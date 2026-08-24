@@ -1,5 +1,5 @@
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
-import { dirname, join, posix } from 'node:path';
+import { mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join, posix, resolve } from 'node:path';
 import { runGit } from '../../git/gitCli.js';
 import { poolDocumentPath, serialisePoolDocument } from '../../pool/document.js';
 import type { PoolFetchedDocument, PoolTransport } from '../../pool/transport.js';
@@ -116,19 +116,38 @@ export class GitPoolTransport implements PoolTransport {
   /**
    * The clone, made once and reused.
    *
-   * `git rev-parse --git-dir` rather than a directory check: the root may exist and
-   * be empty (a mkdir from a failed earlier attempt), and cloning into a directory
+   * **The guard must establish that the repository it found is _this root's own_.**
+   * `git rev-parse --git-dir` walks *up* the directory tree, so in the default
+   * configuration — `poolRoot` is `<deskRoot>/pool` and `deskRoot` resolves against
+   * `repoRoot` — it reports the **target repository's** git dir and every pool root
+   * reads as an existing clone. Nothing is ever cloned, and `publish` then writes
+   * its document into a plain directory inside the operator's checkout and stages it
+   * there. Where that path happens to be ignored the `git add` fails loudly; where it
+   * does not, the harness commits a pool document into somebody's repository under
+   * their name, on a schedule, with nobody having asked. `--show-toplevel` compared
+   * against the root is the exact question, and the walk stops mattering.
+   *
+   * Still not a plain directory check, for the reason it never was: the root may
+   * exist and be empty from a failed earlier attempt, and cloning into a directory
    * that is already a repository is the failure mode that would strand a pool.
+   *
+   * **Anything at the root that is not that clone is removed before cloning.** The
+   * root is the transport's alone, so what is there is either nothing, or the stray
+   * document tree an affected deployment's earlier publishes wrote — and a stray
+   * document is re-derivable by construction, since the put is a whole replace. It
+   * is also what makes the recovery automatic: `git clone` refuses a non-empty
+   * directory, so a deployment that has already hit this would otherwise fail
+   * forever on a directory only an operator could clear.
+   * → `docs/spec/28-cross-fleet-pool.md#the-clone-and-its-root`
    */
   private async ensureClone(): Promise<void> {
-    mkdirSync(this.deps.root, { recursive: true });
-    try {
-      await runGit(this.deps.root, ['rev-parse', '--git-dir']);
+    if (await this.isOwnClone()) {
+      await this.assertOrigin();
       return;
-    } catch {
-      /* not a clone yet */
     }
-    await runGit(this.deps.root, [
+    rmSync(this.deps.root, { recursive: true, force: true });
+    mkdirSync(dirname(this.deps.root), { recursive: true });
+    await runGit(dirname(this.deps.root), [
       'clone',
       '--branch',
       this.deps.branch,
@@ -136,6 +155,44 @@ export class GitPoolTransport implements PoolTransport {
       this.deps.remote,
       this.deps.root,
     ]);
+  }
+
+  /** Whether the repository `git` reports from the root is the root itself, rather than one enclosing it. */
+  private async isOwnClone(): Promise<boolean> {
+    try {
+      const { stdout } = await runGit(this.deps.root, ['rev-parse', '--show-toplevel']);
+      return samePath(stdout.trim(), this.deps.root);
+    } catch {
+      // No repository here at all, or no directory yet: either way, not a clone.
+      return false;
+    }
+  }
+
+  /**
+   * The clone's `origin` is the configured remote, checked before anything is
+   * written into it.
+   *
+   * A clone left behind by an earlier `pool.remote` is a real repository at the
+   * right path, so every check above it passes and the only thing wrong is *which*
+   * repository the fleet's documents, commits and pushes land in. Refused rather
+   * than re-cloned: wiping a repository on the strength of a config edit is the more
+   * expensive way to be wrong, and the throw is recorded by the desk like any other
+   * pool failure and names both URLs.
+   */
+  private async assertOrigin(): Promise<void> {
+    let origin: string | null = null;
+    try {
+      const { stdout } = await runGit(this.deps.root, ['remote', 'get-url', 'origin']);
+      origin = stdout.trim();
+    } catch {
+      /* a clone with no origin at all — the same refusal, reported as none */
+    }
+    if (origin !== null && sameRemote(origin, this.deps.remote)) return;
+    throw new Error(
+      `The pool clone at ${this.deps.root} has origin ${origin ?? 'none'}, which is not the configured remote ` +
+        `${this.deps.remote}. Nothing was written. Point pool.remote back at it, or delete the directory so the ` +
+        `pool is cloned afresh.`,
+    );
   }
 
   /** Push, and on a rejection pull-rebase and try again. Bounded, and never `--force`. */
@@ -188,4 +245,37 @@ function readIfFile(path: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Whether two paths name the same directory. `git` answers `--show-toplevel` with
+ * forward slashes on every platform and with symlinks resolved, so both sides are
+ * put through `resolve` and `realpath` before they are compared — otherwise a root
+ * under macOS's `/var` -> `/private/var` reads as somebody else's repository and is
+ * re-cloned on every pulse.
+ */
+function samePath(a: string, b: string): boolean {
+  const canonical = (path: string): string => {
+    const absolute = resolve(path);
+    try {
+      return realpathSync(absolute);
+    } catch {
+      return absolute;
+    }
+  };
+  const [left, right] = [canonical(a), canonical(b)];
+  return process.platform === 'win32' ? left.toLowerCase() === right.toLowerCase() : left === right;
+}
+
+/**
+ * Whether a clone's `origin` is the configured remote. String equality over the URL
+ * as both sides spell it, with a trailing slash ignored and a local path compared as
+ * a path — deliberately nothing cleverer, because the cost of a false *match* is
+ * writing into the wrong repository and the cost of a false mismatch is a recorded
+ * error naming both URLs.
+ */
+function sameRemote(origin: string, configured: string): boolean {
+  const trimmed = (url: string): string => url.replace(/\/+$/, '');
+  if (trimmed(origin) === trimmed(configured)) return true;
+  return origin.includes('://') || configured.includes('://') ? false : samePath(origin, configured);
 }

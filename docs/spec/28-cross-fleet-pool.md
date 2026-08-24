@@ -1,7 +1,7 @@
 # 28 — The cross-fleet pool
 
 Every deployment learns in isolation. [27](27-knowledge.md) models how far a fact carries as a
-first-class axis, and its widest distance is `fleet` — meaning *that one operator's* fleet. So a
+first-class axis, and its widest distance is `fleet` — meaning _that one operator's_ fleet. So a
 common problem is solved once per engineer, at full price, on every machine: three people on one
 project each pay an agent to discover that the native builds need `npm ci` before the tests, and none
 of the three ever finds out the others did.
@@ -115,6 +115,56 @@ pool counts every registered worktree under that root as a slot whatever the dir
 ([23](23-local-runs.md#the-checkout)), and the answer is the same one: a separate root, touched by
 nothing else.
 
+### The clone and its root
+
+The clone is made once and reused, so the transport asks on every publish and every fetch whether it
+is already there. **The question is whether the repository is _this root's own_, and never whether
+some repository encloses it.** `git rev-parse --git-dir` answers the second: it walks _up_ the
+directory tree, so a pool root inside another repository's working tree reports that repository's git
+dir and the guard returns early.
+
+That is the default configuration and not an exotic one. The pool root is `<deskRoot>/pool`, and
+`deskRoot` defaults to `.lubbdubb/desk` resolved against `repoRoot` — so unless an operator has moved
+it, the pool root is _always_ inside the target repository's working tree. Read that way, the pool is
+never cloned at all, and `publish` writes the fleet's document into a plain directory inside the
+operator's checkout and stages it **there**:
+
+- Where the enclosing repository happens to ignore the path, `git add` refuses and the desk records a
+  failure every pulse. That is the lucky case, because it is the loud one.
+- Where it does not, the `git add` succeeds and the harness commits a pool document into the
+  operator's repository, under their name, on a schedule, with nobody having asked. Same cause, no
+  error, and the worse outcome.
+
+So the check is `git rev-parse --show-toplevel` compared against the root itself, with both sides
+resolved through `realpath` — git answers with symlinks resolved, and a root under a symlinked
+temporary directory would otherwise read as somebody else's repository and be re-cloned every pulse.
+The walk stops mattering once the answer must equal the root.
+
+It stays a git question rather than becoming a plain directory check, for the reason it always was:
+the root may exist and be empty from a `mkdir` a failed earlier attempt left behind, and cloning into
+a directory that is already a repository is the failure mode that would strand a pool.
+
+**The clone's `origin` must be the configured remote before anything is written into it.** A clone
+left behind by an earlier `pool.remote` is a real repository at the right path, so every check above
+it passes and the only thing wrong is _which_ repository the fleet's documents, commits and pushes
+land in — which is one writer per namespace holding, in the wrong building. A mismatch is refused and
+recorded, naming both URLs, rather than re-cloned: wiping a repository on the strength of a config
+edit is the more expensive way to be wrong, and an operator who meant the move deletes the root.
+
+**Anything at the root that is not that clone is removed before cloning, and that is where a deployment
+already affected by this recovers.** Such a deployment has a stray document tree sitting in the
+enclosing repository's working directory, at exactly the path the pool clone needs; `git clone` refuses
+a non-empty directory, so left alone it would fail forever on a directory only an operator could clear.
+Removing it is safe by the same property that makes the whole design cheap: the put is a whole replace
+and every document is re-derivable from the local store, so a stray one is worth nothing. The root is
+the transport's alone and nothing else writes there, which is what makes this a removal of its own
+output rather than of somebody's files.
+
+The transport clears the directory it owns and no more. **A commit the bug already made into the
+enclosing repository is the operator's to revert** — it is a commit in their history, under their name,
+and the pool has no business rewriting it. The stray tree disappears on the next pulse; a commit stays
+until they drop it.
+
 ### Living in somebody else's repository
 
 A pool does not need a repository of its own. `pool.path` is a prefix inside the one it is given, so a
@@ -128,7 +178,7 @@ It defaults to empty, which is the repository root — right for a dedicated poo
 for every shared one, which is why it is a setting rather than a convention.
 
 **The prefix is the transport's and never the payload's.** It is not on the envelope and no document
-records it, because it is an address rather than a fact: the layer above says *publish my document* and
+records it, because it is an address rather than a fact: the layer above says _publish my document_ and
 the transport decides where that lands. A substrate with no folders — the `http` service later — has
 nothing to do with the setting, and one with a different layout can honour it differently without
 anything above changing.
@@ -177,7 +227,7 @@ So they are two documents at two addresses:
 
 **The cadence difference is the one that decides it.** One document means republishing the claim text
 every time a day's numbers move, so the fleet's file grows a commit an hour with the knowledge diff
-buried in it — and the one history worth having, *when did this fleet start believing this*, becomes
+buried in it — and the one history worth having, _when did this fleet start believing this_, becomes
 unreadable. Two files, and the claims file's own history is that record for free.
 
 **The classification difference is the one that would be expensive to get wrong.** Digests are numbers
@@ -194,7 +244,7 @@ writer per **address** — strictly stronger, and unchanged in every property th
 `pool` (schema version), `kind`, `fleetId`, `project`, `publishedAt`, `harnessVersion`.
 
 **The version is on the envelope and never inside the body.** A document written by a newer harness is
-skipped *per document*, recorded, and drawn on the page as a fleet that is ahead of you. A version
+skipped _per document_, recorded, and drawn on the page as a fleet that is ahead of you. A version
 inside the body fails the whole fetch and takes every other fleet's contribution down with it — one
 early adopter silently emptying the pool for everybody.
 
@@ -216,7 +266,7 @@ A fact is in the fleet's document when all four are true:
 
 **`ruled_at` is the vouch, and reading it is what makes the gate mechanical.** It is stamped on any
 move an operator makes, including one that changes nothing ([27](27-knowledge.md#reach--how-far-it-carries)),
-so *a person has read this sentence and ruled on it* is a column rather than a policy somebody has to
+so _a person has read this sentence and ruled on it_ is a column rather than a policy somebody has to
 keep true. The awkward case closes by construction: a claim carried to `lookup` by two agents agreeing
 and never seen by a person carries a null `ruled_at` and does not leave the machine.
 
@@ -230,7 +280,7 @@ silently becomes the whole mechanism on the one kind written to have more than o
 the repository, one level up and unchanged.
 
 **Only `fleet` scope crosses.** A `goal:` scope dies with its goal, and a `check:` scope names another
-fleet's pipeline — a provider identifier that is fragile *within* one fleet
+fleet's pipeline — a provider identifier that is fragile _within_ one fleet
 ([27](27-knowledge.md#scope--who-it-is-relevant-to)) and meaningless outside it.
 
 **A `graduated` claim never crosses.** It is in the repository now. For a fleet working the same
@@ -265,8 +315,8 @@ nothing has to know which in advance.
 A fleet arriving with five corroborations would arrive already past `lookup`, which is auto-promotion
 crossing a machine boundary: the one transition [27](27-knowledge.md#corroboration) reserves for a clock
 or an operator. The origin's counts ride as provenance drawn on the row, in the class that document
-calls a reading and never a trigger. The dispute count is the more useful of the two — *the fleet that
-vouched for this has since had two agents contradict it* is exactly what an operator needs in front of
+calls a reading and never a trigger. The dispute count is the more useful of the two — _the fleet that
+vouched for this has since had two agents contradict it_ is exactly what an operator needs in front of
 them before promoting it here.
 
 **A pooled corroboration's voice is the origin fleet, and one fleet is one voice** however many entries
@@ -291,12 +341,12 @@ delete verb, no ordering — the whole-document put paying for itself again.
 
 **A vanished arrival does not delete the local fact.** By then it may carry local corroborations of its
 own, and deleting on a remote operator's ruling would let one person prune another's store. What happens
-instead is that the withdrawal is recorded and drawn: *the fleet that vouched for this has withdrawn it*.
+instead is that the withdrawal is recorded and drawn: _the fleet that vouched for this has withdrawn it_.
 A reading, and never a trigger.
 
 ## The project name
 
-Pool-wide, `fleet` scope no longer implies *this repository*. A claim about one project's lint
+Pool-wide, `fleet` scope no longer implies _this repository_. A claim about one project's lint
 configuration is noise to a fleet working a different one, and nothing in the sentence says which.
 
 **The name is declared in `lubbdubb.project.json`, committed with the repository:**
@@ -415,8 +465,8 @@ Three fleets, one problem, three keys — `test (windows)`, `ci/test-windows`, `
 Summed across projects that is three rows of one instead of one row of three, and it renders perfectly:
 a chart saying no single check causes much pain, with nothing red.
 
-Within one project the names are comparable, because it is one pipeline. *That check cost the team $900
-last month across four engineers' fleets* is the reading the whole digest arm is for.
+Within one project the names are comparable, because it is one pipeline. _That check cost the team $900
+last month across four engineers' fleets_ is the reading the whole digest arm is for.
 
 So `byCheck` is a **separate section**, and the aggregator's read of it takes a project name as an
 argument. Two sections rather than one with a flag, for the reason `knowledge_corroborations` and
@@ -426,7 +476,7 @@ rather than merely wrong.
 
 **A normalised check bucket is refused.** Classifying every check into `lint` / `unit` / `build` / `e2e`
 would let names cross projects, and it is rejected twice over: it is a new measurement invented here
-rather than moved from what exists, and `RemedyCause` already answers *what was actually wrong* without
+rather than moved from what exists, and `RemedyCause` already answers _what was actually wrong_ without
 guessing; and it would be regex over provider names, silently misfiling every project whose naming did
 not match whoever wrote the patterns, producing confident buckets that are wrong.
 
@@ -514,7 +564,7 @@ It is not instant, and nothing here should be described as though it were.
 ## Data classification
 
 **A promoted claim is already off the machine.** It rides the system prompt of every dispatch to a model
-API, and that happened at the vouch. What the pool changes is who *inside the company* can read it — a
+API, and that happened at the vouch. What the pool changes is who _inside the company_ can read it — a
 compartmentalisation question, not an exfiltration one, and right-sizing it is what keeps the controls
 below proportionate.
 
@@ -525,7 +575,7 @@ The controls, in order:
 2. **The vouch is the per-claim gate.** A second click to publish would mean nothing is ever published:
    the pool sits empty and looks like it is working, which is the failure [27](27-knowledge.md#retiring-is-not-rejecting)
    names about a store nobody prunes, pointed the other way. What changes is the wording — the control
-   says *promote and publish*, so the consequence is not hidden.
+   says _promote and publish_, so the consequence is not hidden.
 3. **`keepLocal`**, a per-claim opt-out for the one claim in fifty that quotes a customer's
    configuration. Opt-out rather than opt-in, so the cheap vouch stays cheap.
 4. **Withdrawal is one click and immediate.** Demote, retire, reject or `keepLocal`, and the claim is not
@@ -534,7 +584,7 @@ The controls, in order:
    structured pattern — a key, a token, a private-key header — is not published, and the row says why.
 
 **A scrub is refused.** A customer name is an English noun and no expression matches it. A scrub that
-mostly works is worse than none, because its output *looks* sanitised, so nobody reads it carefully
+mostly works is worse than none, because its output _looks_ sanitised, so nobody reads it carefully
 again and the one it missed is now trusted — it fails in the direction where the claim publishes looking
 clean. The backstop above is deliberately the opposite shape: it refuses, and refusing is loud. An
 allowlist is refused for a plainer reason: a claim is a sentence, and there is no structure to allow.
@@ -568,7 +618,7 @@ absent.
 
 ## Configuration
 
-Two layers, split by what the setting is *about* ([02](02-configuration.md#precedence)).
+Two layers, split by what the setting is _about_ ([02](02-configuration.md#precedence)).
 
 **The project layer, `lubbdubb.project.json`, committed** — which pool, and which project this is:
 
@@ -595,14 +645,14 @@ names **person and target repo**, which is what makes two of one person's deploy
 in a pool. A fleet with no id configured while the pool is selected is a boot error, exactly as a
 project with no name is.
 
-| Key | Layer | Default |
-| --- | --- | --- |
-| `integrations.pool` | project | `fake` — publishes nowhere, fetches nothing, runs no desk |
-| `pool.project` | project | none; required when the pool is selected |
-| `pool.remote`, `pool.branch` | project | none; the `git` transport's coordinates |
-| `pool.path` | project | empty — the repository root; a prefix when the repository is shared |
-| `pool.digestIntervalMs` | either | one hour |
-| `fleetId` | deployment | none; required when the pool is selected |
+| Key                          | Layer      | Default                                                             |
+| ---------------------------- | ---------- | ------------------------------------------------------------------- |
+| `integrations.pool`          | project    | `fake` — publishes nowhere, fetches nothing, runs no desk           |
+| `pool.project`               | project    | none; required when the pool is selected                            |
+| `pool.remote`, `pool.branch` | project    | none; the `git` transport's coordinates                             |
+| `pool.path`                  | project    | empty — the repository root; a prefix when the repository is shared |
+| `pool.digestIntervalMs`      | either     | one hour                                                            |
+| `fleetId`                    | deployment | none; required when the pool is selected                            |
 
 **Off by default.** `fake` is the default provider for the same reason it is for `sourceControl` and
 `issues`: a harness that reached a network on a fresh clone would be one nobody could run a test
@@ -639,14 +689,14 @@ no swallowed catches.
 - **A publish that fails leaves the document dirty**, so the next pulse retries. There is nothing to
   queue or replay, because the put is a whole replace.
 - **A fetch that fails leaves the last-known-good mirror in place** rather than emptying it, and the page
-  says the reading is stale and how old it is. *Could not reach the pool* is never folded into *nobody
-  has published anything* — [24](24-environments.md#the-three-verdicts)'s discipline, and the same
+  says the reading is stale and how old it is. _Could not reach the pool_ is never folded into _nobody
+  has published anything_ — [24](24-environments.md#the-three-verdicts)'s discipline, and the same
   reason: read as absence, an outage says in the operator's words that nobody else knows anything.
 - **Nothing about the harness stops.** No dispatch is held, no agent waits, no boot fails. A fleet with
   an unreachable pool works exactly as a fleet without one.
 - **There is no backoff.** Retry is the next pulse, which is already a five-minute floor; exponential
   backoff on top would mostly mean a recovered pool taking an hour to be noticed. What it needs instead
-  is that a persistently failing pool is *visible*: one error record per failure, and the Knowledge page
+  is that a persistently failing pool is _visible_: one error record per failure, and the Knowledge page
   saying when this fleet last published successfully.
 
 ## In the cockpit
@@ -688,7 +738,7 @@ Three columns, all additive `ALTER TABLE`s declared in `KNOWLEDGE_COLUMNS` (`src
 two on `knowledge_facts` and one on `knowledge_corroborations`:
 
 - **`project`** — the project name at the moment the fact was written. **It needs a backfill**, gated on
-  `ensureColumns` reporting that it added the column: null spells *no project*, which would exclude every
+  `ensureColumns` reporting that it added the column: null spells _no project_, which would exclude every
   claim the store already holds from ever being published, and every one of them was in fact learned
   about the deployment's current project. The migration asserts history rather than guessing at it, and
   running it on every boot instead would relabel every claim written since.
