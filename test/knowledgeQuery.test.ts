@@ -33,6 +33,8 @@ function fact(over: Partial<KnowledgeFactView> = {}): KnowledgeFactView {
     expiresAt: null,
     reach: 'proposal',
     supersedes: null,
+    project: null,
+    keepLocal: false,
     originRef: 'issue:1',
     ruledAt: null,
     resolvesWhen: null,

@@ -885,6 +885,31 @@ having intervened.
 | `azureDevOps.filters.workItemTag`             | `string` (optional)             | unset     | Only surface work items carrying this tag.           |
 | `azureDevOps.policyChecks`                    | kind → mode map (optional)      | see below | Which branch-policy kinds become CI checks, and how. |
 
+### The cross-fleet pool
+
+The third capability, and the one whose keys are split across both layers by what each setting is
+_about_ — which pool and which project is the team's; who this fleet is is the machine's.
+→ [28](28-cross-fleet-pool.md#configuration)
+
+| Key                          | Layer      | Type                | Default  | Behaviour                                                                                                          |
+| ---------------------------- | ---------- | ------------------- | -------- | ------------------------------------------------------------------------------------------------------------------ |
+| `integrations.pool`          | project    | `'fake' \| 'git'`   | `'fake'` | Which substrate carries the pool. `fake` publishes nowhere, fetches nothing, runs no desk.                         |
+| `pool.project`               | project    | `string` (optional) | unset    | What this project is called in the pool. **Required** when the pool is selected; there is no derivation fallback.   |
+| `pool.remote`, `pool.branch` | project    | `string` (optional) | unset    | The `git` transport's coordinates. Required when it is selected.                                                   |
+| `pool.path`                  | project    | `string` (optional) | empty    | A prefix inside that repository, so a shared wiki hosts the pool in a folder. Empty is its root. An absolute, rooted or `..`-bearing path is refused at load. |
+| `pool.digestIntervalMs`      | either     | `number`            | one hour | How often the digest republishes, and how often the backstop re-derives both documents and compares.               |
+| `fleetId`                    | deployment | `string` (optional) | unset    | Who this fleet is. Person and target repo (`alice@acme-api`), never derived. **Required** when the pool is selected. |
+
+There is deliberately no poll interval beside them: the pulse is the clock, so polling is
+`heartbeatIntervalMs` and not a second key free to be set below it. Retention (ninety UTC days) and the
+UTC day itself are stated constants for `KNOWLEDGE_CHARS_PER_TOKEN`'s reason — an operator tuning either
+would be tuning the answer rather than the thing measured, and two deployments' figures would stop
+being comparable, which is the one thing a shared page exists to make them.
+
+No secret is ever here. The `git` transport authenticates the way git already does for that host, which
+is what keeps `lubbdubb.project.json` safe to commit — and committing it is the whole mechanism of the
+project name.
+
 ### `userId`
 
 **Who you are, to every provider the harness talks to.** One string, and the only place the harness

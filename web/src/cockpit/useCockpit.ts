@@ -268,6 +268,10 @@ export function useCockpit(): CockpitStatus {
       placePet: (id, placed) => then(api.placePet(id, placed)),
       blendPet: (id) => then(api.blendPet(id)),
       setFactReach: (id, reach) => then(api.setFactReach(id, reach)),
+      // A store write and never a publish: the desk's next pulse re-derives the
+      // document and puts it, so an operator's click never waits on a push to
+      // another continent.
+      setFactKeepLocal: (id, keepLocal) => then(api.setFactKeepLocal(id, keepLocal)),
       raiseFact: (claim, originRef) => then(api.raiseFact(claim, originRef)),
       exitFact: (id, exit) => then(api.exitFact(id, exit)),
       settleGraduation: (id, outcome) => then(api.settleGraduation(id, outcome)),
@@ -384,6 +388,7 @@ export function useCockpit(): CockpitStatus {
       knowledgeFolded: place.knowledgeFolded,
       insightsView: place.insightsView,
       insightsWindow: place.insightsWindow,
+      poolProject: place.poolProject,
       selectedGoal: place.goal,
       consolePanel: place.panel,
       tab: place.tab,

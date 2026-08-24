@@ -138,6 +138,12 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
       'ownWorkOnly',
       'github',
       'azureDevOps',
+      // The pool is an integration in the sense that decides this list: it is a
+      // capability with a provider behind it, selected in `integrations`. Its two
+      // identity keys sit beside `userId` for the same reason — one names the person
+      // the harness acts as, the other names the fleet it publishes as.
+      'fleetId',
+      'pool',
       'labelPrefix',
       'issuePriorityLabels',
       'issueStateColours',

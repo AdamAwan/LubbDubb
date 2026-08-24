@@ -2471,7 +2471,7 @@ version of the other two. The output graph drew a cost row; the yield panel drew
 spend trend drew a completion rate off a second server builder, one click from the first. That is the
 shape of a wrong seam.
 
-**One page, one window, six readings of it.**
+**One page, one window, seven readings of it — six of them windowed.**
 
 - **Economics** — is the fleet worth what it costs? The ratio headline, the phase split, the timeline,
   the goals and the costliest runs.
@@ -2483,6 +2483,11 @@ shape of a wrong seam.
 - **MCP** — which tools the fleet reaches for, and which it never does. The odd one out, and
   deliberately: every other tab is a reading about work the harness did, and this is a reading about a
   **channel**. See [below](#mcp).
+- **Pool** — what the whole [cross-fleet pool](28-cross-fleet-pool.md) spent, across fleets. The one tab
+  that ignores the window bar, and it has to: the digest's bucket is a UTC day and its retention is
+  ninety of them, so the page's five spans are not a question anybody asks of it. What it takes instead
+  is a **project**, on `Place` as `poolProject` — because `byCheck` is comparable only inside one
+  pipeline, and the tab draws the reason rather than an empty table when it is not narrowed.
 
 Every table the three panels drew lands in exactly one of these, and the duplicates collapse on the way
 in: there is one phase table rather than two, and one completion rate rather than the reliability fold's

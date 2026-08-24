@@ -100,6 +100,16 @@ export interface Place {
   insightsView: InsightsView;
   insightsWindow: InsightsWindow;
   /**
+   * Which project the shared pool reading is narrowed to, or null for every one.
+   *
+   * A field of its own rather than a `useState` in the panel, for every reason the
+   * two above are places — and one more that is specific to it: `byCheck` is drawn
+   * only inside a project, so "which project" is the difference between a table
+   * being there and not, and a link somebody sends has to open on the same one.
+   * → `docs/spec/28-cross-fleet-pool.md#in-the-cockpit`
+   */
+  poolProject: string | null;
+  /**
    * The tickets tab's feature headings that are **collapsed**, by issue number.
    *
    * Collapsed rather than expanded, so the default — every feature open — is the
@@ -154,7 +164,7 @@ export interface Place {
 }
 
 const TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'knowledge', 'insights', 'pets', 'config'];
-const INSIGHTS_VIEWS: readonly InsightsView[] = ['economics', 'reliability', 'causes', 'trend', 'mix', 'mcp'];
+const INSIGHTS_VIEWS: readonly InsightsView[] = ['economics', 'reliability', 'causes', 'trend', 'mix', 'mcp', 'pool'];
 /**
  * The windows the time bar offers, and what a bare Insights URL means.
  *
@@ -187,6 +197,9 @@ export const NOWHERE: Place = {
   configTab: 'values',
   configGroup: null,
   insightsView: 'economics',
+  // Every project, which is the honest default: `byCheck` is absent until somebody
+  // narrows, rather than summed across pipelines that share no naming.
+  poolProject: null,
   insightsWindow: DEFAULT_INSIGHTS_WINDOW,
   collapsed: [],
   ticketWatch: 'any',
@@ -337,6 +350,7 @@ export function readPlace(search: string): Place {
     // showing whatever the other one was set to.
     configGroup: param(query, 'keys'),
     insightsView: INSIGHTS_VIEWS.find((v) => v === param(query, 'view')) ?? 'economics',
+    poolProject: param(query, 'project') ?? null,
     insightsWindow: INSIGHTS_WINDOWS.find((w) => w === param(query, 'win')) ?? DEFAULT_INSIGHTS_WINDOW,
     collapsed: readNumbers(param(query, 'collapsed')),
     // Validated back into their types like every other parameter here, and for
@@ -561,6 +575,7 @@ export function placeQuery(place: Place): string {
   if (place.configTab !== 'values') query.set('section', place.configTab);
   if (place.configGroup !== null) query.set('keys', place.configGroup);
   if (place.insightsView !== 'economics') query.set('view', place.insightsView);
+  if (place.poolProject !== null) query.set('project', place.poolProject);
   if (place.insightsWindow !== DEFAULT_INSIGHTS_WINDOW) query.set('win', place.insightsWindow);
   // Sorted on the way out as on the way in, so folding A then B and folding B
   // then A are one place rather than two history entries.

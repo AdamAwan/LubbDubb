@@ -221,6 +221,14 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
           error: 'this claim was rejected, and a rejection is terminal — the way back is an amendment naming it',
         });
       }
+      // The vouch is the pool's per-claim gate, so a ruling is what makes this
+      // fleet's claims document stale. A **flag** and not a publish: a route that
+      // did the network write would make the operator's click wait on a push to
+      // another continent, and a failed push there would be a 500 on a ruling that
+      // succeeded locally. The store write is the truth; the publish is a
+      // consequence, and the desk's next pulse is where it happens.
+      // → `docs/spec/28-cross-fleet-pool.md#the-publish-is-never-inside-a-route-handler`
+      store.markPoolDirty('claims');
       // `dirty` rather than `world:changed`: nothing in the world moved and no
       // cycle is run — the page simply has a row somewhere else. The reading
       // `dismissFinding` and `promoteLesson` both take.

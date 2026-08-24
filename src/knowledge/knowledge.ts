@@ -569,16 +569,27 @@ interface Corroborator {
    * what lets the count see one agent rather than two.
    */
   sessionId: string | null;
+  /**
+   * The pool fleet whose document carried this voice, or null for a local agent's.
+   *
+   * **One fleet is one voice**, however many entries it publishes and however many
+   * times it is polled. A pooled row has neither a goal nor a session, so the origin
+   * fleet folds into the union below rather than becoming a second count beside it —
+   * which is what keeps a fleet that publishes five entries matching one local claim
+   * from carrying it five voices further.
+   * → `docs/spec/28-cross-fleet-pool.md#what-arriving-means`
+   */
+  fleetId?: string | null;
 }
 
 /**
  * How many independent corroborators these observations came from.
  *
- * Two rows are the same corroborator if they share a goal **or** a session, and
- * the relation is transitive — a union over both key spaces rather than a pass
- * that collapses one into the other, because an agent resumed across two goals
+ * Two rows are the same corroborator if they share a goal, a session **or** a pool
+ * fleet, and the relation is transitive — a union over the key spaces rather than a
+ * pass that collapses one into another, because an agent resumed across two goals
  * would otherwise be counted twice by whichever key was checked second. A row
- * with no goal and no session is its own corroborator.
+ * with no goal, no session and no fleet is its own corroborator.
  */
 export function distinctCorroborators(rows: readonly Corroborator[]): number {
   const parent = new Map<string, string>();
@@ -597,6 +608,7 @@ export function distinctCorroborators(rows: readonly Corroborator[]): number {
     const key = keys[i]!;
     if (!parent.has(key)) parent.set(key, key);
     if (row.sessionId) union(key, `session:${row.sessionId}`);
+    if (row.fleetId) union(key, `fleet:${row.fleetId}`);
   }
   return new Set(keys.map(find)).size;
 }

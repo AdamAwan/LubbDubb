@@ -15,7 +15,7 @@ import type { CiCheck, CiStatus, MergeableState, PrComment, PullRequest } from '
 import { EVIDENCE_LOG_TAIL_LINES, type CiEvidenceTarget, type CiFailureEvidence } from '../../ci/ciEvidence.js';
 import type {
   BranchDeleteCapable,
-  Capability,
+  WorldCapability,
   CiCheckRequeueCapable,
   CiEvidenceCapable,
   Integration,
@@ -82,7 +82,7 @@ export class AzureDevOpsSourceControlIntegration
     RefResolvable
 {
   readonly id = 'sourceControl:azure';
-  readonly capability: Capability = 'sourceControl';
+  readonly capability: WorldCapability = 'sourceControl';
 
   /** Last successful slice, served on a transient failure so PRs don't flap. */
   private lastGood: PullRequest[] | null = null;

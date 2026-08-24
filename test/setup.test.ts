@@ -143,7 +143,10 @@ test('a key the team’s project file already sets is not copied into the operat
   const repoRoot = mkdtempSync(join(tmpdir(), 'lubbdubb-setup-'));
   writeFileSync(
     join(repoRoot, 'lubbdubb.project.json'),
-    JSON.stringify({ integrations: { sourceControl: 'github', issues: 'github' }, labelPrefix: 'acme-bot' }),
+    JSON.stringify({
+      integrations: { sourceControl: 'github', issues: 'github', pool: 'fake' },
+      labelPrefix: 'acme-bot',
+    }),
   );
   const resolved = await resolveFromRepo(
     { email: 'adam@acme.com', repoRoot },
@@ -173,7 +176,10 @@ test('the reading says the harness is on the mock, and stops saying so once it i
 
 test('a credential the environment does not hold is bad, and the fleet’s own key is bad for a different reason', async () => {
   const reading = await buildSetupReading({
-    config: config({ integrations: { sourceControl: 'github', issues: 'github' }, github: { owner: 'a', repo: 'b' } }),
+    config: config({
+      integrations: { sourceControl: 'github', issues: 'github', pool: 'fake' },
+      github: { owner: 'a', repo: 'b' },
+    }),
     store: buildSystem(config()).store,
     probes: probes({ env: (name) => (name === 'ANTHROPIC_API_KEY' ? 'sk-ant-x' : undefined) }),
     configFile: '/nowhere/lubbdubb.config.json',
@@ -195,7 +201,7 @@ test('a credential the environment does not hold is bad, and the fleet’s own k
  */
 test('a signed-in az CLI is a credential, and the row says so without naming a variable nobody set', async () => {
   const azure = {
-    integrations: { sourceControl: 'azure' as const, issues: 'azure' as const },
+    integrations: { sourceControl: 'azure' as const, issues: 'azure' as const, pool: 'fake' },
     azureDevOps: { organization: 'contoso', project: 'Platform', repository: 'api' },
   };
   const reading = await buildSetupReading({
@@ -215,7 +221,7 @@ test('a signed-in az CLI is a credential, and the row says so without naming a v
 test('azure with neither route names both, and offers the one that needs no restart', async () => {
   const reading = await buildSetupReading({
     config: config({
-      integrations: { sourceControl: 'azure', issues: 'azure' },
+      integrations: { sourceControl: 'azure', issues: 'azure', pool: 'fake' },
       azureDevOps: { organization: 'contoso', project: 'Platform', repository: 'api' },
     }),
     store: buildSystem(config()).store,
@@ -246,7 +252,7 @@ test('the az CLI is not asked when the PAT is set, and never asked for github at
   };
   const withPat = await buildSetupReading({
     config: config({
-      integrations: { sourceControl: 'azure', issues: 'azure' },
+      integrations: { sourceControl: 'azure', issues: 'azure', pool: 'fake' },
       azureDevOps: { organization: 'contoso', project: 'Platform', repository: 'api' },
     }),
     store: buildSystem(config()).store,
@@ -259,7 +265,10 @@ test('the az CLI is not asked when the PAT is set, and never asked for github at
   assert.equal(asked, 0);
 
   await buildSetupReading({
-    config: config({ integrations: { sourceControl: 'github', issues: 'github' }, github: { owner: 'a', repo: 'b' } }),
+    config: config({
+      integrations: { sourceControl: 'github', issues: 'github', pool: 'fake' },
+      github: { owner: 'a', repo: 'b' },
+    }),
     store: buildSystem(config()).store,
     probes: probes({ env: () => undefined, azSignedIn: counting }),
     configFile: '/nowhere/lubbdubb.config.json',
@@ -329,7 +338,7 @@ test('a fault the file already answers says restart, instead of asking for the w
     probes: probes(),
     configFile: '/nowhere/lubbdubb.config.json',
     pending: pendingFor(running, {
-      integrations: { sourceControl: 'github', issues: 'github' },
+      integrations: { sourceControl: 'github', issues: 'github', pool: 'fake' },
       github: { owner: 'AdamAwan', repo: 'LubbDubb' },
       userId: 'AdamAwan',
     }),
@@ -360,14 +369,17 @@ test('a fault the file already answers says restart, instead of asking for the w
  * one row here that names a discrepancy with no fault behind it.
  */
 test('a pending change no check names gets a row of its own', async () => {
-  const running = config({ integrations: { sourceControl: 'github', issues: 'github' }, userId: 'AdamAwan' });
+  const running = config({
+    integrations: { sourceControl: 'github', issues: 'github', pool: 'fake' },
+    userId: 'AdamAwan',
+  });
   const reading = await buildSetupReading({
     config: running,
     store: buildSystem(config()).store,
     probes: probes({ env: () => 'ghp_x' }),
     configFile: '/nowhere/lubbdubb.config.json',
     pending: pendingFor(running, {
-      integrations: { sourceControl: 'github', issues: 'github' },
+      integrations: { sourceControl: 'github', issues: 'github', pool: 'fake' },
       userId: 'AdamAwan',
       heartbeatIntervalMs: 5000,
     }),
@@ -385,14 +397,17 @@ test('a pending change no check names gets a row of its own', async () => {
  * change would reach no surface at all.
  */
 test('a pending change to a key whose check is already ok is still named', async () => {
-  const running = config({ integrations: { sourceControl: 'github', issues: 'github' }, userId: 'AdamAwan' });
+  const running = config({
+    integrations: { sourceControl: 'github', issues: 'github', pool: 'fake' },
+    userId: 'AdamAwan',
+  });
   const reading = await buildSetupReading({
     config: running,
     store: buildSystem(config()).store,
     probes: probes({ env: () => 'ghp_x' }),
     configFile: '/nowhere/lubbdubb.config.json',
     pending: pendingFor(running, {
-      integrations: { sourceControl: 'github', issues: 'github' },
+      integrations: { sourceControl: 'github', issues: 'github', pool: 'fake' },
       userId: 'someone-else',
     }),
     prompts: defaultPromptTemplates(),
@@ -432,7 +447,7 @@ test('a harness running what its file says has no restart row', async () => {
  */
 test('a pending change never restates a check the environment owns', async () => {
   const running = config({
-    integrations: { sourceControl: 'github', issues: 'github' },
+    integrations: { sourceControl: 'github', issues: 'github', pool: 'fake' },
     github: { owner: 'a', repo: 'b' },
   });
   const reading = await buildSetupReading({
@@ -441,7 +456,7 @@ test('a pending change never restates a check the environment owns', async () =>
     probes: probes({ env: (name) => (name === 'ANTHROPIC_API_KEY' ? 'sk-ant-x' : undefined) }),
     configFile: '/nowhere/lubbdubb.config.json',
     pending: pendingFor(running, {
-      integrations: { sourceControl: 'github', issues: 'github' },
+      integrations: { sourceControl: 'github', issues: 'github', pool: 'fake' },
       github: { owner: 'a', repo: 'b' },
       heartbeatIntervalMs: 5000,
     }),

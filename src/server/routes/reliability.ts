@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { ReliabilityPayload } from '../../wire.js';
 import { buildReliabilityInsights } from '../../reliabilityInsights.js';
-import { buildRemedyInsights } from '../../remedyInsights.js';
+import { buildRemedyInsights, isReturnOrigin } from '../../remedyInsights.js';
 import { InsightsQuery, resolveWindow, sinceOrEpoch } from '../../insightsWindow.js';
 import { checked } from '../validation.js';
 import type { RouteContext } from './context.js';
@@ -60,17 +60,4 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
       } satisfies ReliabilityPayload;
     }),
   );
-}
-
-/**
- * Whether a task was dispatched to answer a red or a review — the denominator
- * behind the Causes reading's `unaccounted`.
- *
- * Read off the **origin** rather than off `Task.rule`, because the origin is what
- * `remedyOrigin` fences the tool on: counting by rule would make the denominator
- * and the numerator two different populations, and the gap between them would
- * read as agents failing to report when it was the two definitions disagreeing.
- */
-function isReturnOrigin(originRef: string | null): boolean {
-  return originRef !== null && /^pr:\d+:(ci|comments)$/.test(originRef);
 }

@@ -7732,3 +7732,109 @@ a.btn {
 .sp-tile.sp-watch .vl {
   color: var(--amber);
 }
+
+/* ---------------------------------------------------------------------------
+   The cross-fleet pool (docs/spec/28-cross-fleet-pool.md).
+
+   Every colour here is a custom property already on `:root` — nothing is a
+   literal, because a hex at a use site is a surface that stays dark when somebody
+   switches to Light, and the only thing in `check` that reads CSS at all is
+   `test/cockpitTheme.test.ts`. Nothing new is declared either: the pool is a view
+   of the same readings the Insights tabs beside it draw, so it borrows their
+   palette rather than growing one that could drift from it.
+   --------------------------------------------------------------------------- */
+.pool {
+  display: grid;
+  gap: 14px;
+  max-width: 1040px;
+}
+.pool-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pool-section > h3 {
+  margin: 0;
+  font-size: 13px;
+}
+.pool-note {
+  margin: 2px 0 6px;
+  font-size: 12px;
+  color: var(--cn-fg-dim);
+}
+.pool-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.pool-table th,
+.pool-table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--cn-line-soft);
+  text-align: left;
+}
+.pool-table th.num,
+.pool-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The two readings that are never optional. Drawn beside the tables rather than
+   inside one, because they are the denominator every share above them is a share
+   *of* — a cause table read without them is a list of anecdotes. */
+.pool-caveats {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.pool-caveat {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 8px 10px;
+  border: 1px solid var(--cn-line);
+  border-radius: var(--r-md);
+  background: var(--cn-panel-2);
+}
+.pool-caveat-n {
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  color: var(--cn-amber);
+}
+
+/* Said in the page's own voice rather than drawn as an empty table: "no check
+   costs much" and "this reading does not apply across projects" are different
+   facts, and only one of them is true. */
+.pool-refusal {
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--cn-fg-dim);
+  border-left: 2px solid var(--cn-line);
+}
+
+.pool-fleets {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pool-fleet {
+  display: inline-flex;
+  gap: 6px;
+  align-items: baseline;
+  padding: 3px 8px;
+  font-size: 12px;
+  border: 1px solid var(--cn-line);
+  border-radius: var(--r-md);
+}
+/* A fleet ahead of this build, drawn as such rather than as one that has
+   published nothing — read as absence it would say nobody else knows anything. */
+.pool-fleet.ahead {
+  border-color: var(--cn-amber);
+  color: var(--cn-amber);
+}
+.pool-fleet-p,
+.pool-fleet-at {
+  color: var(--cn-fg-dim);
+}

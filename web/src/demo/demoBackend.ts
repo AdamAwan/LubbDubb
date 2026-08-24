@@ -1047,6 +1047,8 @@ class DemoServer {
         expiresAt: null,
         reach: 'proposal',
         supersedes: null,
+        project: 'lubbdubb',
+        keepLocal: false,
         originRef,
         ruledAt: null,
         resolvesWhen: null,
@@ -1105,6 +1107,8 @@ class DemoServer {
       taskId: null,
       goalRef: i === 0 ? fact.originRef : `issue:${340 + i}`,
       sessionId: null,
+      // Local voices: the demo has one fleet, so nothing here arrived from a pool.
+      fleetId: null,
       words:
         i === 0
           ? 'What I actually saw when I wrote this down.'
@@ -3854,6 +3858,34 @@ export const demoApi = {
   // dropped, so a demo folding the browser's empty store would teach a reader to
   // read a working channel as a broken one.
   getMcpUsage: () => Promise.resolve({ insights: buildDemoMcp() }),
+  // The demo runs one fleet against one project and has no pool behind it, so both
+  // pool reads answer *nothing published* rather than inventing other people's
+  // fleets. An invented one would be the demo asserting a cross-company reading
+  // that no deployment on the `fake` default ever has.
+  getPoolInsights: (project: string | null) =>
+    Promise.resolve({
+      rollup: {
+        project,
+        fleets: [],
+        days: [],
+        byPhase: [],
+        byCause: [],
+        byCheck: project === null ? null : [],
+        unaccounted: {
+          key: '',
+          label: 'Unaccounted returns',
+          count: 0,
+          costUsd: null,
+          fleets: 0,
+          dailyMeanCostUsd: null,
+        },
+        unmeasured: { key: '', label: 'Unmeasured runs', count: 0, costUsd: null, fleets: 0, dailyMeanCostUsd: null },
+      },
+      projects: [],
+      fleets: [],
+    }),
+  getPool: () => Promise.resolve({ status: null, fleets: [], claims: [] }),
+  setFactKeepLocal: () => Promise.resolve({ ok: true as const }),
   // The prompt book lives in the server's template registry, and the web bundle
   // deliberately imports no server code. Shipping a copy of eighteen prompts here
   // to fill the demo panel would be a duplicate free to drift from the originals

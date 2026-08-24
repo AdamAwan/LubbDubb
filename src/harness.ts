@@ -37,6 +37,7 @@ import type { Action, WorldEvent, WorldSnapshot } from './types.js';
 import type { UpcomingPlan } from './wire.js';
 import { isActiveTask } from './tasks.js';
 import type { StackLandingDesk } from './stacks/landingDesk.js';
+import type { PoolDesk } from './pool/poolDesk.js';
 
 /**
  * How many accounts of each kind the dispatch context carries.
@@ -214,6 +215,18 @@ interface HarnessDeps {
    * what it writes.
    */
   graduations?: { run(): void };
+  /**
+   * The cross-fleet pool's one desk: polls everybody else's documents into the
+   * mirror, and publishes this fleet's when they have moved. Absent = no pool
+   * (tests that do not care, and every deployment on the `fake` default), and then
+   * nothing is published and nothing arrives.
+   *
+   * It writes `pool_*` rows and — through the ordinary proposal path — `knowledge_facts`
+   * ones. It decides no dispatch and no rule reads what it writes, which is why it
+   * sits beside the other bookkeeping rather than in the dispatcher.
+   * → `docs/spec/28-cross-fleet-pool.md#the-clocks`
+   */
+  pool?: PoolDesk;
   /**
    * Clears "Needs you" items whose agent has died. Absent = no sweep (tests that
    * do not care), and then only the terminal-state listeners tidy. It settles
@@ -435,6 +448,20 @@ export class Harness extends EventEmitter {
       // states. Beside the other bookkeeping and not in the dispatcher for
       // `notices`' reason: it staffs nobody and no rule reads a fact.
       this.deps.graduations?.run();
+      // The distance above `fleet`: what other fleets have vouched for, landed here,
+      // and what this fleet has vouched for, sent out.
+      //
+      // **Above `decide` and above the executor**, for `notices`' reason exactly: an
+      // arrival that carries a local claim to `lookup` on this pulse must be a claim
+      // the agents dispatched on this pulse can be answered with. And below
+      // `graduations`, so a claim that left for the repository on this pulse is out
+      // of the document before it is derived rather than published one last time.
+      //
+      // Awaited but never blocking: every failure inside is recorded and non-fatal,
+      // a fetch that fails leaves the last-known-good mirror in place, and a publish
+      // that fails leaves the document dirty for the next pulse. A fleet with an
+      // unreachable pool works exactly as a fleet without one.
+      await this.deps.pool?.run();
       // An agent parked because the *account* ran out is resumed once the window
       // `claude` named has turned over — the one park with a known end, so the
       // ordinary case needs no operator (issue #318). Beside the other bookkeeping

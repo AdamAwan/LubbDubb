@@ -34,6 +34,7 @@ is about.
 | `routes/readings.ts`    | `/api/retrospectives/:ref`, `/api/scratchpads/:ref`                                                                                                                       |
 | `routes/reliability.ts` | `/api/reliability` — run outcomes, CI health, and why the fleet came back                                                                                                 |
 | `routes/mcpUsage.ts`    | `/api/mcp/usage` — which MCP tools the fleet reached for, and which it never did                                                                                          |
+| `routes/pool.ts`        | `/api/pool`, `/api/pool/insights` and the pool's one write — the cross-fleet pool ([28](28-cross-fleet-pool.md))                                                          |
 | `routes/work.ts`        | The work graph and its ignore / file verdicts                                                                                                                             |
 | `routes/tickets.ts`     | Every item the tracker has returned since the harness first swept, and the filters over it                                                                                |
 | `routes/localRun.ts`    | The machine's one dev environment: start it on a goal, stop it, read what is holding it up                                                                                |
@@ -984,6 +985,32 @@ ever run, plus the window's `pr_ci` transitions.
 The window is resolved in the handler rather than inside the fold, so the `since` a row is selected by
 and the `since` it is bucketed into are one value: a store read wider than the buckets drops rows
 silently at the fold, and a narrower one draws an empty first bucket that was never empty.
+
+### `GET /api/pool`, `GET /api/pool/insights`, `POST /api/knowledge/facts/:id/keep-local`
+
+The [cross-fleet pool](28-cross-fleet-pool.md), and the shape of all three follows from the pool being a
+**view** and never a database.
+
+`GET /api/pool` is this fleet's own side plus the mirror: what has been published and when, when the
+pool was last polled, which claims the secret backstop refused, and which fleets have been heard from —
+including the ones **ahead of this build**, which is a third verdict rather than a quiet absence. Its
+`status` is `null` on a deployment with no pool, and that null is load-bearing: a deployment on the
+`fake` default and a pool that has never published are different facts.
+
+`GET /api/pool/insights` is the shared page: the mirror folded across fleets. It takes `?project=` and
+an optional `?since=` UTC day, and **no `?window=`** — the digest's bucket is a day and its retention is
+ninety of them, so the Insights window bar is not the question anybody asks of it. `rollup.byCheck` is
+`null` unless a project was named, and that is the shape rather than a flag: a reader that forgot the
+filter would sum two unrelated pipelines, and null makes that unreachable rather than merely wrong.
+
+`POST /api/knowledge/facts/:id/keep-local` is the pool's only write: the per-claim opt-out. It writes
+the store and **never publishes** — a route that did the network write would make an operator's click
+wait on a push to another continent, and a failed push there is a 500 on a ruling that succeeded
+locally. It marks the document dirty; the desk's next pulse re-derives and puts it.
+
+Neither read rides on `/api/state`, for `/api/mcp/usage`'s reason: the mirror is other teams' prose plus
+ninety days of rows per fleet, and the snapshot comes round every couple of seconds for every open
+cockpit.
 
 ### `GET /api/mcp/usage`
 

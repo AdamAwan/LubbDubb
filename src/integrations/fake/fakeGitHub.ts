@@ -14,7 +14,7 @@ import type {
 import type { PullRequest } from '../../types.js';
 import type {
   BranchDeleteCapable,
-  Capability,
+  WorldCapability,
   Injectable,
   Integration,
   PrBaseCapable,
@@ -60,7 +60,7 @@ export class FakeGitHubIntegration
     Injectable
 {
   readonly id = 'sourceControl:fake';
-  readonly capability: Capability = 'sourceControl';
+  readonly capability: WorldCapability = 'sourceControl';
 
   constructor(
     private readonly world: FakeWorldStore,

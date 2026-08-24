@@ -55,6 +55,8 @@ import type { BuildReading } from './selfUpdate/upgradePlan.js';
 import type { FileOverlap } from './fileOverlap.js';
 import type { UnrecordedWork } from './graph/unrecorded.js';
 import type { PrAttention } from './prAttention.js';
+import type { PoolStatus } from './pool/poolDesk.js';
+import type { PoolRollup } from './pool/aggregate.js';
 import type { PrHealth } from './prHealth.js';
 import type { ControlState } from './runtimeControl.js';
 import type { RunningConfigGroup } from './server/runningConfig.js';
@@ -120,6 +122,8 @@ import type {
   ShortfallAuthor,
   ShortfallCause,
   StackLanding,
+  PoolFleetReading,
+  PoolMirroredClaim,
   StallPark,
   TaskSummary,
   ValidationCheck,
@@ -1731,6 +1735,19 @@ export type {
 export type { RemedyCauseTotal, RemedyInsights, RemedyKindHealth, RemedyRow } from './remedyInsights.js';
 export type { RemedyCause, RemedyGuard, RemedyKind } from './types.js';
 export type { McpChannel } from './types.js';
+// The pool's own shapes. A wire type either **is** a domain type or `extends` it,
+// so these are re-exports rather than re-declarations — the cockpit reads exactly
+// what the store holds. → `docs/spec/28-cross-fleet-pool.md`
+export type {
+  PoolClaim,
+  PoolDigestRow,
+  PoolDocumentKind,
+  PoolFleetReading,
+  PoolMirroredClaim,
+  PoolPublication,
+} from './types.js';
+export type { PoolStatus } from './pool/poolDesk.js';
+export type { PoolRollup, PoolRollupRow } from './pool/aggregate.js';
 /** What `POST /api/issues/:number/dismiss-run` stopped on its way out. */
 export type { RunClearOut } from './floor/endRun.js';
 export type { SpendGoal, SpendInsights, SpendPhase, SpendPhaseTotal, SpendRun } from './spendInsights.js';
@@ -1947,4 +1964,42 @@ export interface McpChannelPayload {
   skillPath: string;
   /** The three tools the desktop channel advertises, in the order `tools/list` gives them. */
   tools: { name: string; description: string }[];
+}
+
+/**
+ * `/api/pool` — the cross-fleet pool as this fleet sees it: its own side, and the
+ * mirror of everybody else's.
+ *
+ * A route of its own rather than a field on the state snapshot, for
+ * {@link McpUsagePayload}'s reason: the mirror is other teams' prose plus ninety
+ * days of rows per fleet, and the snapshot comes round every couple of seconds for
+ * every open cockpit.
+ *
+ * → `docs/spec/28-cross-fleet-pool.md#in-the-cockpit`
+ */
+export interface PoolStatePayload {
+  /**
+   * Null on the `fake` default, and that null is load-bearing: a deployment with no
+   * pool and a pool that has never published are different facts, and drawing the
+   * second for the first says in the operator's words that something is broken.
+   */
+  status: PoolStatus | null;
+  /** Every fleet the mirror has heard from — including the ones ahead of this build. */
+  fleets: PoolFleetReading[];
+  /** The mirror's claims, newest vouch first. Drawn as readings; nothing acts on one. */
+  claims: PoolMirroredClaim[];
+}
+
+/**
+ * `/api/pool/insights` — the shared page: everybody's digests folded across fleets.
+ *
+ * `rollup.byCheck` is null unless the request named a project, and that is the
+ * shape rather than a flag: a reader that forgot the filter would sum two unrelated
+ * pipelines, and null makes that unreachable rather than merely wrong.
+ */
+export interface PoolInsightsPayload {
+  rollup: PoolRollup;
+  /** The projects the mirror actually holds, so the picker offers what exists. */
+  projects: string[];
+  fleets: PoolFleetReading[];
 }

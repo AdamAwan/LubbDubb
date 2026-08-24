@@ -114,7 +114,10 @@ test('every config fix a check offers is a key the config route accepts', async 
  */
 test('every outstanding check says what to do about it', async () => {
   const reading = await buildSetupReading({
-    config: config({ integrations: { sourceControl: 'github', issues: 'github' }, github: { owner: 'a', repo: 'b' } }),
+    config: config({
+      integrations: { sourceControl: 'github', issues: 'github', pool: 'fake' },
+      github: { owner: 'a', repo: 'b' },
+    }),
     store: buildSystem(config()).store,
     probes: probes({ agentVersion: () => Promise.resolve(null), env: () => undefined }),
     configFile: '/nowhere/lubbdubb.config.json',
@@ -140,7 +143,10 @@ test('every outstanding check says what to do about it', async () => {
  */
 test('an identity nothing could confirm is never offered as a one-click fix', async () => {
   const github = await buildSetupReading({
-    config: config({ integrations: { sourceControl: 'github', issues: 'github' }, github: { owner: 'a', repo: 'b' } }),
+    config: config({
+      integrations: { sourceControl: 'github', issues: 'github', pool: 'fake' },
+      github: { owner: 'a', repo: 'b' },
+    }),
     store: buildSystem(config()).store,
     probes: probes({ env: () => undefined }),
     configFile: '/nowhere/lubbdubb.config.json',
@@ -152,7 +158,10 @@ test('an identity nothing could confirm is never offered as a one-click fix', as
   assert.notEqual(identity?.fix?.kind, 'config', 'a guessed login must not reach a button');
 
   const confirmed = await buildSetupReading({
-    config: config({ integrations: { sourceControl: 'github', issues: 'github' }, github: { owner: 'a', repo: 'b' } }),
+    config: config({
+      integrations: { sourceControl: 'github', issues: 'github', pool: 'fake' },
+      github: { owner: 'a', repo: 'b' },
+    }),
     store: buildSystem(config()).store,
     probes: probes({ env: (name) => (name === 'GITHUB_TOKEN' ? 'ghp_x' : undefined) }),
     configFile: '/nowhere/lubbdubb.config.json',

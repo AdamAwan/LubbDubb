@@ -4,6 +4,7 @@ import { dirname } from 'node:path';
 import { SCHEMA } from './schema.js';
 import { systemClock, type Clock, type StoreContext } from './context.js';
 import { ensureColumns, rebuildTables, runOnce } from './migrate.js';
+import { PoolStore, type PoolDigestMirrorRow } from './pool.js';
 import { backfillTaskDispatchKind, TaskStore, TASK_COLUMNS } from './tasks.js';
 import { JobStore, JOB_COLUMNS } from './jobs.js';
 import { JobScheduleStore, JOB_SCHEDULE_COLUMNS } from './schedules.js';
@@ -15,6 +16,7 @@ import {
   KnowledgeStore,
   KNOWLEDGE_COLUMNS,
   KNOWLEDGE_REBUILDS,
+  stampFactsWithProject,
   stampGraduationsBeforeExits,
   type ContradictionOutcome,
   type FactContradictionOutcome,
@@ -95,6 +97,11 @@ import type {
   KnowledgeContradiction,
   KnowledgeCorroboration,
   KnowledgeFact,
+  PoolDigestDocument,
+  PoolDocumentKind,
+  PoolFleetReading,
+  PoolMirroredClaim,
+  PoolPublication,
   KnowledgeGraduation,
   Remedy,
   RemedyInput,
@@ -201,8 +208,15 @@ export class Store {
   private readonly tickets: TicketStore;
   private readonly upgrades: UpgradeStore;
   private readonly pets: PetStore;
+  private readonly pool: PoolStore;
 
-  constructor(dbPath: string, clock: Clock = systemClock) {
+  /**
+   * @param project The project name this deployment declares (`pool.project`), or
+   * undefined where it declares none. It is handed to the knowledge module so every
+   * fact is stamped with it as it is written, and it gates the one backfill the
+   * pool adds — see {@link stampFactsWithProject}.
+   */
+  constructor(dbPath: string, clock: Clock = systemClock, project?: string) {
     if (dbPath !== ':memory:') mkdirSync(dirname(dbPath), { recursive: true });
     this.db = new Database(dbPath);
     this.db.pragma('journal_mode = WAL');
@@ -247,6 +261,16 @@ export class Store {
     // Run on every boot instead, it would rewrite the exit of every job and ticket
     // graduation written since.
     if (addedColumns.includes('knowledge_graduations.exit')) stampGraduationsBeforeExits(this.db);
+    // The third of the three, and the one whose null is *most* load-bearing:
+    // `knowledge_facts.project` null spells "no project", which would exclude every
+    // claim the store already holds from ever being published — and every one of
+    // them was in fact learned about the deployment's current project. Run on every
+    // boot instead, it would relabel every claim written since the day an operator
+    // pointed the harness at a second one. A deployment that declares no name stamps
+    // nothing, which is the honest answer rather than a guess.
+    if (addedColumns.includes('knowledge_facts.project') && project !== undefined) {
+      stampFactsWithProject(this.db, project);
+    }
     // The migrations that are not columns, here for the same reason the pass above
     // is — before any module is constructed, let alone reads. #203's
     // `floor_completions` becomes #234's `issue_runs`, carrying the operator's
@@ -308,7 +332,8 @@ export class Store {
     this.schedules = new JobScheduleStore(ctx);
     this.priority = new PriorityStore(ctx);
     this.profileOverrides = new ProfileOverrideStore(ctx);
-    this.knowledge = new KnowledgeStore(ctx);
+    this.knowledge = new KnowledgeStore(ctx, project ?? null);
+    this.pool = new PoolStore(ctx);
     this.remedies = new RemedyStore(ctx);
     this.mcpCalls = new McpCallStore(ctx);
     this.humanTasks = new HumanTaskStore(ctx);
@@ -600,6 +625,48 @@ export class Store {
   }
   listRecentRemedies(kind: RemedyKind, limit: number): Remedy[] {
     return this.remedies.listRecentRemedies(kind, limit);
+  }
+
+  // -- The cross-fleet pool (docs/spec/28-cross-fleet-pool.md) ----------------
+
+  listPublishableFacts(): KnowledgeFact[] {
+    return this.knowledge.listPublishableFacts();
+  }
+  setFactKeepLocal(id: string, keepLocal: boolean): KnowledgeFact | null {
+    return this.knowledge.setFactKeepLocal(id, keepLocal);
+  }
+  replacePoolFleetClaims(fleetId: string, claims: readonly PoolMirroredClaim[]): void {
+    this.pool.replaceFleetClaims(fleetId, claims);
+  }
+  replacePoolFleetDigest(fleetId: string, project: string, document: PoolDigestDocument): void {
+    this.pool.replaceFleetDigest(fleetId, project, document);
+  }
+  recordPoolFleetReading(reading: Omit<PoolFleetReading, 'seenAt'>): void {
+    this.pool.recordFleetReading(reading);
+  }
+  listPoolFleets(): PoolFleetReading[] {
+    return this.pool.listPoolFleets();
+  }
+  listMirroredClaims(): PoolMirroredClaim[] {
+    return this.pool.listMirroredClaims();
+  }
+  mirroredClaimsForFact(factId: string): PoolMirroredClaim[] {
+    return this.pool.mirroredClaimsForFact(factId);
+  }
+  listPoolDigestRows(project: string | null): PoolDigestMirrorRow[] {
+    return this.pool.listDigestRows(project);
+  }
+  getPoolPublication(kind: PoolDocumentKind): PoolPublication {
+    return this.pool.getPublication(kind);
+  }
+  markPoolDirty(kind: PoolDocumentKind): void {
+    this.pool.markPoolDirty(kind);
+  }
+  recordPoolPublish(kind: PoolDocumentKind, contentHash: string): void {
+    this.pool.recordPoolPublish(kind, contentHash);
+  }
+  recordPoolChecked(kind: PoolDocumentKind): void {
+    this.pool.recordPoolChecked(kind);
   }
 
   // -- MCP calls (which tools the fleet reaches for, and which it never does) -

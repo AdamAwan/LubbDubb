@@ -21,7 +21,7 @@ function withToken(token: string | null, fn: () => void): void {
 }
 
 function selection(over: Partial<IntegrationSelection>): IntegrationSelection {
-  return { sourceControl: 'fake', issues: 'fake', ...over };
+  return { sourceControl: 'fake', issues: 'fake', ...over, pool: 'fake' };
 }
 
 test('loadConfig carries a github block (owner/repo) from overrides', () => {
@@ -37,7 +37,7 @@ test('registry builds real github providers when selected with a token + owner/r
   withToken('ghp_test', () => {
     const store = new Store(':memory:');
     const config = loadConfig({ github: { owner: 'o', repo: 'r' } });
-    const integrations = buildIntegrations(selection({ sourceControl: 'github', issues: 'github' }), {
+    const integrations = buildIntegrations(selection({ sourceControl: 'github', issues: 'github', pool: 'fake' }), {
       store,
       config,
       now: FIXED,

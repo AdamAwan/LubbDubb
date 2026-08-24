@@ -1249,6 +1249,32 @@ export interface KnowledgeFact {
    * list of those is worse than an absence.
    */
   where: string | null;
+  /**
+   * The project this claim was learned about (`pool.project`), or null on a
+   * deployment that declares none.
+   *
+   * Stamped **as the fact is written**, because what is worth recording is what
+   * was true when the claim was learned rather than what is true when it is
+   * published. Pool-wide, `fleet` scope no longer implies *this repository*, and
+   * nothing in the sentence says which one it is about.
+   *
+   * It never takes part in claim matching — making it part of identity would
+   * fragment exactly the agreement the pool exists to gain. What it decides is one
+   * thing: whether a **non-matching** arrival is proposed locally, or held in the
+   * mirror and proposed to nobody.
+   * → `docs/spec/28-cross-fleet-pool.md#the-project-name`
+   */
+  project: string | null;
+  /**
+   * Whether the operator has withheld this claim from the cross-fleet pool.
+   *
+   * An **opt-out** rather than an opt-in, so the cheap vouch stays cheap: the
+   * per-claim gate is the vouch itself, and this is for the one claim in fifty
+   * that quotes a customer's configuration. Withdrawal is immediate — a claim
+   * marked here is simply not in the next publish, which is a whole-document put.
+   * → `docs/spec/28-cross-fleet-pool.md#data-classification`
+   */
+  keepLocal: boolean;
   createdAt: string;
   /** When it last moved — for anything but a fresh proposal, when its reach changed. */
   updatedAt: string;
@@ -1296,6 +1322,16 @@ export interface KnowledgeCorroboration {
   sessionId: string | null;
   /** What the observer actually saw. Never the claim restated. */
   words: string;
+  /**
+   * The pool fleet whose document carried this voice, or null for a local agent's.
+   *
+   * **One fleet is one voice**, however many entries it publishes and however many
+   * times it is polled — which is why this is on the row rather than a second count
+   * beside the local one: `distinctCorroborators` unions over goal and session
+   * transitively, and a pooled row has neither, so the origin fleet folds into that
+   * same union. → `docs/spec/28-cross-fleet-pool.md#what-arriving-means`
+   */
+  fleetId: string | null;
   createdAt: string;
 }
 
@@ -1306,6 +1342,11 @@ export interface FactObservation {
   goalRef: string | null;
   sessionId: string | null;
   words: string;
+  /**
+   * The pool fleet this observation arrived from, when it did. Absent for every
+   * local agent, which is every observation the harness made before the pool.
+   */
+  fleetId?: string | null;
 }
 
 /**
@@ -3744,4 +3785,174 @@ export interface McpCallInput {
   durationMs: number;
   /** Serialised by the store, so a caller never has to decide whether to keep them. */
   args: Record<string, unknown>;
+}
+
+// ---------------------------------------------------------------------------
+// The cross-fleet pool (docs/spec/28-cross-fleet-pool.md)
+//
+// The distance above `fleet`: what one fleet has vouched for, carried to the
+// others so a common problem is solved once rather than once per engineer, and a
+// daily digest of what each fleet spent so a person can read where the money goes
+// across a company rather than across a laptop.
+//
+// It is a **distribution** problem and not a measurement one. Nothing here
+// measures anything new — `knowledge_facts`, `src/spendInsights.ts` and
+// `src/remedyInsights.ts` already hold every figure. This moves what exists.
+// ---------------------------------------------------------------------------
+
+/** Which of the two documents this is. They differ in cadence, content, readership and retention. */
+export type PoolDocumentKind = 'claims' | 'digest';
+
+/**
+ * What every pool document carries, whichever kind it is.
+ *
+ * `fleetId` is in the body **as well as in the address**, and a mismatch discards
+ * the document: the address is the transport's, a text substrate may have none
+ * that survives a round trip, and a fleet publishing under another fleet's name is
+ * the single thing that can break one writer per namespace.
+ */
+interface PoolEnvelope {
+  /** The schema version. Named `pool` so the field reads as what it versions. */
+  pool: number;
+  kind: PoolDocumentKind;
+  fleetId: string;
+  project: string;
+  publishedAt: string;
+  harnessVersion: string;
+}
+
+/**
+ * One claim as it crosses — the words, and nothing that points into a world the
+ * reader cannot see.
+ *
+ * Three omissions, each load-bearing. **No claim key**: it is recomputed locally
+ * through `src/claims.ts`, and a key carried in the document is a second matcher
+ * free to disagree with the one that actually decides whether an arrival joins a
+ * local row. **No `aboutRef` and no `originRef`**: a ref points into somebody
+ * else's tracker, and `<Ref to={ref}/>` would draw it as a live link there. **No
+ * lifetime and no scope**: everything published stands, and everything published
+ * is fleet-scoped.
+ */
+export interface PoolClaim {
+  /** The origin's own fact id. Never minted at the far end — it is half the mirror's key. */
+  id: string;
+  claim: string;
+  /** What locates it, in the origin's words. Free text, or null. */
+  where: string | null;
+  /** When an operator at the origin ruled on it — the vouch that let it leave the machine. */
+  vouchedAt: string;
+  /** The origin's own count. A **reading** drawn on the row, never a trigger. */
+  corroborations: number;
+  /**
+   * The origin's dispute count — the more useful of the two. *The fleet that
+   * vouched for this has since had two agents contradict it* is exactly what an
+   * operator needs in front of them before promoting it here.
+   */
+  disputes: number;
+  /** The corroborators' own words, capped. What survives the crossing is the words. */
+  evidence: string[];
+}
+
+/** A fleet's claims document: what it has vouched for, whole. */
+export interface PoolClaimsDocument extends PoolEnvelope {
+  kind: 'claims';
+  claims: PoolClaim[];
+}
+
+/**
+ * One day's figure for one key, in one section.
+ *
+ * **Counts and dollars, never percentages** — a share summed across fleets is
+ * meaningless, so the aggregator takes shares from summed counts. `costUsd` is
+ * null where a window measured nothing at all, and never `$0.00` for it.
+ */
+export interface PoolDigestRow {
+  /** A UTC day, `YYYY-MM-DD`. Never local midnight — see the spec's sharp edge. */
+  day: string;
+  /** The section's own key: a `SpendPhase`, a `kind/cause/guard` triple, a check name, or `''`. */
+  key: string;
+  /** Runs, accounts, or dispatches — whichever the section counts. */
+  count: number;
+  costUsd: number | null;
+  /**
+   * True for the origin's current day. **A partial day counts in a total and never
+   * in an average** — otherwise every average on the page is dragged down by a day
+   * that is not over, silently, on the newest and most-read number.
+   */
+  partial: boolean;
+}
+
+/**
+ * A fleet's digest document: ninety UTC days of what it spent and what coming back
+ * to a pull request cost it.
+ *
+ * There is no separate total: `PHASE_ORDER` includes `other`, so the phases
+ * partition the fleet's spend and the total is their sum. A total shipped beside
+ * them would be a second statement of one number, free to disagree with the one
+ * that adds up.
+ */
+export interface PoolDigestDocument extends PoolEnvelope {
+  kind: 'digest';
+  /** Keyed by `SpendPhase`. */
+  byPhase: PoolDigestRow[];
+  /** Keyed by `<RemedyKind>/<RemedyCause>/<RemedyGuard>` — closed vocabularies, comparable by construction. */
+  byCause: PoolDigestRow[];
+  /**
+   * Keyed by the check's own name. A **separate section**, because check names
+   * cross within a project and never between: three fleets on one problem produce
+   * three keys, and summed across projects that renders perfectly as a chart
+   * saying no single check causes much pain.
+   */
+  byCheck: PoolDigestRow[];
+  /** Return dispatches that filed no account. Not optional: without it every share is a share of a minority. */
+  unaccounted: PoolDigestRow[];
+  /** Runs that reported no usage at all. Without it a PTY fleet is drawn as a cheap fleet. */
+  unmeasured: PoolDigestRow[];
+}
+
+/** One document, whichever kind. The layer above splits on `kind`; the transport stays opaque. */
+export type PoolDocument = PoolClaimsDocument | PoolDigestDocument;
+
+/**
+ * One arriving claim as the mirror holds it, plus what this fleet did with it.
+ *
+ * `localFactId` is null for the "held in the mirror, proposed to nobody" case — a
+ * cross-project arrival matching nothing local. That asymmetry is the design: a
+ * claim about your project's lint configuration never reaches a fleet on another
+ * project, because no agent there will ever say that sentence.
+ */
+export interface PoolMirroredClaim extends PoolClaim {
+  fleetId: string;
+  project: string;
+  /** The local fact this was proposed onto, or null when it was held in the mirror. */
+  localFactId: string | null;
+  publishedAt: string;
+  seenAt: string;
+}
+
+/**
+ * One fleet as the mirror last saw it — including the two readings that are not
+ * "it has published nothing".
+ *
+ * `ahead` is a fleet whose document this build's schema version skips, and it is
+ * drawn as such. *Could not reach the pool* is never folded into *nobody has
+ * published anything*.
+ */
+export interface PoolFleetReading {
+  fleetId: string;
+  project: string | null;
+  claimsAt: string | null;
+  digestAt: string | null;
+  ahead: boolean;
+  seenAt: string;
+}
+
+/** What this fleet has published of one kind, and whether the store has moved since. */
+export interface PoolPublication {
+  kind: PoolDocumentKind;
+  contentHash: string | null;
+  publishedAt: string | null;
+  /** A **hint**. The content hash is the truth; the slow clock re-derives and compares. */
+  dirty: boolean;
+  checkedAt: string | null;
 }

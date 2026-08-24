@@ -13,6 +13,7 @@ import { TicketsPanel } from '../components/TicketsPanel.js';
 import { ConfigPage } from '../components/ConfigPage.js';
 import { RecordPanel } from '../components/RecordPanel.js';
 import { KnowledgePanel } from '../components/KnowledgePanel.js';
+import { PoolStatus } from '../components/PoolStatus.js';
 import { LaunchPanel } from '../components/LaunchPanel.js';
 import { SetupPanel } from '../components/SetupPanel.js';
 import { PetsPanel } from '../components/PetsPanel.js';
@@ -127,7 +128,14 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
       // component that does is not reaching — the import ban is on `api.js` and
       // still holds. The window and the open reading are handed in from `Place`
       // rather than held inside it, so a link to one carries both.
-      return <InsightsPage view={view.insightsView} window={view.insightsWindow} actions={actions} />;
+      return (
+        <InsightsPage
+          view={view.insightsView}
+          window={view.insightsWindow}
+          poolProject={view.poolProject}
+          actions={actions}
+        />
+      );
     case 'tickets':
       // Embedded exactly as Insights is, and for the same reason: it reaches its
       // own route, which `console/` may not, but rendering a component that does
@@ -173,39 +181,48 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
       // by the same person, and three surfaces asking one question is how an
       // operator ends up ruling on the same claim twice.
       return (
-        <KnowledgePanel
-          facts={view.state.knowledge}
-          graduations={view.state.knowledgeGraduations}
-          delivery={view.state.knowledgeDelivery}
-          cost={view.state.knowledgeCost}
-          canFileTickets={view.state.config.canFileTickets}
-          now={view.now}
-          refUrls={view.state.refUrls}
-          viewingFact={view.viewingFact}
-          query={{
-            view: view.knowledgeView,
-            show: view.knowledgeShow,
-            sort: view.knowledgeSort,
-            desc: view.knowledgeDesc,
-            fold: view.knowledgeFolded,
-          }}
-          onQuery={(next) =>
-            actions.setKnowledgeQuery({
-              ...(next.view !== undefined && { knowledgeView: next.view }),
-              ...(next.show !== undefined && { knowledgeShow: next.show }),
-              ...(next.sort !== undefined && { knowledgeSort: next.sort }),
-              ...(next.desc !== undefined && { knowledgeDesc: next.desc }),
-              ...(next.fold !== undefined && { knowledgeFolded: next.fold }),
-            })
-          }
-          onReach={(id, reach) => actions.setFactReach(id, reach)}
-          onExit={(id, exit) => actions.exitFact(id, exit)}
-          onRaise={(claim, originRef) => actions.raiseFact(claim, originRef)}
-          onSettleGraduation={(id, outcome) => actions.settleGraduation(id, outcome)}
-          onDetail={(id) => actions.factDetail(id)}
-          onResolveContradiction={(id, ruling) => actions.resolveContradiction(id, ruling)}
-          onViewFact={(id) => actions.viewFact(id)}
-        />
+        <>
+          {/* This fleet's own side of the cross-fleet pool, above the claims it is
+              about: what has been published, when the pool was last read, and which
+              claims the secret backstop refused. It draws nothing at all when no pool
+              is configured — an empty panel there would say something is broken.
+              → docs/spec/28-cross-fleet-pool.md#in-the-cockpit */}
+          <PoolStatus now={view.now} />
+          <KnowledgePanel
+            facts={view.state.knowledge}
+            graduations={view.state.knowledgeGraduations}
+            delivery={view.state.knowledgeDelivery}
+            cost={view.state.knowledgeCost}
+            canFileTickets={view.state.config.canFileTickets}
+            now={view.now}
+            refUrls={view.state.refUrls}
+            viewingFact={view.viewingFact}
+            query={{
+              view: view.knowledgeView,
+              show: view.knowledgeShow,
+              sort: view.knowledgeSort,
+              desc: view.knowledgeDesc,
+              fold: view.knowledgeFolded,
+            }}
+            onQuery={(next) =>
+              actions.setKnowledgeQuery({
+                ...(next.view !== undefined && { knowledgeView: next.view }),
+                ...(next.show !== undefined && { knowledgeShow: next.show }),
+                ...(next.sort !== undefined && { knowledgeSort: next.sort }),
+                ...(next.desc !== undefined && { knowledgeDesc: next.desc }),
+                ...(next.fold !== undefined && { knowledgeFolded: next.fold }),
+              })
+            }
+            onReach={(id, reach) => actions.setFactReach(id, reach)}
+            onExit={(id, exit) => actions.exitFact(id, exit)}
+            onRaise={(claim, originRef) => actions.raiseFact(claim, originRef)}
+            onSettleGraduation={(id, outcome) => actions.settleGraduation(id, outcome)}
+            onDetail={(id) => actions.factDetail(id)}
+            onResolveContradiction={(id, ruling) => actions.resolveContradiction(id, ruling)}
+            onViewFact={(id) => actions.viewFact(id)}
+            onKeepLocal={(id, keepLocal) => actions.setFactKeepLocal(id, keepLocal)}
+          />
+        </>
       );
     case 'pets':
       // A deployment drawing no vivarium has no tab to reach this, but a stale URL

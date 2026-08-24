@@ -150,7 +150,7 @@ test('both github capabilities share one client', () => {
   try {
     const config = loadConfig({ github: { owner: 'o', repo: 'r' } });
     const integrations = buildIntegrations(
-      { sourceControl: 'github', issues: 'github' },
+      { sourceControl: 'github', issues: 'github', pool: 'fake' },
       { store, config, now: FIXED },
     );
     // Two clients would be two ETag caches and two views of one hourly budget,

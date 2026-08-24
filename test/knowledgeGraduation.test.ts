@@ -584,6 +584,8 @@ test('what may be sent on, by which exit, and the wording of each refusal', () =
     aboutRef: null,
     where: null,
     createdAt: '2026-08-01T00:00:00.000Z',
+    project: null,
+    keepLocal: false,
     updatedAt: '2026-08-01T00:00:00.000Z',
   };
   assert.equal(exitableFact(base, 'docs').ok, true);
@@ -625,6 +627,8 @@ test('the note says what the landing costs the claim, whichever target it names'
     aboutRef: null,
     where: null,
     createdAt: '2026-08-01T00:00:00.000Z',
+    project: null,
+    keepLocal: false,
     updatedAt: '2026-08-01T00:00:00.000Z',
   };
   const observations = Array.from({ length: 9 }, (_, i) => ({
@@ -634,6 +638,7 @@ test('the note says what the landing costs the claim, whichever target it names'
     taskId: null,
     goalRef: `issue:${i}`,
     sessionId: null,
+    fleetId: null,
     words: `observation ${i}`,
     createdAt: '2026-08-01T00:00:00.000Z',
   }));

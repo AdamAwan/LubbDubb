@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { signOff } from '../src/sink/signOff.js';
 import { CompositeConnector } from '../src/integrations/compositeConnector.js';
 import type {
-  Capability,
+  WorldCapability,
   Integration,
   IssueCommentCapable,
   IssueCreateCapable,
@@ -28,7 +28,7 @@ class RecordingIntegration
   implements Integration, PrReplyCapable, PrCreateCapable, IssueCreateCapable, IssueCommentCapable, PrLabelCapable
 {
   readonly id = 'sourceControl:recording';
-  readonly capability: Capability = 'sourceControl';
+  readonly capability: WorldCapability = 'sourceControl';
   readonly sent: string[] = [];
   readonly labels: PrLabelInput[] = [];
 

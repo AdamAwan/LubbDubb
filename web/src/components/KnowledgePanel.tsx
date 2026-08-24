@@ -94,6 +94,7 @@ export function KnowledgePanel({
   onDetail,
   onResolveContradiction,
   onViewFact,
+  onKeepLocal,
 }: {
   facts: KnowledgeFactView[];
   /** Every attempt to put a claim in the repository, with the sweep's own reading of each. */
@@ -121,6 +122,8 @@ export function KnowledgePanel({
   }>;
   onResolveContradiction: (id: string, ruling: ContradictionRuling) => Promise<unknown> | unknown;
   onViewFact: (id: string | null) => void;
+  /** Withhold one claim from the cross-fleet pool, or put it back. Never a ruling. */
+  onKeepLocal: (id: string, keepLocal: boolean) => Promise<unknown> | unknown;
   /** False when no real tracker is configured — there is nowhere to file a claim into. */
   canFileTickets: boolean;
 }) {
@@ -154,6 +157,7 @@ export function KnowledgePanel({
     onDetail,
     onResolveContradiction,
     onViewFact,
+    onKeepLocal,
     dropped,
     graduationOf,
     waiting,
@@ -755,6 +759,8 @@ interface RowProps {
   }>;
   onResolveContradiction: (id: string, ruling: ContradictionRuling) => Promise<unknown> | unknown;
   onViewFact: (id: string | null) => void;
+  /** Withhold one claim from the cross-fleet pool, or put it back. Never a ruling. */
+  onKeepLocal: (id: string, keepLocal: boolean) => Promise<unknown> | unknown;
   /** Ids the block's cap left out, from the renderer that left them out. */
   dropped: Set<string>;
   /** Why each claim is waiting on a person, by fact id — `waitingOn`'s answer, taken once. */
@@ -836,6 +842,7 @@ function FactCard({
   onDetail,
   onResolveContradiction,
   onViewFact,
+  onKeepLocal,
   dropped,
   graduationOf,
   waiting,
@@ -1014,6 +1021,7 @@ function FactCard({
           onSettle={onSettleGraduation}
         />
         <FactRulings fact={fact} onReach={onReach} />
+        <FactKeepLocal fact={fact} onKeepLocal={onKeepLocal} />
       </div>
       {committing && <FactCommitForm fact={fact} onExit={onExit} onDone={() => setCommitting(false)} />}
       {open && <FactProvenance id={fact.id} now={now} onDetail={onDetail} onResolve={onResolveContradiction} />}
@@ -1190,6 +1198,52 @@ function FactExits({
         </button>
       )}
     </>
+  );
+}
+
+/**
+ * The pool's per-claim opt-out, on the row where the vouch is made.
+ *
+ * **An opt-out and not an opt-in**, so the cheap vouch stays cheap: the per-claim
+ * gate is the vouch itself, and this is for the one claim in fifty that quotes a
+ * customer's configuration. A second click to publish would mean nothing is ever
+ * published — the pool sits empty and looks like it is working.
+ *
+ * It is **not a ruling**. Withholding changes nothing about who this fleet tells,
+ * only about who else may read it, so the claim stays exactly where the operator
+ * left it and the page's **Needs you** section is unaffected.
+ *
+ * Drawn only where it would mean something: a claim the pool would never carry
+ * anyway — an unruled proposal, a notice, a `check:` or `goal:` scope, one already
+ * in the repository — gets no control, because a switch that changes nothing is a
+ * switch an operator will believe they have used.
+ * → `docs/spec/28-cross-fleet-pool.md#data-classification`
+ */
+function FactKeepLocal({
+  fact,
+  onKeepLocal,
+}: {
+  fact: KnowledgeFactView;
+  onKeepLocal: (id: string, keepLocal: boolean) => Promise<unknown> | unknown;
+}): JSX.Element | null {
+  const publishable =
+    fact.scope === 'fleet' &&
+    fact.lifetime === 'standing' &&
+    fact.ruledAt !== null &&
+    (fact.reach === 'lookup' || fact.reach === 'injected');
+  if (!publishable) return null;
+  return (
+    <AsyncButton
+      className="ghost"
+      onClick={() => onKeepLocal(fact.id, !fact.keepLocal)}
+      title={
+        fact.keepLocal
+          ? 'Withheld from the cross-fleet pool. Put it back and it rides the next publish'
+          : 'Withhold this claim from the cross-fleet pool. It leaves the next document immediately — a publish is a whole replace, so there is nothing to retract'
+      }
+    >
+      {fact.keepLocal ? 'Withheld from the pool' : 'Keep local'}
+    </AsyncButton>
   );
 }
 

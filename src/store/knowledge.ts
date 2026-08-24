@@ -60,9 +60,41 @@ import type { StoreContext } from './context.js';
  * → `docs/spec/14-persistence.md#migrations`
  */
 export const KNOWLEDGE_COLUMNS: ColumnMigrations = {
-  knowledge_facts: { ruled_at: 'TEXT', resolves_when: 'TEXT', about_ref: 'TEXT', where_at: 'TEXT' },
+  knowledge_facts: {
+    ruled_at: 'TEXT',
+    resolves_when: 'TEXT',
+    about_ref: 'TEXT',
+    where_at: 'TEXT',
+    project: 'TEXT',
+    keep_local: 'INTEGER',
+  },
+  knowledge_corroborations: { fleet_id: 'TEXT' },
   knowledge_graduations: { exit: 'TEXT', ticket_ref: 'TEXT' },
 };
+
+/**
+ * The pool's two columns, and the one of them whose **null means something**.
+ *
+ * `project` is the project name at the moment the fact was written, so what is
+ * recorded is what was true when the claim was learned rather than what is true
+ * when it is published. Null there spells *no project*, which would exclude every
+ * claim the store already holds from ever being published — and every one of them
+ * was in fact learned about the deployment's current project. So it is stamped,
+ * **gated on `ensureColumns` reporting that it added the column**: run on every
+ * boot instead, this would relabel every claim written since the day an operator
+ * pointed the harness at a second project.
+ *
+ * A deployment with no project name configured stamps nothing, which is the honest
+ * answer: there is no name to assert, and the rows stay null until there is one.
+ *
+ * `keep_local` needs no backfill beside it, for the plainest reason of the pair:
+ * nothing before this could withhold anything, so null is not merely tolerable on
+ * an older row — it is the only true value.
+ * → `docs/spec/14-persistence.md#when-a-null-means-something`
+ */
+export function stampFactsWithProject(db: Database.Database, project: string): void {
+  db.prepare(`UPDATE knowledge_facts SET project=? WHERE project IS NULL`).run(project);
+}
 
 /**
  * The one shape change here that **no `ALTER TABLE` can express**.
@@ -164,7 +196,16 @@ export function stampGraduationsBeforeExits(db: Database.Database): void {
  * → `docs/spec/27-knowledge.md`
  */
 export class KnowledgeStore {
-  constructor(private readonly ctx: StoreContext) {}
+  /**
+   * @param project The project name this deployment declares (`pool.project`), stamped
+   * on every fact as it is written. Null on a deployment that declares none, which is
+   * every deployment with the pool off — and null there spells *no project*, not
+   * *some project nobody named*.
+   */
+  constructor(
+    private readonly ctx: StoreContext,
+    private readonly project: string | null = null,
+  ) {}
 
   /**
    * File a claim, or record that somebody else saw the same thing.
@@ -233,6 +274,64 @@ export class KnowledgeStore {
       fact: this.promoteOnCorroboration(fact, corroborations),
       corroborations,
     };
+  }
+
+  /**
+   * The facts this fleet may publish to the cross-fleet pool.
+   *
+   * Four conditions, and each of the three refusals behind them is a decision
+   * rather than a filter:
+   *
+   * - **Reach is `lookup` or `injected`.** A proposal is one agent's claim nobody
+   *   has agreed with; `graduated` is in the repository now, where git already
+   *   carries it for a fleet on the same repository and where it was a claim about
+   *   a repository a fleet on another one does not have.
+   * - **`ruled_at` is not null.** *The vouch*, and reading it is what makes the gate
+   *   mechanical: it is stamped on any move an operator makes, so "a person has read
+   *   this sentence and ruled on it" is a column rather than a policy somebody has to
+   *   keep true. The awkward case closes by construction — a claim two agents carried
+   *   to `lookup` that no person has seen carries a null here and does not leave the
+   *   machine.
+   * - **The lifetime is standing.** A notice never crosses: it is a report on today,
+   *   and its resolution condition names a check on a pull request in a repository
+   *   the reader cannot see, so nothing at the far end can evaluate it and the clock
+   *   silently becomes the whole mechanism on the one kind written to have more.
+   * - **Scope is `fleet`.** A `goal:` scope dies with its goal, and a `check:` scope
+   *   names another fleet's pipeline.
+   *
+   * `keep_local` is the operator's own opt-out on top of all four.
+   * → `docs/spec/28-cross-fleet-pool.md#what-leaves`
+   */
+  listPublishableFacts(): KnowledgeFact[] {
+    const rows = this.ctx.db
+      .prepare(
+        `SELECT * FROM knowledge_facts
+          WHERE scope = 'fleet'
+            AND reach IN ('lookup','injected')
+            AND lifetime = 'standing'
+            AND ruled_at IS NOT NULL
+            AND (keep_local IS NULL OR keep_local = 0)
+          ORDER BY ruled_at ASC, rowid ASC`,
+      )
+      .all() as FactRow[];
+    return rows.map(rowToFact);
+  }
+
+  /**
+   * Withhold one claim from the pool, or put it back.
+   *
+   * Not a reach and not a ruling: it changes nothing about who this fleet tells,
+   * only about who else may read it. So `ruled_at` is deliberately left alone — a
+   * claim withheld is still a claim the operator ruled on, and stamping it here
+   * would move it out of the page's **Needs you** section for a click that answered
+   * a different question.
+   */
+  setFactKeepLocal(id: string, keepLocal: boolean): KnowledgeFact | null {
+    const result = this.ctx.db
+      .prepare(`UPDATE knowledge_facts SET keep_local=?, updated_at=? WHERE id=?`)
+      .run(keepLocal ? 1 : 0, this.ctx.now(), id);
+    if (result.changes === 0) return null;
+    return this.getFact(id);
   }
 
   getFact(id: string): KnowledgeFact | null {
@@ -986,6 +1085,12 @@ export class KnowledgeStore {
       resolvesWhen: proposal.lifetime === 'expiring' ? proposal.resolvesWhen : null,
       aboutRef: proposal.aboutRef,
       where: proposal.where,
+      // Stamped as the fact is written rather than read at publish time: what is
+      // worth recording is the project the claim was *learned* about, and a
+      // deployment repointed at a second repository would otherwise relabel its
+      // whole history.
+      project: this.project,
+      keepLocal: false,
       createdAt: ts,
       updatedAt: ts,
     };
@@ -993,22 +1098,53 @@ export class KnowledgeStore {
       .prepare(
         `INSERT INTO knowledge_facts
            (id, claim, scope, lifetime, expires_at, reach, supersedes, origin_ref, ruled_at, resolves_when,
-            about_ref, where_at, created_at, updated_at)
+            about_ref, where_at, project, keep_local, created_at, updated_at)
          VALUES (@id, @claim, @scope, @lifetime, @expiresAt, @reach, @supersedes, @originRef, @ruledAt,
-                 @resolvesWhen, @aboutRef, @where, @createdAt, @updatedAt)`,
+                 @resolvesWhen, @aboutRef, @where, @project, 0, @createdAt, @updatedAt)`,
       )
-      .run({ ...fact, resolvesWhen: fact.resolvesWhen === null ? null : JSON.stringify(fact.resolvesWhen) });
+      .run({
+        ...fact,
+        // Dropped from the binding rather than bound: `keep_local` is written as
+        // the literal 0 above (better-sqlite3 refuses a JS boolean), and the driver
+        // throws on a named parameter the statement does not use.
+        keepLocal: undefined,
+        resolvesWhen: fact.resolvesWhen === null ? null : JSON.stringify(fact.resolvesWhen),
+      });
     return fact;
   }
 
+  /**
+   * One voice on a claim.
+   *
+   * **A pooled voice is upserted on `(fact_id, fleet_id)` and never appended**, and
+   * that is the silent one. The poller re-reads whole documents forever, so an
+   * append would add a corroboration on every pulse — some two hundred and
+   * eighty-eight a day against every pooled claim, with nothing erroring, every
+   * pooled claim crossing to `lookup` within one pulse and then going on climbing.
+   * It looks *exactly* like the design working.
+   * → `docs/spec/28-cross-fleet-pool.md#the-one-that-is-silent`
+   */
   private recordCorroboration(factId: string, observer: FactObservation): void {
+    const fleetId = observer.fleetId ?? null;
+    if (fleetId !== null) {
+      const existing = this.ctx.db
+        .prepare(`SELECT id FROM knowledge_corroborations WHERE fact_id=? AND fleet_id=?`)
+        .get(factId, fleetId) as { id: string } | undefined;
+      if (existing) {
+        // The words are refreshed rather than left: the origin's evidence is what an
+        // operator reads before promoting, and a document that has been rewritten
+        // since carries the corroborators it has now.
+        this.ctx.db.prepare(`UPDATE knowledge_corroborations SET words=? WHERE id=?`).run(observer.words, existing.id);
+        return;
+      }
+    }
     this.ctx.db
       .prepare(
         `INSERT INTO knowledge_corroborations
-           (id, fact_id, agent_id, task_id, goal_ref, session_id, words, created_at)
-         VALUES (@id, @factId, @agentId, @taskId, @goalRef, @sessionId, @words, @createdAt)`,
+           (id, fact_id, agent_id, task_id, goal_ref, session_id, words, fleet_id, created_at)
+         VALUES (@id, @factId, @agentId, @taskId, @goalRef, @sessionId, @words, @fleetId, @createdAt)`,
       )
-      .run({ id: `knc_${nanoid(10)}`, factId, ...observer, createdAt: this.ctx.now() });
+      .run({ id: `knc_${nanoid(10)}`, factId, ...observer, fleetId, createdAt: this.ctx.now() });
   }
 
   /**
@@ -1184,6 +1320,10 @@ interface FactRow {
   about_ref: string | null;
   /** Nullable and possibly absent, for {@link FactRow.ruled_at}'s reason. */
   where_at: string | null;
+  /** The project the claim was learned about; nullable and possibly absent, for {@link FactRow.ruled_at}'s reason. */
+  project: string | null;
+  /** 1 when the operator has withheld this claim from the pool. Nullable and possibly absent. */
+  keep_local: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -1212,6 +1352,11 @@ function rowToFact(r: FactRow): KnowledgeFact {
     // failure being closed here, since absent is also the correct answer.
     aboutRef: r.about_ref ?? null,
     where: r.where_at ?? null,
+    project: r.project ?? null,
+    // `=== 1` rather than a truthiness read: the column is nullable and possibly
+    // absent, and both of those are "not withheld" — the one value that must be
+    // true is the explicit 1 an operator's click writes.
+    keepLocal: r.keep_local === 1,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -1225,6 +1370,8 @@ interface CorroborationRow {
   goal_ref: string | null;
   session_id: string | null;
   words: string;
+  /** The pool fleet whose document carried this voice; null for a local agent's own. */
+  fleet_id: string | null | undefined;
   created_at: string;
 }
 
@@ -1305,6 +1452,10 @@ function rowToCorroboration(r: CorroborationRow): KnowledgeCorroboration {
     goalRef: r.goal_ref,
     sessionId: r.session_id,
     words: r.words,
+    // `?? null` for `rowToFact`'s reason: nullable *and* possibly absent on a
+    // database from before the pool, where absent and null both mean "a local
+    // agent said this".
+    fleetId: r.fleet_id ?? null,
     createdAt: r.created_at,
   };
 }

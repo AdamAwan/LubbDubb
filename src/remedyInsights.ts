@@ -246,6 +246,25 @@ function costPerAccount(remedies: readonly Remedy[], usageEvents: readonly Usage
  * Membership rather than arithmetic, so an account filed inside the window by a
  * dispatch made before it accounts for *that* dispatch and for no other.
  */
+/**
+ * Whether a task was dispatched to answer a red or a review — the denominator
+ * behind {@link RemedyInsights.unaccounted}.
+ *
+ * Read off the **origin** rather than off `Task.rule`, because the origin is what
+ * `remedyOrigin` fences the tool on: counting by rule would make the denominator
+ * and the numerator two different populations, and the gap between them would read
+ * as agents failing to report when it was the two definitions disagreeing.
+ *
+ * Exported and living here rather than in the route that first needed it, because
+ * the cross-fleet digest counts the same population per UTC day
+ * (`src/pool/digestArm.ts`): two spellings of this predicate is how one fleet's own
+ * Causes panel and its contribution to the company page come to describe two
+ * different denominators, with both rendering perfectly.
+ */
+export function isReturnOrigin(originRef: string | null): boolean {
+  return originRef !== null && /^pr:\d+:(ci|comments)$/.test(originRef);
+}
+
 function unaccounted(returnDispatches: readonly string[], remedies: readonly Remedy[]): number {
   const accounted = new Set(remedies.map((r) => r.taskId));
   return returnDispatches.filter((taskId) => !accounted.has(taskId)).length;
