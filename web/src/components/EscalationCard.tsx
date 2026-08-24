@@ -105,7 +105,22 @@ export function EscalationCard({
   // The countdown, drawn only where there is an agent to settle: a stall park is
   // always attached to one, and a card without the agent has no control to offer.
   const expiring = escalation.agentId && stallExpiresAt ? stallExpiresAt : null;
-  const [headline, body] = splitPrompt(escalation.prompt);
+  const [headline, prose] = splitPrompt(escalation.prompt);
+  const [ask, caution] = splitCaution(prose);
+  // What the card draws under its headline, and the whole of what a plan approval
+  // dropped. A plan's ask is four paragraphs the plan panel says better — why the
+  // planner split it that way, and what approving and rejecting do, which is what
+  // the two buttons' own hints say — and above it sits `detail`, the planner's
+  // diagnosis and approach, the same summary the plan sheet leads with. Drawing
+  // both made the card on the goal page taller than the goal page. What is kept
+  // is the appended caution, because it is the one part that is about *this*
+  // decision and appears nowhere else.
+  //
+  // A drafted reply drops its prose for the same reason and a plainer one: its
+  // body *is* the draft, which the card already draws in a block of its own with
+  // a label on it.
+  const draftedBody = typeof context.draft === 'string' && ask.includes(context.draft.trim());
+  const body = proposal?.kind === 'plan' || draftedBody ? caution : prose;
   // The plan behind a `plan` proposal. Drawn as its own control below the body
   // rather than as one more ghost link among the agent actions: the card carries
   // what the plan diagnosed and what it will do, and everything else about it —
@@ -192,7 +207,7 @@ export function EscalationCard({
       ) : null}
 
       {context.draft ? (
-        <details className="esc-context">
+        <details className="esc-context" open={decidable?.kind === 'reply_draft'}>
           <summary className="muted small">Draft reply</summary>
           <pre className="esc-output">{context.draft}</pre>
         </details>
@@ -387,6 +402,24 @@ export function EscalationCard({
 function splitPrompt(prompt: string): [headline: string, body: string] {
   const at = prompt.search(/\r?\n\s*\r?\n/);
   return at === -1 ? [prompt.trim(), ''] : [prompt.slice(0, at).trim(), prompt.slice(at).trim()];
+}
+
+/**
+ * A body's own prose and the caution the harness appended to it.
+ *
+ * `planApprovalWarnings` (`src/plans/planWedge.ts`) writes its bullets under a
+ * `Before you decide:` line, appended rather than interpolated — so the marker is
+ * the harness's own and no operator override can lose it. Split here because the
+ * two halves are read differently: the prose restates what the plan sheet draws,
+ * and the caution is the only part of the ask that is about *this* decision — an
+ * unclaimed pull request on the branch, parts already blocked. A card that drops
+ * the first must keep the second.
+ *
+ * No marker means no caution, which is the common case.
+ */
+function splitCaution(body: string): [prose: string, caution: string] {
+  const at = body.search(/(^|\n)Before you decide:/);
+  return at === -1 ? [body, ''] : [body.slice(0, at).trim(), body.slice(at).trim()];
 }
 
 /**

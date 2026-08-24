@@ -11,11 +11,19 @@ import type {
 import { goalIssue, goalOfPr } from './goalPage.js';
 
 /**
- * What kind of answer a row wants. `permission` and `proposal` are escalations
- * underneath, split out because the verdict differs: a permission goes to
- * `/permission`, a proposal carries accept/reject, and a plain question takes
- * free text. Drawing them as one kind is how a surface ends up offering the
+ * What kind of answer a row wants. `permission` and the four proposal kinds are
+ * escalations underneath, split out because the verdict differs: a permission
+ * goes to `/permission`, a proposal carries accept/reject, and a plain question
+ * takes free text. Drawing them as one kind is how a surface ends up offering the
  * wrong control.
+ *
+ * **A proposal is four kinds, not one.** They were one — `proposal`, labelled
+ * `Plan` — and the label was a lie on three of them: a drafted reply, a merge and
+ * an assessment's follow-up all arrived on the rail and in the ask panel under the
+ * word `Plan`, which names the one thing they are not. What answers them differs
+ * too (`ACCEPT_LABEL` in `web/src/components/EscalationCard.tsx` has always known
+ * that), so the kind is the proposal's own kind and the tag says which act is
+ * waiting.
  */
 /**
  * `config` and `config_gap` are the harness's own configuration, read by
@@ -33,7 +41,10 @@ export type NeedKind =
   | 'recovery'
   | 'escalation'
   | 'permission'
-  | 'proposal'
+  | 'plan'
+  | 'reply'
+  | 'merge'
+  | 'shortfall'
   | 'profile'
   | 'placement'
   | 'bench'
@@ -199,6 +210,98 @@ function agentLabelOf(agentId: string | null, state: AppState): string | null {
   return line === '' ? null : line;
 }
 
+/**
+ * A row's line: what is being asked, and the goal it is about.
+ *
+ * One factual sentence, assembled here rather than taken from whatever prose the
+ * ask arrived with. The rail used to draw `escalation.prompt` verbatim, and a
+ * plan approval's prompt is four paragraphs — so the card that mattered most was
+ * the tallest thing on the rail, and a queue of them was unreadable at a glance.
+ * Everything that prose says is still one click away in the band the row opens;
+ * what the row owes the operator is which ask it is, and which goal it is about.
+ *
+ * The goal is named `#395 · <its title>`, because a number alone is not something
+ * an operator recognises — and the ref is dropped when the summary already spells
+ * it out, so a close-out does not read `Close issue #395 in the tracker for #395`.
+ *
+ * @see docs/spec/17-cockpit.md — the queue rail
+ */
+function askLine(summary: string, goalRef: string | null, state: AppState): string {
+  const issue = goalRef === null ? undefined : goalIssue(state, goalRef);
+  if (issue === undefined) return summary;
+  const named = new RegExp(`#${issue.number}(?!\\d)`).test(summary);
+  return `${summary}${named ? '' : ` for #${issue.number}`} · ${issue.title}`;
+}
+
+/** Long enough for a sentence, short enough that two rows fit where one used to. */
+const MAX_SUMMARY = 110;
+
+/**
+ * Free text as one clamped line. Everything an ask arrives with is prose somebody
+ * wrote — an agent, a planner, a template — so a row that drew it whole would be
+ * whatever length that author felt like.
+ *
+ * Absent text is a line rather than a throw. These are wire strings, and a row
+ * whose prose the server did not send is still a row the operator has to be shown:
+ * a derivation that threw on it would take the whole queue down with it.
+ */
+function oneLine(text: string | null | undefined): string {
+  const line = (text ?? '').split('\n')[0]?.trim() ?? '';
+  return line.length <= MAX_SUMMARY ? line : `${line.slice(0, MAX_SUMMARY - 1).trimEnd()}…`;
+}
+
+/**
+ * Who wrote the review comment a drafted reply answers, when the world still
+ * carries it. Named because that is what makes the row judgeable from the rail:
+ * "a reply is waiting" says nothing an operator can act on, and who it is to says
+ * most of it. Null degrades to a line that simply does not name them.
+ */
+function commentAuthor(state: AppState, prNumber: unknown, commentId: unknown): string | null {
+  if (typeof prNumber !== 'number' || typeof commentId !== 'string') return null;
+  const pr = state.world.pullRequests.find((p) => p.number === prNumber);
+  return pr?.unresolvedComments.find((c) => c.id === commentId)?.author ?? null;
+}
+
+/**
+ * What an escalation-backed row says, in the harness's words rather than the
+ * ask's own prose.
+ *
+ * Each arm states the act that is waiting — the thing the operator is deciding —
+ * and nothing about why. A proposal already knows which act it is, so the line is
+ * derived from the proposal rather than guessed from the prompt; a plain question
+ * has no act, and its own first line is the most factual thing there is.
+ */
+function escalationSummary(
+  e: Escalation,
+  proposal: Proposal | undefined,
+  originRef: string | null,
+  state: AppState,
+): string {
+  const { context } = e;
+  const pr = typeof context.prNumber === 'number' ? ` for PR #${context.prNumber}` : '';
+  if (proposal) {
+    switch (proposal.kind) {
+      case 'plan':
+        return 'Plan ready';
+      case 'reply_draft': {
+        const author = commentAuthor(state, context.prNumber, context.commentId);
+        return `Draft reply${author === null ? '' : ` to ${author}`}${pr}`;
+      }
+      case 'merge':
+        return `Merge waiting on your verdict${pr}`;
+      case 'shortfall':
+        return 'The delivered work did not reach the goal';
+    }
+  }
+  if (context.permission) return oneLine(`${context.permission.toolName}: ${context.permission.summary}`);
+  // The arm with no proposal under it: the goal itself is what the assessor found
+  // wrong, so nothing is dispatched and nothing will be until a person rules.
+  if (isShortfallAsk(originRef)) return 'Assessed as not delivered';
+  const questions = Array.isArray(context.questions) ? context.questions.length : 0;
+  if (questions > 0) return `${questions} questions from the agent`;
+  return oneLine(e.prompt);
+}
+
 function holdingForTask(task: HumanTask, parts: readonly PlanPart[]): number {
   if (!task.partId) return 0;
   const step = parts.find((p) => p.id === task.partId);
@@ -213,9 +316,33 @@ function holdingForEscalation(e: Escalation, state: AppState): number {
   return step ? partHolding(step.planId, step.slug, state.planParts ?? []) : 0;
 }
 
-function kindOf(e: Escalation, proposal: Proposal | undefined): NeedKind {
+/**
+ * Which row kind a proposal draws as — total over {@link ProposalKind}, so a
+ * fifth act fails the typecheck here rather than inheriting whichever word the
+ * last one happened to wear.
+ */
+const PROPOSAL_KIND: Record<Proposal['kind'], NeedKind> = {
+  plan: 'plan',
+  reply_draft: 'reply',
+  merge: 'merge',
+  shortfall: 'shortfall',
+};
+
+/**
+ * A shortfall the harness is asking about rather than proposing an arm for — the
+ * assessment found the *goal* to be what is wrong, so nothing is dispatched and
+ * there is no proposal under the row ([13](../../../docs/spec/13-jobs-and-tickets.md)).
+ * It is still a shortfall, and a row that read `Escalation` would file the one ask
+ * about a delivered goal with the ones about a stuck agent.
+ */
+function isShortfallAsk(originRef: string | null): boolean {
+  return /^issue:\d+:shortfall$/.test(originRef ?? '');
+}
+
+function kindOf(e: Escalation, proposal: Proposal | undefined, originRef: string | null): NeedKind {
   if (e.context.permission) return 'permission';
-  return proposal ? 'proposal' : 'escalation';
+  if (proposal) return PROPOSAL_KIND[proposal.kind];
+  return isShortfallAsk(originRef) ? 'shortfall' : 'escalation';
 }
 
 /**
@@ -350,9 +477,9 @@ export function buildNeedsYou(
     const goalRef = goalOf(originRef, state);
     rows.push({
       id: e.id,
-      kind: kindOf(e, proposal),
+      kind: kindOf(e, proposal, originRef),
       group: 'blocking',
-      title: e.prompt,
+      title: askLine(escalationSummary(e, proposal, originRef, state), goalRef, state),
       goalRef,
       originRef,
       opens: opensAt(goalRef, state),
@@ -375,7 +502,7 @@ export function buildNeedsYou(
       id: agentId,
       kind: 'limit',
       group: 'blocking',
-      title: agent.waitingReason ?? 'Parked: this account has no usage allowance left right now.',
+      title: askLine(oneLine(agent.waitingReason ?? 'Parked: no usage allowance left right now.'), goalRef, state),
       goalRef,
       originRef,
       opens: opensAt(goalRef, state),
@@ -409,7 +536,7 @@ export function buildNeedsYou(
       id: `profile:${goalRef}`,
       kind: 'profile',
       group: 'yours',
-      title: `The goal assay wants this run on “${assay.proposedProfile}”`,
+      title: askLine(`Wants to run on “${assay.proposedProfile}”`, goalRef, state),
       goalRef,
       originRef: goalRef,
       opens: opensAt(goalRef, state),
@@ -450,10 +577,13 @@ export function buildNeedsYou(
         id: `placement:${ask.field}:${goalRef}`,
         kind: 'placement',
         group: 'yours',
-        title:
+        title: askLine(
           ask.field === 'parent'
-            ? `This goal has no parent — should it be #${ask.proposedParent}?`
-            : `This goal is on no team's board — should it be “${ask.proposedAreaPath}”?`,
+            ? `No parent — #${ask.proposedParent} proposed`
+            : `On no team's board — “${ask.proposedAreaPath}” proposed`,
+          goalRef,
+          state,
+        ),
         goalRef,
         originRef: goalRef,
         opens: opensAt(goalRef, state),
@@ -475,7 +605,7 @@ export function buildNeedsYou(
       id: t.id,
       kind: needKindOfTask(t.kind),
       group: 'yours',
-      title: t.title,
+      title: askLine(oneLine(t.title), goalRef, state),
       goalRef,
       originRef: t.originRef ?? null,
       opens: opensAt(goalRef, state),
