@@ -14,7 +14,7 @@ import type { CiCheck, CiStatus, MergeableState, PrComment, PullRequest } from '
 import { EVIDENCE_LOG_TAIL_LINES, type CiEvidenceTarget, type CiFailureEvidence } from '../../ci/ciEvidence.js';
 import type {
   BranchDeleteCapable,
-  Capability,
+  WorldCapability,
   CiEvidenceCapable,
   Integration,
   PrBaseCapable,
@@ -83,7 +83,7 @@ export class GitHubSourceControlIntegration
     RefResolvable
 {
   readonly id = 'sourceControl:github';
-  readonly capability: Capability = 'sourceControl';
+  readonly capability: WorldCapability = 'sourceControl';
 
   /** Last successful slice, served on a transient failure so PRs don't flap. */
   private lastGood: PullRequest[] | null = null;

@@ -95,6 +95,30 @@ export interface Config {
    */
   integrations: IntegrationSelection;
   /**
+   * Who **this fleet** is in the cross-fleet pool.
+   *
+   * Explicit and never derived — not from a git author line, not from the hostname
+   * — and it names **person and target repo** (`alice@acme-api`), which is what
+   * makes two of one person's deployments distinguishable in a pool. A fleet with
+   * no id configured while the pool is selected is a boot error, exactly as a
+   * project with no name is.
+   *
+   * The **deployment** layer, because it is who this machine is. The pool's other
+   * coordinates are the project's and live in `lubbdubb.project.json`.
+   * → `docs/spec/28-cross-fleet-pool.md#configuration`
+   */
+  fleetId?: string;
+  /**
+   * The cross-fleet pool's coordinates: which project this is, and where the pool
+   * lives. Required when `integrations.pool` selects anything but `fake`.
+   *
+   * No secret is ever here ({@link Config.github}'s rule): the `git` transport
+   * authenticates the way git already does for that host, which is what keeps
+   * `lubbdubb.project.json` safe to commit — and committing it is the whole
+   * mechanism of the project name.
+   */
+  pool?: PoolConfig;
+  /**
    * GitHub target + optional scope filters, required when a capability uses the
    * `github` provider. The auth token is deliberately NOT here — it comes from the
    * `GITHUB_TOKEN` env var so a secret never lands in a committed config file.
@@ -751,6 +775,60 @@ export interface AzureDevOpsConfig {
   policyChecks?: PolicyCheckModes;
 }
 
+/**
+ * The pool's coordinates. Every field but {@link PoolConfig.digestIntervalMs}
+ * belongs in the **project** layer, because every one of them is a fact about the
+ * project rather than about this machine.
+ *
+ * → `docs/spec/28-cross-fleet-pool.md#configuration`
+ */
+interface PoolConfig {
+  /**
+   * What this project is called in the pool, declared in `lubbdubb.project.json`
+   * and committed with the repository.
+   *
+   * A committed file travels with the repository: every clone, every fork and every
+   * teammate's deployment reads the same string with nobody coordinating — which
+   * derivation from `github.owner`/`github.repo` cannot match, because it breaks at
+   * exactly the fork, mirror and rename cases. A fork keeps the file and therefore
+   * shares with upstream by default, which is right: a fork hits the same walls.
+   *
+   * **There is no derivation fallback.** A pool switched on against a project that
+   * declares no name is a clear boot error, the stance the registry already takes
+   * when `github` is selected with no owner or repo — a silent fallback would be a
+   * second source of truth for one string, and the two would disagree on precisely
+   * the cases the declaration exists to handle.
+   */
+  project?: string;
+  /** The `git` transport's remote. Any repository git can reach; it need not be the pool's own. */
+  remote?: string;
+  /** The branch the pool lives on. */
+  branch?: string;
+  /**
+   * A prefix **inside** that repository, so a team's existing wiki hosts the pool in
+   * a folder rather than having its root written into.
+   *
+   * Empty by default, which is the repository root — right for a dedicated pool
+   * repository and wrong for every shared one, which is why it is a setting rather
+   * than a convention. A path that escapes the clone (absolute, rooted, or containing
+   * `..`) is refused at config load rather than at write time: a prefix is a
+   * coordinate an operator types once, so it is checked where the rest of the
+   * coordinates are.
+   *
+   * **The prefix is the transport's and never the payload's.** No document records
+   * it, because it is an address rather than a fact.
+   */
+  path?: string;
+  /**
+   * How often the digest is republished, and how often the backstop re-derives both
+   * documents and compares their hash. One hour by default.
+   *
+   * There is no *poll* interval beside it: the pulse is the clock, so polling is
+   * `heartbeatIntervalMs` and not a second key free to be set below it.
+   */
+  digestIntervalMs?: number;
+}
+
 export interface WhitelistRule {
   /** Substring matched against the agent's waiting prompt. */
   match: string;
@@ -767,7 +845,15 @@ const DEFAULTS: Config = {
   // the build: one carrying an identity keeps the gates it had, one without keeps
   // them off, because a filter needs an identity to filter to.
   ownWorkOnly: true,
-  integrations: { sourceControl: 'fake', issues: 'fake' },
+  // `fake` for the pool too, and for the reason the other two have it: a harness
+  // that reached a network on a fresh clone would be one nobody could run a test
+  // against. A project that never adds the file is unaffected in every respect.
+  integrations: { sourceControl: 'fake', issues: 'fake', pool: 'fake' },
+  // Empty rather than absent, so a project layer setting one field of it merges
+  // rather than replaces — `DEEP_MERGED_BLOCKS`' rule, and the block qualifies for
+  // the same reason `github` does: the config form writes the one leaf an operator
+  // changed.
+  pool: {},
   labelPrefix: 'lubbdubb',
   issuePriorityLabels: { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 },
   issueDefaultPriority: 2,
@@ -902,6 +988,7 @@ function mergeConfig(overrides: Partial<Config> = {}): Config {
   const merged = { ...DEFAULTS, ...overrides };
   resolveRootPaths(merged);
   merged.integrations = { ...DEFAULTS.integrations, ...overrides.integrations };
+  merged.pool = { ...DEFAULTS.pool, ...overrides.pool };
   merged.planning = { ...DEFAULTS.planning, ...overrides.planning };
   merged.pets = { ...DEFAULTS.pets, ...overrides.pets };
   merged.spendBurn = { ...DEFAULTS.spendBurn, ...overrides.spendBurn };
@@ -1041,6 +1128,52 @@ function refuseRemovedKeys(fromFile: object, filePath: string): void {
 }
 
 /**
+ * The pool's coordinates, judged once with every layer folded in.
+ *
+ * Nothing is checked while the pool is `fake`, which is the default: a deployment
+ * that never opts in is unaffected in every respect, and refusing to boot over a
+ * key nobody set would be the harness having an opinion about a feature that is off.
+ *
+ * The path check is the one that would otherwise fail late and badly. `pool.path`
+ * is a prefix inside somebody else's repository, and an absolute, rooted or
+ * `..`-bearing one resolves outside the clone — so it is checked **where the rest of
+ * the coordinates are**, and the failure is a boot error naming the key rather than
+ * a write into whatever the path resolved to.
+ * → `docs/spec/28-cross-fleet-pool.md#living-in-somebody-elses-repository`
+ */
+function validatePool(merged: Config): void {
+  const path = merged.pool?.path ?? '';
+  if (path.startsWith('/') || path.startsWith('\\') || /^[A-Za-z]:/.test(path) || path.split(/[\\/]/).includes('..')) {
+    throw new Error(
+      `Refusing to start: pool.path ("${path}") escapes the pool's clone. It is a prefix *inside* the ` +
+        `repository the pool is given — "engineering/fleet-pool", or empty for the repository root. ` +
+        `An absolute, rooted or ".."-bearing path would have the harness writing outside the clone.`,
+    );
+  }
+  if (merged.integrations.pool === 'fake') return;
+  if (!merged.pool?.project) {
+    throw new Error(
+      `Refusing to start: integrations.pool is "${merged.integrations.pool}" but no pool.project is set. ` +
+        `The project name is what decides whose claims are relevant to whom, and it is declared in the ` +
+        `committed lubbdubb.project.json so every clone reads the same string. There is no derivation fallback.`,
+    );
+  }
+  if (!merged.fleetId) {
+    throw new Error(
+      `Refusing to start: integrations.pool is "${merged.integrations.pool}" but no fleetId is set. ` +
+        `A fleet writes its own documents and nobody else's, so it needs a name of its own — set "fleetId" ` +
+        `in lubbdubb.config.json, naming person and target repo (e.g. "alice@acme-api").`,
+    );
+  }
+  if (merged.integrations.pool === 'git' && (!merged.pool.remote || !merged.pool.branch)) {
+    throw new Error(
+      `Refusing to start: the git pool transport needs coordinates — set "pool.remote" and "pool.branch" ` +
+        `in lubbdubb.project.json. No credential goes there: git authenticates the way it already does for that host.`,
+    );
+  }
+}
+
+/**
  * The nested policy blocks, which merge field by field where everything else
  * replaces.
  *
@@ -1073,6 +1206,7 @@ export const DEEP_MERGED_BLOCKS = [
   'ci',
   'github',
   'azureDevOps',
+  'pool',
 ] as const;
 
 /**
@@ -1345,6 +1479,15 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
         `run's checkout would be leased to an agent and wiped. Point localRunRoot somewhere outside the pool.`,
     );
   }
+
+  // The pool's own refusals, and both are the registry's stance rather than a new
+  // one: a capability pointed at a real provider with an incomplete target is a
+  // clear startup error naming the key, not a later network failure. Silence in
+  // either direction is worse than a boot error — a pool with no project name would
+  // have every fleet publishing under one name and matching nothing, and a pool with
+  // no fleet id would have two engineers writing one address, which is the single
+  // thing "one writer per namespace" cannot survive.
+  validatePool(merged);
 
   // Agents run in a worktree/scratch cwd, so any relative script path in
   // claudeArgs (e.g. the demo mock-agent) must be made absolute up front or the

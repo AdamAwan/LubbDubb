@@ -1235,6 +1235,87 @@ CREATE TABLE IF NOT EXISTS mcp_calls (
   created_at TEXT NOT NULL
 );
 
+-- The cross-fleet pool's mirror of everybody else's documents (docs/spec/28-cross-fleet-pool.md).
+--
+-- **Derived and wholly replaceable**: rewritten on every poll, so dropping it and
+-- re-polling gives an identical one. That is what keeps the pool from becoming
+-- authoritative locally — every fleet's own SQLite stays the truth about that
+-- fleet, and everything here is re-derivable from the documents.
+--
+-- Keyed on (fleet_id, fact_id): the origin's own fact id inside the origin's
+-- namespace, which is the only identity that survives the crossing. Nothing reads
+-- this into a prompt and no tool answers from it — an agent asking knowledge_ask
+-- is answered from knowledge_facts exactly as it was before the pool existed.
+CREATE TABLE IF NOT EXISTS pool_claims (
+  fleet_id       TEXT NOT NULL,      -- the fleet that published it
+  fact_id        TEXT NOT NULL,      -- the origin's own fact id; never minted here
+  project        TEXT NOT NULL,      -- the project the origin learned it about
+  claim          TEXT NOT NULL,
+  where_at       TEXT,               -- what locates it, in the origin's words
+  vouched_at     TEXT NOT NULL,      -- when an operator over there ruled on it
+  corroborations INTEGER NOT NULL,   -- the origin's count, a reading and never a trigger
+  disputes       INTEGER NOT NULL,   -- likewise, and the more useful of the two
+  evidence       TEXT NOT NULL,      -- JSON array of the corroborators' own words, capped
+  -- The local fact this arrival was proposed onto, or null when it matched nothing
+  -- local and the project did not permit proposing it. Null is the "held in the
+  -- mirror, proposed to nobody" row of the project-name table.
+  local_fact_id  TEXT,
+  published_at   TEXT NOT NULL,      -- the document's own stamp
+  seen_at        TEXT NOT NULL,      -- when this poll wrote the row
+  PRIMARY KEY (fleet_id, fact_id)
+);
+
+-- Everybody else's digests, one row per (fleet, day, section key). Replaced whole
+-- on every poll for pool_claims' reason: it is a mirror, not a ledger.
+--
+-- "section" and "key" rather than a column per dimension, because the sections do
+-- not share a key space — byPhase is a SpendPhase, byCause is a kind/cause/guard
+-- triple, byCheck is a provider's own check name — and a table per section would
+-- be three tables the aggregator has to remember to read all of.
+CREATE TABLE IF NOT EXISTS pool_digest_rows (
+  fleet_id TEXT NOT NULL,
+  project  TEXT NOT NULL,
+  day      TEXT NOT NULL,            -- a UTC day, YYYY-MM-DD. Never local midnight.
+  section  TEXT NOT NULL,            -- phase | cause | check | unaccounted | unmeasured
+  key      TEXT NOT NULL,            -- the section's own key; empty for the two totals
+  count    INTEGER NOT NULL,         -- runs, or accounts, or dispatches — the section says which
+  cost_usd REAL,                     -- null where a window measured nothing; never 0.00 for it
+  partial  INTEGER NOT NULL,         -- 1 for the origin's current day: counts in a total, never an average
+  PRIMARY KEY (fleet_id, day, section, key)
+);
+
+-- One row per fleet whose document this harness has parsed, and the mirror's own
+-- honesty: a fleet that is ahead of this build, one that could not be parsed, and
+-- one that simply has not published are three different facts, and folding them
+-- into an absence would say in the operator's words that nobody else knows
+-- anything. → docs/spec/24-environments.md#the-three-verdicts, one level up.
+CREATE TABLE IF NOT EXISTS pool_fleets (
+  fleet_id      TEXT PRIMARY KEY,
+  project       TEXT,
+  claims_at     TEXT,                -- publishedAt of its claims document, or null
+  digest_at     TEXT,                -- publishedAt of its digest document, or null
+  ahead         INTEGER NOT NULL,    -- 1 when it wrote a schema version this build skips
+  seen_at       TEXT NOT NULL
+);
+
+-- What this fleet has published, and whether it still matches what the store says.
+-- One row per kind, so the two documents keep their own cadences.
+--
+-- "dirty" is a **hint and not a queue**: because publish is a whole-document put,
+-- five rulings in a minute collapse to one publish and a failed push simply stays
+-- dirty. "content_hash" is the truth — the slow clock re-derives both documents and
+-- compares, so anything the flag loses to a crash self-heals within the hour.
+CREATE TABLE IF NOT EXISTS pool_publications (
+  kind          TEXT PRIMARY KEY,    -- claims | digest
+  content_hash  TEXT,                -- of the document last published successfully
+  published_at  TEXT,
+  dirty         INTEGER NOT NULL,
+  checked_at    TEXT                 -- when the backstop last re-derived and compared
+);
+
+CREATE INDEX IF NOT EXISTS idx_pool_claims_fleet ON pool_claims(fleet_id);
+CREATE INDEX IF NOT EXISTS idx_pool_digest_project ON pool_digest_rows(project, day);
+
 CREATE INDEX IF NOT EXISTS idx_local_run_cost_deltas_at ON local_run_cost_deltas(at);
 CREATE INDEX IF NOT EXISTS idx_local_runs_status ON local_runs(status);
 CREATE INDEX IF NOT EXISTS idx_agent_flags_agent ON agent_flags(agent_id);

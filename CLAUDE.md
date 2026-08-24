@@ -13,7 +13,7 @@ differ, and which is a thing you may find yourself sent to implement. The [READM
 what LubbDubb _is_ and how to run it.
 
 **When you change behaviour, update the spec document that owns it in the same change.** That is the
-repo's one documentation rule; [`docs/README.md`](docs/README.md) indexes the twenty-seven documents and
+repo's one documentation rule; [`docs/README.md`](docs/README.md) indexes the twenty-eight documents and
 says which owns what.
 
 ## Making a change
@@ -89,18 +89,18 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
   takes the build. A backfill run on _every_ boot is the same silence pointed the other way: it opens
   the eggs they were saving. Both look like the feature working.
   → [14](docs/spec/14-persistence.md#when-a-null-means-something)
-- **A one-shot id is never edited in place** — `VIVARIUM_RESET` in `src/pets/keeper.ts`, and every id
-  passed to `runOnce`. The string names _that_ clearance or _that_ migration, so changing it is not a
-  rename: it declares a second one, which every database that already ran the first then runs again —
-  releasing every operator's pet collection, or re-creating rows they have since ruled on, on the boot
-  after they take the build. A pass that ran as designed reports nothing, and `check` has no opinion
-  about a constant. A further pass is a further id, added deliberately.
+- **A one-shot id is never edited in place** — `VIVARIUM_RESET` in `src/pets/keeper.ts`, and every id passed to
+  `runOnce`. The string names _that_ clearance or _that_ migration, so changing it is not a rename: it declares a second
+  one, which every database that already ran the first then runs again — releasing every operator's pet collection, or
+  re-creating rows they have since ruled on, on the boot after they take the build. A pass that ran as designed reports
+  nothing, and `check` has no opinion about a constant. A further pass is a further id, added deliberately.
   → [22](docs/spec/22-pets.md#clearing-the-vivarium), [14](docs/spec/14-persistence.md#a-migration-that-must-run-once)
-- **A new issue-verdict writer goes through `IssueVerdictStore.recordVerdict`, never a hand-rolled
-  `DELETE`.**
-  Which of `issue_conclusions` / `issue_deliveries` / `issue_shortfalls` / `issue_assays` may coexist
-  is declared once in `src/store/verdicts.ts`; a writer that clears its siblings itself compiles,
-  passes, and silently reintroduces the pairwise drift the matrix replaced.
+- **A pooled corroboration is upserted on `(fact_id, fleet_id)`; `PoolDesk` never lands its own fleet's
+  document.** Either appends a voice every pulse and looks like the pool working. → [28](docs/spec/28-cross-fleet-pool.md)
+- **A new issue-verdict writer goes through `IssueVerdictStore.recordVerdict`, never a hand-rolled `DELETE`.**
+  Which of `issue_conclusions` / `issue_deliveries` / `issue_shortfalls` / `issue_assays` may coexist is
+  declared once in `src/store/verdicts.ts`; a writer that clears its siblings itself compiles, passes, and
+  silently reintroduces the pairwise drift the matrix replaced.
   → [14](docs/spec/14-persistence.md#issue-verdicts-and-the-exclusion-matrix)
 
 ### Tests
@@ -389,7 +389,7 @@ running and does the wrong thing. → [10](docs/spec/10-agent-runtimes.md#sharp-
 
 ## Where to read further
 
-[`docs/README.md`](docs/README.md) is the index: twenty-seven specs, one per subsystem, numbered by the
+[`docs/README.md`](docs/README.md) is the index: twenty-eight specs, one per subsystem, numbered by the
 order they build on each other. Start there rather than grepping — each document states the
 invariants of its area and the reasoning behind them, which is what stops a change re-litigating a
 settled decision badly.

@@ -49,7 +49,9 @@ function system(opts: { upstream?: FakeUpstreamIssues; github?: { owner: string;
       startPaused: true,
       // The issues provider only: source control stays fake, since nothing here
       // reads a branch and a second real provider would be a second boot check.
-      ...(opts.github ? { integrations: { sourceControl: 'fake', issues: 'github' }, github: opts.github } : {}),
+      ...(opts.github
+        ? { integrations: { sourceControl: 'fake', issues: 'github', pool: 'fake' }, github: opts.github }
+        : {}),
     });
     return buildSystem(config, {
       worktrees: new FakeWorktreeManager(),

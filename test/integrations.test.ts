@@ -7,7 +7,7 @@ import { loadConfig } from '../src/config.js';
 import type { IntegrationSelection } from '../src/integrations/integration.js';
 
 const FIXED = () => '2026-01-01T00:00:00.000Z';
-const FAKES: IntegrationSelection = { sourceControl: 'fake', issues: 'fake' };
+const FAKES: IntegrationSelection = { sourceControl: 'fake', issues: 'fake', pool: 'fake' };
 
 function build(selection: IntegrationSelection = FAKES) {
   const store = new Store(':memory:');

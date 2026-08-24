@@ -25,6 +25,8 @@ import type {
   PlanHistory,
   McpChannelPayload,
   McpUsagePayload,
+  PoolInsightsPayload,
+  PoolStatePayload,
   PromptsPayload,
   RetrospectivePayload,
   RunClearOut,
@@ -207,6 +209,21 @@ const realApi = {
   // that is the one read in the harness that touches `tasks.prompt` in bulk.
   getMcpUsage: (window: InsightsWindow) =>
     authFetch(`/api/mcp/usage?window=${window}`).then((r) => json<McpUsagePayload>(r)),
+  // The cross-fleet pool. It takes **no window**: the digest's bucket is a UTC day
+  // and its retention is ninety of them, so the question a reader asks of it is a
+  // number of days rather than one of the page's five spans — and it takes a
+  // project, because `byCheck` is only comparable inside one pipeline.
+  getPoolInsights: (project: string | null) =>
+    authFetch(`/api/pool/insights${project === null ? '' : `?project=${encodeURIComponent(project)}`}`).then((r) =>
+      json<PoolInsightsPayload>(r),
+    ),
+  // This fleet's own side of the pool, plus the mirror. Fetched on the Knowledge
+  // page rather than riding the snapshot, for `getMcpUsage`'s reason: it is other
+  // teams' prose, and the snapshot comes round every couple of seconds.
+  getPool: () => authFetch('/api/pool').then((r) => json<PoolStatePayload>(r)),
+  /** Withhold one claim from the pool, or put it back. Never publishes — the desk does. */
+  setFactKeepLocal: (id: string, keepLocal: boolean) =>
+    post<{ ok: true }>(`/api/knowledge/facts/${encodeURIComponent(id)}/keep-local`, { keepLocal }),
   // The prompt book, fetched on open for the opposite reason to the work graph:
   // it is read once at boot, so polling it would be paying for a constant.
   /**

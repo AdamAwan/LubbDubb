@@ -9,7 +9,7 @@ import { isRefResolvable, type IntegrationSelection } from '../src/integrations/
 const FIXED = () => '2026-01-01T00:00:00.000Z';
 
 function selection(over: Partial<IntegrationSelection>): IntegrationSelection {
-  return { sourceControl: 'fake', issues: 'fake', ...over };
+  return { sourceControl: 'fake', issues: 'fake', ...over, pool: 'fake' };
 }
 
 const TARGET = { organization: 'org', project: 'proj', repository: 'repo' };
@@ -31,7 +31,7 @@ test('loadConfig carries an azureDevOps block (org/project/repo/tag) from overri
 test('registry builds real azure providers when selected with a target', () => {
   const store = new Store(':memory:');
   const config = loadConfig({ azureDevOps: TARGET });
-  const integrations = buildIntegrations(selection({ sourceControl: 'azure', issues: 'azure' }), {
+  const integrations = buildIntegrations(selection({ sourceControl: 'azure', issues: 'azure', pool: 'fake' }), {
     store,
     config,
     now: FIXED,
@@ -49,7 +49,7 @@ test('an azure-selected connector resolves refs to Azure web URLs', () => {
   // unresolvable ref is *meant* to be omitted (that's the fake provider's case).
   const store = new Store(':memory:');
   const config = loadConfig({ azureDevOps: TARGET });
-  const integrations = buildIntegrations(selection({ sourceControl: 'azure', issues: 'azure' }), {
+  const integrations = buildIntegrations(selection({ sourceControl: 'azure', issues: 'azure', pool: 'fake' }), {
     store,
     config,
     now: FIXED,
@@ -67,7 +67,7 @@ test('each azure integration resolves refs on its own, whichever the composite p
   // whose capability matches the ref — so both must answer every shape.
   const store = new Store(':memory:');
   const config = loadConfig({ azureDevOps: TARGET });
-  for (const integration of buildIntegrations(selection({ sourceControl: 'azure', issues: 'azure' }), {
+  for (const integration of buildIntegrations(selection({ sourceControl: 'azure', issues: 'azure', pool: 'fake' }), {
     store,
     config,
     now: FIXED,

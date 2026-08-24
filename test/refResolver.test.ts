@@ -4,14 +4,14 @@ import { Store } from '../src/store/store.js';
 import { CompositeConnector } from '../src/integrations/compositeConnector.js';
 import {
   isRefResolvable,
-  type Capability,
+  type WorldCapability,
   type Integration,
   type RefResolvable,
 } from '../src/integrations/integration.js';
 
 class StubResolver implements Integration, RefResolvable {
   readonly id = 'sourceControl:stub';
-  readonly capability: Capability = 'sourceControl';
+  readonly capability: WorldCapability = 'sourceControl';
   async snapshot() {
     return {};
   }
@@ -22,7 +22,7 @@ class StubResolver implements Integration, RefResolvable {
 
 class PlainIntegration implements Integration {
   readonly id = 'issues:plain';
-  readonly capability: Capability = 'issues';
+  readonly capability: WorldCapability = 'issues';
   async snapshot() {
     return {};
   }

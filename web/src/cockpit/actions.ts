@@ -88,7 +88,7 @@ export type ConsoleTab = 'overview' | 'tickets' | 'knowledge' | 'insights' | 'pe
  * sends someone a link to, and a tab held in component state works right up
  * until the back button steps over it or a reload drops it.
  */
-export type InsightsView = 'economics' | 'reliability' | 'causes' | 'trend' | 'mix' | 'mcp';
+export type InsightsView = 'economics' | 'reliability' | 'causes' | 'trend' | 'mix' | 'mcp' | 'pool';
 
 /**
  * Every mutation the cockpit can perform, pre-bound and refetching on completion.
@@ -217,7 +217,12 @@ export interface CockpitActions {
    * keys nothing reads, so every tab and every window button on the page was a
    * control that pushed no history entry and changed nothing.
    */
-  openInsights(where: { insightsView?: InsightsView; insightsWindow?: InsightsWindow }): void;
+  openInsights(where: {
+    insightsView?: InsightsView;
+    insightsWindow?: InsightsWindow;
+    /** Which project the shared pool page is narrowed to, or null for every one. */
+    poolProject?: string | null;
+  }): void;
   /** Open a goal's page, or return to the overview with null. */
   selectGoal(ref: string | null): void;
   /** Bring a full-surface panel in front, or dismiss it with null. */
@@ -349,6 +354,17 @@ export interface CockpitActions {
    * you" section ever empties.
    */
   setFactReach(id: string, reach: FactRuling): Promise<void>;
+  /**
+   * Withhold one claim from the cross-fleet pool, or put it back.
+   *
+   * **Not a ruling**: it changes nothing about who this fleet tells, only about who
+   * else may read it — so the claim stays exactly where the operator left it and
+   * `ruledAt` is untouched. It writes the store and never publishes; the desk's next
+   * pulse re-derives the document, which is a whole replace, so a withheld claim is
+   * simply not in it and there is nothing to retract.
+   * → `docs/spec/28-cross-fleet-pool.md#data-classification`
+   */
+  setFactKeepLocal(id: string, keepLocal: boolean): Promise<void>;
   /**
    * Write a claim down. The operator's own arm of the store, and the one write on
    * this page that is not a ruling.

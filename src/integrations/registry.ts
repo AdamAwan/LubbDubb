@@ -1,5 +1,9 @@
 import type { AzureDevOpsConfig, GitHubConfig } from '../config.js';
-import type { Capability, Integration, IntegrationContext, IntegrationSelection } from './integration.js';
+import { resolve } from 'node:path';
+import type { Integration, IntegrationContext, IntegrationSelection, WorldCapability } from './integration.js';
+import type { PoolTransport } from '../pool/transport.js';
+import { FakePoolTransport } from './fake/fakePool.js';
+import { GitPoolTransport } from './pool/gitPool.js';
 import { FakeWorldStore } from './fake/fakeWorld.js';
 import { FakeGitHubIntegration } from './fake/fakeGitHub.js';
 import { FakeIssuesIntegration } from './fake/fakeIssues.js';
@@ -38,7 +42,7 @@ interface ProviderClients {
  * the harness changes. Selecting it is a config
  * change (`integrations.sourceControl: 'github'`).
  */
-const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
+const REGISTRY: Record<WorldCapability, Record<string, ProviderFactory>> = {
   sourceControl: {
     fake: (ctx, world) => new FakeGitHubIntegration(world, ctx.config.defaultBranch),
     github: (ctx, _world, clients) => {
@@ -94,7 +98,7 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
   },
 };
 
-const CAPABILITIES = Object.keys(REGISTRY) as Capability[];
+const CAPABILITIES = Object.keys(REGISTRY) as WorldCapability[];
 
 /**
  * Who the world is narrowed to at fetch time, or `undefined` for "narrow it to
@@ -189,4 +193,63 @@ export function buildIntegrations(selection: IntegrationSelection, ctx: Integrat
     }
     return factory(ctx, world, clients);
   });
+}
+
+/**
+ * The pool's own registry — the third capability, and one line per provider exactly
+ * as {@link REGISTRY} is.
+ *
+ * Separate from it rather than a third entry in it, because a pool transport is not
+ * an {@link Integration}: it reads no slice of the world, has no `snapshot`, and is
+ * never merged by the composite connector. Folding it in would mean either widening
+ * `Integration` with two methods nothing else implements, or a `snapshot` that
+ * returns nothing — and the second is the one that would go wrong silently, since a
+ * capability the composite believes it has is one it will ask.
+ *
+ * `http` later is one more line here with nothing above it changing.
+ * → `docs/spec/28-cross-fleet-pool.md#the-two-transports`
+ */
+const POOL_REGISTRY: Record<string, (ctx: IntegrationContext) => PoolTransport> = {
+  fake: () => new FakePoolTransport(),
+  git: (ctx) => {
+    const pool = ctx.config.pool ?? {};
+    // Every one of these is checked at config load (`validatePool`), which is where
+    // a coordinate an operator types belongs — the reads here are the type's, not a
+    // second gate free to disagree with the first.
+    return new GitPoolTransport({
+      root: poolRoot(ctx),
+      remote: pool.remote ?? '',
+      branch: pool.branch ?? 'main',
+      path: pool.path ?? '',
+      fleetId: ctx.config.fleetId ?? '',
+    });
+  },
+};
+
+/**
+ * Where the pool's clone lives — **its own root, and never under `worktreeRoot`**.
+ *
+ * The worktree pool counts every registered worktree under that root as a slot
+ * whatever the directory is called, so a pool clone in there is leased to an agent
+ * and wiped with `git clean -ffdx` (`docs/spec/09-execution.md#exhaustion`). Exactly
+ * the hazard `localRunRoot` exists to avoid, and the same answer: a separate root,
+ * touched by nothing else. Under `deskRoot`, which is the harness's own scratch
+ * space and is never a registered worktree.
+ */
+function poolRoot(ctx: IntegrationContext): string {
+  return resolve(ctx.config.deskRoot, 'pool');
+}
+
+/**
+ * Resolve the configured pool provider. Throws the registry's own clear error,
+ * listing the valid ids, if it names one that does not exist.
+ */
+export function buildPoolTransport(selection: IntegrationSelection, ctx: IntegrationContext): PoolTransport {
+  const factory = POOL_REGISTRY[selection.pool];
+  if (!factory) {
+    throw new Error(
+      `Unknown pool provider '${selection.pool}'. Valid providers: ${Object.keys(POOL_REGISTRY).join(', ')}.`,
+    );
+  }
+  return factory(ctx);
 }

@@ -135,6 +135,16 @@ on the boot the column arrives and never again — run unconditionally it would 
 every job and ticket graduation written since, and a wrong exit is silent in both directions.
 `ticket_ref` beside it needs nothing: null on a row that never had a ticket is the only true value.
 
+`knowledge_facts.project` is the third, and the one with a condition on the backfill itself. Null there
+spells _no project_, which would exclude every claim the store already holds from ever being published
+to the cross-fleet pool — and every one of them was in fact learned about the deployment's current
+project. So `stampFactsWithProject` writes that name onto them, on the boot the column arrives and never
+again: run unconditionally it would relabel every claim written since the day an operator pointed the
+harness at a second repository, which is silent in both directions. The condition is that there **is** a
+name — a deployment declaring none stamps nothing, because the migration asserts history rather than
+guessing at it. `keep_local` beside it needs nothing, for `ticket_ref`'s reason: nothing before it could
+withhold anything, so null is the only true value. → [28](28-cross-fleet-pool.md#persistence)
+
 A column whose absence is simply a weaker claim — `built_sha`, `chain`, `dismiss_note` — needs none
 of this. The test is whether _null_ is a value the running code will act on.
 

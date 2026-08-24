@@ -321,6 +321,14 @@ terms an operator can check: which check, which commit, which pull request, and 
 pulse before. That is what they read to decide whether the claim should have promoted, and a harness
 row that said only "observed by the harness" would be a count with nothing behind it.
 
+A third kind of voice arrives from outside the machine entirely: the **cross-fleet pool**
+([28](28-cross-fleet-pool.md)). A pooled corroboration carries a `fleet_id` and neither a goal nor a
+session, so `distinctCorroborators` unions on it — **one fleet is one voice**, however many entries that
+fleet publishes and however many times it is polled. Everything else is unchanged: an arrival lands with
+exactly one corroboration and never the origin's count, so nothing crosses a machine boundary already
+past `lookup`, and the origin's own counts ride as a reading drawn beside the local ones rather than as
+a trigger.
+
 `src/knowledge/noticeDesk.ts` is where both live, and it is a **writer** of facts rather than a
 reader. It sits in the pulse above `decide` and above the executor, and that ordering is what it is
 for: the block a dispatch carries is rendered at launch, so a desk run below that point would raise a

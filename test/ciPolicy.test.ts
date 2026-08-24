@@ -992,13 +992,14 @@ test('describeCiPolicy: policy kinds are Azure-only, and a partial map merges ov
   // Under GitHub the modes are consulted by nothing, so a table of them would be
   // an answer to a question this harness never asks.
   assert.equal(
-    describeCiPolicy(loadConfig({ integrations: { sourceControl: 'github', issues: 'fake' } })).policyKinds,
+    describeCiPolicy(loadConfig({ integrations: { sourceControl: 'github', issues: 'fake', pool: 'fake' } }))
+      .policyKinds,
     null,
   );
 
   const kinds = describeCiPolicy(
     loadConfig({
-      integrations: { sourceControl: 'azure', issues: 'fake' },
+      integrations: { sourceControl: 'azure', issues: 'fake', pool: 'fake' },
       azureDevOps: { organization: 'org', project: 'proj', repository: 'repo', policyChecks: { workItems: 'check' } },
     }),
   ).policyKinds;

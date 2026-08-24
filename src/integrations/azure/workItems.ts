@@ -12,7 +12,7 @@ import type {
 import type { Issue, IssueRelative, IssueState, TrackerItem } from '../../types.js';
 import type { AreaPathTree } from '../../intake/placement.js';
 import type {
-  Capability,
+  WorldCapability,
   Integration,
   IssueCommentCapable,
   IssueCreateCapable,
@@ -75,7 +75,7 @@ export class AzureDevOpsWorkItemsIntegration
     TicketHistoryCapable
 {
   readonly id = 'issues:azure';
-  readonly capability: Capability = 'issues';
+  readonly capability: WorldCapability = 'issues';
   /**
    * Work item descriptions and discussion comments are HTML fields — Azure stores
    * and renders them as markup, so Markdown sent to one arrives as its own

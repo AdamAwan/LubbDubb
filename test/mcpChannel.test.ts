@@ -436,6 +436,8 @@ test('a claim queued as a job carries its provenance into the job it becomes', (
       aboutRef: 'issue:41',
       where: 'src/net/backoff.ts:41',
       createdAt: TAKEN_AT,
+      project: null,
+      keepLocal: false,
       updatedAt: TAKEN_AT,
     },
     [
@@ -446,6 +448,7 @@ test('a claim queued as a job carries its provenance into the job it becomes', (
         taskId: 't1',
         goalRef: 'pr:142',
         sessionId: null,
+        fleetId: null,
         words: 'The 5th retry waits ~17 minutes.',
         createdAt: TAKEN_AT,
       },

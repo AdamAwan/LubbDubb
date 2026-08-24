@@ -2,7 +2,7 @@ import type { ErrorRecorder } from '../../errorLog.js';
 import type { IssueCommentInput, IssueCreateInput, IssueLabelInput, SendResult } from '../../sink/actionSink.js';
 import type { Issue, IssueState, TrackerItem } from '../../types.js';
 import type {
-  Capability,
+  WorldCapability,
   Integration,
   IssueCommentCapable,
   IssueCreateCapable,
@@ -47,7 +47,7 @@ export class GitHubIssuesIntegration
     TicketHistoryCapable
 {
   readonly id = 'issues:github';
-  readonly capability: Capability = 'issues';
+  readonly capability: WorldCapability = 'issues';
 
   private lastGood: Issue[] | null = null;
 

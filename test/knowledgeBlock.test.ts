@@ -198,6 +198,8 @@ function fact(id: string, over: Partial<KnowledgeFact> = {}): KnowledgeFact {
     expiresAt: null,
     reach: 'injected',
     supersedes: null,
+    project: null,
+    keepLocal: false,
     originRef: 'issue:41',
     ruledAt: '2026-01-01T00:00:00.000Z',
     resolvesWhen: null,

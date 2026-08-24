@@ -40,8 +40,20 @@ import type { TrackerItem, WorldSnapshot } from '../types.js';
  * chooses the providers.
  */
 
-/** The kinds of integration the harness understands. Mirrors {@link WorldSnapshot}. */
-export type Capability = 'sourceControl' | 'issues';
+/** The kinds of integration that read a slice of the world. Mirrors {@link WorldSnapshot}. */
+export type WorldCapability = 'sourceControl' | 'issues';
+
+/**
+ * Every capability a provider may fulfil.
+ *
+ * `pool` is the third, and it is deliberately **not** a {@link WorldCapability}: a
+ * pool transport reads no slice of the world and has no `snapshot`, so it does not
+ * implement {@link Integration} and is not merged by the composite connector. What
+ * it shares with the other two is the thing that matters — one line in the registry
+ * adds a provider, and selecting it is a config change.
+ * → `docs/spec/28-cross-fleet-pool.md#the-transport`
+ */
+type Capability = WorldCapability | 'pool';
 
 /** One provider chosen per capability. This is the swap switch (set in config). */
 export type IntegrationSelection = Record<Capability, string>;
@@ -73,7 +85,7 @@ export interface Integration {
   /** Stable id, e.g. `sourceControl:fake`. For the audit log and diagnostics. */
   readonly id: string;
   /** Which capability this integration fulfils. Exactly one provider per capability. */
-  readonly capability: Capability;
+  readonly capability: WorldCapability;
   /** This integration's slice of the world right now. Called every dispatch cycle. */
   snapshot(): Promise<WorldSlice>;
   /**

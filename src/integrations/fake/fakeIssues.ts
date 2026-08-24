@@ -9,7 +9,7 @@ import type {
   WorkItemStateInput,
 } from '../../sink/actionSink.js';
 import type {
-  Capability,
+  WorldCapability,
   Injectable,
   Integration,
   IssueCommentCapable,
@@ -43,7 +43,7 @@ export class FakeIssuesIntegration
     TicketHistoryCapable
 {
   readonly id = 'issues:fake';
-  readonly capability: Capability = 'issues';
+  readonly capability: WorldCapability = 'issues';
 
   /**
    * Comments the harness has written, keyed by the ref it handed back — the fake's

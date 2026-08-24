@@ -43,7 +43,7 @@ test('one userId answers ownership, assignment and PR authorship together', () =
   const cfg = loadConfig({
     userId: 'adam',
     github: { owner: 'acme', repo: 'app' },
-    integrations: { sourceControl: 'github', issues: 'github' },
+    integrations: { sourceControl: 'github', issues: 'github', pool: 'fake' },
   });
   assert.equal(cfg.userId, 'adam');
   assert.equal(ticketAssignee(cfg), 'adam', 'filed tickets go to them');
@@ -52,7 +52,7 @@ test('one userId answers ownership, assignment and PR authorship together', () =
 test('an unset userId leaves every identity gate off rather than guessing one', () => {
   const cfg = loadConfig({
     github: { owner: 'acme', repo: 'app' },
-    integrations: { sourceControl: 'github', issues: 'github' },
+    integrations: { sourceControl: 'github', issues: 'github', pool: 'fake' },
   });
   assert.equal(ticketAssignee(cfg), null, 'nothing to assign to, so tickets file unassigned');
 });

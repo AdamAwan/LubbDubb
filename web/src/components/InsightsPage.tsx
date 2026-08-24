@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type JSX, type RefObject } from 'react';
 import type {
   InsightsWindow,
   McpInsights,
+  PoolInsightsPayload,
   ReliabilityInsights,
   RemedyInsights,
   SpendInsights,
@@ -16,6 +17,7 @@ import { CausesTab } from './CausesTab.js';
 import { SpendTrendTab } from './SpendTrendTab.js';
 import { WorkMixTab } from './WorkMixTab.js';
 import { McpUsageTab, mcpCsv } from './McpUsageTab.js';
+import { PoolTab } from './PoolTab.js';
 
 /**
  * Insights — one destination, one window, five readings of it.
@@ -59,6 +61,7 @@ const TABS: readonly { id: InsightsView; label: string; note: string }[] = [
   { id: 'trend', label: 'Trend', note: 'whether what you changed is working' },
   { id: 'mix', label: 'Work mix', note: 'why this kind of work costs what it does' },
   { id: 'mcp', label: 'MCP', note: 'which tools the fleet reaches for, and which it never does' },
+  { id: 'pool', label: 'Pool', note: 'what the whole pool spent, across fleets' },
 ];
 
 /**
@@ -84,10 +87,13 @@ const PENDING = { state: 'loading', data: null } as const;
 export function InsightsPage({
   view,
   window: chosen,
+  poolProject,
   actions,
 }: {
   view: InsightsView;
   window: InsightsWindow;
+  /** Which project the pool tab is narrowed to. Null is every one, and then `byCheck` is absent. */
+  poolProject: string | null;
   actions: CockpitActions;
 }): JSX.Element {
   // The page itself, for the print sheet: PDF is the surface *printed*, not a
@@ -114,6 +120,12 @@ export function InsightsPage({
   // window, which is the one read in the harness that touches `tasks.prompt` in
   // bulk. Same ref-per-window shape, because a window change invalidates it.
   const mcpFetchedFor = useRef<InsightsWindow | null>(null);
+  // The pool tab's own, and the one that does **not** hang off the window: the
+  // digest's bucket is a UTC day and its retention is ninety of them, so the page's
+  // five spans are not the question anybody asks of it. It is keyed on the project
+  // instead, which is the one narrowing that changes what the payload contains.
+  const [pool, setPool] = useState<Fetched<PoolInsightsPayload>>(PENDING);
+  const poolFetchedFor = useRef<string | null | undefined>(undefined);
   // Both refetch on a window change, and both are re-read from scratch rather
   // than merged: a payload for the old window left standing beside one for the
   // new is the disagreement the single window exists to remove.
@@ -177,6 +189,22 @@ export function InsightsPage({
       live = false;
     };
   }, [view, chosen]);
+
+  // On the *place* rather than off the click, for the trend's reason: arriving on a
+  // shared `?view=pool&project=acme-api` link is a first visit too.
+  useEffect(() => {
+    if (view !== 'pool' || poolFetchedFor.current === poolProject) return;
+    poolFetchedFor.current = poolProject;
+    let live = true;
+    setPool(PENDING);
+    api
+      .getPoolInsights(poolProject)
+      .then((res) => live && setPool({ state: 'ready', data: res }))
+      .catch(() => live && setPool({ state: 'failed', data: null }));
+    return () => {
+      live = false;
+    };
+  }, [view, poolProject]);
 
   const note = TABS.find((t) => t.id === view)?.note ?? '';
   // The window as the *server* resolved it, never as this page asked: the caption
@@ -246,6 +274,9 @@ export function InsightsPage({
           remedies={remedies}
           trend={trend}
           mcp={mcp}
+          pool={pool}
+          poolProject={poolProject}
+          actions={actions}
           windowLabel={resolved?.label ?? 'this window'}
         />
       </div>
@@ -269,6 +300,9 @@ function Body({
   remedies,
   trend,
   mcp,
+  pool,
+  poolProject,
+  actions,
   windowLabel,
 }: {
   view: InsightsView;
@@ -277,6 +311,9 @@ function Body({
   remedies: RemedyInsights | null;
   trend: Fetched<SpendTrend>;
   mcp: Fetched<McpInsights>;
+  pool: Fetched<PoolInsightsPayload>;
+  poolProject: string | null;
+  actions: CockpitActions;
   windowLabel: string;
 }): JSX.Element {
   if (view === 'economics' || view === 'mix') {
@@ -300,6 +337,14 @@ function Body({
     if (mcp.state === 'loading') return <p className="empty">Reading the tool channel…</p>;
     if (mcp.data === null) return <p className="empty">Could not read the tool channel.</p>;
     return <McpUsageTab insights={mcp.data} />;
+  }
+
+  if (view === 'pool') {
+    if (pool.state === 'loading') return <p className="empty">Reading the pool…</p>;
+    // A failed fetch is its own answer and never an empty one: an empty pool page
+    // would say every other fleet knows nothing, which is a different fact.
+    if (pool.data === null) return <p className="empty">Could not read the pool.</p>;
+    return <PoolTab payload={pool.data} project={poolProject} actions={actions} />;
   }
 
   if (trend.state === 'loading') return <p className="empty">Reading eight windows…</p>;

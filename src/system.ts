@@ -3,7 +3,9 @@ import { join } from 'node:path';
 import { configFilePath, projectConfigFilePath, type Config } from './config.js';
 import { Store } from './store/store.js';
 import { CompositeConnector } from './integrations/compositeConnector.js';
-import { buildIntegrations } from './integrations/registry.js';
+import { buildIntegrations, buildPoolTransport } from './integrations/registry.js';
+import { PoolDesk } from './pool/poolDesk.js';
+import { harnessVersion } from './pool/harnessVersion.js';
 import type { ActionSink } from './sink/actionSink.js';
 import { ticketFiler, type TicketFiler } from './tickets/filing.js';
 import { ghCliUpstreamIssues, type UpstreamIssues } from './tickets/upstream.js';
@@ -128,6 +130,16 @@ export interface System {
    * and different facts.
    */
   tickets: TicketSweep;
+  /**
+   * The cross-fleet pool, or undefined on the `fake` default.
+   *
+   * Exposed because the cockpit reads its status — what this fleet last published,
+   * when it last polled, and which claims the secret backstop refused — and because
+   * the routes have no other handle on the thing that holds it. Absent, the Knowledge
+   * page draws no pool section at all, which is the honest reading rather than an
+   * empty one. → `docs/spec/28-cross-fleet-pool.md`
+   */
+  pool?: PoolDesk;
   /**
    * Files a tracker item (issue #394). Exposed because filing is **route-driven**:
    * the operator clicks, waits, and is told the item's ref — so it is neither an
@@ -324,7 +336,10 @@ interface BuildOptions {
  * in-memory store, the server builds a real one, and nothing else changes.
  */
 export function buildSystem(config: Config, opts: BuildOptions = {}): System {
-  const store = new Store(config.dbPath);
+  // The project name goes in at construction because every fact is stamped with it
+  // as it is written, and because the one backfill the pool adds needs a name to
+  // assert rather than guess (`stampFactsWithProject`).
+  const store = new Store(config.dbPath, undefined, config.pool?.project);
   // Recorded MCP-call arguments past their retention, cleared at boot as well as
   // on the write path. The write path alone would be a retention promise kept
   // only while the fleet is busy: a harness that goes quiet holds its arguments
@@ -926,6 +941,29 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // pull request never takes its claim out of the fleet's prompts.
   const graduations = new KnowledgeGraduationDesk({ store, errors });
 
+  // The distance above `fleet` (issue #28): what this fleet has vouched for, carried
+  // to the others, and a daily digest of what it spent. Wired **only when the pool
+  // is selected** — unlike the two desks above, which are always on: with
+  // `integrations.pool` at its `fake` default there is nothing to publish to and
+  // nothing to read, so a desk here would be a pass that runs every pulse to write
+  // an in-memory map nobody reads.
+  //
+  // The coordinates are read straight from config because `validatePool` has already
+  // refused a boot without them — the reads below are the type's, not a second gate.
+  const pool =
+    config.integrations.pool === 'fake'
+      ? undefined
+      : new PoolDesk({
+          store,
+          transport: buildPoolTransport(config.integrations, { store, config, now, errors }),
+          fleetId: config.fleetId ?? '',
+          project: config.pool?.project ?? '',
+          harnessVersion: harnessVersion(),
+          now,
+          digestIntervalMs: config.pool?.digestIntervalMs ?? 60 * 60 * 1000,
+          errors,
+        });
+
   const harness = new Harness({
     store,
     connector,
@@ -963,6 +1001,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     fleet: agents,
     notices,
     graduations,
+    pool,
     heartbeatIntervalMs: config.heartbeatIntervalMs,
     errors,
     runtime: runtimeControl,
@@ -1131,6 +1170,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     harness,
     graph,
     tickets,
+    pool,
     filing,
     upstream,
     updates,

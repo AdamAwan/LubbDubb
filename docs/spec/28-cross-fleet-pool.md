@@ -1,11 +1,5 @@
 # 28 — The cross-fleet pool
 
-> **Not yet built.** Nothing in this document describes running code: no table, module, route or
-> config key named here exists yet. The paths it backticks are the **existing** files a change would
-> touch, and it deliberately names no new ones — where a module ends up is the implementing change's
-> to decide. It is the design that change is written against, and the marker comes off section by
-> section as each becomes true.
-
 Every deployment learns in isolation. [27](27-knowledge.md) models how far a fact carries as a
 first-class axis, and its widest distance is `fleet` — meaning *that one operator's* fleet. So a
 common problem is solved once per engineer, at full price, on every machine: three people on one
@@ -47,11 +41,27 @@ The pool is a third capability in the provider registry (`src/integrations/regis
 
 ```ts
 interface PoolTransport {
+  readonly id: string; // `pool:git` — for the audit log and the cockpit
   readonly canRead: boolean;
   publish(doc: PoolDocument): Promise<void>; // replaces MY namespace, whole
-  fetch(): Promise<PoolDocument[]>; // everyone's, mine included
+  fetch(): Promise<PoolFetchedDocument[]>; // everyone's, mine included
+}
+
+interface PoolFetchedDocument {
+  addressedTo: string | null; // the fleet the *address* named, or null on a substrate with none
+  text: string;
 }
 ```
+
+`fetch` hands up **bytes and an address**, not parsed documents, because checking the one against the
+other is the layer above's job — see [the envelope](#the-envelope). A substrate whose addresses do not
+survive says `null`, and the check is skipped rather than failed.
+
+It lives in a registry of its own (`POOL_REGISTRY`) beside the world capabilities' rather than as a
+third entry in theirs, because a pool transport is **not** an `Integration`: it reads no slice of the
+world and has no `snapshot`. Folding it in would mean either widening that interface with two methods
+nothing else implements, or a `snapshot` that returns nothing — and the second is the one that would go
+wrong silently, since a capability the composite believes it has is one it will ask.
 
 Four properties are load-bearing, and each is a property of the **contract** rather than of any one
 substrate — so no transport has to be clever, and a substrate added later cannot reintroduce a failure
@@ -263,6 +273,16 @@ them before promoting it here.
 it publishes and however many times it is polled. `distinctCorroborators` counts over goal and session
 transitively today; a pooled row has neither, so the origin fleet folds into that same union in that one
 function rather than becoming a second count beside it.
+
+**This fleet's own document is read back and never landed.** `fetch` returns everyone's, mine included,
+which is what lets the page say whether the last publish actually arrived — but importing it would
+propose this fleet's own claims back to itself carrying its own fleet id as a second voice, and every
+claim an operator vouched for would cross to `lookup` again on the next pulse wearing evidence it had
+itself written. Nothing errors, and it looks exactly like another fleet agreeing.
+
+**A claim this operator has rejected stays rejected, whoever else vouches for it.** An arrival goes
+through `proposeFact` like any other, so the rejection bar refuses it by name. The mirror still records
+that somebody believes it — a reading the operator can act on, and never a way around their own ruling.
 
 ### Withdrawal
 
@@ -664,8 +684,8 @@ on `:root` with an entry in `web/src/cockpit/tokens.ts`, and every reference on 
 
 ## Persistence
 
-Two columns on `knowledge_facts`, both additive `ALTER TABLE`s declared in `KNOWLEDGE_COLUMNS`
-(`src/store/knowledge.ts`):
+Three columns, all additive `ALTER TABLE`s declared in `KNOWLEDGE_COLUMNS` (`src/store/knowledge.ts`) —
+two on `knowledge_facts` and one on `knowledge_corroborations`:
 
 - **`project`** — the project name at the moment the fact was written. **It needs a backfill**, gated on
   `ensureColumns` reporting that it added the column: null spells *no project*, which would exclude every
@@ -673,8 +693,16 @@ Two columns on `knowledge_facts`, both additive `ALTER TABLE`s declared in `KNOW
   about the deployment's current project. The migration asserts history rather than guessing at it, and
   running it on every boot instead would relabel every claim written since.
   → [14](14-persistence.md#when-a-null-means-something)
+  The name is handed to the store at construction (`new Store(dbPath, clock, project)`) rather than read
+  at publish time, because what is worth recording is the project the claim was **learned** about: a
+  deployment repointed at a second repository would otherwise relabel its whole history. A deployment
+  that declares no name stamps nothing, which is the honest answer rather than a guess.
 - **`keep_local`** — null needs no backfill and is the only true value on every existing row: nothing
   before this could withhold anything.
+- **`knowledge_corroborations.fleet_id`** — which pool fleet a voice came from, null for a local agent's.
+  Null needs no backfill for `keep_local`'s reason exactly: nothing before this could arrive from a
+  pool. It is what `distinctCorroborators` unions on, so **one fleet is one voice** however many entries
+  it publishes and however many times it is polled.
 
 ### The one that is silent
 
@@ -685,9 +713,10 @@ crosses to `lookup` within one pulse and then goes on climbing. And it looks **e
 working — two fleets agreeing, carrying a claim, which is the feature. It would be found by somebody
 wondering why the block is full.
 
-It belongs in `CLAUDE.md` when it lands.
+It is in `CLAUDE.md`.
 
-The mirror needs no migration of that kind. It is a new table, and a new table is created whole by
-`CREATE TABLE IF NOT EXISTS` on every database that lacks one — but being new **once** is what stops
-it staying exempt, and the first column added to it later belongs in `ColumnMigrations` exactly as the
-two above do. → [14](14-persistence.md#migrations)
+The mirror needs no migration of that kind. Its four tables — `pool_claims`, `pool_digest_rows`,
+`pool_fleets` and this fleet's own `pool_publications` — are new, and a new table is created whole by
+`CREATE TABLE IF NOT EXISTS` on every database that lacks one. But being new **once** is what stops one
+staying exempt, and the first column added to any of them later belongs in `ColumnMigrations` exactly
+as the three above do. → [14](14-persistence.md#migrations)

@@ -193,6 +193,8 @@ export interface CockpitView {
   insightsView: InsightsView;
   /** The stretch of time every reading on that page is measured over. */
   insightsWindow: InsightsWindow;
+  /** Which project the pool reading is narrowed to, or null for every one. */
+  poolProject: string | null;
 }
 
 const LIVE_STATUSES = ['starting', 'running', 'waiting'];
@@ -280,6 +282,8 @@ interface ViewInputs {
   insightsView: InsightsView;
   /** The stretch of time every reading on that page is measured over. */
   insightsWindow: InsightsWindow;
+  /** Which project the pool reading is narrowed to. Optional for `collapsed`'s reason. */
+  poolProject?: string | null;
   /** The goal whose page is open, as `issue:<n>`. */
   selectedGoal: string | null;
   /** Which full-surface panel is in front. */
@@ -358,6 +362,7 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     tab: input.tab,
     insightsView: input.insightsView,
     insightsWindow: input.insightsWindow,
+    poolProject: input.poolProject ?? null,
     collapsedFeatures: new Set(input.collapsed ?? []),
     configTab: input.configTab ?? 'values',
     configGroup: input.configGroup ?? null,
