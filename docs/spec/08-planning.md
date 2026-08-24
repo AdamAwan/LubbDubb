@@ -212,6 +212,23 @@ what would be done about it, so a planner supplied a diagnosis only when it happ
 and the plan sheet led with a paragraph about splitting on an issue whose reader wanted the fix. The
 prompts now ask for all three by name and say what each is not.
 
+**The verdict's three fields — `diagnosis`, `approach` and `verification` — are asked for as bullets,
+in plain English, with no file paths in them.** They are read side by side on the plan sheet by someone
+deciding in a minute whether the work happens, and the three things that cost them that minute are all
+form rather than substance: a paragraph, so the claims have to be hunted for; a lecture, when what was
+wanted was an overview; and a path mid-sentence, which is a token the reader cannot click and did not
+ask for. So the prompt and the `plan_submit` schema both ask for one plain point per bullet, four or
+five at most, the code named in words rather than in paths. The paths already have a home — `evidence`,
+which the sheet draws beside the diagnosis as links — and so does the argument: `document`, which is a
+tab away for the reader who wants it. `alternatives`, `openQuestions` and `reason` stay sentences,
+because each is an argument rather than a list.
+
+Nothing renders this: `renderMarkdown` has always understood lists and `.pm-prose` has always styled
+them, so this is entirely a change of what the planner is _asked_ for. Which is also why it is stated
+in two places that must agree — `PLAN_DOCUMENT_SCHEMA` and the `issue-plan` / `issue-replan` /
+`discuss-plan` templates — and why a deployment running an overridden prompt keeps whatever form its
+own prompt asks for.
+
 `diagnosis` is legitimately absent on work that is not a defect — there is no root cause of a feature —
 and the modal simply omits the section. `approach` is not: every plan is a plan to do something. Both
 are optional in the _schema_ for the reason every post-v1 field is, which is that an operator-overridden
