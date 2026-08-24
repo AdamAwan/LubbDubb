@@ -502,6 +502,69 @@ as a complete figure. A claim may be withheld by `keepLocal`, because claims are
 never totalled into a number anybody treats as complete: withholding one leaves nothing corrupted, only
 absent.
 
+## Configuration
+
+Two layers, split by what the setting is *about* ([02](02-configuration.md#precedence)).
+
+**The project layer, `lubbdubb.project.json`, committed** — which pool, and which project this is:
+
+```json
+{
+  "integrations": { "pool": "git" },
+  "pool": {
+    "project": "acme-api",
+    "remote": "https://git.internal.example/eng/lubbdubb-pool.git",
+    "branch": "main"
+  }
+}
+```
+
+**The deployment layer, `lubbdubb.config.json`, per machine** — who this fleet is:
+
+```json
+{ "fleetId": "alice@acme-api" }
+```
+
+`fleetId` is explicit and never derived — not from a git author line, not from the hostname — and it
+names **person and target repo**, which is what makes two of one person's deployments distinguishable
+in a pool. A fleet with no id configured while the pool is selected is a boot error, exactly as a
+project with no name is.
+
+| Key | Layer | Default |
+| --- | --- | --- |
+| `integrations.pool` | project | `fake` — publishes nowhere, fetches nothing, runs no desk |
+| `pool.project` | project | none; required when the pool is selected |
+| `pool.remote`, `pool.branch` | project | none; the `git` transport's coordinates |
+| `pool.digestIntervalMs` | either | one hour |
+| `fleetId` | deployment | none; required when the pool is selected |
+
+**Off by default.** `fake` is the default provider for the same reason it is for `sourceControl` and
+`issues`: a harness that reached a network on a fresh clone would be one nobody could run a test
+against. A project that never adds the file is unaffected in every respect.
+
+**No secret is ever a config key** ([02](02-configuration.md#secrets)). The `git` transport
+authenticates the way git already does for that host, and `lubbdubb.project.json` stays safe to
+commit — which it must be, since committing it is the whole mechanism of the project name.
+
+**The clone gets its own root**, never under `worktreeRoot`, for the reason in
+[The two transports](#the-two-transports).
+
+### What is deliberately not a key
+
+- **Retention, and the UTC day.** Stated constants. `KNOWLEDGE_CHARS_PER_TOKEN`'s argument
+  ([27](27-knowledge.md#what-it-costs)) applies unchanged: an operator tuning either would be tuning
+  the answer rather than the thing measured, and two deployments' figures would stop being comparable
+  — which is the one thing a shared page exists to make them.
+- **Whether check names ship.** Anything that is summed is mandatory; an optional field makes every
+  aggregate silently partial. See
+  [Anything summed is mandatory](#anything-summed-is-mandatory-anything-read-alone-may-be-withheld).
+- **The poll interval.** The pulse is the clock, so it is `heartbeatIntervalMs` and not a second key
+  free to be set below it.
+
+**When this is built, every key above belongs in [02](02-configuration.md) as well**, which owns the
+full table of keys, defaults and precedence. A key documented only here is a key an operator looking
+in the one place that lists them all will not find.
+
 ## When the pool is unreachable
 
 Every failure is caught, recorded through `errors.record` (`src/errorLog.ts`) and non-fatal. There are
