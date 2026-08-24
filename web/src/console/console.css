@@ -560,10 +560,19 @@
   font: 11px var(--cn-mono);
   color: var(--cn-fg-faint);
 }
+/* Two lines, whatever the ask arrived with. `askLine` already words a row as one
+   factual sentence, and this is the backstop under it: a goal with a long title,
+   or an agent's own question, must not be able to make one row the height of the
+   rail. The whole of it is in the band the row opens. */
 .cn-qtitle {
   font-size: 13px;
   line-height: 1.35;
   margin: 0 0 6px;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
 }
 .cn-qmeta {
   display: flex;

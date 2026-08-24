@@ -13,7 +13,10 @@ export const KIND_LABEL: Record<NeedKind, string> = {
   recovery: 'Recovery',
   escalation: 'Escalation',
   permission: 'Permission',
-  proposal: 'Plan',
+  plan: 'Plan',
+  reply: 'Reply',
+  merge: 'Merge',
+  shortfall: 'Shortfall',
   profile: 'Profile',
   placement: 'Backlog',
   bench: 'Bench',
@@ -56,7 +59,15 @@ export const KIND_TONE: Record<NeedKind, 'red' | 'amber' | 'blue' | 'green'> = {
   recovery: 'red',
   escalation: 'red',
   permission: 'amber',
-  proposal: 'blue',
+  // A plan and a shortfall are read: one proposes work, the other says work that
+  // was done did not reach the goal, and both want judgement rather than a hand on
+  // a switch. A drafted reply and a merge are the two that *send* something — a
+  // gate on `permission`'s terms, where nothing is wrong and an act is waiting on a
+  // yes — so they wear its hue rather than the plan's.
+  plan: 'blue',
+  reply: 'amber',
+  merge: 'amber',
+  shortfall: 'blue',
   profile: 'blue',
   // Amber on `config_gap`'s terms rather than blue on the profile gate's: nothing
   // is held and nothing failed, and what is wrong is that work the fleet is doing
@@ -101,7 +112,15 @@ export const KIND_SYMBOL: Record<NeedKind, string> = {
   recovery: '\u21ba',
   escalation: '?',
   permission: '\u2298',
-  proposal: '\u25c7',
+  plan: '\u25c7',
+  // A return arrow for the reply and a circled plus for the merge: the two acts
+  // that leave the harness, said as what they do to the pull request.
+  reply: '\u21b5',
+  merge: '\u2295',
+  // The ballot X against `validate`'s tick, which is exactly the pair: one is a
+  // goal's checks passing, the other is an assessment saying the goal was not
+  // reached.
+  shortfall: '\u2717',
   profile: '\u2299',
   // A box: where the item is filed, against the profile gate's ringed dot.
   placement: '\u25a3',
@@ -146,6 +165,22 @@ export function subjectLabel(row: NeedRow): string | null {
   if (row.goalRef !== null) return refLabel(row.goalRef);
   const pr = /^pr:(\d+)/.exec(row.originRef ?? '');
   return pr ? `PR #${pr[1]}` : null;
+}
+
+/**
+ * The subject as the *rail* draws it, which is the subject only when the row's
+ * own line has not already said it. `askLine` (`web/src/view/needsYou.ts`) names
+ * the goal wherever the world still carries it, and a row that then repeated
+ * `#395` under a line ending in `#395 · Snapshot downloads 401…` would spend a
+ * second line on the one thing already read.
+ *
+ * It stays for the rows the line cannot name — a pull request no ticket owns, a
+ * goal-shaped ref the world has dropped — because an ask whose subject a surface
+ * cannot name is one the operator answers blind.
+ */
+function subjectBeside(row: NeedRow): string | null {
+  const subject = subjectLabel(row);
+  return subject !== null && row.title.includes(subject) ? null : subject;
 }
 
 /**
@@ -214,7 +249,7 @@ function Row({
   const cls = ['cn-q', `cn-t-${KIND_TONE[row.kind]}`, parked ? 'cn-parked' : '', dim ? 'cn-dim' : '']
     .filter((c) => c !== '')
     .join(' ');
-  const goal = subjectLabel(row);
+  const goal = subjectBeside(row);
   const inner = (
     <>
       <i className="cn-stripe" />

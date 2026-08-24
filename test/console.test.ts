@@ -1359,7 +1359,7 @@ test('the knowledge page draws the retired claims too', () => {
  */
 function orphanAsk(): { v: CockpitView; row: CockpitView['needsYou'][number] } {
   const base = view();
-  const found = base.needsYou.find((n) => n.kind === 'escalation' || n.kind === 'proposal' || n.kind === 'permission');
+  const found = base.needsYou.find((n) => n.kind === 'escalation' || n.kind === 'plan' || n.kind === 'permission');
   assert.ok(found, 'the demo fixtures must carry an escalation to build the orphan from');
   const row = { ...found, goalRef: null, originRef: 'pr:9999', opens: 'ask' as const };
   return { v: { ...base, needsYou: [row, ...base.needsYou.filter((n) => n.id !== row.id)] }, row };

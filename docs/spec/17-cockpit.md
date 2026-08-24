@@ -390,10 +390,21 @@ validate rows, dispatches the executor keeps refusing and the recovery hold. `bu
 transcript tail, so the all-time list was half a megabyte a refresh spent on rows that were filtered
 straight back out. A surface that wanted the settled ones would need a route of its own.
 
-**Nine kinds, and the split is about what answers them.** `permission` and `proposal` are escalations
-underneath, named apart because the verdict differs — a permission goes to `/permission`, a proposal
-carries accept/reject, a plain question takes free text. Drawing them as one kind is how a surface ends
-up offering the wrong control. `bench` and `close_out` are human tasks, likewise split, since a
+**Nine kinds, and the split is about what answers them.** `permission` and the four proposal kinds are
+escalations underneath, named apart because the verdict differs — a permission goes to `/permission`, a
+proposal carries accept/reject, a plain question takes free text. Drawing them as one kind is how a
+surface ends up offering the wrong control.
+
+**A proposal is four kinds — `plan`, `reply`, `merge`, `shortfall` — and was one.** It was `proposal`,
+tagged `Plan`, which is the name of the one act among the four it might be: a drafted reply held for
+sign-off, a merge waiting on a verdict and an assessment's follow-up all arrived on the rail, and in
+the ask panel's own header, under the word `Plan`. `PROPOSAL_KIND` (`web/src/view/needsYou.ts`) is
+total over `ProposalKind`, so a fifth act fails the typecheck rather than inheriting whichever word the
+last one wore. A shortfall the harness only _asks_ about — the arm where the goal itself is what the
+assessor found wrong, so nothing is dispatched and no proposal is written
+([13](13-jobs-and-tickets.md)) — is `shortfall` too, read off its `issue:<n>:shortfall` origin: it is the
+same news, and a row reading `Escalation` would file the one ask about a delivered goal with the ones
+about a stuck agent. `bench` and `close_out` are human tasks, likewise split, since a
 close-out is the step after a launch and reads as one ([13](13-jobs-and-tickets.md#the-step-after-the-launch-the-close-out)).
 `validate` is split from both for the same reason one layer on: it is the _other_ step after a launch
 ([13](13-jobs-and-tickets.md#the-other-step-after-the-launch-the-validation)), and a row that read
@@ -488,7 +499,10 @@ within it.
 | `permission` | Permission  | amber | `⊘`   | A gate, not a fault — a command is waiting on a yes.   |
 | `limit`      | Usage limit | amber | `‖`   | Nothing broke; an allowance window has to turn over.   |
 | `burn`       | Spend       | amber | `▲`   | A heads-up on a run that carries on either way.        |
-| `proposal`   | Plan        | blue  | `◇`   | A plan to read and decide on.                          |
+| `plan`       | Plan        | blue  | `◇`   | A plan to read and decide on.                          |
+| `reply`      | Reply       | amber | `↵`   | A drafted reply, held until you send it.               |
+| `merge`      | Merge       | amber | `⊕`   | A merge waiting on your verdict.                       |
+| `shortfall`  | Shortfall   | blue  | `✗`   | Delivered work that did not reach its goal.            |
 | `profile`    | Profile     | blue  | `⊙`   | Which profile a goal runs on.                          |
 | `placement`  | Backlog     | amber | `▣`   | Nothing is held; the ticket is off the board.          |
 | `bench`      | Bench       | blue  | `◆`   | Work only a person can do. Informative, not broken.    |
@@ -522,6 +536,26 @@ single ask already in front of the operator with its verdict controls under it, 
 there to rank it against. Hue and glyph are what make a row and the band it opened read as one ask, and
 both hold — asserted in `test/console.test.ts`.
 
+### The plan band shows the plan's summary, not the ask's prose
+
+The band on the goal page had the same fault one layer down, and worse: a plan approval drew its whole
+prompt — the template's sentence, why the planner split it that way, and a paragraph on what approving
+and rejecting do — _above_ `context.detail`, which is the planner's diagnosis and approach, the same
+summary the plan sheet leads with. Two accounts of one plan, the longer one first, on a card that also
+carries the buttons.
+
+`EscalationCard` now drops that prose for a `plan` proposal and keeps the summary, which is what the
+operator is deciding on; the split, the evidence and what it rules out stay behind **Read the full
+plan**, and what approving and rejecting do is what the two buttons' own hints say. A drafted reply
+drops its prose for the plainer version of the same reason — its body _is_ the draft, which the card
+already draws under a label of its own, now open rather than folded away, since it is the thing being
+approved.
+
+**What is kept is the appended caution.** `planApprovalWarnings` (`src/plans/planWedge.ts`) writes its
+bullets under a `Before you decide:` line, appended to the rendered ask rather than interpolated into
+it — an unclaimed pull request on the branch, parts already blocked. It is the one part of the ask that
+is about _this_ decision and appears nowhere else, so `splitCaution` keeps it while the rest goes.
+
 A tone is five custom properties on the row or the band — `--cn-tone`, `--cn-tone-fill`, `--cn-tone-bg`,
 `--cn-tone-line`, `--cn-tone-ink` — set by one `.cn-t-*` class and inherited by everything inside. Five
 values that have to move together, and the alternative is the near-identical copy of each rule per tone
@@ -539,6 +573,31 @@ this replaced.
 else, so the rail and the view-model stay one reading. `test/console.test.ts` feeds it deliberately
 out-of-order rows and asserts array order survives — a second sort in the component is the drift that
 would make the rail's own claim about urgency stop being `needsYou`'s.
+
+### A row is one factual line
+
+**The row says which ask it is and which goal it is about, and nothing else.** It used to draw the
+ask's own prose — `escalation.prompt` verbatim — and a plan approval's prompt is four paragraphs, so
+the row that mattered most was the tallest thing on the rail and a queue of them could not be read at
+a glance. `askLine` (`web/src/view/needsYou.ts`) words each row instead: a summary of the act, then
+`for #395 · <the goal's title>`.
+
+- **The act, from the row's own source and never from the prose.** A proposal knows which act it is,
+  so `Plan ready`, `Draft reply to <the reviewer> for PR #412`, `Merge waiting on your verdict for
+PR #412`, `The delivered work did not reach the goal`. A permission states its tool and command; a
+  questionnaire states its count; a plain question is the only one with no act to name, and its own
+  first line is the most factual thing there is.
+- **The goal is named, not numbered.** `#395` alone is not something an operator recognises, so the
+  goal's title rides with it — resolved through `goalIssue`, and simply absent for a goal the world no
+  longer carries.
+- **The ref is dropped where the summary already spells it out**, so a close-out reads
+  `Close issue #364 in the tracker · …` rather than naming `#364` twice. `subjectBeside`
+  (`web/src/console/QueueRail.tsx`) does the same for the metadata line: the subject is drawn beside
+  the row only when the row's line has not already said it, which leaves it exactly where it is still
+  needed — a pull request no ticket owns.
+- **Free text is clamped to one line**, and `.cn-qtitle` clamps the drawn result to two, because a
+  goal title or an agent's own question is whatever length its author felt like. The whole of it is in
+  the band the row opens, one click away.
 
 **Every row states what it is holding**, and that count is the sort key within a group. `holding` is
 **live direct dependents only** — the parts whose `dependsOn` names this ask's slug and which are not
