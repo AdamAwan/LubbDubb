@@ -209,6 +209,19 @@ has to be able to say so — the store stamps `ruled_at` on any move they make, 
 reach changed. Without it the page's **Needs you** section would ask again forever, and the only way
 to empty it would be a decision the operator does not agree with.
 
+### Above `fleet` — the cross-fleet pool
+
+**Not yet built.** [28](28-cross-fleet-pool.md) describes a distance above `fleet`: one namespace per
+fleet on shared internal infrastructure, so a claim one deployment has vouched for reaches other
+deployments' agents rather than being bought again on every machine.
+
+Nothing about this document's gate changes there, and that is the whole of how the two fit together. A
+pooled claim **arrives as a proposal** carrying the origin fleet as **one** corroboration — never the
+origin's count, which would be auto-promotion crossing a machine boundary. Two independent fleets
+agreeing therefore means exactly what two independent goals agreeing already means, and only an
+operator carries a claim further. A claim leaves this fleet only once `ruled_at` says a person has
+ruled on it; a notice, a `goal:` or `check:` scope, and a `graduated` claim never leave at all.
+
 ### Retiring is not rejecting
 
 The two were one word, in two stores, meaning opposite things. `lessons` called its prune `retired`
