@@ -194,6 +194,13 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'How much one press of Extend adds to that countdown.',
   },
   {
+    path: 'agentSilenceParkMs',
+    type: 'number',
+    ms: true,
+    access: 'plain',
+    why: 'How long an agent may produce nothing at all before it is read as wedged.',
+  },
+  {
     path: 'agentResumeAttempts',
     type: 'number',
     access: 'plain',

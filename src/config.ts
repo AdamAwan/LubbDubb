@@ -487,6 +487,28 @@ export interface Config {
    */
   agentStallExtendMs: number;
   /**
+   * How long a **stream** agent may produce no output at all before the harness
+   * parks it and starts the same countdown an unannounced stop gets, in
+   * milliseconds. 0 disables it, which is the behaviour this replaced.
+   *
+   * The nudge and the park above are both read off a turn *ending*, and an agent
+   * wedged inside a turn never reaches one: a tool call that never returns, a
+   * command waiting on input nobody will type. It emits no `result`, so it emits no
+   * stop, so nothing arms — and it holds a worktree lease and a slot against the cap
+   * until a person notices, which on a fleet nobody is watching is until the next
+   * restart. Nothing is red the whole time: an agent silently wedged and one
+   * thinking hard look identical on the glass.
+   *
+   * Long by design, and for the opposite reason `agentStallParkMs` is short. This
+   * one is not an operator's window, it is the longest a legitimate step may take
+   * without a word — an install, a full test run, a slow fetch — and every byte on
+   * stdout starts it again. It is the PTY runtime's `agentIdleWaitMs` measured
+   * against a different silence: a TUI repaints while it works, so ninety seconds
+   * of nothing means something there, where a protocol that says nothing during a
+   * tool call means only that a tool call is running.
+   */
+  agentSilenceParkMs: number;
+  /**
    * How many times a *live* agent whose process dies mid-run is re-attached to
    * its own session before the harness settles it as failed (issue #318).
    *
@@ -797,6 +819,7 @@ const DEFAULTS: Config = {
   agentStallNudges: 2,
   agentStallParkMs: 300_000,
   agentStallExtendMs: 900_000,
+  agentSilenceParkMs: 1_800_000,
   agentResumeAttempts: 3,
   knowledgeBlockChars: 6_000,
   knowledgeScopeStaleDays: 30,

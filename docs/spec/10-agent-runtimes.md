@@ -428,6 +428,15 @@ Three things about which parks count down:
   answered stop and a dismissed one stop counting down — and `resumeParked` does it on the same terms:
   the agent is working again, so there is no unanswered stop left to settle. Without it a resumed,
   demonstrably live agent is killed mid-turn when the old clock fires.
+- **And a park that has not ended, but is visibly working, has its clock pushed out.** A tool call
+  from a parked agent (`noteResumed`) is the one thing that contradicts the deadline: whatever the
+  park says, this agent is doing something, and settling it under its own hands is the outcome the
+  countdown must not have. Pushed rather than dropped — an agent that works for one more minute and
+  then goes quiet for good would otherwise stand parked forever, which is the state this exists to
+  end — and never pulled in, so an operator's Extend outlives it. What it is pushed by is the clock's
+  `grace`, which is where the two parks differ: an unannounced stop gets its own window back, and a
+  silence park gets its silence window, which is the span that agent has just proved is longer than
+  its work goes between words.
 - **In memory, like `limited`**, because it describes a park _this process_ is holding. A restart
   drops every one of them, at which point the same rows are the recovery desk's question and its
   verdicts are the ones on offer.
@@ -448,6 +457,60 @@ Tests: `test/stallNudge.test.ts` (the nudge, the budget, the quoted park, the pa
 countdown settling itself, the extend, and the two parks that never count down),
 `test/streamJsonSession.test.ts` and `test/streamQueuedTurn.test.ts` (the runtime's half — which event
 a turn end produces, and on whose text).
+
+### The wedge: an agent that never reaches a turn boundary
+
+Everything above — the done sentinel, the waiting one, the unannounced stop — is read off a turn
+_ending_. So none of it reaches the agent that stops **inside** a turn: a Bash tool whose command
+never returns, a command sitting at a prompt for input nobody will type, a fetch that hung. It emits
+no `result`, so it emits no stop, so no nudge is sent and no clock is armed. It holds a worktree lease
+and a slot against the cap until a person notices — which on a fleet nobody is watching means until
+the next restart.
+
+Nothing is red for any of it, and that is the whole difficulty: from outside, an agent wedged and an
+agent thinking look identical. The stall park was built for stops it could see, and this is the
+population it could not.
+
+The only observable a wedged agent has is that it says nothing, so that is what the runtime watches.
+`StreamJsonSession` arms a timer for `agentSilenceParkMs` and re-arms it on every byte of stdout, on
+every message written in, and on every transition back to `running`; when it runs out it emits
+`silent`. It is not `stalled`, and the difference is what the manager does about it.
+
+**The wedge is told, not asked.** `AgentManager.handleSilent` goes straight to the park, skipping the
+nudge budget entirely. A nudge is a message written to stdin, and `claude` reads it at the end of the
+turn it is in — an agent that has not produced a byte has not reached that end and is not going to, so
+the nudge would sit in the pipe of a process nobody will hear from again while the budget was spent
+asking. A stop at a turn boundary can be asked something. This one can only be told about.
+
+From there it is the same park and the same countdown, settled the same way — which matters more here
+than it does for a stop, because `complete` calls `session.kill()` and that reaps the process
+_subtree_ ([below](#reaping-the-process-subtree)). The wedged tool call's own children are exactly
+what hold the worktree open, so the settle is what actually frees the slot rather than just relabelling
+it.
+
+Three things about the window, all of which follow from it being a wall clock rather than a reading:
+
+- **It is long, for the opposite reason `agentStallParkMs` is short.** That one is an operator's
+  window to disagree; this one is the longest a _legitimate_ step may take without a word — a cold
+  install, a full test run, a slow fetch. Thirty minutes by default, where the PTY runtime's
+  `agentIdleWaitMs` is ninety seconds, and the two are not in disagreement: a TUI repaints at least
+  once a second while it works, so silence there means the agent is parked at the prompt, while a
+  protocol that says nothing during a tool call means only that a tool call is running.
+- **It is off for every status that is legitimately silent.** Arming runs through `setStatus`, which
+  is the one place every transition passes, so a session parked on a question, on a spent limit, or
+  ended has no clock at all — an agent waiting on a person may wait all night. `handleSilent` checks
+  the manager's own latch for the same reason: silence is only evidence about an agent nobody is
+  already waiting on.
+- **A kill clears it first, before anything that can throw.** The timer is the harness's, not the
+  process's, and one left armed by a kill that found nothing to signal outlives the session and parks
+  an agent nobody is running any more.
+
+`agentSilenceParkMs: 0` turns it off and restores the wedge that stands forever. The PTY runtime is
+unaffected: `agentIdleWaitMs` is its own answer to the same question, and it has had one all along.
+
+Tests: `test/silencePark.test.ts` (the park and the nudge it does not send, the settle and the reap,
+the long step that is not a wedge, the working agent that is never settled under its own hands, and
+the two exclusions).
 
 ### Transcript legibility
 

@@ -431,7 +431,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
         reap: reapTree,
       });
   };
-  const streamFactory: SessionFactory = (spec) => new StreamJsonSession(spec, opts.streamSpawner, reapTree);
+  const streamFactory: SessionFactory = (spec) =>
+    new StreamJsonSession(spec, opts.streamSpawner, reapTree, config.agentSilenceParkMs);
 
   // Blueprint attachments (issue #249): one canonical file per image under the
   // config'd root, outside every worktree. Every launch is granted read access to
@@ -661,6 +662,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     stallNudges: config.agentStallNudges,
     stallParkMs: config.agentStallParkMs,
     stallExtendMs: config.agentStallExtendMs,
+    silenceParkMs: config.agentSilenceParkMs,
     resumable: agentSetup.resumable,
     resumeAttempts: config.agentResumeAttempts,
     statusFile: rateLimits ? (sessionId): string => rateLimits.fileFor(sessionId) : undefined,
