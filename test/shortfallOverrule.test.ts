@@ -104,12 +104,15 @@ test('an overrule writes no conclusion, because one would clear the delivery it 
   }
 });
 
-test('an ordinary instruction on a delivered goal leaves the delivery standing', async () => {
-  // The same edge reached by the other door: the **More work** control on a goal
-  // that has already been assessed as delivered. The conclusion is skipped for
-  // the same reason and the instruction still lands — on a delivered goal the
-  // next dispatch is the retrospective, which `instructionsFor` deliberately
-  // includes.
+test('an ordinary instruction on a delivered goal retracts the delivery, where an overrule keeps it', async () => {
+  // The same edge reached by the other door, and the two doors mean opposite
+  // things. An overrule says *the assessment is wrong and the goal is delivered*,
+  // so it writes the delivery. The **More work** control says the goal is not
+  // finished — so the `more_work` conclusion is written whatever is standing, and
+  // `VERDICT_EXCLUSIONS.conclusion` takes the park down with it (issue #603).
+  // Leaving it up used to be justified by the retrospective reading the words, and
+  // it does; but `issue-retro` dispatches a desk agent with no worktree, so the one
+  // agent the instruction reached was the one that could not act on it.
   const system = build();
   const { app } = await buildApp(system);
   try {
@@ -121,23 +124,7 @@ test('an ordinary instruction on a delivered goal leaves the delivery standing',
     });
     assert.equal(res.statusCode, 200);
     assert.equal(system.store.listStandingInstructions('issue:1').length, 1, 'the words still reach the next agent');
-    assert.ok(system.store.getDelivery('issue:1'), 'and writing them did not retract the delivery');
-    assert.equal(system.store.getIssueConclusion('issue:1'), null);
-  } finally {
-    await app.close();
-    system.store.close();
-  }
-});
-
-test('an instruction on a goal nothing has delivered still writes the verdict that gets it read', async () => {
-  // The guard narrows one case and must leave the ordinary one exactly as it was:
-  // rule `work-item-back-to-pickup` acts on an explicit `more_work` and nothing
-  // else, so without it an instruction on a parked item is words nobody is
-  // dispatched to read.
-  const system = build();
-  const { app } = await buildApp(system);
-  try {
-    await app.inject({ method: 'POST', url: '/api/issues/1/instruction', payload: { text: 'change the button' } });
+    assert.equal(system.store.getDelivery('issue:1'), null, 'and the goal is no longer parked as delivered');
     const conclusion = system.store.getIssueConclusion('issue:1');
     assert.equal(conclusion?.verdict, 'more_work');
     assert.equal(conclusion?.by, 'operator');

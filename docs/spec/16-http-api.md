@@ -484,23 +484,52 @@ Body `{text}`, required and non-empty (max 4 000). What the operator wants done 
 own words — _change the button to primary_, _the permission is wrong_. This is what the cockpit's
 **More work** control writes, and what the bare `more_work` toggle became.
 
-It writes **two** rows and both are load-bearing. The instruction is what reaches the agent, appended
-to every dispatch on the goal until one concludes it
-([09](09-execution.md#the-operators-own-instructions-reach-the-agent)); the `more_work` conclusion is
-what makes there _be_ a next dispatch, since rule `work-item-back-to-pickup` acts on an explicit
-verdict and nothing else. The verdict's note deliberately does **not** repeat the instruction — one
-fact rendered twice in one prompt reads as two, and the prior-work briefing renders a conclusion's
-note. Broadcasts `world:changed` and runs a cycle, for the toggle's reason sharpened: an operator who
-has just said what they want should not wait a heartbeat to be listened to. 400 on an empty `text` or
-a non-integer issue number. Returns `{ok: true, instruction, conclusion}`.
+It writes the instruction and then **restarts the goal**, and those are two different jobs. The
+instruction is what reaches the agent, appended to every dispatch on the goal until one concludes it
+([09](09-execution.md#the-operators-own-instructions-reach-the-agent)). Restarting the goal is
+everything else the route does, and it is the half that used not to happen: the two states an
+operator presses **More work** in are exactly the two the funnel has already stopped in — a standing
+delivery, which holds the goal out of `eligibleIssues` altogether, and a settled plan, which
+`resolvePlanRoute` answers `parts` whatever its status, so rule `issue-pickup` skips it as planned
+while rule `plan-part` finds every part finished. The words landed, the cockpit drew them and no agent
+was ever dispatched to read them. That is the gap [`src/delivery/shortfall.ts`](../../src/delivery/shortfall.ts)
+names for the _assessor's_ negative verdict, reached through the operator's door instead.
 
-**On a goal with a standing delivery the conclusion is skipped**, and `conclusion` comes back null.
-The conclusion is a means rather than the operator's statement, and there it would not schedule
-anything: it would _clear the delivery_ (`VERDICT_EXCLUSIONS.conclusion` lists it), un-parking rule
-`issue-assess` and re-blocking `issue-retro`, `validate-check` and the close-out obligation, all
-three of which gate on `deliveryParked`. There is already a next dispatch on a delivered goal — the
-retrospective, which `instructionsFor` deliberately includes — so the instruction is read either way,
-and writing the verdict would cost a finished goal another trip round the funnel with nothing red.
+So:
+
+- **The `more_work` conclusion is written whatever is standing**, including on a delivered goal, where
+  `VERDICT_EXCLUSIONS.conclusion` clears the delivery. That is the point rather than a cost:
+  `delivered` and "there is more here" are opposite answers to one question, and
+  `resolveIssueConclusion`'s first arm already says the operator outranks the assessor on it. It used
+  to be skipped there, on the grounds that the retrospective would read the instruction anyway — and it
+  does, but rule `issue-retro` dispatches a **desk agent with no branch and no worktree**, deliberately,
+  so the one agent the words reached was the one agent structurally unable to act on them; once it had
+  written the run up, nothing was dispatched for that goal again. `issue-retro`, `validate-check` and
+  the close-out obligation all stop while the goal is back in play, which is the honest reading of a
+  goal whose owner has just said it is not finished. None of that is a new path: `closeOutPass` already
+  declines an open close-out with _"the goal went back into production — there is no delivery to close
+  it out"_ and reopens it once the goal is delivered again, which is exactly the retraction
+  [`/delivered`](#post-apiissuesnumberdelivered) has always been able to cause. A retrospective already
+  written stays written.
+- **A settled plan goes back to a planner** — `complete` becomes `planning`, one status write, which is
+  `shortfallArm`'s replan arm through this door: rule `issue-plan` already routes a `planning` plan to a
+  planner with the `issue-replan` prompt and `currentPlanSummary`, and `plannerVerdict` already narrows
+  the cooldown to decisions since `plan.updatedAt`. The goal is planned out again and put to the
+  operator for approval as usual. Nothing is torn down, exactly as
+  [`POST /api/plans/:id/replan`](#post-apiplansidreplan) tears nothing down. It also keeps the assessor
+  off the planner it just asked for: `planInFlight` is true of a `planning` plan and rule `issue-assess`
+  skips on it. A plan **still in flight** — `planning`, `awaiting_approval`, `active` — is left exactly
+  where it is: it already has a next dispatch or a decision the operator owes, and rewinding it would
+  throw away the decomposition they are in the middle of.
+
+The verdict's note deliberately does **not** repeat the instruction, and neither does the plan's reason
+— one fact rendered twice in one prompt reads as two; the prior-work briefing renders a conclusion's
+note, and the replanning agent reads the operator's words through `operatorInstructionsNote`, whose
+`padOriginFor` scope covers the `:plan` origin. Broadcasts `world:changed` and runs a cycle, for the
+toggle's reason sharpened: an operator who has just said what they want should not wait a heartbeat to
+be listened to. 400 on an empty `text` or a non-integer issue number. Returns
+`{ok: true, instruction, conclusion, replanned}`, where `replanned` is the plan that was sent back or
+null.
 
 ### `DELETE /api/issues/:number/instruction/:id`
 
@@ -508,7 +537,14 @@ Take one back — the escape hatch free text sent to an agent has to have, and t
 instruction stops standing other than an agent concluding the goal. Withdrawing the **last** one clears
 the operator's `more_work` with it, so the item is not bounced back to pickup for words nobody is going
 to read; an **agent's** own declaration is left exactly where it was found, because it is about the
-work rather than about the instruction. 409 when there is no standing instruction with that id, so a
+work rather than about the instruction.
+
+It does **not** undo the rest of the restart: a delivery the write retracted stays retracted, and a
+plan it sent back to a planner stays in `planning`. Neither can be undone by guessing — a cleared
+verdict has no row to resurrect, and a plan re-marked `complete` from here would be claiming a roll-up
+nothing re-derived. Both have their own control, [`/delivered`](#post-apiissuesnumberdelivered) and the
+approval of whatever the replan draws, which is where an operator who meant to take the whole act back
+goes. 409 when there is no standing instruction with that id, so a
 double click is refused rather than silently succeeding. Returns `{ok: true, standing}`.
 
 ### `POST /api/issues/:number/delivered`

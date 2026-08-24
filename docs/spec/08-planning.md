@@ -944,6 +944,20 @@ Three things make replan work rather than merely fire:
 3. Ingestion does the amendment, and asks again — an amended plan is a new proposal: `partsToRetire` respects started work, so an amendment cannot withdraw a part that has
    a branch or a PR behind it.
 
+### The other three doors into `planning`
+
+The status write is the whole mechanism, so anything that wants a replan makes it and stops. Besides
+this route there are three, and each is specified where it belongs:
+
+- **A refused plan** — `refusePlan` writes `planning` with the operator's note appended to the reason
+  (above).
+- **An accepted shortfall with cause `plan`** — `shortfallArm`'s arm A, the assessor saying the
+  decomposition itself was wrong ([05](05-dispatcher.md#issue-shortfall--routing-a-failed-assessment)).
+- **An instruction written on a goal whose plan has rolled up `complete`** — the cockpit's **More work**
+  control, the operator saying it there ([16](16-http-api.md#post-apiissuesnumberinstruction)). Only a
+  settled plan is rewound; one still in flight already has a next dispatch or a decision the operator
+  owes.
+
 ## Discussing a plan
 
 **Discuss is a link, not a dispatch.** It opens the operator's own Claude Code on the goal's checkout

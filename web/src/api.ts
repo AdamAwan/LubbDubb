@@ -329,8 +329,9 @@ const realApi = {
   setIssueConclusion: (issueNumber: number, verdict: 'done' | 'more_work' | null) =>
     post<{ ok: true }>(`/api/issues/${issueNumber}/conclusion`, { verdict }),
   // Tell the fleet what to do on this goal, in the operator's own words. It writes
-  // the instruction *and* the `more_work` that makes there be a next dispatch to
-  // read it — one act on this side, because half of it does nothing.
+  // the instruction *and* restarts the goal — the `more_work` verdict, which retracts
+  // a standing delivery, and a settled plan sent back to a planner. One act on this
+  // side, because the words without a next dispatch reach nobody.
   addInstruction: (issueNumber: number, text: string) =>
     post<{ ok: true }>(`/api/issues/${issueNumber}/instruction`, { text }),
   // Overrule a standing shortfall: the assessment is wrong, and this is why. It

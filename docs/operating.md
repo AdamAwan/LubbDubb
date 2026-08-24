@@ -140,9 +140,11 @@ Your part is the header controls on the goal page:
 - **More work** when it is not, and say what is left in your own words — _change the button to
   primary_, _the permission is wrong_. A third control rather than the other end of the toggle,
   because it does two things the toggle cannot: your sentence goes to the next agent verbatim, and the
-  goal goes back in front of the harness once no PR is open. Several stand at once, they are drawn on
-  the goal page until an agent concludes it, and any of them can be withdrawn. The agent amends the
-  ticket itself when what you said changes what the goal asks for.
+  goal goes back in front of the harness. That second half means what it says on a goal that already
+  looks finished — a `delivered` verdict is retracted, and a plan whose parts have all landed is sent
+  back to a planner, which draws a new one and asks you to approve it as usual. Several stand at once,
+  they are drawn on the goal page until an agent concludes it, and any of them can be withdrawn. The
+  agent amends the ticket itself when what you said changes what the goal asks for.
 - **Raise a bug** when you ran the thing and it does not do what you expect. That is the one fact
   about a goal no agent on it can derive, because none of them ran it. Your words become the new
   goal.

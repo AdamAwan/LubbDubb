@@ -376,6 +376,12 @@ appended to every dispatch on it until an agent concludes
 instruction on a parked item is read by nobody, and a verdict with no instruction re-dispatches an
 agent onto the ticket that already produced the thing the operator was unhappy with.
 
+That act **restarts the goal** as well as writing the rows, and it has to: an operator presses
+**More work** on a goal that looks finished, which is exactly a goal the funnel has parked. So the
+route retracts a standing delivery (below) and sends a plan that has rolled up `complete` back to a
+planner. Both are argued where the route is specified,
+[16](16-http-api.md#post-apiissuesnumberinstruction).
+
 Consequence worth knowing: on a provider with no work-item state machine (GitHub, the fake) a
 conclusion is recorded and displayed but changes no dispatch — there is no review state to be parked
 in, so there is no bounce-back to suppress.
@@ -425,7 +431,11 @@ promise what the next cycle refuses. Two arms, plus a third clearer that is deli
    re-ask is a **new row**.
 3. **The operator clears it** (`POST /api/issues/:number/delivered` with `{delivered: false}`). A
    delete, which is why it is not an arm — the absence of a verdict keeps exactly one
-   representation.
+   representation. Writing an instruction on the goal
+   ([16](16-http-api.md#post-apiissuesnumberinstruction)) is the same clearer reached by a different
+   door: the `more_work` conclusion it records retracts the delivery through the exclusion matrix,
+   because an operator saying there is more to do here is the opposite answer to the question the
+   verdict answered.
 
 **There is no timer arm.** The asymmetry with `proposalHold`'s accepted settle window is the point:
 an accepted act waits on the world to _reflect_ something already done, which is a duration; a
