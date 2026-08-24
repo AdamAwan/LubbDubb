@@ -1177,9 +1177,19 @@ interpolated into it, are four things:
 
 `pr-review-comment` carries the same last two, with the prior-remedy half unfiltered — there is no
 review equivalent of a check name, and filtering to this pull request would leave it empty on the
-first review of every branch. Both ride **after** the thread list and the re-check instruction: they
-are the least urgent thing in the prompt and the only part not about the review in front of the
-agent.
+first review of every branch. Both ride **after** the thread list, the re-check instruction and
+`replyToolNote` (below): they are the least urgent thing in the prompt and the only part not about the
+review in front of the agent.
+
+**`replyToolNote`** (`src/dispatcher/reviewThreads.ts`) is the review dispatch's own third appendix,
+and it does two things a tool description cannot do alone. It names `reply_to_review`, which is
+classified `point-of-use` precisely because only this dispatch ever calls it. And it says **not to
+post to the thread by hand** — not with `gh`, not with `az`, not with the provider's REST API, not
+from any shell — because that is what an agent does otherwise: this prompt hands out thread ids, tells
+the agent to prepare a reply, and a deployment's `agentAllowedTools` commonly reaches the tracker's
+CLI. A reply posted that way is unsigned, unrecorded by the harness and attributed to whoever is
+logged in on the machine, and nothing anywhere says it happened.
+→ [09](09-execution.md#where-a-reply_on_pr-comes-from), [11](11-mcp-tools.md#reply_to_review)
 
 The evidence is fetched in the **executor**, at dispatch, not in the rule. The rule pipeline is
 synchronous and pure over the world snapshot, and the world read is per pulse — so the only place a

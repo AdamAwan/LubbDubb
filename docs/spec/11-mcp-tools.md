@@ -36,6 +36,7 @@ assembles them (see [How a tool is built](#how-a-tool-is-built)).
 | `validation_amend`   | Correct the validation plan for the goal this agent is working: add or amend checks, withdraw one with a reason, declare a resource. **Merge-only** — an omitted check is untouched. Open to every agent on the goal; refused to the planner, which has `plan_submit`. → [20](20-validation.md)                                                                                                                                                                                               |
 | `validation_report`  | Record the reading of the one validation check this agent was dispatched to run: `passed`, `failed`, or `handback` — could not run it, which records nothing and returns the check to the operator with the reason. Refused to every caller but that check's own agent, by name. → [20](20-validation.md#the-hand-over)                                                                                                                                                                       |
 | `knowledge_ask`      | Read what the fleet has learned, for this caller's own scopes or about a question. Answers only with claims two independent goals have seen or an operator has vouched for — never a bare proposal. → [27](27-knowledge.md)                                                                                                                                                                                                                                                                   |
+| `reply_to_review`    | Hand the harness your reply to a review thread, instead of posting it yourself. Raises the same `reply_on_pr` act a rule raises and sends nothing: the operator's authority, the harness's signature and the audit row all follow from that. Fenced to `pr:<n>:comments` origins. → [09](09-execution.md#where-a-reply_on_pr-comes-from)                                                                                                                                                       |
 | `request_permission` | Harness-internal (issue #130). Claude Code calls it via `--permission-prompt-tool` to route an un-allowlisted tool call to the operator. The one tool an agent never calls itself, and the one whose response is **bare** (no `_status`).                                                                                                                                                                                                                                                     |
 
 There is a **second, much shorter list** for the desktop channel below — six tools, none of them
@@ -535,6 +536,45 @@ Arguments `{summary, type?, scope?, body?}` — and **nothing that names work**.
 server — the tool is still advertised (so `names.ts` stays honest) and reports that it is unavailable,
 and every prompt still tells the agent how to open its own pull request. `test/mcpChannel.test.ts`
 asserts that rather than intending it.
+
+### `reply_to_review`
+
+Hands the harness the reply an agent has written for a review thread. Arguments `{body, thread?}` —
+and, like every tool here, **nothing that names a pull request**: it comes from the caller's origin.
+
+- **It sends nothing.** The handler calls `ActionExecutor.proposeReply`, which raises the same
+  `reply_on_pr` act a dispatch rule raises, and returns. Calling `ActionSink.postPrReply` from here
+  would look identical from the agent's side and skip every one of: the hold that suppresses a second
+  ask about one thread, the rejection the operator already gave, the `reaskContext` that names it, the
+  authority (the config key, or a pending question), the sign-off applied in
+  `CompositeConnector.signed`, and the escalation raised when a send fails.
+  → [09](09-execution.md#where-a-reply_on_pr-comes-from)
+- **Fenced to `pr:<n>:comments`** (`replyOrigin`, `src/dispatcher/reviewThreads.ts`) — the review
+  dispatch. A CI agent is answering a red check, and a reply from it lands on a thread another agent
+  is working; a planner, assayer or desk job has no review at all. Every other origin is refused by
+  name and told what to do instead, because the thing being displaced is the agent doing it by hand.
+- **The `thread` is the id the prompt already handed it.** Omitted, the reply is on the pull request
+  rather than in a thread — said in the schema, since an unthreaded answer to a threaded question is
+  one nobody reading the thread sees. The id is what `replyProposalRef` keys the hold on, so two
+  agents on two threads of one review do not hold each other.
+- **The reply comes back with the executor's own account of what happened** — proposed and waiting, or
+  sent — rather than a second wording of it here. Either is a finished call: nothing is waiting on the
+  agent afterwards.
+- **It is named at its point of use**, in `pr-review-comment`'s appended block rather than in
+  `MCP_PROTOCOL_ADDENDUM`: only one kind of agent ever calls it. That block also tells the agent **not
+  to post to the thread itself** — with `gh`, `az`, the provider's REST API or any shell — which the
+  tool's existence does not accomplish on its own. The prompt hands out thread ids, a deployment's
+  `agentAllowedTools` commonly reaches the tracker's CLI, and the instruction to defend an approach
+  reads as an instruction to answer *somewhere*. → [05](05-dispatcher.md#prompt-templates)
+- **The floor is not the agent posting it itself.** Unwired, the tool says so and tells the agent to
+  put the reply in the summary it finishes with. That is the one degradation floor here that is
+  deliberately _not_ "do what you did before the tool existed": doing it by hand is the behaviour the
+  tool exists to end.
+
+**It is not on the desktop channel.** `DESKTOP_TOOL_NAMES` does not carry it and should not: the
+operator's own Claude Code is the operator, replying as themselves, and there is nothing for the
+harness to sign or to put to anybody. The two channels are separate lists for exactly this reason —
+editing one is not editing "the tool".
 
 ### `request_permission`
 

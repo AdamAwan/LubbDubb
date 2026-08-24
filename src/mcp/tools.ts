@@ -14,6 +14,7 @@ import { openPr } from './tools/openPr.js';
 import { planSubmit } from './tools/planSubmit.js';
 import { raise as raiseFact } from './tools/raise.js';
 import { reportRemedy } from './tools/reportRemedy.js';
+import { replyToReview } from './tools/replyToReview.js';
 import { requestHumanTask } from './tools/requestHumanTask.js';
 import { requestPermission } from './tools/requestPermission.js';
 import { retroSubmit } from './tools/retroSubmit.js';
@@ -55,6 +56,7 @@ const TOOLS: Record<McpToolName, ToolFactory> = {
   scratch_read: scratchRead,
   retro_submit: retroSubmit,
   open_pr: openPr,
+  reply_to_review: replyToReview,
   validation_amend: validationAmend,
   validation_report: validationReport,
   report_remedy: reportRemedy,

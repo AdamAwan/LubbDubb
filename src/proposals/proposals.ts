@@ -177,8 +177,9 @@ const SETTLE_WINDOW_MS = 15 * 60_000;
 /** How a decider reads to an operator. Chosen once, so every surface says it the same way. */
 function decidedByLabel(decidedBy: Proposal['decidedBy']): string {
   if (decidedBy === 'human') return 'you';
-  // Historical only — nothing writes it any more (see `Proposal.decidedBy`), but
-  // an old row must still name its authority rather than read as unrecorded.
+  // The operator's config key (`sendPrRepliesWithoutApproval`) authorizing a class
+  // of act in advance — and, on a database old enough, the removed confidence
+  // gate. Both were auto-send; the proposal's own note says which.
   if (decidedBy === 'auto_send') return 'auto-send';
   // Still "you" — a stack landing *is* the operator, deciding once for a whole
   // chain instead of once per rung — and distinguished, because "which click" is

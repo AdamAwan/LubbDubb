@@ -9,7 +9,7 @@ import { buildSystem } from '../src/system.js';
 import { Store } from '../src/store/store.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { defaultPromptTemplates } from '../src/dispatcher/promptTemplates.js';
-import { reviewRecheckNote, reviewThreadsNote } from '../src/dispatcher/reviewThreads.js';
+import { replyToolNote, reviewRecheckNote, reviewThreadsNote } from '../src/dispatcher/reviewThreads.js';
 import { remedyAskNote } from '../src/remedies/remedies.js';
 import type { ActionSink } from '../src/sink/actionSink.js';
 import type { DispatchResult } from '../src/dispatcher/dispatcher.js';
@@ -65,6 +65,7 @@ function reviewCommentPrompt(number: number, branch: string, comment: string, id
     defaultPromptTemplates().render('pr-review-comment', { number, branch, author: 'reviewer', comment }) +
     reviewThreadsNote([{ id, author: 'reviewer', body: comment, handled: false }]) +
     reviewRecheckNote(number) +
+    replyToolNote() +
     // Every append the rule makes, in its order — this fixture is only worth
     // anything while it mirrors that composition exactly. The prior-remedy note
     // is absent rather than forgotten: nothing has been accounted for in these
@@ -313,11 +314,21 @@ test('a rejection stands while nothing happens to the PR, and stops standing whe
 });
 
 test("a rejection reaches the next agent on that ref, in the operator's own words", async () => {
-  const system = buildSystem(testConfig({ repoRoot: gitRepo(), agentMode: 'raw', maxConcurrentAgents: 4 }), {
-    backend: new FakePtyBackend(),
-    sink: countingSink(),
-    errorMirror: () => {},
-  });
+  const system = buildSystem(
+    // Off, so a draft is put to the operator and there is something for them to
+    // refuse — this test is about what a refusal carries, not about who authorized.
+    testConfig({
+      repoRoot: gitRepo(),
+      agentMode: 'raw',
+      maxConcurrentAgents: 4,
+      sendPrRepliesWithoutApproval: false,
+    }),
+    {
+      backend: new FakePtyBackend(),
+      sink: countingSink(),
+      errorMirror: () => {},
+    },
+  );
   const commented = async (number: number, branch: string, body: string): Promise<string> => {
     system.connector.inject({ kind: 'new_pr', number, title: `PR ${number}`, branch, labels: ['lubbdubb-watch'] });
     system.connector.inject({ kind: 'pr_comment', prNumber: number, author: 'reviewer', body });
@@ -375,7 +386,12 @@ test('the executor refuses a duplicate proposal even when the dispatcher gate is
 
 test('a drafted reply is proposed, and accepting it sends that draft', async () => {
   const sink = countingSink();
-  const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), sink });
+  // Off, or the reply is authorized on the way through and there is no pending
+  // proposal to accept — this test is about the accept, so it asks for the ask.
+  const system = buildSystem(testConfig({ sendPrRepliesWithoutApproval: false }), {
+    backend: new FakePtyBackend(),
+    sink,
+  });
   const plan = {
     rationale: 'test',
     rejected: [],

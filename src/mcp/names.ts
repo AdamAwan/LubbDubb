@@ -38,6 +38,7 @@ export const MCP_TOOL_NAMES = [
   'scratch_read',
   'retro_submit',
   'open_pr',
+  'reply_to_review',
   'validation_amend',
   'validation_report',
   'report_remedy',
@@ -101,6 +102,10 @@ export const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use'> = {
   // A request for a person to act rather than an observation, which is why it did
   // not fold into `raise` — and why it still needs naming.
   request_human_task: 'addendum',
+  // Named by `pr-review-comment`'s appendix, which is also where the agent is
+  // told not to post to the thread itself — the half a tool description alone
+  // cannot carry, since the habit it is displacing predates the tool.
+  reply_to_review: 'point-of-use',
   // Terminal or task-scoped: the dispatch prompt names these where they are used.
   link_ticket: 'point-of-use',
   conclude_work: 'point-of-use',

@@ -598,6 +598,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     // Lazy for the same reason: `link_ticket` files the item an agent wrote up
     // (issue #394), and the sink it files through is built below.
     filing: (): McpToolDeps['filing'] => filing,
+    // Lazy for the same reason again: the executor is built below this. It is
+    // where `reply_to_review` hands an agent's reply, so the reply takes the same
+    // route a rule-drafted one takes — held, authorized and signed — instead of
+    // being posted from inside the agent with the operator's credential.
+    prReply: (): McpToolDeps['prReply'] => executor,
     errors,
   });
 
@@ -710,6 +715,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     defaultBranch: config.defaultBranch,
     runtime: runtimeControl,
     errors,
+    // Read through the running config object, never copied: the key is
+    // live-applied, and the flip that matters is the one turning it back off.
+    autoSendReplies: () => config.sendPrRepliesWithoutApproval,
     // The composite, never `opts.sink`: this is a *read* of the provider, and a
     // test that swaps the outbound sink is not saying anything about where CI
     // evidence comes from. It answers `[]` when no integration can supply any,

@@ -158,32 +158,91 @@ Rule `pr-merge-ready` suppresses itself off the same predicate, so on the defaul
 but it is repeated here because it must hold for _every_ path that reaches the executor, the LLM
 dispatcher's prose-composed `reply_on_pr` included. Two call sites, one predicate.
 
-### 2. The one standing authority — `store.standingLandingForPr(prNumber)`
+### 2. The two standing authorities
 
-**The harness authorizes no outbound act on its own.** There was a confidence gate here once:
-`autoSendVerdict` compared a dispatcher-reported number against a configured threshold and could send
-a reply or land a merge with nobody asked. It is gone, along with the `autoSend` config block and the
-`confidence` field on the two actions that carried it — the number was a hardcoded literal at one
-emitter, so the "threshold" resolved between two constants and measured nothing.
+**The harness authorizes no outbound act on its own judgement.** Every authority here is the
+operator's; there are two of them, and they are two because they are different promises.
 
-What is left is a **stack landing**: the operator's own authorization over a chain, clicked once over
-the pull request numbers it covers ([12](12-stacked-prs.md)). Asked only of a merge — a landing says
-nothing about replies — and asked _after_ the hold, so a rejection they gave still governs, and
-_before_ the escalation, so an authorized chain does not fill the inbox with the questions it exists
-to answer.
+| Authority                                       | Reaches                       | The operator said                                             |
+| ----------------------------------------------- | ----------------------------- | ------------------------------------------------------------- |
+| **Stack landing** — `store.standingLandingForPr` | the merges of named rungs     | _these pull request numbers_, clicked once over the chain      |
+| **`sendPrRepliesWithoutApproval`** — the config  | every reply the fleet drafts  | _this class of act_, in advance — **and by default**, until they turn it off |
+
+A **stack landing** is the operator's authorization over a chain, clicked once over the pull request
+numbers it covers ([12](12-stacked-prs.md)). Its scope _is_ those numbers: it is asked only of a
+merge, and a landing says nothing about replies.
+
+**`sendPrRepliesWithoutApproval`** is the operator authorizing a class of act ahead of any particular
+one: while it is on, a drafted reply is sent rather than put to them. It is the wider promise of the
+two — nothing about it names a pull request — which is why it is scoped to **replies only** and why
+its config entry says plainly what it does: prose an agent wrote, onto a thread the operator does not
+control, signed as the harness.
+
+**It is on by default, because that is already what happened.** Until `reply_to_review` existed an
+agent had no way to answer a reviewer but to post to the thread from its own shell with the operator's
+credential — unsigned, unrecorded, attributed to them, and with nobody asked
+([11](11-mcp-tools.md#reply_to_review)). The reply was going out either way. What the default preserves
+is that; what the tool changes is **who sends it**: signed, recorded, held by a standing rejection,
+and carrying a proposal row that names the authority.
+
+Read the other way round, `false` is the setting that changes something, and it is the stricter one —
+it buys a click on every reply. Defaulting *there* would have been the silent change: a deployment
+that edited nothing would take the build and find its replies stopping and its inbox filling with
+drafts nobody had asked to review. An operator who wants that sets one key, and every draft waits in
+the inbox again — the arm below, unchanged, and still the only thing a merge or a plan can take. A merge is not in it (the landing is the better-scoped answer, and it
+is per pull request), and neither is a plan: a plan is always put to a human, permanently, because
+the undo for a plan that started itself is a replan — `planning.requireApproval` is a `RETIRED_KEY`
+for exactly that reason ([08](08-planning.md#the-approval-gate)).
+
+Both are asked _after_ the hold, so a rejection the operator gave still governs — "you do not need to
+ask me" is not "ignore what I said no to" — and _before_ the escalation, so an authorized act does not
+fill the inbox with the questions the authority exists to answer.
+
+**This is not the confidence gate coming back.** `autoSendVerdict` compared a dispatcher-reported
+number against a configured threshold, and the number was a hardcoded literal at its one emitter, so
+the threshold resolved between two constants and measured nothing — it is gone, with the `autoSend`
+block and the `confidence` field on the two actions that carried it, and the key name stays refused at
+boot ([02](02-configuration.md#retired-keys)). What is here instead is a boolean an operator sets.
+There is no number, no score and no gate: the harness never forms an opinion about whether an act is
+good enough to send, it only reads back an authorization somebody gave it. A threshold, a confidence
+field, or any numeric gate reintroduced here would be the removed feature, whatever it were called.
 
 **Nothing here can reject.** Only a human can, because a rejection is durable and a machine "no"
-would mean the question is never put to anyone. Unauthorized means "not mine to authorize", which is
-exactly what a pending proposal already says.
+would mean the question is never put to anyone. That holds for the config key as much as the landing:
+it is an accept-only authority. Unauthorized means "not mine to authorize", which is exactly what a
+pending proposal already says.
 
 ### 3. Either the standing authority or an ask
 
-- **Covered by a landing** → `store.createProposal(…)`, then `decideProposal(id, 'accepted', note,
-'stack_landing')`, then `runAuthorized(accepted, cycleId)`. No escalation: nothing is being asked of
-  anyone. One appears only if the act then fails.
+- **Covered by a standing authority** → `store.createProposal(…)`, then
+  `decideProposal(id, 'accepted', note, 'stack_landing' | 'auto_send')`, then
+  `runAuthorized(accepted, cycleId)`. No escalation: nothing is being asked of anyone. One appears only
+  if the act then fails. The proposal row is written **either way** — it is the audit trail, and a send
+  with no row is an outbound act with no record of what authorized it — and its `note` names _which_
+  authority: the landing and when it was clicked, or the config key by name. Six weeks later that note
+  is the only thing that can tell a reply the operator clicked from one their config sent.
 - **Everything else** → an escalation (`approve_change` for a merge, `review_reply` carrying the
   draft) plus a **pending** proposal hanging off it, audited `executed` — an escalation did happen.
   Accepting performs the act; rejecting records the reason and stops.
+
+### Where a `reply_on_pr` comes from
+
+Two things raise one, and neither of them sends anything:
+
+- **A dispatch rule**, on the pulse, through `execute`.
+- **An agent**, through the `reply_to_review` MCP tool ([11](11-mcp-tools.md#reply_to_review)), which
+  calls `ActionExecutor.proposeReply` and returns. The pull request comes from the caller's origin,
+  never from an argument.
+
+The tool takes this route rather than the sink because everything above is what makes a reply the
+_harness's_: the hold that stops one thread being asked about twice, the rejection the operator
+already gave and the re-ask that names it, their authority, the sign-off `CompositeConnector.signed`
+applies on the way out, and the escalation if the send fails. An agent that posts to the thread itself
+— with the tracker's CLI and the operator's credential, which a deployment's `agentAllowedTools`
+commonly makes possible — gets none of it, and the reply is unsigned, unrecorded by the harness, and
+attributed to the operator rather than to the fleet. Nothing about that is red, which is why the
+prompt appendix says not to as well as the tool description
+([05](05-dispatcher.md#prompt-templates)).
 
 ## Performing an authorized act
 
@@ -210,19 +269,28 @@ because the three are a chain and not three facts:
 | --------------- | --------------------------------------------------------------------------------- | ------------------------------------------------ |
 | `human`         | `human:<proposal id>` — a decision made outside the pulse, like `agent-lifecycle` | `authorized by you`                              |
 | `stack_landing` | the pulse's own cycle id                                                          | `authorized by you, landing the stack`           |
-| `auto_send`     | the pulse's own cycle id                                                          | `authorized by auto-send` — historical rows only |
+| `auto_send`     | the pulse's own cycle id, or the agent's call                                     | `authorized by auto-send`                        |
 
 A standing landing accepts _inside_ a cycle, so its row stays grouped with the pulse that produced
 the action and **cannot** carry the `human:` prefix the cockpit badges "you · accepted" off — that
 prefix marks a click being applied at a route, and this one was clicked earlier, over the chain.
 
-`auto_send` survives in the `decidedBy` union as a **historical** value only. Nothing writes it; a
-database written before the gate was removed still holds rows carrying it, and a decider the cockpit
-cannot name reads as a missing authority rather than an old one.
+`auto_send` is what `sendPrRepliesWithoutApproval` writes, and it is also what the removed confidence
+gate wrote — so a database from before that removal holds rows carrying it with no config key behind
+them. Both read as "authorized by auto-send", which is what both were; what distinguishes them is the
+proposal's own note, which the key names itself in and the old gate did not.
 
-**The failure path is one path for both deciders.** A send that throws creates an `autoMergeFailed`
-escalation and audits `rejected` (the act did not go out). The proposal stays `accepted` — it _was_ accepted — and once its settle window lapses the gate
-re-proposes if the world still warrants it. That is the recovery; it needs no new state.
+A reply the key authorizes at an agent's call has no pulse to belong to, so its cycle id is
+`agent-reply:<agent id>` — the same shape as a human accept's `human:<proposal id>`, and deliberately
+neither the pulse's nor the `human:` prefix the cockpit badges "you · accepted" off. It was neither.
+
+**The failure path is one path for every decider.** A send that throws creates an escalation and
+audits `rejected` (the act did not go out) — including one the config key authorized, which is one of
+the reasons `reply_to_review` must not call the sink itself.
+
+A merge's failure carries `autoMergeFailed` on its escalation context. The proposal stays
+`accepted` — it _was_ accepted — and once its settle window lapses the gate re-proposes if the world
+still warrants it. That is the recovery; it needs no new state.
 
 ## A rejection expires on signal
 

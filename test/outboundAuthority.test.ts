@@ -11,26 +11,37 @@ import type { DispatchResult } from '../src/dispatcher/dispatcher.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 /**
- * **The harness authorizes no outbound act on its own.**
+ * **The harness authorizes no outbound act on its own judgement.**
  *
  * There was a confidence gate here once: a dispatcher-reported number compared
  * against a configured threshold decided whether a reply or a merge went out
  * without anyone being asked. It is gone, and this file is what holds the line it
- * left — every act the harness can publish is written as a `Proposal` and waits.
+ * left — every act the harness can publish is written as a `Proposal`, and unless
+ * the operator authorized it in advance it waits.
  *
- * One authority survives, and it is still the operator's: a **standing stack
- * landing**, clicked once over a named set of pull requests. It is not a
- * widening — it answers "you authorized this chain in advance", over rungs the
- * operator picked, rather than "the harness cleared its own bar".
+ * Two authorities do that, and both are the operator's, neither a bar the harness
+ * cleared for itself:
+ *
+ * - a **standing stack landing**, clicked once over a named set of pull requests;
+ * - **`sendPrRepliesWithoutApproval`**, their config saying a drafted review reply
+ *   need not be put to them. On by default — before the harness could send a reply
+ *   at all the agent posted it from its own shell with nobody asked, so the
+ *   default preserves what happened and changes who signs it. The tests below that
+ *   are about a reply *waiting* therefore set it off, which is the stricter
+ *   posture and the one that has something to assert.
+ *
+ * Neither can reject: a rejection is durable, and a machine "no" would mean the
+ * question is never put to anyone.
  */
 
-function testConfig() {
+function testConfig(overrides: Record<string, unknown> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   return loadConfig({
     dbPath: ':memory:',
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
     heartbeatIntervalMs: 999_999,
+    ...overrides,
   });
 }
 
@@ -103,17 +114,20 @@ function countingSink(fail = false): ActionSink & { merges: number[]; replies: n
   };
 }
 
-function build(sink?: ActionSink) {
-  return buildSystem(testConfig(), {
+function build(sink?: ActionSink, overrides: Record<string, unknown> = {}) {
+  return buildSystem(testConfig(overrides), {
     worktrees: new FakeWorktreeManager(),
     backend: new FakePtyBackend(),
     ...(sink ? { sink } : {}),
   });
 }
 
-test('a drafted reply is never sent — it is proposed, and waits', async () => {
+test('with sendPrRepliesWithoutApproval off, a drafted reply is never sent — it is proposed, and waits', async () => {
   const sink = countingSink();
-  const system = build(sink);
+  // The stricter posture, and the only one in which a reply waits: on the default
+  // a reply goes out, because before the harness could send one the agent posted
+  // it from its own shell and nobody was asked either.
+  const system = build(sink, { sendPrRepliesWithoutApproval: false });
   await system.executor.execute('cyc', replyPlan());
 
   assert.deepEqual(sink.replies, [], 'nothing may go out unauthorized');
@@ -127,6 +141,25 @@ test('a drafted reply is never sent — it is proposed, and waits', async () => 
   assert.equal(proposal!.status, 'pending');
   assert.equal(proposal!.decidedBy, null);
   assert.ok(proposal!.escalationId, 'a pending proposal hangs off its inbox item');
+  system.store.close();
+});
+
+test('on the default the same draft goes out, and the row names the config as the authority', async () => {
+  const sink = countingSink();
+  const system = build(sink);
+  await system.executor.execute('cyc', replyPlan());
+
+  assert.deepEqual(sink.replies, [42], 'the operator authorized this class of act in advance');
+  assert.equal(system.store.listOpenEscalations().length, 0, 'nothing is being asked of anyone');
+
+  // The row is written either way: a send with no proposal behind it is an
+  // outbound act with no record of what authorized it.
+  const [proposal] = system.store.listProposals();
+  assert.equal(proposal!.status, 'accepted');
+  assert.equal(proposal!.decidedBy, 'auto_send');
+  assert.equal(proposal!.escalationId, null);
+  assert.match(proposal!.note ?? '', /sendPrRepliesWithoutApproval/);
+  assert.match(replyDecision(system)!.detail, /authorized by auto-send/);
   system.store.close();
 });
 
@@ -236,7 +269,9 @@ test('an authorized act is not re-proposed on every pulse while the world catche
 });
 
 test('accepting a threaded reply sends it and settles the comment it answered', async () => {
-  const system = build();
+  // Off, so there is a pending proposal to accept — this is about what accepting
+  // does, not about who authorized it.
+  const system = build(undefined, { sendPrRepliesWithoutApproval: false });
   system.connector.inject({ kind: 'new_pr', number: 42, title: 'X', branch: 'feat' });
   system.connector.inject({ kind: 'pr_comment', prNumber: 42, author: 'bob', body: 'why this?' });
   const before = (await system.connector.getState()).pullRequests[0]!.unresolvedComments[0]!;

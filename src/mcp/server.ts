@@ -63,6 +63,12 @@ interface McpBridgeServerOptions {
   /** Lazy for `openPr`'s reason: the sink it files through is built after this server. */
   filing?: () => McpToolDeps['filing'];
   /**
+   * Where `reply_to_review` hands a reply — the executor, which is built after
+   * this server, so lazy for `openPr`'s reason and with the same floor: absent,
+   * the tool says replying is not wired rather than sending anything itself.
+   */
+  prReply?: () => McpToolDeps['prReply'];
+  /**
    * How long a recorded call's arguments are kept, in days. `0` records none at
    * all. Absent takes the store's own default — see `McpCallStore`.
    */
@@ -287,6 +293,7 @@ export class McpBridgeServer {
         permissions: this.opts.permissions?.(),
         openPr: this.opts.openPr?.(),
         filing: this.opts.filing?.(),
+        prReply: this.opts.prReply?.(),
         errors: this.opts.errors,
       },
       resolved.identity,

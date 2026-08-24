@@ -96,7 +96,14 @@ export interface RunningConfigGroup {
 const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
   {
     title: 'Dispatch',
-    keys: ['heartbeatIntervalMs', 'maxConcurrentAgents', 'startPaused', 'closedPrWindowMs', 'upNextOverrideTtlMs'],
+    keys: [
+      'heartbeatIntervalMs',
+      'maxConcurrentAgents',
+      'startPaused',
+      'sendPrRepliesWithoutApproval',
+      'closedPrWindowMs',
+      'upNextOverrideTtlMs',
+    ],
   },
   {
     title: 'Agents',
