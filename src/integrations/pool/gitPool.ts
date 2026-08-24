@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, posix } from 'node:path';
 import { runGit } from '../../git/gitCli.js';
 import { poolDocumentPath, serialisePoolDocument } from '../../pool/document.js';
@@ -171,9 +171,20 @@ function listDirectories(path: string): string[] {
   }
 }
 
+/**
+ * One document's bytes, or null when there is nothing readable there.
+ *
+ * **Read first and ask afterwards**, rather than `statSync().isFile()` and then a
+ * read. The pair is a check-then-use over a path other fleets and people are
+ * pushing to: the file can be replaced by a directory — or vanish — between the two
+ * calls, so the stat answers about one thing and the read touches another. Reading
+ * straight through has no window at all, and it costs nothing here because every
+ * way of not being a readable file already throws: `ENOENT` for a document that is
+ * not there, `EISDIR` for a directory wearing a document's name.
+ */
 function readIfFile(path: string): string | null {
   try {
-    return statSync(path).isFile() ? readFileSync(path, 'utf8') : null;
+    return readFileSync(path, 'utf8');
   } catch {
     return null;
   }
