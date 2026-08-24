@@ -666,7 +666,13 @@ a model per _kind_ of work:
       "deep": { "model": "opus", "effort": "medium", "rank": 3, "description": "Work whose shape is unclear." }
     },
     "default": "deep",
-    "byRule": { "pr-ci-gate": "fast", "issue-retro": "fast", "issue-assess": "standard" }
+    "byRule": {
+      "pr-ci-gate": "fast",
+      "issue-retro": "fast",
+      "issue-assess": "standard",
+      "pr-base-update": "fast",
+      "pr-base-update-conflict": "deep"
+    }
   }
 }
 ```
@@ -674,6 +680,15 @@ a model per _kind_ of work:
 - **The key is a `DISPATCH_RULES` id.** That id is already persisted on `Task.rule` and is already the
   axis `src/taskTypeSpend.ts` prices work by, so config, spend and the decision log share one
   vocabulary rather than growing a second. → [05](05-dispatcher.md#the-rule-book)
+- **The rule id is the whole grain, so a rule with two costs is two rules.** The last pair in the
+  example is the case: `pr-base-update` merges a base the provider has already called clean, and
+  `pr-base-update-conflict` resolves a conflict by hand. They were one id over one predicate's two
+  arms, and one id has one profile — so a deployment that wants a deep model on conflicts was buying
+  one for routine base merges too. On a provider with no `update_pr_branch` endpoint (Azure DevOps has
+  none) that is not hypothetical: the cheap arm dispatches an agent as well, and both were priced
+  together. Splitting the id is the mechanism this file offers for that; the two still share one
+  cooldown origin, because the split is about price, not about accounting.
+  → [05](05-dispatcher.md#pr-base-update--two-arms)
 - **A rule points at a named profile, and a profile is a model and the depth it runs at.** The
   indirection buys a name (`deep`, `fast`) that survives a model being replaced: when a new model
   ships, one profile value changes and every rule pointing at it follows. A profile deliberately

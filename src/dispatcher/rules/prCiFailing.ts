@@ -32,17 +32,18 @@ import { isActive, type RawAction, type StageContext } from './context.js';
  * collected here and ranked across PRs below — world order is arbitrary, so it
  * must not decide who wins scarce headroom.
  *
- * **One pass covering six rules**, registered in `STAGES` under `pr-ci-failing`,
- * which is why `pr-review-comment`, `pr-ci-blocked`, `pr-ci-gate`,
- * `pr-base-update` and `pr-merge-ready` have no stage of their own. They are not
- * independent: the four concern rules feed one per-PR list whose *top* entry
- * alone becomes a dispatch, because one agent works a branch. Their relative
+ * **One pass covering seven rules**, registered in `STAGES` under
+ * `pr-ci-failing`, which is why `pr-review-comment`, `pr-ci-blocked`,
+ * `pr-ci-gate`, `pr-base-update`, `pr-base-update-conflict` and `pr-merge-ready`
+ * have no stage of their own. They are not independent: the five concern rules
+ * feed one per-PR list whose *top* entry alone becomes a dispatch, because one
+ * agent works a branch. Their relative
  * urgency is their order in the pipeline — see {@link concernUrgency}, which
  * reads it rather than restating it, and which `prAttention`'s lens asks the same
  * question of so the two cannot end up on different orders.
  *
  * The registration is under `pr-ci-failing` rather than under whichever of the
- * six the pipeline currently puts first, and that is deliberate: they are
+ * seven the pipeline currently puts first, and that is deliberate: they are
  * contiguous, so nothing else runs between them and the pass contributes its
  * candidates at the same point in the walk whichever id carries it. Chasing the
  * first id through this map on every reorder would be a second copy of the
@@ -272,8 +273,8 @@ export function prCiFailing(s: StageContext): void {
       // *already asserted is clean*, so it is taken directly instead of costing a
       // worktree, a model and a cold read of the repository (issue #332). The
       // conflicted arm keeps its agent: resolving a conflict is judgement, and
-      // `pr-base-update-conflict` already tells the agent to escalate when it
-      // cannot.
+      // the `pr-base-update-conflict` prompt already tells the agent to escalate
+      // when it cannot.
       //
       // Unless the last direct attempt came back unperformed — a provider with no
       // such endpoint (Azure DevOps has none), or a write the repository refused.
@@ -282,7 +283,14 @@ export function prCiFailing(s: StageContext): void {
       // path was unavailable.
       const direct = behind && !directActUnperformed('update_pr_branch', mergeableOrigin, ctx.recentDecisions);
       concerns.push({
-        rule: 'pr-base-update',
+        // **The rule id splits where the cost does**, off the same `behind` boolean
+        // everything else here reads. `agentModels.byRule` keys on the rule, so one
+        // id across both arms prices a conflict resolution and a routine base merge
+        // on one profile — and on a provider with no `update_pr_branch` endpoint
+        // there is no cheap arm at all, so both dispatch an agent. The **origin**
+        // deliberately does not split with it: same PR, same problem, one cooldown
+        // and one attempt budget.
+        rule: behind ? 'pr-base-update' : 'pr-base-update-conflict',
         origin: mergeableOrigin,
         act: direct
           ? ({

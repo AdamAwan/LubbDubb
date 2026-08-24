@@ -281,10 +281,19 @@ interface TaskRow extends TaskSummaryRow {
 /**
  * Which rule a historical PR dispatch came from, read off the origin it claimed.
  *
- * Structural, not prose: these four origins are minted by exactly one rule each
- * (`src/dispatcher/rules/prCiFailing.ts`), so the mapping is a fact about the
- * dispatch vocabulary rather than a guess. Safe to re-run — it fills a null with
- * the same answer every time.
+ * Structural, not prose: these origins are minted by `prCiFailing.ts` and nowhere
+ * else, so the mapping is a fact about the dispatch vocabulary rather than a
+ * guess. Safe to re-run — it fills a null with the same answer every time.
+ *
+ * **One of them is no longer exact.** `pr:<n>:mergeable` is shared by
+ * `pr-base-update` and `pr-base-update-conflict`, which were one rule when every
+ * row this backfill touches was written and were split so the two arms could be
+ * priced apart in `agentModels.byRule`. The origin carries no trace of which arm
+ * ran, so a conflict resolution from before the `rule` column existed is
+ * attributed to `pr-base-update` — the id that arm's rows *did* carry at the
+ * time. That is the honest answer for a historical row and the wrong one for a
+ * fresh dispatch, which is why nothing on the write path reads this: the
+ * dispatcher records `rule` itself, and this only ever fills a null.
  */
 const RULE_OF_ORIGIN: readonly [RegExp, string][] = [
   [/^pr:\d+:ci$/, 'pr-ci-failing'],

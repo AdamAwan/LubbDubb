@@ -224,8 +224,8 @@ const ActionSchema = z.discriminatedUnion('type', [
    * Bring a pull request that is merely **behind** its base up to date, without
    * spending a code agent on two git commands (issue #332).
    *
-   * Emitted only by rule `pr-base-update`'s `behind` arm — the case the provider
-   * has already said merges cleanly — and never for a conflict, which is
+   * Emitted only by rule `pr-base-update` — the case the provider has already
+   * said merges cleanly — and never by `pr-base-update-conflict`, which is
    * judgement and keeps its agent. It claims no headroom and is pushed straight
    * through, like `merge_pr` and `set_work_item_state`; the executor performs it
    * against the sink and audits the outcome under `originRef`, which is what keeps
