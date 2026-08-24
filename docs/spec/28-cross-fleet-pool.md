@@ -90,9 +90,12 @@ reading.
 `fake` — mandatory, and the seam every test uses. All provider I/O sits behind a scripted fake and the
 suite touches no network.
 
-`git` — clone, pull, write your own file, push. Provider-neutral by construction, so one implementation
-covers Azure DevOps with a wiki, Azure DevOps without one, GitHub, and any bare repository. A
-provider-specific wiki transport is an optional extra that may never be worth writing. `http` later is
+`git` — clone, pull, write your own file under the configured prefix, push. Provider-neutral by
+construction, so one implementation covers Azure DevOps with a wiki, Azure DevOps without one, GitHub,
+and any bare repository — and, because the prefix means the repository need not be the pool's, a
+folder inside a team's existing wiki is a first-class home rather than a workaround
+([below](#living-in-somebody-elses-repository)). A provider-specific wiki transport is an optional
+extra that may never be worth writing. `http` later is
 the service, and by then it is one factory line with nothing above it changing.
 
 **The `git` transport's clone lives under its own root and never under `worktreeRoot`.** The worktree
@@ -101,6 +104,47 @@ pool counts every registered worktree under that root as a slot whatever the dir
 `git clean -ffdx`. This is exactly the hazard `localRunRoot` exists to avoid
 ([23](23-local-runs.md#the-checkout)), and the answer is the same one: a separate root, touched by
 nothing else.
+
+### Living in somebody else's repository
+
+A pool does not need a repository of its own. `pool.path` is a prefix inside the one it is given, so a
+team's existing wiki hosts the pool in a folder rather than having its root written into:
+
+```json
+{ "pool": { "path": "engineering/fleet-pool" } }
+```
+
+It defaults to empty, which is the repository root — right for a dedicated pool repository and wrong
+for every shared one, which is why it is a setting rather than a convention.
+
+**The prefix is the transport's and never the payload's.** It is not on the envelope and no document
+records it, because it is an address rather than a fact: the layer above says *publish my document* and
+the transport decides where that lands. A substrate with no folders — the `http` service later — has
+nothing to do with the setting, and one with a different layout can honour it differently without
+anything above changing.
+
+Three rules follow from the repository not being the pool's, and each of them is a way to damage
+somebody else's work:
+
+- **The write set is exactly `<path>/fleets/<fleetId>/`.** The transport stages its own two files by
+  name and commits those paths. Never `git add -A`, never `git add .`, and never `git clean` anywhere
+  in the clone. In a dedicated repository a broad stage is untidy; in a wiki it commits whatever else
+  happens to be in the tree, under the harness's name, on a schedule, with nobody having asked.
+- **The read is scoped to `<path>/fleets/`** rather than to the tree. A pool sharing a wiki is a pool
+  whose sibling directories are full of documents that are not documents in this sense, and a `fetch`
+  that walked the repository would try to parse the team's meeting notes and record an error for each
+  one, every pulse.
+- **A rejected push is pulled and retried, never forced.** Other fleets push to this repository and, in
+  a shared one, so do people. `--force` on somebody's wiki is the worst outcome this design can
+  produce. The rebase is safe by construction rather than by luck: one writer per namespace means the
+  incoming changes cannot touch the file this fleet is writing, so there is nothing for a rebase to
+  conflict over. Retries are bounded, and a push that keeps being rejected is recorded and left for the
+  next pulse like any other failure.
+
+**A path that escapes the clone is refused at config load** — absolute, rooted, or containing `..` —
+rather than at write time. A prefix is a coordinate an operator types once, so it is checked where the
+rest of the coordinates are, and the failure is a boot error naming the key rather than a write into
+whatever the path resolved to.
 
 ## Two documents, one envelope
 
@@ -117,8 +161,8 @@ and consented to.
 So they are two documents at two addresses:
 
 ```
-fleets/<fleetId>/claims.json
-fleets/<fleetId>/digest.json
+<pool.path>/fleets/<fleetId>/claims.json
+<pool.path>/fleets/<fleetId>/digest.json
 ```
 
 **The cadence difference is the one that decides it.** One document means republishing the claim text
@@ -513,8 +557,9 @@ Two layers, split by what the setting is *about* ([02](02-configuration.md#prece
   "integrations": { "pool": "git" },
   "pool": {
     "project": "acme-api",
-    "remote": "https://git.internal.example/eng/lubbdubb-pool.git",
-    "branch": "main"
+    "remote": "https://git.internal.example/eng/team-wiki.git",
+    "branch": "main",
+    "path": "engineering/fleet-pool"
   }
 }
 ```
@@ -535,6 +580,7 @@ project with no name is.
 | `integrations.pool` | project | `fake` — publishes nowhere, fetches nothing, runs no desk |
 | `pool.project` | project | none; required when the pool is selected |
 | `pool.remote`, `pool.branch` | project | none; the `git` transport's coordinates |
+| `pool.path` | project | empty — the repository root; a prefix when the repository is shared |
 | `pool.digestIntervalMs` | either | one hour |
 | `fleetId` | deployment | none; required when the pool is selected |
 
