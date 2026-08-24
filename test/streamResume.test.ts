@@ -96,6 +96,7 @@ function recordingSpawner(): { spawner: Spawner; launches: Launch[] } {
 // state — i.e. a real server restart, not a fresh in-memory store.
 function streamConfig(dir: string, extra: Partial<Config> = {}): Config {
   return loadConfig({
+    selfUpdate: { enabled: false } as never,
     ...extra,
     labelPrefix: '',
     dbPath: join(dir, 'db.sqlite'),

@@ -31,6 +31,7 @@ function build(): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   return buildSystem(
     loadConfig({
+      selfUpdate: { enabled: false } as never,
       auth: { enabled: false } as never,
       labelPrefix: 'lubbdubb',
       dbPath: ':memory:',
@@ -263,6 +264,7 @@ test('the gate switched off writes no empty tag onto the baseline', async () => 
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   const system = buildSystem(
     loadConfig({
+      selfUpdate: { enabled: false } as never,
       auth: { enabled: false } as never,
       labelPrefix: '',
       dbPath: ':memory:',
@@ -372,6 +374,7 @@ test('the gate switched off writes no empty tag onto the mirror either', async (
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   const system = buildSystem(
     loadConfig({
+      selfUpdate: { enabled: false } as never,
       auth: { enabled: false } as never,
       labelPrefix: '',
       dbPath: ':memory:',

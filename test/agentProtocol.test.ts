@@ -162,6 +162,7 @@ test('no allowedTools means no permissions fragment', () => {
 function claudeModeConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-claude-'));
   return loadConfig({
+    selfUpdate: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',
     agentMode: 'pty',

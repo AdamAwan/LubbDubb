@@ -27,6 +27,7 @@ import type { Job, JobSchedule, Task } from '../src/types.js';
 function testConfig(overrides: Partial<Config> = {}): Config {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-sched-'));
   return loadConfig({
+    selfUpdate: { enabled: false } as never,
     // The cockpit guard is exercised in test/cockpitAuth.test.ts; these drive routes.
     auth: { enabled: false } as never,
     labelPrefix: '',

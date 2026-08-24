@@ -12,6 +12,7 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 // state — i.e. a real server restart, not a fresh in-memory store.
 function ptyConfig(dir: string): Config {
   return loadConfig({
+    selfUpdate: { enabled: false } as never,
     labelPrefix: '',
     dbPath: join(dir, 'db.sqlite'),
     agentMode: 'pty',

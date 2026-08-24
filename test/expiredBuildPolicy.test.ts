@@ -223,6 +223,7 @@ function build(pullRequests: PullRequest[], ci: CiPolicy = { checks: [] }, sink?
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-expired-'));
   const system = buildSystem(
     loadConfig({
+      selfUpdate: { enabled: false } as never,
       labelPrefix: '',
       dbPath: ':memory:',
       agentMode: 'raw',

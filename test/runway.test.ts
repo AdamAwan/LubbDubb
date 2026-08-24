@@ -821,6 +821,7 @@ function build(over: Partial<RunwayPolicy> = {}): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-runway-'));
   return buildSystem(
     loadConfig({
+      selfUpdate: { enabled: false } as never,
       auth: { enabled: false } as never,
       // The gate off, so every open issue is watched and the fixtures below say
       // what they mean without a tag on each one.
@@ -916,6 +917,7 @@ test('the band reads a standing supply row off the whole bench, not the hundred-
   const dbPath = join(dir, 'runway.sqlite');
   const system = buildSystem(
     loadConfig({
+      selfUpdate: { enabled: false } as never,
       auth: { enabled: false } as never,
       labelPrefix: '',
       dbPath,

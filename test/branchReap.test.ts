@@ -137,6 +137,7 @@ test('two merged PRs on one branch delete it once', () => {
 function build(over: Record<string, unknown> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-reap-'));
   const config = loadConfig({
+    selfUpdate: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',
     agentMode: 'raw',

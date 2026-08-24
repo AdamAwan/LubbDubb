@@ -18,6 +18,7 @@ import { findTask } from './support/tasks.js';
 function build(overrides: Partial<ActionSink> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   const config = loadConfig({
+    selfUpdate: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',
     agentMode: 'raw',

@@ -415,6 +415,7 @@ test('a delivery reads delivered, an agent’s own done reads concluded, and a d
 
 test('GET /api/tickets ships the mirror, filtered, ordered and paged', async () => {
   const config = loadConfig({
+    selfUpdate: { enabled: false } as never,
     auth: { enabled: false } as never,
     dbPath: ':memory:',
     labelPrefix: 'lubbdubb',
@@ -711,6 +712,7 @@ test('the pickup states config marks the states it lets through', () => {
 
 test('the pickup mark on a state facet is the dispatcher’s effective set, not the raw list', async () => {
   const config = loadConfig({
+    selfUpdate: { enabled: false } as never,
     auth: { enabled: false } as never,
     dbPath: ':memory:',
     labelPrefix: 'lubbdubb',
@@ -750,6 +752,7 @@ test('the pickup mark on a state facet is the dispatcher’s effective set, not 
 
 test('the board column order is an operator policy, shipped to the cockpit as it was written', async () => {
   const config = loadConfig({
+    selfUpdate: { enabled: false } as never,
     auth: { enabled: false } as never,
     dbPath: ':memory:',
     labelPrefix: 'lubbdubb',
@@ -780,6 +783,7 @@ test('the board column order is an operator policy, shipped to the cockpit as it
 
 test('a deployment that configures no board states ships an empty list, not a guess', async () => {
   const config = loadConfig({
+    selfUpdate: { enabled: false } as never,
     auth: { enabled: false } as never,
     dbPath: ':memory:',
     agentMode: 'raw',
@@ -801,6 +805,7 @@ test('a deployment that configures no board states ships an empty list, not a gu
 
 test('the cockpit is told whether a state can be written, and which states the rules own', async () => {
   const config = loadConfig({
+    selfUpdate: { enabled: false } as never,
     auth: { enabled: false } as never,
     dbPath: ':memory:',
     agentMode: 'raw',
@@ -834,6 +839,7 @@ test('the cockpit is told whether a state can be written, and which states the r
 
 test('with no state gate configured there are no rules to report, and null says so', async () => {
   const config = loadConfig({
+    selfUpdate: { enabled: false } as never,
     auth: { enabled: false } as never,
     dbPath: ':memory:',
     agentMode: 'raw',

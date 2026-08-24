@@ -403,6 +403,7 @@ test('a cooling assessor still suppresses pickup for that cycle, and stays visib
 function testConfig(): ReturnType<typeof loadConfig> {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-assess-'));
   return loadConfig({
+    selfUpdate: { enabled: false } as never,
     auth: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',

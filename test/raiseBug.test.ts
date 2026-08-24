@@ -26,6 +26,7 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 function testConfig(overrides: Record<string, unknown> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-raisebug-'));
   return loadConfig({
+    selfUpdate: { enabled: false } as never,
     auth: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',

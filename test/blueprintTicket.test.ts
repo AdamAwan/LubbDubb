@@ -30,6 +30,7 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 function testConfig(overrides: Record<string, unknown> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-blueprint-'));
   return loadConfig({
+    selfUpdate: { enabled: false } as never,
     auth: { enabled: false } as never,
     labelPrefix: 'lubbdubb',
     dbPath: ':memory:',

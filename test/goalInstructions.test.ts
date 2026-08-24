@@ -8,6 +8,7 @@ import { buildSystem, type System } from '../src/system.js';
 import { buildApp } from '../src/server/app.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
+import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { operatorInstructionsNote, ticketAmendCommands } from '../src/goalInstructions.js';
 import type { Agent, IssueInstruction, Plan } from '../src/types.js';
 import { planWithOnePart } from './support/plans.js';
@@ -87,6 +88,7 @@ test('the amend commands name the configured tracker, and nothing under the fake
   assert.equal(ticketAmendCommands(loadConfig({ labelPrefix: '', dbPath: ':memory:' }), 1), null);
   const azure = ticketAmendCommands(
     loadConfig({
+      selfUpdate: { enabled: false } as never,
       labelPrefix: '',
       dbPath: ':memory:',
       integrations: { issues: 'azure', prs: 'fake' },
@@ -100,6 +102,7 @@ test('the amend commands name the configured tracker, and nothing under the fake
 
 function githubConfig(): Config {
   return loadConfig({
+    selfUpdate: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',
     integrations: { issues: 'github', prs: 'github' },
@@ -113,6 +116,7 @@ function build(): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-ins-'));
   return buildSystem(
     loadConfig({
+      selfUpdate: { enabled: false } as never,
       auth: { enabled: false } as never,
       labelPrefix: '',
       dbPath: ':memory:',
@@ -121,7 +125,12 @@ function build(): System {
       worktreeRoot: join(dir, 'wt'),
       heartbeatIntervalMs: 999_999,
     }),
-    { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend(), errorMirror: () => {} },
+    {
+      worktrees: new FakeWorktreeManager(),
+      gitObserver: new FakeGitObserver(),
+      backend: new FakePtyBackend(),
+      errorMirror: () => {},
+    },
   );
 }
 

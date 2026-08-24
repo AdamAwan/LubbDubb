@@ -74,6 +74,7 @@ const past = (ms: number) => new Promise((r) => setTimeout(r, ms));
 function streamConfig(patch: Record<string, unknown> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-silence-'));
   return loadConfig({
+    selfUpdate: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',
     agentMode: 'stream',

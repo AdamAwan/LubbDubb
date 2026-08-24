@@ -506,6 +506,7 @@ test('a merged PR stays merged in the graph long after the world forgets it', as
   // still in `closedPullRequests`, then the PR leaves both lists the way the 6h
   // `closedPrWindowMs` retires it, and the graph is asked again.
   const config = loadConfig({
+    selfUpdate: { enabled: false } as never,
     auth: { enabled: false } as never,
     dbPath: ':memory:',
     labelPrefix: '',
@@ -558,6 +559,7 @@ test('a merged PR stays merged in the graph long after the world forgets it', as
 
 test('the routes serve roots and one subtree, and refuse an unknown root', async () => {
   const config = loadConfig({
+    selfUpdate: { enabled: false } as never,
     auth: { enabled: false } as never,
     dbPath: ':memory:',
     labelPrefix: '',

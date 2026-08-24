@@ -18,6 +18,7 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 function testConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   return loadConfig({
+    selfUpdate: { enabled: false } as never,
     // The cockpit guard is exercised in test/cockpitAuth.test.ts; these drive routes.
     auth: { enabled: false } as never,
     labelPrefix: '',

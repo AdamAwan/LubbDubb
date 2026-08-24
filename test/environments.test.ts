@@ -623,6 +623,7 @@ function build(
   git: FakeGitObserver = new FakeGitObserver(),
 ) {
   const config = loadConfig({
+    selfUpdate: { enabled: false } as never,
     dbPath: ':memory:',
     heartbeatIntervalMs: 60_000,
     environments,

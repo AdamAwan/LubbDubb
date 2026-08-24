@@ -104,6 +104,7 @@ test('a number the mirror does not hold is skipped — the mirror is a record of
 
 function boardSystem() {
   const config = loadConfig({
+    selfUpdate: { enabled: false } as never,
     auth: { enabled: false } as never,
     dbPath: ':memory:',
     labelPrefix: 'lubbdubb',

@@ -19,6 +19,7 @@ function build(): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   return buildSystem(
     loadConfig({
+      selfUpdate: { enabled: false } as never,
       auth: { enabled: false } as never,
       labelPrefix: 'lubbdubb',
       dbPath: ':memory:',

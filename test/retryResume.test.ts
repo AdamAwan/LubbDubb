@@ -57,6 +57,7 @@ function recordingSpawner(): { spawner: Spawner; launches: Launch[] } {
 function testConfig(mode: 'stream' | 'raw', extra: Partial<Config> = {}): Config {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-retry-resume-'));
   return loadConfig({
+    selfUpdate: { enabled: false } as never,
     ...extra,
     labelPrefix: '',
     dbPath: ':memory:',

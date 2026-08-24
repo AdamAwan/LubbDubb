@@ -509,6 +509,7 @@ test('an empty note is the one thing refused — there is nothing to store', () 
 function testConfig(overrides: Record<string, unknown> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-mcp-'));
   return loadConfig({
+    selfUpdate: { enabled: false } as never,
     // The cockpit guard is exercised in test/cockpitAuth.test.ts; these drive routes.
     auth: { enabled: false } as never,
     labelPrefix: '',

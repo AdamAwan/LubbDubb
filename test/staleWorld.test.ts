@@ -12,6 +12,7 @@ import type { PullRequest, WorldSnapshot } from '../src/types.js';
 function testConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-sw-'));
   return loadConfig({
+    selfUpdate: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',
     agentMode: 'raw',
