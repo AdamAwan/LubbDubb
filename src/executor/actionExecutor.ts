@@ -30,13 +30,14 @@ import { operatorInstructionsNote } from '../goalInstructions.js';
 import { attachmentsNote } from '../jobs/attachments.js';
 import { retroSubmitOrigin } from '../retro/retro.js';
 import { retroDossier, retroPad } from '../retro/dossier.js';
+import { goalRecord } from '../retro/record.js';
 import { neighbourSeedPaths, priorWorkBriefing } from '../briefing/priorWork.js';
 import { ciEvidenceNote, type CiEvidenceReader, type CiEvidenceTarget } from '../ci/ciEvidence.js';
 import { padOriginFor } from '../scratch/pad.js';
 import { dispatchFactScopes, KNOWLEDGE_READ_LIMIT, renderScopedKnowledgeNote } from '../knowledge/block.js';
 import { retryNote, retryResumeFor, type RetryResume } from './retryResume.js';
 import { isActiveTask } from '../tasks.js';
-import type { Action, DecisionOutcome, Escalation, Proposal, ProposalKind, Task, WorldEvent } from '../types.js';
+import type { Action, DecisionOutcome, Proposal, ProposalKind, Task, WorldEvent } from '../types.js';
 
 interface ExecutorDeps {
   store: Store;
@@ -1261,84 +1262,14 @@ function priorWorkFor(originRef: string | null | undefined, store: Store, outsta
  * validated data and this is a page of prose assembled at dispatch time, which is
  * also why it is appended to the rendered prompt rather than interpolated into it.
  */
-function actionOrigin(action: Action): string | null {
-  const ref = (action as { originRef?: unknown }).originRef;
-  return typeof ref === 'string' ? ref : null;
-}
-
-/**
- * Which goal an escalation is about, when it carries no task to be asked through.
- *
- * A narrowing rather than a parse, in {@link actionOrigin}'s shape and beside it so
- * the two readings of "which goal is this row about" stay together. It exists
- * because the harness raises escalations of its own — the plan approval and the
- * shortfall ask — with no `taskId` at all, and those are the two most consequential
- * human decisions a goal ever produces.
- */
-function escalationOrigin(escalation: Escalation): string | null {
-  const ref = escalation.context.originRef;
-  return typeof ref === 'string' ? ref : null;
-}
-
 function retroBriefing(originRef: string | null | undefined, store: Store): string | null {
   const target = originRef ? retroSubmitOrigin(originRef) : { ok: false as const, error: '' };
   if (!target.ok) return null;
   const issueOriginRef = target.issueOrigin;
-  const issueNumber = Number(issueOriginRef.slice('issue:'.length));
-  const world = store.getWorldBaseline();
-  const issue = world?.issues.find((i) => i.number === issueNumber) ?? null;
-  const plan = store.getPlanByOrigin(issueOriginRef);
-  const parts = plan ? store.listPlanParts(plan.id) : [];
-  const prNumbers = new Set<number>(parts.flatMap((p) => (p.prNumber === null ? [] : [p.prNumber])));
-  if (issue?.linkedPrNumber) prNumbers.add(issue.linkedPrNumber);
-  // The issue's own subtree — the predicate every gate in the dispatcher keys on.
-  const mine = (ref: string | null | undefined): boolean =>
-    ref === issueOriginRef || (ref?.startsWith(`${issueOriginRef}:`) ?? false);
-  const tasks = store.listTasks().filter((t) => mine(t.originRef));
-  const taskIds = new Set(tasks.map((t) => t.id));
-  const agents = store.listAgents().filter((a) => taskIds.has(a.taskId));
-
-  const dossier = retroDossier({
-    issueNumber,
-    issueTitle: issue?.title ?? issueOriginRef,
-    plan,
-    parts,
-    pullRequests: (world?.pullRequests ?? []).filter((pr) => prNumbers.has(pr.number)),
-    closedPullRequests: (world?.closedPullRequests ?? []).filter((pr) => prNumbers.has(pr.number)),
-    // Every list oldest-first, which is the order `retroDossier` states for its
-    // decisions and needs for all four: its caps keep the *tail*, so a newest-first
-    // list handed over unreversed kept the earliest rows and said it had dropped
-    // them. The goal-scoped reads are what make the dossier's own named constants
-    // the only cap — `listDecisions`/`listFacts` cut fleet-wide at 200 before any
-    // filter here could run. → docs/spec/05-dispatcher.md#what-it-is-bounded-by
-    decisions: store
-      .listDecisionsForGoal(issueOriginRef)
-      .filter((d) => mine(actionOrigin(d.action)))
-      .reverse(),
-    // Matched on its task **or** its own origin: an agent's escalation carries no
-    // `originRef` of its own, and the harness's carries no task. Selecting on the
-    // task alone dropped every ask the harness put to the operator about the goal.
-    escalations: store
-      .listEscalations()
-      .filter((e) => (e.taskId ? taskIds.has(e.taskId) : mine(escalationOrigin(e))))
-      .reverse(),
-    proposals: store
-      .listProposals()
-      .filter((p) => mine(p.ref))
-      .reverse(),
-    claims: store
-      .listFactsForGoal(issueOriginRef)
-      .filter((f) => mine(f.originRef))
-      .reverse(),
-    agentCount: agents.length,
-    delivery: store.getDelivery(issueOriginRef),
-    shortfall: store.getShortfall(issueOriginRef),
-    assay: store.getAssay(issueOriginRef),
-    conclusion: store.getIssueConclusion(issueOriginRef),
-    // Null rather than 0 when nothing was reported: PTY mode reports no usage at
-    // all, and a confident "$0.00" is the one reading that would be a lie.
-    costUsd: agents.some((a) => a.costUsd !== null) ? agents.reduce((sum, a) => sum + (a.costUsd ?? 0), 0) : null,
-  });
+  // The reading is `goalRecord`'s and the rendering is this call's — the one
+  // account of a run, so a retrospective and the operator's own Claude answering
+  // a question about the same goal cannot be looking at two different histories.
+  const dossier = retroDossier(goalRecord(store, issueOriginRef));
   return [retroPad(store.listScratchEntries(issueOriginRef)), dossier].filter(Boolean).join('\n\n');
 }
 

@@ -658,8 +658,13 @@ deciding whether to re-run a check before closing a goal is deciding on exactly 
 
 ### The skill
 
-`/lubbdubb 284:C`, `/lubbdubb discuss 284`, `/lubbdubb run 284` — three jobs told apart by the
-argument, one file. Installed to `validation.desktopSkillPath` when the channel starts, from
+`/lubbdubb 284:C`, `/lubbdubb discuss 284`, `/lubbdubb run 284`, `/lubbdubb ask 284 …` — four jobs
+told apart by the argument, one file. The fourth is the only one that settles nothing:
+[`goal_read`](11-mcp-tools.md#answering-a-question-about-a-goal) hands back the harness's record of a
+goal and the skill says what to do with it. Its longest section is about the one way a session with
+the repository open gets a question about a run wrong — reconstructing a plausible history from the
+code, which is the one answer an operator cannot tell from the real one — and about `unknown` on an
+environment not being `absent`. Installed to `validation.desktopSkillPath` when the channel starts, from
 `DESKTOP_SKILL` in `src/validation/desktopSkill.ts` — a string in a `.ts` module rather than a `.md`
 asset, the prompt templates' reason: the build emits `.ts` and nothing copies a stray `.md` into
 `dist`, so an asset works in development and is missing in a deployment. There is no second copy
@@ -669,7 +674,10 @@ The skill is the interface, not a convenience. Without it the operator types the
 at their Claude every time — which is the friction the whole channel exists to remove, and the reason
 the bench design was rejected. It says what the three answers mean, that `handback` is a right
 answer, and the two things a session with the repository open is most able to do wrong: report
-`passed` from evidence it did not gather, and change code to make a check pass. Everything about
+`passed` from evidence it did not gather, and change code to make a check pass. The `ask` section
+carries the same shape of warning for the same reason — a question is answerable wrongly and
+confidently — plus the one line that keeps the read a read: change nothing, and offer `discuss` if
+the answer turns out to be that the plan is wrong. Everything about
 _how_ to run a given check comes back from the tools, which read the live plan; a skill that restated
 any of it would be a second copy of the procedure, drifting.
 

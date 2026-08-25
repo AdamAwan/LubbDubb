@@ -1213,6 +1213,16 @@
   border-color: var(--cn-line-hi);
   color: var(--cn-fg);
 }
+/* The one `.cn-tgl` that is an anchor. `Ask ↗` opens the operator's own Claude
+   Code, and a deep link is a destination rather than a button — so it is an `<a>`
+   wearing the row's tone. These three properties are only what the element brings
+   and the class never had to say, because until now nothing wearing it was a link;
+   no colour is stated here, so it stays on the toggle's tokens in both themes. */
+a.cn-tgl {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
 /* A toggle that destroys something. Red at rest rather than only on hover, because
    the warning has to be there before the pointer is — this is the one control in the
    header row an operator must not reach for by accident. Filled on hover, the shape
