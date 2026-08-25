@@ -134,6 +134,45 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
       </>
     );
   }
+  // The goal assay's refusal (#158). It was drawn only as a call-out on the
+  // tickets tab, which is a page an operator opens to groom the backlog rather
+  // than to find out what is waiting on them — so the one verdict that stops a
+  // goal's pickup outright was the one ask the queue never mentioned.
+  //
+  // The assayer's sentence is quoted **whole**, and never reworded: it is the only
+  // account of why this goal is held, so a paraphrase would be the only account
+  // there is, and wrong.
+  if (row.kind === 'intake') {
+    const issue = row.goalRef === null ? undefined : goalIssue(view.state, row.goalRef);
+    const assay = issue?.assay;
+    // The verdict cleared, or the goal was dropped from the watch tag, between the
+    // snapshot this row was derived from and this draw. Either way nothing is held
+    // any more, and a band offering an override for a hold that is gone would
+    // change a verdict nobody is waiting on.
+    if (!issue || assay?.verdict !== 'unclear') return null;
+    return (
+      <>
+        <p>
+          <strong>The goal assay could not say this is workable</strong> — nothing is dispatched for it until the
+          verdict moves.
+        </p>
+        <p className="cn-tick">“{assay.summary}”</p>
+        <p className="cn-tick">
+          The hold clears by itself when the goal&rsquo;s own text changes, so sharpening the ticket is the other answer
+          and costs no click here. Overriding says the brief is good enough as it stands.
+        </p>
+        <div className="cn-acts">
+          <AsyncButton
+            className="cn-btn cn-primary"
+            onClick={() => actions.setIssueAssay(issue.number, 'workable')}
+            title="Work it anyway — the harness stops holding pickup and runs a cycle now"
+          >
+            Override → workable
+          </AsyncButton>
+        </div>
+      </>
+    );
+  }
   // The goal-profile gate (#342). Its two buttons are the whole of it, and both
   // go through the same write: the pin is re-affirmed and the question settled in
   // one act, so "keep mine" leaves the tag deliberately disagreeing with the

@@ -380,8 +380,9 @@ reads the `ticket*` fields off `place.ts` and asserts the hook forwards every on
 ## The queue rail — "Needs you"
 
 A permanent left column holding **every** blocking item in one list: escalations, plan proposals,
-permission requests, unanswered goal-profile proposals, usage-limit parks, bench tasks, close-outs,
-validate rows, dispatches the executor keeps refusing and the recovery hold. `buildNeedsYou`
+permission requests, goals the assay refused at intake, unanswered goal-profile proposals, usage-limit
+parks, bench tasks, close-outs, validate rows, dispatches the executor keeps refusing and the recovery
+hold. `buildNeedsYou`
 (`web/src/view/needsYou.ts`) is the merge, and it is pure.
 
 **The snapshot carries only the escalations that are still open** — the rail's own
@@ -446,6 +447,28 @@ it, or three buttons collapse into one rubber stamp. Like the profile gate it is
 the write — a proposal answered by three buttons that all 400 is the dead end this cockpit's rules
 exist to prevent.
 
+**`intake` is the fourth kind with no row of its own underneath it**, and the only one of the four that
+is a refusal rather than a proposal. It is read off `issue.assay.verdict === 'unclear'` — the goal
+assay's own hold, which stops pickup for the whole goal ([06](06-issue-pickup.md#block-or-inform-and-why-blocking-is-safe)) —
+and it is `yours` on the profile gate's terms: a whole goal's dispatch is held and no agent is sitting
+in it.
+
+It was drawn on the **tickets tab and nowhere else**, as a call-out above the list. That is a page an
+operator opens to groom the backlog, not to find out what is waiting on them — so the one verdict that
+stops a goal dead was the one ask the surface that exists to say what is waiting never mentioned, and a
+held goal read to anybody who did not open that tab as a goal that simply had not come up yet. The same
+argument the profile gate is on the rail for, and the same fix.
+
+The row's line says which ask it is and which goal it is about; the **assayer's sentence is quoted whole
+in the band**, never reworded and never clamped, because it is the only account of why the goal is held.
+Its verdict is one button — `Override → workable`, through `setIssueAssay`, the call the tickets tab
+already used — because the hold's other two exits are not buttons: it expires when the goal's own text
+changes, and it is cleared in the tracker.
+
+An **unwatched** item is never intake, whatever a stale verdict says: nothing assays a goal nobody opted
+in, so a verdict on one is left over from before it was dropped, and the drop outranks it. Derived from
+`world.issues` and never the retained runs, for the profile gate's reason.
+
 **`limit` is the one kind with no row of its own underneath it.** It is built from the _fleet_ —
 `state.parkedOnLimit`, keyed on the agent — because a usage-limit park raises no escalation on purpose:
 there is no question in it to answer ([10](10-agent-runtimes.md#the-limit-park)). Its verdict is
@@ -503,6 +526,7 @@ within it.
 | `reply`      | Reply       | amber | `↵`   | A drafted reply, held until you send it.               |
 | `merge`      | Merge       | amber | `⊕`   | A merge waiting on your verdict.                       |
 | `shortfall`  | Shortfall   | blue  | `✗`   | Delivered work that did not reach its goal.            |
+| `intake`     | Intake      | blue  | `◌`   | The assay could not say a goal is workable.            |
 | `profile`    | Profile     | blue  | `⊙`   | Which profile a goal runs on.                          |
 | `placement`  | Backlog     | amber | `▣`   | Nothing is held; the ticket is off the board.          |
 | `bench`      | Bench       | blue  | `◆`   | Work only a person can do. Informative, not broken.    |
@@ -1306,8 +1330,8 @@ backlog is deleted and every part of it is named a destination here rather than 
 | The backlog had                                | It is now                                                  |
 | ---------------------------------------------- | ---------------------------------------------------------- |
 | four groups (watched/intake/unwatched/ignored) | the **Watch** filter's values, now two                     |
-| intake pulled out of Watched                   | the **intake call-out** above the list                     |
-| `Override → workable` on intake rows           | the same button, the same call, on the same rows           |
+| intake pulled out of Watched                   | a **lamp** on the held row, and its ask on the queue rail  |
+| `Override → workable` on intake rows           | the same button, the same call, in the rail's `intake` band |
 | features as headings, folds on `Place`         | `group=feature`, the same `collapsed` field                |
 | the name opening the goal page                 | unchanged — `selectGoal`, refs beside it                   |
 | 25 rows then "…and 31 more"                    | the keyset cursor and infinite scroll this tab already had |
@@ -1561,38 +1585,39 @@ attribute: the config route refuses one on the way in, but the map also arrives 
 file. **Frozen keeps its dashed border** whatever colour its state carries — closed in the tracker is a
 fact about the item, not a shade of the state it stopped in.
 
-### Intake is pulled out, never greyed inside the list
+### Intake is raised on the rail, and marked in the list
 
-An `unclear` assay is the one intake reading that **stops dispatch** ([06](06-issue-pickup.md)). Among
-a page of rows it reads as a detail rather than as the thing holding all the work, so it is drawn as a
-call-out **above** the list: what is held, the assayer's own sentence quoted whole, and
-`Override → workable` beside it. A lamp marks the same rows in the table.
+An `unclear` assay is the one intake reading that **stops dispatch** ([06](06-issue-pickup.md)), and it
+is raised where every other ask waiting on a person is raised: [the queue rail](#the-queue-rail--needs-you),
+as an `intake` row. What is left here is the reading — a **lamp** on the held row, so a page of tickets
+still says which of them nothing is moving on.
 
-The sentence is quoted and never reworded — it is the only account of why the goal is held, so a
-paraphrase would be the only account there is, and wrong. An **unwatched** item is never intake,
-whatever a stale verdict says: "leave this alone" is the operator's own instruction and outranks a
-reading about a goal nobody is going to work.
+It was a call-out above this list, and that was the whole of it. The argument for pulling it out of the
+rows still holds — among a page of rows a hold reads as a detail rather than as the thing stopping the
+work — but the surface was wrong: this tab is where an operator grooms the backlog, and the rail is where
+they find out what is waiting on them. A held goal was invisible to anybody who did not open this tab,
+which is the same fault the profile gate was moved onto the rail to fix, and it is the same fix.
 
-Unlike the group it replaces, the call-out is **absent when nothing is held** rather than drawn empty.
-A group that vanishes when quiet reads as one that broke; an exception nobody has is not a heading.
+An **unwatched** item is never intake, whatever a stale verdict says: "leave this alone" is the
+operator's own instruction and outranks a reading about a goal nobody is going to work. The rail's
+derivation asks the same question of the same tag, so the lamp here and the row there cannot disagree.
 
 ### Unrecorded work
 
 What the harness did that nothing in the tracker accounts for, with `File a work item` and `Ignore`
 beside each row — since nobody outside can ever mark done what nothing records. `UnrecordedWork`, drawn
-as a second call-out above the list, below intake.
+as a call-out above the list.
 
 **It is here because it is triage.** Filing or ignoring is a verdict cast on a row, which is what this
 whole tab is for; it sat at the head of the work tab while that existed, and by the end it was the only
-part of that tab an operator ever acted on. It is drawn **below** the intake
-call-out because intake is the louder of the two: an unclear assay stops dispatch, while an unrecorded
-job is a debt that costs nothing until somebody outside asks what the harness has been doing.
+part of that tab an operator ever acted on. It is now the tab's only call-out — it shared the head of the
+list with intake until the intake hold moved to the rail.
 
 It reads `/api/work` on mount, **fetched on open and never polled** — the same route and the same
 reasoning as [the record panel](#the-record-panel), and the rows change on a pulse at most. Both
 surfaces reading one route is also what keeps them from disagreeing about what is outstanding.
 
-Like intake, it draws **nothing at all** when there is nothing outstanding. That is the opposite of the
+It draws **nothing at all** when there is nothing outstanding. That is the opposite of the
 rule the overview's cards obey, and deliberately: those are gauges an operator glances at the same spot
 for, where a card that vanishes when quiet is indistinguishable from one that broke — this is a call-out
 above somebody else's list, and a permanent "nothing to record" heading over the tickets table is a row
@@ -1608,14 +1633,15 @@ rows cleared themselves on the next pulse. Worth stating because it is the failu
 this one has: a list of things that are owed is read exactly as long as everything on it is owed.
 → [16](16-http-api.md#get-apiwork)
 
-### Two controls, and no more
+### One control, and no more
 
 This tab used to state that nothing in it changed the world. That was true of a record and is false of
 a work surface, and the sentence changed with the code rather than after it. What it says now is
-narrower and holds: **the watch switch and the intake override, and nothing else.**
+narrower and holds: **the watch switch, and nothing else.** It was two until the intake override went
+with its ask to the rail; a row is otherwise a reading, the lamp included.
 
-- Both write through calls that already existed — `POST /api/issues/:number/watch` and
-  `setIssueAssay` — so the merged surface introduces no new way to change the world.
+- It writes through a call that already existed — `POST /api/issues/:number/watch` — so the merged
+  surface introduces no new way to change the world.
 - The switch is **two-valued**, in both directions: Watch adds the tag, Unwatch takes it off, and
   there is no third state to draw or to land in.
 - **A container cascades, and the heading says so before the click** — `cascadeNote` states the
@@ -3609,7 +3635,8 @@ button and the recovery hold not, the ask drawn above the plan, a goal with no a
 goal page answering through the shared card, a held part quoting the reconciler, a retired plan drawing
 what it proposed rather than only saying it has no live parts, an HTML ticket drawn as HTML, a goal with
 no measured spend drawing no `$0.00`, the overview's five cards, an empty rack still drawing, the
-tickets tab's intake call-out, its rows being ways into their goals and its container cascade, the fault
+the intake hold arriving on the rail rather than on the tickets tab, that tab's rows being ways into
+their goals and its container cascade, the fault
 log keeping its clear at zero, a panel's two ways out, the demo gate on injection, the precedence
 between a goal and whichever tab the nav is on, all three tabs appearing in the nav (a destination added
 to `ConsoleTab` and forgotten there is a view nothing can reach) and `Work` appearing in none of them,
