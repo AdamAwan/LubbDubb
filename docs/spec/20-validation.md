@@ -797,7 +797,7 @@ changes five readings:
   swallowed clicks. The bench's Done reads `Done…` and opens the same box Decline uses; End the run
   opens `EndRunModal` — on **every** goal now, because ending a run also kills the goal's agents and
   cancels its queued work ([16](16-http-api.md#post-apiissuesnumberdismiss-run)), so it confirms
-  whether or not a plan is flagged. What the flag still decides is what happens *inside* that modal:
+  whether or not a plan is flagged. What the flag still decides is what happens _inside_ that modal:
   the note is required and the confirm disabled until it is filled. Both mirror the route in its
   **condition only** — `close_out` on a goal whose
   `validation` is `flagged` — and never in its counts, which stay the server's fold; and the route
@@ -897,6 +897,11 @@ the document that proposed it is a control nobody finds. Each row draws its lett
 a part's sequence number sits, because it is the same kind of handle, and collapses to its head — with
 the amendment band, the hand-back band and the result note staying visible on a closed row, because
 those are what a reader must not scroll past. → [17](17-cockpit.md#validation-on-the-goal)
+
+A **settled** head — passed or waived — is drawn a step back from one still to run, so the card reads
+as the work that is left rather than as the whole list. Scoped to the head, lifted when the row is
+opened, and lighter than the treatment a withdrawn check gets: withdrawn and done are not the same
+news. → [17](17-cockpit.md#validation-on-the-goal)
 
 The **plan sheet** keeps a read-only `ValidationDigest` between the parts and the caveats, with a rail
 entry carrying the settled count — the reading order is answer, then work, then how anyone knows it

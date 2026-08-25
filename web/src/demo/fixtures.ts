@@ -827,7 +827,7 @@ export function buildDemoState(): DemoSeed {
           // three passed of six live — because the header chip is the way in to the
           // card that draws them, and a chip disagreeing with the rows under it is
           // the one thing this whole surface exists to prevent.
-          validation: { state: 'flagged', total: 6, passed: 3, failed: 0, unrun: 3, deferred: 0, waived: 0 },
+          validation: { state: 'flagged', total: 9, passed: 3, failed: 1, unrun: 3, deferred: 1, waived: 1 },
         }),
         // Worked, landed, and still not what was asked for. A shortfall gates
         // nothing — the goal is eligible again the moment there is capacity — and
@@ -1503,10 +1503,12 @@ export function buildDemoState(): DemoSeed {
     ],
     // A validation plan on the plan awaiting approval, so the sheet's section and
     // the flag are both reachable in the demo rather than only in a real
-    // deployment that has written one. Six checks, one of each interesting state:
-    // passed by hand, amended out from under a reading, claimed by a desktop
-    // session right now, run by the fleet, handed back, and reported from a
-    // desktop session.
+    // deployment that has written one. Ten checks, one of each thing the section
+    // can draw: passed by hand, amended out from under a reading, claimed by a
+    // desktop session right now, run by the fleet, handed back, reported from a
+    // desktop session, failed, deferred, waived, and withdrawn by an amendment.
+    // Every state the card weights, so the weighting can be read off the demo
+    // rather than off one deployment that happens to have a failure in it.
     validationChecks: [
       demoCheck({
         id: 'download-opens-in-a-new-tab',
@@ -1626,6 +1628,79 @@ export function buildDemoState(): DemoSeed {
         resultNote: 'Drove it at 380px in Chrome: no horizontal overflow, every hunk header legible.',
         resultBy: 'desktop',
         resultAt: ago(1),
+      }),
+      // The three readings that are not a pass, one each. None of them is
+      // reachable by clicking around a demo — recording one needs a note, and a
+      // note needs somebody to type it — and between them they are what the card's
+      // weighting is for: a failure and an unrun check draw at full hue because
+      // they are still owed, a waiver draws at the weight of a pass because it is
+      // settled, and a deferral sits between the two saying who it is waiting on.
+      demoCheck({
+        id: 'pruned-snapshot-mints-nothing',
+        createdAt: ago(12),
+        updatedAt: ago(1),
+        letter: 'G',
+        seq: 7,
+        title: 'A pruned snapshot mints no capability',
+        do: 'Prune a snapshot’s file on disk, reload /snapshots, and look at the row that is left.',
+        expect: 'The row draws with no download link at all, rather than a link that 404s.',
+        covers: ['mint'],
+        state: 'failed',
+        resultNote:
+          'The row still mints a capability and still draws the link — clicking it 404s from the file layer. ' +
+          'The list never checks the file is there.',
+        resultBy: 'operator',
+        resultAt: ago(1),
+      }),
+      demoCheck({
+        id: 'survives-a-key-rotation',
+        createdAt: ago(12),
+        updatedAt: ago(2),
+        letter: 'H',
+        seq: 8,
+        title: 'A download survives a signer key rotation',
+        do: 'Mint a capability, rotate the signing key, and request the snapshot with the capability from before.',
+        expect: 'A 403 naming the key, and a fresh page load mints one that works.',
+        covers: ['signer'],
+        state: 'deferred',
+        resultNote: 'There is no rotation path yet — the signer part is the one that adds it.',
+        // Free text rather than a date, which is what the route asks for: a
+        // deferral is usually waiting on a thing rather than on a day.
+        deferUntil: 'the signer part merges',
+        resultBy: 'operator',
+        resultAt: ago(2),
+      }),
+      demoCheck({
+        id: 'downloads-work-in-safari',
+        createdAt: ago(12),
+        updatedAt: ago(2),
+        letter: 'I',
+        seq: 9,
+        title: 'Downloads work in Safari',
+        do: 'Open /snapshots in Safari and click a download link.',
+        expect: 'The file downloads without the tab being blocked as a popup.',
+        covers: ['route'],
+        state: 'waived',
+        resultNote: 'Nobody here has a Mac this week. The console is Chrome-only internally, so this is not the bar.',
+        resultBy: 'operator',
+        resultAt: ago(2),
+      }),
+      // The withdrawn check, which is otherwise the one part of the section a
+      // demo never draws: the fold only appears when a plan has dropped
+      // something, and nothing in the cockpit amends a plan.
+      demoCheck({
+        id: 'bearer-token-never-in-a-url',
+        createdAt: ago(12),
+        updatedAt: ago(3),
+        letter: 'J',
+        seq: 10,
+        title: 'No bearer token ever appears in a URL',
+        do: 'Watch the network tab through a whole download and grep the URLs for the token.',
+        expect: 'No request carries the bearer token as a query parameter.',
+        covers: ['signer'],
+        supersededReason:
+          'Folded into check A when the capability replaced the token: there is no longer a token that could be ' +
+          'put in a URL, so this checked for the absence of something that cannot exist.',
       }),
     ],
     validationResources: [],

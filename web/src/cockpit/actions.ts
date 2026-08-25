@@ -318,6 +318,14 @@ export interface CockpitActions {
    * and a toggle read from stale props would fight a fold restored from the URL.
    */
   collapseFeature(issueNumber: number, collapsed: boolean): void;
+  /**
+   * Open one of the goal page's reference sections — `ticket` or `record` — or
+   * shut it again. The state being *set* is the argument rather than a bare
+   * toggle, for {@link collapseFeature}'s reason: the caller already knows which
+   * way the caret points, and a toggle read from stale props would fight a
+   * disclosure restored from the URL.
+   */
+  openGoalSection(section: string, open: boolean): void;
   reorderUpNext(origins: string[]): Promise<void>;
   /**
    * Override which model profile the next dispatch on one queued origin runs on,

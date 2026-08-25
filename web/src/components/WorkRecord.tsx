@@ -34,12 +34,32 @@ import { WorkRow } from './workTree.js';
  * The tab's discipline, for the tab's reason: `/api/state` comes round every couple
  * of seconds and the graph only ever grows. Being a card on a page opened
  * deliberately is what keeps "on open" honest — nothing fetches until an operator
- * goes to a goal.
+ * goes to a goal. Since the goal page folds it away, "open" is now the disclosure
+ * rather than the page, and the fetch waits for it: a card nobody has unfolded
+ * costs no request at all.
+ *
+ * ## The disclosure is its own heading's
+ *
+ * `open` and `onToggle` are the component's rather than its caller's because the
+ * count is: the heading says how many nodes there are, and only this knows. A
+ * caller drawing its own heading over a folded record would be a second heading
+ * with no count in it, or one that lied when the record grew.
  *
  * It is a **lens**. Nothing here, and nothing in the dispatcher, decides anything
  * from what it draws.
  */
-export function WorkRecord({ goalRef, now }: { goalRef: string; now: number }): JSX.Element {
+export function WorkRecord({
+  goalRef,
+  now,
+  open,
+  onToggle,
+}: {
+  goalRef: string;
+  now: number;
+  open: boolean;
+  /** The state being *set*, never a bare toggle — the caret already says which way. */
+  onToggle: (open: boolean) => void;
+}): JSX.Element {
   const [record, setRecord] = useState<{ nodes: WorkNodeView[]; refUrls: Record<string, string> } | null>(null);
   const [missing, setMissing] = useState(false);
 
@@ -48,6 +68,7 @@ export function WorkRecord({ goalRef, now }: { goalRef: string; now: number }): 
     // record while its own is in flight — the tab's own rule for the same reason.
     setRecord(null);
     setMissing(false);
+    if (!open) return;
     let live = true;
     void api
       .getWorkSubtree(goalRef)
@@ -63,30 +84,35 @@ export function WorkRecord({ goalRef, now }: { goalRef: string; now: number }): 
     return () => {
       live = false;
     };
-  }, [goalRef]);
+  }, [goalRef, open]);
 
   const nodes = record?.nodes.filter((n) => n.ref !== goalRef) ?? [];
   return (
     <>
       <h3>
-        The record
+        <button type="button" className="cn-disc" aria-expanded={open} onClick={() => onToggle(!open)}>
+          <i className="cn-caret">{open ? '▾' : '▸'}</i>
+          The record
+        </button>
         {nodes.length > 0 && <i className="cn-n">{nodes.length}</i>}
         <span className="cn-more">what happened, after the world forgot</span>
       </h3>
-      <div className="work-record">
-        {missing && <p className="cn-empty">Nothing is recorded for this goal — the graph fills in from a pulse.</p>}
-        {!missing && record === null && <p className="cn-empty">Reading the record…</p>}
-        {record !== null && nodes.length === 0 && (
-          <p className="cn-empty">The goal is on the record, and nothing has happened under it yet.</p>
-        )}
-        {record !== null && nodes.length > 0 && (
-          <RefLinksExtended refUrls={record.refUrls}>
-            {nodes.map((node) => (
-              <WorkRow key={node.ref} node={node} nodes={nodes} now={now} />
-            ))}
-          </RefLinksExtended>
-        )}
-      </div>
+      {open && (
+        <div className="work-record">
+          {missing && <p className="cn-empty">Nothing is recorded for this goal — the graph fills in from a pulse.</p>}
+          {!missing && record === null && <p className="cn-empty">Reading the record…</p>}
+          {record !== null && nodes.length === 0 && (
+            <p className="cn-empty">The goal is on the record, and nothing has happened under it yet.</p>
+          )}
+          {record !== null && nodes.length > 0 && (
+            <RefLinksExtended refUrls={record.refUrls}>
+              {nodes.map((node) => (
+                <WorkRow key={node.ref} node={node} nodes={nodes} now={now} />
+              ))}
+            </RefLinksExtended>
+          )}
+        </div>
+      )}
     </>
   );
 }
