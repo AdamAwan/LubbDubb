@@ -219,12 +219,12 @@ test('sibling context separates work that exists from work that is not yours', (
     part('b', 2, { status: 'ready' }),
     part('c', 3, { status: 'pending' }),
   ];
-  const { done, remaining } = siblingContext(parts, parts[1]!);
+  const { done, remaining } = siblingContext(parts, parts[1]!, '#');
   assert.match(done, /The a part \[a, merged \(PR #40\)\]/);
   assert.doesNotMatch(done, /\[b,/, 'a part is never told about itself');
   assert.match(remaining, /\[c, pending\]/);
   // The first part is told so plainly rather than being handed an empty list.
-  assert.match(siblingContext(parts, parts[0]!).done, /Nothing has landed yet/);
+  assert.match(siblingContext(parts, parts[0]!, '#').done, /Nothing has landed yet/);
 });
 
 // -- rule `plan-part` -----------------------------------------------------------------
@@ -711,25 +711,29 @@ test('the plan comment never describes a non-code part as merged, and names a mi
       outcomeSummary: 'Findings in docs/perf.md',
     }),
   ];
-  const body = renderPlanComment(plan({ status: 'complete' }), parts);
+  const body = renderPlanComment(plan({ status: 'complete' }), parts, '#');
   assert.match(body, /all 2 parts finished/);
   assert.match(body, /Write it up.*report.*Findings in docs\/perf\.md/);
   assert.doesNotMatch(body, /Write it up.*merged/);
 
   // Surfaced, never validated: a part planned as code that turned out to be a
   // duplicate must still be able to close truthfully.
-  const mismatched = renderPlanComment(plan({ status: 'complete' }), [
-    part('a', 1, {
-      title: 'Build it',
-      status: 'concluded',
-      expectedKind: 'code',
-      touches: [],
-      acceptanceMet: [],
-      size: null,
-      outcomeKind: 'determination',
-      outcomeSummary: 'Already fixed by #98',
-    }),
-  ]);
+  const mismatched = renderPlanComment(
+    plan({ status: 'complete' }),
+    [
+      part('a', 1, {
+        title: 'Build it',
+        status: 'concluded',
+        expectedKind: 'code',
+        touches: [],
+        acceptanceMet: [],
+        size: null,
+        outcomeKind: 'determination',
+        outcomeSummary: 'Already fixed by #98',
+      }),
+    ],
+    '#',
+  );
   assert.match(mismatched, /planned as code/);
 });
 

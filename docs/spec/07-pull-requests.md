@@ -437,6 +437,29 @@ That leaves the form of the body expressible in exactly one place: the descripti
 first, one line each, no headings and no prose paragraphs. It reads as an odd place for a house style
 until you notice it is the only place the agent reads before writing.
 
+### Naming a pull request
+
+**`#12` is a work item on Azure DevOps, and `!12` is the pull request.** GitHub has one id space and
+resolves `#12` either way; Azure has two disjoint ones and two sigils to tell them apart — the same
+fact `azureRefUrl` refuses to guess on ([15](15-integrations.md)). So a body that names a sibling pull
+request as `#12` on Azure does not fail to link. It links, confidently, to an unrelated ticket, and
+nothing about that is red: the description renders, the sigil is live, and only a reader who follows
+it finds a work item about something else.
+
+`src/prRef.ts` holds the whole of it — `prRefStyle(provider)` picks the sigil from
+`integrations.sourceControl` and `prRef(n, style)` writes one reference. Threaded from `system.ts` to
+every place a pull request is named in prose that somebody else reads:
+
+- **What the agent is shown.** `siblingContext` and `currentPlanSummary` name each part's pull request
+  (`(PR !40)`), and an agent writing its own description copies the form it was given.
+- **What the agent is told.** `open_pr`'s `body` argument description names the sigil and says why —
+  the only text the agent reads immediately before writing a body ([11](11-mcp-tools.md#open_pr)).
+- **What the harness publishes.** The plan's status comment on the tracker names each part's PR.
+
+**The issue reference is deliberately not routed through it.** `Relates to #12` means the tracker item
+on both providers, so `open_pr`'s appended reference is already right on Azure — and the work-item link
+it writes beside it is what actually satisfies the branch policy anyway (below).
+
 ### `renamablePrs(prs, ctx)` — and what may be renamed
 
 `userId` is the gate, because it is already the operator's answer to "which pull requests

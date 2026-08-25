@@ -1,4 +1,5 @@
 import { tmpdir } from 'node:os';
+import { prRefStyle } from './prRef.js';
 import { join } from 'node:path';
 import { configFilePath, projectConfigFilePath, type Config } from './config.js';
 import { Store } from './store/store.js';
@@ -609,6 +610,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
       // than on the next pulse — the fleet's own work is never briefly invisible
       // to the fleet.
       watchLabel,
+      // So the body guidance names the sigil this provider reads as "pull
+      // request" — `#12` is work item 12 on Azure, and a stacked part naming its
+      // base pull request that way links to an unrelated ticket.
+      prRefStyle: prRefStyle(config.integrations.sourceControl),
     }),
     // Lazy for the same reason: `link_ticket` files the item an agent wrote up
     // (issue #394), and the sink it files through is built below.
@@ -638,6 +643,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     argsRetentionDays: config.mcpArgsRetentionDays,
     claimMinutes: config.validation.desktopClaimMinutes,
     validationRoot: config.validationRoot,
+    prRefStyle: prRefStyle(config.integrations.sourceControl),
     // Lazily, for `proposals`' reason: the runner is built further down, and both
     // this channel and the cockpit's panel must start *the same* run.
     localRun: (): LocalRunner => localRun,
@@ -777,6 +783,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     config.ci,
     config.validation,
     config.validationRoot,
+    prRefStyle(config.integrations.sourceControl),
   );
   const dispatcher: Dispatcher = rules;
 
@@ -796,6 +803,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     sink: opts.sink ?? connector,
     planning: config.planning,
     defaultBranch: config.defaultBranch,
+    prRefStyle: prRefStyle(config.integrations.sourceControl),
     fetch: opts.gitObserver ? undefined : () => fetchRemote(config.repoRoot),
     errors,
   });

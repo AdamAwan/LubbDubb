@@ -77,6 +77,7 @@ export function issuePlan(s: StageContext): void {
                 current: currentPlanSummary(
                   existing!,
                   (ctx.planParts ?? []).filter((p) => p.planId === existing!.id),
+                  s.prRefStyle,
                 ),
               })
             : s.templates.render('issue-plan', {

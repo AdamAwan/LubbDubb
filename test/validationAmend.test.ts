@@ -533,7 +533,7 @@ test('a withdrawn reading is stated off the cockpit too — on the close-out and
   const [line] = outstandingChecks(checks);
   assert.match(line ?? '', /amended since you recorded \*\*passed\*\*/);
 
-  const comment = renderPlanComment(system.store.getPlanByOrigin('issue:12')!, [], checks);
+  const comment = renderPlanComment(system.store.getPlanByOrigin('issue:12')!, [], '#', checks);
   assert.match(comment, /amended after it was passed/);
 
   // The other direction: a check nobody had run says nothing extra, because an

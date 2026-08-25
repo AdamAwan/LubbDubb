@@ -18,6 +18,7 @@ import type {
   ValidationCheck,
 } from '../../types.js';
 import type { PlanRouteVerdict } from '../../plans/planning.js';
+import type { PrRefStyle } from '../../prRef.js';
 
 /**
  * The state a pipeline stage runs against — the coupling that used to be
@@ -182,6 +183,14 @@ export interface StageContext {
   ci: CiPolicy;
   /** The base a PR is assumed to target when the provider doesn't report one. */
   defaultBranch: string;
+  /**
+   * The sigil the configured provider reads as "pull request" in prose, so the
+   * sibling and plan summaries a rule puts in front of an agent name a pull
+   * request the way the agent's own pull request description must. A bare string
+   * on {@link StageContext.defaultBranch}'s terms: the dispatcher only phrases it.
+   * → `src/prRef.ts`
+   */
+  prRefStyle: PrRefStyle;
   /**
    * Where a goal's validation resources live, so `validate-check` can tell an
    * agent which directory to look in. A bare string on the same terms as
