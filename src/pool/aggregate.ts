@@ -81,8 +81,8 @@ export function foldPoolDigest(
     project: options.project,
     fleets: [...new Set(inWindow.map((r) => r.fleetId))].sort(),
     days: [...new Set(inWindow.map((r) => r.day))].sort(),
-    byPhase: rollup(inWindow, 'phase', phaseRowLabel).sort(byPhaseOrder),
-    byCause: rollup(inWindow, 'cause', causeRowLabel),
+    byPhase: rollup(inWindow, 'phase', poolPhaseLabel).sort(byPhaseOrder),
+    byCause: rollup(inWindow, 'cause', poolCauseLabel),
     // Null and not an empty list: "this reading does not apply across projects" and
     // "no check cost anything" are different facts, and only one of them is drawable.
     byCheck: options.project === null ? null : rollup(inWindow, 'check', (key) => key),
@@ -143,7 +143,12 @@ function byPhaseOrder(a: PoolRollupRow, b: PoolRollupRow): number {
   return PHASE_ORDER.indexOf(a.key as SpendPhase) - PHASE_ORDER.indexOf(b.key as SpendPhase);
 }
 
-function phaseRowLabel(key: string): string {
+/**
+ * A phase key in the operator's words. Exported for the same reason
+ * {@link poolCauseLabel} is: the markdown companion names these phases too, and two
+ * spellings of one vocabulary is how a fleet's page and its file come to disagree.
+ */
+export function poolPhaseLabel(key: string): string {
   return PHASE_ORDER.includes(key as SpendPhase) ? phaseLabel(key as SpendPhase) : key;
 }
 
@@ -155,7 +160,7 @@ function phaseRowLabel(key: string): string {
  * well as in the data: a key this build has no copy for is drawn as the key, which
  * is what a fleet ahead of you looks like on the glass.
  */
-function causeRowLabel(key: string): string {
+export function poolCauseLabel(key: string): string {
   const [kind, cause, guard] = key.split('/') as [RemedyKind, RemedyCause, RemedyGuard];
   const causeLabel = CAUSE_COPY[cause]?.label ?? cause;
   const guardLabel = GUARD_COPY[guard]?.label ?? guard;
