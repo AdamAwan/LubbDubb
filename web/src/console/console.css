@@ -111,6 +111,14 @@
   color: var(--cn-fg);
   font: 13px/1.45 var(--cn-ui);
   -webkit-font-smoothing: antialiased;
+  /* The tick and the radio dot, which the UA draws and the cockpit only picks a hue
+     for. Inherited from here rather than named on each control, and that is what keeps
+     it off the shared components the console embeds: a box on a console surface takes
+     the console blue, the same box outside takes the page orange from `body`, and
+     neither call site says anything. The two families really do differ here —
+     `--accent` is orange and `--cn-accent` is blue — so one answer for both would be
+     wrong on one of them. → docs/spec/17-cockpit.md#fields */
+  accent-color: var(--cn-accent);
 }
 /* The console's reset for its own markup. It counts as (0,1,1) — stronger than a
    single class — which the rest of this sheet is written against: `.cn-read`,
@@ -1224,6 +1232,34 @@
   color: var(--cn-blue-ink-hi);
   background: var(--cn-blue-bg);
 }
+/* The console's own field, and the counterpart to `.cn-btn`. The shared sheet's
+   element base draws every control in the *page's* family, which is a step lighter
+   and a different edge from a console card — so a control the console draws itself
+   wears this instead, the way `.cfg-in` and `.th-search` already do.
+
+   A class and **not** `.cn input`, and that is the layering rule rather than a
+   taste: the console *embeds* shared components — the escalation card, the launch
+   composer, the knowledge panel — so a descendant selector on the element reaches
+   inside them at (0,1,1) and restyles a component that is meant to be restyleable
+   through tokens alone. There was one, a `.cn textarea` no console markup needed,
+   quietly overriding five components' note boxes and the `rows` their callers chose.
+   `test/console.test.ts` guards both shapes now. → docs/spec/17-cockpit.md#fields */
+.cn-in {
+  background: var(--cn-bg);
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r-sm);
+  color: var(--cn-fg);
+  font: 12px var(--cn-ui);
+  padding: 5px 8px;
+  max-width: 100%;
+}
+.cn-in:hover {
+  border-color: var(--cn-line-hi);
+}
+.cn-in:focus-visible {
+  outline: 1px solid var(--cn-accent);
+  outline-offset: -1px;
+}
 /* The model-profile picker (#342). Shaped like the toggles it sits beside, so a
    goal's controls read as one row rather than a form dropped into a header. */
 .cn-profile {
@@ -1723,17 +1759,6 @@ button.cn-grow {
 .cn-opt:hover {
   border-color: var(--cn-accent);
   background: var(--cn-blue-bg);
-}
-.cn textarea {
-  width: 100%;
-  background: var(--cn-panel-2);
-  border: 1px solid var(--cn-line);
-  border-radius: var(--cn-r-sm);
-  color: var(--cn-fg);
-  padding: 9px 11px;
-  font: 13px var(--cn-ui);
-  resize: vertical;
-  min-height: 64px;
 }
 .cn-acts {
   display: flex;

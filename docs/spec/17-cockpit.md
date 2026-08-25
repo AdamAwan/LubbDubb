@@ -122,6 +122,73 @@ Three consequences worth stating, because each is a thing a reasonable change wo
 would be invisible to `tsx`, which has no CSS loader and would throw when `test/console.test.ts` pulls
 those modules in.
 
+### Fields
+
+A field — a text box, a note box, a dropdown — is drawn once, at the **element**, in the `fields`
+block of `styles.css`. Not as a class, and the reason is the failure it replaces.
+
+Left to the call sites, the cockpit had eleven answers to what a field looks like. Four grounds
+(`--bg`, `--well`, `--panel`, `--panel-2`) among sites two rows apart, two radii, five type sizes,
+seven paddings — and, because neither an `<input>` nor a `<select>` inherits the page's font, two of
+those rules forgot `font: inherit` and drew in the UA's Arial beside Segoe UI prose. Underneath that
+was the sharper version: **a bare `<select>` had no rule at all**, so the two on the queue rail that
+offer a different parent and a different area path were drawn white-on-black by the platform, in the
+middle of a dark instrument. The tick boxes were the same story in one property — no `accent-color`
+anywhere but one rule in the plan sheet, so every checkbox in the cockpit drew in the platform's
+blue.
+
+None of that is a thing a class fixes. A class reaches the controls somebody remembered to put it on,
+which is exactly the set that was already fine; the ones that read wrong are the ones nobody had
+looked at. An element selector has no such gap — there is no field it can miss, including the ones
+not written yet — which makes this the same argument [scrollbars](#scrollbars) settle the same way:
+some of what the cockpit draws is furniture rather than a component, and furniture is drawn once for
+everything.
+
+Four decisions inside the block are load-bearing:
+
+- **The type exclusions ride inside `:where()`.** A tick box, a radio, a colour swatch, a file
+  picker and a slider are not text boxes and a ground and a padding would wreck them, so they are
+  excluded — but `input:not([type='radio'])` counts (0,1,1), which beats every `.pm-note`-shaped rule
+  in the sheet and would take the sizing off the twelve fields that had it right. `:where()`
+  contributes nothing, so the base weighs (0,0,1) and a single class still wins. A plain `:not()`
+  here is the bug, and it is not a subtle one to look at — it is subtle to _write_.
+- **`font: inherit`**, for the reason above. It is the one declaration a field cannot be left to
+  inherit on its own.
+- **The ring is inset** — `outline-offset: -1px` — because fields sit in flex rows at 6px gaps and a
+  halo outside one overlaps the control beside it. `:focus-visible`, so a select that has been used
+  does not keep a ring while its value is being read.
+- **`option` is given a ground.** Chromium hangs the dropdown's list off the control from the
+  platform palette unless the options say otherwise, so a dark cockpit otherwise gets a white menu.
+  It is one answer for both families rather than one each, and that is the trade: the alternative is
+  a `.cn option` — the descendant-element trap below, on markup four shared components render — for a
+  menu the platform draws in its own geometry anyway. macOS draws it entirely itself and ignores this,
+  which is its right: that one is the platform's menu, not the cockpit's.
+
+What a call site is left to say is what makes its field _that_ field — how wide it is, whether it
+grows, a mono face for a cron expression, a smaller size in a dense row. Nothing in either sheet
+restates a ground, an edge or a radius, and the one field that overrides its ground says why in place:
+`.kn-commit textarea` sits in a panel that _is_ the well, where an inset box on an inset box is a
+border and nothing else.
+
+**The console draws its own fields with `.cn-in`**, the counterpart to `.cn-btn`. The base draws in
+the page's family, which is a step lighter and a different edge from a console card, so a control the
+console draws itself wears the `--cn-*` face instead — same as `.cfg-in` and `.th-search` already do.
+It is a class and **not `.cn input`**, and that is the [layering](#tokens) rule rather than a
+preference: the console _embeds_ shared components, so a descendant selector on the element reaches
+inside the escalation card and the launch composer at (0,1,1) and restyles a component that is
+supposed to be restyleable through tokens alone. Until this section was written, `test/console.test.ts`
+checked the named classes and nothing checked an element selector — which is how there came to be one:
+a `.cn textarea` no console markup needed, silently overriding five shared components' note boxes,
+`rows={2}` included, with a 64px floor. It guards both shapes now.
+
+**`accent-color` is settled by container, not by control.** It is one property the browser owns the
+shape of, and the only thing the cockpit gets to say is which hue — but the two families genuinely
+differ here, `--accent` being orange and `--cn-accent` blue, so a single answer is wrong on one of
+them. So `body` carries the shared hue and `.cn` carries the console's, and each tick box inherits
+whichever surface it landed on with no call site naming either. Keyed on `input[type='checkbox']`
+instead it would not work at all: a declaration on the element beats an inherited one unconditionally,
+so the console's answer could never reach a box inside the console.
+
 ### Scrollbars
 
 Left alone, a scrollbar is the one thing on the screen the theme does not reach: the browser draws it
@@ -3614,7 +3681,9 @@ Ten files, split on what they can see:
 - `test/cockpitTheme.test.ts` — [the theme](#the-theme) and the token layer, which is also the only
   thing in `check` that reads the stylesheets: no literal outside a declaration, every `var()`
   resolving, the registry and the sheets naming the same tokens in both directions, each token's kind
-  matching the value it is declared with, and every preset — and paper — answering every literal.
+  matching the value it is declared with, every preset — and paper — answering every literal, and the
+  two [field](#fields) guards: that the base's type exclusions stay inside `:where()` where they cost
+  no specificity, and that `accent-color` is only ever declared on a container.
 - `test/insightExport.test.ts` — the [exports](#exporting-a-reading): the CSV quoting, the sections and
   their order, that figures leave unrounded, and that each caveat the panel speaks leaves as a row.
 - `test/markdown.test.ts` and `test/richText.test.ts` — the two prose renderers, and the line between
@@ -3626,8 +3695,10 @@ Ten files, split on what they can see:
 The renders are wrapped in a **clock pin**, because `buildDemoState` stamps every timestamp relative to
 `Date.now()` and the rendered relative times would drift between runs otherwise.
 
-`test/console.test.ts` holds the two structural assertions the layer split rests on — nothing under
-`console/` imports `api.js`, and `console.css` never targets a shared component's class — and pins the
+`test/console.test.ts` holds the three structural assertions the layer split rests on — nothing under
+`console/` imports `api.js`, `console.css` never targets a shared component's class, and it reaches no
+form control through `.cn` either, which is [the same rule](#fields) at the one selector shape that
+gets past naming a class — and pins the
 renders where being wrong would be worse than being absent: the rail carrying every blocking kind in one
 list, its array order surviving the grouping, the holding count agreeing with its noun, an empty queue
 muting rather than removing the rail, a group with no rows drawing no heading, a row with a goal being a
