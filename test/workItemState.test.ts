@@ -36,6 +36,10 @@ function statePlan(number: number, state: string): DispatchResult {
 function recordingSink(): { sink: ActionSink; states: WorkItemStateInput[] } {
   const states: WorkItemStateInput[] = [];
   const sink: ActionSink = {
+    canCloseIssue: () => false,
+    closeIssue: (): never => {
+      throw new Error('closeIssue is not scripted in this test');
+    },
     canSetWorkItemState: () => true,
     canPlaceWorkItem: () => false,
     setWorkItemParent: () => Promise.reject(new Error('not used')),
@@ -109,6 +113,10 @@ test('set_work_item_state routes to the sink and is audited (no auto-send gate)'
 
 test('a failing transition is recorded as rejected, not escalated', async () => {
   const failingSink: ActionSink = {
+    canCloseIssue: () => false,
+    closeIssue: (): never => {
+      throw new Error('closeIssue is not scripted in this test');
+    },
     canSetWorkItemState: () => true,
     canPlaceWorkItem: () => false,
     setWorkItemParent: () => Promise.reject(new Error('not used')),

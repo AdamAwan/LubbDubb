@@ -80,6 +80,12 @@ export function planApprovalDetail(plan: Pick<Plan, 'diagnosis' | 'approach' | '
  * placeholders, so a `{settlement}` token would be silently dropped by exactly the
  * deployments that customised most. Appending has no fallback to get wrong.
  *
+ * **Four answers, and two of them are not about the plan.** Approve and Reject
+ * both agree the work is worth doing — a rejection asks a planner for a different
+ * plan — so the note names the back-outs too (`src/plans/planBackOut.ts`), which
+ * are what an operator reaches for when the *ticket* is the problem. Without them
+ * stated, the only "no" on the card was the one that re-plans a goal nobody wants.
+ *
  * **One paragraph, whatever the plan's size.** This used to be two, because a
  * one-pull-request plan settled somewhere else entirely — approving it handed the
  * issue to ordinary pickup, and refusing it had nowhere to fall back to. Both arms
@@ -89,7 +95,9 @@ export function planApprovalDetail(plan: Pick<Plan, 'diagnosis' | 'approach' | '
 export function planApprovalNote(): string {
   return (
     `\n\nApprove and each part gets its own agent, branch and pull request, bottom of the stack first. Reject and ` +
-    `the plan goes back to a planner with your reason — nothing is scheduled either way until a plan is approved.`
+    `the plan goes back to a planner with your reason — nothing is scheduled either way until a plan is approved. ` +
+    `If the ticket itself is the problem rather than the plan, back out instead: close the ticket with a comment, ` +
+    `or hold it, which stops watching it and sends this plan back — watch it again and a fresh plan is written for it.`
   );
 }
 
@@ -181,6 +189,53 @@ export function refusePlan(store: Store, planId: string, originRef: string, note
   return {
     ok: true,
     detail: `sent the plan for ${originRef} back to a planner (retired ${retire.length} unstarted part(s))${kept}`,
+  };
+}
+
+/**
+ * Decline: the plan stops, and **nothing takes its place**. The third settlement,
+ * and the one the other two had no way to express.
+ *
+ * {@link releasePlan} and {@link refusePlan} are both answers to "is this the right
+ * plan" — yes, or no-write-another-one. An operator reading a plan and concluding
+ * that the *issue* is not real, or is not worth the work, was answering a different
+ * question and had only the second button to say it with: a refusal sends it
+ * straight back to a planner, which re-derives a plan for a goal nobody wants and
+ * puts the same card back in front of them until the attempt cap runs out. So the
+ * back-out (`src/plans/planBackOut.ts`) settles the plan here instead.
+ *
+ * `abandoned` rather than `complete`: rule `plan-part` schedules nothing from
+ * either, and the work graph reads both as terminal, but only one of them is
+ * honest about a plan whose parts were never done. The reason carries the
+ * operator's words, appended for {@link refusePlan}'s reason — a plan somebody
+ * later reopens should say why it stopped, next to what it was going to do.
+ *
+ * Compare-and-set against `awaiting_approval`, exactly as the other two: a verdict
+ * that arrives after the plan moved on — an operator who hit Replan with the card
+ * still open — must not abandon a decomposition nobody was shown. Unstarted parts
+ * are retired and their asks withdrawn through the same `withdrawPartAsks` a
+ * refusal reaches, and parts with a branch or a pull request are left exactly as
+ * they are: work that has left the harness is not this verdict's to withdraw, and
+ * the operator still has **End the run** for that.
+ */
+export function declinePlan(store: Store, planId: string, originRef: string, note?: string | null): PlanSettlement {
+  const plan = store.getPlan(planId);
+  if (!plan) return { ok: false, detail: `plan ${planId} for ${originRef} no longer exists` };
+  if (plan.status !== 'awaiting_approval')
+    return { ok: false, detail: `plan ${planId} is "${plan.status}", not awaiting approval — nothing changed` };
+
+  const parts = store.listPlanParts(planId);
+  const retire = partsToRetire(parts, []);
+  for (const part of retire) store.updatePlanPart(part.id, { status: 'retired' });
+  withdrawPartAsks(store, retire, REFUSED_PART_RESOLUTION);
+  const surviving = survivorsOf(parts, retire);
+  store.setPlanStatus(planId, 'abandoned', declinedPlanReason(plan.reason, note ?? null));
+
+  const kept =
+    surviving.length === 0 ? '' : `; ${surviving.length} part(s) already in flight keep running until you end the run`;
+  return {
+    ok: true,
+    detail: `abandoned the plan for ${originRef} (retired ${retire.length} unstarted part(s))${kept}`,
   };
 }
 
@@ -295,6 +350,20 @@ function refusedPlanReason(reason: string | null, note: string | null): string {
   return appendPlanReason(
     reason,
     `An operator declined this plan${note ? `: ${note}` : '.'} Reconsider it in the light of that.`,
+  );
+}
+
+/**
+ * The reason an abandoned plan keeps: what it decided, plus that a human stopped
+ * it here and why. Appended rather than replaced for {@link refusedPlanReason}'s
+ * reason — and with more riding on it, because nothing will read this to write a
+ * better plan: it is the record of why work that was planned was not done, in
+ * front of whoever reopens the goal.
+ */
+function declinedPlanReason(reason: string | null, note: string | null): string {
+  return appendPlanReason(
+    reason,
+    `An operator backed out of this plan${note ? `: ${note}` : '.'} Nothing was scheduled for it.`,
   );
 }
 

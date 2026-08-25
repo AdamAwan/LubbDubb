@@ -99,6 +99,8 @@ export function App() {
       onClose={() => status.actions.viewPlan(null)}
       onReplan={(id) => status.actions.replan(id)}
       onDecide={(id, verdict, note) => status.actions.decideProposal(id, verdict, note)}
+      onBackOut={(id, verdict, note) => status.actions.backOutProposal(id, verdict, note)}
+      onCommentDraft={(id) => status.actions.proposalCommentDraft(id)}
       onOpenGoal={(ref) => status.actions.selectGoal(ref)}
       onAcceptance={(id, slug, criterion, met) => status.actions.setAcceptance(id, slug, criterion, met)}
       onPartProfile={(id, slug, profile) => status.actions.setPartProfile(id, slug, profile)}

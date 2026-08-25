@@ -28,6 +28,7 @@ import type {
   PoolInsightsPayload,
   PoolStatePayload,
   PromptsPayload,
+  ProposalCommentDraft,
   RetrospectivePayload,
   RunClearOut,
   RunningConfigPayload,
@@ -304,6 +305,15 @@ const realApi = {
     post<{ ok: boolean; detail: string }>(`/api/proposals/${id}/accept`, { note }),
   rejectProposal: (id: string, note?: string) =>
     post<{ ok: boolean; detail: string }>(`/api/proposals/${id}/reject`, { note }),
+  // Backing out of a plan verdict: the ticket is closed with the operator's comment,
+  // or un-watched until somebody has thought about it. Not a rejection — that asks a
+  // planner for a different plan for a goal nobody wants.
+  backOutProposal: (id: string, verdict: 'close' | 'hold', note?: string) =>
+    post<{ ok: boolean; detail: string }>(`/api/proposals/${id}/back-out`, { verdict, note }),
+  // The placeholder comment for a close. Served, never posted — what lands on the
+  // ticket is whatever the operator sends back with the verdict.
+  proposalCommentDraft: (id: string) =>
+    authFetch(`/api/proposals/${id}/comment-draft`).then((r) => json<ProposalCommentDraft>(r)),
   respondAgent: (id: string, text: string) => post(`/api/agents/${id}/respond`, { text }),
   setControl: (patch: { cap?: number; paused?: boolean }) =>
     post<{ ok: true; cap: number; paused: boolean }>('/api/control', patch),

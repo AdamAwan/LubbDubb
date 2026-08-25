@@ -5,6 +5,7 @@ import type {
   CiCheckRequeueInput,
   IssueCommentInput,
   IssueCreateInput,
+  IssueCloseInput,
   IssueLabelInput,
   PrBaseInput,
   PrBaseUpdateInput,
@@ -67,6 +68,14 @@ export class FakeConnector implements Connector, ActionSink {
 
   setIssueLabel(input: IssueLabelInput): Promise<SendResult> {
     return this.composite.setIssueLabel(input);
+  }
+
+  canCloseIssue(): boolean {
+    return this.composite.canCloseIssue();
+  }
+
+  closeIssue(input: IssueCloseInput): Promise<SendResult> {
+    return this.composite.closeIssue(input);
   }
 
   canSetWorkItemState(): boolean {

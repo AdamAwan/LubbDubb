@@ -108,6 +108,9 @@ function ghApi(script: GhScript): GitHubApi {
     updateIssueComment: unused('updateIssueComment'),
     mergePull: unused('mergePull'),
     setPullLabel: unused('setPullLabel'),
+    closeIssue: (): never => {
+      throw new Error('closeIssue is not scripted in this test');
+    },
     setIssueLabel: unused('setIssueLabel'),
     createIssue: unused('createIssue'),
     createPull: unused('createPull'),

@@ -47,6 +47,7 @@ providers share one `FakeWorldStore` so their world stays coherent.
 `PrReplyCapable`, `PrMergeCapable`, `PrLabelCapable`, `PrCreateCapable`, `PrTitleCapable`,
 `PrBaseCapable`, `PrBaseUpdateCapable`, `BranchDeleteCapable`, `IssueLabelCapable`,
 `WorkItemStateCapable`, `WorkItemLinkCapable`, `IssueCommentCapable`, `IssueCreateCapable`,
+`IssueCloseCapable`,
 `CiEvidenceCapable`, `RefResolvable`, `TicketHistoryCapable`, and the fake-only `Injectable`.
 
 `BranchDeleteCapable` deletes a branch outright — the reap after a pull request merges. Both
@@ -74,6 +75,18 @@ runs at date precision by default and faults on _any_ time supplied under it. Th
 query-string parameter; the `Wiql` body is `{query}` alone, so putting it there is dropped in
 silence). It is also why the mirror's one-month floor is a floor rather
 than a cut — asking by last-changed brings back older items that are still alive.
+
+`IssueCloseCapable` **closes** a tracker item — the plan back-out's "this is not really an issue"
+([08](08-planning.md#backing-out-of-a-plan)). Its input is the number and a reason in the two
+readings every tracker distinguishes (`completed` / `not_planned`); the operator's words are a
+separate `upsertIssueComment`, because a close reason is a provider's own two-word vocabulary and
+prose does not fit in it. It is its own capability rather than a method on `WorkItemStateCapable` for
+`PrBaseUpdateCapable`'s reason: **GitHub** closes an issue and has no workflow state at all, while
+**Azure** has a dozen states and no generic close, and which of them means _we are not doing this_
+belongs to the project's process template rather than to the harness. So Azure is deliberately not
+capable, `ActionSink.canCloseIssue()` answers false there, and the back-out reports that the item was
+left open instead of guessing a state word — the goal is concluded and un-watched either way, so the
+fleet is stopped and only the card on the board is left for a human to move.
 
 `IssueCreateCapable` **creates** a tracker item — the seam the four filing arms had no answer for, so
 each of them composed a `gh`/`az` command as a string and spent a desk agent typing it back
