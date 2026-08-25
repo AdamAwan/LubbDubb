@@ -60,6 +60,8 @@ export function PlanModal({
   onClose,
   onReplan,
   onDecide,
+  onBackOut,
+  onCommentDraft,
   onOpenGoal,
   onAcceptance,
   onPartProfile,
@@ -84,6 +86,16 @@ export function PlanModal({
   onClose: () => void;
   onReplan: (planId: string) => Promise<unknown> | unknown;
   onDecide: (id: string, verdict: 'accept' | 'reject', note?: string) => Promise<unknown> | unknown;
+  /**
+   * The two answers that are about the **ticket** rather than the plan — close it
+   * with the note as its comment, or hold it by dropping the watch tag. Offered
+   * here as well as on the inbox card because this is the surface where the
+   * operator has actually read the plan, and reading it is what tends to produce
+   * "this is not really an issue".
+   */
+  onBackOut: (id: string, verdict: 'close' | 'hold', note?: string) => Promise<unknown> | unknown;
+  /** Fetch the placeholder closing comment into the note box, to be edited. Nothing is posted by it. */
+  onCommentDraft: (id: string) => Promise<string>;
   /** Open the goal this plan hangs off — where its checks are now recorded. */
   onOpenGoal: (issueRef: string) => void;
   onAcceptance: (planId: string, slug: string, criterion: string, met: boolean) => Promise<unknown> | unknown;
@@ -439,6 +451,39 @@ export function PlanModal({
                   onClick={() => onDecide(decidable.id, 'reject', composeNote(pins, live, note))}
                 >
                   Reject — send it back to the planner
+                </AsyncButton>
+                {/* The two ways out that are not about the plan. A rejection asks a
+                    planner for a different plan, so it is the wrong "no" for a goal
+                    that should not be worked at all — which is the reading this
+                    panel, where the plan has actually been read, most often produces. */}
+                <AsyncButton
+                  className="ghost"
+                  // The note is posted on the tracker as the closing comment, so a
+                  // close with an empty box would shut somebody's ticket for a
+                  // reason nobody can read.
+                  disabled={note.trim().length === 0}
+                  title={
+                    note.trim().length === 0
+                      ? 'Say why in the box — your words go on the ticket as the closing comment'
+                      : 'Comments with your words, closes the ticket, stops watching it and abandons this plan'
+                  }
+                  onClick={() => onBackOut(decidable.id, 'close', note.trim())}
+                >
+                  Close the ticket
+                </AsyncButton>
+                <AsyncButton
+                  className="ghost"
+                  title="Put a draft closing comment in the box to edit — nothing is posted until you close the ticket"
+                  onClick={async () => setNote(await onCommentDraft(decidable.id))}
+                >
+                  Draft a comment
+                </AsyncButton>
+                <AsyncButton
+                  className="ghost"
+                  title="Stops watching the ticket, so nothing is scheduled for it. This plan waits exactly where it is — watch it again and it is put to you afresh."
+                  onClick={() => onBackOut(decidable.id, 'hold', note.trim() || undefined)}
+                >
+                  Hold — stop watching
                 </AsyncButton>
                 {discussHref !== null && (
                   <a

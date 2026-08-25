@@ -10,6 +10,7 @@ import { buildApp } from '../src/server/app.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { resolvePlanRoute } from '../src/plans/planning.js';
+import { backOutCommentDraft } from '../src/plans/planBackOut.js';
 import {
   actOnShortfall,
   describeProposedParts,
@@ -411,6 +412,140 @@ test('rejecting schedules nothing and leaves the issue a route rather than parki
   system.store.close();
 });
 
+test('the closing draft quotes what was planned, and is a draft rather than a default', () => {
+  // The ticket's readers have not seen the plan — it lives in the cockpit — so a
+  // "not doing this" with no account of what was considered reads as nobody having
+  // looked. Nothing posts it: the route serves it and the operator edits it.
+  const draft = backOutCommentDraft(
+    {
+      diagnosis: 'The signer is cached at module load.',
+      approach: 'Resolve it per request instead.',
+      reason: 'Two seams, two reviews.',
+    },
+    12,
+  );
+  assert.match(draft, /Closing #12 without doing the work/);
+  assert.match(draft, /cached at module load/);
+  assert.match(draft, /it can be picked up again/);
+  // A planner that filled in neither still leaves a usable draft rather than a
+  // heading with nothing under it.
+  const bare = backOutCommentDraft({ diagnosis: null, approach: null, reason: null }, 12);
+  assert.match(bare, /Closing #12/);
+  assert.doesNotMatch(bare, /for the record/);
+});
+
+test('closing the ticket stops the goal for good, and says so on the ticket', async () => {
+  const { system } = plannedSystem({ labelPrefix: 'lubbdubb' });
+  await system.harness.runCycle('manual');
+  const proposal = system.store.listProposals()[0]!;
+
+  const backed = await system.proposals.backOut(proposal.id, 'close', 'Duplicate of #7 — nothing to build here.');
+  assert.equal(backed!.outcome, 'none');
+  // The plan stops where it is rather than going back to a planner, which is the
+  // whole difference from a rejection: re-planning a goal nobody wants is what the
+  // operator was trying to avoid by pressing this.
+  const plan = system.store.getPlanByOrigin('issue:12')!;
+  assert.equal(plan.status, 'abandoned');
+  assert.match(plan.reason!, /Schema first\./);
+  assert.match(plan.reason!, /Duplicate of #7/);
+  assert.deepEqual(
+    system.store.listPlanParts(plan.id).map((p) => p.status),
+    ['retired', 'retired'],
+  );
+  // The harness's own record is what stops the re-pickup, and it carries the
+  // operator's words rather than a bare "done".
+  const conclusion = system.store.getIssueConclusion('issue:12')!;
+  assert.equal(conclusion.verdict, 'done');
+  assert.match(conclusion.note, /Duplicate of #7/);
+  // And the ticket itself: commented, closed, and un-watched — the audit line says
+  // each of the three, because an operator told "closed" over an open ticket has
+  // been lied to about the thing they were deciding.
+  assert.match(backed!.detail, /commented on #12/);
+  assert.match(backed!.detail, /closed #12 as not planned/);
+  assert.match(backed!.detail, /dropped the watch tag/);
+  // The tag is patched onto the baseline the moment it lands, the way the cockpit's
+  // own toggle patches it: `/api/state` serves the baseline, so a cockpit redrawn
+  // before the next sweep would otherwise show the goal still watched.
+  assert.deepEqual(system.store.getWorldBaseline()!.issues.find((i) => i.number === 12)!.labels, []);
+
+  // The inbox empties on the click, and nothing is scheduled on any later pulse —
+  // no planner, no part, no second card.
+  assert.equal(system.store.getEscalation(proposal.escalationId!)!.status, 'answered');
+  await system.harness.runCycle('manual');
+  await system.harness.runCycle('manual');
+  // The close itself shows up the way every other provider write does: on the next
+  // sweep of the world, rather than as a belief the harness holds separately.
+  assert.equal(system.store.getWorldBaseline()!.issues.find((i) => i.number === 12)!.state, 'closed');
+  assert.equal(system.store.listTasks().length, 0);
+  assert.equal(system.store.listProposals().length, 1);
+  system.store.close();
+});
+
+test('holding the ticket only stops the watching, so watching it again asks afresh', async () => {
+  const { system } = plannedSystem({ labelPrefix: 'lubbdubb' });
+  await system.harness.runCycle('manual');
+  const proposal = system.store.listProposals()[0]!;
+
+  const held = await system.proposals.backOut(proposal.id, 'hold', 'Needs a product call first.');
+  assert.match(held!.detail, /dropped the watch tag on 1 item\(s\)/);
+  // Nothing is concluded, nothing is abandoned and nothing is commented: the
+  // operator said "not yet", which is not a verdict about the work at all.
+  const plan = system.store.getPlanByOrigin('issue:12')!;
+  assert.equal(plan.status, 'awaiting_approval');
+  assert.equal(system.store.getIssueConclusion('issue:12'), null);
+  assert.doesNotMatch(held!.detail, /closed #12/);
+  assert.deepEqual(
+    system.store.listPlanParts(plan.id).map((p) => p.status),
+    ['ready', 'ready'],
+    'the parts are exactly where they were — a hold withdraws nothing',
+  );
+  const issue = system.store.getWorldBaseline()!.issues.find((i) => i.number === 12)!;
+  assert.equal(issue.state, 'open');
+  assert.deepEqual(issue.labels, []);
+
+  // Un-watched, the pulse asks nobody about it.
+  await system.harness.runCycle('manual');
+  assert.equal(system.store.listProposals().length, 1);
+  assert.equal(system.store.listTasks().length, 0);
+
+  // And watching it again puts the same plan back in front of the operator rather
+  // than spending a planner on the goal a second time — which is the whole reason
+  // a hold leaves the plan `awaiting_approval` and settles only the proposal.
+  await system.connector.setIssueLabel({ number: 12, label: 'lubbdubb-watch', present: true });
+  await system.harness.runCycle('manual');
+  const asked = system.store.listProposals().filter((p) => p.status === 'pending');
+  assert.equal(asked.length, 1, 'the card comes back');
+  assert.equal(asked[0]!.ref, 'issue:12:plan');
+  assert.equal(system.store.getPlanByOrigin('issue:12')!.status, 'awaiting_approval');
+  system.store.close();
+});
+
+test('backing out is refused for anything but a plan, and settles exactly once', async () => {
+  const { system } = plannedSystem({ labelPrefix: 'lubbdubb' });
+  await system.harness.runCycle('manual');
+  const proposal = system.store.listProposals()[0]!;
+
+  // A merge has no ticket behind it to close or hold — the act is on a pull
+  // request — so the desk refuses rather than settling a verdict whose effect
+  // cannot run. Refused *before* the transition, so the merge is still decidable.
+  const merge = system.store.createProposal({
+    kind: 'merge',
+    ref: 'pr:7:merge',
+    action: { type: 'merge_pr', reason: 'green', prNumber: 7, method: 'squash' },
+    escalationId: null,
+  });
+  assert.equal(await system.proposals.backOut(merge.id, 'close', 'not a ticket'), null);
+  assert.equal(system.store.getProposal(merge.id)!.status, 'pending');
+
+  // And the plan's own verdict is one-way, exactly as accepting and rejecting are:
+  // a second click changes nothing and does not comment on the ticket twice.
+  assert.ok(await system.proposals.backOut(proposal.id, 'close', 'Duplicate of #7.'));
+  assert.equal(await system.proposals.backOut(proposal.id, 'close', 'again'), null);
+  assert.equal(await system.proposals.backOut(proposal.id, 'hold', 'or this'), null);
+  assert.equal(system.store.getPlanByOrigin('issue:12')!.status, 'abandoned');
+  system.store.close();
+});
+
 test('a one-part plan is asked about on the same terms, and schedules its part once approved', async () => {
   const { system } = plannedSystem({ slugs: ['whole'] });
   assert.equal(system.store.getPlanByOrigin('issue:12')!.status, 'awaiting_approval');
@@ -577,6 +712,45 @@ test('free text cannot settle a decomposition', async () => {
   system.store.close();
 });
 
+test('a close with no words is refused, and the draft is served rather than posted', async () => {
+  const { system } = plannedSystem({ labelPrefix: 'lubbdubb' });
+  await system.harness.runCycle('manual');
+  const proposal = system.store.listProposals()[0]!;
+  const { app } = await buildApp(system);
+
+  // The note is what goes on somebody's tracker as the reason it closed, and it
+  // outlives this harness — so an empty one is a refusal rather than a close with
+  // a comment the harness composed and nobody read.
+  const empty = await app.inject({
+    method: 'POST',
+    url: `/api/proposals/${proposal.id}/back-out`,
+    payload: { verdict: 'close' },
+  });
+  assert.equal(empty.statusCode, 400);
+  assert.match(empty.json().error, /note is required/);
+  assert.equal(system.store.getPlanByOrigin('issue:12')!.status, 'awaiting_approval');
+
+  // The draft is there to be edited into one. Serving it posts nothing: the plan
+  // is still awaiting approval and the ticket is untouched.
+  const draft = await app.inject({ method: 'GET', url: `/api/proposals/${proposal.id}/comment-draft` });
+  assert.equal(draft.statusCode, 200);
+  assert.match(draft.json().draft, /Closing #12/);
+  assert.match(draft.json().draft, /two writers disagree/);
+  assert.equal(system.store.getPlanByOrigin('issue:12')!.status, 'awaiting_approval');
+  assert.equal(system.store.getWorldBaseline()!.issues.find((i) => i.number === 12)!.state, 'open');
+
+  // A hold needs no words at all — it decides nothing about the work.
+  const held = await app.inject({
+    method: 'POST',
+    url: `/api/proposals/${proposal.id}/back-out`,
+    payload: { verdict: 'hold' },
+  });
+  assert.equal(held.statusCode, 200);
+  assert.equal(system.store.getProposal(proposal.id)!.status, 'rejected');
+  await app.close();
+  system.store.close();
+});
+
 // -- fixtures ----------------------------------------------------------------
 
 function planRow(): Plan {
@@ -659,7 +833,7 @@ function plannerAgent(system: System, originRef: string): Agent {
 }
 
 /** An issue that has already been planned — into two independent parts, or as one PR. */
-function plannedSystem(opts: { slugs?: string[] } = {}): {
+function plannedSystem(opts: { slugs?: string[]; labelPrefix?: string } = {}): {
   system: System;
   repoRoot: string;
 } {
@@ -669,7 +843,7 @@ function plannedSystem(opts: { slugs?: string[] } = {}): {
     selfUpdate: { enabled: false } as never,
     // The cockpit guard is exercised in test/cockpitAuth.test.ts; these drive routes.
     auth: { enabled: false } as never,
-    labelPrefix: '',
+    labelPrefix: opts.labelPrefix ?? '',
     dbPath: ':memory:',
     agentMode: 'raw',
     deskRoot: join(dir, 'desk'),
@@ -683,7 +857,10 @@ function plannedSystem(opts: { slugs?: string[] } = {}): {
     gitObserver: new FakeGitObserver(),
     errorMirror: () => {},
   });
-  system.connector.inject({ kind: 'new_issue', number: 12, title: 'Big thing', body: 'Several PRs.' });
+  // Watched where the deployment has a tag at all: rule `plan-approval` asks about
+  // an open, watched issue, and the back-out's whole mechanism is that tag.
+  const labels = opts.labelPrefix ? [`${opts.labelPrefix}-watch`] : [];
+  system.connector.inject({ kind: 'new_issue', number: 12, title: 'Big thing', body: 'Several PRs.', labels });
   submitPlan(system, 'issue:12', opts.slugs ?? ['schema', 'api']);
   return { system, repoRoot };
 }

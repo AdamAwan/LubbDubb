@@ -1323,6 +1323,56 @@ class DemoServer {
     return { ok: true, detail };
   }
 
+  /**
+   * Back out of a plan verdict — the demo mirror of `POST /api/proposals/:id/back-out`.
+   *
+   * Shown faithfully for `acceptProposal`'s reason: the whole point of the two
+   * verdicts is what happens to the **ticket**, so closing one closes the demo
+   * issue and drops its watch tag, and holding one only drops the tag. A demo that
+   * flipped a proposal status and left the issue open would teach the opposite of
+   * what the buttons do.
+   */
+  async backOutProposal(
+    id: string,
+    verdict: 'close' | 'hold',
+    note?: string,
+  ): Promise<{ ok: boolean; detail: string }> {
+    const proposal = (this.state.proposals ?? []).find((p) => p.id === id);
+    if (!proposal || proposal.status !== 'pending' || proposal.kind !== 'plan')
+      return { ok: false, detail: 'already decided' };
+    this.settle(proposal, 'rejected', note);
+    const originRef = String(proposal.action.originRef ?? '');
+    const issueNumber = Number(originRef.split(':')[1]);
+    const issue = this.state.world.issues.find((i) => i.number === issueNumber);
+    if (issue) {
+      issue.labels = issue.labels.filter((l) => !l.endsWith('-watch'));
+      if (verdict === 'close') issue.state = 'closed';
+    }
+    const plan = this.state.plans?.find((p) => p.id === proposal.action.planId);
+    if (plan && verdict === 'close') plan.status = 'abandoned';
+    const what = verdict === 'close' ? 'Closed the ticket' : 'Put the ticket on hold';
+    const consequence =
+      verdict === 'close'
+        ? `commented on #${issueNumber}, closed it as not planned and abandoned its plan`
+        : `dropped the watch tag on #${issueNumber}; the plan waits where it is`;
+    const detail = `${what} by you${proposal.note ? `: ${proposal.note}` : ''} — nothing was scheduled; ${consequence} (${proposal.id}).`;
+    this.addDecision(proposal.action.type, 'skipped', detail);
+    this.dirty();
+    return { ok: true, detail };
+  }
+
+  /** The placeholder comment a close may be edited from — the demo's own draft, never posted. */
+  async proposalCommentDraft(id: string): Promise<{ draft: string }> {
+    const proposal = (this.state.proposals ?? []).find((p) => p.id === id);
+    const originRef = String(proposal?.action.originRef ?? '');
+    const issueNumber = originRef.split(':')[1] ?? '?';
+    return {
+      draft:
+        `Closing #${issueNumber} without doing the work — it does not look like something we should build as it stands.` +
+        `\n\nIf that is wrong, say so on this ticket and it can be picked up again.`,
+    };
+  }
+
   /** The verdict itself: one-way, and it answers the inbox item it hangs off. */
   private settle(proposal: Proposal, status: 'accepted' | 'rejected', note?: string): void {
     proposal.status = status;
@@ -4078,6 +4128,9 @@ export const demoApi = {
   dismissHumanTask: (id: string) => getServer().dismissHumanTask(id),
   acceptProposal: (id: string, note?: string) => getServer().acceptProposal(id, note),
   rejectProposal: (id: string, note?: string) => getServer().rejectProposal(id, note),
+  backOutProposal: (id: string, verdict: 'close' | 'hold', note?: string) =>
+    getServer().backOutProposal(id, verdict, note),
+  proposalCommentDraft: (id: string) => getServer().proposalCommentDraft(id),
   // The demo has no previous run to have crashed, so there is never anything to
   // decide — the panel is absent and this exists only to keep the two API shapes
   // interchangeable.

@@ -46,6 +46,10 @@ function countingSink(): ActionSink & { replies: { prNumber: number; commentId: 
   const ok = async () => ({ ok: true as const });
   return {
     replies,
+    canCloseIssue: () => false,
+    closeIssue: (): never => {
+      throw new Error('closeIssue is not scripted in this test');
+    },
     canSetWorkItemState: () => false,
     canPlaceWorkItem: () => false,
     setWorkItemParent: () => Promise.reject(new Error('not used')),

@@ -1357,6 +1357,18 @@ select:disabled {
   gap: 6px;
   margin-top: 10px;
 }
+/* The two ways out of a plan verdict that are not verdicts on the plan. Set apart
+   below the answers the way `.esc-dismiss` is, because neither answers the
+   question the card asked — they are about the ticket. */
+.esc-backout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
 .esc-decide input {
   flex: 1;
   min-width: 160px;

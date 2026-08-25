@@ -103,6 +103,13 @@ export interface GitHubApi {
   /** Add (`present`) or remove a label on an issue — the watch/ignore toggle. Idempotent. */
   setIssueLabel(number: number, label: string, present: boolean): Promise<void>;
   /**
+   * Close an issue, with the reason GitHub draws on the timeline —
+   * `not_planned` reads very differently from `completed`, and the back-out's
+   * whole point is which of the two it was. Idempotent: closing a closed issue is
+   * a no-op that succeeds.
+   */
+  closeIssue(number: number, reason: 'completed' | 'not_planned'): Promise<void>;
+  /**
    * Open an issue. Returns the new number.
    *
    * Labels and the assignee ride on the **create**, not on follow-up writes: an

@@ -1697,6 +1697,31 @@ item; the same live agent then continues (allow) or reads the denial (deny). 400
 boolean; **409 when no pending permission request is attached** (already decided, or the agent died
 first). Returns `{ ok: true, allowed }`.
 
+### `POST /api/proposals/:id/back-out`
+
+Body `{verdict: 'close'|'hold', note?}` — the two ways out of a **plan** verdict that are not verdicts
+on the plan ([08](08-planning.md#backing-out-of-a-plan)). `close` comments on the ticket with the
+note, closes it where the provider can, drops the watch tag, concludes the goal `done` and abandons
+the plan; `hold` drops the watch tag and nothing else, leaving the plan `awaiting_approval` so
+watching the ticket again puts the same card back up.
+
+**`note` is required for `close`** and optional for `hold` — the one place on this surface where a
+note is a 400 rather than a nicety. It is posted on somebody else's tracker as the reason the item
+closed and it outlives this harness, so a close with an empty box would shut a ticket for a reason
+nobody can read. **409** when the proposal is unknown, already decided, or not a `plan`: a merge and a
+drafted reply are acts on a pull request with no ticket to close, and the kind is checked _before_ the
+transition so a wrongly-aimed call leaves the proposal decidable. Broadcasts `world:changed` — the
+watch tag has moved, which is what the pickup gate reads. Returns `{ ok: true, proposal, outcome, detail }`,
+where `detail` names each write that landed and each that did not.
+
+### `GET /api/proposals/:id/comment-draft`
+
+The placeholder closing comment for the route above, quoting the plan's own diagnosis and approach.
+Its own route rather than a field on `/api/state`, for `GET /api/plans/:id/history`'s reason: it is
+read when somebody asks for it, and it carries the plan's prose. **It is served, never posted** —
+what lands on the ticket is whatever the operator sends back with the verdict. **404** for anything
+but a live plan proposal whose plan still exists. Returns `{ draft }` (`ProposalCommentDraft`).
+
 ### `POST /api/recovery/:taskId`
 
 Body `{verdict}`, one of `restore` / `requeue` / `remove` — what happens to work the previous run

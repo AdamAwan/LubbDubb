@@ -755,7 +755,13 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // own — which is all of them. It runs an accepted act through the executor, so
   // the outbound sink keeps a single caller and the human's authorization lands in
   // the audit log.
-  const proposals = new ProposalDesk(store, escalations, executor);
+  const proposals = new ProposalDesk(store, escalations, executor, {
+    // The same sink an accepted act runs through, so the back-out's comment and
+    // close are the one outbound seam rather than a second route to the tracker.
+    sink: opts.sink ?? connector,
+    config,
+    errors,
+  });
 
   // Dispatcher-level issue-pickup policy (gate + label-encoded priority), honoured
   // by whichever dispatcher is selected — provider-agnostic.

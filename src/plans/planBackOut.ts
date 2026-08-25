@@ -1,0 +1,219 @@
+import type { Config } from '../config.js';
+import type { ErrorLog } from '../errorLog.js';
+import type { ActionSink } from '../sink/actionSink.js';
+import type { Store } from '../store/store.js';
+import type { Plan } from '../types.js';
+import { issueConclusionOrigin } from '../issueConclusion.js';
+import { watchCascadeTargets } from '../issueRelations.js';
+import { originIssueNumber } from './planning.js';
+import { declinePlan, planApprovalDetail } from './planApproval.js';
+import { watchLabelFor } from '../watchLabels.js';
+
+/**
+ * The two ways out of a plan verdict that are not a verdict *on the plan*.
+ *
+ * Approve and Reject are the two answers to "is this the right plan": yes, or
+ * no-write-another-one. Both of them agree the work is worth doing — a rejection
+ * sends the goal straight back to a planner, which is why it is the wrong button
+ * for the operator who has just read a plan and realised the *ticket* is the
+ * problem. They pressed it anyway, because it was the only "no" on the card, and
+ * the harness answered by re-planning a goal nobody wanted until the planner's
+ * attempt cap ran out.
+ *
+ * So there are two more, and they are deliberately about the **ticket**:
+ *
+ * - **`close`** — this is not really an issue, or it is not worth doing. The
+ *   operator's words go on the tracker item as a comment, the item is closed where
+ *   the provider can close it, the goal is concluded in the harness's own record so
+ *   nothing picks it up again, and the plan is abandoned.
+ * - **`hold`** — this needs more thought before anyone works it. Nothing is
+ *   concluded, nothing is commented and nothing is abandoned: the watch tag comes
+ *   off, which is the one shape in which "leave this alone" cannot be argued with.
+ *   The plan stays `awaiting_approval`, so watching the ticket again puts the same
+ *   card back in front of the operator rather than spending a planner on it afresh.
+ *
+ * Both are settled through {@link ProposalDesk}, so the proposal's one-way
+ * transition, the inbox item and the audit row are the ones every other verdict
+ * gets. What is new here is only what happens to the ticket.
+ */
+export type BackOutVerdict = 'close' | 'hold';
+
+/** Everything backing out of a plan touches beyond the store: the tracker, and the error log. */
+export interface BackOutContext {
+  store: Store;
+  /** The one outbound seam — the comment, the close and the watch tag all go through it. */
+  sink: ActionSink;
+  config: Pick<Config, 'labelPrefix' | 'issueContainerTypes'>;
+  errors: ErrorLog;
+}
+
+/** What the back-out did, as the audit line and the route both read it. */
+interface BackOutResult {
+  ok: boolean;
+  /** The audit clause, in the operator's terms: what happened to the ticket and to the plan. */
+  detail: string;
+}
+
+/**
+ * Back out of a plan the operator does not want worked — see {@link BackOutVerdict}
+ * for which of the two this is and why they are different acts.
+ *
+ * **Every step is best effort and each is reported**, which is the one thing this
+ * function is careful about. It makes up to four writes across two systems, and a
+ * partial failure is the normal case worth designing for — a tracker that refuses
+ * the close still took the comment, and an operator told "closed" over a ticket
+ * that is still open has been lied to about the thing they were deciding. So each
+ * write's outcome lands in `detail` and every failure goes through
+ * `errors.record`, and the harness's own half — the conclusion and the plan
+ * settlement — is written **first**, because it is the half that actually stops
+ * the fleet.
+ */
+export async function backOutOfPlan(
+  ctx: BackOutContext,
+  act: { planId: string; originRef: string },
+  verdict: BackOutVerdict,
+  note: string | null,
+): Promise<BackOutResult> {
+  const { store } = ctx;
+  const issueNumber = originIssueNumber(act.originRef);
+  if (issueNumber === null) return { ok: false, detail: `${act.originRef} names no issue to back out of` };
+
+  const done: string[] = [];
+
+  if (verdict === 'close') {
+    // The harness's own record first: it is what stops the re-pickup, and it is the
+    // only step that cannot fail on somebody else's network.
+    const settled = declinePlan(store, act.planId, act.originRef, note);
+    done.push(settled.detail);
+    store.recordIssueConclusion({
+      originRef: issueConclusionOrigin(issueNumber),
+      verdict: 'done',
+      note: note ?? 'An operator closed this ticket from the plan approval card.',
+      by: 'operator',
+    });
+    done.push('concluded the goal, so nothing picks it up again');
+  }
+
+  // The tag, both ways round: a closed ticket that kept the watch tag comes back
+  // the day somebody reopens it, and a held one has the tag as its whole
+  // mechanism. Written through the same cascade the cockpit's own toggle uses, so
+  // dropping a Feature drops the stories under it rather than leaving them tagged
+  // and still worked.
+  done.push(await unwatch(ctx, issueNumber));
+
+  if (verdict === 'close') {
+    done.push(await comment(ctx, issueNumber, note));
+    done.push(await closeTicket(ctx, issueNumber));
+  }
+
+  return { ok: true, detail: done.join('; ') };
+}
+
+/**
+ * The placeholder comment, offered to an operator who would rather edit one than
+ * write one from nothing.
+ *
+ * It is a **draft and never a default**: the route that serves it does not post it,
+ * and the back-out refuses a close with no words at all. A comment the harness
+ * posted because nobody typed anything is exactly the "closed for reasons nobody
+ * can read" the whole feature exists to stop — and on somebody else's tracker,
+ * where it outlives the harness that wrote it.
+ *
+ * It quotes the plan's own diagnosis, because that is the thing being declined and
+ * the reader of the ticket has not seen it: the plan lives in the cockpit, and a
+ * "not doing this" with no account of what was considered reads as nobody having
+ * looked.
+ */
+export function backOutCommentDraft(
+  plan: Pick<Plan, 'diagnosis' | 'approach' | 'reason'>,
+  issueNumber: number,
+): string {
+  const considered = planApprovalDetail(plan);
+  const opening = `Closing #${issueNumber} without doing the work — it does not look like something we should build as it stands.`;
+  const body = considered === null ? null : `Here is what was planned for it, for the record:\n\n${considered}`;
+  const closing = 'If that is wrong, say so on this ticket and it can be picked up again.';
+  return [opening, body, closing].filter((block) => block !== null).join('\n\n');
+}
+
+/**
+ * Take the watch tag off — the whole of `hold`, and the belt to the close's
+ * braces. A failure is reported rather than swallowed, for the toggle's reason:
+ * an operator told the ticket is on hold, whose tag is still on it, will find the
+ * fleet working it.
+ */
+async function unwatch(ctx: BackOutContext, issueNumber: number): Promise<string> {
+  const { store, config, errors } = ctx;
+  const label = watchLabelFor(config.labelPrefix);
+  if (!label) return 'left the watch tag alone (this deployment configures no label prefix)';
+  const world = store.getWorldBaseline();
+  const issue = world?.issues.find((i) => i.number === issueNumber);
+  // An issue the snapshot does not carry still gets its own tag written — a world
+  // that has aged out must not stop the back-out — it simply has no tree to walk.
+  const targets =
+    issue === undefined ? [issueNumber] : watchCascadeTargets(issue, world?.issues ?? [], config.issueContainerTypes);
+
+  const landed: number[] = [];
+  const failed: number[] = [];
+  for (const target of targets) {
+    try {
+      await ctx.sink.setIssueLabel({ number: target, label, present: false });
+      landed.push(target);
+    } catch (err) {
+      failed.push(target);
+      errors.record({
+        source: 'server',
+        message: `Failed to drop the watch tag on #${target} while backing out of #${issueNumber}: ${(err as Error).message}`,
+      });
+    }
+  }
+  // Both mirrors, exactly as `POST /api/issues/:number/watch` patches them and for
+  // its reason: `/api/state` serves the baseline and the Tickets tab is built from
+  // `tracker_items`, so a cockpit redrawn before the next sweep would show the tag
+  // still on.
+  store.patchWorldLabels({ issues: landed, label, present: false });
+  store.patchTicketLabels({ numbers: landed, label, present: false });
+
+  if (failed.length === 0) return `dropped the watch tag on ${targets.length} item(s)`;
+  return `dropped the watch tag on ${landed.length} of ${targets.length} item(s) — #${failed.join(', #')} kept it`;
+}
+
+/** The operator's words on the ticket itself. A fresh comment, never an edit of the plan's living one. */
+async function comment(ctx: BackOutContext, issueNumber: number, note: string | null): Promise<string> {
+  if (note === null) return 'posted no comment (none was given)';
+  try {
+    await ctx.sink.upsertIssueComment({ number: issueNumber, body: note, commentRef: null });
+    return `commented on #${issueNumber}`;
+  } catch (err) {
+    const message = (err as Error).message;
+    ctx.errors.record({
+      source: 'server',
+      message: `Failed to comment on #${issueNumber} while closing it: ${message}`,
+    });
+    return `could not comment on #${issueNumber} (${message}) — your words are on the decision instead`;
+  }
+}
+
+/**
+ * Close the tracker item, where the provider has a close at all.
+ *
+ * Where it does not — Azure, whose "we are not doing this" is a state word out of
+ * a process template the harness has no business choosing — this is said plainly
+ * rather than approximated. The goal is concluded and un-watched either way, so
+ * the fleet is stopped; what is left is a human moving the card, which is what it
+ * has always been on that provider.
+ */
+async function closeTicket(ctx: BackOutContext, issueNumber: number): Promise<string> {
+  if (!ctx.sink.canCloseIssue())
+    return `left #${issueNumber} open — this tracker has no close the harness can write, so that stays a human act`;
+  try {
+    await ctx.sink.closeIssue({ number: issueNumber, reason: 'not_planned' });
+    return `closed #${issueNumber} as not planned`;
+  } catch (err) {
+    const message = (err as Error).message;
+    ctx.errors.record({
+      source: 'server',
+      message: `Failed to close #${issueNumber} from the plan back-out: ${message}`,
+    });
+    return `could not close #${issueNumber} (${message}) — it is un-watched, so nothing will work it`;
+  }
+}

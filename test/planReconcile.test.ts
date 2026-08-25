@@ -20,6 +20,10 @@ function recordingSink(): { sink: ActionSink; comments: IssueCommentInput[] } {
   return {
     comments,
     sink: {
+      canCloseIssue: () => false,
+      closeIssue: (): never => {
+        throw new Error('closeIssue is not scripted in this test');
+      },
       canSetWorkItemState: () => false,
       canPlaceWorkItem: () => false,
       setWorkItemParent: () => Promise.reject(new Error('not used')),

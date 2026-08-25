@@ -14,6 +14,8 @@ export function EscalationCard({
   onAnswer,
   onAnswerQuestions,
   onDecide,
+  onBackOut,
+  onCommentDraft,
   onOverrule,
   onPermission,
   onDismiss,
@@ -45,6 +47,21 @@ export function EscalationCard({
    */
   onAnswerQuestions?: (answers: (string | null)[]) => Promise<unknown> | unknown;
   onDecide?: (id: string, verdict: 'accept' | 'reject', note?: string) => Promise<unknown> | unknown;
+  /**
+   * A plan proposal's other two answers, and the ones the card had no way to say:
+   * the ticket is not really an issue (close it, with the note as its comment), or
+   * it needs more thought before anybody works it (hold it — the watch tag comes
+   * off and the plan waits where it is). Separate from {@link onDecide} because
+   * neither is a verdict on the plan: rejecting sends the goal back to a planner,
+   * which is the wrong answer to both.
+   */
+  onBackOut?: (id: string, verdict: 'close' | 'hold', note?: string) => Promise<unknown> | unknown;
+  /**
+   * Fetch the placeholder comment for a close, to be edited before it is sent.
+   * The draft is *put in the box*, never posted from here — what lands on the
+   * ticket is whatever the operator sends with the verdict.
+   */
+  onCommentDraft?: (id: string) => Promise<string>;
   /**
    * A shortfall proposal's third arm: the assessment is wrong, and the note says
    * why. Separate from {@link onDecide} because it is not a verdict on the act
@@ -99,6 +116,9 @@ export function EscalationCard({
   // whole reason the proposal exists — so the text box is replaced rather than
   // supplemented: the note rides *with* the verdict instead of standing in for it.
   const decidable = proposal?.status === 'pending' && onDecide ? proposal : null;
+  // Only a plan has a ticket behind it to close or hold: a merge and a reply draft
+  // are acts on a pull request, and a shortfall is about work already delivered.
+  const backOutable = decidable?.kind === 'plan' && onBackOut ? decidable : null;
   // Only meaningful if the agent moved on *after* asking; a stamp from an earlier
   // park would call a brand-new question stale.
   const resumed = resumedAt != null && Date.parse(resumedAt) > Date.parse(escalation.createdAt);
@@ -293,47 +313,94 @@ export function EscalationCard({
           </AsyncButton>
         </div>
       ) : decidable ? (
-        <div className="esc-decide">
-          <input
-            placeholder={
-              overrulable ? 'Why — optional to decide, required to overrule' : 'Why (optional) — recorded either way'
-            }
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-          />
-          <AsyncButton
-            className="primary"
-            title={ACCEPT_HINT[decidable.kind] ?? 'Authorize this act now'}
-            onClick={() => onDecide!(decidable.id, 'accept', text.trim() || undefined)}
-          >
-            {ACCEPT_LABEL[decidable.kind] ?? 'Approve'}
-          </AsyncButton>
-          <AsyncButton
-            className="ghost"
-            title={REJECT_HINT[decidable.kind] ?? "Nothing goes out, and the harness won't ask again"}
-            onClick={() => onDecide!(decidable.id, 'reject', text.trim() || undefined)}
-          >
-            Reject
-          </AsyncButton>
-          {overrulable && (
+        <>
+          <div className="esc-decide">
+            <input
+              placeholder={
+                backOutable
+                  ? 'Why (optional to decide) — required to close, and it is what the ticket gets'
+                  : overrulable
+                    ? 'Why — optional to decide, required to overrule'
+                    : 'Why (optional) — recorded either way'
+              }
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+            />
+            <AsyncButton
+              className="primary"
+              title={ACCEPT_HINT[decidable.kind] ?? 'Authorize this act now'}
+              onClick={() => onDecide!(decidable.id, 'accept', text.trim() || undefined)}
+            >
+              {ACCEPT_LABEL[decidable.kind] ?? 'Approve'}
+            </AsyncButton>
             <AsyncButton
               className="ghost"
-              // Disabled rather than hidden until there are words, because the words
-              // *are* the act: an overrule with nothing in the box records "delivered"
-              // for a reason nobody can read, which is the assessment problem again
-              // with the operator's name on it.
-              disabled={text.trim().length === 0}
-              title={
-                text.trim().length === 0
-                  ? 'Say why the assessment is wrong — it becomes the delivery’s reason and the correction the ticket gets'
-                  : 'Records the goal delivered with your reason, and puts the same words in front of the retrospective to get them onto the ticket'
-              }
-              onClick={() => onOverrule!(overrulable.issueNumber, overrulable.proposalId, text.trim())}
+              title={REJECT_HINT[decidable.kind] ?? "Nothing goes out, and the harness won't ask again"}
+              onClick={() => onDecide!(decidable.id, 'reject', text.trim() || undefined)}
             >
-              Overrule the assessment
+              Reject
             </AsyncButton>
+            {overrulable && (
+              <AsyncButton
+                className="ghost"
+                // Disabled rather than hidden until there are words, because the words
+                // *are* the act: an overrule with nothing in the box records "delivered"
+                // for a reason nobody can read, which is the assessment problem again
+                // with the operator's name on it.
+                disabled={text.trim().length === 0}
+                title={
+                  text.trim().length === 0
+                    ? 'Say why the assessment is wrong — it becomes the delivery’s reason and the correction the ticket gets'
+                    : 'Records the goal delivered with your reason, and puts the same words in front of the retrospective to get them onto the ticket'
+                }
+                onClick={() => onOverrule!(overrulable.issueNumber, overrulable.proposalId, text.trim())}
+              >
+                Overrule the assessment
+              </AsyncButton>
+            )}
+          </div>
+          {backOutable && (
+            /* Set apart below the two answers, the way dismissing is: neither of
+             these answers the question the card asked. Approve and Reject are both
+             about the *plan* — a rejection asks a planner for a different one — and
+             these two are about the ticket. */
+            <div className="esc-backout">
+              <span className="muted small">Not the work you want?</span>
+              <AsyncButton
+                className="ghost"
+                // Disabled rather than hidden until there are words, for the overrule's
+                // reason and one more: the note is posted on somebody's tracker as the
+                // reason it closed, and a close nobody can read the reason for is the
+                // thing this control exists to stop.
+                disabled={text.trim().length === 0}
+                title={
+                  text.trim().length === 0
+                    ? 'Say why — your words go on the ticket as the closing comment'
+                    : 'Comments with your words, closes the ticket, stops watching it and abandons the plan'
+                }
+                onClick={() => onBackOut!(backOutable.id, 'close', text.trim())}
+              >
+                Close the ticket
+              </AsyncButton>
+              {onCommentDraft && (
+                <AsyncButton
+                  className="ghost"
+                  title="Put a draft comment in the box to edit — nothing is posted until you close the ticket"
+                  onClick={async () => setText(await onCommentDraft(backOutable.id))}
+                >
+                  Draft a comment
+                </AsyncButton>
+              )}
+              <AsyncButton
+                className="ghost"
+                title="Stops watching the ticket, so nothing is scheduled for it. The plan waits where it is — watch it again and this card comes back."
+                onClick={() => onBackOut!(backOutable.id, 'hold', text.trim() || undefined)}
+              >
+                Hold — stop watching
+              </AsyncButton>
+            </div>
           )}
-        </div>
+        </>
       ) : questions ? (
         <div className="esc-quick">
           <AsyncButton className="primary" onClick={() => setAsking(true)}>

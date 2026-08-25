@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid';
 import type { InjectableEvent } from '../../connector/connector.js';
 import type {
+  IssueCloseInput,
   IssueCommentInput,
   IssueCreateInput,
   IssueLabelInput,
@@ -14,6 +15,7 @@ import type {
   Integration,
   IssueCommentCapable,
   IssueCreateCapable,
+  IssueCloseCapable,
   IssueLabelCapable,
   TicketHistoryCapable,
   WorkItemLinkCapable,
@@ -38,6 +40,7 @@ export class FakeIssuesIntegration
     WorkItemStateCapable,
     WorkItemLinkCapable,
     IssueLabelCapable,
+    IssueCloseCapable,
     IssueCreateCapable,
     IssueCommentCapable,
     TicketHistoryCapable
@@ -159,6 +162,20 @@ export class FakeIssuesIntegration
       issue.labels = [...labels];
     });
     return { ok: true };
+  }
+
+  /**
+   * Close the fake issue, so the plan back-out's tracker half is assertable at the
+   * `buildSystem` seam: the next snapshot carries it closed, exactly as a real
+   * tracker's would, and the pickup gate stops seeing it. Idempotent, and the
+   * reason is dropped — the fake world has no timeline to draw it on.
+   */
+  async closeIssue(input: IssueCloseInput): Promise<SendResult> {
+    this.world.mutate((world) => {
+      const issue = world.issues.find((i) => i.number === input.number);
+      if (issue) issue.state = 'closed';
+    });
+    return { ok: true, ref: `issue:${input.number}` };
   }
 
   /**
