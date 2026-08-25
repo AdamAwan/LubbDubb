@@ -842,23 +842,40 @@
 }
 
 /* goal page */
+/* One gap for the whole page, rather than a bottom margin on each child.
+   Every zone here is a sibling of every other, and the margins they used to carry
+   were only ever right in the arrangement they were written for: the plan card
+   came out of a `cn-stack`, which had the gap, and arriving here as a direct child
+   it had none at all — so it and the validation card below it touched, and two
+   full-width panels of one colour with nothing between them read as a single slab
+   with odd space in the middle of it. A gap on the parent cannot have that bug,
+   because there is one number and no child can be the one that forgot. */
 .cn-goal {
   display: flex;
   flex-direction: column;
+  gap: 12px;
   min-width: 0;
 }
-.cn-ghwho {
-  min-width: 0;
-}
+/* Three rows with fixed roles, rather than one row of everything with the
+   controls floated off the end. What the goal *is*, then what anybody has decided
+   about it, then what you can do to it — and the actions get the full width
+   instead of whatever the title left them, which is what stops nine controls
+   reflowing into a different arrangement at every window size. */
 .cn-gh {
   display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  margin-bottom: 14px;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+}
+.cn-ghid {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
   flex-wrap: wrap;
+  min-width: 0;
 }
 .cn-gh h1 {
-  margin: 0 0 7px;
+  margin: 0;
   font-size: 20px;
   line-height: 1.3;
   font-weight: 600;
@@ -871,12 +888,109 @@
   font-size: 12px;
   color: var(--cn-fg-faint);
 }
+/* The measurements, held apart from the verdicts beside them by weight alone —
+   they are the same size and one step fainter, which is the difference between a
+   reading you scan and a judgement you read. */
+.cn-ghfacts {
+  color: var(--cn-fg-faint);
+  opacity: 0.85;
+}
 .cn-ghacts {
-  margin-left: auto;
   display: flex;
   gap: 7px;
   flex-wrap: wrap;
+  align-items: center;
 }
+/* A group wraps as a unit. `nowrap` inside is the whole point: a narrow page
+   breaks *between* read, steer and settle rather than through one of them, so a
+   control never loses the neighbours that say what kind of control it is. */
+.cn-ghgrp {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+.cn-ghsep {
+  width: 1px;
+  align-self: stretch;
+  background: var(--cn-line);
+}
+/* Distance is the half of the warning a colour cannot carry. `auto` margins put
+   it at the far end at any width, and the group before it keeps its own end. */
+.cn-ghend {
+  margin-left: auto;
+}
+
+/* The goal's track: the pipeline in one row, each stretch a way to the section
+   that owns it. `cn-strip` rather than `cn-track`, which the overview's segment
+   bar already owns — and `--cn-track`, the token, is a third thing again.
+
+   A grid with a 1px gap over a lined ground rather than borders on the cells,
+   because the strip wraps: `auto-fit` puts four stages on one row on a wide page
+   and two on two rows on a narrow one, and a `border-right` would leave a stray
+   line at the end of every row but the last.
+
+   Every stage takes its hue from `--cn-tone-*`, set by the `cn-t-*` alias the
+   stage carries. No colour of its own, and so no new token: a theme moves the
+   strip with everything else it already moves. */
+.cn-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1px;
+  background: var(--cn-line);
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r);
+  overflow: hidden;
+}
+.cn-tk {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 9px 12px;
+  background: var(--cn-panel);
+  border: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.cn-tk:hover {
+  background: var(--cn-hover);
+}
+.cn-tkk {
+  font: 600 10px var(--cn-mono);
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+}
+.cn-tkv {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--cn-tone-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cn-tkb {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--cn-track);
+  overflow: hidden;
+}
+.cn-tkb i {
+  display: block;
+  height: 100%;
+  background: var(--cn-tone);
+}
+/* A stage with nothing to measure draws no track at all, rather than an empty
+   one. An empty bar under "no checks" reads as every check outstanding, which is
+   the one thing a null reading exists to keep it from saying. */
+.cn-tkb.cn-none {
+  background: none;
+}
+
 /* Same four tone properties as the rail row, and that is the whole of why a band
    and the row that opened it read as one ask. No weight split here: see
    `NeedsBand`. */
@@ -884,7 +998,6 @@
   border: 1px solid var(--cn-tone-line);
   background: var(--cn-tone-bg);
   border-radius: var(--cn-r);
-  margin-bottom: 14px;
   overflow: hidden;
 }
 .cn-needs > header {
@@ -929,17 +1042,18 @@
   font-size: 14px;
   line-height: 1.55;
 }
-/* The validation card — full width, above the two columns, because a check draws
-   its steps and what to expect side by side and carries a row of five verbs, and
-   both are cramped in a column.
+/* The validation card — full width, and now below the plan that writes its checks
+   rather than above it. Full width because a check draws its steps and what to
+   expect side by side and carries a row of five verbs, and both are cramped in a
+   column; below the plan because the card's own subtitle says where the checks
+   come from, and it was pointing upwards at something underneath it. Neither of
+   those is a rule in this sheet: the card is a `cn-card` like every other, and
+   full width is simply where the page puts it.
 
-   The rules here stop at the card and its padding. What is inside is
+   The rules here stop at the card's own padding. What is inside is
    `ValidationSection`, a *shared* component, and this sheet does not reach into
    one — it dresses its buttons through the `buttonClass` seam instead, the way the
    needs bands dress `EscalationCard`. */
-.cn-val {
-  margin-bottom: 12px;
-}
 .cn-vin {
   padding: 4px 13px 13px;
 }
@@ -963,15 +1077,23 @@
   text-decoration: underline;
 }
 
+/* What is left once the plan and the validation card are full width: four
+   row-lists, which split at 1200 rather than the 1500 the whole page used to
+   need. The two cards that wanted width have it outside this grid now, so the
+   number here is about the rows rather than about them — and 1200 is where the
+   situation area clears 800px, the shell having taken 360 for the rail at 1100.
+
+   Closer to even than the old 1.6/1, because the live reading is two cards and the
+   rail is four: the ratio was carrying the plan's waves, and they have left. */
 .cn-gcols {
   display: grid;
   gap: 12px;
   grid-template-columns: 1fr;
   align-items: start;
 }
-@media (min-width: 1500px) {
+@media (min-width: 1200px) {
   .cn-gcols {
-    grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
   }
 }
 .cn-stack {
@@ -979,6 +1101,39 @@
   flex-direction: column;
   gap: 12px;
   min-width: 0;
+}
+/* The reference footer: the two surfaces that ask nothing of the reader, below
+   everything that does. Its own container rather than more cards in a stack, so
+   the gap above it says the page has stopped being about what is happening. */
+.cn-refs-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  /* On top of the page's own gap, not instead of it: the extra says the page has
+     stopped being about what is happening, which a uniform gap cannot. */
+  margin-top: 8px;
+}
+/* A card heading that opens its own card. Styled off the `h3` it sits in rather
+   than as a control of its own — it is the heading, and drawing it as a button
+   would make the two cards look unlike the nine above them. */
+.cn-card > h3 .cn-disc {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.cn-card > h3 .cn-disc:hover {
+  color: var(--cn-fg);
+}
+.cn-caret {
+  display: inline-block;
+  width: 11px;
+  font-style: normal;
+  color: var(--cn-fg-faint);
 }
 .cn-tick {
   padding: 13px;
@@ -1012,18 +1167,19 @@
   font-weight: 600;
 }
 
-/* the plan's waves stack below 1500px rather than scrolling sideways */
+/* the plan's waves stack below 1200px rather than scrolling sideways */
 .cn-waves {
   display: grid;
   gap: 12px;
   padding: 13px;
 }
-@media (min-width: 1500px) {
+@media (min-width: 1200px) {
   /* Wrapping tracks rather than one implicit row per wave: how many waves fit is
-     a question about the card, not the viewport — the same 1500px that turns the
-     waves sideways also halves the card by giving the goal its right-hand
-     column, so a plan of three waves spilled past the card's edge and under that
-     column until roughly 1680px wide. */
+     a question about the card, not the viewport. That question used to have the
+     wrong answer — the card was in a 1.6fr column, so the 1500px that turned the
+     waves sideways also halved the space they turned into, and a plan of three
+     waves spilled past the card's edge until roughly 1680px. The card is full
+     width now, so the breakpoint is about the waves alone and comes down 300px. */
   .cn-waves {
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   }
@@ -1098,6 +1254,22 @@
   color: var(--cn-fg-dim);
   line-height: 1.45;
 }
+/* What the part's pull request is waiting on, drawn with the *same* two
+   components the pull-request card draws — the CI ladder and the court chip,
+   embedded rather than re-derived. The board said where a part sat in dispatch
+   order and nothing about whether it was moving: "Now" covered a part with red
+   CI, a part sitting on a reviewer and a part an agent was mid-way through, and
+   telling them apart meant scrolling to another card and matching PR numbers by
+   eye. Anything drawn here that read the PR a second time would be a second
+   chance to disagree with that card. */
+.cn-part .cn-pstate {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 6px;
+  flex-wrap: wrap;
+}
+
 .cn-part .cn-dep {
   font: 11px var(--cn-mono);
   color: var(--cn-fg-faint);
@@ -1222,6 +1394,20 @@ a.cn-tgl {
   display: inline-flex;
   align-items: center;
   text-decoration: none;
+}
+/* A toggle with nowhere to go. Drawn rather than hidden — a control that comes and
+   goes is a row whose shape depends on what a provider resolved — and dimmed to the
+   inert neutral so it reads as unavailable rather than merely quiet. No hover lift,
+   because there is nothing to reach for; the title says why. */
+.cn-tgl[aria-disabled='true'] {
+  border-color: var(--cn-inert);
+  background: none;
+  color: var(--cn-fg-faint);
+  cursor: default;
+}
+.cn-tgl[aria-disabled='true']:hover {
+  border-color: var(--cn-inert);
+  color: var(--cn-fg-faint);
 }
 /* A toggle that destroys something. Red at rest rather than only on hover, because
    the warning has to be there before the pointer is — this is the one control in the

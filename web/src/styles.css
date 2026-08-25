@@ -3325,8 +3325,14 @@ select:disabled {
 .pm-vrow {
   display: flex;
   gap: 8px;
-  padding: 8px 0;
+  padding: 8px 9px;
   border-top: 1px solid var(--border);
+  /* A rail per row, coloured by state. The chip already says the state in a word;
+     the rail says it in a scan, which is the reading a card of nine checks is
+     actually given. Weighted rather than merely coded: what is still owed is drawn
+     at full hue, what is done at a fraction of one — a list of checks is a list of
+     work left, and a done row that shouts is the card lying about how much. */
+  border-left: 2px solid transparent;
 }
 .pm-vrow:first-of-type {
   border-top: none;
@@ -3337,6 +3343,82 @@ select:disabled {
 }
 .pm-vrow.gone {
   opacity: 0.55;
+}
+.pm-vrow.unrun {
+  border-left-color: var(--amber);
+}
+.pm-vrow.failed {
+  border-left-color: var(--red);
+}
+.pm-vrow.deferred {
+  border-left-color: color-mix(in srgb, var(--amber) 55%, transparent);
+}
+.pm-vrow.passed {
+  border-left-color: color-mix(in srgb, var(--green) 45%, transparent);
+}
+.pm-vrow.waived {
+  border-left-color: var(--grey);
+}
+/* An outstanding row is washed in its own hue, so the checks still owed are one
+   shape a glance resolves before it resolves a word — the rail and the muted head
+   are readings of a *row*, and this is a reading of the *card*. Lifted rather than
+   the settled rows sunk, which was the first attempt: this component is drawn on
+   two stations, and the console's card ground is already the darkest value in that
+   palette, so there is nothing below it to sink onto. A translucent wash needs no
+   ground of its own and works on both. Kept at 8% for the reason the sinking was
+   tried first — the amendment and hand-back bands are the two things on a closed
+   row that must stay the loudest, and this has to read as tinted paper behind them,
+   never as a surface competing with them. */
+.pm-vrow.unrun:not(.open) {
+  background: color-mix(in srgb, var(--amber) 15%, transparent);
+}
+/* A deferral is half of one: still owed, but waiting on something named rather
+   than on somebody finding the time — so it draws in the same hue at half the
+   strength, between the checks nobody has got to and the ones that are settled. */
+.pm-vrow.deferred:not(.open) {
+  background: color-mix(in srgb, var(--amber) 7%, transparent);
+}
+.pm-vrow.failed:not(.open) {
+  background: color-mix(in srgb, var(--red) 15%, transparent);
+}
+/* A pass is tinted too, and deliberately at a third of what is owed: the card
+   should read as settled/outstanding at a glance, and a settled row with no ground
+   at all only says "not amber", which is a thing you work out rather than see. The
+   ratio is the whole of it — green loud enough to be its own state, quiet enough
+   that a card of nine still shows what is left before it shows what is done. */
+.pm-vrow.passed:not(.open) {
+  background: color-mix(in srgb, var(--green) 6%, transparent);
+}
+/* A settled check is a reading somebody already took, and drawn at the weight of
+   one still to run it reads as work: a sheet of nine says "nine things to do" at a
+   glance when it means two. So a passed or waived head steps back — the title
+   loses its weight and its ink, and the chips that only identify the row fade.
+   Scoped to the head, and only while the row is shut: the amendment and hand-back
+   bands are the two things that must never dim, an open row is one somebody is
+   reading, and hover puts the ink back so it still reads as a control. Deliberately
+   lighter than `.gone` above — withdrawn and done are not the same news. */
+.pm-vrow.passed:not(.open) .pm-vletter,
+.pm-vrow.waived:not(.open) .pm-vletter {
+  opacity: 0.6;
+}
+.pm-vrow.passed:not(.open) .pm-vtitle,
+.pm-vrow.waived:not(.open) .pm-vtitle {
+  font-weight: 400;
+  color: var(--muted);
+}
+.pm-vrow.passed:not(.open) .pm-vnote,
+.pm-vrow.waived:not(.open) .pm-vnote {
+  color: var(--muted);
+}
+.pm-vrow.passed:not(.open) .pm-vhead .chip,
+.pm-vrow.waived:not(.open) .pm-vhead .chip {
+  opacity: 0.55;
+}
+.pm-vrow:not(.open) .pm-vhead:hover .pm-vtitle {
+  color: var(--text);
+}
+.pm-vrow:not(.open) .pm-vhead:hover .chip {
+  opacity: 1;
 }
 .pm-vletter {
   color: var(--muted);

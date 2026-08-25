@@ -254,6 +254,12 @@ export function useCockpit(): CockpitStatus {
             ? [...current.collapsed, issueNumber]
             : current.collapsed.filter((n) => n !== issueNumber),
         })),
+      openGoalSection: (section, open) =>
+        go((current) => ({
+          goalOpen: open
+            ? [...current.goalOpen, section].sort((a, b) => a.localeCompare(b))
+            : current.goalOpen.filter((name) => name !== section),
+        })),
       reorderUpNext: (origins) => then(api.reorderUpNext(origins)),
       setUpNextProfile: (origin, profile) => then(api.setUpNextProfile(origin, profile)),
 
@@ -397,6 +403,7 @@ export function useCockpit(): CockpitStatus {
       consolePanel: place.panel,
       tab: place.tab,
       collapsed: place.collapsed,
+      goalOpen: place.goalOpen,
       configTab: place.configTab,
       configGroup: place.configGroup,
       ticketWatch: place.ticketWatch,

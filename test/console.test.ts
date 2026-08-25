@@ -623,10 +623,16 @@ function goalRef(): string {
   return ref;
 }
 
-function goalView(mutate: (state: CockpitView['state']) => void = () => {}, ref: string = goalRef()): CockpitView {
+function goalView(
+  mutate: (state: CockpitView['state']) => void = () => {},
+  ref: string = goalRef(),
+  /** The reference footer's disclosures to open — `[]` is the page as it arrives. */
+  goalOpen: readonly string[] = [],
+): CockpitView {
   const state = buildDemoState().state;
   mutate(state);
   return buildViewModel({
+    goalOpen,
     state,
     now: Date.now(),
     connected: true,
@@ -661,9 +667,18 @@ function goalView(mutate: (state: CockpitView['state']) => void = () => {}, ref:
  * and catches a card that renders an empty box while its route is in flight.
  */
 test('a goal draws its own durable record, not only the live snapshot', () => {
-  const html = render(goalView());
-  assert.ok(html.includes('The record'), 'the goal page must carry the history the snapshot forgets');
-  assert.ok(html.includes('Reading the record'), 'the card must say it is fetching rather than draw an empty box');
+  // Folded away as the page arrives, and *named* all the same: the heading is what
+  // says the history is here to be had, and a card that drew nothing at all would
+  // be indistinguishable from a page that had lost it.
+  const shut = render(goalView());
+  assert.ok(shut.includes('The record'), 'the goal page must carry the history the snapshot forgets');
+  assert.ok(
+    !shut.includes('Reading the record'),
+    'folded away it fetches nothing — "on open, never polled" is the disclosure now, not the page',
+  );
+
+  const open = render(goalView(() => {}, goalRef(), ['record']));
+  assert.ok(open.includes('Reading the record'), 'the card must say it is fetching rather than draw an empty box');
 });
 
 /**
@@ -951,7 +966,7 @@ test('a goal with no plan draws no way into one', () => {
 });
 
 test('the ticket is drawn as HTML when the tracker wrote HTML', () => {
-  const v = goalView();
+  const v = goalView(() => {}, goalRef(), ['ticket']);
   const page = v.goalPage;
   assert.ok(page, 'the fixture goal must resolve to a page');
 
@@ -962,6 +977,28 @@ test('the ticket is drawn as HTML when the tracker wrote HTML', () => {
 
   assert.ok(html.includes('Login is broken.'));
   assert.ok(!html.includes('&lt;div&gt;'), 'the tags are structure, not text to print');
+});
+
+/**
+ * The reference footer arrives shut, and its state is the address bar's.
+ *
+ * Both halves are the point. Shut, because neither surface is owed anything — the
+ * ticket is read once at pickup and the record is what is left after the snapshot
+ * forgets — and between them they used to put a screen and a half of prose in
+ * front of everything still moving. Named while shut, because a section that
+ * vanished would be a page that had lost it.
+ *
+ * And it is a `Place`, so a link to a goal's ticket body opens on it and the back
+ * button steps out of a disclosure it stepped into. Held in a `useState` all of
+ * that fails silently, which is why it is pinned here rather than left to reading.
+ */
+test('the reference footer arrives shut, and opens from the place', () => {
+  const shut = render(goalView());
+  assert.ok(shut.includes('The ticket'), 'the ticket is named even while it is folded away');
+  assert.ok(!shut.includes('as it stood at pickup</span><div class="cn-tick"'), 'and its body is not drawn');
+
+  const open = render(goalView(() => {}, goalRef(), ['ticket']));
+  assert.ok(open.includes('cn-tick'), 'the place is what opens it');
 });
 
 test('a held goal is a way into the goal it names', () => {
@@ -1528,4 +1565,52 @@ test('the shell renders the console, and the drawer that the console only asks f
   // down the reason a build failure.
   assert.ok(!/import\s+\{[^}]*RecordPanel/.test(src), 'the shell must not import the work graph');
   assert.ok(!src.includes('<RecordPanel'), 'the work graph is a console panel, not a strip under the shell');
+});
+
+/**
+ * The way to the tracker is always drawn, and it never leads to the wrong thing.
+ *
+ * Two faults, and both were silent. The control was drawn only when a URL
+ * resolved, so on a goal whose ticket could not be addressed it simply was not
+ * there — indistinguishable from the cockpit having forgotten it, and absent
+ * exactly where finding the ticket by hand is hardest. And it resolved through
+ * `#<n>` alone, a key `buildRefUrls` writes for pull requests *first*: on a tracker
+ * carrying both issue 412 and PR 412, "Open ticket" opened the pull request.
+ */
+test('the way to the tracker is always drawn, and prefers the unambiguous key', () => {
+  const v = goalView();
+  const page = v.goalPage;
+  assert.ok(page, 'the fixture goal must resolve to a page');
+  const n = page.issue.number;
+  const noUrl = { ...page, issue: { ...page.issue, url: undefined } };
+
+  // `#<n>` is shared with pull requests and the pull requests are keyed first, so
+  // the colon form is the only one that certainly names this goal.
+  const both = render({
+    ...v,
+    state: {
+      ...v.state,
+      refUrls: {
+        ...v.state.refUrls,
+        [`#${n}`]: 'https://tracker/pull/collision',
+        [`issue:${n}`]: 'https://tracker/browse/right',
+      },
+    },
+    goalPage: noUrl,
+  });
+  // Read off the control itself rather than off the page: `#<n>` is a ref other
+  // surfaces here legitimately draw, so a whole-page search would pass on their
+  // links and never see this one.
+  const opener = /<a[^>]*href="([^"]*)"[^>]*>Open ticket/.exec(both);
+  assert.ok(opener, 'the control is drawn as a link when there is somewhere to go');
+  assert.equal(opener[1], 'https://tracker/browse/right', 'the goal’s own ref wins over the number a PR shares');
+
+  // Nothing resolves at all: still drawn, still named, and no longer a link.
+  const nowhere = render({ ...v, state: { ...v.state, refUrls: {} }, goalPage: noUrl });
+  assert.ok(nowhere.includes('Open ticket'), 'the row’s shape must not depend on what a provider resolved');
+  assert.ok(nowhere.includes('aria-disabled="true"'), 'and it says it is unavailable rather than pretending');
+  assert.ok(
+    !/<a[^>]*>Open ticket/.test(nowhere),
+    'a link that leads nowhere is the dead end refs exist to prevent, so it stops being one',
+  );
 });

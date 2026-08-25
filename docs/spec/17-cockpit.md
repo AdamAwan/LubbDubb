@@ -327,21 +327,27 @@ in React as well — rendering a different tree per width — buys nothing and c
 re-render on every drag, and a second definition of each boundary that will disagree with the first
 time either moves.
 
-| width     | arrangement                                                                             |
-| --------- | --------------------------------------------------------------------------------------- |
-| < 1100    | one column — rail, then situation area, then vivarium — scrolling as a single page      |
-| 1100–1199 | the rail beside the situation area (360px), vivarium on its floor; situation one column |
-| 1200–1499 | overview cards in two tracks; Fleet, Goals and Pull requests span both                  |
-| 1500–1999 | the goal page gains its right-hand column, and its plan waves go side by side           |
-| ≥ 2000    | overview cards in four tracks; the three spanning cards take two each                   |
+| width     | arrangement                                                                                    |
+| --------- | ---------------------------------------------------------------------------------------------- |
+| < 1100    | one column — rail, then situation area, then vivarium — scrolling as a single page             |
+| 1100–1199 | the rail beside the situation area (360px), vivarium on its floor; situation one column        |
+| 1200–1999 | overview cards in two tracks; the goal page gains its rail, and its plan waves go side by side |
+| ≥ 2000    | overview cards in four tracks; the three spanning cards take two each                          |
 
 **The breakpoints are therefore stated once**, in `console.css`, and each is a statement about a
-different surface: 1100 is the shell, 1200 the overview grid, 1500 the goal page, 2000 the overview
-again. The plan's waves use `auto-fit` above 1500 rather than a fixed track count, so how many waves
-sit in a row is a question about the card and not about the viewport — the same 1500px that turns the
-waves sideways also halves the card by giving the goal its right-hand column.
+different surface: 1100 is the shell, 1200 the overview grid _and_ the goal page, 2000 the overview
+again. The plan's waves use `auto-fit` above 1200 rather than a fixed track count, so how many waves
+sit in a row is a question about the card and not about the viewport.
 
-**The plan's waves stack vertically below 1500px** rather than scrolling sideways. A horizontally
+**The goal page moved from 1500 to 1200, and that is a consequence rather than a decision.** Both
+numbers were the same number: the plan's waves needed width, and the card was inside a 1.6fr column,
+so the point at which the waves could turn sideways was the point at which the column stopped halving
+them — around 1680px in practice, for a plan of three waves. The plan and the validation card are
+[full width now](#the-goal-page), outside the two-column grid entirely, so the waves answer only to
+the card and what is left in the grid is four row-lists. Neither needs 1500 of its own, and at 1200
+the situation area clears 800px with the shell's 360 taken for the rail.
+
+**The plan's waves stack vertically below 1200px** rather than scrolling sideways. A horizontally
 scrolling plan is the failure this layout is a reaction to.
 
 **Document order is reading order.** No card carries a CSS `order`; a section moved in `Overview.tsx`
@@ -401,6 +407,7 @@ once.
 | `sort`                               | the Knowledge table's order, `-` for the far end: `-asks` is most-asked-for first; `reach` ascending is the absent value                                                                                                 |
 | `fold`                               | the Knowledge tails an operator has **folded away**, as `rejected,retired` — the folded ones, so the page as it stands is a bare URL and nothing is hidden on arrival                                                    |
 | `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                                                                                                                 |
+| `open`                               | the goal page's reference sections held open, as `record,ticket`                                                                                                                                                         |
 | `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                                                                                                        |
 | `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched`; `any` is the absent value                                                                                                                                       |
 | `tracking`                           | what the harness is doing about it: `any` / `frozen`; `live` is the absent value, since the tab is the surface work happens on                                                                                           |
@@ -814,16 +821,10 @@ either settles the row and the next snapshot clears both, with nothing kept in s
 
 Order on the page, top to bottom:
 
-1. **The goal header** — number, title, item type, workflow state, the assay verdict with the
-   assayer's own summary in its title, the conclusion verdict, the validation verdict as a settled
-   count (absent when the goal has no checks — "no plan" is a third reading and not a synonym for
-   clear, [20](20-validation.md)), when the run started, the agent count,
-   what it has cost, and how many parts have merged. Every chip quotes a reading the server already
-   made; nothing here is a second opinion. A `null` spend draws no reading at all, because nothing
-   was ever measured and `$0.00` would report a goal that cost nothing
-   ([18](18-observability.md#per-goal-spend)). The validation chip is the one that is a **button**:
-   the checks are on this page now, so the reading has somewhere to go, and a verdict you can act on
-   should not be the only chip that does nothing.
+1. **The goal header**, in three rows with fixed roles — what the goal _is_, then what anybody has
+   decided about it, then what you can do to it ([The header](#the-header)).
+   1a. **The track** — the goal's pipeline in one row, each stretch a way to the section that owns it
+   ([The track](#the-track)).
 2. **The "Needs you" bands** — every open ask on this goal, stacked, answerable in place. Red for
    asks blocking an agent, amber for the operator's own, the rail's own split carried over so a row
    and the band it opens read the same. **A goal with no ask draws no band at all** — a band that is
@@ -832,26 +833,110 @@ Order on the page, top to bottom:
    goal page's private component, because the goal page is not the only place an ask is read: the ask
    panel draws the same band for a row with no goal page. One band, two placements — a second wiring
    is a second set of verdicts to keep in step.
-3. **Validation** — how anyone checks the goal was met, and what anybody concluded from running each
-   check. Full width, above the two columns ([Validation](#validation-on-the-goal)).
-4. **The plan**, left to right in dispatch order.
-5. **The ticket as it stood at pickup** — what a plan, an assay or an ask is judged against, drawn
-   through `renderRichText` because the body is the _tracker's_ prose and Azure DevOps writes it as
-   HTML ([Tracker-authored prose](#tracker-authored-prose)).
-6. **Pull requests for this goal**, open and closed, with the court chip and the CI ladder.
-7. **Environments** — what a delivered goal still owes ([Environments](#environments)).
-8. **The record** — this goal's own subtree of the durable work graph, last because it is the only
-   card in the column that asks nothing of the reader: the five above it are the live reading and
-   what is still owed, and this is what is left of the same work once the snapshot has forgotten it
-   ([The record](#the-record-on-the-goal-it-belongs-to)).
+3. **The plan**, left to right in dispatch order. **Full width**, because the waves are a board read
+   left to right and a column is what kept them stacked to 1500px.
+4. **Validation** — how anyone checks the goal was met, and what anybody concluded from running each
+   check. Full width ([Validation](#validation-on-the-goal)), and **below the plan**, which is the
+   ordering the card itself has always asked for: its own subtitle says the checks are written by the
+   plan, and the plan was underneath it.
+5. **Two columns**, from 1200px. The live reading and what is still owed on the left — **pull
+   requests for this goal**, open and closed, with the court chip and the CI ladder, then
+   **environments** ([Environments](#environments)). On the right, **On this goal** (who is working
+   it now), **What you've asked for**, **The tail** and **Spend**. Below 1200 the two stacks are one
+   column.
+6. **The reference footer** — the two surfaces that ask nothing of the reader, each folded away
+   behind its own name: **the ticket as it stood at pickup**, drawn through `renderRichText` because
+   the body is the _tracker's_ prose and Azure DevOps writes it as HTML
+   ([Tracker-authored prose](#tracker-authored-prose)); and **the record**, this goal's own subtree
+   of the durable work graph ([The record](#the-record-on-the-goal-it-belongs-to)).
 
-At ≥1500px a right-hand column carries **On this goal** (who is working it now), **Spend** and **The
-tail**. Below that, the two stacks are one column.
+### The reference footer
+
+The ticket and the record were full cards in the middle of the live work — the ticket between the
+plan and the pull requests, the record at the foot of the same column — and between them they put a
+screen and a half of prose in front of everything that was still moving. Neither is owed anything: the
+ticket is read once at pickup and then never again, and the record is what is left of the work once
+the snapshot has forgotten it.
+
+So both are drawn **shut**, below the columns, behind their own names.
+
+**Which of them is open is a `Place`**, `?open=ticket,record`. A disclosure held in a `useState`
+compiles, renders and works right up until the back button steps over it or a reload drops it, and
+both are silent ([The address bar](#the-address-bar)). Open rather than closed is the list — the other
+way round from `collapsed` and `ticketColumns` — because here the empty list _is_ the page as it
+stands, which is the rule those two are inverted to satisfy.
+
+**The record's disclosure is its own, not the footer's.** Its heading carries the node count and only
+it knows that, so a heading drawn outside it would either carry no count or carry a stale one. That
+also keeps "fetched on open, never polled" true now the card no longer opens with the page: folded
+away it issues no request at all.
+
+### The header
+
+**Three rows with fixed roles**, rather than one row of everything with the controls floated off its
+end.
+
+1. **What the goal is** — `#390 · Validate job payloads in the catalog`, the item type, and the
+   tracker's workflow state in the operator's own colour. Neither chip is a verdict anybody passed on
+   the work, which is why they are up here and not in the row below.
+2. **What anybody has decided about it** — the assay verdict with the assayer's own summary in its
+   title, the conclusion verdict, and the validation verdict as a settled count (absent when the goal
+   has no checks: "no plan" is a third reading and not a synonym for clear, [20](20-validation.md)).
+   Every chip quotes a reading the server already made; nothing here is a second opinion. The
+   validation chip is the one that is a **button**: the checks are on this page, so the reading has
+   somewhere to go, and a verdict you can act on should not be the only chip that does nothing. After
+   the verdicts, one plain run of the measurements — when the run started, the agent count, what it
+   has cost — a step fainter, which is the difference between a reading you scan and a judgement you
+   read. A `null` spend draws no reading at all, because nothing was ever measured and `$0.00` would
+   report a goal that cost nothing ([18](18-observability.md#per-goal-spend)).
+3. **What you can do to it**, [below](#the-headers-controls).
+
+**How many parts have merged is deliberately not in row 2 any more.** It is the track's first stage,
+and stating it in both places is how a header and the card it summarises come to disagree.
 
 ### The header's controls
 
 Ask, watch, the priority flag, the profile pin, the conclusion, raising a bug, the ticket, and ending
-the run.
+the run — **in three groups, with the destructive one held out of all three**.
+
+| group  | controls                                      |
+| ------ | --------------------------------------------- |
+| read   | Ask ↗, Open ticket ↗ (always drawn)         |
+| steer  | Watch, Prioritise, the profile pin, More work |
+| settle | Mark done / Unfinish, Raise a bug             |
+| —      | End the run…, pushed to the far end           |
+
+The row was nine controls at one weight that **wrapped**, so no control had a stable position and no
+muscle memory could form. The groups are the fix and they are ordered by what an operator reaches for:
+what only reads, what steers the work, what settles it. A group does not wrap internally, so a narrow
+page breaks _between_ groups rather than through one — a control never loses the neighbours that say
+what kind of control it is.
+
+**Open ticket is always drawn, and resolves through three keys in order of how much
+each can be trusted**: the item's own `url`, which is the provider's; then
+`issue:<n>`, which `stateSnapshot` keys for every world issue _and_ every retained
+run and which nothing else ever writes; then `#<n>` last, because `buildRefUrls`
+walks the pull requests before the issues and the first writer wins — so on a
+tracker carrying both issue 412 and PR 412, `#412` is the _pull request's_ address.
+
+Both halves of that were faults, and both were silent. Resolving through `#<n>`
+alone opened the wrong thing on a number collision, and it made the control vanish
+on a **retained run** — `#<n>` is built from `world.issues`, and a run the harness
+kept after its ticket left the world is by definition not in that list, so the goals
+whose ticket is hardest to find by hand were the ones offering no way to it.
+
+When nothing resolves the control is still drawn, **inert rather than absent**: a
+`<span>` with `aria-disabled`, dimmed, saying in its title that the tracker gave the
+item no address and the harness could not derive one. A control that comes and goes
+is a row whose shape depends on what a provider happened to resolve, which is the
+opposite of what the groups are for; and "the ticket is not reachable from here" is a
+fact worth stating, where a missing button says nothing and reads as the cockpit
+having forgotten. It stops being an `<a>` because a link that leads nowhere is the
+dead end [refs](#links) exists to prevent.
+
+**`End the run…` is in no group and sits at the far end**, on an `auto` margin. Distance is the half of
+the warning a colour cannot carry: `cn-danger` says what the control does, and being the only thing
+over there says it is not one of the others.
 
 - **Ask** is the row's one control that writes nothing, and it is first for that reason: everything
   after it acts on the goal, and this one only asks about it. An `<a>` carrying
@@ -921,6 +1006,39 @@ the run.
   is one they cannot. The live count is read over the same `issue:<n>` subtree the header's agent
   count uses, so the two agree by construction. The flagged-plan note is one more requirement _inside_
   the modal — [below](#saying-the-sentence-a-refusal-asks-for).
+
+### The track
+
+**The goal's pipeline in one row, each stretch a way to the section that owns it.** Plan → Validation →
+Shipped → Close-out, built by `buildGoalStrip` (`web/src/view/goalPage.ts`).
+
+It exists because the answer to _where has this goal got to_ was in four places and none of them was
+one: "2 of 5 parts merged" and "Validation 3/7" in the header, "5 parts" on the plan card, "2/3" per
+environment, four lamps in The tail — three screens apart, in three vocabularies.
+
+Three rules make it safe to put at the top of the page.
+
+- **Every reading is one a card below already draws.** The strip folds `parts`, `issue.validation`,
+  `environments` and the tail's own fields; it computes no verdict of its own. A stage that measured
+  something itself would be a fifth opinion that can disagree with the card it points at, which is the
+  fault it replaces, made bigger and moved to the top.
+- **A stage with nothing to measure draws no bar**, and `done` is `number | null` for that reason. Null
+  is a third reading and not a synonym for zero: a goal with no validation plan has no checks
+  outstanding, and an empty bar under "no checks" would report every one of them still to run. The same
+  distinction `ValidationVerdict` makes one layer down, and the same one the three reach verdicts make
+  for an environment ([24](24-environments.md#the-three-verdicts)) — which is why the Shipped stage
+  answers `unknown` in its own words, before it would ever say "not shipped".
+- **The Shipped stage is absent when no environment is configured**, exactly as the card is. A stage of
+  question marks on a deployment that never set one up is a feature announcing itself as broken.
+
+Each stage takes its hue from a `cn-t-*` tone alias, so it invents no colour and owes no new token —
+green settled, blue moving, amber held or failed, grey not reached.
+
+They are **anchors, not refs**: each jumps to one element on this page, so each is a `<button>` with a
+`scrollIntoView` and not an `<a href="#…">`. The cockpit's address bar is `Place`, and a hash the place
+knows nothing about is a history entry the back button steps through to nowhere. The `ANCHOR` map in
+`GoalPage.tsx` is keyed on `GoalStageAt`, so a stage the strip learns to draw cannot ship without
+somewhere to land — a missing entry is a compile error rather than a control that does nothing.
 
 ### The bands
 
@@ -996,6 +1114,41 @@ names with a present/missing fact resolved server-side, and the controls: Passed
 Waive, each opening a one-line note the server also requires, the hand-over, **Run it in Claude
 Code**, and one way back to `unrun` from any settled state.
 
+**Every row carries a rail on its left, coloured by state, and the hues are weighted rather than
+merely coded.** The chip already says the state in a word; the rail says it in a scan, which is the
+reading a card of nine checks actually gets. What is still owed draws at full hue — amber for `unrun`,
+red for `failed` — and what is done draws at a fraction of one, a `color-mix` of green at 45% for
+`passed` and the flat `--grey` for `waived`. A list of checks is a list of work left, so a done row at
+full strength is the card overstating how much of it there is. A withdrawn row's rail is transparent:
+it is not a state anybody is owed an action on.
+
+**A row still owed is washed in its own hue** — amber at 15% for `unrun`, red at 15% for `failed`, and
+amber at 7% for `deferred`, which is half of one: still owed, but waiting on something named rather
+than on somebody finding the time — so the outstanding checks are one shape a glance resolves before it
+resolves a word. A pass is washed too, in green at 6% — a settled row with no ground at
+all only says "not amber", which is a thing a reader works out rather than sees. The **ratio** is the
+whole of it: green loud enough to be its own state, quiet enough that a card of nine shows what is left
+before it shows what is done. A waiver takes no wash, because it is the one settled row whose reason is
+a decision rather than a reading, and the grey rail is what says so.
+The rail and the muted head are readings of a _row_; the wash is a reading of the _card_. It is the
+outstanding rows that lift rather than the settled ones sinking, which was the first attempt: this
+component is drawn on two stations, and the console's card ground is already the darkest value in that
+palette, so there is nothing below it to sink onto. A translucent wash owns no ground and works on
+both. It stays a wash on purpose — the amendment and hand-back bands are the two things on a closed
+row that must remain the loudest, so this has to read as tinted paper behind them, never as a surface
+competing with them.
+
+**A settled head is drawn a step back.** A passed or waived check is a reading somebody already took,
+and at the weight of one still to run it reads as work — a card of nine says "nine things to do" at a
+glance when it means two. So the title drops to `--muted` at a lighter weight, the letter and the
+identifying chips fade, and hover puts the ink back so the row still reads as a control. Three limits
+make it a de-emphasis and not a hiding: it is scoped to the **head**, so the amendment band, the
+hand-back band and the result note keep their full weight — those are the things a reader must not
+scroll past, and dimming them would undo the reason a closed row draws them at all; it lifts the
+moment a row is **opened**, because an operator who opened one is reading it; and it is deliberately
+lighter than the `.gone` treatment on a withdrawn check, since _withdrawn_ and _done_ are not the same
+news.
+
 **Run it in Claude Code** is the odd one out and is the reason it exists: it writes nothing. A desktop
 session is started from the operator's own Claude Code, not from here, so the control is an `<a>`
 carrying a `claude://code/new` deep link that opens that client on the goal's checkout with
@@ -1061,6 +1214,23 @@ which was retired, with those parts below it.
 
 A part's row names its pull request as a way there rather than as text (`PR #412`), the one ref a wave
 carries; the goal it is under is the page it is already on.
+
+**A part carrying an open pull request draws that request's CI ladder and court chip, embedded from
+the pull-request card rather than re-derived.** The column a part stands in says where it is in
+_dispatch order_ and nothing at all about whether it is moving: "Now" covered a part with red CI, a
+part sitting on a reviewer and a part an agent was mid-way through, and telling the three apart meant
+scrolling to the pull-request card and matching PR numbers by eye — on the one surface whose whole
+job is to be read at a glance. The two components are `CiLadder` and `CourtChip`, the same two
+exports the card draws, for the reason the track strip is folded rather than written: a second
+reading of `ciVerdict` or `attention` beside the first is a second chance to classify a check the CI
+policy already classified, or to disagree about whose court a PR is in, from a component sitting
+nowhere near the one it duplicates.
+
+**A dead pull request's word is drawn only where it disagrees with the column.** The ladder is not
+drawn for one at all — on a closed PR the checks are history, which is why the card's own closed rows
+carry a word and no dots — and `merged` under the **Merged** heading is the heading a second time. What
+survives that cut is the pair that says something the board cannot: a merged pull request on a part
+grouped anywhere else, and a pull request closed without merging.
 
 **The agent on a part is a door, not an id.** The row used to end ` · agent_ab4sc`, which named
 nothing — agent ids are minted and an agent has no name — while the one thing an operator wanted from
@@ -1353,9 +1523,10 @@ It is a **lens**: nothing here, and nothing in the dispatcher, decides anything 
 
 ### The record, on the goal it belongs to
 
-A goal's own subtree of the graph, drawn as a card on its page (`WorkRecord`), below **Pull
-requests**. The roots of the work graph _are_ `issue:<n>` nodes, so a goal page was already sitting on
-top of its own record without drawing it — the card is `GET /api/work/:ref` and nothing else.
+A goal's own subtree of the graph, drawn as a card on its page (`WorkRecord`), in the
+[reference footer](#the-reference-footer) and folded away. The roots of the work graph _are_
+`issue:<n>` nodes, so a goal page was already sitting on top of its own record without drawing it —
+the card is `GET /api/work/:ref` and nothing else.
 
 **It fills a hole the page already had.** Every other card there reads the snapshot, and
 `closedPullRequests` remembers a merge for `closedPrWindowMs` and then drops it — so a goal that
@@ -1364,8 +1535,11 @@ work that demonstrably happened. It also carries what nothing else on the page k
 chip on a merge the harness never watched, concerns raised and cleared, and the requeues, sitting
 under the part they redid.
 
-Three things it does deliberately:
+Four things it does deliberately:
 
+- **Its disclosure is its own**, not the footer's — the heading carries the node count, and only this
+  card knows it. Folded away it fetches nothing at all, which is what keeps "on open, never polled"
+  true now that the card no longer opens with the page.
 - **The root is dropped.** The route returns the root with its subtree, and the root here is the page
   you are standing on. `depth`'s missing-parent arm then lands its children flush left on their own.
 - **A row draws a ref only for `issue:<n>` or `pr:<n>` exactly.** `refLabel` shortens a whole family
@@ -1413,15 +1587,15 @@ same items plus the closed ones, filtered by the same bucket. Two surfaces that 
 things about one item is the drift `src/watchLabels.ts` exists to prevent, one level up — so the
 backlog is deleted and every part of it is named a destination here rather than assumed to survive.
 
-| The backlog had                                | It is now                                                  |
-| ---------------------------------------------- | ---------------------------------------------------------- |
-| four groups (watched/intake/unwatched/ignored) | the **Watch** filter's values, now two                     |
-| intake pulled out of Watched                   | a **lamp** on the held row, and its ask on the queue rail  |
+| The backlog had                                | It is now                                                   |
+| ---------------------------------------------- | ----------------------------------------------------------- |
+| four groups (watched/intake/unwatched/ignored) | the **Watch** filter's values, now two                      |
+| intake pulled out of Watched                   | a **lamp** on the held row, and its ask on the queue rail   |
 | `Override → workable` on intake rows           | the same button, the same call, in the rail's `intake` band |
-| features as headings, folds on `Place`         | `group=feature`, the same `collapsed` field                |
-| the name opening the goal page                 | unchanged — `selectGoal`, refs beside it                   |
-| 25 rows then "…and 31 more"                    | the keyset cursor and infinite scroll this tab already had |
-| the nav's unwatched count                      | the same number on the Tickets badge (`untriagedCount`)    |
+| features as headings, folds on `Place`         | `group=feature`, the same `collapsed` field                 |
+| the name opening the goal page                 | unchanged — `selectGoal`, refs beside it                    |
+| 25 rows then "…and 31 more"                    | the keyset cursor and infinite scroll this tab already had  |
+| the nav's unwatched count                      | the same number on the Tickets badge (`untriagedCount`)     |
 
 `?tab=backlog` **resolves to this tab** rather than falling through to the overview, which is what an
 unknown tab does: every bookmark and shared link to it would otherwise land somewhere else with
@@ -3694,6 +3868,16 @@ is 3 with two agents live, so exactly one goal is `eligible` and the rest of the
 produced. Eleven of the thirteen are reachable by clicking, through the tickets tab's watch filter; `done`
 and `retained` are carried without being listed anywhere, because no surface lists a closed goal — both
 are still readings the wire ships and the goal page draws.
+
+**Every state a check can be in has a check in the fixtures.** Goal #395 carries ten, for the reason
+the pickup roll-call carries thirteen: `passed`, `failed`, `waived`, `deferred` and `unrun` are each
+weighted differently on the card ([Validation on the goal](#validation-on-the-goal)), and a weighting
+is not a thing anybody can judge from a demo that only ever shows two of them. The three readings that
+are not a pass are the ones a demo would otherwise never reach — recording one needs a note, and a note
+needs somebody to type it — and the withdrawn check is there because nothing in the cockpit amends a
+plan, so the fold that lists what an amendment dropped would never draw at all. The same fixture set
+carries every marker for _who_ ran a check: by hand, by the fleet, from a desktop session, claimed by
+one right now, handed back, and amended out from under a reading.
 
 **Schedules are real in the demo, and never fire there.** Writing a recurrence, editing it, pausing it
 and deleting it all work against the fixture state, and "run now" queues the job exactly as the launch
