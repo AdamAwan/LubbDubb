@@ -186,8 +186,8 @@ anything above changing.
 Three rules follow from the repository not being the pool's, and each of them is a way to damage
 somebody else's work:
 
-- **The write set is exactly `<path>/fleets/<fleetId>/`.** The transport stages its own two files by
-  name and commits those paths. Never `git add -A`, never `git add .`, and never `git clean` anywhere
+- **The write set is exactly `<path>/fleets/<fleetId>/`.** The transport stages its own files by
+  name — each document and its companion — and commits those paths. Never `git add -A`, never `git add .`, and never `git clean` anywhere
   in the clone. In a dedicated repository a broad stage is untidy; in a wiki it commits whatever else
   happens to be in the tree, under the harness's name, on a schedule, with nobody having asked.
 - **The read is scoped to `<path>/fleets/`** rather than to the tree. A pool sharing a wiki is a pool
@@ -218,11 +218,12 @@ and consented to.
 | Read by      | the importer, per fleet, sentence by sentence | an aggregator, summed across fleets |
 | Retention    | while the claim is true                       | ninety days, rolling                |
 
-So they are two documents at two addresses:
+So they are two documents at two addresses, each with a companion a person can read
+([below](#the-human-readable-companion)):
 
 ```
-<pool.path>/fleets/<fleetId>/claims.json
-<pool.path>/fleets/<fleetId>/digest.json
+<pool.path>/fleets/<fleetId>/claims.json   <pool.path>/fleets/<fleetId>/claims.md
+<pool.path>/fleets/<fleetId>/digest.json   <pool.path>/fleets/<fleetId>/digest.md
 ```
 
 **The cadence difference is the one that decides it.** One document means republishing the claim text
@@ -252,6 +253,41 @@ early adopter silently emptying the pool for everybody.
 address is the transport's, and a text substrate may have none that survives a round trip. A fleet
 publishing under another fleet's name is the single thing that can break one writer per namespace, so
 it is checked rather than assumed.
+
+## The human-readable companion
+
+A pool lives where people already are — a team's wiki, a repository somebody browses on the web. What
+they find there is a JSON document written for an importer, and the fleet's own knowledge is
+consequently readable only by the fleets. So each document is published with a markdown rendering of
+itself beside it, at the same address with a `.md` extension.
+
+**It is derived output and never an input.** `fetch` names `claims.json` and `digest.json` by name, so
+nothing ever reads a companion back — which is the whole of why it is safe to have one. A markdown file
+the importer parsed would be a second grammar for one fact, free to disagree with the JSON the moment
+either is edited, and it would disagree silently: a hand-corrected sentence in a wiki would arrive at
+every other fleet as a claim the origin never vouched for. `renderPoolMarkdown` in `src/pool/markdown.ts`
+is a pure function of the same `PoolDocument` the JSON is serialised from, and holds no state of its own.
+
+**The two files are written and committed together.** The write set is unchanged — still exactly
+`<path>/fleets/<fleetId>/`, still staged by name — and the content hash still covers the JSON document
+alone, so an idle fleet writes nothing and a publish that happens writes both. A companion that were
+committed separately would be a second commit an hour saying the same thing.
+
+**The digest companion summarises rather than transcribes.** Ninety days across five sections is some
+thousands of rows, and a markdown table of them is a file nobody opens — which defeats the one thing it
+is for. It totals the trailing 7, 30 and 90 days per key and says in the file that `digest.json` holds
+the series. The windows are cut on the **document's own** publish day rather than the reader's clock,
+since a reader a few hours the other side of midnight would otherwise drop the origin's newest day out
+of its own seven-day window.
+
+**The words come from the same copy the panels use.** `poolPhaseLabel` and `poolCauseLabel` are shared
+with the cockpit's fold rather than restated, for the reason that fold gives: two spellings of one
+closed vocabulary is how a fleet's page and its file come to disagree in the operator's language while
+agreeing in the data.
+
+**No setting.** It is derived output in a directory that is already the fleet's alone, it costs one file
+write on a publish that was happening anyway, and a fleet that published one and not the other would be
+a pool whose wiki is right for some fleets and stale for others.
 
 ## The claims arm
 
