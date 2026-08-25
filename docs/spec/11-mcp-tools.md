@@ -526,6 +526,10 @@ Arguments `{summary, type?, scope?, body?}` — and **nothing that names work**.
   why first, one line each, no headings and no prose paragraphs. Unlike the title, the body ships as
   the agent wrote it (the reference is appended and nothing is rewritten), so the schema is the only
   place a form is expressible at all. Left unsaid, agents write thirty lines under `##` headings.
+  It states the **sigil a pull request takes** on the configured provider too (`!12` on Azure DevOps,
+  where `#12` is work item 12). The harness writes the issue reference itself, but a stacked part
+  naming the rung beneath it is the agent's own prose, and this description is the last thing it reads
+  before writing one. → [07](07-pull-requests.md#naming-a-pull-request)
 - **It is named in `MCP_PROTOCOL_ADDENDUM`, and that is load-bearing.** No dispatch prompt names it at
   its point of use, so for its first release nothing named it anywhere and every dispatched agent
   shelled out to `gh`/`az` instead — wired, allow-listed, unused. `test/mcpChannel.test.ts` now

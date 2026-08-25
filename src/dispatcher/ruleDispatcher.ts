@@ -1,4 +1,5 @@
 import type { Dispatcher, DispatchContext, DispatchResult, QueueItem } from './dispatcher.js';
+import type { PrRefStyle } from '../prRef.js';
 import type { ValidatedAction } from './actions.js';
 import { parseActions } from './actions.js';
 import type { Decision, Issue, ValidationCheck } from '../types.js';
@@ -120,6 +121,7 @@ export class RuleDispatcher implements Dispatcher {
   private readonly cooldown: CooldownPolicy;
   private readonly templates: PromptTemplates;
   private readonly defaultBranch: string;
+  private readonly prRefStyle: PrRefStyle;
   private readonly planning: PlanningPolicy;
   /** Only the one field any rule reads — see the constructor's narrowing below. */
   private readonly validation: Pick<ValidationPolicy, 'desktopClaimMinutes'>;
@@ -140,6 +142,8 @@ export class RuleDispatcher implements Dispatcher {
    * floor; omitted means their defaults, never an absent funnel. `ci` decides
    * `pr-ci-failing` per failing check; omitted/empty means every failure is acted
    * on generically, which is what the rule did before per-check policy existed.
+   * `prRefStyle` is how the configured provider links a pull request in prose;
+   * omitted means `#`, which is right everywhere but Azure DevOps.
    *
    * The assay, the assessor and the retrospective take no policy at all: they are
    * unconditional, and the only thing that ever holds one is the state of the issue
@@ -154,6 +158,7 @@ export class RuleDispatcher implements Dispatcher {
     ci: Partial<CiPolicy> = {},
     validation: Partial<ValidationPolicy> = {},
     validationRoot = '.lubbdubb/validation',
+    prRefStyle: PrRefStyle = '#',
   ) {
     this.validation = {
       // An omitted *duration* is not a feature being switched off, and zero would
@@ -163,6 +168,7 @@ export class RuleDispatcher implements Dispatcher {
     };
     this.validationRoot = validationRoot;
     this.defaultBranch = defaultBranch;
+    this.prRefStyle = prRefStyle;
     this.ci = { checks: ci.checks ?? [] };
     this.planning = {
       maxConcurrentPartsPerIssue: planning.maxConcurrentPartsPerIssue ?? DEFAULT_PLANNING.maxConcurrentPartsPerIssue,
@@ -541,6 +547,7 @@ export class RuleDispatcher implements Dispatcher {
       planning: this.planning,
       ci: this.ci,
       defaultBranch: this.defaultBranch,
+      prRefStyle: this.prRefStyle,
       validationRoot: this.validationRoot,
       validationClaimMinutes: this.validation.desktopClaimMinutes,
       // `workItemStates` narrows both work-item rules' config to non-null. Narrowed

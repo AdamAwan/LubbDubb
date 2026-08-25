@@ -1,4 +1,5 @@
 import { prState } from '../prHealth.js';
+import { prRef, type PrRefStyle } from '../prRef.js';
 import type { PartOutcomeKind, Plan, PlanPart, PullRequest } from '../types.js';
 
 /**
@@ -295,7 +296,7 @@ export function partsToRetire(existing: PlanPart[], declared: string[]): PlanPar
  * and each part's real-world position, because what the planner may still change
  * depends entirely on whether work has left the harness.
  */
-export function currentPlanSummary(plan: Plan, parts: PlanPart[]): string {
+export function currentPlanSummary(plan: Plan, parts: PlanPart[], style: PrRefStyle): string {
   const live = liveParts(parts);
   if (live.length === 0) return `The current plan is "${plan.status}" and declares no parts.`;
   const lines = live.map((p) => {
@@ -303,7 +304,7 @@ export function currentPlanSummary(plan: Plan, parts: PlanPart[]): string {
       p.status === 'concluded'
         ? `${partOutcomeKind(p) ?? 'concluded'}: ${p.outcomeSummary ?? 'no summary'}`
         : p.prNumber !== null
-          ? `PR #${p.prNumber}`
+          ? `PR ${prRef(p.prNumber, style)}`
           : (p.branch ?? 'no branch yet');
     // Every declared prerequisite, not the first: an amendment turns on slugs, so a
     // summary naming one of a rejoin's two would invite the replanner to drop the other.
@@ -334,19 +335,24 @@ export function currentPlanSummary(plan: Plan, parts: PlanPart[]): string {
  * is code it may find on its branch and must not redo, the second is work that is
  * explicitly *not* its to do.
  */
-export function siblingContext(parts: PlanPart[], current: PlanPart): { done: string; remaining: string } {
+export function siblingContext(
+  parts: PlanPart[],
+  current: PlanPart,
+  style: PrRefStyle,
+): { done: string; remaining: string } {
   const others = liveParts(parts).filter((p) => p.slug !== current.slug);
   const exists = (p: PlanPart): boolean => partSettled(p) || p.status === 'in_review';
   return {
-    done: describe(others.filter(exists), 'Nothing has landed yet — this is the first part.'),
+    done: describe(others.filter(exists), 'Nothing has landed yet — this is the first part.', style),
     remaining: describe(
       others.filter((p) => !exists(p)),
       'Nothing — this is the last part.',
+      style,
     ),
   };
 }
 
-function describe(parts: PlanPart[], empty: string): string {
+function describe(parts: PlanPart[], empty: string, style: PrRefStyle): string {
   if (parts.length === 0) return empty;
   return parts
     .map((p) => {
@@ -356,7 +362,7 @@ function describe(parts: PlanPart[], empty: string): string {
         p.status === 'concluded'
           ? ` (${partOutcomeKind(p) ?? 'concluded'}: ${p.outcomeSummary ?? 'no summary'})`
           : p.prNumber !== null
-            ? ` (PR #${p.prNumber})`
+            ? ` (PR ${prRef(p.prNumber, style)})`
             : p.branch !== null
               ? ` (branch ${p.branch})`
               : '';

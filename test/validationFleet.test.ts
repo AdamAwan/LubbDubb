@@ -546,6 +546,7 @@ test('the close-out line says who owes the check, and the ticket says who record
   const comment = renderPlanComment(
     system.store.getPlanByOrigin(goal) as Plan,
     [],
+    '#',
     system.store.listValidationChecks(goal),
   );
   // The reader of the ticket next month is deciding how much the tick is worth.

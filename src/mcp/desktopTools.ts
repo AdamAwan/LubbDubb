@@ -1,4 +1,5 @@
 import { validatePlanDocument } from '../plans/planDocument.js';
+import type { PrRefStyle } from '../prRef.js';
 import { ingestPlanDocument } from '../plans/planIngest.js';
 import { issueOrigin } from '../plans/planning.js';
 import { acceptanceCriteria, currentPlanSummary } from '../plans/parts.js';
@@ -52,6 +53,13 @@ export interface DesktopToolDeps {
   claimMinutes: number;
   /** `config.validationRoot` — where a goal's fixtures live, which the session has to be told. */
   validationRoot: string;
+  /**
+   * How the configured provider links a pull request in prose, so the plan
+   * rendering here names a part's pull request the way the operator's own
+   * session can follow it. Omitted means `#`, which is right everywhere but
+   * Azure DevOps. → `src/prRef.ts`
+   */
+  prRefStyle?: PrRefStyle;
   /**
    * The machine's one dev environment, lazily — the runner is built after this
    * server in `system.ts`, the same thunk `proposals` uses for the same reason.
@@ -396,7 +404,7 @@ const planRead: DesktopToolFactory = (deps) => ({
       document: plan.document,
       // The same rendering a replanning agent is given, rather than a second one:
       // it carries each part's slug, which is the merge key an amendment turns on.
-      parts: currentPlanSummary(plan, parts),
+      parts: currentPlanSummary(plan, parts, deps.prRefStyle ?? '#'),
       acceptance: parts.map((p) => ({ slug: p.slug, criteria: acceptanceCriteria(p).map((c) => c.text) })),
       validation: checks.map((c) => ({ letter: c.letter, id: c.id, title: c.title, state: c.state })),
       next: PLAN_READ_NEXT,
