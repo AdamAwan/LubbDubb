@@ -480,7 +480,7 @@ export function PlanModal({
                 </AsyncButton>
                 <AsyncButton
                   className="ghost"
-                  title="Stops watching the ticket, so nothing is scheduled for it. This plan waits exactly where it is — watch it again and it is put to you afresh."
+                  title="Stops watching the ticket and sends this plan back to the planner. Nothing is scheduled for it — watch it again and a fresh plan is written."
                   onClick={() => onBackOut(decidable.id, 'hold', note.trim() || undefined)}
                 >
                   Hold — stop watching

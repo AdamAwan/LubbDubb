@@ -1702,8 +1702,9 @@ first). Returns `{ ok: true, allowed }`.
 Body `{verdict: 'close'|'hold', note?}` — the two ways out of a **plan** verdict that are not verdicts
 on the plan ([08](08-planning.md#backing-out-of-a-plan)). `close` comments on the ticket with the
 note, closes it where the provider can, drops the watch tag, concludes the goal `done` and abandons
-the plan; `hold` drops the watch tag and nothing else, leaving the plan `awaiting_approval` so
-watching the ticket again puts the same card back up.
+the plan; `hold` drops the watch tag **and refuses the plan** (`refusePlan`, Reject's own
+settlement), so nothing is scheduled while it is un-watched and watching the ticket again gets a
+freshly written plan rather than this one put back up.
 
 **`note` is required for `close`** and optional for `hold` — the one place on this surface where a
 note is a 400 rather than a nicety. It is posted on somebody else's tracker as the reason the item

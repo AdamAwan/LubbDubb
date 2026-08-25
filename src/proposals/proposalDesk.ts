@@ -99,8 +99,10 @@ export class ProposalDesk {
    * reason: the act was not authorized, so the row must leave `pending` in the one
    * direction that says so, the inbox item must be answered with it, and the
    * decision log must carry what the click did. What differs is entirely the
-   * effect — `refusePlan` is not reached at all, because sending a goal nobody
-   * wants back to a planner is precisely what these two exist not to do.
+   * effect. A close ends the plan outright (`declinePlan`) and concludes the goal;
+   * a hold reaches `refusePlan` after all, but with the watch tag off — so the
+   * replan it sets up costs nothing until somebody asks for the goal again, and
+   * what comes back then is a new plan rather than this one re-proposed.
    *
    * Refused for anything but a `plan` proposal: a merge or a reply draft has no
    * ticket behind it to close or hold, and a shortfall's ticket is one the harness

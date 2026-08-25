@@ -3251,8 +3251,10 @@ Close is **disabled until there is a note**, the way the shortfall's overrule is
 reason: the note is posted on the tracker as the closing comment and outlives this harness, so an
 empty one shuts somebody's ticket for a reason nobody can read. Draft a comment puts a server-composed
 placeholder _in the box_ to be edited — it posts nothing, and what lands on the ticket is whatever is
-sent with the verdict. Hold needs no note at all, because it decides nothing about the work: it drops
-the watch tag, the plan waits where it is, and watching the ticket again puts this same card back up.
+sent with the verdict. Hold takes a note optionally rather than requiring one — it decides nothing
+about the work, and its words are read by a planner rather than posted anywhere: it drops the watch
+tag and sends the plan back, so watching the ticket again produces a fresh plan instead of this one
+again.
 
 Approve / Reject appear only while the plan is `awaiting_approval`, and route through the same
 `decideProposal` the escalation card uses — one verdict, one implementation, so the rail's row clears

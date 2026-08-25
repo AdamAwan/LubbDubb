@@ -578,7 +578,7 @@ the first writes (`src/store/store.ts`):
 | Accept               | `ProposalDesk.accept` → `ActionExecutor.runAuthorized` → `releasePlan`: the plan becomes `active`, audited under `human:<proposal id>` as `authorized by you`.                                                                                     |
 | Reject               | `ProposalDesk.reject` → `refusePlan`, carrying the operator's note.                                                                                                                                                                                |
 | Close the ticket     | `ProposalDesk.backOut(id, 'close')` → `backOutOfPlan` → `declinePlan`: comment, close, un-watch, conclude, abandon. Below.                                                                                                                          |
-| Hold the ticket      | `ProposalDesk.backOut(id, 'hold')` → the watch tag comes off and nothing else moves. Below.                                                                                                                                                        |
+| Hold the ticket      | `ProposalDesk.backOut(id, 'hold')` → the watch tag comes off and the plan is refused, so watching it again gets a new one. Below.                                                                                                                   |
 | Replan               | `POST /api/plans/:id/replan` withdraws a pending proposal (below).                                                                                                                                                                                 |
 
 **What the ask says** is one template, a quoted block, and two appended paragraphs.
@@ -723,12 +723,21 @@ seen the plan and a "not doing this" with no account of what was considered read
 looked. It is **served and never posted**: nothing goes on the tracker but what the operator sends
 back with the verdict.
 
-**`hold` — this needs more thought.** The watch tag comes off, and that is the whole of it. Nothing
-is concluded, nothing is commented, nothing is abandoned, and the plan stays `awaiting_approval` with
-its parts exactly where they were. That is what makes it reversible: rule `plan-approval` asks about
-an **open, watched** issue, so an un-watched goal is put to nobody — and watching it again proposes
-the same plan afresh (`planProposalHold` holds on `pending` alone, so the settled verdict does not
-veto the new ask) rather than spending a planner on a decomposition that already exists.
+**`hold` — this needs more thought.** Two writes: the watch tag comes off, and the plan is
+**refused** — `refusePlan`, the same settlement Reject makes, so it goes to `planning` with the
+operator's words on its reason and its unstarted parts retired. Nothing is concluded and nothing is
+commented: a hold is not a verdict about the work, and the goal is not finished.
+
+The two halves are what make each other safe. A refusal alone would have rule `issue-plan` start a
+replan on the next pulse, which is the opposite of a hold; the tag being off is what stops it, since
+that rule dispatches for an **eligible** issue. So the refusal sits there costing nothing, and
+watching the ticket again is what starts a planner — and what comes back is a **new plan**, written
+in the light of why it was held.
+
+Parking the plan at `awaiting_approval` instead was the first shape of this and is the wrong one: a
+hold says the thinking is not finished, so re-proposing the *same* decomposition weeks later asks the
+operator to approve a plan written before whatever they were waiting on happened. The plan they get
+back should be one that knows about it.
 
 Neither verdict widens `ProposalStatus`. Both settle the row as `rejected`, because that is what
 happened to the *act* — the plan was not authorized — and what distinguishes them lives where it can

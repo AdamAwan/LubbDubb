@@ -393,7 +393,7 @@ export function EscalationCard({
               )}
               <AsyncButton
                 className="ghost"
-                title="Stops watching the ticket, so nothing is scheduled for it. The plan waits where it is — watch it again and this card comes back."
+                title="Stops watching the ticket and sends this plan back. Nothing is scheduled for it — watch it again and a fresh plan is written."
                 onClick={() => onBackOut!(backOutable.id, 'hold', text.trim() || undefined)}
               >
                 Hold — stop watching

@@ -481,42 +481,52 @@ test('closing the ticket stops the goal for good, and says so on the ticket', as
   system.store.close();
 });
 
-test('holding the ticket only stops the watching, so watching it again asks afresh', async () => {
+test('holding the ticket stops the watching and sends the plan back, so it is planned afresh', async () => {
   const { system } = plannedSystem({ labelPrefix: 'lubbdubb' });
   await system.harness.runCycle('manual');
   const proposal = system.store.listProposals()[0]!;
 
   const held = await system.proposals.backOut(proposal.id, 'hold', 'Needs a product call first.');
   assert.match(held!.detail, /dropped the watch tag on 1 item\(s\)/);
-  // Nothing is concluded, nothing is abandoned and nothing is commented: the
-  // operator said "not yet", which is not a verdict about the work at all.
+  // The plan is refused rather than parked: a hold says the thinking is not
+  // finished, and re-proposing the same decomposition weeks later would ask the
+  // operator to approve a plan written before whatever they were waiting on.
   const plan = system.store.getPlanByOrigin('issue:12')!;
-  assert.equal(plan.status, 'awaiting_approval');
-  assert.equal(system.store.getIssueConclusion('issue:12'), null);
-  assert.doesNotMatch(held!.detail, /closed #12/);
+  assert.equal(plan.status, 'planning');
+  assert.match(plan.reason!, /Schema first\./, "the planner's own reasoning is what is being amended");
+  assert.match(plan.reason!, /Needs a product call first/);
   assert.deepEqual(
     system.store.listPlanParts(plan.id).map((p) => p.status),
-    ['ready', 'ready'],
-    'the parts are exactly where they were — a hold withdraws nothing',
+    ['retired', 'retired'],
+    'parts nothing started are retired, exactly as a refusal retires them',
   );
+  // Nothing is concluded and nothing is said on the ticket — a hold is not a
+  // verdict about the work, and the goal is not finished.
+  assert.equal(system.store.getIssueConclusion('issue:12'), null);
+  assert.doesNotMatch(held!.detail, /closed #12/);
+  assert.doesNotMatch(held!.detail, /commented on #12/);
   const issue = system.store.getWorldBaseline()!.issues.find((i) => i.number === 12)!;
   assert.equal(issue.state, 'open');
   assert.deepEqual(issue.labels, []);
 
-  // Un-watched, the pulse asks nobody about it.
+  // Un-watched, the replan the refusal sets up costs nothing: rule `issue-plan`
+  // dispatches for an eligible issue, and this one is not one.
   await system.harness.runCycle('manual');
-  assert.equal(system.store.listProposals().length, 1);
+  await system.harness.runCycle('manual');
   assert.equal(system.store.listTasks().length, 0);
+  assert.equal(system.store.listProposals().length, 1);
 
-  // And watching it again puts the same plan back in front of the operator rather
-  // than spending a planner on the goal a second time — which is the whole reason
-  // a hold leaves the plan `awaiting_approval` and settles only the proposal.
+  // Watching it again is what starts a planner — and what it writes is a *new*
+  // plan, not this one put back up. That is the whole of the hold: the thinking
+  // resumes where the operator left it, rather than an old decomposition being
+  // re-proposed after whatever they were waiting on happened.
   await system.connector.setIssueLabel({ number: 12, label: 'lubbdubb-watch', present: true });
   await system.harness.runCycle('manual');
-  const asked = system.store.listProposals().filter((p) => p.status === 'pending');
-  assert.equal(asked.length, 1, 'the card comes back');
-  assert.equal(asked[0]!.ref, 'issue:12:plan');
-  assert.equal(system.store.getPlanByOrigin('issue:12')!.status, 'awaiting_approval');
+  assert.deepEqual(
+    system.store.listTasks().map((t) => t.originRef),
+    ['issue:12:plan'],
+  );
+  assert.equal(system.store.listProposals().filter((p) => p.status === 'pending').length, 0);
   system.store.close();
 });
 

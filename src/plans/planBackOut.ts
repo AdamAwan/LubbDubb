@@ -6,7 +6,7 @@ import type { Plan } from '../types.js';
 import { issueConclusionOrigin } from '../issueConclusion.js';
 import { watchCascadeTargets } from '../issueRelations.js';
 import { originIssueNumber } from './planning.js';
-import { declinePlan, planApprovalDetail } from './planApproval.js';
+import { declinePlan, planApprovalDetail, refusePlan } from './planApproval.js';
 import { watchLabelFor } from '../watchLabels.js';
 
 /**
@@ -27,10 +27,18 @@ import { watchLabelFor } from '../watchLabels.js';
  *   the provider can close it, the goal is concluded in the harness's own record so
  *   nothing picks it up again, and the plan is abandoned.
  * - **`hold`** — this needs more thought before anyone works it. Nothing is
- *   concluded, nothing is commented and nothing is abandoned: the watch tag comes
- *   off, which is the one shape in which "leave this alone" cannot be argued with.
- *   The plan stays `awaiting_approval`, so watching the ticket again puts the same
- *   card back in front of the operator rather than spending a planner on it afresh.
+ *   concluded and nothing is commented: the watch tag comes off, which is the one
+ *   shape in which "leave this alone" cannot be argued with, and the plan is
+ *   **refused** — `refusePlan`, the same settlement Reject makes, so it goes back
+ *   to `planning` with the operator's words on its reason and its unstarted parts
+ *   retired. Un-watched, `issue-plan` dispatches nothing, so the refusal sits
+ *   there costing nothing; watching the ticket again is what starts a planner, and
+ *   what comes back is a **new plan** written in the light of why it was held.
+ *
+ *   Leaving the plan `awaiting_approval` instead was the first shape of this, and
+ *   it is the wrong one: a hold says the thinking is not finished, and re-proposing
+ *   the *same* decomposition weeks later asks the operator to approve a plan
+ *   written before whatever they were waiting on happened.
  *
  * Both are settled through {@link ProposalDesk}, so the proposal's one-way
  * transition, the inbox item and the audit row are the ones every other verdict
@@ -80,9 +88,15 @@ export async function backOutOfPlan(
 
   const done: string[] = [];
 
+  // The plan first, either way: it is the harness's own record, it is what stops
+  // the fleet, and it is the only step that cannot fail on somebody else's network.
+  // The two verdicts differ in which settlement — a close ends the plan, a hold
+  // refuses it so the goal is planned afresh whenever it is picked back up.
+  if (verdict === 'hold') {
+    done.push(refusePlan(store, act.planId, act.originRef, note).detail);
+  }
+
   if (verdict === 'close') {
-    // The harness's own record first: it is what stops the re-pickup, and it is the
-    // only step that cannot fail on somebody else's network.
     const settled = declinePlan(store, act.planId, act.originRef, note);
     done.push(settled.detail);
     store.recordIssueConclusion({
@@ -95,8 +109,9 @@ export async function backOutOfPlan(
   }
 
   // The tag, both ways round: a closed ticket that kept the watch tag comes back
-  // the day somebody reopens it, and a held one has the tag as its whole
-  // mechanism. Written through the same cascade the cockpit's own toggle uses, so
+  // the day somebody reopens it, and on a hold it is the whole of what stops the
+  // replan the refusal above would otherwise have a planner start on the next
+  // pulse. Written through the same cascade the cockpit's own toggle uses, so
   // dropping a Feature drops the stories under it rather than leaving them tagged
   // and still worked.
   done.push(await unwatch(ctx, issueNumber));

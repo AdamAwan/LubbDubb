@@ -97,7 +97,7 @@ export function planApprovalNote(): string {
     `\n\nApprove and each part gets its own agent, branch and pull request, bottom of the stack first. Reject and ` +
     `the plan goes back to a planner with your reason — nothing is scheduled either way until a plan is approved. ` +
     `If the ticket itself is the problem rather than the plan, back out instead: close the ticket with a comment, ` +
-    `or hold it, which stops watching it and leaves this plan where it is until you watch it again.`
+    `or hold it, which stops watching it and sends this plan back — watch it again and a fresh plan is written for it.`
   );
 }
 

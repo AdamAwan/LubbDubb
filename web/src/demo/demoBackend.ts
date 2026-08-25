@@ -1328,9 +1328,9 @@ class DemoServer {
    *
    * Shown faithfully for `acceptProposal`'s reason: the whole point of the two
    * verdicts is what happens to the **ticket**, so closing one closes the demo
-   * issue and drops its watch tag, and holding one only drops the tag. A demo that
-   * flipped a proposal status and left the issue open would teach the opposite of
-   * what the buttons do.
+   * issue and drops its watch tag, and holding one drops the tag and sends the plan
+   * back. A demo that flipped a proposal status and left the issue open would teach
+   * the opposite of what the buttons do.
    */
   async backOutProposal(
     id: string,
@@ -1349,12 +1349,14 @@ class DemoServer {
       if (verdict === 'close') issue.state = 'closed';
     }
     const plan = this.state.plans?.find((p) => p.id === proposal.action.planId);
-    if (plan && verdict === 'close') plan.status = 'abandoned';
+    // A close ends the plan; a hold sends it back, so the goal is planned afresh
+    // whenever somebody watches the ticket again.
+    if (plan) plan.status = verdict === 'close' ? 'abandoned' : 'planning';
     const what = verdict === 'close' ? 'Closed the ticket' : 'Put the ticket on hold';
     const consequence =
       verdict === 'close'
         ? `commented on #${issueNumber}, closed it as not planned and abandoned its plan`
-        : `dropped the watch tag on #${issueNumber}; the plan waits where it is`;
+        : `dropped the watch tag on #${issueNumber} and sent the plan back — watching it again writes a fresh one`;
     const detail = `${what} by you${proposal.note ? `: ${proposal.note}` : ''} — nothing was scheduled; ${consequence} (${proposal.id}).`;
     this.addDecision(proposal.action.type, 'skipped', detail);
     this.dirty();
