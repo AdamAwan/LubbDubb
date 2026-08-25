@@ -110,6 +110,23 @@ test('console.css never targets a shared component’s class', () => {
   }
 });
 
+/**
+ * The same rule, at the one selector shape that gets past the check above. `.cn`
+ * *contains* nearly every shared component the cockpit embeds, so `.cn textarea`
+ * names no shared class and reaches all of them anyway — at (0,1,1), which outranks
+ * the single class each one styles itself with. There was one, and it was silently
+ * redrawing five components' note boxes and overriding the `rows` their callers
+ * chose. The console's own fields wear `.cn-in`, which reaches only what it is put
+ * on. → docs/spec/17-cockpit.md#fields
+ */
+test('console.css reaches no form control through .cn', () => {
+  const css = readFileSync(fileURLToPath(new URL('../web/src/console/console.css', import.meta.url)), 'utf8');
+  const offenders = [...css.matchAll(/^\s*(\.cn[\w-]*\s+(?:input|textarea|select|option)\b[^,{]*)/gm)].map((m) =>
+    m[1]!.trim(),
+  );
+  assert.deepEqual(offenders, [], 'a descendant element rule restyles the components the console embeds');
+});
+
 test('a dropped socket draws no gauge, no rail and no situation area', () => {
   const html = render(view({ connected: false }));
   assert.ok(html.includes('Off the air'));

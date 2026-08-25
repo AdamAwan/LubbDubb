@@ -350,7 +350,12 @@ function ParentAsk({
         </AsyncButton>
         {options.length > 0 && (
           <>
-            <select value={chosen} aria-label="A different parent" onChange={(e) => setChosen(e.currentTarget.value)}>
+            <select
+              className="cn-in"
+              value={chosen}
+              aria-label="A different parent"
+              onChange={(e) => setChosen(e.currentTarget.value)}
+            >
               <option value="">Choose another…</option>
               {options.map((o) => (
                 <option key={o.number} value={String(o.number)}>
@@ -424,6 +429,7 @@ function AreaPathAsk({
         {options.length > 0 && (
           <>
             <select
+              className="cn-in"
               value={chosen}
               aria-label="A different area path"
               onChange={(e) => setChosen(e.currentTarget.value)}
