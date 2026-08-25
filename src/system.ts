@@ -643,6 +643,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     argsRetentionDays: config.mcpArgsRetentionDays,
     claimMinutes: config.validation.desktopClaimMinutes,
     validationRoot: config.validationRoot,
+    // `goal_read` answers "has it reached hallway yet" off the operator's own list.
+    environments: config.environments,
     prRefStyle: prRefStyle(config.integrations.sourceControl),
     // Lazily, for `proposals`' reason: the runner is built further down, and both
     // this channel and the cockpit's panel must start *the same* run.

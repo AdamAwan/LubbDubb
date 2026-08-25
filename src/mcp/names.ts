@@ -206,6 +206,16 @@ export const ALLOWED_MCP_TOOLS: string[] = MCP_TOOL_NAMES.map((name) => `mcp__${
  * document schema they genuinely do share is one export
  * (`src/mcp/planDocumentSchema.ts`) rather than two literals.
  *
+ * `goal_read` is the one tool here that is *only* a read, and the only one whose
+ * answer is not about a next step: it is what the harness kept about a goal — the
+ * plan, the parts, the pull requests, the decisions the dispatcher took, what was
+ * escalated, what was concluded — handed over so the operator can ask a question
+ * about the work and get an answer from the record rather than from a session's
+ * reading of the repository. It is named `goal_read` and not `world_read`
+ * deliberately: the fleet's `world_read` answers a provider's view of one item,
+ * where this answers the harness's own history of a run, and one name over both
+ * would be the `validation_report` trap a third time.
+ *
  * `local_run` is the one tool here with no goal in it and nothing to write. It
  * answers "how does this project start on this machine", which is the question a
  * session has to settle before it can carry out most checks — and the reason it
@@ -216,6 +226,7 @@ export const ALLOWED_MCP_TOOLS: string[] = MCP_TOOL_NAMES.map((name) => `mcp__${
  * at the prompt to approve a call. Here somebody is, and it is their own machine.
  */
 export const DESKTOP_TOOL_NAMES = [
+  'goal_read',
   'validation_read',
   'validation_claim',
   'validation_report',

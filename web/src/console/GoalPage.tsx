@@ -22,7 +22,7 @@ import { renderRichText } from '../components/richText.js';
 import { issueTypeTone } from '../issueGroups.js';
 import { fmtUsd, relTime } from '../components/util.js';
 import { Ref } from '../components/refs.js';
-import { desktopDeepLink, localRunPrompt } from '../cockpit/desktopLink.js';
+import { askPrompt, desktopDeepLink, localRunPrompt } from '../cockpit/desktopLink.js';
 import { ValidationSection } from '../components/ValidationSection.js';
 import { watchBucket } from '../worldBuckets.js';
 import { stateColour } from '../stateColour.js';
@@ -218,6 +218,24 @@ function Header({
         </div>
       </div>
       <div className="cn-ghacts">
+        {/* The one control up here that changes nothing. It opens the operator's
+            own Claude Code on this goal with `/lubbdubb ask <n>` already in the
+            box, so a question about the work — what was done, which pull request,
+            is it on hallway yet — is a click from the goal rather than a cockpit
+            read joined to a repository read by hand. An anchor rather than a
+            button, as the other two deep links are: a deep link is a destination.
+            First in the row because it is the read, and everything after it acts.
+            The command is in the title as well as the href for `desktopPrompt`'s
+            reason — the link reaches only the machine this browser is on, and a
+            client that is not installed answers nothing at all, so an operator
+            reading the cockpit from another desk is left with the line to type. */}
+        <a
+          className="cn-tgl"
+          href={desktopDeepLink(config.desktopFolder, askPrompt(issue.number))}
+          title={`Opens your own Claude Code with "${askPrompt(issue.number).trim()}" ready for your question, answered from what the harness actually recorded about this goal — the plan, the pull requests, what was escalated, what it cost, and where the work has reached.`}
+        >
+          Ask ↗
+        </a>
         <button
           type="button"
           className={`cn-tgl ${watched === 'watched' ? 'cn-watch' : ''}`}

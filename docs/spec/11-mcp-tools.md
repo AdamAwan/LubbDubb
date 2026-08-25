@@ -704,26 +704,70 @@ load-bearing both ways:
 ## The desktop channel
 
 `src/mcp/desktop.ts`. A second socket, for the operator's **own** Claude Code rather than for a
-spawned agent. Three jobs go there: a validation check needing a browser and a login the fleet does
+spawned agent. Four jobs go there: a validation check needing a browser and a login the fleet does
 not have, run at their keyboard and reported onto the same row; a conversation about a plan, held
-where there is room to have one; and asking for the application itself to be brought up, which most
+where there is room to have one; asking for the application itself to be brought up, which most
 checks need before their first step is possible — the harness runs that one, so the tool asks rather
-than instructs ([23](23-local-runs.md#two-triggers-one-owner)). **Unconditional** — every start binds the stable socket, mints the
+than instructs ([23](23-local-runs.md#two-triggers-one-owner)); and
+[a question about a goal](#answering-a-question-about-a-goal), which is the only one of the four that
+settles nothing. **Unconditional** — every start binds the stable socket, mints the
 credential at `validation.desktopCredentialPath` (`0600`) and rewrites the skill at
 `validation.desktopSkillPath`, on a deployment that configured none of it. That footprint is the whole
-of what the channel costs a deployment that never uses it, and it is the price of the cockpit's three
+of what the channel costs a deployment that never uses it, and it is the price of the cockpit's four
 deep links reaching something. [20](20-validation.md#the-desktop-channel) owns the check behaviour
 and [the run](20-validation.md#getting-the-application-up);
-[08](08-planning.md#discussing-a-plan) owns the plan one.
+[08](08-planning.md#discussing-a-plan) owns the plan one;
+[Answering a question about a goal](#answering-a-question-about-a-goal) below owns the fourth.
 
 | Tool                | Purpose                                                                                               |
 | ------------------- | ----------------------------------------------------------------------------------------------------- |
+| `goal_read`         | The harness's whole record of one goal, for answering a question about it. Records nothing.           |
 | `validation_read`   | Read a goal's validation plan, or one check's full procedure. Records nothing.                        |
 | `validation_claim`  | Take the one check this session is about to run. One claim at a time, harness-wide.                   |
 | `validation_report` | Record what was seen: `passed`, `failed`, or `handback`. Reported against the claim, not an argument. |
 | `plan_read`         | Read a goal's delivery plan: the verdict, the parts and their slugs, the agenda. Records nothing.     |
 | `plan_amend`        | Rewrite it after talking it through. Refuses outside `awaiting_approval`; withdraws the stale card.   |
 | `local_run`         | The machine's dev environment: what is running, and — given a goal — start it on that goal's code.    |
+
+### Answering a question about a goal
+
+The other three jobs are steps in a piece of work. This one is a person wanting to understand one:
+_what did we actually do here, which pull request was it, why did it take four goes, is it on hallway
+yet._ Every one of those is answerable from rows the harness already holds, and before `goal_read`
+every one of them was answered by reading the cockpit, reading the repository, and joining the two by
+hand.
+
+`goal_read` takes a goal number and answers with the record. It is the widest read on either channel
+and that is what being a read buys: it settles nothing, schedules nothing and claims nothing, so the
+argument that fences every other tool on this socket — which check is this report about — has nothing
+to fence.
+
+**The history is the dossier the retrospective agent gets, through the same read and the same
+rendering.** `goalRecord` (`src/retro/record.ts`) is the one assembly of "what happened on this goal"
+and `retroDossier` is the one rendering of it; `goal_read` and the retrospective briefing in
+`src/executor/actionExecutor.ts` are its two callers. A second gather beside the first is the obvious
+way to build this — each caller wants a different shape — and what it produces is two answers to one
+question, free to disagree the next time the subtree predicate or the escalation matching changes.
+The reading is shared; the rendering is the caller's.
+
+**What rides beside the dossier is what the dossier does not carry, and only that**: the ticket's own
+text, the validation checks and their readings, where the work has reached in each environment, the
+retrospective if one was written, and the tail of the scratchpad. The plan, the parts, the pull
+requests, the decisions, the escalations, the claims, the cost and the verdicts are all in the
+dossier already, and a second rendering of any of them in the same reply would be two accounts of one
+row that the next change to either is free to separate.
+
+**An environment verdict is passed through three-valued.** The fold is `allGoalReach`
+([24](24-environments.md#the-lens)) — the cockpit's own, so an operator asking their Claude and an
+operator reading the panel get one answer — and `unknown` is never folded into `absent` on the way
+out. Both the tool's hand-back note and the skill's own section say what the distinction means,
+because the failure is a sentence: a session told `absent` reports in the operator's words that the
+work has not shipped, when what happened is that a probe could not answer.
+→ [24](24-environments.md#the-three-verdicts)
+
+**It refuses a number the harness holds nothing about** — no plan, no decisions, and absent from the
+last world snapshot. An empty account is what a typo produces far more often than a goal, and it
+reads exactly like a goal nothing has happened on yet.
 
 **`plan_amend` is deliberately not a second `plan_submit`.** They write the same document through the
 same `ingestPlanDocument`, and they share the schema as one export (`src/mcp/planDocumentSchema.ts`)

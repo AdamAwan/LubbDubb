@@ -850,9 +850,28 @@ tail**. Below that, the two stacks are one column.
 
 ### The header's controls
 
-Watch, the priority flag, the profile pin, the conclusion, raising a bug, the ticket, and ending the
-run.
+Ask, watch, the priority flag, the profile pin, the conclusion, raising a bug, the ticket, and ending
+the run.
 
+- **Ask** is the row's one control that writes nothing, and it is first for that reason: everything
+  after it acts on the goal, and this one only asks about it. An `<a>` carrying
+  `claude://code/new?q=/lubbdubb ask <n> &folder=<config.desktopFolder>`, built by the same
+  `desktopDeepLink` the plan sheet's **Discuss…** and the validation card's **Run it in Claude Code**
+  use ([20](20-validation.md#starting-a-run-from-the-cockpit)), so it opens the operator's own Claude
+  Code on the goal's checkout with the command already in the composer and the harness's whole record
+  of the goal one `goal_read` away ([11](11-mcp-tools.md#answering-a-question-about-a-goal)). It is
+  what the cockpit had no answer for before: a question about a goal — what was actually done, which
+  pull request, why four goes, is it on hallway yet — was answered by reading this page, reading the
+  repository, and joining the two by hand.
+  - **The question is not in the link.** The other three deep links start a job with one meaning, so
+    the whole command is prefilled; this one starts a conversation whose subject the operator has not
+    said yet, and `q` fills the composer without sending. What lands is `/lubbdubb ask 284` with the
+    cursor after it — the half they should not have to type — because there is no reading of a click
+    that says which question it was.
+  - **The command is in the title as well as the `href`**, the deep link's standing rule: the link
+    fires only on the machine the browser is on, and a client that is not installed answers nothing
+    at all, so an operator reading the cockpit from another desk is left with the line to type rather
+    than a control that did nothing.
 - **The watch toggle writes one tag.** `setIssueWatched` adds the watch label or takes it off, and
   the title says which — un-watching writes nothing in its place, so the goal lands back in the
   tickets tab's Unwatched filter rather than in a bucket of its own.
