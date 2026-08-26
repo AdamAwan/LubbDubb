@@ -198,17 +198,6 @@ export interface Place {
    */
   ticketView: 'table' | 'card';
   /**
-   * Which grammar the overview's panel rows are drawn in — the row as labelled
-   * facts, or the row as a claim with its evidence under it.
-   *
-   * A place rather than a `useState` or a setting for the reason every field here
-   * is one, and one more that is specific to it: the two are being *compared*, so
-   * "the same overview, drawn the other way" has to be a link somebody can send.
-   * It is temporary — it goes with the grammar that is not chosen.
-   * → `docs/spec/17-cockpit.md#the-row-grammar`
-   */
-  panelGrammar: 'facts' | 'columns';
-  /**
    * The board columns hidden from view — the **hidden** ones, not the shown ones.
    *
    * Inverted for `collapsed`'s reason: the default is the empty list and so a bare
@@ -281,7 +270,6 @@ export const NOWHERE: Place = {
   ticketOrder: 'added',
   ticketView: 'table',
   ticketColumns: [],
-  panelGrammar: 'facts',
 };
 
 const CONFIG_TABS: readonly ConfigTab[] = ['values', 'raw', 'ci', 'prompts', 'mcp', 'notifications', 'theme'];
@@ -356,7 +344,6 @@ const TICKET_TRACKING: readonly TicketTrackingFilter[] = ['any', 'live', 'frozen
 const TICKET_GROUP = ['feature', 'flat'] as const;
 const TICKET_ORDER: readonly TicketOrder[] = ['added', 'changed', 'cost'];
 const TICKET_VIEW: readonly Place['ticketView'][] = ['table', 'card'];
-const PANEL_GRAMMAR: readonly Place['panelGrammar'][] = ['facts', 'columns'];
 // Every member of `ConsolePanel` bar the ask, which carries its own parameter. A
 // panel missing from here is not merely unshareable: the place round-trips through
 // the query string, so an unlisted name is parsed straight back to null and the
@@ -457,7 +444,6 @@ export function readPlace(search: string): Place {
     ticketOrder: TICKET_ORDER.find((o) => o === param(query, 'order')) ?? 'added',
     ticketView: TICKET_VIEW.find((v) => v === param(query, 'view')) ?? 'table',
     ticketColumns: readStrings(param(query, 'hide')),
-    panelGrammar: PANEL_GRAMMAR.find((g) => g === param(query, 'grammar')) ?? 'facts',
   };
 }
 
@@ -702,7 +688,6 @@ export function placeQuery(place: Place): string {
   if (place.ticketColumns.length > 0) {
     query.set('hide', [...place.ticketColumns].sort((a, b) => a.localeCompare(b)).join(','));
   }
-  if (place.panelGrammar !== 'facts') query.set('grammar', place.panelGrammar);
   const encoded = query.toString();
   return encoded === '' ? '' : `?${encoded}`;
 }

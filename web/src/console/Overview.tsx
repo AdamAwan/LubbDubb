@@ -29,45 +29,11 @@ import { AgentOnIt } from '../components/AgentOnIt.js';
 export function Overview({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   return (
     <div className="cn-grid">
-      <GrammarSwitch view={view} actions={actions} />
       <Fleet view={view} actions={actions} />
       <GoalsInFlight view={view} actions={actions} />
       <Rack view={view} actions={actions} />
       <UpNext view={view} actions={actions} />
       <WorldSignals view={view} />
-    </div>
-  );
-}
-
-/**
- * The preview switch, while the row grammar is being chosen.
- *
- * It spans the grid above the cards because it is a statement about all five of
- * them, and it is drawn dashed because it is not part of the cockpit: it exists
- * to be looked at once, and it goes with the grammar that is not chosen. The
- * grammar itself is on the place, so a link carries whichever one the sender was
- * reading. → docs/spec/17-cockpit.md#the-row-grammar
- */
-function GrammarSwitch({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
-  return (
-    <div className="cn-grammar">
-      <b>Row grammar</b>
-      <span>
-        {view.panelGrammar === 'facts'
-          ? 'Every row is its title and its quantities, each said with what it is.'
-          : 'Every card is a table: the quantities become headings, and a row is cells.'}
-      </span>
-      <span className="cn-gap" />
-      {(['facts', 'columns'] as const).map((grammar) => (
-        <button
-          key={grammar}
-          type="button"
-          className={`cn-pill ${view.panelGrammar === grammar ? 'cn-on' : ''}`}
-          onClick={() => actions.setPanelGrammar(grammar)}
-        >
-          {grammar === 'facts' ? 'Facts' : 'Columns'}
-        </button>
-      ))}
     </div>
   );
 }
@@ -112,9 +78,6 @@ function Fleet({ view, actions }: { view: CockpitView; actions: CockpitActions }
       {view.live.length === 0 && desk.length === 0 && <p className="cn-empty">Nobody is out.</p>}
       {showEnded && ended.length === 0 && <p className="cn-empty">No shift has ended.</p>}
       <PanelRows
-        grammar={view.panelGrammar}
-        subject="Agent is on"
-        refsLabel="On"
         rows={[
           ...view.live.map((agent) => agentRow(agent, view, actions)),
           // Below the dispatched agents, because that is the order the harness
@@ -474,11 +437,7 @@ function GoalsInFlight({ view, actions }: { view: CockpitView; actions: CockpitA
         Goals in flight <i className="cn-n">{goals.length}</i>
       </h3>
       {goals.length === 0 && <p className="cn-empty">No goal is in flight.</p>}
-      <PanelRows
-        grammar={view.panelGrammar}
-        subject="Goal"
-        rows={goals.map((issue) => goalRow(issue, view, actions))}
-      />
+      <PanelRows rows={goals.map((issue) => goalRow(issue, view, actions))} />
     </section>
   );
 }
@@ -637,12 +596,7 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
         {merged !== null && <span className="cn-more">{merged} merged</span>}
       </h3>
       {open.length === 0 && <p className="cn-empty">No pull request is open.</p>}
-      <PanelRows
-        grammar={view.panelGrammar}
-        subject="Pull request"
-        refsLabel="Goal"
-        rows={open.map((pr) => prRow(pr, view, actions, watchLabel))}
-      />
+      <PanelRows rows={open.map((pr) => prRow(pr, view, actions, watchLabel))} />
     </section>
   );
 }
@@ -797,12 +751,7 @@ function UpNext({ view, actions }: { view: CockpitView; actions: CockpitActions 
         Up next <i className="cn-n">{items.length} queued</i>
       </h3>
       {items.length === 0 && <p className="cn-empty">Nothing is queued.</p>}
-      <PanelRows
-        grammar={view.panelGrammar}
-        subject="Dispatch"
-        refsLabel="On"
-        rows={items.map((item) => queueRow(item, view, actions))}
-      />
+      <PanelRows rows={items.map((item) => queueRow(item, view, actions))} />
     </section>
   );
 }
@@ -892,9 +841,6 @@ function WorldSignals({ view }: { view: CockpitView }): JSX.Element {
       </h3>
       {rows.length === 0 && <p className="cn-empty">The world has not moved.</p>}
       <PanelRows
-        grammar={view.panelGrammar}
-        subject="What happened"
-        refsLabel="Goal"
         rows={rows.map((row) => ({
           key: row.key,
           title: <RefText text={row.summary} />,

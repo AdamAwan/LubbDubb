@@ -118,13 +118,6 @@ export interface CockpitView {
   ticketOrder: TicketOrder;
   ticketView: 'table' | 'card';
   ticketColumns: string[];
-  /**
-   * How the overview's panel rows are drawn — labelled facts, or a claim with its
-   * evidence under it. Carried through the view model rather than read from the
-   * place in the card, so every surface reads one shape.
-   */
-  panelGrammar: 'facts' | 'columns';
-
   /** The agent whose drawer is open, if any. */
   selectedAgent: Agent | null;
   /** Streamed output for the open drawer only; undefined for everyone else. */
@@ -349,7 +342,6 @@ interface ViewInputs {
   ticketView?: 'table' | 'card';
   ticketColumns?: string[];
   /** Optional for `collapsed`'s reason: the default is what a bare URL means. */
-  panelGrammar?: 'facts' | 'columns';
 }
 
 function groupByAgent<T extends { agentId: string }>(rows: readonly T[] | undefined): Map<string, T[]> {
@@ -418,7 +410,6 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     ticketOrder: input.ticketOrder ?? 'added',
     ticketView: input.ticketView ?? 'table',
     ticketColumns: input.ticketColumns ?? [],
-    panelGrammar: input.panelGrammar ?? 'facts',
 
     selectedAgent: state.agents.find((a) => a.id === selected) ?? null,
     selectedOutput: selected ? input.liveOutput.get(selected) : undefined,

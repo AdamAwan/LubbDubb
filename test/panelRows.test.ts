@@ -7,7 +7,6 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { buildViewModel } from '../web/src/view/viewModel.js';
 import type { CockpitView } from '../web/src/view/viewModel.js';
 import type { CockpitActions } from '../web/src/cockpit/actions.js';
-import { NOWHERE, placeQuery, readPlace } from '../web/src/cockpit/place.js';
 
 // `tsx` compiles JSX with the classic runtime, which emits bare
 // `React.createElement`; the console's own modules are loaded after this so they
@@ -28,7 +27,7 @@ const { goalIssue } = await import('../web/src/view/goalPage.js');
  * `view.state` alone would leave every one of them answering about the world it
  * was built from, and its assertions would be about nothing.
  */
-function view(grammar: 'facts' | 'columns', over: Partial<CockpitView['state']> = {}): CockpitView {
+function view(over: Partial<CockpitView['state']> = {}): CockpitView {
   const state = { ...buildDemoState().state, ...over };
   return buildViewModel({
     state,
@@ -49,7 +48,6 @@ function view(grammar: 'facts' | 'columns', over: Partial<CockpitView['state']> 
     selectedGoal: null,
     consolePanel: null,
     tab: 'overview',
-    panelGrammar: grammar,
   });
 }
 
@@ -60,7 +58,7 @@ const actions = new Proxy({}, { get: () => () => undefined }) as CockpitActions;
  * card puts its rows in is `cn-rows`, so a bare `cn-row` counts the container as
  * a row and hands the first assertion a chunk with no refs slot in it.
  */
-const ROW = /class="cn-(?:row|drow)[ "]/g;
+const ROW = /class="cn-row[ "]/g;
 
 /** The overview as the shell mounts it — references resolve against `RefLinks` or `<Ref>` throws. */
 const render = (v: CockpitView): string =>
@@ -74,25 +72,6 @@ const render = (v: CockpitView): string =>
   );
 
 /**
- * The two grammars are two readings of one model, so neither may drop a row.
- *
- * The failure this pins is the one a screenshot hides: a card that renders under
- * one grammar and silently short-lists under the other reads as a quiet fleet
- * rather than as a bug, on whichever grammar nobody was looking at.
- */
-test('both grammars draw the same cards and the same rows', () => {
-  const rows = (html: string): number => (html.match(ROW) ?? []).length;
-  const cards = (html: string): number => html.split('class="cn-card').length - 1;
-
-  const facts = render(view('facts'));
-  const columns = render(view('columns'));
-
-  assert.equal(cards(facts), cards(columns));
-  assert.equal(rows(facts), rows(columns));
-  assert.ok(rows(facts) > 10, 'the fixtures carry rows on every card — this test is about them');
-});
-
-/**
  * The rule the model exists to enforce, checked from the sharp end.
  *
  * A pull request row names a pull request, so it offers a way to one: before the
@@ -100,24 +79,20 @@ test('both grammars draw the same cards and the same rows', () => {
  * it read exactly like the rows that did not.
  */
 test('every pull-request row carries a way to the pull request it names', () => {
-  for (const grammar of ['facts', 'columns'] as const) {
-    const html = render(view(grammar));
-    const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('Up next'));
-    const rows = rack.split(ROW).slice(1);
-    assert.ok(rows.length > 0, `no pull-request rows rendered under ${grammar}`);
-    for (const row of rows) {
-      // `cn-refs` in the list grammar, `cn-drefs` in the table: the slot has a
-      // different shape in each and the same job in both.
-      const at = Math.max(row.indexOf('cn-refs'), row.indexOf('cn-drefs'));
-      assert.ok(at > 0, `a pull-request row has no refs slot at all under ${grammar}`);
-      const slot = row.slice(at);
-      // The number, not the token: `<Ref>` draws a reference the provider could
-      // not resolve as plain text on purpose, and the demo's fake provider
-      // resolves only some of them. What the row owes is the reference in the
-      // slot every card keeps them in — whether it became a link is the
-      // provider's answer and not this rule's.
-      assert.match(slot, /#\d+/, `a pull-request row's refs slot is empty under ${grammar}`);
-    }
+  const html = render(view());
+  const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('Up next'));
+  const rows = rack.split(ROW).slice(1);
+  assert.ok(rows.length > 0, 'no pull-request rows rendered');
+  for (const row of rows) {
+    const at = row.indexOf('cn-refs');
+    assert.ok(at > 0, 'a pull-request row has no refs slot at all');
+    const slot = row.slice(at);
+    // The number, not the token: `<Ref>` draws a reference the provider could not
+    // resolve as plain text on purpose, and the demo's fake provider resolves only
+    // some of them. What the row owes is the reference in the slot every card
+    // keeps them in — whether it became a link is the provider's answer and not
+    // this rule's.
+    assert.match(slot, /#\d+/, "a pull-request row's refs slot is empty");
   }
 });
 
@@ -130,17 +105,15 @@ test('every pull-request row carries a way to the pull request it names', () => 
  * can click and a keyboard user cannot reach at all.
  */
 test('the why marker holds prose, never a reference and never a control', () => {
-  for (const grammar of ['facts', 'columns'] as const) {
-    const html = render(view(grammar));
-    const tips = html
-      .split('class="cn-why-tip"')
-      .slice(1)
-      .map((part) => part.slice(0, part.indexOf('</span>')));
-    assert.ok(tips.length > 0, `no reason was drawn at all under ${grammar}`);
-    for (const tip of tips) {
-      assert.ok(!tip.includes('<a '), 'a reason must not carry a link');
-      assert.ok(!tip.includes('<button'), 'a reason must not carry a control');
-    }
+  const html = render(view());
+  const tips = html
+    .split('class="cn-why-tip"')
+    .slice(1)
+    .map((part) => part.slice(0, part.indexOf('</span>')));
+  assert.ok(tips.length > 0, 'no reason was drawn at all');
+  for (const tip of tips) {
+    assert.ok(!tip.includes('<a '), 'a reason must not carry a link');
+    assert.ok(!tip.includes('<button'), 'a reason must not carry a control');
   }
 });
 
@@ -155,7 +128,7 @@ test('the why marker holds prose, never a reference and never a control', () => 
  * with two similar rows does not show.
  */
 test('every row of a card sits on that card’s own grid', () => {
-  const html = render(view('facts'));
+  const html = render(view());
   // Per card, because the subject column differs between them: what has to agree
   // is the rows of one card, which is what "always look here" means on a page of
   // five different-shaped cards.
@@ -195,7 +168,7 @@ test('a fleet row wears the state it is in, and the strongest one it is in', () 
   assert.ok(live[0] && waiting, 'the fixtures must carry a live agent and a waiting one');
 
   const chips = (over: Partial<CockpitView['state']>): string[] => {
-    const html = render(view('facts', over));
+    const html = render(view(over));
     const fleet = html.slice(html.indexOf('Fleet'), html.indexOf('Goals in flight'));
     return [...fleet.matchAll(/cn-why-chip cn-t-(\w+)"[^>]*>([^<]+)</g)].map((m) => `${m[2]}:${m[1]}`);
   };
@@ -233,7 +206,7 @@ test('a fleet row wears the state it is in, and the strongest one it is in', () 
  */
 test('a pull-request row wears the court the server put it in', () => {
   const state = buildDemoState().state;
-  const html = render(view('facts'));
+  const html = render(view());
   const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('Up next'));
   const rows = rack.split(ROW).slice(1);
   assert.equal(rows.length, state.world.pullRequests.length, 'every open pull request is drawn');
@@ -279,7 +252,7 @@ test('a pull-request row draws the agent on its branch instead of its checks', (
     return found.slice(0, found.indexOf('cn-refs'));
   };
 
-  const html = render(view('facts'));
+  const html = render(view());
   for (const pr of staffed) {
     const row = rowFor(html, pr.title);
     assert.match(row, /cn-onit/, `#${pr.number} has an agent on its branch and does not say so`);
@@ -289,7 +262,7 @@ test('a pull-request row draws the agent on its branch instead of its checks', (
   // Every agent ended: the checks are the truest reading again, and the marker
   // is gone from every row.
   const quiet = render(
-    view('facts', { agents: state.agents.map((a) => ({ ...a, endedAt: a.endedAt ?? new Date().toISOString() })) }),
+    view({ agents: state.agents.map((a) => ({ ...a, endedAt: a.endedAt ?? new Date().toISOString() })) }),
   );
   assert.ok(!quiet.includes('cn-onit'), 'a finished agent still holds a pull request');
   for (const pr of staffed) assert.match(rowFor(quiet, pr.title), /cn-cd/, `#${pr.number} lost its checks`);
@@ -305,7 +278,7 @@ test('a pull-request row draws the agent on its branch instead of its checks', (
  */
 test('a goal row wears its pickup verdict in words, not as an enum', () => {
   const state = buildDemoState().state;
-  const html = render(view('facts'));
+  const html = render(view());
   const card = html.slice(html.indexOf('Goals in flight'), html.indexOf('Pull requests'));
   const rows = card.split(ROW).slice(1);
   assert.ok(rows.length > 0, 'the fixtures must put a goal in flight');
@@ -336,7 +309,7 @@ test('a goal row says so while an agent is on it', () => {
   const state = buildDemoState().state;
   const card = (html: string): string => html.slice(html.indexOf('Goals in flight'), html.indexOf('Pull requests'));
 
-  const html = render(view('facts'));
+  const html = render(view());
   const rows = card(html).split(ROW).slice(1);
   const staffed = rows.filter((row) => row.includes('cn-onit'));
   assert.ok(staffed.length > 0, 'the fixtures must put an agent on a goal whose origin is a pull request');
@@ -345,17 +318,7 @@ test('a goal row says so while an agent is on it', () => {
   // And it comes back: a marker that outlived its agent is a goal that looks
   // staffed forever, which is the one row nobody re-checks.
   const quiet = render(
-    view('facts', { agents: state.agents.map((a) => ({ ...a, endedAt: a.endedAt ?? new Date().toISOString() })) }),
+    view({ agents: state.agents.map((a) => ({ ...a, endedAt: a.endedAt ?? new Date().toISOString() })) }),
   );
   assert.ok(!card(quiet).includes('cn-onit'), 'a finished agent still holds a goal');
-});
-
-/** The grammar is a place, so both readings are a link somebody can send. */
-test('the row grammar round-trips through the query string', () => {
-  assert.equal(placeQuery(NOWHERE), '', 'the default grammar is a bare URL');
-  assert.equal(placeQuery({ ...NOWHERE, panelGrammar: 'columns' }), '?grammar=columns');
-  assert.equal(readPlace('?grammar=columns').panelGrammar, 'columns');
-  // An unknown value is the default rather than a blank overview — the same rule
-  // every other parameter here follows.
-  assert.equal(readPlace('?grammar=nonsense').panelGrammar, 'facts');
 });

@@ -152,15 +152,6 @@ interface RowFact {
 }
 
 /**
- * How a card is drawn. Two grammars over one model, chosen on the place so both
- * are reachable from a link while the choice between them is open.
- *
- * - `facts` — a list of rows; each row is its title and its labelled quantities.
- * - `columns` — a table; those labels become headings, and the row is cells.
- */
-type PanelGrammar = 'facts' | 'columns';
-
-/**
  * Which slots any of a card's rows fill.
  *
  * Read once per card and shared by both grammars, because both need the same
@@ -231,34 +222,20 @@ function gridTemplate(has: SlotsUsed): string {
 }
 
 /**
- * A card's rows, in whichever grammar the place asks for.
+ * A card's rows.
  *
- * The whole set rather than one row at a time, because `columns` cannot be drawn
- * a row at a time: its headings are the union of what the rows carry, so the
- * table has to see them together. Which is also the honest shape for `facts` —
- * "these rows belong to this card" is what both grammars are about.
+ * The whole set rather than one row at a time, because the rail is a fact about
+ * the card and not about any row on it: which slots exist is the union of what
+ * the rows carry, so they have to be seen together for an empty cell to mean
+ * *this row has no verdict* rather than *this row is shorter*.
  *
- * `subject` names the title column, because nothing can derive it: *what the
- * agent is on*, *title*, *dispatch* and *what happened* are the same slot on four
- * cards and four different questions. `refsLabel` is the same argument one column
- * further right, and is where the `columns` grammar earns its keep — a heading is
- * a stronger answer to "where is the way there" than any convention.
+ * The card named its own subject and refs columns while it was also drawn as a
+ * table — `subject` and `refsLabel`, the two things nothing could derive. Both are
+ * gone with the table: a heading nothing renders is a second description of every
+ * card, kept in step by nobody.
  */
-export function PanelRows({
-  rows,
-  grammar,
-  subject,
-  refsLabel,
-}: {
-  rows: readonly PanelRowModel[];
-  grammar: PanelGrammar;
-  subject: string;
-  refsLabel?: string;
-}): JSX.Element {
+export function PanelRows({ rows }: { rows: readonly PanelRowModel[] }): JSX.Element {
   const has = slotsUsed(rows);
-  if (grammar === 'columns') {
-    return <ColumnsTable rows={rows} has={has} subject={subject} refsLabel={refsLabel ?? 'Refs'} />;
-  }
   // On each row, never on the list: `.cn-rows` is a flex column, and
   // `grid-template-columns` on a flex container is inherited by nothing and
   // applies to nothing. It renders exactly as it did before — which is how this
@@ -308,109 +285,6 @@ function FactsRow({ row, has, columns }: { row: PanelRowModel; has: SlotsUsed; c
 }
 
 /**
- * The card as a table: the facts' labels become headings, and a row is cells.
- *
- * Nothing extra is declared to get here. The columns are the union of the labels
- * the rows already carry, in the order they first appear, plus the fixed slots —
- * so a card that says `branch` and `checks` in its facts gets those two headings,
- * and a card that says `kind` and `when` gets those. That is what keeps this a
- * second reading of one model rather than a second description of every card.
- *
- * A slot no row fills draws no column at all, which is this grammar's whole
- * difference from a fixed row of slots: alignment here is *within* a card,
- * guaranteed by the card's own headings, rather than across the page.
- */
-function ColumnsTable({
-  rows,
-  has,
-  subject,
-  refsLabel,
-}: {
-  rows: readonly PanelRowModel[];
-  has: SlotsUsed;
-  subject: string;
-  refsLabel: string;
-}): JSX.Element {
-  const factLabels = factColumns(rows);
-  return (
-    <div className="cn-dscroll">
-      <table className="cn-dtable">
-        <thead>
-          <tr>
-            {has.lamp && <th className="cn-dlamp" />}
-            {has.toggle && <th className="cn-dlamp" />}
-            <th>{subject}</th>
-            {factLabels.map((label) => (
-              <th key={label}>{label}</th>
-            ))}
-            {/* The graphical reading, the verdict and the control head nothing: a
-                heading over a CI ladder or a watch toggle names the obvious, and
-                buys a column of ink for it. */}
-            {has.why && <th className={has.whyLabel ? undefined : 'cn-dwhy'}>{has.whyLabel ? 'State' : 'Why'}</th>}
-            {has.reading && <th />}
-            {has.chips && <th />}
-            {has.action && <th />}
-            {has.refs && <th className="cn-drefs">{refsLabel}</th>}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => {
-            const byLabel = new Map((row.facts ?? []).map((fact) => [fact.label, fact]));
-            return (
-              <tr key={row.key} className={rowClass(row, 'cn-drow')} title={row.hint}>
-                {has.lamp && <td className="cn-dlamp">{row.lamp}</td>}
-                {has.toggle && <td className="cn-dlamp">{row.toggle}</td>}
-                <td className="cn-dsubject">
-                  <Subject row={row} facts={false} />
-                </td>
-                {factLabels.map((label) => {
-                  const fact = byLabel.get(label);
-                  return (
-                    <td key={label} className={`cn-dfact ${fact?.alarm === true ? 'cn-alarm' : ''}`}>
-                      {/* A row that does not carry this quantity draws the cell
-                          empty rather than borrowing the one beside it. */}
-                      {fact === undefined ? '' : fact.value}
-                    </td>
-                  );
-                })}
-                {has.why && (
-                  <td className={has.whyLabel ? undefined : 'cn-dwhy'}>
-                    <Why row={row} />
-                  </td>
-                )}
-                {has.reading && <td>{row.reading}</td>}
-                {has.chips && <td>{row.chips}</td>}
-                {has.action && <td>{row.action}</td>}
-                {has.refs && <td className="cn-drefs">{row.refs}</td>}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-/**
- * The card's fact columns: every label its rows use, in the order they first
- * appear.
- *
- * First-seen rather than sorted, so the columns read in the order the card's own
- * builder states them — and a fact only some rows carry (a cost on a stream
- * agent, a `times` on a repeated signal) still gets a column, rather than being
- * dropped for the rows that do have it.
- */
-function factColumns(rows: readonly PanelRowModel[]): string[] {
-  const seen: string[] = [];
-  for (const row of rows) {
-    for (const fact of row.facts ?? []) {
-      if (!seen.includes(fact.label)) seen.push(fact.label);
-    }
-  }
-  return seen;
-}
-
-/**
  * The name, and — in the `facts` grammar — the quantities under it.
  *
  * A `button` exactly when the row opens something, so a row that offers a way in
@@ -418,11 +292,11 @@ function factColumns(rows: readonly PanelRowModel[]): string[] {
  * outside it either way, which is the one rule a call site could otherwise get
  * wrong.
  */
-function Subject({ row, facts = true }: { row: PanelRowModel; facts?: boolean }): JSX.Element {
+function Subject({ row }: { row: PanelRowModel }): JSX.Element {
   const inner = (
     <>
       <b className="cn-name">{row.title}</b>
-      {facts && <Facts facts={row.facts} />}
+      <Facts facts={row.facts} />
     </>
   );
   return row.open === undefined ? (

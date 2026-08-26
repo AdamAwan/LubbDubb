@@ -1330,7 +1330,7 @@ that agent's transcript, and it is drawn from `agentOnBranch` — the two-hop jo
 `taskId` to its task's branch, derived once in the view model because a card doing it itself is a card
 that will do it slightly differently. **Live agents only**: a finished agent's branch is history, and a
 marker that outlived it would be a pull request that looks staffed forever, which is the one row
-nobody re-checks. The moment the agent ends, the checks come back. → `test/panelGrammar.test.ts`
+nobody re-checks. The moment the agent ends, the checks come back. → `test/panelRows.test.ts`
 
 **A failing check's dot is red.** It was `--cn-inert` — the grey the token block calls _deliberately
 not a verdict_ — on the reasoning that a red check the harness is already dispatching on is not your
@@ -1444,8 +1444,7 @@ being forgotten:
   scanning a card nothing until they hover every row. Where a card has a word for what is going on —
   the Fleet card does — the marker wears it and the sentence is the detail behind it. The word is
   drawn as the cockpit's own chip, in the tone the state deserves: `ask` red, `hold` amber, `quiet`
-  neither. The column widens to `--cn-w-state` on a card that uses words, and the `columns` grammar
-  heads it **State** rather than **Why**.
+  neither. The column widens to `--cn-w-state` on a card that uses words.
 
   **The Fleet card's four states are ranked, not merged**, because they are read from four different
   facts and an agent can be in more than one: an open escalation naming the agent (`question`, and it
@@ -1463,7 +1462,7 @@ being forgotten:
   reasons in a `title`, one column apart — two hovers over one sentence, and a state column that said
   nothing. `you` is the only `ask`; `stalled` and `unwatched` are `hold`, because nothing is going to
   happen to either on its own. The chip is gone from the overview and stays on the goal page, where
-  there is no state column to put it in. → `test/panelGrammar.test.ts`
+  there is no state column to put it in. → `test/panelRows.test.ts`
 
   **The Goals in flight card's word is `pickup.status`, in the operator's words.** Same shape as the
   rack's, one card up: the verdict was a `pickup` fact with a bare `?` beside it holding
@@ -1476,7 +1475,7 @@ being forgotten:
   rather than to a blank. `escalated` is the only `ask` — the one status parked on a person by design;
   `unwatched`, `blocked`, `cooldown` and `appraisal` are `hold`, the harness stopped and waiting on
   something. The tone is about whether the row wants anything, never about how far along it is.
-  → `test/panelGrammar.test.ts`
+  → `test/panelRows.test.ts`
 
   **The Up next card's word is `QueueStatus`** — `dispatching`, or the named reason it is not:
   `cooldown`, `capped`, `unapproved`, `superseded`, `waiting`. Third card with the same fix: the
@@ -1515,40 +1514,26 @@ being forgotten:
   used to be the only one and was the row's least useful fact: the title says what the work is and the
   refs say where it is.
 
-The model has **two renderings**, because the layout was worth settling separately from the rule:
-
-| Grammar   | The card is                   | Drawn as                                                                                |
-| --------- | ----------------------------- | --------------------------------------------------------------------------------------- |
-| `facts`   | a list of rows                | one line each on a fixed rail: lamp, switch, subject, why, reading, chips, action, refs |
-| `columns` | a table with its own headings | a cell each; the fact labels **are** the headings, plus `Why` and the refs column       |
-
-Both put the same slots in the same order, and both hold a slot open on every row of a card where any
-row fills it — the census is one function, `slotsUsed`, read once per card and shared. In `facts` that
-census becomes a `grid-template-columns` the card sets once, so a slot has a fixed **position** and not
-merely an order: packed as a flex line, the fleet card's verdict sat where the rack's control did and
+The card draws its rows as **one line each on a fixed rail**: lamp, switch, subject, why, reading,
+chips, action, refs. A slot is held open on every row of a card where _any_ row fills it — the census is
+one function, `slotsUsed`, read once per card — which is what makes a slot a fixed **position** and not
+merely an order. Packed as a flex line, the fleet card's verdict sat where the rack's control did and
 every row shifted when the row above it grew a chip, which is why "always look here" had only ever been
-true of the refs group. An empty cell in a column that exists says _this row has no verdict_; a closed-up
-gap says nothing and moves everything after it. The rail's widths are `--cn-w-*` on `.cn-rows`, stated
-once for every card.
+true of the refs group. An empty cell in a column that exists says _this row has no verdict_; a
+closed-up gap says nothing and moves everything after it. The census becomes a `grid-template-columns`
+the card sets once, off the `--cn-w-*` widths stated once for every card.
 
-`columns` declares nothing extra. Its headings are the union of the `facts` labels its rows already
-carry, in first-seen order, so a card saying `comments` and `waiting` gets those two columns and one
-saying `kind` and `when` gets those — which is what keeps it a second reading of one model rather than
-a second description of every card. What a card _does_ name is its subject column (`Agent is on`,
-`Goal`, `Pull request`, `Dispatch`, `What happened`) and its refs column (`On`, `Goal`), because
-nothing can derive either — and the named refs column is where this grammar earns its keep: a heading
-is a stronger answer to "where is the way there" than any convention. The graphical reading, the
-verdict and the control head nothing; a heading over a CI ladder names the obvious.
+**There was a second rendering, and it lost.** `columns` drew the card as a table whose headings were
+the union of the `facts` labels its rows carried, with each card naming its own subject and refs
+columns (`Agent is on`, `Dispatch`, `On`); a preview switch on `Place.panelGrammar` spanned the grid so
+both were a link somebody could send while the choice was open. It was a fair second reading of one
+model — but alignment inside a card is a weaker thing than alignment across the page, and a
+seven-column card did not fit the overview's two-up width, so it scrolled sideways. The switch, the
+place field, the table and the per-card heading names all went together; what stayed is the model,
+which is what the exercise was for. Do not reintroduce a per-card layout choice: two ways to draw a
+card is the drift `PanelRowModel` exists to end, one level up.
 
-Its cost is drawn rather than hidden: a seven-column card does not fit the overview's two-up width, so
-the card scrolls sideways. Alignment is _within_ a card, guaranteed by its own headings, and never
-across the page — which is the trade against a fixed row of slots.
-
-Which one is live is on `Place.panelGrammar`, `?grammar=columns`, so both are a link somebody can send
-while the choice between them is open — and a preview switch spans the top of the grid. **Both are
-temporary in that sense**: the switch and the losing grammar go together once one is chosen, and what
-stays is the model. `test/panelGrammar.test.ts` holds the two to the same cards and the same rows, and
-pins the prose-only rule on the marker.
+`test/panelRows.test.ts` holds the rail to one grid per card and pins the prose-only rule on the marker.
 
 - **Goals in flight** carries the **furthest environment** holding a goal whole, where any is —
   last-declared in the operator's list, since that list is the order the work travels in. `partial`
@@ -1600,7 +1585,7 @@ pins the prose-only rule on the marker.
   not off the parts: an agent's origin is a pull request as often as the goal itself, so a reading that
   only understood `issue:<n>` would say nothing is happening on every goal whose work has reached a
   pull request — most of the ones being worked, and indistinguishable from a quiet fleet.
-  → `test/panelGrammar.test.ts`
+  → `test/panelRows.test.ts`
   The track's four colours carry their key in the **hover**: a legend would cost more room than the
   bar, and four tones with nothing to read them against is a reading only somebody who has read the
   source can take.
