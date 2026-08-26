@@ -13,7 +13,7 @@ export const JOB_SCHEDULE_COLUMNS: ColumnMigrations = {
 };
 
 /**
- * The `job_schedules` table: recurring blueprints, and how far through each
+ * The `job_schedules` table: recurring briefs, and how far through each
  * recurrence the harness has got.
  *
  * The store holds **when**, never **whether** — no query here asks the clock.

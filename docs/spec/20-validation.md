@@ -787,14 +787,19 @@ changes five readings:
   off "plug the cable in" is the friction that gets the whole flag ignored. The harness's own
   settlement, when it observes the ticket closed, is unaffected: that is not an operator deciding to
   move on, and a guard in the store would either stop the sweep or make its resolution the excuse.
+  **`POST /api/human-tasks/:id/close-ticket` refuses on the same condition**, because the flag is
+  about the goal rather than about which verb settles the row — a button that closed the item in
+  silence would be the way around the rule.
+  → [13](13-jobs-and-tickets.md#the-step-after-the-launch-the-close-out)
 - **`POST /api/issues/:number/dismiss-run` refuses without a note**, kept on the run as
   `dismissNote`. The sharper of the two, because this is the button that ends the harness's run at a
   goal and it is one-way.
-- **Both controls ask for the sentence before they post**, which is what makes the two refusals above
+- **All three controls ask for the sentence before they post**, which is what makes the two refusals above
   something other than a control that does nothing. Neither used to: Done sent no note and had
   nowhere to type one, End the run sent none either, and the 400 reached a `catch` that dropped it
   and an unhandled rejection — so a rule stated as "it costs a sentence" arrived as a button that
-  swallowed clicks. The bench's Done reads `Done…` and opens the same box Decline uses; End the run
+  swallowed clicks. The bench's Done reads `Done…` and opens the same box Decline uses — and so does Close the
+  ticket…, one box for all three; End the run
   opens `EndRunModal` — on **every** goal now, because ending a run also kills the goal's agents and
   cancels its queued work ([16](16-http-api.md#post-apiissuesnumberdismiss-run)), so it confirms
   whether or not a plan is flagged. What the flag still decides is what happens _inside_ that modal:
@@ -921,7 +926,7 @@ what a plan withdrew — a surface that filtered them would leave a reader unabl
 was dropped from one that was never written. They stay on the **sheet**: what an amendment dropped is
 a fact about that plan, while the goal's card lists what is still to be checked.
 
-The goal page also carries the verdict as a chip beside the assay and the conclusion, inside neither —
+The goal page also carries the verdict as a chip beside the appraisal and the conclusion, inside neither —
 and that chip is a button, because the checks are now on the same page and a verdict you can act on
 should not be the one reading that goes nowhere.
 

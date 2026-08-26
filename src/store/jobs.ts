@@ -175,7 +175,7 @@ export class JobStore {
 
   /**
    * Every attachment the harness holds, newest ref last. One read for the whole
-   * cockpit snapshot: the strips are drawn per queued blueprint and per issue, and
+   * cockpit snapshot: the strips are drawn per queued brief and per issue, and
    * there are a handful of rows in total — a query per card would be a join the
    * browser does anyway.
    */
@@ -187,7 +187,7 @@ export class JobStore {
   }
 
   /**
-   * Forget what was attached to `targetRef` — a blueprint cancelled before it ran,
+   * Forget what was attached to `targetRef` — a brief cancelled before it ran,
    * the one case nothing downstream can want. Rows go first and the files after,
    * so an interrupted deletion leaves orphaned bytes rather than a row pointing at
    * a path that no longer resolves.

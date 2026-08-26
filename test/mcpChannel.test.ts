@@ -24,7 +24,7 @@ import { defaultSocketPath, McpBridgeServer } from '../src/mcp/server.js';
 import { parseWorldRef, readWorldItem, WORLD_READ_KINDS } from '../src/mcp/worldRead.js';
 import { parseItemRef } from '../src/mcp/findings.js';
 import { assessmentOrigin } from '../src/mcp/assessment.js';
-import { assayerOrigin } from '../src/mcp/goalAssay.js';
+import { appraiserOrigin } from '../src/mcp/goalAppraisal.js';
 import { conclusionOrigin } from '../src/issueConclusion.js';
 import { partConclusionOrigin } from '../src/mcp/partOutcome.js';
 import { planOriginIssue } from '../src/plans/planning.js';
@@ -1826,7 +1826,7 @@ test('every terminal tool tells the caller to print the done sentinel', async ()
 });
 
 test('the finish reminder states a condition rather than announcing the end', () => {
-  // A terminal tool's call is not itself "done" — an assayer, for one, has a
+  // A terminal tool's call is not itself "done" — an appraiser, for one, has a
   // scratchpad note to leave after it. Wording that read as "you are finished
   // now" would cut that short, so the reminder is conditional on the task.
   assert.ok(DONE_REMINDER.includes(DONE_SENTINEL), 'the reminder is built from the sentinel, never a second copy');
@@ -2054,16 +2054,16 @@ test('every origin fence points a refused caller at a tool that accepts it', () 
     conclude_work: (ref) => conclusionOrigin(ref).ok,
     conclude_part: (ref) => partConclusionOrigin(ref).ok,
     assess_issue: (ref) => assessmentOrigin(ref).ok,
-    assay_issue: (ref) => assayerOrigin(ref).ok,
+    appraise_issue: (ref) => appraiserOrigin(ref).ok,
     plan_submit: (ref) => planOriginIssue(ref) !== null,
   };
   const fences: [string, (ref: string) => { ok: boolean; error?: string }][] = [
     ['assess_issue', assessmentOrigin],
-    ['assay_issue', assayerOrigin],
+    ['appraise_issue', appraiserOrigin],
     ['conclude_work', conclusionOrigin],
     ['conclude_part', partConclusionOrigin],
   ];
-  const origins = ['issue:12', 'issue:12:plan', 'issue:12:part:schema', 'issue:12:assess', 'issue:12:assay'];
+  const origins = ['issue:12', 'issue:12:plan', 'issue:12:part:schema', 'issue:12:assess', 'issue:12:appraisal'];
 
   for (const [tool, fence] of fences) {
     for (const origin of origins) {

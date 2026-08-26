@@ -729,10 +729,10 @@ test('an unanswered profile proposal reaches the rail, not only the goal page', 
   const gated = (state: CockpitView['state']) => {
     const issue = state.world.issues.find((i) => `issue:${i.number}` === ref);
     assert.ok(issue, 'the fixture goal must be in the world');
-    issue.assay = {
+    issue.appraisal = {
       verdict: 'workable',
       summary: 'Three subsystems and an auth guard between them.',
-      by: 'assayer',
+      by: 'appraiser',
       decidedAt: new Date(Date.now() - 3600_000).toISOString(),
       commentRef: null,
       proposedProfile: 'deep',
@@ -743,7 +743,7 @@ test('an unanswered profile proposal reaches the rail, not only the goal page', 
 
   const html = decode(render(goalView(gated)));
   assert.ok(html.includes(KIND_LABEL.profile), 'the rail names the kind');
-  assert.ok(html.includes('The goal assay wants this run on “deep”'), 'and says what is being asked');
+  assert.ok(html.includes('The goal appraisal wants this run on “deep”'), 'and says what is being asked');
   assert.ok(html.includes('Use “deep”'), 'the band offers the proposal');
   assert.ok(html.includes('Leave it unpinned') || /Keep “/.test(html), 'and the way to keep what is standing');
 
@@ -1008,7 +1008,7 @@ test('a held goal is a way into the goal it names', () => {
   // the goal like every other row's.
   const v = view();
   const row = v.needsYou.find((n) => n.kind === 'intake');
-  assert.ok(row, 'the demo fixtures must carry a goal the assay refused');
+  assert.ok(row, 'the demo fixtures must carry a goal the appraisal refused');
   assert.equal(row.opens, 'goal', 'a held goal has a page, so the row opens it');
   assert.ok(decode(render(v)).includes(row.title), 'and the rail draws it');
 });
@@ -1249,7 +1249,7 @@ test('a goal row is a way into its page', () => {
 /**
  * The backlog's four groups became the tickets tab's watch filter (#351), and its
  * intake group became an ask on the queue rail. What the group *argued* — that an
- * `unclear` assay is the one intake reading that stops dispatch, so it must be
+ * `unclear` appraisal is the one intake reading that stops dispatch, so it must be
  * pulled out rather than greyed inside the watched rows — is what these assert,
  * one surface further along: it is pulled out onto the rail, where the operator
  * reads what is waiting on them, rather than onto a page they open to groom the
@@ -1259,18 +1259,18 @@ test('a goal row is a way into its page', () => {
  * so the arrangement those groups used to cover is tested against `featureBlocks`
  * in `test/issueGroups.test.ts` instead.
  */
-test('a goal the assay refused is raised on the rail, quoted whole, with its override under it', () => {
+test('a goal the appraisal refused is raised on the rail, quoted whole, with its override under it', () => {
   const v = view();
   const row = v.needsYou.find((n) => n.kind === 'intake');
-  assert.ok(row, 'the demo fixtures must carry a goal the assay refused');
-  const assay = v.state.world.issues.find((i) => `issue:${i.number}` === row.goalRef)?.assay;
-  assert.ok(assay);
+  assert.ok(row, 'the demo fixtures must carry a goal the appraisal refused');
+  const appraisal = v.state.world.issues.find((i) => `issue:${i.number}` === row.goalRef)?.appraisal;
+  assert.ok(appraisal);
 
   // The band the row opens, drawn in front rather than behind the rail: it is the
   // ask panel's body, and the same one the goal page draws.
   const decoded = decode(render({ ...v, consolePanel: { ask: row.id } }));
   assert.ok(decoded.includes('could not say this is workable'), 'the band names what is holding the work');
-  assert.ok(decoded.includes(assay.summary), 'the assayer’s own words are quoted, never reworded');
+  assert.ok(decoded.includes(appraisal.summary), 'the appraiser’s own words are quoted, never reworded');
   assert.ok(decoded.includes('Override → workable'), 'and the one button that unblocks it sits under them');
 });
 
@@ -1278,7 +1278,7 @@ test('a goal nothing is holding raises no intake row at all', () => {
   // A call-out is an exception being raised, and an exception nobody has is not a
   // heading, it is silence — the same rule the rail keeps for every other kind.
   const v = view();
-  const issues = v.state.world.issues.map((i) => ({ ...i, assay: null }));
+  const issues = v.state.world.issues.map((i) => ({ ...i, appraisal: null }));
   const cleared = buildNeedsYou({ ...v.state, world: { ...v.state.world, issues } });
   assert.equal(cleared.filter((r) => r.kind === 'intake').length, 0, 'no goal is held, so nothing claims one is');
 });

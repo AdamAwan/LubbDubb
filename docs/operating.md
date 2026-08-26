@@ -27,7 +27,7 @@ Everything below is what that means in practice.
 | Chase red CI                               | Each failing check is classified and worked, or held if it isn't ours   |
 | Write the change                           | An agent writes it; you read the plan and the delivered result          |
 | Decide what "done" means                   | **Still you.** Nothing else                                             |
-| Decide whether the goal was even clear     | **Still you**, when the assay says it isn't                             |
+| Decide whether the goal was even clear     | **Still you**, when the appraisal says it isn't                             |
 | Decide whether this may leave the building | **Still you.** No comment, merge or ticket goes out unauthorized        |
 
 The pattern is that **the harness owns the loop and you own the judgement**. Where a step needs a
@@ -43,7 +43,7 @@ Two ways to start one, converging on the same path:
 
 - **Write the ticket** in GitHub or Azure DevOps, tag it watched, and it enters the funnel on the next
   pulse.
-- **Type it into Launch** in the cockpit. With a tracker configured, a code blueprint is _filed as a
+- **Type it into Launch** in the cockpit. With a tracker configured, a code brief is _filed as a
   watched ticket_ and enters the same funnel — it is not coded straight off your prompt. That is
   deliberate: work started from a sentence you typed is then as recoverable, reviewable and reportable
   as work started from the tracker.
@@ -82,7 +82,7 @@ the code but not your last three weeks:
 - **Don't write the diff.** A ticket that dictates the implementation gets you a worse one than the
   agent would have found, and hides the fact that you had not decided the outcome.
 
-When you _know_ the assay is being precious and the goal is fine, the Backlog tab's intake group has
+When you _know_ the appraisal is being precious and the goal is fine, the Backlog tab's intake group has
 **Override → workable** beside the quoted refusal. Use it and move on; it is one click, and the
 override exists because you are allowed to be the one who knows.
 

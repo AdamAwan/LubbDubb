@@ -2,7 +2,7 @@ import { MCP_TOOL_NAMES, type McpToolName } from './names.js';
 import type { McpTool } from './protocol.js';
 import { retiredTools } from './retiredTools.js';
 import { buildToolContext, type McpIdentity, type McpToolDeps, type ToolFactory } from './tools/context.js';
-import { assayIssue } from './tools/assayIssue.js';
+import { appraiseIssue } from './tools/appraiseIssue.js';
 import { assessIssue } from './tools/assessIssue.js';
 import { concludePart } from './tools/concludePart.js';
 import { concludeWork } from './tools/concludeWork.js';
@@ -11,6 +11,7 @@ import { knowledgeAsk } from './tools/knowledgeAsk.js';
 import { linkTicket } from './tools/linkTicket.js';
 import { noteProgress } from './tools/noteProgress.js';
 import { openPr } from './tools/openPr.js';
+import { planNotNeeded } from './tools/planNotNeeded.js';
 import { planSubmit } from './tools/planSubmit.js';
 import { raise as raiseFact } from './tools/raise.js';
 import { reportRemedy } from './tools/reportRemedy.js';
@@ -42,6 +43,7 @@ import { worldRead } from './tools/worldRead.js';
  */
 const TOOLS: Record<McpToolName, ToolFactory> = {
   plan_submit: planSubmit,
+  plan_not_needed: planNotNeeded,
   escalate,
   world_read: worldRead,
   request_human_task: requestHumanTask,
@@ -51,7 +53,7 @@ const TOOLS: Record<McpToolName, ToolFactory> = {
   conclude_work: concludeWork,
   assess_issue: assessIssue,
   conclude_part: concludePart,
-  assay_issue: assayIssue,
+  appraise_issue: appraiseIssue,
   scratch_append: scratchAppend,
   scratch_read: scratchRead,
   retro_submit: retroSubmit,

@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { loadConfig } from '../src/config.js';
 import { buildSystem, type System } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
-import { goalFingerprint } from '../src/intake/assay.js';
+import { goalFingerprint } from '../src/intake/appraisal.js';
 import { githubRefUrl } from '../src/integrations/github/refUrl.js';
 import { buildRefUrls, issueCommentRef } from '../src/server/refUrls.js';
 import type { Issue } from '../src/types.js';
@@ -14,7 +14,7 @@ import type { CockpitState } from '../src/wire.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 // Issue #171 — the two comments the harness maintains on a ticket by itself: the
-// plan's status comment and the goal assay's refusal. Both are written without
+// plan's status comment and the goal appraisal's refusal. Both are written without
 // anyone authorising them (mechanical bookkeeping, deliberately not auto-send
 // gated), and both were invisible to the cockpit — the ref lived in the store and
 // nothing on `/api/state` said a comment existed, let alone where to read it.
@@ -97,25 +97,28 @@ test('the plan status comment ships as a canonical ref, never the provider id', 
   system.store.close?.();
 });
 
-test("the assay's refusal comment ships beside its verdict", async () => {
+test("the appraisal's refusal comment ships beside its verdict", async () => {
   const system = build();
   const issue = await withIssue(system);
-  system.store.recordAssay({
+  system.store.recordAppraisal({
     originRef: `issue:${ISSUE}`,
     verdict: 'unclear',
     summary: 'Name one behaviour that is wrong today.',
     goalRef: goalFingerprint(issue.title, issue.body),
-    by: 'assayer',
+    by: 'appraiser',
   });
 
   // Before the desk has spoken there is a verdict and no comment — the reading and
   // the way in are separate facts, and the second one is allowed to be missing.
   const asked = await snapshot(system);
-  assert.equal(asked.world.issues.find((i) => i.number === ISSUE)!.assay!.commentRef, null);
+  assert.equal(asked.world.issues.find((i) => i.number === ISSUE)!.appraisal!.commentRef, null);
 
-  system.store.setAssayComment(`issue:${ISSUE}`, '8402');
+  system.store.setAppraisalComment(`issue:${ISSUE}`, '8402');
   const answered = await snapshot(system);
-  assert.equal(answered.world.issues.find((i) => i.number === ISSUE)!.assay!.commentRef, `issue:${ISSUE}:comment:8402`);
+  assert.equal(
+    answered.world.issues.find((i) => i.number === ISSUE)!.appraisal!.commentRef,
+    `issue:${ISSUE}:comment:8402`,
+  );
   system.store.close?.();
 });
 
@@ -129,19 +132,19 @@ test('the refs the snapshot ships are the refs a provider can resolve', async ()
     reason: null,
   });
   system.store.setPlanStatusComment(plan.id, '8391');
-  system.store.recordAssay({
+  system.store.recordAppraisal({
     originRef: `issue:${ISSUE}`,
     verdict: 'unclear',
     summary: 'Name one behaviour that is wrong today.',
     goalRef: goalFingerprint(issue.title, issue.body),
-    by: 'assayer',
+    by: 'appraiser',
   });
-  system.store.setAssayComment(`issue:${ISSUE}`, '8402');
+  system.store.setAppraisalComment(`issue:${ISSUE}`, '8402');
 
   const snap = await snapshot(system);
   const shipped = [
     snap.plans[0]!.statusCommentRef!,
-    snap.world.issues.find((i) => i.number === ISSUE)!.assay!.commentRef!,
+    snap.world.issues.find((i) => i.number === ISSUE)!.appraisal!.commentRef!,
   ];
   // The `fake` connector resolves nothing, so the snapshot's own map is empty for
   // these — the cockpit draws no link, which is the documented degradation and not

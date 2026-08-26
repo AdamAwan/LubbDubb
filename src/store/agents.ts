@@ -305,7 +305,7 @@ export class AgentStore {
    * one row per path and newest first.
    *
    * **Scoped by the goal's subtree** — the `issue:<n>` root and its `:plan`,
-   * `:assay`, `:assess`, `:retro` and `:part:<slug>` arms, which is the
+   * `:appraisal`, `:assess`, `:retro` and `:part:<slug>` arms, which is the
    * population `padOriginFor` already resolves. Asked as a prefix rather than
    * re-derived from a second taxonomy, so this cannot drift from the pad's
    * membership. The ref is `issue:<n>`, so it carries no `LIKE` wildcards.

@@ -263,7 +263,7 @@ function Disclosure({
 
 /**
  * The goal itself, and the verdicts anyone has passed on it. Each chip quotes a
- * reading the server already made — the assay's own word with its summary in the
+ * reading the server already made — the appraisal's own word with its summary in the
  * title, the tracker's own workflow state — so nothing here is a second opinion.
  *
  * A null `spend` draws no reading at all. It means nothing was ever measured (a
@@ -342,12 +342,12 @@ function Header({
           on the track. What is left of them is one plain run at the end, which is
           the reading nothing else on the page states in one place. */}
       <div className="cn-ghmeta">
-        {issue.assay !== null && (
+        {issue.appraisal !== null && (
           <i
-            className={`cn-chip ${issue.assay.verdict === 'workable' ? 'cn-ok' : 'cn-stall'}`}
-            title={issue.assay.summary}
+            className={`cn-chip ${issue.appraisal.verdict === 'workable' ? 'cn-ok' : 'cn-stall'}`}
+            title={issue.appraisal.summary}
           >
-            Assay: {issue.assay.verdict}
+            Appraisal: {issue.appraisal.verdict}
           </i>
         )}
         {issue.conclusion.verdict !== 'undeclared' && (
@@ -917,7 +917,7 @@ function Part({
 }
 
 /**
- * The ticket as it stood at pickup — what a plan, an assay or an ask is judged
+ * The ticket as it stood at pickup — what a plan, an appraisal or an ask is judged
  * against.
  *
  * Through `renderRichText`, not `renderMarkdown`: Azure DevOps stores a

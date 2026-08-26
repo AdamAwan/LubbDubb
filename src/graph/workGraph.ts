@@ -288,7 +288,7 @@ export function foldWorkGraph(input: WorkGraphInput): WorkNodeObservation[] {
   // accounts for it.
   //
   // Arm B can only adopt a job that *produced a pull request an issue links to*,
-  // and a requeued assay, plan, retro or review-comment job opens none — so every
+  // and a requeued appraisal, plan, retro or review-comment job opens none — so every
   // one of them was emitted parentless forever, and stage 3 offered to file a
   // second tracker item for work an existing one already names. Not a stale row
   // that ages out: the condition is permanent, which is why the unrecorded list

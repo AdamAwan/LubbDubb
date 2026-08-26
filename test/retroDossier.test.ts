@@ -30,7 +30,7 @@ function bare(): RetroDossierInput {
     agentCount: 0,
     delivery: null,
     shortfall: null,
-    assay: null,
+    appraisal: null,
     conclusion: null,
     costUsd: null,
   };

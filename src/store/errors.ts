@@ -20,6 +20,25 @@ export class ErrorStore {
     return entry;
   }
 
+  /**
+   * Every fault recorded at or after `since`, oldest first.
+   *
+   * Unlimited where {@link listErrors} truncates, because the caller is counting
+   * rather than reading: a `LIMIT 100` on a count would answer "one hundred" for
+   * every fleet that had a bad week, and answer it confidently.
+   *
+   * **What it counts is the log as it stands, not every fault that happened.**
+   * {@link clearErrors} drops the whole table, so a cleared log is a fleet with no
+   * faults in the window — which is the reading, and the one thing anything
+   * publishing this has to say out loud.
+   */
+  listErrorsSince(since: string): ErrorLogEntry[] {
+    const rows = this.ctx.db
+      .prepare(`SELECT * FROM error_events WHERE created_at >= ? ORDER BY created_at ASC, rowid ASC`)
+      .all(since) as ErrorEventRow[];
+    return rows.map(rowToErrorEntry);
+  }
+
   listErrors(limit = 100): ErrorLogEntry[] {
     const rows = this.ctx.db
       .prepare(`SELECT * FROM error_events ORDER BY created_at DESC, rowid DESC LIMIT ?`)

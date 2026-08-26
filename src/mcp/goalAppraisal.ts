@@ -1,5 +1,5 @@
 /**
- * The `assay_issue` tool's pure layer: what a goal assay is allowed to be, and
+ * The `appraise_issue` tool's pure layer: what a goal appraisal is allowed to be, and
  * whose origin may cast one.
  *
  * Modelled on `assessment.ts` because the two are the same shape pointed at
@@ -13,12 +13,12 @@
 
 import { normalizeAreaPath } from '../intake/placement.js';
 
-/** What an assayer may conclude about a goal. */
-export const GOAL_ASSAY_VERDICTS = ['workable', 'unclear'] as const;
+/** What an appraiser may conclude about a goal. */
+export const GOAL_APPRAISAL_VERDICTS = ['workable', 'unclear'] as const;
 
-export type GoalAssayVerdictName = (typeof GOAL_ASSAY_VERDICTS)[number];
+export type GoalAppraisalVerdictName = (typeof GOAL_APPRAISAL_VERDICTS)[number];
 
-export const GOAL_ASSAY_VERDICT_HELP: Record<GoalAssayVerdictName, string> = {
+export const GOAL_APPRAISAL_VERDICT_HELP: Record<GoalAppraisalVerdictName, string> = {
   workable:
     'there is a goal here an agent could start from — you may not agree with it, and it may be large, ' +
     'but what is being asked for is identifiable against this repository. The harness proceeds exactly ' +
@@ -30,10 +30,10 @@ export const GOAL_ASSAY_VERDICT_HELP: Record<GoalAssayVerdictName, string> = {
 };
 
 /** Long enough to be prose, short of a pasted transcript. Matches the assessment cap. */
-const MAX_ASSAY_SUMMARY = 2000;
+const MAX_APPRAISAL_SUMMARY = 2000;
 
 /**
- * What the assayer is allowed to say about which profile a goal's work wants
+ * What the appraiser is allowed to say about which profile a goal's work wants
  * (issue #342), given the profiles this deployment actually configures.
  *
  * The names are the operator's own, handed to the agent by the tool rather than
@@ -46,14 +46,14 @@ const MAX_ASSAY_SUMMARY = 2000;
  * Empty for a deployment with no `agentModels` — and then nothing is asked and
  * nothing is refused for its absence, because there is no choice to make.
  */
-export function validateGoalAssay(
+export function validateGoalAppraisal(
   args: Record<string, unknown>,
   profiles: readonly string[] = [],
   areaPaths: readonly string[] = [],
 ):
   | {
       ok: true;
-      verdict: GoalAssayVerdictName;
+      verdict: GoalAppraisalVerdictName;
       summary: string;
       profile: string | null;
       parent: number | null;
@@ -61,12 +61,12 @@ export function validateGoalAssay(
     }
   | { ok: false; error: string } {
   const verdict = args.status;
-  if (typeof verdict !== 'string' || !GOAL_ASSAY_VERDICTS.includes(verdict as GoalAssayVerdictName)) {
+  if (typeof verdict !== 'string' || !GOAL_APPRAISAL_VERDICTS.includes(verdict as GoalAppraisalVerdictName)) {
     return {
       ok: false,
       error:
-        `status must be one of ${GOAL_ASSAY_VERDICTS.join(', ')}. ` +
-        GOAL_ASSAY_VERDICTS.map((v) => `${v}: ${GOAL_ASSAY_VERDICT_HELP[v]}`).join('. '),
+        `status must be one of ${GOAL_APPRAISAL_VERDICTS.join(', ')}. ` +
+        GOAL_APPRAISAL_VERDICTS.map((v) => `${v}: ${GOAL_APPRAISAL_VERDICT_HELP[v]}`).join('. '),
     };
   }
   const summary = typeof args.summary === 'string' ? args.summary.trim() : '';
@@ -80,10 +80,10 @@ export function validateGoalAssay(
         'visible before an agent acts on it.',
     };
   }
-  if (summary.length > MAX_ASSAY_SUMMARY) {
+  if (summary.length > MAX_APPRAISAL_SUMMARY) {
     return {
       ok: false,
-      error: `summary is too long (${summary.length} chars, max ${MAX_ASSAY_SUMMARY}). Summarise it.`,
+      error: `summary is too long (${summary.length} chars, max ${MAX_APPRAISAL_SUMMARY}). Summarise it.`,
     };
   }
   const named = verdict === 'workable' ? checkProfile(args.profile, profiles) : { ok: true as const, profile: null };
@@ -98,7 +98,7 @@ export function validateGoalAssay(
   if (!area.ok) return area;
   return {
     ok: true,
-    verdict: verdict as GoalAssayVerdictName,
+    verdict: verdict as GoalAppraisalVerdictName,
     summary,
     profile: named.profile,
     parent: parent.parent,
@@ -114,11 +114,11 @@ export function validateGoalAssay(
  * omission is indistinguishable from "the default is right" — an answer the
  * harness would then act on at the default's price. A parent is not like that:
  * most items already have one, the tool cannot see whether this one does, and an
- * argument required of every assay would make a proposal for an item that needs
+ * argument required of every appraisal would make a proposal for an item that needs
  * none the common case.
  *
  * Validated only for **shape**: a positive work item number.
- * The candidates the assayer picks from are the open containers already appended
+ * The candidates the appraiser picks from are the open containers already appended
  * to its prompt (`relatedWorkNote`), and they are a suggestion rather than a
  * closed set — a board is narrowed by tag and assignee, so the right container is
  * sometimes one the harness never listed. Refusing anything outside the list
@@ -147,7 +147,7 @@ function checkParent(value: unknown): { ok: true; parent: number | null } | { ok
  * project's tree exactly, and a plausible near-miss — the right team spelled the
  * wrong way, a node that was renamed last quarter — is not visibly wrong to
  * anyone until the write is refused. So the harness offers the tree and the
- * assayer picks from it.
+ * appraiser picks from it.
  *
  * Empty offer means this deployment has no tree the harness could read, and then
  * nothing is asked and nothing refused — the same shape an absent `agentModels`
@@ -209,9 +209,9 @@ function checkProfile(
 }
 
 /**
- * Resolve a task's origin into the issue it may assay — or say why it may not.
+ * Resolve a task's origin into the issue it may appraise — or say why it may not.
  *
- * **Only an assayer's own origin qualifies**, which is `assessmentOrigin`'s
+ * **Only an appraiser's own origin qualifies**, which is `assessmentOrigin`'s
  * discipline applied at the other end of the run: there, an agent that did the work
  * is refused because judging your own delivery is not an assessment; here, every
  * agent that is *doing* the work is refused because an agent already at work has
@@ -221,11 +221,11 @@ function checkProfile(
  * Refusing beats silently narrowing, for the reason `conclusionOrigin` gives: an
  * agent handed `{ok: true}` would believe it had parked the issue.
  */
-export function assayerOrigin(
+export function appraiserOrigin(
   originRef: string | null,
 ): { ok: true; originRef: string; issueOrigin: string } | { ok: false; error: string } {
   const ref = originRef ?? '';
-  const match = /^issue:(\d+):assay$/.exec(ref);
+  const match = /^issue:(\d+):appraisal$/.exec(ref);
   if (match) return { ok: true, originRef: ref, issueOrigin: `issue:${match[1]}` };
 
   const assessor = /^issue:(\d+):assess$/.exec(ref);
@@ -233,7 +233,7 @@ export function assayerOrigin(
     return {
       ok: false,
       error:
-        `assay_issue says whether issue #${assessor[1]}'s goal can be worked from at all, and you were ` +
+        `appraise_issue says whether issue #${assessor[1]}'s goal can be worked from at all, and you were ` +
         `dispatched to judge whether it was delivered. Cast your verdict with assess_issue instead.`,
     };
   }
@@ -245,7 +245,7 @@ export function assayerOrigin(
     return {
       ok: false,
       error:
-        `assay_issue is for an agent dispatched to judge whether issue #${planner[1]}'s goal can be acted ` +
+        `appraise_issue is for an agent dispatched to judge whether issue #${planner[1]}'s goal can be acted ` +
         `on at all, before any work starts, and you were dispatched to decompose it — which the harness ` +
         `only asks for once the goal has been read as workable. If it is unclear to you now that you are ` +
         `in it, escalate — that reaches a human who can answer you, where this would only park an issue ` +
@@ -257,7 +257,7 @@ export function assayerOrigin(
     return {
       ok: false,
       error:
-        `assay_issue is for an agent dispatched to judge whether issue #${working[1]}'s goal can be acted ` +
+        `appraise_issue is for an agent dispatched to judge whether issue #${working[1]}'s goal can be acted ` +
         `on, before any work starts, and you were dispatched to do the work. If the goal is unclear to ` +
         `you now that you are in it, escalate — that reaches a human who can answer you, where this would ` +
         `only park the issue you are already working.`,
@@ -266,8 +266,8 @@ export function assayerOrigin(
   return {
     ok: false,
     error:
-      `assay_issue says whether an issue's goal can be worked from, and this task's origin is ` +
-      `${ref || '(none)'}, which is not an issue assay. Only the agent dispatched to assay an issue casts ` +
+      `appraise_issue says whether an issue's goal can be worked from, and this task's origin is ` +
+      `${ref || '(none)'}, which is not an issue appraisal. Only the agent dispatched to appraise an issue casts ` +
       `this verdict.`,
   };
 }

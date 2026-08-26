@@ -18,6 +18,16 @@ export interface PrReplyInput {
   body: string;
 }
 
+export interface PrThreadResolveInput {
+  prNumber: number;
+  /**
+   * The review thread to mark resolved — the same id a reply is threaded under
+   * (`PrComment.id`), never a provider-native node id. Required: resolving is a
+   * verdict on one thread, and there is no such thing as resolving a pull request.
+   */
+  commentId: string;
+}
+
 export type MergeMethod = 'merge' | 'squash' | 'rebase';
 
 export interface PrMergeInput {
@@ -208,6 +218,26 @@ export interface SendResult {
 export interface ActionSink {
   /** Post a reply on a pull request. Throws if the send fails. */
   postPrReply(input: PrReplyInput): Promise<SendResult>;
+  /**
+   * Whether any configured integration can resolve a review thread at all.
+   *
+   * Asked rather than inferred, for {@link canCloseIssue}'s reason: an agent that
+   * says it dealt with a thread is told which happened, and a harness that could
+   * not resolve it must say so rather than let the agent believe the thread is
+   * shut when it is still open in front of the reviewer.
+   */
+  canResolvePrThread(): boolean;
+  /**
+   * Mark a review thread resolved — the verdict a reviewer would otherwise have to
+   * click themselves, now that the reply goes out through the harness rather than
+   * from the agent's own shell.
+   *
+   * Idempotent: a thread already resolved is a success. `ok: false` is "the
+   * provider has no such thread" — a root comment id that matches nothing, which
+   * is a stale reading rather than a fault — and throws when the provider has the
+   * operation and it failed.
+   */
+  resolvePrThread(input: PrThreadResolveInput): Promise<SendResult>;
   /** Merge a pull request (the last step of the issue → PR → merge loop). Throws if the merge fails. */
   mergePr(input: PrMergeInput): Promise<SendResult>;
   /** Add/remove a label on a PR — the operator's exclusion tag toggle. Throws if it fails. */

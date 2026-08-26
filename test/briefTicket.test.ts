@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildApp } from '../src/server/app.js';
 import { defaultPromptTemplates } from '../src/dispatcher/promptTemplates.js';
-import { blueprintTicketFields } from '../src/blueprintTicket.js';
+import { briefTicketFields } from '../src/briefTicket.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
@@ -13,13 +13,13 @@ import type { Job } from '../src/types.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 /**
- * An injected code **blueprint** enters the workflow through the same door as a
+ * An injected code **brief** enters the workflow through the same door as a
  * ticket (issue #198): when a tracker is configured, `POST /api/jobs` does not
  * dispatch it onto a branch but files a *watched* ticket, so it flows through the
  * planning funnel like any picked-up issue. The whole change is at route time —
  * rule `manual-job` is untouched.
  *
- * The one thing a finding-filed ticket does not need and a blueprint does: the
+ * The one thing a finding-filed ticket does not need and a brief does: the
  * issue must carry the effective `-watch` label, or the watch gate never picks it
  * up. That label is why the arm no longer spends a desk agent (issue #394): an
  * agent that forgot it left the item created, the filing shown complete, and
@@ -28,7 +28,7 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
  */
 
 function testConfig(overrides: Record<string, unknown> = {}) {
-  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-blueprint-'));
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-brief-'));
   return loadConfig({
     selfUpdate: { enabled: false } as never,
     auth: { enabled: false } as never,
@@ -60,12 +60,12 @@ function build(withTracker = true, configOverrides: Record<string, unknown> = {}
 // -- the pure half ------------------------------------------------------------
 
 test('the ticket body is the operator’s request, verbatim', () => {
-  const { title, vars } = blueprintTicketFields('Add a rate limiter to the ingest API\nit keeps falling over');
+  const { title, vars } = briefTicketFields('Add a rate limiter to the ingest API\nit keeps falling over');
   // The title is the request's first line — no "File ticket:" prefix any more,
   // because there is no queue entry for it to be recognisable in.
   assert.equal(title, 'Add a rate limiter to the ingest API');
 
-  const body = defaultPromptTemplates().render('blueprint-ticket-body', vars);
+  const body = defaultPromptTemplates().render('brief-ticket-body', vars);
   assert.match(body, /Add a rate limiter to the ingest API/);
   assert.match(body, /it keeps falling over/);
   // It is a ticket body, not a prompt: nothing in it instructs anybody, and the
@@ -77,7 +77,7 @@ test('the ticket body is the operator’s request, verbatim', () => {
 
 // -- the route ----------------------------------------------------------------
 
-test('a code blueprint with a tracker is filed as a watched ticket, not dispatched', async () => {
+test('a code brief with a tracker is filed as a watched ticket, not dispatched', async () => {
   const system = build();
   const { app } = await buildApp(system);
 
@@ -129,7 +129,7 @@ test('the operator’s title wins over the one derived from the request', async 
   assert.equal(world.issues.find((i) => `issue:${i.number}` === ticketRef)!.title, 'Speed up the ingest path');
 });
 
-test('a code blueprint with no tracker dispatches directly, as before', async () => {
+test('a code brief with no tracker dispatches directly, as before', async () => {
   const system = build(false); // fake issues provider — nowhere to file
   const { app } = await buildApp(system);
 
@@ -142,7 +142,7 @@ test('a code blueprint with no tracker dispatches directly, as before', async ()
   assert.equal(body.ticketRef, undefined);
 });
 
-test('a desk blueprint dispatches directly even when a tracker is configured', async () => {
+test('a desk brief dispatches directly even when a tracker is configured', async () => {
   const system = build(); // tracker configured
   const { app } = await buildApp(system);
 
@@ -153,7 +153,7 @@ test('a desk blueprint dispatches directly even when a tracker is configured', a
   });
   assert.equal(res.statusCode, 200);
   const body = res.json() as { job: Job; ticketRef?: string };
-  // A desk blueprint is already off the branch-cutting path; it is dispatched as
+  // A desk brief is already off the branch-cutting path; it is dispatched as
   // asked, on its own prompt, with no ticket filed in between.
   assert.equal(body.job.kind, 'desk');
   assert.equal(body.job.prompt, 'Write me a report on X');

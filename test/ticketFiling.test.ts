@@ -27,6 +27,10 @@ function sinkRecording(created: IssueCreateInput[], ref: string | null = 'issue:
     // A predicate rather than an act, so `unused` is the wrong shape: this test's
     // subject cannot reach it, and a throw would be a stub failing on a question.
     canCloseIssue: () => false,
+    canResolvePrThread: () => false,
+    resolvePrThread: (): never => {
+      throw new Error('resolvePrThread is not scripted in this test');
+    },
     closeIssue: (): never => {
       throw new Error('closeIssue is not scripted in this test');
     },
@@ -83,7 +87,7 @@ test('the filer resolves the type, the assignee and the relation from config and
   assert.equal(created[1]!.relatedTo, 12);
 });
 
-test('a blueprint’s watch label rides on the create, and an empty one is not a label', async () => {
+test('a brief’s watch label rides on the create, and an empty one is not a label', async () => {
   const created: IssueCreateInput[] = [];
   const file = ticketFiler(azure(), sinkRecording(created));
   await file({ title: 'Build X', body: 'the request', labels: ['lubbdubb-watch'] });

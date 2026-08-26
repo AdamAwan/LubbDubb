@@ -1,4 +1,4 @@
-import { stripSentinels } from './sentinels.js';
+import { DONE_SENTINEL, extractWaitingReason, stripSentinels } from './sentinels.js';
 
 /**
  * Turns the content blocks of a stream-JSON message into clean, labelled display
@@ -87,11 +87,13 @@ export function renderBlocks(blocks: ContentBlock[], at?: string): string {
   for (const b of blocks) {
     const when = stamp(b.at ?? at);
     if (b.type === 'text') {
-      const text = stripSentinels(b.text ?? '');
+      const raw = b.text ?? '';
+      const text = stripSentinels(raw);
       // Tool blocks close with a single newline, so prose following one would sit
       // flush against the last line of a result. Give it its own paragraph.
       if (text && out && !out.endsWith('\n\n')) out += '\n';
       out += text;
+      out += sentinelMarkers(raw, when);
     } else if (b.type === 'tool_use') {
       out += renderToolUse(b, when);
     } else if (b.type === 'tool_result') {
@@ -99,6 +101,40 @@ export function renderBlocks(blocks: ContentBlock[], at?: string): string {
     } else if (b.type === HUMAN_BLOCK) {
       out += renderHuman(b, when);
     }
+  }
+  return out;
+}
+
+/**
+ * The record that a status sentinel was **in** this block — the line that stands
+ * where the token was stripped out.
+ *
+ * A sentinel is removed so the protocol never leaks into the reading, and for a
+ * long time that left nothing at all: a turn announcing `done` and a turn that
+ * simply stopped were byte-identical on the glass. That is not a cosmetic gap. An
+ * operator who cannot see the announcement asks the agent whether it forgot to
+ * finish; the agent, which can only consult its own memory of the turn, answers
+ * that it did not and prints the token again — stripped again. Neither party can
+ * reach the one thing that would settle it, and the transcript that should be the
+ * record holds no evidence either way.
+ *
+ * Written from the **same bytes with the same helpers** {@link StreamJsonSession}
+ * judges the turn with, so the marker can never claim a sentinel the runtime did
+ * not see, nor stay silent about one it did. A `flag` gets no marker: it carries no
+ * status meaning and already surfaces as its own artifact in the cockpit, so it is
+ * the one sentinel whose disappearance from the text loses nothing.
+ *
+ * A block quoting the protocol while *explaining* it therefore marks too — which is
+ * correct, because detection reads that block the same way and the transcript's job
+ * here is to show what the runtime saw, not what the agent meant.
+ */
+function sentinelMarkers(raw: string, when: string): string {
+  let out = '';
+  if (raw.includes(DONE_SENTINEL)) out += `\n${prefix(when)}${GREEN}✓ announced done${RESET}\n`;
+  const reason = extractWaitingReason(raw);
+  if (reason !== null) {
+    const said = reason ? ` ${DIM}${reason}${RESET}` : '';
+    out += `\n${prefix(when)}${CYAN}⏸ asked for a person${RESET}${said}\n`;
   }
   return out;
 }

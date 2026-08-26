@@ -57,7 +57,7 @@ revise takes the best world available, and a decision it cannot must wait for a 
 ### What is in the dispatcher's world, and what puts it there
 
 The snapshot above is the connector's answer and stays that way — everything that _reports_ the world
-(the cockpit's world panels, the work graph, `world_read`, the assay desk) reads it verbatim. What
+(the cockpit's world panels, the work graph, `world_read`, the appraisal desk) reads it verbatim. What
 `decide` is given is a **derived** view, built in `Harness.runCycle`, and two things shape it:
 
 - **PRs carrying no `-watch` tag are removed** and handed over separately as `unwatchedPrs`, so
@@ -254,7 +254,7 @@ thing this issue's lifecycle does report.
 goal-closure cohort was rebuilt off the mirror for exactly this reason, after every deployment drew
 the empty state forever — and it is written down here because a future hold or lens designed off this
 table would otherwise pick `issue_closed` as its signal, ship, and observe nothing. `deliveryHold` and
-`assayHold` both name it among the events they expire on, and both are relying on `issue_opened` and
+`appraisalHold` both name it among the events they expire on, and both are relying on `issue_opened` and
 `issue_linked` for anything that actually fires.
 
 The kind itself is kept rather than retired, symmetric with how `pr_merged`'s open-list arm was kept:

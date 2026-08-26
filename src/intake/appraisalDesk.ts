@@ -1,10 +1,10 @@
 import type { ErrorRecorder } from '../errorLog.js';
 import type { ActionSink } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
-import type { Issue, IssueAssay, WorldEvent, WorldSnapshot } from '../types.js';
-import { assayHold } from './assay.js';
+import type { Issue, IssueAppraisal, WorldEvent, WorldSnapshot } from '../types.js';
+import { appraisalHold } from './appraisal.js';
 
-interface AssayDeskDeps {
+interface AppraisalDeskDeps {
   store: Store;
   /** Outbound seam, for the one comment a refused goal maintains on its ticket. */
   sink: ActionSink;
@@ -12,12 +12,12 @@ interface AssayDeskDeps {
 }
 
 /**
- * The half of the goal assay that talks to the person who wrote the ticket.
+ * The half of the goal appraisal that talks to the person who wrote the ticket.
  *
  * Issue #158's third decision: *"the most useful output may not be the gate at all
  * but a comment on the ticket — 'this is ambiguous, here is what I would need' —
  * which is actionable by the human who wrote it."* That is right, and it is what
- * makes a **blocking** gate fair rather than merely safe. Everything else the assay
+ * makes a **blocking** gate fair rather than merely safe. Everything else the appraisal
  * produces lands in the cockpit, and the person who can end the hold in one edit is
  * usually not looking at the cockpit — so without this the harness would refuse a
  * ticket and tell only itself.
@@ -29,10 +29,10 @@ interface AssayDeskDeps {
  *   plus a `comment_ref` on the row). A refused goal is a standing state, not a
  *   stream of news; a fresh comment per pulse would be the duplicate-question
  *   failure `proposalHold` exists to stop, wearing a thread instead of an inbox.
- *   The ref is dropped when the ticket's text changes (`Store.recordAssay`), so a
+ *   The ref is dropped when the ticket's text changes (`Store.recordAppraisal`), so a
  *   genuinely new question gets a new comment rather than overwriting the record of
  *   the old one.
- * - **Written only when the body changes**, so a re-assay that says the same thing
+ * - **Written only when the body changes**, so a re-appraisal that says the same thing
  *   edits nothing.
  * - **A desk beside the plan reconciler, not an action through the executor.** It
  *   is mechanical bookkeeping in exactly the sense `set_work_item_state` and the
@@ -43,9 +43,9 @@ interface AssayDeskDeps {
  *
  * What it never does: close, reject, label or edit the ticket. The verdict informs
  * pickup and asks a question; issue #158 puts all three of those out of scope, and
- * this comment is the *only* outbound act the assay performs.
+ * this comment is the *only* outbound act the appraisal performs.
  */
-export class AssayDesk {
+export class AppraisalDesk {
   /**
    * What was last written per issue, so an unchanged body is not re-sent. In memory
    * rather than a column: the cost of losing it across a restart is one redundant
@@ -53,7 +53,7 @@ export class AssayDesk {
    */
   private readonly lastBody = new Map<string, string>();
 
-  constructor(private readonly deps: AssayDeskDeps) {}
+  constructor(private readonly deps: AppraisalDeskDeps) {}
 
   /**
    * Post or update the comment for every issue carrying an `unclear` verdict.
@@ -66,37 +66,38 @@ export class AssayDesk {
    * events to replay.
    */
   async announce(world: WorldSnapshot, signals: WorldEvent[]): Promise<void> {
-    const assays = new Map(this.deps.store.listAssays().map((a) => [a.originRef, a]));
-    if (assays.size === 0) return;
+    const appraisals = new Map(this.deps.store.listAppraisals().map((a) => [a.originRef, a]));
+    if (appraisals.size === 0) return;
     for (const issue of world.issues) {
-      const assay = assays.get(`issue:${issue.number}`);
-      if (!assay || assay.verdict !== 'unclear') continue;
+      const appraisal = appraisals.get(`issue:${issue.number}`);
+      if (!appraisal || appraisal.verdict !== 'unclear') continue;
       // An expired verdict is still written — to say it expired. Leaving the
       // question standing on the thread after the harness stopped asking it is what
       // makes people stop believing a bot's comments.
-      const held = assayHold(assay, issue, { signals }) !== null;
-      if (!held && assay.commentRef === null) continue; // never asked; nothing to retract
-      const body = renderAssayComment(assay, held);
-      if (assay.commentRef !== null && body === this.lastBody.get(assay.originRef)) continue;
-      await this.write(issue, assay, body);
+      const held = appraisalHold(appraisal, issue, { signals }) !== null;
+      if (!held && appraisal.commentRef === null) continue; // never asked; nothing to retract
+      const body = renderAppraisalComment(appraisal, held);
+      if (appraisal.commentRef !== null && body === this.lastBody.get(appraisal.originRef)) continue;
+      await this.write(issue, appraisal, body);
     }
   }
 
-  private async write(issue: Issue, assay: IssueAssay, body: string): Promise<void> {
+  private async write(issue: Issue, appraisal: IssueAppraisal, body: string): Promise<void> {
     try {
       const result = await this.deps.sink.upsertIssueComment({
         number: issue.number,
         body,
-        commentRef: assay.commentRef,
+        commentRef: appraisal.commentRef,
       });
-      this.lastBody.set(assay.originRef, body);
-      if (result.ref && result.ref !== assay.commentRef) this.deps.store.setAssayComment(assay.originRef, result.ref);
+      this.lastBody.set(appraisal.originRef, body);
+      if (result.ref && result.ref !== appraisal.commentRef)
+        this.deps.store.setAppraisalComment(appraisal.originRef, result.ref);
     } catch (err) {
       // Asking the question must never take the pulse down with it — the verdict
       // still holds, the cockpit still shows it, and the failure lands in Errors.
       this.deps.errors?.record({
         source: 'cycle',
-        message: `Could not update the goal assay comment on #${issue.number}: ${(err as Error).message}`,
+        message: `Could not update the goal appraisal comment on #${issue.number}: ${(err as Error).message}`,
       });
     }
   }
@@ -111,22 +112,22 @@ export class AssayDesk {
  * saying it cannot start. It names its own escape routes, since a reader who does
  * not know that an edit ends the hold will assume they need an operator.
  */
-export function renderAssayComment(assay: IssueAssay, held: boolean): string {
+export function renderAppraisalComment(appraisal: IssueAppraisal, held: boolean): string {
   if (!held) {
     return (
       `${MARKER}\n\n**No longer waiting on this.** Something has changed here since the question below ` +
-      `was asked, so LubbDubb will look at this item again.\n\n> ${quote(assay.summary)}`
+      `was asked, so LubbDubb will look at this item again.\n\n> ${quote(appraisal.summary)}`
     );
   }
   return (
     `${MARKER}\n\n**Nothing is scheduled for this yet — I could not work out what to do from the ` +
-    `description.**\n\n> ${quote(assay.summary)}\n\nEditing this item, or replying here, is enough: ` +
+    `description.**\n\n> ${quote(appraisal.summary)}\n\nEditing this item, or replying here, is enough: ` +
     `either makes LubbDubb look again on its next pass. Nothing has been rejected and nothing is closed.`
   );
 }
 
 /** Identifies the comment as the harness's, for anyone reading the thread cold. */
-const MARKER = '<!-- lubbdubb:assay -->\n_LubbDubb goal check_';
+const MARKER = '<!-- lubbdubb:appraisal -->\n_LubbDubb goal check_';
 
 /** Keep a multi-line summary inside the blockquote rather than escaping it halfway. */
 function quote(text: string): string {

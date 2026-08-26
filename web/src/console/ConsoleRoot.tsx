@@ -10,6 +10,7 @@ import { Overview } from './Overview.js';
 import { Panel } from './Panel.js';
 import { RecoveryPanel } from '../components/RecoveryPanel.js';
 import { TicketsPanel } from '../components/TicketsPanel.js';
+import { FeatureBoard } from '../components/FeatureBoard.js';
 import { ConfigPage } from '../components/ConfigPage.js';
 import { RecordPanel } from '../components/RecordPanel.js';
 import { KnowledgePanel } from '../components/KnowledgePanel.js';
@@ -229,6 +230,17 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
             onMerge={(id, members) => actions.mergeFacts(id, members)}
           />
         </>
+      );
+    case 'features':
+      // Gated exactly as the vivarium is, and for the same reason: a deployment
+      // with no board has no tab to reach this, but a stale URL still can. The
+      // predicate is the server's own conjunction (`featureBoardOn`) — the
+      // operator's flag and a provider with a hierarchy — so this and the route
+      // refuse together rather than the page fetching a 404 and drawing a spinner.
+      return view.state.config.featureBoard ? (
+        <FeatureBoard view={view} actions={actions} />
+      ) : (
+        <p className="muted">This deployment has no feature board.</p>
       );
     case 'pets':
       // A deployment drawing no vivarium has no tab to reach this, but a stale URL

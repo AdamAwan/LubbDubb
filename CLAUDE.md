@@ -77,12 +77,12 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
 
 ### Persistence
 
-- **A column added to an _existing_ table needs an additive `ALTER TABLE`**, guarded by a
-  `PRAGMA table_info` check and declared in the `ColumnMigrations` of the module that owns the table. `CREATE TABLE IF NOT EXISTS` never alters an existing
-  table, so a column without an `ensureColumns` entry is invisible on every database from before it
-  existed — and invisible is the whole failure: nothing errors. A brand-new table needs no entry,
-  but a table being new **once** does not keep it exempt.
-  → [14](docs/spec/14-persistence.md#migrations)
+- **A column added to an _existing_ table needs an additive `ALTER TABLE`**, guarded by a `PRAGMA table_info` check
+  and declared in the `ColumnMigrations` of the module that owns the table. `CREATE TABLE IF NOT EXISTS` never alters
+  an existing table, so a column without an `ensureColumns` entry is invisible on every database from before it
+  existed — and invisible is the whole failure: nothing errors. A brand-new table needs no entry, but a table being
+  new **once** does not keep it exempt. A table _renamed_ is the same silence again, and needs a `TableRename` entry
+  applied **before** the schema pass. → [14](docs/spec/14-persistence.md#migrations), [rename](docs/spec/14-persistence.md#renaming-a-table)
 - **A column whose _null means something_ needs a backfill as well as an `ALTER TABLE`, gated on
   `ensureColumns`' report of what it added.** `pets.opened_at` null spells "still an egg", so the
   column alone turns every existing vivarium back into a crate of shells on the boot the operator
@@ -98,7 +98,7 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
 - **A pooled corroboration is upserted on `(fact_id, fleet_id)`; `PoolDesk` never lands its own fleet's
   document.** Either appends a voice every pulse and looks like the pool working. → [28](docs/spec/28-cross-fleet-pool.md)
 - **A new issue-verdict writer goes through `IssueVerdictStore.recordVerdict`, never a hand-rolled `DELETE`.**
-  Which of `issue_conclusions` / `issue_deliveries` / `issue_shortfalls` / `issue_assays` may coexist is
+  Which of `issue_conclusions` / `issue_deliveries` / `issue_shortfalls` / `issue_appraisals` may coexist is
   declared once in `src/store/verdicts.ts`; a writer that clears its siblings itself compiles, passes, and
   silently reintroduces the pairwise drift the matrix replaced.
   → [14](docs/spec/14-persistence.md#issue-verdicts-and-the-exclusion-matrix)
@@ -149,7 +149,7 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
   type, the labels, the assignee and the bug/story relation are arguments to
   `ActionSink.createIssue`, resolved by `ticketFiler` (`src/tickets/filing.ts`). Told to an agent
   instead, each is only as reliable as its memory of one line — and every failure is silent: a
-  blueprint's ticket without the watch label is created, linked, shown complete in the cockpit, and
+  brief's ticket without the watch label is created, linked, shown complete in the cockpit, and
   **never dispatched for**; an Azure bug without its relation is a bug nobody can trace back.
   → [13](docs/spec/13-jobs-and-tickets.md#filing-a-ticket), [15](docs/spec/15-integrations.md)
 
@@ -160,12 +160,12 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
   is two things: a `DISPATCH_PIPELINE` entry in the position it should run, and a module under
   `src/dispatcher/rules/` registered in `STAGES` under that id. There are no rule numbers, and one
   must not come back. → [05](docs/spec/05-dispatcher.md#the-rule-book)
-- **Pipeline order is load-bearing state, not just priority.** `issue-assay` and `issue-assess`
-  write `assaying` / `assessing` on the `StageContext` for later stages to read. Moving either
+- **Pipeline order is load-bearing state, not just priority.** `issue-appraisal` and `issue-assess`
+  write `appraising` / `assessing` on the `StageContext` for later stages to read. Moving either
   below its readers compiles fine and silently puts two agents on one issue.
 - **Lenses must stay out of `src/dispatcher/`.** The work graph (`src/graph/`), `buildStacks`,
-  `prAttentionStatus`, `knowledge` and `overlaps` are all read-only views for the cockpit; a rule
-  consulting one would be a second opinion about a decision made elsewhere. Asserted structurally
+  `prAttentionStatus`, `knowledge`, `overlaps` and `src/features/` are read-only views for the
+  cockpit; a rule consulting one would be a second opinion about a decision made elsewhere. Asserted structurally
   in `test/workGraph.test.ts`, `test/stacks.test.ts` and `test/prAttention.test.ts` — if one fails,
   fix the file it names, not the assertion.
 

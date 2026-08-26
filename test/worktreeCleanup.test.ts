@@ -1,21 +1,20 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { existsSync, mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadConfig } from '../src/config.js';
 import { buildSystem } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
-import { gitRepo } from './support/gitRepo.js';
+import { gitRepo, tmpDir } from './support/gitRepo.js';
 import { failPlanningOpen } from './support/plans.js';
 import { pinnedPool } from './support/worktrees.js';
 
 const tick = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 function build() {
-  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
+  const dir = tmpDir();
   const config = loadConfig({
     selfUpdate: { enabled: false } as never,
     labelPrefix: '',
@@ -26,7 +25,7 @@ function build() {
     repoRoot: gitRepo(),
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
-    // The assessor and the assay are pinned off: they default **on**, and this
+    // The assessor and the appraisal are pinned off: they default **on**, and this
     // file is about something else — leaving them on would put an extra agent in
     // front of every issue these assertions dispatch. Each has its own tests.
     // (The planning funnel cannot be pinned off; a goal is planned by writing the
@@ -66,7 +65,7 @@ class FakeStreamChild extends EventEmitter implements StreamChild {
 /** Same pool/config shape as {@link build}, but on the stream runtime so a kill's
  * exit is a later, separate event instead of firing synchronously off `kill()`. */
 function buildStream() {
-  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
+  const dir = tmpDir();
   const config = loadConfig({
     selfUpdate: { enabled: false } as never,
     labelPrefix: '',

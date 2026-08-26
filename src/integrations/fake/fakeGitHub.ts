@@ -8,6 +8,7 @@ import type {
   PrLabelInput,
   PrMergeInput,
   PrReplyInput,
+  PrThreadResolveInput,
   PrTitleInput,
   SendResult,
 } from '../../sink/actionSink.js';
@@ -23,6 +24,7 @@ import type {
   PrLabelCapable,
   PrMergeCapable,
   PrReplyCapable,
+  PrThreadResolveCapable,
   PrTitleCapable,
   WorldSlice,
 } from '../integration.js';
@@ -50,6 +52,7 @@ export class FakeGitHubIntegration
   implements
     Integration,
     PrReplyCapable,
+    PrThreadResolveCapable,
     PrMergeCapable,
     PrLabelCapable,
     PrCreateCapable,
@@ -162,6 +165,27 @@ export class FakeGitHubIntegration
     if (input.commentId) this.markCommentHandled(input.prNumber, input.commentId);
     const ref = `fake-reply_${nanoid(6)}`;
     return { ok: true, ref };
+  }
+
+  /**
+   * The outbound side of resolving a review thread: the fake world has no
+   * resolution flag of its own, so `handled` — the one thing every reader of a
+   * thread asks — is what it sets, exactly as a reply does. A thread the world
+   * does not carry is `ok: false`, the same stale-reading answer the real
+   * providers give.
+   */
+  async resolvePrThread(input: PrThreadResolveInput): Promise<SendResult> {
+    let found = false;
+    this.world.mutate((world) => {
+      mutatePr(world, input.prNumber, (pr) => {
+        const c = pr.unresolvedComments.find((x) => x.id === input.commentId);
+        if (c) {
+          c.handled = true;
+          found = true;
+        }
+      });
+    });
+    return { ok: found, ref: found ? `fake-resolve_${nanoid(6)}` : undefined };
   }
 
   /**

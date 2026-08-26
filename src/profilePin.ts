@@ -38,12 +38,12 @@ interface PinLookup {
  * write-ups deeper moves `issue-retro` in `byRule`, where the decision is about
  * the *kind* of work and so belongs.
  *
- * `assay` because it is the stage that **produces** the answer. It runs before
+ * `appraisal` because it is the stage that **produces** the answer. It runs before
  * any proposal exists, so a pin could only reach it on a second pass, and an
- * assayer whose own depth moved with the pin it proposes would be grading its own
+ * appraiser whose own depth moved with the pin it proposes would be grading its own
  * work.
  */
-const UNPINNED_SUFFIXES = ['retro', 'assay'];
+const UNPINNED_SUFFIXES = ['retro', 'appraisal'];
 
 /**
  * The profile this dispatch is pinned to, or null to leave it to the rule.

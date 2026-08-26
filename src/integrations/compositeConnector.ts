@@ -13,6 +13,7 @@ import type {
   PrLabelInput,
   PrMergeInput,
   PrReplyInput,
+  PrThreadResolveInput,
   PrTitleInput,
   SendResult,
   WorkItemLinkInput,
@@ -39,6 +40,7 @@ import {
   isPrLabelCapable,
   isPrMergeCapable,
   isPrReplyCapable,
+  isPrThreadResolveCapable,
   isPrTitleCapable,
   isRefResolvable,
   isTicketHistoryCapable,
@@ -163,6 +165,19 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
     const handler = this.integrations.find(isPrReplyCapable);
     if (!handler) throw new Error('no integration can post PR replies (no sourceControl provider is PrReplyCapable)');
     return handler.postPrReply({ ...input, body: this.signed(handler, input.body) });
+  }
+
+  canResolvePrThread(): boolean {
+    return this.integrations.some(isPrThreadResolveCapable);
+  }
+
+  async resolvePrThread(input: PrThreadResolveInput): Promise<SendResult> {
+    const handler = this.integrations.find(isPrThreadResolveCapable);
+    if (!handler)
+      throw new Error(
+        'no integration can resolve review threads (no sourceControl provider is PrThreadResolveCapable)',
+      );
+    return handler.resolvePrThread(input);
   }
 
   async mergePr(input: PrMergeInput): Promise<SendResult> {

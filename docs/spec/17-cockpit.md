@@ -456,7 +456,7 @@ reads the `ticket*` fields off `place.ts` and asserts the hook forwards every on
 ## The queue rail — "Needs you"
 
 A permanent left column holding **every** blocking item in one list: escalations, plan proposals,
-permission requests, goals the assay refused at intake, unanswered goal-profile proposals, usage-limit
+permission requests, goals the appraisal refused at intake, unanswered goal-profile proposals, usage-limit
 parks, bench tasks, close-outs, validate rows, dispatches the executor keeps refusing and the recovery
 hold. `buildNeedsYou`
 (`web/src/view/needsYou.ts`) is the merge, and it is pure.
@@ -489,7 +489,7 @@ close-out is the step after a launch and reads as one ([13](13-jobs-and-tickets.
 are answered the same two ways — done, or declined with a reason — which is why they share a body.
 
 **`profile` is the second kind with no row of its own underneath it** — it is read off
-`issue.assay.awaitingProfileAnswer`, the goal-profile gate ([06](06-issue-pickup.md#the-second-arm-an-unanswered-profile-proposal-issue-342)),
+`issue.appraisal.awaitingProfileAnswer`, the goal-profile gate ([06](06-issue-pickup.md#the-second-arm-an-unanswered-profile-proposal-issue-342)),
 because the harness raises no escalation and files no task for it: the proposal _is_ the ask. It is in
 the queue for what makes that gate different from every other hold — it expires on nothing but the
 answer, so a gate nobody sees is a goal stopped for good. It was drawn on the goal's own page and
@@ -500,8 +500,8 @@ re-readable as an unanswered disagreement. It is derived from `world.issues` and
 runs: a goal the world no longer carries is not one the funnel is refusing to dispatch.
 
 **`placement` is the third kind with no row of its own underneath it**, and the first that holds
-nothing at all. It is read off `issue.assay.placement` — the goal's missing parent and its missing area
-path, as the assay proposed them ([06](06-issue-pickup.md#where-the-goal-belongs-the-placement-proposals-issue-463)).
+nothing at all. It is read off `issue.appraisal.placement` — the goal's missing parent and its missing area
+path, as the appraisal proposed them ([06](06-issue-pickup.md#where-the-goal-belongs-the-placement-proposals-issue-463)).
 Every other row on this rail stands between the fleet and some work; this one does not. The work is
 dispatched, done and merged whatever the answer is, and what is wrong is that the ticket is invisible
 to whoever plans the backlog — a fault nobody sees until they go looking for work that is not on the
@@ -524,8 +524,8 @@ the write — a proposal answered by three buttons that all 400 is the dead end 
 exist to prevent.
 
 **`intake` is the fourth kind with no row of its own underneath it**, and the only one of the four that
-is a refusal rather than a proposal. It is read off `issue.assay.verdict === 'unclear'` — the goal
-assay's own hold, which stops pickup for the whole goal ([06](06-issue-pickup.md#block-or-inform-and-why-blocking-is-safe)) —
+is a refusal rather than a proposal. It is read off `issue.appraisal.verdict === 'unclear'` — the goal
+appraisal's own hold, which stops pickup for the whole goal ([06](06-issue-pickup.md#block-or-inform-and-why-blocking-is-safe)) —
 and it is `yours` on the profile gate's terms: a whole goal's dispatch is held and no agent is sitting
 in it.
 
@@ -535,13 +535,13 @@ stops a goal dead was the one ask the surface that exists to say what is waiting
 held goal read to anybody who did not open that tab as a goal that simply had not come up yet. The same
 argument the profile gate is on the rail for, and the same fix.
 
-The row's line says which ask it is and which goal it is about; the **assayer's sentence is quoted whole
+The row's line says which ask it is and which goal it is about; the **appraiser's sentence is quoted whole
 in the band**, never reworded and never clamped, because it is the only account of why the goal is held.
-Its verdict is one button — `Override → workable`, through `setIssueAssay`, the call the tickets tab
+Its verdict is one button — `Override → workable`, through `setIssueAppraisal`, the call the tickets tab
 already used — because the hold's other two exits are not buttons: it expires when the goal's own text
 changes, and it is cleared in the tracker.
 
-An **unwatched** item is never intake, whatever a stale verdict says: nothing assays a goal nobody opted
+An **unwatched** item is never intake, whatever a stale verdict says: nothing appraises a goal nobody opted
 in, so a verdict on one is left over from before it was dropped, and the drop outranks it. Derived from
 `world.issues` and never the retained runs, for the profile gate's reason.
 
@@ -602,7 +602,7 @@ within it.
 | `reply`      | Reply       | amber | `↵`   | A drafted reply, held until you send it.               |
 | `merge`      | Merge       | amber | `⊕`   | A merge waiting on your verdict.                       |
 | `shortfall`  | Shortfall   | blue  | `✗`   | Delivered work that did not reach its goal.            |
-| `intake`     | Intake      | blue  | `◌`   | The assay could not say a goal is workable.            |
+| `intake`     | Intake      | blue  | `◌`   | The appraisal could not say a goal is workable.        |
 | `profile`    | Profile     | blue  | `⊙`   | Which profile a goal runs on.                          |
 | `placement`  | Backlog     | amber | `▣`   | Nothing is held; the ticket is off the board.          |
 | `bench`      | Bench       | blue  | `◆`   | Work only a person can do. Informative, not broken.    |
@@ -881,7 +881,7 @@ end.
 1. **What the goal is** — `#390 · Validate job payloads in the catalog`, the item type, and the
    tracker's workflow state in the operator's own colour. Neither chip is a verdict anybody passed on
    the work, which is why they are up here and not in the row below.
-2. **What anybody has decided about it** — the assay verdict with the assayer's own summary in its
+2. **What anybody has decided about it** — the appraisal verdict with the appraiser's own summary in its
    title, the conclusion verdict, and the validation verdict as a settled count (absent when the goal
    has no checks: "no plan" is a third reading and not a synonym for clear, [20](20-validation.md)).
    Every chip quotes a reading the server already made; nothing here is a second opinion. The
@@ -1068,7 +1068,8 @@ one thing wherever it lands.
 ([20](20-validation.md#where-it-lands)) posted no note and offered no box to type one in, so the
 refusal was not merely invisible — it was unsatisfiable, and the control could not work at all. The
 bench verdict's Done reads `Done…` on a `close_out` whose goal is flagged and opens the note box
-Decline already had. `EndRunModal` mirrors the same condition **inside itself** rather than in whether
+Decline already had — as does **Close the ticket…**, since the flag is about the goal rather than
+about which verb settles the row, and one box serves all three. `EndRunModal` mirrors the same condition **inside itself** rather than in whether
 it opens: on a flagged goal the box is required and the confirm stays disabled until it is filled; on
 every other goal it is offered and optional, since an operator with a reason should not need a flagged
 plan to record it. The condition is mirrored, the counts are not: they are `issue.validation`, folded
@@ -1077,6 +1078,20 @@ once on the server, and the row's own detail already lists what is outstanding.
 The header no longer draws a `.launch-error` of its own for this control. It had one because ending a
 run was a one-click post with nowhere else to put a refusal; the refusal now lands in the modal that
 sent it, which is where the text that was refused still is.
+
+**A `close_out` row carries a third verb: Close the ticket.** The obligation the row states is a close
+in the tracker, so the button that takes it sits beside the two that record it and leads them —
+`HumanTaskActions` draws Done as the secondary where it is on offer, because Done is what an operator
+presses having already closed the item somewhere else. It posts
+`POST /api/human-tasks/:id/close-ticket` ([16](16-http-api.md)), which closes the item and settles the
+row together.
+
+It is drawn only where all three hold: the row is an open `close_out`, its origin is an `issue:<n>`,
+and `config.canCloseIssue` is true — the connector's own answer, asked once on the server rather than
+inferred in the browser from the provider's name, exactly as `canSetWorkItemState` is for the board's
+drag. Where it is false there is no button and no disabled ghost of one: the row's own detail already
+states the other way out, and a control that cannot work teaches nothing that sentence does not.
+→ [13](13-jobs-and-tickets.md#the-step-after-the-launch-the-close-out)
 
 **A band whose source has left the snapshot draws nothing at all.** A header over an empty box would
 claim something is waiting while offering no way to answer it.
@@ -1614,7 +1629,7 @@ reason: the list is all-time and only grows, and `/api/state` comes round every 
 
 Rows come from the **local mirror**, so the tab opens instantly and a provider that is briefly down is
 the same picture as one that is up. Everything that is a _live reading_ — the pickup reasons, the
-assay, the current labels — is read off the **state snapshot the cockpit already has**, and that split
+appraisal, the current labels — is read off the **state snapshot the cockpit already has**, and that split
 is the whole of the design: those are the server's own sentences, and a second derivation of them here
 would be a second opinion about a decision made elsewhere.
 
@@ -1849,7 +1864,7 @@ fact about the item, not a shade of the state it stopped in.
 
 ### Intake is raised on the rail, and marked in the list
 
-An `unclear` assay is the one intake reading that **stops dispatch** ([06](06-issue-pickup.md)), and it
+An `unclear` appraisal is the one intake reading that **stops dispatch** ([06](06-issue-pickup.md)), and it
 is raised where every other ask waiting on a person is raised: [the queue rail](#the-queue-rail--needs-you),
 as an `intake` row. What is left here is the reading — a **lamp** on the held row, so a page of tickets
 still says which of them nothing is moving on.
@@ -2129,7 +2144,7 @@ Three rules hold them:
   on two goals already agreed on. A count of what is already vouched for would tick up on their own
   click and never come down, and one that included a single agent's unseconded note would never come
   down either. The number did not change when the page became a destination — only where it is drawn.
-- **Launch counts the queue, not the history.** A launched blueprint that has been dispatched is an
+- **Launch counts the queue, not the history.** A launched brief that has been dispatched is an
   agent in the Fleet, and counting it here would have the reading climb as work starts rather than as
   it waits.
 
@@ -2367,13 +2382,13 @@ filename and a × that removes it before launch.
 - **The browser's mime is not sent.** It drives the local preview only; the server decides the type
   from the bytes, so a field it ignores would read as one it honours.
 
-`AttachmentStrip` draws what was attached to a queued blueprint (`job:<id>`). The URL comes from
+`AttachmentStrip` draws what was attached to a queued brief (`job:<id>`). The URL comes from
 `attachmentUrls`, never string-built, because it carries a short-lived capability that the cockpit's
 bearer token structurally cannot substitute for — an `<img>` load sends no `Authorization` header
 ([16](16-http-api.md#get-attachmentsid)). Clicking opens the image at its own size in a new tab,
 `rel="noreferrer"` so the capability does not ride out in a referrer.
 
-`SchedulePanel` puts a blueprint on a clock: a cron expression, a prompt, code/desk, and every
+`SchedulePanel` puts a brief on a clock: a cron expression, a prompt, code/desk, and every
 recurrence with its next run, its last run, and pause / run now / delete.
 
 - **The expression is typed, and four common ones are buttons.** Reading `0 9 * * 1-5` and writing it
@@ -2403,6 +2418,177 @@ situation area survive the drop.
 moment an operator has something to report, and a way to report it that is only there while the harness
 is healthy is missing exactly then. Both arms are asserted, since the offline one is the return a change
 to the bar forgets.
+
+## The feature board
+
+`web/src/components/FeatureBoard.tsx`, off `/api/features`, derived by `src/features/featureBoard.ts`.
+**Off by default and absent on most deployments** — see [the two gates](#the-two-gates) below.
+
+A fleet worked at the story level answers _is #583 done_ and never _how is the Environments work
+going_, and the second question is the one anybody outside the fleet actually asks. The board is that
+question: one card per container the mirror's items hang off, with the work beneath it folded.
+
+It is a **lens**, on the terms the work graph, `buildStacks` and `prAttentionStatus` are held to
+([05](05-dispatcher.md)): nothing under `src/dispatcher/` reads it, it decides nothing, and every
+reading on it is a quotation — the outcome word is `ticketOutcomes`', the money is `buildSpendGoals`',
+the watch bucket is [`src/watchLabels.ts`](../../src/watchLabels.ts)', which items are containers is
+`isContainerType`'s, and the environment fold is `rollUpReach`'s. It is fetched on open and never
+polled, for the tickets tab's reason: it reads the whole mirror, and the snapshot comes round every
+couple of seconds.
+
+### The two gates
+
+The board needs **both** the operator's `featureBoard` flag ([02](02-configuration.md)) and a provider
+that can place a work item. The second is not a permission check and not a guess at the provider's
+name: `canPlaceWorkItem` is asked of the connector exactly as `canCloseIssue` and `canSetWorkItemState`
+are, and it is the right predicate rather than a near one — placing a work item _is_ setting its
+parent, so a provider that can do it is exactly a provider with the container hierarchy this board
+rolls up. GitHub answers false by design ([15](15-integrations.md)).
+
+Without that second half the flag alone would draw a page where every item is its own orphan and the
+whole board is one grey card. So on a flat tracker the tab is **absent**, not empty.
+
+The conjunction is one predicate — `featureBoardOn` in `src/server/routes/features.ts` — read by two
+callers that must never disagree: the route's own refusal, and the `config.featureBoard` on
+`/api/state` that the nav draws its tab off. Two copies would drift into the cockpit's worst shape, a
+tab whose every fetch 404s. The refusal is a **404 and not a 403** for the same reason: neither gate is
+about permission, and a 403 would send whoever reported it looking for a token problem.
+
+### Six standings, because they are six different facts
+
+The bar over each card is segmented, and the four segments that are not `delivered` are the ones a
+reader acts on differently. The precedence is strict and every step of it is load-bearing:
+
+| Standing    | Is                                            | Beaten by                 |
+| ----------- | --------------------------------------------- | ------------------------- |
+| `unwatched` | no watch tag — **nothing has ever read it**   | nothing; it wins outright |
+| `inFlight`  | a run the harness minted and has not finished | `unwatched`               |
+| `delivered` | `ticketOutcomes`' word                        | `unwatched`, `inFlight`   |
+| `fellShort` | worked, and the goal still not reached        | `unwatched`, `inFlight`   |
+| `settled`   | `concluded` or `abandoned`                    | `unwatched`, `inFlight`   |
+| `queued`    | watched, and none of the above                | everything                |
+
+**`unwatched` first, and it is the reading the whole board most has to get right.** An item carrying
+no watch tag has not been appraised, not been read and not been spent on — it is _unseen_, not late.
+Drawn as `queued` it would report a fleet working through a backlog it cannot see, and the card would
+say the opposite of the truth while looking entirely reasonable. It is drawn **hatched** rather than as
+a sixth colour, exactly as the tickets tab hatches "no feature": it is the absence of the fleet having
+looked, and a solid block reads as a fifth kind of progress.
+
+**`inFlight` above the outcome words**, because a re-picked goal carries the verdict of its _last_
+attempt while an agent works its next one. The board is a reading of now — and the verdict is not
+erased by it, only outranked: the row carries both.
+
+**`settled` is its own segment** rather than folded either way. Into `delivered` it overstates the
+Feature; into `queued` it understates it for ever.
+
+### Three buckets for a parent link, not two
+
+The mirror's `parent` is three-valued and stays three-valued all the way to the screen: a Feature, a
+resolved `null`, and an **unresolved** absence. The orphan card counts the second and the third is a
+line of its own under the board. Folding them would tell a reader the tracker says an item has no
+parent when the truth is that nobody could read the link — the same distinction the tickets tab draws
+by leaving unresolved rows [flush with no heading](#features-are-headings-not-rows).
+
+**The orphan card is the most valuable thing on the page and the most uncomfortable.** Work answering
+to no container is invisible at portfolio level by construction, and a board that quietly dropped it
+would report a fleet whose every hour rolls up somewhere. It carries its own spend for that reason:
+_this much was spent under no Feature_, which is also the sentence that says every roll-up above it
+understates its own.
+
+### The briefing
+
+Under the bar, each card carries three short lists — **In the way**, **Being worked**, **Delivered** —
+which are the questions somebody outside the fleet asks in that order: _what is stopping this_, _is it
+moving_, _what of it is done_. The counts above answer none of them: `3 fell short` is a number, and
+what a person needs is the sentence saying what fell short.
+
+**Every line in it was written by somebody.** A delivered line is `IssueDelivery.summary` as its
+author wrote it, attributed to them; a blocked line is either the agent's own escalation prompt or the
+assessor's shortfall summary; a working line is a goal and the age of the run on it. Nothing in the
+briefing is composed, scored, summarised or forecast — which is the same discipline the attention line
+one row up keeps from the other side. That line **counts facts and phrases them**; this one **quotes
+sentences and phrases nothing**. A briefing that wrote its own sentence would be exactly the verdict
+about a Feature this surface refuses, wearing an agent's voice.
+
+**Blocked is two words, not one.** `asked` is an agent parked on an escalation nobody has answered —
+the fleet is stopped and what it needs is a reply. `fell short` is an assessor's verdict that the work
+did not reach the goal — nothing is stopped, and what it needs is a decision. Folded into one word a
+reader could not tell which of the two things they owe, so they are drawn in two colours and questions
+sort first: one has an agent waiting against it and the other has been waiting anyway.
+
+**A question counts only where the escalation names the goal.** One raised against a pull request
+(`pr:42:ci`) names no goal here, and it is counted under **no** Feature rather than attributed to a
+guess at which one the PR was for. It is still on the needs-you rail, which is where a parked agent is
+answered.
+
+**Only `open` escalations block**, never "unanswered": `dismissEscalation` stamps no `answeredAt`, so a
+briefing keyed on that field would leave a Feature reporting a question nobody is being asked any more.
+
+**The outcome word decides the done and blocked lists, not the standing.** A re-picked goal is
+`inFlight` and still carries the verdict of its last attempt, and both readings are true at once —
+keying the delivered list off the standing would take finished work off the board for as long as an
+agent is on the goal.
+
+Each list is bounded (`FEATURE_BRIEFING_ROWS`, `src/features/featureBoard.ts`) and **says what it stood for**: `3 of 11`, never three
+rows and silence. Three of eleven blocked items read as three blocked items is the one number on this
+card somebody would act on being wrong about. The orphan card carries a briefing on the same terms —
+work answering to no container is still work, and a person asking what is in the way wants that answer
+too.
+
+A Feature with nothing worked, nothing delivered and nothing blocked draws **no briefing at all**. The
+bar has already said so, and three empty headings would be the loudest thing on the card saying
+nothing.
+
+### What it deliberately does not draw
+
+**No verdict about a Feature.** There is no _at risk_, no _on track_ and no forecast date, and their
+absence is the point rather than an omission: each would be a policy no config file states and no
+module owns, and a card asserting one would be exactly the second opinion this surface is arranged to
+avoid. What it draws instead is one line naming what is waiting on a person — and that line is a
+**count of facts, phrased**: an appraisal the appraiser marked `unclear`, items that fell short, items
+nothing can see, a reach the probe could not read. Ordered hardest-first, and it stops at the first
+thing that bites, because a card that says four things says none of them.
+
+**No age judgement.** `lastLandingAt` is drawn as an age and nothing is said about whether it is too
+old. How stale is too stale is a policy nobody has stated.
+
+**No sizing or forecast.** Extrapolating the remaining work from recent spend is the one reading that
+would make the board feel finished, and it is the one it has no honest basis for.
+
+The ordering — features wanting a person first, then the ones carrying the most work — is an
+**ordering and not a verdict**, the same distinction the queue rail draws. It says which card to read
+first and nothing about whether a Feature is in trouble.
+
+### Reach folds with the same function, one tier up
+
+A Feature is to its goals what a goal is to its landings, so the per-environment fold is
+`rollUpReach` — the **same function**, exported from `src/environments/reach.ts` rather than copied
+([24](24-environments.md)). That is what keeps `unknown` from collapsing into `absent` one tier up,
+which is the whole reason the verdict is three-valued: an expired credential and work that genuinely
+has not shipped read identically on the glass, and only one of them is about deployment. A goal that
+is `partial` or `unknown` counts as **unresolved** here — half a goal in an environment is not a goal
+in it.
+
+Only goals `allGoalReach` produced a row for are counted, which is that module's decision and not a
+second one. A goal with nothing merged has been nowhere; counting it as `absent` would put every
+never-started story in the denominator and make a shipped Feature read as a third deployed, for good.
+
+### Where it sits
+
+In `components/` and not in `console/`, because it rides its own route and **nothing under `console/`
+imports `api.js`** — the tickets tab's arrangement exactly, asserted in `test/console.test.ts`. Its
+styles are in `web/src/styles.css` for the same reason, drawing `--cn-*` tokens all the same: the
+prefix boundary is by component family, [not by file](#tokens).
+
+The tab is inserted **beside Tickets** rather than appended, because the two are one backlog read at
+two altitudes and a reader moving between them should not cross Knowledge to do it. A goal is still
+opened, and still acted on, on its own page: the board links down and never grows a control of its
+own.
+
+Each card ships a bounded slice of its children, ordered so that what wants attention survives the
+cut — an arrival ordering would show twenty delivered stories and drop the one that fell short. What
+was cut is **said**, not silently trimmed: a list that simply stopped would read as the whole Feature.
 
 ## Settings
 
@@ -3226,6 +3412,33 @@ The drawer subscribes to full output on open and unsubscribes on close or switch
 `AgentDrawer` opens over the page for one agent, asked for by `actions.select(id)` from wherever an
 agent is drawn — the Fleet card, a goal page's **On this goal** rows, the escalation card's own way in.
 
+**The transcript is polled every five seconds while the run is live, and the poll is the load-bearing
+half of how the pane moves** (issue #639). The socket delivers an agent's output the moment it
+happens, but only what it produced _since this drawer subscribed_ — so what arrives there is a suffix
+of a stream whose earlier part came from `GET /api/agents/:id/transcript`, with no marker joining the
+two. The drawer's rule was therefore "prefer the socket buffer once it is longer than the fetched
+seed", which is the safe reading of that and also meant a run opened mid-flight showed a **frozen
+pane**: the socket had to deliver more bytes than the entire transcript before it before anything
+moved, which on a long run is never. Watching an agent work was the one thing the drawer is for, and
+it was the thing it could not do.
+
+So the seed is re-read on a five-second timer, and the route is
+[ranged](16-http-api.md#get-apiagentsidtranscript) — each poll names what the drawer already holds and
+is answered with the tail, so a quiet run costs an empty string rather than the whole record. The
+socket buffer is still preferred where it is **safe**, which is exactly when the transcript was empty
+when the drawer opened: the socket then carries the stream from its first byte, the two strings are the
+same, and the pane moves at the speed of the agent rather than the timer. Anywhere else it is ignored
+— appending a suffix to a prefix across an unknown gap would draw output that never existed.
+
+Two things about the timer are deliberate:
+
+- **It stops when the run does.** A finished transcript never grows again, so a closed-out agent left
+  open on the glass is not a request every five seconds. A first read that has not landed yet is
+  retried regardless of status, so a drawer opened on a slow response still fills.
+- **A status change does not restart it.** `running ⇄ waiting` is every question an agent asks, and
+  keying the seed effect on liveness would drop the buffer and reseed the pane on each one — every
+  expanded tool call folding shut mid-read. Liveness is read through a ref inside the tick instead.
+
 **The transcript pane is HTML, not a terminal.** What reaches the cockpit is already legible text in
 every mode (`renderBlocks` output, or settled PTY session-file text), never raw TUI bytes, so it renders
 into a scrollable `<div>` with `white-space: pre-wrap; overflow-wrap: anywhere`:
@@ -3802,7 +4015,7 @@ disagree with what the dispatcher does:
   reason as the row's sentence, and its `container` arm is what disables a watch toggle.
 
 **Nothing is derived in the browser that the server decided.** `attention.status`, `ciVerdict`,
-`health.reasons`, `QueueItem.reason`, `pickup.reasons` and the assay summary are quoted, never parsed —
+`health.reasons`, `QueueItem.reason`, `pickup.reasons` and the appraisal summary are quoted, never parsed —
 the rule that keeps the cockpit from holding a second opinion about a decision made elsewhere, drawn
 inches from the first. The **lenses** that produce them — the work graph (`src/graph/`), `buildStacks`,
 `prAttentionStatus`, `knowledge` and `overlaps` — stay read-only views out of `src/dispatcher/`, asserted
@@ -3833,7 +4046,7 @@ from a reader that broke, and because each of these is a decision rather than an
 - **`tailByAgent` is folded and drawn nowhere.** `agent:tail` frames still arrive and still cost
   nothing to keep — they are one line per agent — but the fleet row draws the agent's `note`
   instead, which is what the agent chose to say rather than whatever its last line happened to be.
-- **`plan.statusCommentRef` and `issue.assay.commentRef` are drawn nowhere.** Both are canonical comment
+- **`plan.statusCommentRef` and `issue.appraisal.commentRef` are drawn nowhere.** Both are canonical comment
   refs the harness maintains on a ticket ([15](15-integrations.md#comment-refs)); the surfaces that
   captioned them were the old world panel's rows.
 
@@ -3865,7 +4078,7 @@ or it does not go in.
 **Every pickup status has a goal in the fixtures.** `issuePickupStatus` answers thirteen ways
 ([06](06-issue-pickup.md)), and each answer is somebody's whole explanation of why nothing is happening
 to their ticket — so `done`, `retained`, `has_pr`, `active`, `container`, `unwatched`, `planning`,
-`delivered`, `assay`, `cooldown`, `escalated`, `blocked` and `eligible` are each carried by at least
+`delivered`, `appraisal`, `cooldown`, `escalated`, `blocked` and `eligible` are each carried by at least
 one issue, with the reason string the real gate would have written. A demo showing eight of them
 teaches an operator that the rest are a bug on the day they first appear. The roll-call is
 stated in a comment above the `issues` array, and the arithmetic around it has to hold as well: the cap

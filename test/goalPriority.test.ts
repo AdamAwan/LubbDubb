@@ -63,7 +63,7 @@ test('a flagged goal covers its whole origin subtree', () => {
   for (const origin of [
     'issue:12',
     'issue:12:plan',
-    'issue:12:assay',
+    'issue:12:appraisal',
     'issue:12:assess',
     'issue:12:retro',
     'issue:12:part:signer',

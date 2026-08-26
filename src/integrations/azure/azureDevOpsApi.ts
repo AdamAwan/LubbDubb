@@ -123,6 +123,11 @@ export interface AzureDevOpsApi {
     parentCommentId: number,
     content: string,
   ): Promise<AzCommentRef>;
+  /**
+   * Set a comment thread's status — `fixed` for the harness resolving a thread on
+   * an agent's say-so. Idempotent: a thread already in that status is a no-op.
+   */
+  setThreadStatus(pullRequestId: number, threadId: number, status: string): Promise<void>;
   /** Open a new top-level comment thread on a PR. */
   createThread(pullRequestId: number, content: string): Promise<AzCommentRef>;
   /** Complete (merge) a PR with the given strategy. `lastMergeSourceCommit` is required by Azure. */
@@ -194,7 +199,7 @@ export interface AzureDevOpsApi {
    * The one read on this seam that is about the *project* rather than about an
    * item, and it is here because there is nowhere else the harness could learn
    * it — an area path is a node in a tree only the provider holds, and the world
-   * snapshot carries items, not schema. It is what lets the assayer be **offered**
+   * snapshot carries items, not schema. It is what lets the appraiser be **offered**
    * the areas rather than free-typing one, which is the difference between a
    * choice and an invented node that does not exist.
    *

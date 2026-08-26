@@ -245,7 +245,7 @@ by hand while a goal is held still discharges a close-out filed before the gate 
 `ActionSink.upsertIssueComment`, mechanical bookkeeping in `setWorkItemState`'s sense and deliberately
 not auto-send gated: nothing is deciding _whether_ the work arrived.
 
-**One comment per arrival, not one living comment edited in place.** The assay's comment is a standing
+**One comment per arrival, not one living comment edited in place.** The appraisal's comment is a standing
 state and is edited ([06](06-issue-pickup.md)); this is a thing that happened at a time. Four short
 comments are the timeline a reader wants from "where did this get to", and an edited comment would
 silently rewrite the record of the last environment each time.
@@ -382,6 +382,13 @@ A pass that throws is recorded through `errors.record` and never fails the cycle
 
 `src/environments/reach.ts`. `goalReach` folds a goal's landings and their readings into one row per
 environment.
+
+The fold itself is `rollUpReach`, and it is **exported rather than private** because the
+[feature board](17-cockpit.md#the-feature-board) asks the same question one tier up: a Feature is to
+its goals what a goal is to its landings, and `partial` is the interesting value in both places. One
+implementation and not two, because the rule that matters — **`unknown` never folds to `absent`** — is
+exactly the one a second copy would get wrong quietly. Nothing else about the feature board is this
+subsystem's concern; it reads these rows and writes none.
 
 `partial` is the reading the lens exists for. A goal is several pull requests, they land separately,
 and a release cut between two of them puts half a feature in production. Folded to a boolean, that

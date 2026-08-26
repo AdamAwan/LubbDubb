@@ -24,12 +24,12 @@ is about.
 | `routes/control.ts`     | `/api/pulse`, `/api/errors/clear`, `/api/control`, `/api/prs/:number/watch`                                                                                               |
 | `routes/escalations.ts` | The whole "Needs you" inbox: escalations, proposals, recovery                                                                                                             |
 | `routes/humanTasks.ts`  | Work only a person can do: filing one, and the two ways it settles                                                                                                        |
-| `routes/issues.ts`      | Watch, priority, conclusion, assay, delivered, shortfall, dismiss-run                                                                                                     |
+| `routes/issues.ts`      | Watch, priority, conclusion, appraisal, delivered, shortfall, dismiss-run                                                                                                 |
 | `routes/jobs.ts`        | `/api/jobs`, `/api/jobs/:id/cancel`, `/api/upnext/order`, `/api/upnext/profile`                                                                                           |
 | `routes/knowledge.ts`   | The whole claim store: writing one down, its observations and disputes, how far an operator says it carries, the three ways it leaves, and the answers to a contradiction |
 | `routes/plans.ts`       | Plan history, replan, acceptance ticks, part model pins                                                                                                                   |
 | `routes/validation.ts`  | One validation check's current reading — result, defer, waive, reset — and who runs it                                                                                    |
-| `routes/schedules.ts`   | Recurring blueprints: write, edit, run now, delete                                                                                                                        |
+| `routes/schedules.ts`   | Recurring briefs: write, edit, run now, delete                                                                                                                            |
 | `routes/spend.ts`       | `/api/spend` and `/api/spend/trend` — the breakdown behind the cost indicators, and its trend                                                                             |
 | `routes/readings.ts`    | `/api/retrospectives/:ref`, `/api/scratchpads/:ref`                                                                                                                       |
 | `routes/reliability.ts` | `/api/reliability` — run outcomes, CI health, and why the fleet came back                                                                                                 |
@@ -192,6 +192,7 @@ Four properties hold across the surface:
   a junk one, and every `/api/tickets` filter with a bad value, and refuses any 400 whose message
   opens in zod's words — structural for the same reason the two greps above are: the module written
   next is covered on the day it is written.
+
 - **Params are read first, then the query, then the body**, so a request naming no such item is
   refused for that whatever else it got wrong. Where a route answers 404/409 off the store first (`/api/knowledge/facts/:id/exit`,
   `/api/work/:ref/file`), it reads the params, asks the store, and reads the body after — a claim
@@ -241,7 +242,19 @@ refetches → each fan-out fails → recording the error broadcasts another `dir
 
 ### `GET /api/agents/:id/transcript`
 
-`{ agentId, transcript }`. 404 when the agent is unknown.
+`{ agentId, from, total, transcript }`. 404 when the agent is unknown.
+
+**Ranged, because the drawer polls it.** `?from=<characters>` is what the caller already holds;
+`transcript` is the slice from there to the end, and `total` is the whole record's length. `from` is
+echoed back **clamped to `total`** rather than refused — a transcript only grows, so an offset past
+the end is a client that read across a flush, not a bad request, and it wants to be told where the
+end is. A bare call (no `from`) answers with the lot, which is what the first read of a drawer asks
+for.
+
+The range exists because the agent drawer re-reads this every five seconds while the run is live
+([17](17-cockpit.md#the-agent-drawer)): the socket carries only what an agent produced since the
+drawer subscribed, so the fetch is the only complete copy, and re-fetching it whole per poll would
+ship megabytes of unchanged text per open drawer. A poll on a quiet run costs an empty string.
 
 ### `GET /artifacts/:id`
 
@@ -258,7 +271,7 @@ the exception is a separate route rather than a hole in the guard.
 
 ### `GET /attachments/:id`
 
-Serves an image an operator attached to a blueprint (issue #249), **addressed by attachment id**.
+Serves an image an operator attached to a brief (issue #249), **addressed by attachment id**.
 Rate-limited to 240/minute. 404 for an unknown id, or for a stored path that no longer resolves inside
 `attachmentRoot`. Responds with the **sniffed** mime, `x-content-type-options: nosniff`, a `sandbox`
 CSP, and `cache-control: private, max-age=300, immutable` — an attachment's bytes never change and its
@@ -433,7 +446,7 @@ ticket carries at most one answer — and it is the only reason this is a tracke
 store one: a pin is visible where a human already looks, which is what makes "does it expire?" a
 question with no mechanism behind it ([02](02-configuration.md#pinning-one-goal-to-a-profile)).
 
-The same call **answers a standing profile proposal from the assayer**, whichever way the operator
+The same call **answers a standing profile proposal from the appraiser**, whichever way the operator
 went. That is what makes "keep mine" a decision rather than a refusal to answer: the tag goes on
 deliberately disagreeing with the proposal, and a gate that re-read the disagreement would ask the
 same question for ever. What is recorded is that the question was answered, never what it was answered
@@ -448,13 +461,13 @@ failure, which is recorded on the error log. Returns `{ok: true, profile, answer
 
 Bodies `{parent?: number}` and `{areaPath?: string}`. Settle one of a goal's two **placement**
 questions — which container it hangs off, and which area node puts it on a team's board. Each takes
-the three answers the assay's proposal has: the value proposed, a different value the operator picked,
+the three answers the appraisal's proposal has: the value proposed, a different value the operator picked,
 or **absent**, which is "this goal wants no such thing". The route does not distinguish the first two,
 because nothing downstream does.
 
 The write goes through `ActionSink` (`setWorkItemParent` / `setWorkItemAreaPath`) — the harness's own,
 never an agent's and never a shell command in a prompt ([13](13-jobs-and-tickets.md#filing-a-ticket)).
-It is then recorded on the assay row (`parent_settled_at` / `area_path_settled_at`), scoped to the
+It is then recorded on the appraisal row (`parent_settled_at` / `area_path_settled_at`), scoped to the
 `goal_ref` the operator was looking at so a superseded proposal cannot be settled. The stamp is
 written on **all three** answers and not only the dismissal: whether the question still stands is
 otherwise derived from the live work item, and that read is a pulse behind this write.
@@ -472,7 +485,7 @@ the provider name) and on a provider failure, which is recorded on the error log
 ### `POST /api/issues/:number/priority`
 
 Body `{priority: boolean}`. Marks this goal a priority, or clears the mark: every origin under it —
-its pickup, its plan, its parts, its assay, its assessor, its validation checks and the pull requests
+its pickup, its plan, its parts, its appraisal, its assessor, its validation checks and the pull requests
 its branches opened — is ranked ahead of the natural cross-rule order and ahead of an
 `/api/upnext/order` drag, behind rule `manual-job` only
 ([05](05-dispatcher.md#marking-a-goal-a-priority)).
@@ -661,12 +674,12 @@ the next heartbeat.
 Unlike the delivery it gates nothing, so recording one never parks an issue; see
 [06](06-issue-pickup.md#the-shortfall--the-same-verdicts-other-polarity).
 
-### `POST /api/issues/:number/assay`
+### `POST /api/issues/:number/appraisal`
 
-Body `{verdict: 'workable'|'unclear'|null, summary?: string}`. The operator's arm of the goal assay,
-and the escape hatch a blocking gate has to have: `workable` releases an issue the assayer refused,
+Body `{verdict: 'workable'|'unclear'|null, summary?: string}`. The operator's arm of the goal appraisal,
+and the escape hatch a blocking gate has to have: `workable` releases an issue the appraiser refused,
 `unclear` parks one without waiting for an agent to agree, and `null` **clears** the row — a delete,
-so "not assayed" has exactly one representation (which is also what a crashed assayer leaves, i.e.
+so "not appraised" has exactly one representation (which is also what a crashed appraiser leaves, i.e.
 the fail-open). An operator verdict is fingerprinted against the issue as the last world snapshot saw
 it, so it expires on the next edit exactly as an agent's does; an issue absent from that snapshot is
 a 404 rather than a guess, since a verdict fingerprinted against an empty goal would be a silent
@@ -686,7 +699,7 @@ them ran the feature.
 - **`summary` is required**, where every other body on this surface takes an optional one. Elsewhere
   the operator has the row in front of them and a default says who decided; here their report _is_ the
   feature, so an empty one asks for nothing. Trimmed, capped at 4000 characters, **400** outside that.
-- **Refusals in order:** **404** when the issue is absent from the last world snapshot (the `assay`
+- **Refusals in order:** **404** when the issue is absent from the last world snapshot (the `appraisal`
   route's check, for its reason), then **409** when no tracker is configured to file into, then the
   body's 400. The cockpit hides the button off the same `canFileTickets` flag, so a 409 means a direct
   call.
@@ -823,7 +836,7 @@ issue its own PR names; **C** — a job is adopted by the origin it stands in fo
 `issue:41` while `issue:41:part:api` — itself a node — lands on itself.
 
 Arm C is what makes the list honest. Arms A and B can only adopt a job that produced a pull request,
-and a requeued assay, plan, retro or review-comment job opens none — so every one of them was
+and a requeued appraisal, plan, retro or review-comment job opens none — so every one of them was
 parentless forever and the call-out offered to file a second tracker item for work an existing one
 already named. Not a stale row that ages out: the condition is permanent until acted on, which is how
 the list came to be mostly `Requeued: Plan issue #35699` and read as noise.
@@ -898,7 +911,7 @@ them, an empty list mid-backfill being indistinguishable from an empty tracker. 
 page's own rows, resolved through the connector's `resolveRefUrl` rather than read off the snapshot —
 that map is built from the world, and most rows here left it long ago.
 
-Note what it does **not** ship: the pickup reasons and the assay. Those are live readings the cockpit
+Note what it does **not** ship: the pickup reasons and the appraisal. Those are live readings the cockpit
 already holds on `/api/state`, and a second copy of them here would be a second answer to a question
 the dispatcher has already answered.
 
@@ -907,6 +920,42 @@ Three readings are quoted rather than re-derived: cost from `buildSpendGoals`, t
 `src/watchLabels.ts` — the same precedence the dispatcher's gate resolves through. It is a lens: no
 rule under `src/dispatcher/` reads the table behind it. → [17](17-cockpit.md#the-tickets-tab),
 [14](14-persistence.md#the-ticket-mirror)
+
+### `GET /api/features`
+
+The **feature board**: every container the mirror's items hang off, with the work beneath it folded.
+No parameters — the board is the whole of what the tracker's hierarchy holds, and the narrowing an
+operator wants is the tickets tab one click down. Rate-limited and fetched rather than polled, for
+`/api/tickets`' reason.
+
+**Gated twice, and a refusal is a `404`.** It exists only where the operator has set `featureBoard`
+([02](02-configuration.md)) _and_ the connector answers `canPlaceWorkItem` — a flat tracker has no
+hierarchy to roll up, so on GitHub the route is absent rather than empty. Neither gate is about
+permission, which is why the refusal is a 404 and not a 403: a 403 would say the operator may not see
+a page that is there, and send whoever reported it looking for a token problem. The predicate is
+`featureBoardOn`, exported from the route module and read by exactly two callers — this refusal, and
+the `config.featureBoard` on `/api/state` the nav draws its tab off. One predicate, because two would
+drift into a tab whose every fetch 404s.
+
+Returns `{ features, orphans, unresolved, environments, backfilling, refUrls }`. Each feature carries
+its identity and hue slot, a six-way `counts` of its children, a `briefing`, a bounded slice of the
+child rows, its rolled-up `costUsd`, its per-environment `reach` and `lastLandingAt`. The briefing is
+three bounded lists — what is being worked, what a delivery verdict stands on, and what is blocked,
+each carrying the sentence its author wrote, and each with the total it stood for
+([17](17-cockpit.md#the-briefing)). It reads escalations as well as the verdicts the rest of the
+payload folds, and quotes all of them: the route prepares nothing and filters nothing, so the lens
+holds the one definition of which escalations block. `orphans` is the same fold over
+the items the tracker says hang off nothing, and is `null` where there are none; `unresolved` counts
+the items whose parent link could not be read at all, which is **neither** of the other two — the same
+three-valued distinction `TicketRow.parent` keeps by being optional rather than nullable.
+
+Every reading on it is quoted rather than re-derived: the outcome word from `src/tickets/outcomes.ts`,
+cost from `buildSpendGoals`, the watch bucket from `src/watchLabels.ts`, which items are containers
+from `isContainerType`, and the environment fold from `rollUpReach` — the **same function** a goal's
+own landings are folded with, so `unknown` cannot collapse into `absent` one tier up. It ships **no
+verdict about a Feature**: no risk word, no forecast, no age judgement. It is a lens, and no rule under
+`src/dispatcher/` reads it. → [17](17-cockpit.md#the-feature-board),
+[24](24-environments.md#the-three-verdicts)
 
 ### `GET /api/retrospectives/:ref`
 
@@ -1258,13 +1307,13 @@ The payload **carries no secret**. The credential is a file the bridge reads at 
 names its path only — which is the same property that lets the registration be pasted into a chat, a
 runbook or a ticket.
 
-### Launching a blueprint
+### Launching a brief
 
 #### `POST /api/jobs`
 
 Queue an operator job. See [13](13-jobs-and-tickets.md). 400 on a missing/empty prompt, a bad `kind`,
 a non-string `title` or `branch`; **409** when a code job names a branch a live task holds. Returns
-`{ ok: true, job, report }`. A **code** job with a tracker configured is a _blueprint_: the harness
+`{ ok: true, job, report }`. A **code** job with a tracker configured is a _brief_: the harness
 files it as a watched ticket that enters the planning funnel and queues **nothing**, returning
 `{ ok: true, ticketRef, report }` with no `job` at all ([13](13-jobs-and-tickets.md#filing-a-ticket));
 a tracker that refuses the create answers **502**. The branch-collision 409 applies only to the
@@ -1285,18 +1334,18 @@ pasted, dropped or picked in the composer, `data` base64 of the raw file.
 - **Bounds** are `src/jobs/attachments.ts`, and only there: at most **4** images, **5 MB** each
   decoded, and **png / jpeg / gif / webp** decided by magic bytes. Each failure is a **400** naming the
   file (by the operator's own label) and the bound it broke, and **no job row is created** — validation
-  runs before `createJob`, because a blueprint that says "make it look like this" without the "this" is
-  worse than no blueprint.
+  runs before `createJob`, because a brief that says "make it look like this" without the "this" is
+  worse than no brief.
 - **The filename is never used as a path.** Files are stored `<index>.<ext>` from the sniffed format
   under `attachmentRoot`, which removes traversal as a category rather than sanitising it; the
-  operator's name is kept as a display label. See [14](14-persistence.md#blueprint-attachments) and
+  operator's name is kept as a display label. See [14](14-persistence.md#brief-attachments) and
   [09](09-execution.md#an-operators-attachments-reach-the-agent).
-- The images are written under **the ref the work ends up on** — `job:<id>` for a blueprint that
+- The images are written under **the ref the work ends up on** — `job:<id>` for a brief that
   dispatches, `issue:<n>` for one the harness files as a ticket. The number is known before any byte is
   written, so nothing is keyed on a job and then moved, and the image is in front of the whole planning
   funnel from the moment it lands. A create that succeeds and an attachment write that fails is
   recorded rather than raised: the ticket is what the operator asked for. See
-  [14](14-persistence.md#blueprint-attachments).
+  [14](14-persistence.md#brief-attachments).
 
 ### `POST /api/upnext/order`
 
@@ -1330,11 +1379,11 @@ takes it. The override is standing rather than one-shot, and is pruned by the sa
 
 409 when the job is absent or no longer queued. Returns `{ ok: true, job }`. Any attachments are
 dropped with it — rows first, then the files — the one deletion in the attachment story, since nothing
-downstream can want a blueprint that never ran.
+downstream can want a brief that never ran.
 
 ### Schedules
 
-Recurring blueprints — the prompt an operator wants queued on a clock. See
+Recurring briefs — the prompt an operator wants queued on a clock. See
 [13](13-jobs-and-tickets.md#schedules). **Nothing here dispatches**: a firing writes the same `jobs`
 row `POST /api/jobs` writes, which rule `manual-job` then drains under the cap and the pause flag
 like any other, so these four routes add a way for work to arrive and no way for it to be run.
@@ -1541,6 +1590,28 @@ differently to the way it just decided. 409 when absent or already settled. **Th
 deliberately not concluded** — that would release every dependent waiting on the thing that was
 refused. The next pulse's reconciler blocks it with its own account of why; see
 [08](08-planning.md#a-step-for-a-person). Returns `{ ok: true, humanTask, report }`.
+
+### `POST /api/human-tasks/:id/close-ticket`
+
+Body `{note?}`. The close-out row's own act: closes the tracker item the row names through
+`ActionSink.closeIssue` (reason `completed`) and settles the row `done` with it, worded as the act —
+`Closed #12 in the tracker from the cockpit.`, with the note appended where one was asked for.
+Broadcasts `world:changed` and runs a cycle, so the goal stops calling the item open without waiting
+for the heartbeat. Returns `{ ok: true, humanTask, report }`.
+
+Four refusals, and each is a different kind of no:
+
+| Condition                                             | Code | Why                                                                           |
+| ----------------------------------------------------- | ---- | ----------------------------------------------------------------------------- |
+| not a `close_out`, absent, or already settled         | 409  | only that row asks for a close, and it has been answered                      |
+| origin is not an `issue:<n>`                          | 409  | there is no tracker item to close                                             |
+| `connector.canCloseIssue()` is false                  | 400  | the deployment has no such operation — `closeIssue` would throw               |
+| the goal's validation is flagged and no note was sent | 400  | the same sentence `/done` costs, for the same reason → [20](20-validation.md) |
+
+The provider's own sentence is quoted whole on a failure (400) and recorded through `errors.record`;
+the row is left exactly where it was, so the obligation still stands. The sweep in
+[13](13-jobs-and-tickets.md#the-step-after-the-launch-the-close-out) remains the authority for a close
+taken anywhere else, and is idempotent against a row this settled.
 
 ### `POST /api/human-tasks/:id/dismiss`
 
@@ -1866,16 +1937,16 @@ read **once** and shared, so two parts of the UI cannot disagree.
 | `config`                        | `heartbeatIntervalMs`, `maxConcurrentAgents`, `watchLabel`, `containerTypes`, `canFileTickets`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `control`                       | The **live** cap and pause state. The cockpit reads these, not the frozen `config` block.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `worldObservedAt`               | When `world` was observed — the baseline's `takenAt`. **Null** before the first cycle, when `world` is empty.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `world`                         | The snapshot, with `health`, `attention` and `ciVerdict` per open PR and `pickup`, `conclusion`, `shortfall`, `assay`, `completion` and `spend` per issue.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `world`                         | The snapshot, with `health`, `attention` and `ciVerdict` per open PR and `pickup`, `conclusion`, `shortfall`, `appraisal`, `completion` and `spend` per issue.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `retainedRuns`                  | Runs whose issue the world has forgotten (#203, #234), rebuilt from their stored snapshots by the same `retainedRunIssues` the dispatcher unions into its issue list, through the same per-issue enrichment a live one takes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `plans`, `planParts`            | The plan graph — the same rows the per-issue chip reads, with `statusCommentRef` as a canonical ref.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `tasks`                         | Every task, **without prompts** — `TaskSummary`, not `Task`. See _Bulk text_ below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `jobs`                          | Operator jobs, newest first.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `schedules`                     | Recurring blueprints, oldest first — **every** one, paused included, since this is the only surface anywhere that says a paused one exists. What a firing produces is an ordinary entry in `jobs`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `schedules`                     | Recurring briefs, oldest first — **every** one, paused included, since this is the only surface anywhere that says a paused one exists. What a firing produces is an ordinary entry in `jobs`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `agents`                        | Every agent row, including usage and the progress note.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `flags`                         | Every artifact chip, grouped by the cockpit onto agents.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `files`                         | Every file every agent wrote.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `attachments`, `attachmentUrls` | Images an operator attached to a blueprint (#249), every ref in one list, plus the capability-carrying URL to load each one's bytes. The cockpit filters by `targetRef`: `job:<id>` while queued, `issue:<n>` once filed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `attachments`, `attachmentUrls` | Images an operator attached to a brief (#249), every ref in one list, plus the capability-carrying URL to load each one's bytes. The cockpit filters by `targetRef`: `job:<id>` while queued, `issue:<n>` once filed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `overlaps`                      | Paths two concurrently-live code agents wrote.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `humanTasks`                    | Work only a person can do — open ones and a settled tail, newest first. Its own list rather than part of `escalations`: nobody is parked on one.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `knowledge`                     | Every fact the fleet has written down, newest first, **the rejected ones included** — each with the corroborator count that promotes it, the count of voices disputing it, the ratio between them, how many disputes are unanswered, how often it was asked for (`asks`, `lastAskedAt`) and whether its `check:` scope has stopped matching anything (`scopeStale`, `scopeLastMatchedAt`). Every one of those is taken server-side beside the rows it counts; the ratio in particular, because two counts of _voices_ divided in the browser would be arithmetic over numbers whose rule the view layer does not know — and the staleness verdict for the same reason, since a "days since" taken from `Date.now()` in the view layer would be a second implementation of it. All of them are readings and none of them acts ([27](27-knowledge.md#what-it-costs)). The evidence behind a claim is not here: see `GET /api/knowledge/facts/:id`. |
@@ -1946,16 +2017,16 @@ Eight consistency points:
   silently: the cockpit would say _repair_ while the harness held. `test/ciPolicy.test.ts` asserts the
   shipped value against the function itself rather than against a transcribed literal, so a second
   expectation written out by hand cannot become a second implementation.
-- **The assay verdict sits beside `conclusion` and `shortfall`, not inside `pickup`** — pickup answers
-  "would an agent start next cycle", the assay answers "is there anything here to start on" (see
+- **The appraisal verdict sits beside `conclusion` and `shortfall`, not inside `pickup`** — pickup answers
+  "would an agent start next cycle", the appraisal answers "is there anything here to start on" (see
   [06](06-issue-pickup.md)). `{verdict, summary, by, decidedAt}`, or **null**, and null is a third
   reading rather than a synonym for `workable`: `pickup.reasons[0]` already carries the refusal text,
   but "refused" and "awaiting a verdict" differ _only_ in that prose, and telling them apart by reading
   a string written for a human is what `signalPolarity` refuses to do. `goalRef` is deliberately not
   shipped — it is the fingerprint the hold is measured against, not a reading. `commentRef` rides
-  beside the verdict: the standing comment the assay desk keeps on the ticket, as a canonical ref.
+  beside the verdict: the standing comment the appraisal desk keeps on the ticket, as a canonical ref.
 - **A comment the harness maintains ships as a ref, never as the provider's id** (#171). Both records
-  that keep one — `plan.statusCommentRef` and `issue.assay.commentRef` — are stored as a provider
+  that keep one — `plan.statusCommentRef` and `issue.appraisal.commentRef` — are stored as a provider
   comment id and translated on the way out by `issueCommentRef` into `issue:<n>:comment:<id>` (see
   [15](15-integrations.md#comment-refs)). The store is untouched; the id is what `upsertIssueComment`
   round-trips, and it is exactly what must not reach a resolver, which reads a bare number as an issue

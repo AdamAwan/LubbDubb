@@ -106,7 +106,7 @@ test('the number-param routes refuse a non-numeric path, each in its own words',
   const issueRoutes = [
     { url: '/api/issues/abc/watch', payload: { watched: true } },
     { url: '/api/issues/abc/conclusion', payload: { verdict: 'done' } },
-    { url: '/api/issues/abc/assay', payload: { verdict: 'workable' } },
+    { url: '/api/issues/abc/appraisal', payload: { verdict: 'workable' } },
     { url: '/api/issues/abc/delivered', payload: { delivered: true } },
     { url: '/api/issues/abc/shortfall', payload: { cause: 'goal' } },
     { url: '/api/issues/abc/dismiss-run', payload: {} },

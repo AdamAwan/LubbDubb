@@ -96,7 +96,7 @@ const ORDER_OPTIONS: ReadonlyArray<{ value: TicketOrder; label: string; title: s
  *
  * **The mirror is the list; the world is the overlay.** Rows come from the route,
  * which reads the local mirror and is fetched on open and per page rather than
- * polled. Everything that is a *live reading* — the pickup reasons, the assay, the
+ * polled. Everything that is a *live reading* — the pickup reasons, the appraisal, the
  * current labels — is read off the state snapshot the cockpit already has, for the
  * one reason that matters: those are the server's own sentences, and a second
  * derivation of them here would be a second opinion about a decision made
@@ -706,7 +706,7 @@ function TicketRowView({
   // what it would do next cycle, and a second reading of the gates here would be a
   // second opinion about a decision made elsewhere.
   const reasons = issue?.pickup.reasons ?? [];
-  const intake = issue?.assay?.verdict === 'unclear';
+  const intake = issue?.appraisal?.verdict === 'unclear';
   const frozen = row.tracking === 'frozen';
 
   return (

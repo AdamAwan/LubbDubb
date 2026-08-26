@@ -47,7 +47,7 @@ the goal occupied the fleet, which is what the drain is a drain of.
 | Close-out           | `human_tasks` `close_out`, `created_at → resolved_at`  |
 | Validation          | `human_tasks` `validate`, same span                    |
 | A step for a person | `human_tasks` `ask` **with a `part_id`**               |
-| The profile gate    | `issue_assays`, `decided_at → profile_answered_at`\*\* |
+| The profile gate    | `issue_appraisals`, `decided_at → profile_answered_at`\*\* |
 | A standing delivery | `issue_deliveries`, `decided_at →` the end of the run  |
 | An escalation       | `escalations`, `created_at → answered_at`              |
 
@@ -55,11 +55,11 @@ the goal occupied the fleet, which is what the drain is a drain of.
 write-up are all still inside the span, which is exactly why agent durations remain the wrong
 substitute.
 
-**\*\* The profile gate is the hold `assayHold` reports, and its span is closed or it is nothing.**
-Two things follow, and both were once got wrong together. It is asked through `assayHold`
-(`src/intake/assay.ts`) rather than re-tested here — the same pure function the pickup gate and the
-`assay` bucket ask — so a gate the world has **released** is not a hold: a ticket rewritten since the
-assay no longer fingerprints to what the assayer read, and that is precisely how a goal with an
+**\*\* The profile gate is the hold `appraisalHold` reports, and its span is closed or it is nothing.**
+Two things follow, and both were once got wrong together. It is asked through `appraisalHold`
+(`src/intake/appraisal.ts`) rather than re-tested here — the same pure function the pickup gate and the
+`appraisal` bucket ask — so a gate the world has **released** is not a hold: a ticket rewritten since the
+appraisal no longer fingerprints to what the appraiser read, and that is precisely how a goal with an
 unanswered proposal comes to ship at all. And an **unanswered** proposal is subtracted as nothing
 rather than run to the end of the run: it has no end, so clamped it erases the whole span of a goal
 that demonstrably completed — the completion being the evidence the fleet was not held. The
@@ -138,9 +138,9 @@ same issue.
 | Bucket        | Pickup status                                      | What it means                                   |
 | ------------- | -------------------------------------------------- | ----------------------------------------------- |
 | **Inflight**  | `active` · `has_pr` · `planning`                   | The fleet is on it. Drains over time.           |
-| **Queued**    | `eligible` · `blocked` · `cooldown` · `assay`\*    | Unstarted supply the fleet may take.            |
+| **Queued**    | `eligible` · `blocked` · `cooldown` · `appraisal`\*    | Unstarted supply the fleet may take.            |
 | **Reservoir** | `unwatched`                                        | Not supply. One watch write away from being it. |
-| **Held**      | `escalated` · `delivered` · `retained` · `assay`\* | Parked on a person. The fleet cannot drain it.  |
+| **Held**      | `escalated` · `delivered` · `retained` · `appraisal`\* | Parked on a person. The fleet cannot drain it.  |
 | **Gone**      | `done`                                             | —                                               |
 
 `blocked` is in **queued** and it is the healthiest number on the card: it means more work than
@@ -148,12 +148,12 @@ slots, which is the condition this whole module exists to keep a deployment in. 
 it would report a full backlog as a drought on precisely the fleet working hardest. `cooldown` is
 supply that is coming back.
 
-### \* Why `assay` is in two rows
+### \* Why `appraisal` is in two rows
 
-`assay` is the one status that covers two opposite situations, and it must not be bucketed by name.
-An issue the fleet has not assayed **yet** is ordinary unstarted supply — an assayer is coming. One
-an assayer refused, or priced and left standing, is parked on a person. The lens separates them by
-asking `assayHold` (`src/intake/assay.ts`), the same pure function the gate itself asks: a null hold
+`appraisal` is the one status that covers two opposite situations, and it must not be bucketed by name.
+An issue the fleet has not appraised **yet** is ordinary unstarted supply — an appraiser is coming. One
+an appraiser refused, or priced and left standing, is parked on a person. The lens separates them by
+asking `appraisalHold` (`src/intake/appraisal.ts`), the same pure function the gate itself asks: a null hold
 is the pending arm.
 
 Read as held, **every freshly tagged issue would count as work nobody can do**, and a deployment

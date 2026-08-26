@@ -1,8 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ErrorLogEntry, ErrorLogInput } from '../src/types.js';
 import { loadConfig } from '../src/config.js';
@@ -10,6 +9,7 @@ import { RuntimeControl } from '../src/runtimeControl.js';
 import { buildSystem } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { defaultPoolSize, WorktreeManager } from '../src/worktree/worktreeManager.js';
+import { tmpDir } from './support/gitRepo.js';
 
 /**
  * Everything here is git behaviour — a slot's dirt, a stash, a ref — so it runs
@@ -19,7 +19,7 @@ import { defaultPoolSize, WorktreeManager } from '../src/worktree/worktreeManage
  * through an ignored file.
  */
 function initRepo(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-repo-'));
+  const dir = tmpDir('lubbdubb-repo-');
   const run = (args: string[]) => execFileSync('git', args, { cwd: dir });
   run(['init', '-q', '-b', 'main']);
   run(['config', 'user.email', 't@t.com']);
@@ -106,7 +106,7 @@ test('the pool bound follows the live cap, not the cap the harness booted with',
 });
 
 test('the bound is the live cap through the composition root', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
+  const dir = tmpDir();
   const base = {
     labelPrefix: '',
     dbPath: ':memory:',
@@ -176,10 +176,10 @@ test('a stranded slot on a detached HEAD is reclaimed too — there is no branch
   const wt = manager(repo, 1, recorder());
 
   // A read-only checkout: detached at a commit, with no ref of its own anywhere.
-  const dir = await wt.ensureReadOnly('assay/issue/1', 'main');
+  const dir = await wt.ensureReadOnly('appraisal/issue/1', 'main');
   assert.equal(git(dir, ['rev-parse', '--abbrev-ref', 'HEAD']), 'HEAD');
   strand(dir);
-  await wt.remove('assay/issue/1');
+  await wt.remove('appraisal/issue/1');
 
   assert.equal(await wt.ensure('issue/2', 'main'), dir);
   assert.equal(salvageRefs(repo).length, 1, 'the stash takes whatever HEAD is, named or not');

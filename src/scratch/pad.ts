@@ -40,7 +40,7 @@ const MAX_PAD_TOPIC = 60;
 /**
  * The pad an origin belongs to, or null when the origin is not inside one issue's
  * subtree. The vocabulary is the harness's own — `issue:<n>` plus the `:plan`,
- * `:assay`, `:assess`, `:retro` and `:part:<slug>` suffixes the rules already
+ * `:appraisal`, `:assess`, `:retro` and `:part:<slug>` suffixes the rules already
  * dispatch on — so nothing here has to be kept in step with a second taxonomy.
  */
 export function padOriginFor(originRef: string | null): string | null {

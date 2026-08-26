@@ -107,7 +107,7 @@ rather than the field inside it. The list:
 | Retired key                                                        | Because                                                                                              |
 | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
 | `planning.enabled`, `validation.enabled`                           | always on ([08](08-planning.md), [20](20-validation.md))                                             |
-| `assay`, `assessment`, `retrospective` (and each one's `.enabled`) | always on ([06](06-issue-pickup.md), [05](05-dispatcher.md))                                         |
+| `appraisal`, `assessment`, `retrospective` (and each one's `.enabled`) | always on ([06](06-issue-pickup.md), [05](05-dispatcher.md))                                         |
 | `mcp`, `mcp.enabled`, `mcp.permissionEscalation`                   | always on ([11](11-mcp-tools.md))                                                                    |
 | `validation.desktop`, `validation.desktopSkill`                    | the channel and its skill are always on ([20](20-validation.md))                                     |
 | `reapMergedBranches`                                               | always on ([07](07-pull-requests.md#reaping-a-merged-branch))                                        |
@@ -370,7 +370,7 @@ resolve them against the wrong directory:
 | `defaultBranch`  | `string` | `"main"`                | The integration branch. A new agent branch is cut from it, and a PR targeting anything else is treated as stacked. Not auto-detected.                                                                                                                                                                                                                                                                                                                                     |
 | `worktreeRoot`   | `string` | `.lubbdubb/worktrees`   | Root for the pool of worktree slot directories (`slot-0`, `slot-1`, …).                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `deskRoot`       | `string` | `.lubbdubb/desk`        | Root for desk-task scratch directories (one per task id).                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `attachmentRoot` | `string` | `.lubbdubb/attachments` | Root for images attached to a blueprint (issue #249) — deliberately outside every worktree, so a screenshot cannot be committed onto a branch. Every agent launch is granted read access to this whole root via `permissions.additionalDirectories`, which is a real widening: an agent working one goal can read another goal's attachments. See [09](09-execution.md) and [10](10-agent-runtimes.md).                                                                   |
+| `attachmentRoot` | `string` | `.lubbdubb/attachments` | Root for images attached to a brief (issue #249) — deliberately outside every worktree, so a screenshot cannot be committed onto a branch. Every agent launch is granted read access to this whole root via `permissions.additionalDirectories`, which is a real widening: an agent working one goal can read another goal's attachments. See [09](09-execution.md) and [10](10-agent-runtimes.md).                                                                   |
 | `localRunRoot`   | `string` | `.lubbdubb/local-run`   | The local run's one checkout, kept warm between goals. **Must not be under `worktreeRoot`**, and is **refused at load** if it is: the pool counts every registered worktree under its root whatever the directory is called, so a preview checkout in there would count toward the bound and be handed to an agent. → [23](23-local-runs.md#the-checkout)                                                                                                                                                      |
 | `validationRoot` | `string` | `.lubbdubb/validation`  | Root for a goal's validation resources — fixtures, reference material, sample data — one directory per goal (`<root>/issue-284/`). `attachmentRoot`'s storage rule, argument for argument: outside every worktree, canonical rather than copied per dispatch, and granted to every agent launch through `permissions.additionalDirectories`. Granted on every launch, so an agent's readable set does not depend on a policy flag it cannot see. → [20](20-validation.md) |
 
@@ -535,8 +535,8 @@ reading the file is not the same as knowing the policy.
 | `issuePickupStates`    | `string[]` (optional)    | unset                                                             | When non-empty, only items whose provider-native state is listed are eligible. Items with no such state bypass it.                                                                                                                       |
 | `issueInReviewState`   | `string` (optional)      | unset                                                             | The state an item is moved to once a PR is open for it. Takes effect only alongside `issuePickupStates`.                                                                                                                                 |
 | `issueInProgressState` | `string` (optional)      | unset                                                             | The state an item is moved to once an agent is **working** it. Takes effect only alongside `issuePickupStates`, and is folded into them — see [the in-progress state](#the-in-progress-state).                                           |
-| `issueContainerTypes`  | `string[]`               | `["Feature", "Epic"]`                                             | Item types that **hold** work rather than being work. Never picked up, planned or assayed. Matched case-insensitively; `[]` turns the gate off; items with no type bypass it.                                                            |
-| `issueFilingTypes`     | `string[]`               | `["User Story", "Bug"]`                                           | The types the harness **creates** at when filing a finding, a blueprint or unrecorded work; the **first** entry is the one it uses — see [what a filed item is](#what-type-a-filed-item-is). Azure only; `[]` falls back to the default. |
+| `issueContainerTypes`  | `string[]`               | `["Feature", "Epic"]`                                             | Item types that **hold** work rather than being work. Never picked up, planned or appraised. Matched case-insensitively; `[]` turns the gate off; items with no type bypass it.                                                            |
+| `issueFilingTypes`     | `string[]`               | `["User Story", "Bug"]`                                           | The types the harness **creates** at when filing a finding, a brief or unrecorded work; the **first** entry is the one it uses — see [what a filed item is](#what-type-a-filed-item-is). Azure only; `[]` falls back to the default. |
 | `issueBugType`         | `string` (optional)      | `"Bug"`                                                           | The type a bug an operator raised is filed as. A project on the Basic process sets `"Issue"`. Azure only.                                                                                                                                |
 
 #### Board columns
@@ -586,6 +586,7 @@ Both transitions need a provider that can write the state back (Azure). GitHub i
 
 | Key                                   | Type             | Default                              | Behaviour                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | ------------------------------------- | ---------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `featureBoard`                        | `boolean`        | `false`                              | Draw the [feature board](17-cockpit.md#the-feature-board) — the fleet's work rolled up per Feature rather than per story. **Not sufficient on its own**: the tab needs a provider that can place a work item too (`canPlaceWorkItem`, asked of the connector), because a flat tracker has no hierarchy to roll up and the page would be one grey card. With the flag on and a provider without one, the tab is **absent** rather than empty. Off by default because most of what it draws is meaningless without the second half. |
 | `planning.maxConcurrentPartsPerIssue` | `number`         | `2`                                  | How many parts of one plan may have live agents at once.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `planning.gitFetchIntervalMs`         | `number`         | `60000`                              | Floor on how often plan reconciliation runs `git fetch`. `0` = every pulse.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `validation.desktopClaimMinutes`      | `number`         | `60`                                 | How long a desktop claim holds a check unreleased. A claim normally goes when the session's socket closes or the check is reported; neither survives a harness killed in between, and a stale claim blocks the fleet from a check nobody is running.                                                                                                                                                                                                                                                                                                                                                                                  |
@@ -719,7 +720,7 @@ a model per _kind_ of work:
   _cheaper_ or _deeper_ than what is standing, and what orders the cockpit's dropdowns. Declaration
   order was the alternative and is not one — a key's position in a JSON object is not a value, and
   reordering the block would silently re-rank the fleet. `description` is the whole of what the
-  assayer is told about a deployment's profiles when it proposes one, so it is written as
+  appraiser is told about a deployment's profiles when it proposes one, so it is written as
   instructions to an agent about when to pick this profile rather than as a note to the operator.
 - **`effort` is optional, and omitting it is not the middle setting.** `claude --effort` takes
   `low`/`medium`/`high`/`xhigh`/`max`, and the CLI's own default is the top of that ladder — so an
@@ -751,7 +752,7 @@ from `loadConfig` (not only `loadDeploymentConfig`, or no test could reach it):
   it rejects — at spawn, per agent, rather than once at boot;
 - a missing or non-numeric `rank`, a missing or empty `description`, or two profiles sharing a rank.
   The first two are refused rather than defaulted because both have a _silent_ wrong answer available:
-  an inferred rank reads as a deliberate ordering, and an empty description makes every assay proposal
+  an inferred rank reads as a deliberate ordering, and an empty description makes every appraisal proposal
   a guess that looks exactly like a judgement. A shared rank is refused because "deeper or cheaper
   than what is standing" then has no answer;
 - a `default` or `byRule` value naming a profile that is not in `profiles`, which would otherwise
@@ -819,7 +820,7 @@ The chain a dispatch resolves through is then three levels, in `resolveAgentProf
   not a direction.
 - **It reaches every dispatch on that issue's origins, with two carve-outs.** `issue-retro` runs on its
   `byRule` entry whatever the goal is pinned to: a retrospective **gates nothing**, so inheriting a deep
-  pin is real money on a write-up no dispatch reads. `issue-assay` runs on its own entry because it is
+  pin is real money on a write-up no dispatch reads. `issue-appraisal` runs on its own entry because it is
   the stage that _produces_ the pin. Both are declared in `UNPINNED_SUFFIXES` in `src/profilePin.ts`.
   Nothing outside the `issue:<n>` subtree is pinned at all, so the CI and review rules on a pull request
   the work produced resolve on `byRule` — following a pin down that lineage is a second mechanism.
@@ -836,10 +837,10 @@ The chain a dispatch resolves through is then three levels, in `resolveAgentProf
 - **Nothing needs enabling.** Pins are on wherever `labelPrefix` and `agentModels.profiles` are both
   set, and off — completely, with no control drawn — where either is missing.
 
-#### The gate: the assayer proposes, a human confirms
+#### The gate: the appraiser proposes, a human confirms
 
-`assay_issue` asks the assayer for a profile alongside its `workable`/`unclear` verdict, enumerating
-this deployment's own profiles with their descriptions. The assayer is the right author because it is
+`appraise_issue` asks the appraiser for a profile alongside its `workable`/`unclear` verdict, enumerating
+this deployment's own profiles with their descriptions. The appraiser is the right author because it is
 the only stage that reads the ticket against the repository **before** anything is spent, and it is
 already dispatched in front of every fresh issue. It necessarily runs on its own `byRule` entry.
 
@@ -849,31 +850,31 @@ would be lost, since an operator who splits `deep` into two knows what the two a
 vocabulary cannot be told.
 
 **A proposal that differs from what is already standing holds the funnel** until a human answers it,
-as a second arm on `assayHold` — see [06](06-issue-pickup.md). Blocking rather than informing, for the
+as a second arm on `appraisalHold` — see [06](06-issue-pickup.md). Blocking rather than informing, for the
 reason the `unclear` arm blocks: informing is what the cockpit already does for every verdict, and the
 dispatch the gate exists to price correctly would happen anyway. What makes it safe is what makes the
 first arm safe:
 
-- **An absent proposal holds nothing.** An assayer that crashes, is killed, spends its attempt cap or
+- **An absent proposal holds nothing.** An appraiser that crashes, is killed, spends its attempt cap or
   simply names no profile leaves the issue to the funnel it would have entered anyway, on its rule's
   own entry. So does every `unclear` verdict — a goal nobody could start from has no work to size.
 - **Agreement holds nothing, and costs no click.** The divergence is decided **once**, where the
   proposal is written and the ticket's tag and the operator's config are both in hand
-  (`AgentManager.recordAssay`), and a proposal that matched what was standing is stored already
+  (`AgentManager.recordAppraisal`), and a proposal that matched what was standing is stored already
   answered. So the gate itself is a two-field read with no config threaded into it, and no caller can
   forget a lookup and gate the whole fleet by accident.
 - **The answer is recorded, not the choice.** The operator's click writes the tag _and_ stamps
-  `issue_assays.profile_answered_at`. What was chosen is the tag; a second copy of it on the row would
+  `issue_appraisals.profile_answered_at`. What was chosen is the tag; a second copy of it on the row would
   be free to drift. This is also why "keep mine" works — the tag goes on deliberately disagreeing with
-  the assayer, and a gate that re-read the disagreement would ask the same question for ever.
+  the appraiser, and a gate that re-read the disagreement would ask the same question for ever.
 - **It does not expire on world signal**, unlike the `unclear` arm. A comment or a link is how a human
   answers "I could not act on this goal"; it is not how they authorise spending more than the rule
   allows. Three things end it: the operator answering, the ticket being rewritten (a new fingerprint,
-  so a re-assay proposes against the current text), and `clearAssay`.
+  so a re-appraisal proposes against the current text), and `clearAppraisal`.
 
 The tag therefore holds the **resolved answer**, not an operator override sitting beside an inferred
 one — which is what collapses the precedence chain to one lookup at dispatch. Who decided is still
-answerable: the assay row keeps what was proposed, and a difference between it and the tag is a human
+answerable: the appraisal row keeps what was proposed, and a difference between it and the tag is a human
 having intervened.
 
 ### Provider targets
@@ -1006,7 +1007,7 @@ mechanisms that happen to share a name.
 
 `issueFilingTypes` names the Azure work item types the harness **creates** at, and the **first** entry
 is the one it uses (`filingType`, `src/ticketTypes.ts`). The three non-bug filing arms — a deferred
-finding, a blueprint, unrecorded work — used to hardcode `--type Task`, which is the altitude a story
+finding, a brief, unrecorded work — used to hardcode `--type Task`, which is the altitude a story
 is **broken down** at rather than the one a backlog is filed at: an item created there has no story
 above it, rolls up to nothing, and appears on no backlog anybody grooms.
 

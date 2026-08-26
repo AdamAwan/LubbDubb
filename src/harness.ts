@@ -12,12 +12,12 @@ import { awaitingReview, isPrWatched } from './prHealth.js';
 
 import { rejectionSignalQuery } from './proposals/proposals.js';
 import { deliverySignalQuery } from './delivery/delivery.js';
-import { assaySignalQuery } from './intake/assay.js';
+import { appraisalSignalQuery } from './intake/appraisal.js';
 import { retainedRunIssues, runsToRecord } from './floor/runs.js';
 import type { AgentModels } from './agents/modelPolicy.js';
 import type { LimitResumeFailure } from './agents/agentManager.js';
 import type { PlanReconciler } from './plans/planReconciler.js';
-import type { AssayDesk } from './intake/assayDesk.js';
+import type { AppraisalDesk } from './intake/appraisalDesk.js';
 import type { AreaPathDirectory } from './intake/areaPaths.js';
 import type { PrNamingDesk } from './prNamingDesk.js';
 import type { PrWatchDesk } from './prWatchDesk.js';
@@ -81,12 +81,12 @@ interface HarnessDeps {
    */
   plans?: PlanReconciler;
   /**
-   * Asks the goal assay's question on the ticket itself. Absent = no comment (and
-   * it no-ops anyway with the assay off).
+   * Asks the goal appraisal's question on the ticket itself. Absent = no comment (and
+   * it no-ops anyway with the appraisal off).
    */
-  assays?: AssayDesk;
+  appraisals?: AppraisalDesk;
   /**
-   * The project's area tree, kept fresh enough for the assay tool and the state
+   * The project's area tree, kept fresh enough for the appraisal tool and the state
    * snapshot to read synchronously. Absent = never read, and then every item
    * reads as classified — which is the correct answer for a tracker that has no
    * such tree, and the reason the directory itself distinguishes "no tree" from
@@ -568,14 +568,16 @@ export class Harness extends EventEmitter {
       // judged, and what was said. Unbounded in age for the reason deliveries are,
       // and the read that can end an `unclear` verdict is derived from the verdicts
       // themselves — so a deployment that has never refused a goal does no read.
-      const assays = store.listAssays();
-      const assayWindow = assaySignalQuery(assays);
-      const assaySignals = assayWindow ? store.listWorldEventsSince(assayWindow.since, assayWindow.refs) : [];
-      // Put the assay's question where the person who wrote the ticket will see it.
+      const appraisals = store.listAppraisals();
+      const appraisalWindow = appraisalSignalQuery(appraisals);
+      const appraisalSignals = appraisalWindow
+        ? store.listWorldEventsSince(appraisalWindow.since, appraisalWindow.refs)
+        : [];
+      // Put the appraisal's question where the person who wrote the ticket will see it.
       // After the read above so it judges the same verdicts the dispatcher will, and
       // before `decide` only because everything else on the pulse is — it changes no
       // decision, and a failure is recorded rather than thrown.
-      await this.deps.assays?.announce(world, assaySignals);
+      await this.deps.appraisals?.announce(world, appraisalSignals);
       // The area tree, if its own TTL says it is stale — otherwise a no-op. Here
       // rather than on a timer of its own for the reason every other periodic read
       // is on the pulse: a timer keeps firing across a drain and an upgrade
@@ -696,8 +698,8 @@ export class Harness extends EventEmitter {
         deliveries,
         deliverySignals,
         shortfalls,
-        assays,
-        assaySignals,
+        appraisals,
+        appraisalSignals,
         // Which goals already have a write-up — origins only. Rule `issue-retro` needs to know
         // whether to dispatch one; what it says is deliberately out of its reach.
         retrospectiveOrigins,
@@ -769,8 +771,8 @@ export class Harness extends EventEmitter {
             planParts,
             deliveries,
             deliverySignals,
-            assays,
-            assaySignals,
+            appraisals,
+            appraisalSignals,
             runs: store.listIssueRuns(),
             headroom,
             paused: this.deps.runtime.paused,

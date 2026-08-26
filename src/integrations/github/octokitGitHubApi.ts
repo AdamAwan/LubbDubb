@@ -26,6 +26,14 @@ import type {
  * has no REST equivalent — and deliberately narrow: the root comment's
  * `databaseId` to join against the REST comments read, and the reviewer's verdict.
  */
+const RESOLVE_THREAD_MUTATION = `
+  mutation ($threadId: ID!) {
+    resolveReviewThread(input: { threadId: $threadId }) {
+      thread { isResolved }
+    }
+  }
+`;
+
 const REVIEW_THREADS_QUERY = `
   query ($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
     repository(owner: $owner, name: $repo) {
@@ -33,6 +41,7 @@ const REVIEW_THREADS_QUERY = `
         reviewThreads(first: 100, after: $cursor) {
           pageInfo { hasNextPage endCursor }
           nodes {
+            id
             isResolved
             comments(first: 1) { nodes { databaseId } }
           }
@@ -42,13 +51,24 @@ const REVIEW_THREADS_QUERY = `
   }
 `;
 
+/** A review thread as {@link REVIEW_THREADS_QUERY} reads it, node id included — this file's shape, not the seam's. */
+interface GqlThread {
+  nodeId: string;
+  rootCommentId: number;
+  isResolved: boolean;
+}
+
 /** Only the fields {@link REVIEW_THREADS_QUERY} selects; everything is nullable per the GraphQL schema. */
 interface GqlReviewThreadPage {
   repository?: {
     pullRequest?: {
       reviewThreads?: {
         pageInfo?: { hasNextPage?: boolean; endCursor?: string | null };
-        nodes?: Array<{ isResolved?: boolean; comments?: { nodes?: Array<{ databaseId?: number | null }> } } | null>;
+        nodes?: Array<{
+          id?: string | null;
+          isResolved?: boolean;
+          comments?: { nodes?: Array<{ databaseId?: number | null }> };
+        } | null>;
       };
     };
   };
@@ -318,13 +338,14 @@ export class OctokitGitHubApi implements GitHubApi {
    * resolution has no REST representation at all, so `octokit.pulls` cannot
    * answer whether a reviewer marked their comment resolved.
    *
-   * Only `isResolved` and the root comment's `databaseId` are selected — the
-   * comment bodies keep coming from REST, so this query stays small and a
-   * GraphQL outage costs the resolution verdict rather than the comments
-   * themselves. Paginated by hand because `octokit.graphql` has no `paginate`.
+   * Only the node id, `isResolved` and the root comment's `databaseId` are
+   * selected — the comment bodies keep coming from REST, so this query stays
+   * small and a GraphQL outage costs the resolution verdict rather than the
+   * comments themselves. Paginated by hand because `octokit.graphql` has no
+   * `paginate`.
    */
-  async listPullReviewThreads(number: number): Promise<GhReviewThread[]> {
-    const threads: GhReviewThread[] = [];
+  private async reviewThreadNodes(number: number): Promise<GqlThread[]> {
+    const threads: GqlThread[] = [];
     let cursor: string | null = null;
     do {
       const page: GqlReviewThreadPage = await this.octokit.graphql(REVIEW_THREADS_QUERY, {
@@ -340,12 +361,38 @@ export class OctokitGitHubApi implements GitHubApi {
         // thread we cannot join to the REST read, so it is dropped rather than
         // guessed at — it degrades to the reply arm, which is the safe direction.
         const rootCommentId = node.comments?.nodes?.[0]?.databaseId;
-        if (typeof rootCommentId !== 'number') continue;
-        threads.push({ rootCommentId, isResolved: node.isResolved === true });
+        if (typeof rootCommentId !== 'number' || typeof node.id !== 'string') continue;
+        threads.push({ nodeId: node.id, rootCommentId, isResolved: node.isResolved === true });
       }
       cursor = connection.pageInfo?.hasNextPage ? (connection.pageInfo.endCursor ?? null) : null;
     } while (cursor !== null);
     return threads;
+  }
+
+  async listPullReviewThreads(number: number): Promise<GhReviewThread[]> {
+    const threads = await this.reviewThreadNodes(number);
+    // The node id stays in this file: everything outside it joins a thread to the
+    // REST read by its root comment, and a second identifier crossing the seam
+    // would be one more thing every fixture has to know about GitHub.
+    return threads.map(({ rootCommentId, isResolved }) => ({ rootCommentId, isResolved }));
+  }
+
+  /**
+   * The one GraphQL *write*, for the read's reason: `resolveReviewThread` is a
+   * mutation with no REST equivalent, and it takes the thread's node id — which
+   * is why the lookup above is shared rather than the caller being handed an id
+   * it has no other use for.
+   *
+   * A thread already resolved returns without mutating: the act is idempotent
+   * either way, but a second mutation on a thread a reviewer resolved themselves
+   * would post nothing and cost a request.
+   */
+  async resolveReviewThread(number: number, rootCommentId: number): Promise<boolean> {
+    const thread = (await this.reviewThreadNodes(number)).find((t) => t.rootCommentId === rootCommentId);
+    if (!thread) return false;
+    if (thread.isResolved) return true;
+    await this.octokit.graphql(RESOLVE_THREAD_MUTATION, { threadId: thread.nodeId });
+    return true;
   }
 
   async getCombinedStatus(sha: string): Promise<GhCombinedStatus> {

@@ -253,7 +253,7 @@ export interface Config {
   /**
    * Provider-native item types that *hold* work rather than being work — Azure
    * DevOps Features and Epics. An item of one of these types is never picked up,
-   * planned or assayed: its children are the work, and an agent put on the
+   * planned or appraised: its children are the work, and an agent put on the
    * container would implement a decomposition that already exists beside it in the
    * tracker. Meaningful only for providers that report an item type (Azure);
    * GitHub issues carry none and are unaffected. Defaults to
@@ -263,7 +263,7 @@ export interface Config {
   issueContainerTypes: string[];
   /**
    * The work item types the harness **files** at, when an operator files a
-   * finding, a blueprint or unrecorded work from the cockpit. The **first** entry
+   * finding, a brief or unrecorded work from the cockpit. The **first** entry
    * is the one it creates; the rest document what the project files at.
    *
    * It used to be a menu a filing agent picked from. Since #394 the harness files
@@ -302,6 +302,21 @@ export interface Config {
    * implements the funnel.
    */
   planning: PlanningPolicy;
+  /**
+   * The feature board (`src/features/`) — the cockpit tab that reads the fleet's
+   * work one tier up, per Feature rather than per story.
+   *
+   * **Off by default**, and off is the honest default rather than a cautious one:
+   * the board is a roll-up over a container hierarchy, and a tracker with no
+   * hierarchy has nothing to roll up. On a flat tracker every item is its own
+   * orphan and the page is one grey card — so the flag turning it on is only half
+   * the gate. The other half is the provider's, asked of the connector rather than
+   * inferred from its name, exactly as `canCloseIssue` and `canSetWorkItemState`
+   * are: with `featureBoard: true` and a provider that cannot place a work item,
+   * the tab is **absent** rather than empty.
+   * → `docs/spec/17-cockpit.md#the-feature-board`
+   */
+  featureBoard: boolean;
   /**
    * The live burn watch (`src/spendBurn.ts`) — what to do about a run that is
    * spending far past what its kind of work costs, while it is still running.
@@ -699,7 +714,7 @@ export interface Config {
   /** Root under which desk (no-code) scratch dirs are created. */
   deskRoot: string;
   /**
-   * Root under which images attached to a blueprint are stored (issue #249).
+   * Root under which images attached to a brief are stored (issue #249).
    * Deliberately **outside every worktree**, so a screenshot can never be
    * committed onto a branch, and canonical rather than copied per dispatch — one
    * file is what lets the planner, each part agent and the retrospective read the
@@ -927,6 +942,9 @@ const DEFAULTS: Config = {
   // Each policy's own module owns the operator default; the dispatcher's fallback
   // for an *omitted* policy is a separate answer (off) and lives with the rules.
   planning: DEFAULT_PLANNING,
+  // Off, and the provider gate above it is the reason a bare `true` is still not
+  // enough to draw the tab.
+  featureBoard: false,
   spendBurn: DEFAULT_BURN,
   runway: DEFAULT_RUNWAY,
   // One switch and no rates. Everything a pet costs lives in `src/pets/rules.ts`
@@ -1147,8 +1165,8 @@ const RETIRED_KEYS: Readonly<Record<string, string>> = {
   'validation.desktopSkill': 'the /lubbdubb skill is always installed and refreshed when the desktop channel starts',
   assessment: 'the assessor is always on — a goal with work behind it and nothing in flight is always assessed',
   'assessment.enabled': 'the assessor is always on',
-  assay: 'the goal assay is always on — every fresh goal is assayed before anything is dispatched against it',
-  'assay.enabled': 'the goal assay is always on',
+  appraisal: 'the goal appraisal is always on — every fresh goal is appraised before anything is dispatched against it',
+  'appraisal.enabled': 'the goal appraisal is always on',
   retrospective: 'the retrospective is always on — every delivered goal is written up',
   'retrospective.enabled': 'the retrospective is always on',
   mcp: 'the agent tool channel and its permission backstop are always on',

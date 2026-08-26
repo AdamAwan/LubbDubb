@@ -689,6 +689,8 @@ export class ActionExecutor {
     /** The review thread being answered, or null for a reply on the pull request itself. */
     commentId: string | null;
     draft: string;
+    /** The agent's verdict: this thread is dealt with, so resolve it once the reply lands. */
+    resolve: boolean;
     reason: string;
   }): Promise<{ outcome: DecisionOutcome; detail: string }> {
     const cycleId = `agent-reply:${input.agentId}`;
@@ -697,6 +699,7 @@ export class ActionExecutor {
       prNumber: input.prNumber,
       commentId: input.commentId,
       draft: input.draft,
+      resolve: input.resolve,
       reason: input.reason,
       rule: null,
       admission: null,
@@ -797,9 +800,10 @@ export class ActionExecutor {
         commentId: act.commentId,
         body: act.body,
       });
+      const resolution = await this.resolveAnswered(act);
       return audit(
         'executed',
-        `Sent the reply on PR #${act.prNumber} — authorized by ${by}${because} (${proposal.id}).${res.ref ? ` ref=${res.ref}` : ''}`,
+        `Sent the reply on PR #${act.prNumber} — authorized by ${by}${because} (${proposal.id}).${res.ref ? ` ref=${res.ref}` : ''}${resolution}`,
       );
     } catch (err) {
       const message = (err as Error).message;
@@ -826,6 +830,48 @@ export class ActionExecutor {
         'rejected',
         `Authorized ${act.kind === 'merge' ? `merge of PR #${act.prNumber}` : `reply on PR #${act.prNumber}`} failed (${message}); escalated so it isn't dropped: ${esc.id}.`,
       );
+    }
+  }
+
+  /**
+   * Mark the thread resolved, when the agent that wrote the reply said it had
+   * dealt with it — and report what happened as a clause on the reply's own audit
+   * line rather than as a second decision row. One act was authorized; this is
+   * the rest of it.
+   *
+   * **Its failure is swallowed on purpose, and this is the sharp edge.** A throw
+   * here would land in `runAuthorized`'s catch, which reads every failure as "the
+   * send failed": the reply — already posted, visible in the thread — would be
+   * escalated for the operator to send by hand and re-proposed once its settle
+   * window lapsed, so the reviewer gets the same reply twice because the harness
+   * could not close a thread. An unresolved thread is the safe direction: the
+   * rule dispatches for it again, which is visible and cheap.
+   *
+   * Nothing is attempted without a thread to resolve (a reply on the pull request
+   * itself has none) or where no integration can resolve one — the second is a
+   * shape rather than a fault, and it is said in the line so an operator reading
+   * it back is not left wondering.
+   */
+  private async resolveAnswered(act: {
+    prNumber: number;
+    commentId: string | null;
+    resolve: boolean;
+  }): Promise<string> {
+    if (!act.resolve || act.commentId === null) return '';
+    if (!this.deps.sink.canResolvePrThread()) return ' The thread was left open: this provider cannot resolve one.';
+    try {
+      const res = await this.deps.sink.resolvePrThread({ prNumber: act.prNumber, commentId: act.commentId });
+      return res.ok
+        ? ` Resolved thread ${act.commentId}.`
+        : ` PR #${act.prNumber} carries no thread ${act.commentId}; left it as it was.`;
+    } catch (err) {
+      const message = (err as Error).message;
+      this.deps.errors.record({
+        source: 'provider',
+        message: `Sent the reply on PR #${act.prNumber} but could not resolve thread ${act.commentId}: ${message}`,
+        detail: 'The thread stays open, so rule pr-review-comment dispatches for it again.',
+      });
+      return ` The reply went out; resolving thread ${act.commentId} failed (${message}), so it is still open.`;
     }
   }
 
@@ -1104,20 +1150,20 @@ export class ActionExecutor {
  */
 /**
  * The images attached to the goal being dispatched for — or null when there are
- * none, which is every dispatch that did not come from a blueprint carrying one.
+ * none, which is every dispatch that did not come from a brief carrying one.
  *
  * In the executor, and for the branch gate's reason: every dispatch passes
  * through here whatever composed it.
  *
- * **The lookup is by goal, not by exact origin** (issue #249). Once a blueprint
+ * **The lookup is by goal, not by exact origin** (issue #249). Once a brief
  * has been filed as a ticket its images are keyed `issue:<n>`, while the agents
- * that go on to work it are dispatched for `issue:<n>:plan`, `:assay`, `:assess`,
+ * that go on to work it are dispatched for `issue:<n>:plan`, `:appraisal`, `:assess`,
  * `:part:<slug>` and `:retro`. An exact match would put the screenshot in front of
  * the filing agent alone — the one agent that writes no code — so the whole point
  * of the ticket surviving would be lost. `padOriginFor` is the harness's own
  * spelling of "which goal is this origin inside", already used to decide who
  * shares a scratchpad, so the answer here and there cannot drift; an origin
- * outside any issue subtree (a `job:<id>` blueprint that dispatched directly)
+ * outside any issue subtree (a `job:<id>` brief that dispatched directly)
  * falls back to itself, which is an exact match.
  *
  * The scoping is deliberately unconditional within a goal: a part agent working
@@ -1163,7 +1209,7 @@ function knowledgeFor(
  *
  * **Scoped by `padOriginFor`**, the attachments' rule for the attachments' reason:
  * an instruction is about the *goal*, and the agents that go on to work it are
- * dispatched for `issue:<n>:plan`, `:assay`, `:assess` and `:part:<slug>`. An
+ * dispatched for `issue:<n>:plan`, `:appraisal`, `:assess` and `:part:<slug>`. An
  * exact match would put "change the button to primary" in front of nobody at all
  * on a decomposed goal — the one shape where it matters most. Everything outside
  * a goal's subtree (a PR concern, a job) resolves to null, which is
@@ -1201,7 +1247,7 @@ function outstandingForOrigin(originRef: string | null | undefined, store: Store
  * **Scoped by `padOriginFor`, not by a fresh predicate.** That is already the
  * harness's answer to "which goal is this agent working", written for the pad and
  * asked here for the same population: the `issue:<n>` root plus its `:plan`,
- * `:assay`, `:assess` and `:part:<slug>` arms. Everything else — a PR concern, a
+ * `:appraisal`, `:assess` and `:part:<slug>` arms. Everything else — a PR concern, a
  * job, a filing — resolves to null and is handed nothing, which is
  * `outstandingForOrigin`'s widening rule at the level of a whole goal: an agent
  * fixing CI on `pr:42` has no use for a planner's write-up about `issue:12` and
@@ -1236,7 +1282,7 @@ function priorWorkFor(originRef: string | null | undefined, store: Store, outsta
   const briefing = priorWorkBriefing({
     plan,
     parts: plan ? store.listPlanParts(plan.id) : [],
-    assay: store.getAssay(issueOriginRef),
+    appraisal: store.getAppraisal(issueOriginRef),
     conclusion: outstandingShown ? null : store.getIssueConclusion(issueOriginRef),
     delivery: store.getDelivery(issueOriginRef),
     shortfall: store.getShortfall(issueOriginRef),

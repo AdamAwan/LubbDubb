@@ -5,7 +5,7 @@ import { bugTicketFields } from '../../bugFiling.js';
 import { trackerCoordinates } from '../../mcp/findings.js';
 import { dedupeCandidates, renderCandidates } from '../../tickets/candidates.js';
 import { MAX_INSTRUCTION } from '../../goalInstructions.js';
-import { goalFingerprint } from '../../intake/assay.js';
+import { goalFingerprint } from '../../intake/appraisal.js';
 import { ShortfallBody } from '../../delivery/shortfall.js';
 import { GateReleaseBody } from '../../environments/arrival.js';
 import { validationHeadline } from '../../delivery/closeOut.js';
@@ -21,7 +21,7 @@ import type { FilingTargetProbe, IssueFiled } from '../../wire.js';
 
 /**
  * The operator's own arm of every verdict an agent can cast about an issue —
- * watch, conclusion, assay, delivery, shortfall — plus ending its run.
+ * watch, conclusion, appraisal, delivery, shortfall — plus ending its run.
  *
  * Each of the five verdict routes writes the *harness's* record and never the
  * tracker: concluding an issue in the harness's own view is what stops the
@@ -219,7 +219,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   //
   // It also **settles any standing proposal**, whichever way the operator went.
   // That is the click the gate is waiting for, and it is why "keep mine" works:
-  // the tag deliberately goes on disagreeing with the assayer, so a gate that
+  // the tag deliberately goes on disagreeing with the appraiser, so a gate that
   // re-read the disagreement would ask the same question for ever. What is stored
   // is that the question was answered, never what it was answered with — that is
   // the tag, and a second copy of it here would be free to drift.
@@ -261,8 +261,8 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       // The answer, if a proposal was waiting on one. Keyed on the row's own
       // fingerprint so it settles the question the operator was actually shown.
       const origin = issueConclusionOrigin(issueNumber);
-      const assay = store.getAssay(origin);
-      const answered = assay !== null && store.answerAssayProfile(origin, assay.goalRef);
+      const appraisal = store.getAppraisal(origin);
+      const answered = appraisal !== null && store.answerAppraisalProfile(origin, appraisal.goalRef);
 
       hub.broadcast({ type: 'world:changed' });
       await harness.runCycle('manual');
@@ -272,7 +272,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
 
   // Settle one of a goal's two **placement** questions: which container it hangs
   // off, and which area node it sits on. One route each, and each takes the three
-  // answers the assay's proposal has — take it, use a different value, or say it
+  // answers the appraisal's proposal has — take it, use a different value, or say it
   // does not apply.
   //
   // The write is the harness's, never an agent's, and never a shell command in a
@@ -353,8 +353,8 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       return { ok: false, error: message };
     }
     const origin = issueConclusionOrigin(issueNumber);
-    const assay = store.getAssay(origin);
-    const settled = assay !== null && store.settleAssayPlacement(origin, assay.goalRef, field);
+    const appraisal = store.getAppraisal(origin);
+    const settled = appraisal !== null && store.settleAppraisalPlacement(origin, appraisal.goalRef, field);
     hub.broadcast({ type: 'world:changed' });
     await harness.runCycle('manual');
     return { ok: true, settled };
@@ -562,7 +562,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  // Override a goal assay — the escape hatch a blocking gate has to have.
+  // Override a goal appraisal — the escape hatch a blocking gate has to have.
   //
   // `unclear` is the only verdict that stops anything, and it stops it for an issue
   // the operator has explicitly tagged for the harness. So the operator must be able
@@ -571,28 +571,28 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   // an agent to agree. Both arms are here.
   //
   // Clearing is a delete rather than a stored third verdict, for `clearDelivery`'s
-  // reason: the absence of an assay keeps exactly one representation, and it is
-  // also the state a crashed assayer leaves behind — the fail-open. The goal
+  // reason: the absence of an appraisal keeps exactly one representation, and it is
+  // also the state a crashed appraiser leaves behind — the fail-open. The goal
   // fingerprint of an operator's verdict is taken from the issue as the harness
   // currently sees it, so it expires on the next edit exactly as an agent's does.
-  const AssayBody = z.object({
+  const AppraisalBody = z.object({
     verdict: z.union([z.literal('workable'), z.literal('unclear'), z.null()], {
       errorMap: () => ({ message: 'verdict must be "workable", "unclear" or null' }),
     }),
     summary: optionalText('summary'),
   });
   app.post(
-    '/api/issues/:number/assay',
-    checked({ params: IssueNumberParams, body: AssayBody }, async ({ params, body, reply }) => {
+    '/api/issues/:number/appraisal',
+    checked({ params: IssueNumberParams, body: AppraisalBody }, async ({ params, body, reply }) => {
       const { number: issueNumber } = params;
       const { verdict, summary } = body;
       const originRef = issueConclusionOrigin(issueNumber);
       if (verdict === null) {
-        store.clearAssay(originRef);
+        store.clearAppraisal(originRef);
         hub.broadcast({ type: 'world:changed' });
         // Clearing a hold is a request to reconsider the issue now, not next beat.
         await harness.runCycle('manual');
-        return { ok: true, assay: null };
+        return { ok: true, appraisal: null };
       }
       // The text the verdict is about, from the world the cockpit is showing. Absent
       // (an issue the last snapshot did not carry) is refused rather than guessed: a
@@ -600,7 +600,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       // issue was next fetched, which is a silent no-op dressed as an override.
       const issue = store.getWorldBaseline()?.issues.find((i) => i.number === issueNumber);
       if (!issue) return reply.code(404).send({ error: 'issue not in the last world snapshot' });
-      const assay = store.recordAssay({
+      const appraisal = store.recordAppraisal({
         originRef,
         verdict,
         // As on the conclusion and delivery routes, an operator has the item in front
@@ -612,7 +612,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       hub.broadcast({ type: 'world:changed' });
       // A `workable` override releases the issue into the funnel — act on it now.
       if (verdict === 'workable') await harness.runCycle('manual');
-      return { ok: true, assay };
+      return { ok: true, appraisal };
     }),
   );
 
@@ -873,7 +873,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     '/api/issues/:number/bug',
     checked({ params: IssueNumberParams }, async ({ params, req, reply }) => {
       const { number: issueNumber } = params;
-      // The assay route's check, for its reason: an override on an issue the harness
+      // The appraisal route's check, for its reason: an override on an issue the harness
       // has never seen would be a silent no-op dressed as an action.
       const issue = store.getWorldBaseline()?.issues.find((i) => i.number === issueNumber);
       if (!issue) return reply.code(404).send({ error: 'issue not in the last world snapshot' });

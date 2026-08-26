@@ -31,7 +31,7 @@ function github(): Config {
 
 test('a filed Azure item is never a Task', () => {
   // The regression the types were introduced for: `--type Task` was hardcoded, so
-  // every finding, blueprint and work-item filing landed at the altitude a story
+  // every finding, brief and work-item filing landed at the altitude a story
   // is broken down at rather than the one a backlog is groomed at.
   assert.equal(filingType(azure({ issueFilingTypes: ['User Story', 'Tech Debt', 'Bug'] })), 'User Story');
   assert.equal(filingType(azure({ issueFilingTypes: ['Product Backlog Item', 'Bug'] })), 'Product Backlog Item');

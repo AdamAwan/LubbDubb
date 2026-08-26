@@ -15,7 +15,7 @@ import { DISPATCH_RULES } from '../src/dispatcher/rules.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { Decision, Issue, Plan, PlanPart, WorldSnapshot } from '../src/types.js';
 import { gitRepo } from './support/gitRepo.js';
-import { planWithOnePart, pastTheFunnel, spentAssayAttempts, failAssayOpen } from './support/plans.js';
+import { planWithOnePart, pastTheFunnel, spentAppraisalAttempts, failAppraisalOpen } from './support/plans.js';
 
 // -- the pure route ----------------------------------------------------------
 
@@ -135,11 +135,11 @@ function context(issues: Issue[], extra: Partial<DispatchContext> = {}): Dispatc
     queuedJobs: [],
     agentHeadroom: 5,
     ...extra,
-    // Every issue in the world is past the goal assay. The assay is unconditional
+    // Every issue in the world is past the goal appraisal. The appraisal is unconditional
     // and ranks in front of the planner, so without this each test below would be
-    // asserting about the assay rather than about the rule it names. Appended to
+    // asserting about the appraisal rather than about the rule it names. Appended to
     // whatever the case itself asked for rather than replacing it.
-    recentDecisions: [...issues.flatMap((i) => spentAssayAttempts(i.number)), ...(extra.recentDecisions ?? [])],
+    recentDecisions: [...issues.flatMap((i) => spentAppraisalAttempts(i.number)), ...(extra.recentDecisions ?? [])],
   };
 }
 
@@ -231,9 +231,9 @@ function pickupCtx(extra: Partial<IssuePickupContext> = {}): IssuePickupContext 
     headroom: 5,
     paused: false,
     ...extra,
-    // Past the goal assay, for `context`'s reason: it is the gate in front of the
+    // Past the goal appraisal, for `context`'s reason: it is the gate in front of the
     // planner, and this file is about what the *planner* parks an issue for.
-    recentDecisions: [...spentAssayAttempts(12), ...(extra.recentDecisions ?? [])],
+    recentDecisions: [...spentAppraisalAttempts(12), ...(extra.recentDecisions ?? [])],
   };
 }
 
@@ -302,8 +302,8 @@ function systemWithPlanning(): System {
 test('an injected issue routes through the planner, and its verdict hands the issue back to pickup', async () => {
   const on = systemWithPlanning();
   on.connector.inject({ kind: 'new_issue', number: 1, title: 'Ship the thing', body: 'Please.' });
-  // The assay runs in front of the planner and would take this cycle otherwise.
-  failAssayOpen(on.store, 1);
+  // The appraisal runs in front of the planner and would take this cycle otherwise.
+  failAppraisalOpen(on.store, 1);
   await on.harness.runCycle('manual');
   const planTask = on.store.getTask(on.store.listTasks()[0]!.id);
   assert.equal(planTask?.branch, planBranch(1));

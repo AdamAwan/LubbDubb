@@ -38,7 +38,7 @@ import { watchBucket } from '../worldBuckets.js';
  * but something of yours is hiding work from it).
  */
 /**
- * `intake` is the goal assay's refusal (#158): an `unclear` verdict stops pickup
+ * `intake` is the goal appraisal's refusal (#158): an `unclear` verdict stops pickup
  * for the whole goal, and it is raised on the queue rather than only on the
  * tickets tab. It lived there alone, which put the one reading that stops a goal
  * dead on a page an operator opens to *groom* the backlog — while the rail, the
@@ -716,17 +716,17 @@ export function buildNeedsYou(
     });
   }
 
-  // The goal assay's refusal (#158). Like the profile gate below it, the hold has
+  // The goal appraisal's refusal (#158). Like the profile gate below it, the hold has
   // no row of its own anywhere — no escalation, no human task, no parked agent —
   // so a queue reading only those four sources left the one verdict that stops a
   // goal's pickup legible on the tickets tab alone.
   //
   // Read off `world.issues` for the profile gate's reason, and filtered on the
-  // watch tag for the tickets tab's: nothing assays a goal nobody opted in, so a
+  // watch tag for the tickets tab's: nothing appraises a goal nobody opted in, so a
   // verdict on an unwatched item is left over from before it was dropped, and the
   // drop outranks it.
   for (const issue of state.world.issues) {
-    if (issue.state !== 'open' || issue.assay?.verdict !== 'unclear') continue;
+    if (issue.state !== 'open' || issue.appraisal?.verdict !== 'unclear') continue;
     if (watchBucket(issue.labels, state.config.watchLabel) !== 'watched') continue;
     const goalRef = `issue:${issue.number}`;
     rows.push({
@@ -736,13 +736,13 @@ export function buildNeedsYou(
       kind: 'intake',
       group: 'yours',
       // The line says which ask it is and which goal it is about, and no more: the
-      // assayer's sentence is prose somebody wrote and belongs in the band, which
+      // appraiser's sentence is prose somebody wrote and belongs in the band, which
       // quotes it whole rather than clamping the only account of why this is held.
       title: askLine('Held at intake', goalRef, state),
       goalRef,
       originRef: goalRef,
       opens: opensAt(goalRef, state),
-      // The assayer that cast the verdict is gone, and nothing was ever parked on
+      // The appraiser that cast the verdict is gone, and nothing was ever parked on
       // the answer — an id here would point at a run that ended.
       agentId: null,
       agentLabel: null,
@@ -750,7 +750,7 @@ export function buildNeedsYou(
       // count invented here would sort it against asks that really are holding
       // work.
       holding: 0,
-      raisedAt: issue.assay.decidedAt,
+      raisedAt: issue.appraisal.decidedAt,
     });
   }
 
@@ -765,8 +765,8 @@ export function buildNeedsYou(
   // no longer carries is not one the funnel is refusing to dispatch, and a row
   // for it would be an ask about nothing.
   for (const issue of state.world.issues) {
-    const assay = issue.assay;
-    if (!assay?.awaitingProfileAnswer || assay.proposedProfile === null) continue;
+    const appraisal = issue.appraisal;
+    if (!appraisal?.awaitingProfileAnswer || appraisal.proposedProfile === null) continue;
     const goalRef = `issue:${issue.number}`;
     rows.push({
       // Prefixed, because the row is derived from the goal rather than from a row
@@ -775,11 +775,11 @@ export function buildNeedsYou(
       id: `profile:${goalRef}`,
       kind: 'profile',
       group: 'yours',
-      title: askLine(`Wants to run on “${assay.proposedProfile}”`, goalRef, state),
+      title: askLine(`Wants to run on “${appraisal.proposedProfile}”`, goalRef, state),
       goalRef,
       originRef: goalRef,
       opens: opensAt(goalRef, state),
-      // The assayer that proposed it is gone, and it was never parked on the
+      // The appraiser that proposed it is gone, and it was never parked on the
       // answer — an id here would point at a run that ended.
       agentId: null,
       agentLabel: null,
@@ -787,7 +787,7 @@ export function buildNeedsYou(
       // to hold any, and a count invented here would sort it against asks that
       // really are blocking work.
       holding: 0,
-      raisedAt: assay.decidedAt,
+      raisedAt: appraisal.decidedAt,
     });
   }
 
@@ -808,7 +808,7 @@ export function buildNeedsYou(
   // can: the browser has neither the project's area tree nor the root node that
   // says what "unclassified" means.
   for (const issue of state.world.issues) {
-    for (const ask of issue.assay?.placement ?? []) {
+    for (const ask of issue.appraisal?.placement ?? []) {
       const goalRef = `issue:${issue.number}`;
       rows.push({
         // Keyed by field as well as goal: a goal can carry both questions at once,
@@ -826,14 +826,14 @@ export function buildNeedsYou(
         goalRef,
         originRef: goalRef,
         opens: opensAt(goalRef, state),
-        // The assayer that proposed it is long gone, and nothing was ever parked
+        // The appraiser that proposed it is long gone, and nothing was ever parked
         // on the answer — an id here would point at a run that ended.
         agentId: null,
         agentLabel: null,
         // Genuinely zero, and not the profile gate's "nothing yet": this holds no
         // part because it holds nothing at all.
         holding: 0,
-        raisedAt: issue.assay?.decidedAt ?? '',
+        raisedAt: issue.appraisal?.decidedAt ?? '',
       });
     }
   }

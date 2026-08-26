@@ -15,6 +15,8 @@ interface Connector {
 ```ts
 interface ActionSink {
   postPrReply(input): Promise<SendResult>;
+  canResolvePrThread(): boolean;
+  resolvePrThread(input): Promise<SendResult>;
   mergePr(input): Promise<SendResult>;
   setPrLabel(input): Promise<SendResult>;
   setIssueLabel(input): Promise<SendResult>;
@@ -44,11 +46,18 @@ providers share one `FakeWorldStore` so their world stays coherent.
 
 `src/integrations/integration.ts` defines each outbound capability separately, with a type guard:
 
-`PrReplyCapable`, `PrMergeCapable`, `PrLabelCapable`, `PrCreateCapable`, `PrTitleCapable`,
+`PrReplyCapable`, `PrThreadResolveCapable`, `PrMergeCapable`, `PrLabelCapable`, `PrCreateCapable`, `PrTitleCapable`,
 `PrBaseCapable`, `PrBaseUpdateCapable`, `BranchDeleteCapable`, `IssueLabelCapable`,
 `WorkItemStateCapable`, `WorkItemLinkCapable`, `IssueCommentCapable`, `IssueCreateCapable`,
 `IssueCloseCapable`,
 `CiEvidenceCapable`, `RefResolvable`, `TicketHistoryCapable`, and the fake-only `Injectable`.
+
+`PrThreadResolveCapable` marks a review thread resolved, and is separate from `PrReplyCapable`
+because the two are different provider operations — GitHub resolves through a GraphQL mutation and
+replies through REST, Azure patches the thread's status — and because a provider may gain one without
+the other. It is keyed on the **root comment id**, the same id a reply threads under and the same id
+`PrComment` carries, so nothing outside a provider handles a second identifier. `ok: false` means the
+pull request carries no such thread — a stale reading rather than a fault.
 
 `BranchDeleteCapable` deletes a branch outright — the reap after a pull request merges. Both
 providers implement it, and both report **already gone as success**: GitHub's "automatically delete
@@ -220,7 +229,7 @@ Implements both seams:
   answers rather than throwing, and null rather than an empty tree because the two are different
   readings and only one is about this project: an empty tree is a project that has never subdivided,
   null is a tracker with no such concept at all. `AreaPathDirectory` (`src/intake/areaPaths.ts`) is
-  what calls it, from the pulse and under its own TTL, because both its readers — the `assay_issue`
+  what calls it, from the pulse and under its own TTL, because both its readers — the `appraise_issue`
   argument schema and the state snapshot — are synchronous.
   → [06](06-issue-pickup.md#where-the-goal-belongs-the-placement-proposals-issue-463)
 - **`canPlaceWorkItem()` / `setWorkItemParent` / `setWorkItemAreaPath`** — where a work item sits on
@@ -246,7 +255,7 @@ Implements both seams:
 ## Signing what the harness says
 
 Every outbound write rides on the **operator's own credential** — their `GITHUB_TOKEN`, their PAT. So
-a plan comment, an assay question, a review reply or a filed ticket arrives on the thread wearing
+a plan comment, an appraisal question, a review reply or a filed ticket arrives on the thread wearing
 their avatar and their name, indistinguishable from something they typed. That is a misattribution
 rather than an untidiness: a reviewer answers a machine's question believing a colleague asked it,
 and the thread's permanent record says a person said something they never said.
@@ -258,7 +267,7 @@ So the composite **signs every piece of prose on its way out**, in `signed()`:
 Four decisions hold it up.
 
 **It is appended at the seam, not rendered by the callers.** Six surfaces write prose today — the
-plan status comment, the assay question, the arrival announcement, the PR review reply, the filed
+plan status comment, the appraisal question, the arrival announcement, the PR review reply, the filed
 ticket body and the opened PR body — and every one of them reaches a provider through
 `postPrReply`, `upsertIssueComment`, `createIssue` or `createPullRequest`. Signing there signs the
 surfaces that exist *and* the ones added later. Six call sites each remembering to sign is six that
@@ -295,7 +304,7 @@ no second footer.
 The line's last clause is drawn from a list of endings, because one fixed ending read a hundred times
 stops being a joke and becomes furniture — and furniture is what a reader's eye learns to skip,
 taking the half of the line that *matters* along with it. Which ending a body gets is **hashed from
-the body**, not drawn at random: the plan status comment and the assay question are each one living
+the body**, not drawn at random: the plan status comment and the appraisal question are each one living
 comment edited in place, and a random ending would move under every edit, filling the thread's
 revision history with diffs whose only content is the joke. Hashing spreads endings across comments
 while holding each comment's own ending still — and keeps the function pure, so a test asserts
@@ -401,6 +410,12 @@ Behaviour worth knowing:
   Both arms, and a missing resolution read, fail toward a thread staying **open** — an agent
   dispatched for a comment already dealt with is visible and cheap, where a dropped review is neither.
 
+- **Resolving a thread is the one GraphQL _write_**, for the read's reason: `resolveReviewThread` is a
+  mutation taking the thread's node id, which no REST call returns. The node id never crosses the
+  seam — `resolveReviewThread(number, rootCommentId)` looks it up through the same paginated read the
+  snapshot uses, so a caller holds only the root comment id and a fixture knows one id fewer. A
+  thread already resolved returns without mutating.
+
 - Auth is `GITHUB_TOKEN` only; `github.owner`/`github.repo` are required. See [02](02-configuration.md).
 
 ## The `azure` provider
@@ -459,6 +474,11 @@ Behaviour worth knowing:
   leaving it waiting on a build nobody started. An evaluation that arrives without an id carries no
   `requeueRef` at all, which reads the same way.
   → [09](09-execution.md#requeue_ci_check--the-expired-build-without-an-agent)
+- **Resolving a thread is a PATCH on the thread with `status: 'fixed'`**, not a write on a comment:
+  Azure's resolution verdict lives on the thread, and `fixed` is one of the four statuses the resolved
+  arm of `buildUnresolvedComments` already reads — so a thread the harness resolves settles on the
+  next poll exactly as one a reviewer closed themselves. `commentId` carries the **thread** id here,
+  as it does for a reply.
 - **Merging is Azure "complete PR"**, which needs the head commit. The provider caches each PR's
   `lastMergeSourceCommit` from the last snapshot, so a `merge_pr` only works on a PR seen in a prior
   cycle.
@@ -525,7 +545,7 @@ cockpit renders it as plain text — which is the correct behaviour for the `fak
 ### Comment refs
 
 The two comments the harness maintains on a ticket by itself — a plan's status comment and the goal
-assay's refusal — are stored as a **provider comment id** (`GhCommentRef` carries a number; Azure
+appraisal's refusal — are stored as a **provider comment id** (`GhCommentRef` carries a number; Azure
 addresses an edit by work item + comment). That is the right value for `upsertIssueComment` to
 round-trip and the wrong one to put on the wire: an id resolves to nothing on its own, and a bare
 number is read as an _issue number_ by `githubRefUrl`'s last-but-one arm — so shipping one would key a
