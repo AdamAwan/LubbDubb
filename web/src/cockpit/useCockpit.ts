@@ -291,6 +291,7 @@ export function useCockpit(): CockpitStatus {
       resolveContradiction: (id, ruling) => then(api.resolveContradiction(id, ruling)),
       completeHumanTask: (id, note) => then(api.completeHumanTask(id, note)),
       declineHumanTask: (id, note) => then(api.declineHumanTask(id, note)),
+      closeHumanTaskTicket: (id, note) => then(api.closeHumanTaskTicket(id, note)),
       dismissHumanTask: (id) => then(api.dismissHumanTask(id)),
 
       setPrWatched: (n, watched) => then(api.setPrWatched(n, watched)),

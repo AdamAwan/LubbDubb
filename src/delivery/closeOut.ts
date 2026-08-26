@@ -101,6 +101,17 @@ interface CloseOutInput {
    * the operator's way of saying "I am done with this" is the row, not the checks.
    */
   validating: ReadonlySet<string>;
+  /**
+   * Whether this deployment's tracker can be closed from the cockpit — the
+   * connector's own answer, not a guess from the provider's name.
+   *
+   * It changes one thing: the sentence the row offers as the way to discharge it.
+   * A deployment whose issues provider cannot close (there is no button on the row
+   * either) must not be told to press one, and a deployment that can must not be
+   * sent to the tracker to do by hand what the row will do for it — both are the
+   * row stating the wrong way out, which is the whole of what it is for.
+   */
+  canClose: boolean;
 }
 
 /**
@@ -119,7 +130,7 @@ export function closeOutPass(input: CloseOutInput): CloseOutStep[] {
 
   for (const delivery of input.deliveries) {
     const originRef = delivery.originRef;
-    if (issueNumber(originRef) === null) continue;
+    if (closeOutIssueNumber(originRef) === null) continue;
     // A shortfall and a delivery cannot coexist in the store, so this guards a
     // world that somehow has both — and there the negative wins, as it does
     // everywhere else that asks the pair.
@@ -139,7 +150,7 @@ export function closeOutPass(input: CloseOutInput): CloseOutStep[] {
         steps.push({
           kind: 'reopen',
           taskId: existing.id,
-          detail: closeOutDetail(issue, delivery, input.validation.get(originRef) ?? null),
+          detail: closeOutDetail(issue, delivery, input.validation.get(originRef) ?? null, input.canClose),
         });
       continue;
     }
@@ -184,7 +195,7 @@ export function closeOutPass(input: CloseOutInput): CloseOutStep[] {
       kind: 'file',
       originRef,
       title: closeOutTitle(issue.number),
-      detail: closeOutDetail(issue, delivery, input.validation.get(originRef) ?? null),
+      detail: closeOutDetail(issue, delivery, input.validation.get(originRef) ?? null, input.canClose),
     });
   }
 
@@ -233,6 +244,7 @@ function closeOutDetail(
   issue: Issue,
   delivery: IssueDelivery,
   validation: { verdict: ValidationVerdict; outstanding: readonly string[] } | null,
+  canClose: boolean,
 ): string {
   // Capitalised here rather than held as a second record: the words are the same
   // words `deliveryHold` uses, and two records is how the two sentences come to
@@ -242,7 +254,9 @@ function closeOutDetail(
   const lines = [
     `${by} marked **${issue.title}** delivered${delivery.summary ? ` — "${delivery.summary}"` : ''}.`,
     '',
-    'The item is still open in the tracker. Close it there and this settles itself on the next pulse — or mark it done here, or decline it and say why.',
+    canClose
+      ? 'The item is still open in the tracker. **Close the ticket** here does it and settles this row with it — or close it in the tracker yourself and this settles itself on the next pulse, or mark it done here, or decline it and say why.'
+      : 'The item is still open in the tracker. Close it there and this settles itself on the next pulse — or mark it done here, or decline it and say why.',
   ];
   if (validation && validation.verdict.state === 'flagged') {
     lines.push(
@@ -270,7 +284,17 @@ export function validationHeadline(verdict: ValidationVerdict): string {
   return `Validation is not clear on this goal — ${owed}, of ${verdict.total}.`;
 }
 
-function issueNumber(originRef: string): number | null {
+/**
+ * The tracker item a close-out row names, or null for an origin that is not an
+ * issue at all.
+ *
+ * Exported because the row's own **Close the ticket** button
+ * (`POST /api/human-tasks/:id/close-ticket`) has to resolve the same number this
+ * pass files against, and two readings of one origin string is how the button
+ * comes to close a different item from the one the row is about.
+ */
+export function closeOutIssueNumber(originRef: string | null): number | null {
+  if (originRef === null) return null;
   const m = /^issue:(\d+)$/.exec(originRef);
   return m ? Number(m[1]) : null;
 }

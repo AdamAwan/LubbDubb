@@ -28,6 +28,15 @@ export class DeliveryCloseOutDesk {
   constructor(
     private readonly store: Store,
     private readonly environments: EnvironmentConfig[] = [],
+    /**
+     * Whether the tracker can be closed from the cockpit, asked of the connector
+     * **per pulse** rather than snapshotted at boot: it is a question about a
+     * provider and a credential, and the answer the row's own sentence is written
+     * from has to be the one the button will get. Defaulted false so a test that
+     * does not care describes the deployment that cannot, which is the sentence
+     * that was there before this button existed.
+     */
+    private readonly canClose: () => boolean = () => false,
   ) {}
 
   /** @public called by `Harness.runCycle`, beside the other bookkeeping passes. */
@@ -54,6 +63,7 @@ export class DeliveryCloseOutDesk {
           .filter((t) => t.status === 'open' && t.originRef !== null)
           .map((t) => t.originRef!),
       ),
+      canClose: this.canClose(),
       opened: openedGoals(
         'close_out',
         this.environments,

@@ -855,6 +855,17 @@ interface CockpitConfig {
    */
   canSetWorkItemState: boolean;
   /**
+   * Whether the provider can close a tracker item — the close-out row's **Close
+   * the ticket** button, and nothing else, depends on it.
+   *
+   * Asked of the connector for `canSetWorkItemState`'s reason, and shipped for the
+   * same one: `closeIssue` throws where no integration implements it, so a button
+   * drawn off the provider's *name* would be a control that fails on exactly the
+   * deployments nobody tested. False draws no button, and the row still reads the
+   * way it always did — close it in the tracker, and the sweep settles it.
+   */
+  canCloseIssue: boolean;
+  /**
    * The project's area nodes, as the harness last read them from the tracker —
    * what the cockpit offers when the operator answers a placement question with a
    * value of their own.

@@ -138,6 +138,7 @@ function filed(over: Partial<Parameters<typeof closeOutPass>[0]> = {}): { detail
     validation: new Map(),
     opened: null,
     validating: new Set<string>(),
+    canClose: true,
     ...over,
   });
   const file = steps.find((s) => s.kind === 'file');
@@ -292,6 +293,41 @@ test('marking a close-out done on a flagged goal costs a sentence; an ordinary a
   });
   assert.equal(withNote.statusCode, 200);
   assert.equal(system.store.getHumanTask(closeOut.id)!.resolution, 'closed it; A is on Monday');
+  await app.close();
+});
+
+test('closing the ticket from the row costs the same sentence marking it done does', async () => {
+  const system = build();
+  plan(system, [CHECK]);
+  const { task: closeOut } = system.store.recordHumanTask({
+    title: 'Close issue #12 in the tracker',
+    detail: 'still open',
+    originRef: 'issue:12',
+    kind: 'close_out',
+    agentId: null,
+    taskId: null,
+  });
+  const app = await server(system);
+
+  // The flag is about the goal, not about which verb settles the row — a button
+  // that closed the item in silence would be the way around the rule.
+  const refused = await app.inject({
+    method: 'POST',
+    url: `/api/human-tasks/${closeOut.id}/close-ticket`,
+    payload: {},
+  });
+  assert.equal(refused.statusCode, 400);
+  assert.match(refused.json().error, /note is required/);
+  assert.equal(system.store.getHumanTask(closeOut.id)!.status, 'open');
+
+  const withNote = await app.inject({
+    method: 'POST',
+    url: `/api/human-tasks/${closeOut.id}/close-ticket`,
+    payload: { note: 'A is on Monday' },
+  });
+  assert.equal(withNote.statusCode, 200);
+  // Both sentences on the row: what was done, and what was said about the checks.
+  assert.match(system.store.getHumanTask(closeOut.id)!.resolution ?? '', /Closed #12 .* A is on Monday/);
   await app.close();
 });
 
