@@ -1887,7 +1887,12 @@ button.cn-grow {
   background: var(--cn-green);
 }
 .cn-cd.cn-fail {
-  background: var(--cn-inert);
+  /* Red, and it was `--cn-inert` — the grey this sheet's own token block calls
+     deliberately *not* a verdict. At 6px that is the empty track: the single most
+     actionable reading on a pull-request row, drawn as the least. Whose move a red
+     check is is the state column's answer since #651, which leaves the ladder free
+     to answer only whether the thing is broken. */
+  background: var(--cn-red);
 }
 .cn-cd.cn-notours {
   background: var(--cn-amber);

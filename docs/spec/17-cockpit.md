@@ -1299,9 +1299,19 @@ written anywhere in this repository**: every one comes off the verdict. Where th
 per-check detail at all the aggregate speaks under a generic name rather than drawing nothing, because
 missing detail is not a clean bill of health.
 
-`CourtChip` and `CiLadder` are exported from `GoalPage.tsx` and drawn by the overview's rack too — the
-whole chip rather than the tone lookup alone, since two readings of one verdict side by side is how
-the same PR comes to wear two tones, or two thresholds, nobody chose.
+`CiLadder` is exported from `GoalPage.tsx` and drawn by the overview's rack too — the whole component
+rather than the tone lookup alone, since two readings of one verdict side by side is how the same PR
+comes to wear two tones nobody chose. `CourtChip` stays here: the rack draws the same verdict as the
+word in its state column, which is where every card on the overview puts its state, and this page has
+no such column. `waitedFor` is shared for the chip's reason — the rack draws the same age as a fact.
+
+**A failing check's dot is red.** It was `--cn-inert` — the grey the token block calls _deliberately
+not a verdict_ — on the reasoning that a red check the harness is already dispatching on is not your
+move. But at 6px that is the empty track, so the most actionable reading on the row was drawn as the
+least, and the row said nothing where it should have said the loudest thing it knows. Whose move it
+is is the state column's answer now, which frees the ladder to answer only _is this broken_: red for
+broken, amber where it is broken and **yours** (`escalate` — the policy says the harness must not
+touch it), dashed where the policy ignores it.
 
 **The court chip carries how long a review has been waiting.** A PR carrying
 `attention.reviewWaitingSince` reads `elsewhere · 3d`, with the instant it started waiting in the
@@ -1515,7 +1525,8 @@ pins the prose-only rule on the marker.
   folded into one. Each row is a way into that goal's page, carries its segment track, and takes a
   **court chip read off `needsYou`** — a goal is in your court exactly when the rail is holding an ask
   about it. Anything else would let a chip say "you" with nothing to answer.
-- **Pull requests** — every open PR with its court chip, its CI ladder, and the watch toggle.
+- **Pull requests** — every open PR with its court in the state column, its CI ladder, and the watch
+  eye pinned left of the title.
   An **unwatched** PR stays in the list, with its health, and is drawn **spent** — the same dimming a
   closed PR and an unwatched goal take, off `attention.status === 'unwatched'` rather than a
   second reading of the labels. The chip alone left the one row nothing will happen on sitting at the

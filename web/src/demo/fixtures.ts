@@ -2976,6 +2976,13 @@ export function buildDemoState(): DemoSeed {
       '#410': 'https://github.com/example/markdown-magpie/pull/410',
       '#406': 'https://github.com/example/markdown-magpie/pull/406',
       '#405': 'https://github.com/example/markdown-magpie/pull/405',
+      // Every open pull request is here, because the server's `buildRefUrls` puts
+      // every one of them there — a demo missing three drew them as plain text on
+      // the one card whose whole job is to be a way to a pull request, and looked
+      // like `<Ref>` refusing rather than like a fixture with a hole in it.
+      '#407': 'https://github.com/example/markdown-magpie/pull/407',
+      '#408': 'https://github.com/example/markdown-magpie/pull/408',
+      '#414': 'https://github.com/example/markdown-magpie/pull/414',
       '#300': 'https://github.com/example/markdown-magpie/issues/300',
       '#332': 'https://github.com/example/markdown-magpie/issues/332',
       '#333': 'https://github.com/example/markdown-magpie/issues/333',
@@ -2992,6 +2999,8 @@ export function buildDemoState(): DemoSeed {
       '#388': 'https://github.com/example/markdown-magpie/issues/388',
       '#390': 'https://github.com/example/markdown-magpie/issues/390',
       '#395': 'https://github.com/example/markdown-magpie/issues/395',
+      '#366': 'https://github.com/example/markdown-magpie/issues/366',
+      '#376': 'https://github.com/example/markdown-magpie/issues/376',
       // The two comments the harness maintains on a ticket by itself, keyed by the
       // canonical ref the snapshot ships and anchored the way the provider builds
       // them. Absent from this map ⇒ the cockpit draws no way in at all.
