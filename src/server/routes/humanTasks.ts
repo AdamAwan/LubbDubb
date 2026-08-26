@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Store } from '../../store/store.js';
 import { validateHumanTask } from '../../mcp/humanTasks.js';
-import { validationHeadline } from '../../delivery/closeOut.js';
+import { closeOutIssueNumber, validationHeadline } from '../../delivery/closeOut.js';
 import { goalValidation } from '../../validation/goal.js';
 import { checked, IdParams, optionalText, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
@@ -17,7 +17,7 @@ import type { RouteContext } from './context.js';
  * that it happened.
  */
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
-  const { store, harness } = system;
+  const { store, harness, connector, errors } = system;
 
   // File one as the operator. The agent arm is `request_human_task` on the MCP
   // channel; this is the same row with no agent behind it, which is exactly what
@@ -105,6 +105,73 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
+  // Close the tracker item from here — the close-out row's third verb, and the one
+  // that does the work rather than recording that somebody else did it.
+  //
+  // The row already settles itself when the tracker stops listing the item open
+  // (`closeOutPass`), so this is not a second way to answer the obligation: it is
+  // the *act* the obligation asks for, taken through the same outbound seam the
+  // plan back-out closes an issue with. What it saves is the round trip — the
+  // operator was being asked to leave the cockpit, do one click in a tracker, and
+  // come back to a row that would settle a pulse later.
+  //
+  // **It settles the row itself rather than waiting for the sweep.** The sweep is
+  // still the authority for a close that happened anywhere else, and it is
+  // idempotent against a row already settled; leaving this one to it would leave an
+  // obligation standing in front of the operator who has just discharged it, for as
+  // long as a pulse takes. The resolution deliberately does **not** carry
+  // `DESK_SETTLED`: a person pressed this, so it is an operator's answer and the
+  // reopen arm must not treat it as the harness's own.
+  //
+  // The capability is checked, for `/api/issues/:number/state`'s reason —
+  // `closeIssue` throws where no integration implements it, and an operator would
+  // read that as this write failing rather than as the deployment not having the
+  // operation at all. The cockpit reads the same flag off `config.canCloseIssue`
+  // and does not draw the button, so this is the backstop rather than the notice.
+  const CloseTicketBody = z.object({ note: optionalText('note') });
+  app.post(
+    '/api/human-tasks/:id/close-ticket',
+    checked({ params: IdParams, body: CloseTicketBody }, async ({ params, body, reply }) => {
+      const task = store.getHumanTask(params.id);
+      if (!task || task.kind !== 'close_out' || task.status !== 'open')
+        return reply.code(409).send({ error: 'human task not found, not a close-out, or already settled' });
+      const number = closeOutIssueNumber(task.originRef);
+      if (number === null) return reply.code(409).send({ error: 'this close-out names no tracker item to close' });
+      if (!connector.canCloseIssue())
+        return reply
+          .code(400)
+          .send({ error: 'This tracker cannot be written from here — close the item there and this settles itself.' });
+      // The same sentence `/done` costs, asked for the same reason and rather more
+      // so: this one closes the item as well as the row, and a goal whose checks
+      // are outstanding is exactly the one that should not be closed in silence.
+      const owed = closeOutValidation(store, params.id);
+      if (owed && body.note === undefined)
+        return reply.code(400).send({
+          error: `note is required — ${owed.headline} Say what you are doing about them, or waive them first.`,
+        });
+
+      try {
+        const result = await connector.closeIssue({ number, reason: 'completed' });
+        if (!result.ok) return reply.code(400).send({ error: `The tracker did not close #${number}.` });
+      } catch (err) {
+        // The provider's own sentence, quoted whole — it is the only account of why
+        // the item is still open, and the row is left exactly where it was so the
+        // obligation still stands.
+        const message = (err as Error).message;
+        errors.record({ source: 'server', message: `Failed to close #${number} from its close-out row: ${message}` });
+        return reply.code(400).send({ error: message });
+      }
+
+      const settled = store.settleHumanTask(params.id, 'done', closeTicketResolution(number, body.note ?? null));
+      hub.broadcast({ type: 'world:changed' });
+      // The world just changed outside the harness, exactly as the watch toggle and
+      // the board's drag change it: a cycle re-reads the tracker, so the goal page
+      // stops calling the item open without waiting for the heartbeat.
+      const report = await harness.runCycle('manual');
+      return { ok: true, humanTask: settled, report };
+    }),
+  );
+
   // Dismissed: the operator has read the settled record and wants it off the
   // bench. Not a third verdict — it says nothing about the work, only about the
   // row — so it takes no note, concludes no part and runs no cycle. **Settled
@@ -138,6 +205,22 @@ function closeOutValidation(store: Store, taskId: string): { headline: string } 
   const validation = goalValidation(store, task.originRef);
   if (!validation || validation.verdict.state === 'clear') return null;
   return { headline: validationHeadline(validation.verdict) };
+}
+
+/**
+ * What the row says once the operator closed the item from here.
+ *
+ * It names the act rather than the observation, because the two are different
+ * facts and only this one has an author: the sweep's own wording ("the tracker
+ * shows it closed") is what a later reader gets when somebody closed the item
+ * elsewhere, and a shared sentence would make every close look like the harness
+ * noticing one. The note rides along where the flag asked for it, so the reason a
+ * flagged goal was closed anyway is on the row a month later rather than in a
+ * request log.
+ */
+function closeTicketResolution(issueNumber: number, note: string | null): string {
+  const closed = `Closed #${issueNumber} in the tracker from the cockpit.`;
+  return note === null ? closed : `${closed} ${note}`;
 }
 
 /**

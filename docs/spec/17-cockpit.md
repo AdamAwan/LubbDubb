@@ -600,7 +600,7 @@ within it.
 | `reply`      | Reply       | amber | `↵`   | A drafted reply, held until you send it.               |
 | `merge`      | Merge       | amber | `⊕`   | A merge waiting on your verdict.                       |
 | `shortfall`  | Shortfall   | blue  | `✗`   | Delivered work that did not reach its goal.            |
-| `intake`     | Intake      | blue  | `◌`   | The appraisal could not say a goal is workable.            |
+| `intake`     | Intake      | blue  | `◌`   | The appraisal could not say a goal is workable.        |
 | `profile`    | Profile     | blue  | `⊙`   | Which profile a goal runs on.                          |
 | `placement`  | Backlog     | amber | `▣`   | Nothing is held; the ticket is off the board.          |
 | `bench`      | Bench       | blue  | `◆`   | Work only a person can do. Informative, not broken.    |
@@ -1066,7 +1066,8 @@ one thing wherever it lands.
 ([20](20-validation.md#where-it-lands)) posted no note and offered no box to type one in, so the
 refusal was not merely invisible — it was unsatisfiable, and the control could not work at all. The
 bench verdict's Done reads `Done…` on a `close_out` whose goal is flagged and opens the note box
-Decline already had. `EndRunModal` mirrors the same condition **inside itself** rather than in whether
+Decline already had — as does **Close the ticket…**, since the flag is about the goal rather than
+about which verb settles the row, and one box serves all three. `EndRunModal` mirrors the same condition **inside itself** rather than in whether
 it opens: on a flagged goal the box is required and the confirm stays disabled until it is filled; on
 every other goal it is offered and optional, since an operator with a reason should not need a flagged
 plan to record it. The condition is mirrored, the counts are not: they are `issue.validation`, folded
@@ -1075,6 +1076,20 @@ once on the server, and the row's own detail already lists what is outstanding.
 The header no longer draws a `.launch-error` of its own for this control. It had one because ending a
 run was a one-click post with nowhere else to put a refusal; the refusal now lands in the modal that
 sent it, which is where the text that was refused still is.
+
+**A `close_out` row carries a third verb: Close the ticket.** The obligation the row states is a close
+in the tracker, so the button that takes it sits beside the two that record it and leads them —
+`HumanTaskActions` draws Done as the secondary where it is on offer, because Done is what an operator
+presses having already closed the item somewhere else. It posts
+`POST /api/human-tasks/:id/close-ticket` ([16](16-http-api.md)), which closes the item and settles the
+row together.
+
+It is drawn only where all three hold: the row is an open `close_out`, its origin is an `issue:<n>`,
+and `config.canCloseIssue` is true — the connector's own answer, asked once on the server rather than
+inferred in the browser from the provider's name, exactly as `canSetWorkItemState` is for the board's
+drag. Where it is false there is no button and no disabled ghost of one: the row's own detail already
+states the other way out, and a control that cannot work teaches nothing that sentence does not.
+→ [13](13-jobs-and-tickets.md#the-step-after-the-launch-the-close-out)
 
 **A band whose source has left the snapshot draws nothing at all.** A header over an empty box would
 claim something is waiting while offering no way to answer it.

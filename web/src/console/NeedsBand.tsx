@@ -93,6 +93,25 @@ function noteOwedOnDone(task: HumanTask, view: CockpitView): string | null {
 }
 
 /**
+ * Whether this row's ticket can be closed from here.
+ *
+ * Three conditions, and each is a different kind of no. Only a `close_out` row
+ * asks for a close at all; only an `issue:` origin names something to close; and
+ * only a deployment whose tracker the harness can write has anywhere to send it —
+ * `config.canCloseIssue` is the connector's own answer, asked once on the server
+ * rather than inferred here from the provider's name.
+ *
+ * A false draws no button rather than a disabled one: the row already says the
+ * other way to discharge it, and a control that cannot work teaches nothing the
+ * sentence above it does not.
+ */
+function closeTicketFor(task: HumanTask, view: CockpitView): boolean {
+  if (task.kind !== 'close_out' || task.status !== 'open') return false;
+  if (task.originRef === null || !/^issue:\d+$/.test(task.originRef)) return false;
+  return view.state.config.canCloseIssue;
+}
+
+/**
  * What answers this ask — the shared component that owns its verdict, wired the
  * way the stamp desk and the bench wire it. `buttonClass` is the one seam a
  * station passes, so the console's buttons and a modal's are one component
@@ -129,6 +148,7 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
             noteOnDone={noteOwedOnDone(task, view)}
             onDone={(id, note) => actions.completeHumanTask(id, note)}
             onDecline={(id, note) => actions.declineHumanTask(id, note)}
+            onCloseTicket={closeTicketFor(task, view) ? (id, note) => actions.closeHumanTaskTicket(id, note) : null}
           />
         </div>
       </>

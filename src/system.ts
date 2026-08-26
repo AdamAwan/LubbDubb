@@ -896,7 +896,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // a delivered goal whose ticket is still open owes a close. Store-only — it
   // files and settles a `human_tasks` row and touches no sink, because closing
   // the item is precisely the part the harness is not doing.
-  const closeOuts = new DeliveryCloseOutDesk(store, config.environments);
+  // The one thing it asks the outside world, and it asks it about the *row's
+  // wording*: whether the close the row is about can be taken from the cockpit.
+  const closeOutSink = opts.sink ?? connector;
+  const closeOuts = new DeliveryCloseOutDesk(store, config.environments, () => closeOutSink.canCloseIssue());
 
   // The other ask a delivered goal owes: the fixtures and accounts its validation
   // plan could not produce. Store-only on the close-out desk's terms, and gated on

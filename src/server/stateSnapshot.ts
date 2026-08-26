@@ -594,6 +594,9 @@ export function buildStateSnapshot(
       // that decides is the one the route asks. `setWorkItemState` throws when
       // nothing implements it, so there is no other way to *offer* the operation.
       canSetWorkItemState: connector.canSetWorkItemState(),
+      // The same question one act further on, and asked the same way: whether this
+      // deployment's tracker can be closed from here at all.
+      canCloseIssue: connector.canCloseIssue(),
       // The nodes an item can be filed under, capped by the same rule the appraiser's
       // offer is capped by — one list, so the operator and the agent are choosing
       // between the same things.
