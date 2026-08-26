@@ -8,6 +8,7 @@ import { elapsed, fmtUsd, relTime } from '../components/util.js';
 import { Ref, RefText, refLabel } from '../components/refs.js';
 import { CiLadder, CourtChip } from './GoalPage.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
+import { PanelRow, type PanelRowModel } from './PanelRow.js';
 
 /**
  * What is shown when no goal is selected: five cards, rows rather than pictures.
@@ -27,11 +28,45 @@ import { ProfilePicker } from '../components/ProfilePicker.js';
 export function Overview({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   return (
     <div className="cn-grid">
+      <GrammarSwitch view={view} actions={actions} />
       <Fleet view={view} actions={actions} />
       <GoalsInFlight view={view} actions={actions} />
       <Rack view={view} actions={actions} />
       <UpNext view={view} actions={actions} />
       <WorldSignals view={view} />
+    </div>
+  );
+}
+
+/**
+ * The preview switch, while the row grammar is being chosen.
+ *
+ * It spans the grid above the cards because it is a statement about all five of
+ * them, and it is drawn dashed because it is not part of the cockpit: it exists
+ * to be looked at once, and it goes with the grammar that is not chosen. The
+ * grammar itself is on the place, so a link carries whichever one the sender was
+ * reading. → docs/spec/17-cockpit.md#the-row-grammar
+ */
+function GrammarSwitch({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
+  return (
+    <div className="cn-grammar">
+      <b>Row grammar</b>
+      <span>
+        {view.panelGrammar === 'facts'
+          ? 'Every row is its title and its quantities, each said with what it is.'
+          : 'Every row is a sentence, with the evidence for it ruled off underneath.'}
+      </span>
+      <span className="cn-gap" />
+      {(['facts', 'claim'] as const).map((grammar) => (
+        <button
+          key={grammar}
+          type="button"
+          className={`cn-pill ${view.panelGrammar === grammar ? 'cn-on' : ''}`}
+          onClick={() => actions.setPanelGrammar(grammar)}
+        >
+          {grammar === 'facts' ? 'Facts' : 'Claim'}
+        </button>
+      ))}
     </div>
   );
 }
@@ -236,46 +271,46 @@ function AgentRow({ agent, view, actions }: { agent: Agent; view: CockpitView; a
   const done = agent.endedAt !== null;
   const limited = view.limitParked.has(agent.id);
   const lamp = view.escalationByAgent.has(agent.id)
-    ? 'cn-ask'
+    ? 'cn-lamp-ask'
     : done
       ? 'cn-off'
       : agent.status === 'waiting'
         ? 'cn-wait'
         : 'cn-run';
-  return (
-    <div className={`cn-row ${done ? 'cn-spent' : ''}`}>
-      <i className={`cn-lamp ${lamp}`} />
-      <button
-        type="button"
-        className="cn-grow"
-        onClick={() => actions.select(agent.id)}
-        title="Open this agent's drawer"
+  const row: PanelRowModel = {
+    lamp: <i className={`cn-lamp ${lamp}`} />,
+    title: task?.title ?? agent.id,
+    open: () => actions.select(agent.id),
+    openTitle: "Open this agent's drawer",
+    // Two refs where there are two: the origin it was dispatched at, and the goal
+    // behind it when that origin is a pull request some ticket owns.
+    refs: <OnWhat origin={origin} view={view} />,
+    facts: [
+      // A limit park says so where the note would be. The note underneath is
+      // whatever the agent last said it was doing, which on a parked row reads as
+      // though it still is.
+      { label: 'doing', value: limited ? 'Out of account limit' : (agent.note ?? agent.status), alarm: limited },
+      { label: 'for', value: elapsed(agent.startedAt, agent.endedAt, view.now) },
+      ...(agent.costUsd !== null ? [{ label: 'cost', value: fmtUsd(agent.costUsd) }] : []),
+    ],
+    // What the harness said about the wait, which is longer than a fact and is
+    // only asked for on the rows that are not moving.
+    why: agent.status === 'waiting' || limited ? agent.waitingReason : null,
+    // The way out of the park, where the park is shown — beside the name rather
+    // than inside it, since the row's own click opens the transcript.
+    action: limited ? (
+      <AsyncButton
+        className="cn-btn"
+        onClick={() => actions.resumeAgent(agent.id)}
+        title={agent.waitingReason ?? 'Resume this agent now the limit has cleared'}
+        pendingLabel="Resuming…"
       >
-        <b className="cn-name">{task?.title ?? agent.id}</b>
-        <span className="cn-sub">
-          {/* A limit park says so on the row itself. The note underneath is whatever
-              the agent last said it was doing, which on a parked row reads as though
-              it still is. */}
-          {limited ? 'Out of account limit' : (agent.note ?? agent.status)} ·{' '}
-          {elapsed(agent.startedAt, agent.endedAt, view.now)}
-        </span>
-      </button>
-      <OnWhat origin={origin} view={view} />
-      {/* The way out of the park, where the park is shown — beside the name rather
-          than inside it, since the row's own click opens the transcript. */}
-      {limited && (
-        <AsyncButton
-          className="cn-btn"
-          onClick={() => actions.resumeAgent(agent.id)}
-          title={agent.waitingReason ?? 'Resume this agent now the limit has cleared'}
-          pendingLabel="Resuming…"
-        >
-          Resume
-        </AsyncButton>
-      )}
-      {agent.costUsd !== null && <span className="cn-num">{fmtUsd(agent.costUsd)}</span>}
-    </div>
-  );
+        Resume
+      </AsyncButton>
+    ) : undefined,
+    spent: done,
+  };
+  return <PanelRow row={row} grammar={view.panelGrammar} />;
 }
 
 /**
@@ -294,10 +329,10 @@ function OnWhat({ origin, view }: { origin: string | null; view: CockpitView }):
   const pr = origin === null ? null : /^pr:(\d+)/.exec(origin);
   const goal = pr ? goalOfPr(view.state, Number(pr[1])) : null;
   return (
-    <span className="cn-refs">
+    <>
       {origin !== null && <Ref to={origin} label={pr ? `PR ${refLabel(origin)}` : refLabel(origin)} />}
       {goal !== null && <Ref to={goal} />}
-    </span>
+    </>
   );
 }
 
@@ -325,28 +360,25 @@ function OnWhat({ origin, view }: { origin: string | null; view: CockpitView }):
  * instant the claim stops blocking `validate-check`.
  */
 function DeskRow({ run, view }: { run: DeskRun; view: CockpitView }): JSX.Element {
-  return (
-    <div
-      className="cn-row cn-desk"
-      title={
-        `${run.label} is running check ${run.letter} of ${refLabel(run.originRef)} — claimed ${relTime(run.claimedAt, view.now)}. ` +
-        'Nobody dispatched it: it takes no fleet slot, and it ends when the reading lands, ' +
-        'when the session closes, or when the claim ages out.'
-      }
-    >
-      <i className="cn-lamp cn-desk-lamp" />
-      <span className="cn-grow">
-        <b className="cn-name">{run.title}</b>
-        <span className="cn-sub">
-          check {run.letter} · {run.label} · {elapsed(run.claimedAt, null, view.now)}
-        </span>
-      </span>
-      <span className="cn-refs">
-        <Ref to={run.originRef} />
-      </span>
-      <i className="cn-chip cn-desk-chip">at a keyboard</i>
-    </div>
-  );
+  const row: PanelRowModel = {
+    lamp: <i className="cn-lamp cn-desk-lamp" />,
+    title: run.title,
+    refs: <Ref to={run.originRef} />,
+    facts: [
+      { label: 'check', value: run.letter },
+      { label: 'who', value: run.label },
+      { label: 'for', value: elapsed(run.claimedAt, null, view.now) },
+    ],
+    // The two things a glance cannot carry, and they are a sentence rather than a
+    // row's worth of hover: this was not dispatched, and it ends on its own.
+    why:
+      `Nobody dispatched this: ${run.label} claimed check ${run.letter} of ${refLabel(run.originRef)} ` +
+      `${relTime(run.claimedAt, view.now)}, at their own keyboard. It takes no fleet slot, and it ends ` +
+      'when the reading lands, when the session closes, or when the claim ages out.',
+    chips: <i className="cn-chip cn-desk-chip">at a keyboard</i>,
+    desk: true,
+  };
+  return <PanelRow row={row} grammar={view.panelGrammar} />;
 }
 
 /**
@@ -395,27 +427,40 @@ function GoalRow({ issue, view, actions }: { issue: Issue; view: CockpitView; ac
   const asks = view.needsYou.filter((n) => n.goalRef === ref).length;
   const furthest = furthestEnvironment(view.state, ref);
 
-  return (
-    <button type="button" className="cn-row cn-goal-row" onClick={() => actions.selectGoal(ref)}>
-      <span className="cn-grow">
-        <b className="cn-name">
-          #{issue.number} {issue.title}
-        </b>
-        <span className="cn-sub">
-          {track !== null && track.total > 0 && `${track.total} parts · ${track.merged} merged · `}
-          {issue.pickup.status}
-          {asks > 0 && ` · ${asks} asking you`}
-        </span>
-      </span>
-      {track !== null && <Track track={track} />}
-      {/* Where the work actually got to, on the row rather than a page deeper.
-          Only ever drawn for an environment holding the goal *whole* — `partial`
-          has no furthest anything, and a chip claiming one would be the boolean
-          rollup the reach fold exists to refuse. */}
-      {furthest !== null && <i className="cn-chip cn-ok">{furthest}</i>}
-      <i className={`cn-chip ${asks > 0 ? 'cn-you' : 'cn-harness'}`}>{asks > 0 ? 'You' : 'Harness'}</i>
-    </button>
-  );
+  const row: PanelRowModel = {
+    title: `#${issue.number} ${issue.title}`,
+    className: 'cn-goal-row',
+    open: () => actions.selectGoal(ref),
+    openTitle: `Open goal #${issue.number} — its plan, its pull requests and anything it is asking you`,
+    // The row *is* the way to this goal, so it names nothing else: a ref beside
+    // the title would be a second token for the destination the row already is.
+    refs: null,
+    facts: [
+      ...(track !== null && track.total > 0
+        ? [
+            { label: 'parts', value: track.total },
+            { label: 'merged', value: track.merged },
+          ]
+        : []),
+      { label: 'pickup', value: issue.pickup.status },
+      ...(asks > 0 ? [{ label: 'asking you', value: asks, alarm: true }] : []),
+    ],
+    // The dispatcher's own account of what it is doing with this goal — most
+    // actionable first, and until now on no overview surface at all.
+    why: issue.pickup.reasons.join(' '),
+    reading: track !== null ? <Track track={track} /> : undefined,
+    chips: (
+      <>
+        {/* Where the work actually got to, on the row rather than a page deeper.
+            Only ever drawn for an environment holding the goal *whole* — `partial`
+            has no furthest anything, and a chip claiming one would be the boolean
+            rollup the reach fold exists to refuse. */}
+        {furthest !== null && <i className="cn-chip cn-ok">{furthest}</i>}
+        <i className={`cn-chip ${asks > 0 ? 'cn-you' : 'cn-harness'}`}>{asks > 0 ? 'You' : 'Harness'}</i>
+      </>
+    ),
+  };
+  return <PanelRow row={row} grammar={view.panelGrammar} />;
 }
 
 /**
@@ -478,21 +523,26 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
           // parts at all, which is most finished goals, and the rack drew no goal
           // for any of them.
           const goal = goalOfPr(view.state, pr.number);
-          return (
-            <div className={`cn-row ${unwatched ? 'cn-spent' : ''}`} key={pr.number}>
-              <span className="cn-grow">
-                <b className="cn-name">
-                  <Ref to={`pr:${pr.number}`} /> {pr.title}
-                </b>
-                <span className="cn-sub">{pr.branch}</span>
-              </span>
-              <span className="cn-refs">
+          const row: PanelRowModel = {
+            title: pr.title,
+            // The pull request's own number moves out of the title and into the
+            // refs slot, where every other card keeps what a row names: as a
+            // prefix it was a way somewhere that only this card put there.
+            refs: (
+              <>
+                <Ref to={`pr:${pr.number}`} />
                 {goal !== null && (
                   <Ref to={goal} title={`Open the goal this pull request is delivering — ${refLabel(goal)}`} />
                 )}
-              </span>
-              <CiLadder pr={pr} />
-              <CourtChip pr={pr} now={view.now} />
+              </>
+            ),
+            facts: [{ label: 'branch', value: pr.branch }],
+            // Whose turn it is and why — the server's own sentence, which the card
+            // drew the verdict of and never the reasoning behind it.
+            why: pr.attention.reasons.join(' '),
+            reading: <CiLadder pr={pr} />,
+            chips: <CourtChip pr={pr} now={view.now} />,
+            action: (
               <AsyncButton
                 className="ghost"
                 disabled={watchLabel === ''}
@@ -507,8 +557,10 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
               >
                 {unwatched ? 'watch' : 'unwatch'}
               </AsyncButton>
-            </div>
-          );
+            ),
+            spent: unwatched,
+          };
+          return <PanelRow key={pr.number} row={row} grammar={view.panelGrammar} />;
         })}
       </div>
     </section>
@@ -556,32 +608,33 @@ function QueueRow({
   actions: CockpitActions;
 }): JSX.Element {
   const config = view.state.config;
-  return (
-    <div className="cn-row">
-      <span className="cn-grow">
-        <b className="cn-name">
-          <Ref to={item.origin} /> {item.title}
-          {/* Why this row is where it is. Without it a flagged goal's parts sit at
-              the top of the panel with their own rule's reason underneath and
-              nothing anywhere connecting the order to the click that caused it. */}
-          {item.expedited === true && (
-            <i className="cn-chip" title="Its goal is marked a priority, so everything under it is ranked first">
-              priority
-            </i>
-          )}
-        </b>
-        <span className={`cn-sub cn-wrap ${item.status === 'dispatching' ? '' : 'cn-held'}`}>
-          <RefText text={item.reason} />
-        </span>
-      </span>
-      {/* What this row will run on, and the one place it can be changed before it
-          runs. The queue is where the judgement is available — an operator
-          reading "resolve the conflict on issue/390/watcher" knows it is
-          mechanical work, and the row is in front of them; the goal's ticket is
-          two clicks away and says nothing about which of its origins is the cheap
-          one. The empty option names what the row resolves to without an
-          override, so the panel answers "which profile" whether or not anyone has
-          touched it. */}
+  const held = item.status !== 'dispatching';
+  const row: PanelRowModel = {
+    title: item.title,
+    refs: <Ref to={item.origin} />,
+    facts: [
+      { label: 'rule', value: item.rule },
+      { label: 'status', value: item.status, alarm: held },
+    ],
+    // The queue's own sentence, verbatim and unre-worded — the direct answer to
+    // "are we working on the right thing". Behind the marker rather than on the
+    // glass: it is a paragraph on the rows that are held, and the word that says
+    // *which* rows those are is a fact above.
+    why: item.reason,
+    chips:
+      // Why this row is where it is. Without it a flagged goal's parts sit at the
+      // top of the panel with nothing anywhere connecting the order to the click
+      // that caused it.
+      item.expedited === true ? (
+        <i className="cn-chip" title="Its goal is marked a priority, so everything under it is ranked first">
+          priority
+        </i>
+      ) : undefined,
+    // What this row will run on, and the one place it can be changed before it
+    // runs. The queue is where the judgement is available — an operator reading
+    // "resolve the conflict on issue/390/watcher" knows it is mechanical work, and
+    // the row is in front of them.
+    action: (
       <ProfilePicker
         profiles={config.profiles}
         value={item.override ?? null}
@@ -592,8 +645,9 @@ function QueueRow({
         inheritLabel={item.profileSource === 'pin' && item.override === undefined ? 'Pinned' : 'Auto'}
         onPick={(profile) => void actions.setUpNextProfile(item.origin, profile)}
       />
-    </div>
-  );
+    ),
+  };
+  return <PanelRow row={row} grammar={view.panelGrammar} />;
 }
 
 /**
@@ -619,24 +673,25 @@ function WorldSignals({ view }: { view: CockpitView }): JSX.Element {
       <div className="cn-rows">
         {rows.length === 0 && <p className="cn-empty">The world has not moved.</p>}
         {rows.map((row) => (
-          <div className="cn-row" key={row.key}>
-            <span className="cn-grow">
-              <b className="cn-name">
-                <RefText text={row.summary} />
-              </b>
-              <span className="cn-sub">
-                {row.kind} · {relTime(row.createdAt, view.now)}
-              </span>
-            </span>
-            {/* The goal behind the signal, beside the sentence rather than inside
-                it. The summary's own `#412` already links out to the provider, so
-                repeating the pull request here would be one ref twice — what a
-                signal never offers is the way onto the goal page. */}
-            <span className="cn-refs">
-              <Ref to={goalBehind(view, row.ref)} />
-            </span>
-            {row.count > 1 && <span className="cn-num">×{row.count}</span>}
-          </div>
+          <PanelRow
+            key={row.key}
+            grammar={view.panelGrammar}
+            row={{
+              title: <RefText text={row.summary} />,
+              // The goal behind the signal, beside the sentence rather than inside
+              // it. The summary's own `#412` already links out to the provider, so
+              // repeating the pull request here would be one ref twice — what a
+              // signal never offers is the way onto the goal page.
+              refs: <Ref to={goalBehind(view, row.ref)} />,
+              facts: [
+                { label: 'kind', value: row.kind },
+                { label: 'when', value: relTime(row.createdAt, view.now) },
+                // The count is a fact with a name now, rather than the same slot a
+                // fleet row puts a dollar figure in.
+                ...(row.count > 1 ? [{ label: 'times', value: `×${row.count}` }] : []),
+              ],
+            }}
+          />
         ))}
       </div>
     </section>

@@ -1236,7 +1236,7 @@ function OnThisGoal({
         {page.agents.map((agent) => (
           <button type="button" className="cn-row" key={agent.id} onClick={() => actions.select(agent.id)}>
             <i
-              className={`cn-lamp ${agent.status === 'waiting' ? 'cn-ask' : agent.endedAt === null ? 'cn-run' : 'cn-off'}`}
+              className={`cn-lamp ${agent.status === 'waiting' ? 'cn-lamp-ask' : agent.endedAt === null ? 'cn-run' : 'cn-off'}`}
             />
             <span className="cn-grow">
               <b className="cn-name">{view.taskFor(agent)?.title ?? agent.id}</b>

@@ -248,6 +248,7 @@ export function useCockpit(): CockpitStatus {
       // One `go` for however many of the three moved: they are one place, and two
       // calls would push two history entries for a single change of question.
       setTicketQuery: (next) => go(next),
+      setPanelGrammar: (grammar) => go({ panelGrammar: grammar }),
       collapseFeature: (issueNumber, collapsed) =>
         go((current) => ({
           collapsed: collapsed
@@ -418,6 +419,7 @@ export function useCockpit(): CockpitStatus {
       ticketOrder: place.ticketOrder,
       ticketView: place.ticketView,
       ticketColumns: place.ticketColumns,
+      panelGrammar: place.panelGrammar,
     }),
   };
 }

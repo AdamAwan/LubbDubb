@@ -393,32 +393,32 @@ modals — and nothing that answers _what is true_. It replaced ten independent 
 page on the tickets tab is **one** place, and stepping back out of it has to restore all three at
 once.
 
-| Parameter                            | Carries                                                                                                                                                                                                                  |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `tab`                                | `tickets` / `knowledge` / `insights`; the overview is the absent value. `backlog` and `work` are aliases for `tickets`, and `?panel=knowledge` for `knowledge`, so links to a deleted tab or a promoted panel still land |
-| `goal`                               | the open goal page, as `issue:<n>`                                                                                                                                                                                       |
-| `panel`                              | `knowledge` / `faults` / `launch` / `build` / `record` / `localRun` / `setup` / `pets`                                                                                                                                   |
-| `ask`                                | the queue row a `{ ask }` panel is showing                                                                                                                                                                               |
-| `agent`                              | the open drawer's agent                                                                                                                                                                                                  |
-| `plan` / `retro` / `pad`             | the plan sheet, the retrospective, the notepad                                                                                                                                                                           |
-| `fact`                               | the claim whose provenance is open on the Knowledge tab, by fact id                                                                                                                                                      |
-| `kn`                                 | the Knowledge tab's layout: `list` for the nine headings, `table` for one sortable row per claim; `queue` — one claim at a time — is the absent value. Not `view`, which the Tickets tab and Insights already share → [27](27-knowledge.md#the-queue-is-the-page)                                                             |
-| `q`                                  | which claim the Knowledge queue is standing on, by fact id. On `Place` and not a `useState` for the usual reason: a reload has to land on the card the operator was ruling on, and the back button has to step back through the ones behind it → [27](27-knowledge.md#the-queue-is-the-page)                                                             |
-| `show`                               | how the Knowledge tab is narrowed: `waiting` / `reaching` / `settled`; `all` is the absent value. A filter, never a move — a claim stays under the heading its reach puts it in                                          |
-| `sort`                               | the Knowledge table's order, `-` for the far end: `-asks` is most-asked-for first; `reach` ascending is the absent value                                                                                                 |
-| `fold`                               | the Knowledge tails an operator has **folded away**, as `rejected,retired` — the folded ones, so the page as it stands is a bare URL and nothing is hidden on arrival                                                    |
-| `see`                                | the Knowledge **queue's** three folds an operator has **opened**, as `cold,settled` — the other way round from `fold`, and a second parameter rather than that one read backwards: the queue's tails start shut where the list's start drawn, and one parameter meaning the opposite thing depending on `kn` is the drift these are spelled apart to avoid → [27](27-knowledge.md#the-queue-is-the-page)                       |
-| `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                                                                                                                 |
-| `open`                               | the goal page's reference sections held open, as `record,ticket`                                                                                                                                                         |
-| `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                                                                                                        |
-| `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched`; `any` is the absent value                                                                                                                                       |
-| `tracking`                           | what the harness is doing about it: `any` / `frozen`; `live` is the absent value, since the tab is the surface work happens on                                                                                           |
-| `state`                              | its tracker axis, in the tracker's own word; `any` is the absent value. `open` / `closed` are read as the old `tracking` axis                                                                                            |
-| `feature`                            | one feature by issue number, or `none` for the orphans; every feature is the absent value                                                                                                                                |
-| `group`                              | how the list is arranged: `flat`; `feature` is the absent value                                                                                                                                                          |
-| `order`                              | how the Tickets tab is ordered: `cost`; `added` is the absent value                                                                                                                                                      |
-| `view`                               | the Tickets tab's layout: `card` for the board of state columns; `table` is the absent value                                                                                                                             |
-| `hide`                               | the board columns folded away, as `Closed,Removed` — the **hidden** ones, so an untouched board is a bare URL                                                                                                            |
+| Parameter                            | Carries                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tab`                                | `tickets` / `knowledge` / `insights`; the overview is the absent value. `backlog` and `work` are aliases for `tickets`, and `?panel=knowledge` for `knowledge`, so links to a deleted tab or a promoted panel still land                                                                                                                                                                                 |
+| `goal`                               | the open goal page, as `issue:<n>`                                                                                                                                                                                                                                                                                                                                                                       |
+| `panel`                              | `knowledge` / `faults` / `launch` / `build` / `record` / `localRun` / `setup` / `pets`                                                                                                                                                                                                                                                                                                                   |
+| `ask`                                | the queue row a `{ ask }` panel is showing                                                                                                                                                                                                                                                                                                                                                               |
+| `agent`                              | the open drawer's agent                                                                                                                                                                                                                                                                                                                                                                                  |
+| `plan` / `retro` / `pad`             | the plan sheet, the retrospective, the notepad                                                                                                                                                                                                                                                                                                                                                           |
+| `fact`                               | the claim whose provenance is open on the Knowledge tab, by fact id                                                                                                                                                                                                                                                                                                                                      |
+| `kn`                                 | the Knowledge tab's layout: `list` for the nine headings, `table` for one sortable row per claim; `queue` — one claim at a time — is the absent value. Not `view`, which the Tickets tab and Insights already share → [27](27-knowledge.md#the-queue-is-the-page)                                                                                                                                        |
+| `q`                                  | which claim the Knowledge queue is standing on, by fact id. On `Place` and not a `useState` for the usual reason: a reload has to land on the card the operator was ruling on, and the back button has to step back through the ones behind it → [27](27-knowledge.md#the-queue-is-the-page)                                                                                                             |
+| `show`                               | how the Knowledge tab is narrowed: `waiting` / `reaching` / `settled`; `all` is the absent value. A filter, never a move — a claim stays under the heading its reach puts it in                                                                                                                                                                                                                          |
+| `sort`                               | the Knowledge table's order, `-` for the far end: `-asks` is most-asked-for first; `reach` ascending is the absent value                                                                                                                                                                                                                                                                                 |
+| `fold`                               | the Knowledge tails an operator has **folded away**, as `rejected,retired` — the folded ones, so the page as it stands is a bare URL and nothing is hidden on arrival                                                                                                                                                                                                                                    |
+| `see`                                | the Knowledge **queue's** three folds an operator has **opened**, as `cold,settled` — the other way round from `fold`, and a second parameter rather than that one read backwards: the queue's tails start shut where the list's start drawn, and one parameter meaning the opposite thing depending on `kn` is the drift these are spelled apart to avoid → [27](27-knowledge.md#the-queue-is-the-page) |
+| `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                                                                                                                                                                                                                                                                                                 |
+| `open`                               | the goal page's reference sections held open, as `record,ticket`                                                                                                                                                                                                                                                                                                                                         |
+| `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                                                                                                                                                                                                                                                                                        |
+| `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched`; `any` is the absent value                                                                                                                                                                                                                                                                                                                       |
+| `tracking`                           | what the harness is doing about it: `any` / `frozen`; `live` is the absent value, since the tab is the surface work happens on                                                                                                                                                                                                                                                                           |
+| `state`                              | its tracker axis, in the tracker's own word; `any` is the absent value. `open` / `closed` are read as the old `tracking` axis                                                                                                                                                                                                                                                                            |
+| `feature`                            | one feature by issue number, or `none` for the orphans; every feature is the absent value                                                                                                                                                                                                                                                                                                                |
+| `group`                              | how the list is arranged: `flat`; `feature` is the absent value                                                                                                                                                                                                                                                                                                                                          |
+| `order`                              | how the Tickets tab is ordered: `cost`; `added` is the absent value                                                                                                                                                                                                                                                                                                                                      |
+| `view`                               | the Tickets tab's layout: `card` for the board of state columns; `table` is the absent value                                                                                                                                                                                                                                                                                                             |
+| `hide`                               | the board columns folded away, as `Closed,Removed` — the **hidden** ones, so an untouched board is a bare URL                                                                                                                                                                                                                                                                                            |
 
 **The query string rather than the path**, for three reasons that are one reason — nothing else has to
 agree with the console about where it is served from. The token arrives in the fragment and is
@@ -1366,6 +1366,54 @@ Two rules run through all five. **Nothing here re-decides what the server decide
 `attention.status`, its checks are `ciVerdict`, a queued item's hold is the queue's own sentence, and a
 goal's state is its `pickup.status`. And **an empty card still draws**, muted, because a surface that
 vanishes when quiet is indistinguishable from one that broke.
+
+A third now runs through all five as well: **no card writes a row.** Each builds a `PanelRowModel` and
+hands it to `PanelRow` — see [the row grammar](#the-row-grammar) below.
+
+### The row grammar
+
+`<Ref>` settled how a reference is _drawn_. What it did not settle is where a row puts one, and the
+five cards answered that five ways: the refs group on Fleet and World signals, a prefix inside
+`cn-name` on Pull requests and Up next. The rest of the row had drifted the same way — a
+dot-separated sub-line whose parts differed per card, and one `cn-num` slot carrying a cost on a fleet
+row and a `×3` on a signal row. Each card read correctly alone, which is why none of it was ever a
+bug anybody filed; the overview is only ever read two cards at a time.
+
+So the row is a **value**, `PanelRowModel` in `web/src/console/PanelRow.tsx`, and the card builds one
+rather than writing markup. The fields are the grammar: `lamp`, `title` with its optional `open`,
+`refs`, `facts`, `why`, `reading`, `chips`, `action`. Three of them carry the rules that kept being
+forgotten:
+
+- **`refs` is required.** Null is how a row says it points at nothing — the goal rows say it, because
+  the row _is_ the way to that goal — and a card that simply never got round to drawing a way
+  somewhere no longer compiles into a row that looks finished. It is the cockpit's most repeated bug
+  and every previous fix for it was a convention.
+- **`facts` are labelled pairs**, not a concatenation: `for 41m`, `cost $2.14`, `branch feature/x`,
+  `when 12m ago`, `times ×3`. `41m` alone is an age on one card and a remaining time on another, and
+  the label is the whole of what says which. The count that used to share the cost's slot is a fact
+  with a name now.
+- **`why` is the row's one long sentence, and it is not on the glass.** A queue item's `reason`, a
+  goal's `pickup.reasons`, a pull request's `attention.reasons` — held behind a `?` marker and given
+  up on hover or focus. On the glass it made Up next the one card whose rows were three lines tall and
+  whose shape every other card was an exception to; behind the marker it is one hover away, and the
+  structured half of the same fact (the rule, and the word _held_) stays visible in its place. The
+  marker holds **prose only** — never a ref, never a control: a reason naming `#412` draws it as
+  plain text, and the way there is in the row's own refs slot, where every card keeps one. It is a
+  `button`, so it answers to the keyboard; a reason only a pointer can reach is a reason half the
+  operators do not have.
+
+The model has **two renderings**, because the layout was worth settling separately from the rule:
+
+| Grammar | The row is                   | Drawn as                                                                        |
+| ------- | ---------------------------- | ------------------------------------------------------------------------------- |
+| `facts` | its title and its quantities | one line: lamp, subject, why, reading, chips, action, refs                      |
+| `claim` | a sentence with its evidence | two bands: the claim, then a ruled strip of refs, facts, reading, chips, action |
+
+Which one is on `Place.panelGrammar`, `?grammar=claim`, so both are a link somebody can send while the
+choice between them is open — and a preview switch spans the top of the grid. **Both are temporary in
+that sense**: the switch and the losing grammar go together once one is chosen, and what stays is the
+model. `test/panelGrammar.test.ts` holds the two to the same cards and the same rows, and pins the
+prose-only rule on the marker.
 
 - **Goals in flight** carries the **furthest environment** holding a goal whole, where any is —
   last-declared in the operator's list, since that list is the order the work travels in. `partial`
@@ -2655,12 +2703,12 @@ the form says so **per row** rather than the surface claiming one answer for fif
 per row all come from the server for `isDefault`'s reason — a browser that decided them would be a
 second copy free to drift:
 
-| Drawn from                  | Decided by                                                                 |
-| --------------------------- | -------------------------------------------------------------------------- |
-| the widget                  | `entry.type` — `configFields.ts` ([02](02-configuration.md#fields))        |
-| applies now / needs restart | `entry.live` — true only where `configApply.ts` holds an arm               |
-| not editable                | `entry.env` (the environment beats the file), or `access: 'fileOnly'`      |
-| where the value came from   | `entry.env`, `entry.isDefault` and `entry.fromProject` — one of four words |
+| Drawn from                  | Decided by                                                                  |
+| --------------------------- | --------------------------------------------------------------------------- |
+| the widget                  | `entry.type` — `configFields.ts` ([02](02-configuration.md#fields))         |
+| applies now / needs restart | `entry.live` — true only where `configApply.ts` holds an arm                |
+| not editable                | `entry.env` (the environment beats the file), or `access: 'fileOnly'`       |
+| where the value came from   | `entry.env`, `entry.isDefault` and `entry.fromProject` — one of four words  |
 | what else requires it       | `entry.requiredWhen` — the declaration, judged here against the staged edit |
 
 **Four words, because there are four layers.** `env`, `file`, `project` and `default`: a harness
@@ -2671,7 +2719,7 @@ have — and a row cleared while the project sets it says it will fall back to t
 because it will. `isDefault` is therefore _what you would have without your own file_, which is the
 same question as "what does clearing this leave", since the form writes one file and nothing else.
 
-`requiredWhen` is the one row in that table whose *answer* is not the server's, and the exception
+`requiredWhen` is the one row in that table whose _answer_ is not the server's, and the exception
 proves the rule: the question is about the edit in front of the operator, not about the config the
 harness booted on. `fleetId` is required while `integrations.pool` is anything but `fake`, and both
 keys are edited here — so the row is marked, the value on offer (`userId@pool.project`) is drawn beside
@@ -3771,8 +3819,8 @@ scheme and the four prompt builders in `web/src/cockpit/desktopLink.ts`.
 because the four live in rows with different tones; what is shared is the address and the sentence.
 
 **The command is in the title as well as the `href`, and the component is what puts it there.** The
-link fires only on the machine the browser is on, and a client that is not installed answers *nothing
-at all* — no error, no tab, no window. So an operator reading the cockpit from another desk is left
+link fires only on the machine the browser is on, and a client that is not installed answers _nothing
+at all_ — no error, no tab, no window. So an operator reading the cockpit from another desk is left
 with the line to type, and the title is the only place to put it. This was a rule each site was
 trusted to remember, and two of the five had already forgotten: the plan sheet's two **Discuss…**
 anchors said what the session would do and never what command it would arrive with. So the title is
@@ -3820,7 +3868,7 @@ shares the number. The tracker's page answers either.
 offer: a ref onto a goal the world carries opens its **page**, so the goal header's `Open ticket ↗`
 needs a control of its own. Three keys are tried, in the order of how much each can be trusted — the
 item's own `url`, then `issue:<n>`, then `#<n>` — and where it lives is the point. Both the ordering
-and the inert `<span>` drawn when none of them resolves are judgements about *how a ref resolves*,
+and the inert `<span>` drawn when none of them resolves are judgements about _how a ref resolves_,
 which is this module's job; written into the page instead, the next surface that wants a ticket writes
 its own third ordering, and `#<n>` first is the one that opens a pull request on a tracker where issue
 412 and PR 412 both exist.

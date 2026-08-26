@@ -1682,7 +1682,12 @@ button.cn-grow {
   background: var(--cn-green);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--cn-green) 13%, transparent);
 }
-.cn-lamp.cn-ask {
+/* Namespaced, because the goal page's ask block is `.cn-ask` and is declared
+   further down this sheet: at equal specificity for the properties the lamp rule
+   does not set, its padding, border and margin landed on the lamp and drew an 8px
+   dot as a 30px red box. Every other lamp modifier is unique to the lamp; this one
+   was not, and nothing about a class name says so. */
+.cn-lamp.cn-lamp-ask {
   background: var(--cn-red);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--cn-red) 15%, transparent);
 }
@@ -2519,4 +2524,171 @@ button.cn-grow {
   background: var(--cn-red-fill);
   color: var(--cn-red-ink);
   font-size: 12px;
+}
+
+/* ── The row grammar ──────────────────────────────────────────────────────────
+
+   One vocabulary for what a panel row draws, shared by both grammars
+   (`PanelRow.tsx`). The row is `position: relative` because the why marker's
+   bubble is positioned against the row rather than against the marker: anchored
+   to a 16px button it leaves the card on every row whose marker sits near an
+   edge, and a tooltip clipped by its own panel is a reason nobody can read.
+   → docs/spec/17-cockpit.md#the-row-grammar */
+.cn-row {
+  position: relative;
+}
+
+/* A row's quantities, each said with what it is. The label is what stops this
+   being the dot-separated concatenation it replaced — `41m` is an age on one card
+   and a remaining time on another, and only the pair says which. */
+.cn-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  font-size: 11.5px;
+  color: var(--cn-fg-faint);
+}
+.cn-fact {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+}
+.cn-fact-k {
+  font: 600 9.5px/1.6 var(--cn-mono);
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+  flex: none;
+}
+.cn-fact-v {
+  color: var(--cn-fg-dim);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The fact that is the reason the row is not moving. */
+.cn-fact-v.cn-alarm {
+  color: var(--cn-amber-ink);
+}
+
+/* The reason, on demand. A button rather than a hover target, because a reason
+   only a pointer can reach is a reason half the operators do not have. */
+.cn-why {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+}
+.cn-why-mark {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--cn-line-hi);
+  border-radius: 50%;
+  background: none;
+  color: var(--cn-fg-faint);
+  font: 600 10px/1 var(--cn-mono);
+  cursor: help;
+}
+.cn-why-mark:hover,
+.cn-why-mark:focus-visible {
+  border-color: var(--cn-accent);
+  color: var(--cn-accent);
+  outline: none;
+}
+/* Two edges rather than a width: the bubble is the width of the row it explains,
+   so it cannot leave the card whatever the marker's position in the row. */
+.cn-why-tip {
+  display: none;
+  position: absolute;
+  left: 13px;
+  right: 13px;
+  top: calc(100% - 4px);
+  z-index: 40;
+  max-width: 420px;
+  padding: 9px 11px;
+  background: var(--cn-bg);
+  border: 1px solid var(--cn-line-hi);
+  border-radius: var(--cn-r-sm);
+  box-shadow: 0 6px 20px var(--cn-scrim);
+  font: 400 11.5px/1.5 var(--cn-ui);
+  color: var(--cn-fg-dim);
+  white-space: normal;
+  text-align: left;
+}
+.cn-why:hover .cn-why-tip,
+.cn-why:focus-within .cn-why-tip {
+  display: block;
+}
+
+/* The claim grammar: a sentence, then the evidence for it. */
+.cn-row.cn-claim-row {
+  display: block;
+  padding: 10px 13px;
+}
+.cn-claim {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+/* The sentence wraps rather than taking the row's ellipsis — carrying the row's
+   words is the whole of what this grammar buys over the other one. */
+.cn-claim .cn-name {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  font-weight: 500;
+}
+.cn-evidence {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px dashed var(--cn-line);
+  font-size: 11.5px;
+}
+.cn-ev-gap {
+  flex: 1;
+}
+/* Inside the evidence band the refs group keeps its position and drops its rule:
+   the band is already ruled off from the claim above it, and a second hairline
+   inside it is two rules for one grouping. */
+.cn-refs.cn-refs-flat {
+  border-left: 0;
+  padding-left: 0;
+  min-width: 0;
+  justify-content: flex-start;
+}
+
+/* The preview switch. Temporary: it exists while the grammar is being chosen and
+   goes with the losing grammar. → docs/spec/17-cockpit.md#the-row-grammar */
+.cn-grammar {
+  /* The full width of the grid, and only as tall as its own line: it is a
+     statement about every card below it, not a card among them. */
+  grid-column: 1 / -1;
+  align-self: start;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 11px;
+  border: 1px dashed var(--cn-line-hi);
+  border-radius: var(--cn-r);
+  background: var(--cn-panel);
+  font-size: 11.5px;
+  color: var(--cn-fg-faint);
+}
+.cn-grammar b {
+  font: 600 10.5px/1 var(--cn-mono);
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--cn-fg-dim);
+}
+.cn-grammar .cn-gap {
+  flex: 1;
 }

@@ -312,6 +312,15 @@ export interface CockpitActions {
     >,
   ): void;
   /**
+   * Draw the overview's rows in the other grammar.
+   *
+   * On the seam rather than a `useState` in the overview for {@link setTicketQuery}'s
+   * reason: the two grammars are being compared, so "the same overview, drawn the
+   * other way" has to be a link somebody can send. Temporary — it goes with the
+   * grammar that is not chosen.
+   */
+  setPanelGrammar(grammar: Place['panelGrammar']): void;
+  /**
    * Fold a feature's children away in the tickets tab, or open them again. Every feature is
    * open until this closes one, so the argument is the state being *set* rather
    * than a bare toggle — the caller already knows which way the chevron points,
