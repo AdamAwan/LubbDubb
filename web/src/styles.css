@@ -6001,6 +6001,28 @@ select:disabled {
 .cfg-row.staged {
   background: var(--cn-amber-bg);
 }
+/* A key another key requires, with nothing in it. Marked on the row rather than
+   only in the save bar: the bar says one field is missing, and the row is the
+   only thing that says which. */
+.cfg-row.needed {
+  background: var(--cn-red-bg);
+}
+.cfg-need {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid var(--cn-red);
+  border-radius: var(--cn-r-sm);
+  font: 10px var(--cn-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--cn-red);
+}
+/* The value on offer for an empty field. A control, so accepting it is the
+   operator's act and not the form's. */
+.cfg-suggest code {
+  font: 11px var(--cn-mono);
+}
 .cfg-key {
   font: 12px var(--cn-mono);
   color: var(--cn-fg-dim);

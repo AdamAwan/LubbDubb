@@ -232,6 +232,34 @@ state no open item is sitting in is still one worth colouring. `issueStateColour
 this type. Its values are refused leaf by leaf on the way in — a colour reaches a `style` attribute, so
 a map half of whose entries do nothing is one an operator reads as broken with nothing saying why.
 
+### A key another key requires
+
+Two members of the declaration exist for one situation: a key that is only required when *another*
+key says so. `fleetId` is the case — required the moment `integrations.pool` leaves `fake`, and a boot
+error otherwise ([28](28-cross-fleet-pool.md#configuration)).
+
+- `requiredWhen: { path, unless }` — the key the requirement hangs on, and the one value of it that
+  lifts it.
+- `suggest: { join, with }` — the keys to join into a value to **offer** for the empty field.
+  `fleetId` joins `userId` and `pool.project` into `alice@acme-api`.
+
+The requirement is **declared** here and **judged in the browser**, which is the one place the config
+form decides anything for itself. The reason is that the answer is a fact about the *edit*: the key
+that raises it is on the same page, so an operator who selects the pool provider and saves has written
+a config the next boot refuses — and `RunningConfigEntry.requiredWhen` reaching the browser as a
+resolved `required: boolean` would carry the answer for the config the harness is *running*, which is
+still `fake`. The refusal would arrive as a 400 from `POST /api/config`, over a key with no row on the
+page to fix, since an unset optional is not drawn.
+
+That last part is the second consequence: **a key with a `requiredWhen` is drawn while unset**, empty
+and reading as inherited, where every other unset optional is omitted. One blank row is cheaper than
+a form that hides the only field that would clear its own refusal.
+
+The suggestion is an offer and never a derivation — a button beside the empty field, and a
+placeholder in it. `fleetId` is [explicitly never derived](28-cross-fleet-pool.md#configuration), and
+nothing here writes it: what the operator accepts is what they typed. It is absent unless every part
+resolves to a non-empty string, because `alice@` is not a suggestion.
+
 `test/configFields.test.ts` asserts every top-level key of `defaultConfig()` is declared, so a config
 key added without one fails `npm run check` rather than quietly arriving un-editable — the failure
 `lubbdubb.config.example.json` already had as a hand-maintained discovery surface.

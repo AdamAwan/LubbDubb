@@ -1103,6 +1103,139 @@ test('the tracker-state colour picker draws the shared field', () => {
   assert.ok(html.includes('value="Done"'), 'an uncoloured state is offered in the datalist');
 });
 
+/**
+ * A key another key requires, drawn while the requirement is raised by an edit
+ * that has not been written yet.
+ *
+ * The whole point of the requirement living in the browser: the pool provider is
+ * `fake` in the config this page was handed, and `git` only in what is staged. A
+ * `required` computed on the server would answer for the running config and let
+ * the operator write a file the next boot refuses — over a key whose row would
+ * not have been drawn at all, since an unset optional is not.
+ */
+test('a key the staged config requires is marked, offered a value, and blocks the write', () => {
+  const html = renderToStaticMarkup(
+    createElement(ConfigValues, {
+      payload: {
+        groups: [
+          {
+            title: 'Integrations',
+            entries: [
+              {
+                path: 'integrations.pool',
+                value: 'fake',
+                isDefault: true,
+                type: 'enum' as const,
+                options: ['fake', 'git'],
+                access: 'plain' as const,
+                live: false,
+                env: null,
+                why: 'Which substrate carries the cross-fleet pool.',
+              },
+              {
+                path: 'fleetId',
+                value: '',
+                isDefault: true,
+                type: 'string' as const,
+                access: 'plain' as const,
+                live: false,
+                env: null,
+                why: 'Who this fleet is in the pool.',
+                requiredWhen: { path: 'integrations.pool', unless: 'fake' },
+                suggestion: 'adam@lubbdubb',
+              },
+            ],
+          },
+        ],
+        file: 'lubbdubb.config.json',
+        projectFile: null,
+        text: '{}',
+        revision: 'abc123',
+        pending: [],
+        canRestart: false,
+      },
+      staged: { set: { 'integrations.pool': 'git' }, clear: [] },
+      saved: null,
+      group: 'Integrations',
+      control: { cap: 2, paused: false },
+      states: [],
+      onGroup: () => undefined,
+      onStage: () => undefined,
+      onReview: () => undefined,
+      onReloaded: () => undefined,
+    }),
+  );
+  assert.ok(html.includes('cfg-need'), 'the row is marked as needed');
+  assert.ok(html.includes('cfg-suggest'), 'the suggestion is offered as a control');
+  assert.ok(html.includes('adam@lubbdubb'), 'and it is userId@pool.project');
+  assert.match(
+    html,
+    /<button class="btn primary small" disabled="">Review &amp; write<\/button>/,
+    'the write is refused while the requirement is unmet',
+  );
+  // Named rather than counted: the row is usually in a group the operator has
+  // already navigated away from.
+  assert.ok(html.includes('fleetId is needed while'), 'and the save bar says which key and why');
+});
+
+/** The same page with the requirement satisfied writes normally. */
+test('a required key that is filled in does not block the write', () => {
+  const html = renderToStaticMarkup(
+    createElement(ConfigValues, {
+      payload: {
+        groups: [
+          {
+            title: 'Integrations',
+            entries: [
+              {
+                path: 'integrations.pool',
+                value: 'git',
+                isDefault: false,
+                type: 'enum' as const,
+                options: ['fake', 'git'],
+                access: 'plain' as const,
+                live: false,
+                env: null,
+                why: 'Which substrate carries the cross-fleet pool.',
+              },
+              {
+                path: 'fleetId',
+                value: 'adam@lubbdubb',
+                isDefault: false,
+                type: 'string' as const,
+                access: 'plain' as const,
+                live: false,
+                env: null,
+                why: 'Who this fleet is in the pool.',
+                requiredWhen: { path: 'integrations.pool', unless: 'fake' },
+                suggestion: 'adam@lubbdubb',
+              },
+            ],
+          },
+        ],
+        file: 'lubbdubb.config.json',
+        projectFile: null,
+        text: '{}',
+        revision: 'abc123',
+        pending: [],
+        canRestart: false,
+      },
+      staged: { set: { fleetId: 'adam@lubbdubb' }, clear: [] },
+      saved: null,
+      group: 'Integrations',
+      control: { cap: 2, paused: false },
+      states: [],
+      onGroup: () => undefined,
+      onStage: () => undefined,
+      onReview: () => undefined,
+      onReloaded: () => undefined,
+    }),
+  );
+  assert.ok(!html.includes('cfg-need'), 'nothing is marked as needed');
+  // The suggestion is an offer for an empty field, so a filled one does not draw it.
+  assert.ok(!html.includes('cfg-suggest'), 'and the offer is gone');
+});
+
 test('the shared colour field keeps the alpha a picker cannot express', () => {
   const seen: string[] = [];
   const html = renderToStaticMarkup(
