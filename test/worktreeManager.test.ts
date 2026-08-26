@@ -1,13 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readdirSync, readFileSync } from 'node:fs';
 import { defaultPoolSize, WorktreeManager } from '../src/worktree/worktreeManager.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
+import { tmpDir } from './support/gitRepo.js';
 
 /**
  * A throwaway repository, because everything in this file is git behaviour and
@@ -16,7 +16,7 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
  * `init.defaultBranch` happens to be.
  */
 function initRepo(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-repo-'));
+  const dir = tmpDir('lubbdubb-repo-');
   const git = (args: string[]) => execFileSync('git', args, { cwd: dir });
   git(['init', '-q', '-b', 'main']);
   git(['config', 'user.email', 't@t.com']);
@@ -544,6 +544,30 @@ test('the reuse arm is scoped to the pool: the operator’s own checkout is neve
   const dir = await wt.ensure('issue/12', 'main');
   assert.notEqual(dir, repo, 'the repo root is never a slot');
   assert.ok(dir.startsWith(join(repo, '.wt')), 'a directory under the worktree root is');
+});
+
+test('deleteBranch refuses the operator’s own checkout by name, and leaves both refs where they are', async () => {
+  const repo = initRepo();
+  const wt = manager(repo);
+  // The reap's version of what `ensure` already refuses above: a merged branch the
+  // operator is standing on to read what the agent did. Detaching their checkout to
+  // free the ref is the one thing this must not do — so the refusal has to carry the
+  // remedy, because `git branch -D`'s own `used by worktree at …` names a path and no
+  // reason, once per pulse for the whole closed-PR window.
+  commitOn(repo, 'issue/12', 'agent.txt');
+  writeFileSync(join(repo, 'uncommitted.txt'), 'mine');
+
+  await assert.rejects(() => wt.deleteBranch('issue/12'), /own working copy[\s\S]*Switch that checkout/);
+
+  assert.equal(git(repo, ['rev-parse', '--abbrev-ref', 'HEAD']), 'issue/12', 'still on their own branch');
+  assert.ok(existsSync(join(repo, 'uncommitted.txt')), 'the operator’s working copy is untouched');
+  assert.notEqual(git(repo, ['branch', '--list', 'issue/12']), '', 'and the ref is still there to reap');
+
+  // Off the branch, and the next pulse's retry goes through — the desk never wrote
+  // the `branch_reaps` row, so there is a next pulse to go through on.
+  git(repo, ['checkout', '-q', 'main']);
+  await wt.deleteBranch('issue/12');
+  assert.equal(git(repo, ['branch', '--list', 'issue/12']), '', 'the local branch should be gone');
 });
 
 test('deleteBranch on a branch that does not exist is a no-op', async () => {

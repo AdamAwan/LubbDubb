@@ -413,8 +413,9 @@ export class WorktreeManager implements Worktrees {
    * checked out anywhere, and the directory is no longer this branch's to delete —
    * detaching frees the ref and leaves the warm tree standing for the next occupant.
    * The repo's own main worktree is left alone: detaching an operator's checkout to
-   * reap a branch would be a rude surprise, and `-D` failing loudly is the honest
-   * answer there.
+   * reap a branch would be a rude surprise. It is refused **by name** rather than
+   * left to `-D` — see {@link reapBlockedByCheckout} for why the honest answer still
+   * needs to be the harness's sentence and not git's.
    *
    * A branch that is not there is a no-op rather than a failure: the reap's question
    * is whether the ref is gone, and both answers satisfy it.
@@ -448,7 +449,8 @@ export class WorktreeManager implements Worktrees {
       }
     }
     await this.remove(branch);
-    if (holding !== null && holding !== resolve(this.repoRoot)) await runGit(holding, ['switch', '--detach']);
+    if (holding === resolve(this.repoRoot)) throw new Error(this.reapBlockedByCheckout(branch, holding));
+    if (holding !== null) await runGit(holding, ['switch', '--detach']);
     if (!(await this.branchExists(branch))) return;
     await this.git(['branch', '-D', branch]);
   }
@@ -846,6 +848,28 @@ export class WorktreeManager implements Worktrees {
       `(the pool is ${this.worktreeRoot}). Git refuses to check one branch out twice, and this checkout is not ` +
       `the harness's to switch — it is most likely the repository's own working copy. Switch it to another ` +
       `branch and the dispatch goes through on the next pulse.`
+    );
+  }
+
+  /**
+   * What the reap says when the branch is checked out in the repository's own
+   * working copy — the counterpart to {@link checkedOutElsewhere}, on the method
+   * that deletes a ref rather than the one that leases a directory.
+   *
+   * The refusal is not new; only the sentence is. `git branch -D` was always going
+   * to fail here, and its message names a path and no remedy — so an operator
+   * standing on a merged branch to read what an agent did got
+   * `cannot delete branch … used by worktree at …` recorded once per pulse for the
+   * whole `closedPrWindowMs` window, with nothing in it to say the checkout was
+   * theirs to move. Refusing by name says which of the two things stuck is which:
+   * the ref and its remote copy both stay, and one `git switch` clears it.
+   */
+  private reapBlockedByCheckout(branch: string, path: string): string {
+    return (
+      `Cannot reap ${branch}: it is checked out at ${path}, the repository's own working copy, which is not ` +
+      `the harness's to switch — detaching it would move an operator off their branch without asking. Git ` +
+      `refuses to delete a branch that is checked out, so the local ref and the remote copy both stay. Switch ` +
+      `that checkout to another branch and the reap completes on the next pulse.`
     );
   }
 
