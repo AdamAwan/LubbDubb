@@ -712,6 +712,19 @@ names **person and target repo**, which is what makes two of one person's deploy
 in a pool. A fleet with no id configured while the pool is selected is a boot error, exactly as a
 project with no name is.
 
+**The config page asks for it in the same breath as the provider.** `fleetId` declares
+`requiredWhen: { path: 'integrations.pool', unless: 'fake' }`
+([02](02-configuration.md#a-key-another-key-requires)), so the row is drawn even while unset, is
+marked the moment the pool provider is staged as anything but `fake`, and the write is refused until
+it holds something. Without that the boot error is the *only* thing that says so, and it arrives as a
+400 on a save, over a key the page did not draw — an operator who has just turned the pool on being
+told their config is wrong, with nothing to fix it in.
+
+Beside the empty field it **offers** `userId@pool.project` — `adam@lubbdubb` — as a button and a
+placeholder. That is not the derivation this section rules out: nothing writes it, the offer is absent
+unless both parts resolve, and what lands in the file is what the operator accepted. It is the shape
+of the answer, spelled out, for a field whose whole job is to be an address nobody else writes to.
+
 | Key                          | Layer      | Default                                                             |
 | ---------------------------- | ---------- | ------------------------------------------------------------------- |
 | `integrations.pool`          | project    | `fake` — publishes nowhere, fetches nothing, runs no desk           |

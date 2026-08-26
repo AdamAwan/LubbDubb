@@ -2655,6 +2655,7 @@ second copy free to drift:
 | applies now / needs restart | `entry.live` — true only where `configApply.ts` holds an arm               |
 | not editable                | `entry.env` (the environment beats the file), or `access: 'fileOnly'`      |
 | where the value came from   | `entry.env`, `entry.isDefault` and `entry.fromProject` — one of four words |
+| what else requires it       | `entry.requiredWhen` — the declaration, judged here against the staged edit |
 
 **Four words, because there are four layers.** `env`, `file`, `project` and `default`: a harness
 pointed at a repository carrying a `lubbdubb.project.json` is running a config assembled from two
@@ -2663,6 +2664,15 @@ A team's value drawn as `default` would send an operator looking for a key their
 have — and a row cleared while the project sets it says it will fall back to the project's value,
 because it will. `isDefault` is therefore _what you would have without your own file_, which is the
 same question as "what does clearing this leave", since the form writes one file and nothing else.
+
+`requiredWhen` is the one row in that table whose *answer* is not the server's, and the exception
+proves the rule: the question is about the edit in front of the operator, not about the config the
+harness booted on. `fleetId` is required while `integrations.pool` is anything but `fake`, and both
+keys are edited here — so the row is marked, the value on offer (`userId@pool.project`) is drawn beside
+it as a button, and **Review & write** is refused, naming the key and why, with a way to the group it
+is in. The server still refuses the same save; what the page adds is that the operator never reaches
+it ([02](02-configuration.md#a-key-another-key-requires),
+[28](28-cross-fleet-pool.md#configuration)).
 
 A `colourMap` is the one `entry.type` that draws more than a field: `issueStateColours` becomes a
 swatch per state over a `datalist` of the state words the tracker is currently reporting, read off the
