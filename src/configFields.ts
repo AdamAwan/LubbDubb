@@ -57,6 +57,40 @@ interface ConfigField {
   env?: string;
   /** A duration in milliseconds, so the cockpit can say "5m" beside the number. */
   ms?: boolean;
+  /**
+   * The key whose value makes this one required, and the one value of it that
+   * does not — `fleetId` is required while `integrations.pool` is anything but
+   * `fake`.
+   *
+   * Declared here rather than judged in the browser for {@link ConfigField}'s
+   * reason, with one addition the other members do not have: the form has to
+   * answer the question against what is **staged**, not against what is running.
+   * An operator picking the pool provider and saving has already written a config
+   * the next boot refuses (`validatePool` in `config.ts`) — the refusal arrives as a 400 on
+   * a form that offered no field to fix it, since an unset optional is not drawn.
+   * So the declaration ships, the form evaluates it over the edit in front of it,
+   * and the key is drawn even while unset.
+   */
+  requiredWhen?: ConfigFieldRequirement;
+  /**
+   * The keys to join into a value to *offer* for an unset field, and what to join
+   * them with. An offer and never a derivation: it is drawn beside the empty
+   * field as something to accept, and nothing writes it on the operator's behalf.
+   * → `docs/spec/28-cross-fleet-pool.md#configuration`
+   */
+  suggest?: ConfigFieldSuggestion;
+}
+
+/** The key another key's requirement hangs on, and the one value of it that lifts it. */
+export interface ConfigFieldRequirement {
+  path: string;
+  unless: string;
+}
+
+/** The keys to join into a suggested value, and what to join them with. */
+export interface ConfigFieldSuggestion {
+  join: readonly string[];
+  with: string;
 }
 
 /**
@@ -287,6 +321,8 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     path: 'fleetId',
     type: 'string',
     access: 'plain',
+    requiredWhen: { path: 'integrations.pool', unless: 'fake' },
+    suggest: { join: ['userId', 'pool.project'], with: '@' },
     why: 'Who this fleet is in the pool. Person and target repo, e.g. "alice@acme-api" — never derived.',
   },
   {
