@@ -367,9 +367,10 @@ genuinely finished invents work, and one told "you are done" that had not abando
   so the turn that asked ends with no sentinel in it — a stop by the letter of it, a real question in
   fact. Nudging there types "carry on" into an agent waiting on a person.
 - **A dead process is not nudged**, because it cannot answer; the stop is all there is, so it parks.
-- **The nudge is written to the transcript** as a sent message (`renderBlocks` with a `human` block)
-  before it goes out. It is the harness taking a turn in the agent's conversation, and a transcript
-  showing the agent apparently answering a question nobody asked is the same unexplained gap moved.
+- **The nudge is written to the transcript** as a sent message, through the same `noteSent` every
+  other sent message goes through ([above](#messages-sent-to-the-agent)), before it goes out. It is
+  the harness taking a turn in the agent's conversation, and a transcript showing the agent
+  apparently answering a question nobody asked is the same unexplained gap moved.
 
 `agentStallNudges: 0` restores the immediate park exactly.
 
@@ -553,6 +554,36 @@ Labels carry SGR colour, which the cockpit's drawer renders through the pure par
 so escapes never show as literal text there.
 
 **Detection still scans the raw turn text**, so the raw-vs-display split must stay intact.
+
+#### Messages sent to the agent
+
+A transcript that shows only what comes back is half a conversation. **Every message the harness or
+the operator sends into a live agent is written to that agent's transcript as a `human` block**
+(`AgentManager.noteSent`), rendered by the same `renderBlocks` as a green `▸ sent` label with the
+message indented under it, and emitted on the `output` event so an open drawer shows it at once.
+
+The stream runtime is why this has to be explicit: it renders the protocol's own events, and the
+protocol only ever carries what the agent says. An answer typed into the drawer therefore left **no
+trace at all** — and the cockpit deliberately does not refetch after one ([17](17-cockpit.md)), so the
+pane sat unchanged until the agent next spoke, and the only evidence the answer had gone anywhere was
+a reply to a question the transcript never showed. It reads exactly like a box that does nothing.
+
+- **A runtime that already records both halves says so**, with `AgentSession.recordsSentMessages`, and
+  is never echoed. The PTY runtime sets it: its transcript _is_ Claude Code's session file, which
+  records the human turns, and its degraded screen fallback shows what was typed — so an echo there
+  would print every message twice.
+- **The echo goes out only where the message did.** `respond` on an agent with no live session
+  refuses, and refuses before it writes: a transcript claiming a message was sent to a session that
+  is gone is worse than the silence it replaced.
+- **The first message of a dispatch is not echoed.** A task prompt is kilobytes and no cockpit
+  surface reads one ([16](16-http-api.md)); the transcript is the agent's working record, not a copy
+  of its brief. A **resume**'s carry-on message _is_ echoed — it is a sentence, sent into a
+  conversation the operator has already been reading.
+
+That covers the operator's answer, a permission rule's canned response, the stall nudge, and the
+sentence that ends a usage-limit park.
+
+Tests: `test/sentMessages.test.ts`.
 
 ### The usage-limit park (issue #318)
 
