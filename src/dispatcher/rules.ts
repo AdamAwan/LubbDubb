@@ -9,7 +9,7 @@
  *
  * There is deliberately **no rule number**. There used to be, hand-written on
  * each entry ('1', '2b', '3c', …), and it rotted exactly as a second copy of an
- * ordering always does: by the time it was removed, `issue-assay` was numbered
+ * ordering always does: by the time it was removed, `issue-appraisal` was numbered
  * after `issue-plan` and evaluated before it, two entries both claimed '3b', and
  * three claimed positions that were not positions at all ('1–2b', '1–4'). Order
  * now lives in one place — the declaration order of {@link DISPATCH_PIPELINE} —
@@ -46,7 +46,7 @@ type RuleKind = 'rule' | 'admission' | 'terminal';
  * The operator switches a rule's `enabled` predicate may ask about, flattened to
  * booleans so this module stays dependency-free — it is imported by the server,
  * the cockpit's snapshot builder and the action parser, and a policy type dragged
- * in here would drag the plan/assay/retro modules along with it.
+ * in here would drag the plan/appraisal/retro modules along with it.
  *
  * `workItemStates` is the one that isn't a feature flag: the work-item rules are
  * on when the operator has configured **both** a review state and pickup states,
@@ -171,11 +171,11 @@ const RULES = [
 
   // ---- The funnel in front of an issue, in the order it narrows. ------------
   {
-    id: 'issue-assay',
+    id: 'issue-appraisal',
     kind: 'rule',
     name: 'Issue goal needs checking',
     description:
-      'A watched open issue nothing has been started for yet gets a code agent to read the ticket against the repository and say whether there is a goal here an agent could start from. It is the only gate in front of an issue that asks about *content*: every other one — the watch tag, the workflow state, the cooldown, the attempt cap, headroom — asks whether the harness is allowed to act, never whether there is anything to act on. A verdict of `unclear` stops the funnel for that issue and says what a human would need to supply; it ends by itself the moment the ticket is edited or anything happens on it. Ranked ahead of the planner, because assaying a goal the planner is about to decompose is the whole point. An assayer that writes no verdict — crashed, killed or capped — leaves the issue to ordinary pickup, so a failure can never park one.',
+      'A watched open issue nothing has been started for yet gets a code agent to read the ticket against the repository and say whether there is a goal here an agent could start from. It is the only gate in front of an issue that asks about *content*: every other one — the watch tag, the workflow state, the cooldown, the attempt cap, headroom — asks whether the harness is allowed to act, never whether there is anything to act on. A verdict of `unclear` stops the funnel for that issue and says what a human would need to supply; it ends by itself the moment the ticket is edited or anything happens on it. Ranked ahead of the planner, because appraising a goal the planner is about to decompose is the whole point. An appraiser that writes no verdict — crashed, killed or capped — leaves the issue to ordinary pickup, so a failure can never park one.',
   },
   {
     id: 'issue-plan',

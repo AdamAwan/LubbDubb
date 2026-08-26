@@ -27,7 +27,7 @@ interface RefUrlInputs {
 
 /**
  * The canonical ref for the one living comment the harness maintains on an issue
- * — the plan's status comment, and the goal assay's refusal (issue #171).
+ * — the plan's status comment, and the goal appraisal's refusal (issue #171).
  *
  * It exists because the two records store a **provider comment id** (`GhCommentRef`
  * carries a number; Azure addresses an edit by work item + comment), which is the

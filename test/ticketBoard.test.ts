@@ -129,7 +129,7 @@ function issue(over: Record<string, unknown> = {}): Issue {
 test('an intake hold outranks everything — it is the reading that stops dispatch', () => {
   const held = cardReason(
     row({ number: 40, outcome: 'delivered' }),
-    issue({ assay: { verdict: 'unclear', summary: 'no acceptance criteria' } }),
+    issue({ appraisal: { verdict: 'unclear', summary: 'no acceptance criteria' } }),
     'lubbdubb-watch',
     '3d',
   );
@@ -138,11 +138,11 @@ test('an intake hold outranks everything — it is the reading that stops dispat
 });
 
 test('an unwatched item is never held, whatever a stale verdict says', () => {
-  // Nothing assays a goal nobody opted in, so a verdict on one is left over from
+  // Nothing appraises a goal nobody opted in, so a verdict on one is left over from
   // before it was dropped — and the drop outranks it. The table's own rule.
   const dropped = cardReason(
     row({ number: 40, watch: 'unwatched' }),
-    issue({ labels: [], assay: { verdict: 'unclear', summary: 'stale' } }),
+    issue({ labels: [], appraisal: { verdict: 'unclear', summary: 'stale' } }),
     'lubbdubb-watch',
     '3d',
   );

@@ -26,7 +26,7 @@ function build() {
     repoRoot: gitRepo(),
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
-    // The assessor and the assay are pinned off: they default **on**, and this
+    // The assessor and the appraisal are pinned off: they default **on**, and this
     // file is about something else — leaving them on would put an extra agent in
     // front of every issue these assertions dispatch. Each has its own tests.
     // (The planning funnel cannot be pinned off; a goal is planned by writing the

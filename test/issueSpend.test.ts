@@ -111,7 +111,7 @@ test('the whole issue subtree is one goal, deliberation included', () => {
     tasks: [
       task('a', 'issue:12'),
       task('b', 'issue:12:plan'),
-      task('c', 'issue:12:assay'),
+      task('c', 'issue:12:appraisal'),
       task('d', 'issue:12:part:auth'),
     ],
     nodes: [],

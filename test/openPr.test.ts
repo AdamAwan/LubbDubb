@@ -124,7 +124,7 @@ test('every origin that is not doing an issue’s work is refused by name', () =
   for (const origin of [
     'pr:42:ci',
     'issue:182:plan',
-    'issue:182:assay',
+    'issue:182:appraisal',
     'issue:182:assess',
     'issue:182:retro',
     'job:7',

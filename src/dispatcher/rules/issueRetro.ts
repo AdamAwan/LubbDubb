@@ -38,7 +38,7 @@ export function issueRetro(s: StageContext): void {
 
     const origin = retroOrigin(issue.number);
     const verdict = dispatchVerdict(origin, s.now, ctx.recentDecisions, s.cooldown);
-    // Fails open and *silent*, for the assayer's reason and more cheaply than
+    // Fails open and *silent*, for the appraiser's reason and more cheaply than
     // any of them: nothing is gated on a retrospective, so a spent cap costs the
     // write-up and nothing else. No escalation — there is nothing a human can do
     // about a report that did not happen that they cannot do by reading the issue.

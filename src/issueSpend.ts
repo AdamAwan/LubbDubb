@@ -14,7 +14,7 @@ import { issueOrigin } from './plans/planning.js';
  * ## Two ways an origin reaches an issue
  *
  * **By name**, for everything under the `issue:<n>` subtree — the pickup root, the
- * planner, the assay, the assessment, the retro, every part. One regex, and it is
+ * planner, the appraisal, the assessment, the retro, every part. One regex, and it is
  * deliberately the whole subtree rather than the classified roles of
  * `issueOriginRole`: a planner that cost $4 and routed the goal to `single` spent
  * that money *on this goal*, whatever it did or did not build. Deliberation is

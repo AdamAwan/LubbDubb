@@ -8,7 +8,7 @@ import type { CiPolicy } from '../../ci/ciPolicy.js';
 import type { PlanningPolicy } from '../../plans/planning.js';
 import type {
   Issue,
-  IssueAssay,
+  IssueAppraisal,
   IssueConclusion,
   IssueRelative,
   IssueShortfall,
@@ -36,7 +36,7 @@ import type { PrRefStyle } from '../../prRef.js';
  *
  * ## Two fields are written by one stage and read by later ones
  *
- * `assaying` and `assessing` are **outputs** of `issue-assay` and `issue-assess`
+ * `appraising` and `assessing` are **outputs** of `issue-appraisal` and `issue-assess`
  * and **inputs** to the stages after them (`issue-plan` reads the first;
  * `issue-pickup` reads both), which is how a rule supersedes a later one for the
  * same issue this cycle. That ordering dependency is load-bearing: it is the
@@ -90,8 +90,8 @@ export interface StageContext {
   conclusions: Map<string, IssueConclusion>;
   /** The negative half of that verdict, on the same origin. */
   shortfallsByOrigin: Map<string, IssueShortfall>;
-  /** Standing goal assays, on the same origin again (issue #158). */
-  assays: Map<string, IssueAssay>;
+  /** Standing goal appraisals, on the same origin again (issue #158). */
+  appraisals: Map<string, IssueAppraisal>;
   /**
    * Issues in the world that are **retained runs**, not the tracker's answer
    * (issue #234) — a goal worked, forgotten by the tracker, and not yet dismissed.
@@ -115,8 +115,8 @@ export interface StageContext {
   partsPlanFor: (issueNumber: number) => Plan | null;
   /** Is a standing `delivered` verdict parking this issue? */
   deliveryParked: (issue: Issue) => boolean;
-  /** Is a standing goal assay parking this issue — refused, or awaiting a profile answer? */
-  assayParked: (issue: Issue) => boolean;
+  /** Is a standing goal appraisal parking this issue — refused, or awaiting a profile answer? */
+  appraisalParked: (issue: Issue) => boolean;
   /**
    * The profile a dispatch on this origin is pinned to, or null to leave it to
    * the rule (issue #342).
@@ -162,8 +162,8 @@ export interface StageContext {
    * `validate-check` and nothing else.
    */
   validationChecks: Map<string, ValidationCheck[]>;
-  /** Issues `issue-assay` claimed this cycle. Written by it, read after it — see the class doc. */
-  assaying: Set<number>;
+  /** Issues `issue-appraisal` claimed this cycle. Written by it, read after it — see the class doc. */
+  appraising: Set<number>;
   /** Issues `issue-assess` claimed this cycle. Written by it, read after it — see the class doc. */
   assessing: Set<number>;
   /**

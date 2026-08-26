@@ -69,9 +69,9 @@ export const KIND_TONE: Record<NeedKind, 'red' | 'amber' | 'blue' | 'green'> = {
   reply: 'amber',
   merge: 'amber',
   shortfall: 'blue',
-  // Blue on the profile gate's terms: the assay refused to say this goal is
+  // Blue on the profile gate's terms: the appraisal refused to say this goal is
   // workable, and what is waiting is a reading — the goal's own text against the
-  // assayer's sentence — rather than a repair. Red would file a goal whose brief
+  // appraiser's sentence — rather than a repair. Red would file a goal whose brief
   // is unclear beside a restart that orphaned six runs, which is the one thing it
   // is not: nothing broke, and nothing is lost while it stands.
   intake: 'blue',
@@ -129,7 +129,7 @@ export const KIND_SYMBOL: Record<NeedKind, string> = {
   // reached.
   shortfall: '\u2717',
   // A dotted circle against the profile gate's ringed dot: the two asks the same
-  // assay leaves behind, one a proposal it made and the other a verdict it could
+  // appraisal leaves behind, one a proposal it made and the other a verdict it could
   // not reach.
   intake: '\u25cc',
   profile: '\u2299',

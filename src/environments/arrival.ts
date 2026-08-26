@@ -170,7 +170,7 @@ const MARKER = '<!-- lubbdubb:arrival -->\n_LubbDubb environments_';
 
 /**
  * What an arrival says on the ticket. Pure, and one comment per arrival rather
- * than one living comment edited in place — unlike the assay's, which is a
+ * than one living comment edited in place — unlike the appraisal's, which is a
  * standing state. This is a thing that happened at a time, and a timeline of four
  * short comments is what a reader wants from "where did this get to"; an edited
  * comment would silently rewrite the record of the last environment each time.

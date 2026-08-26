@@ -24,7 +24,7 @@ import type { TicketFiler } from '../../tickets/filing.js';
 import type { PromptTemplates } from '../../dispatcher/promptTemplates.js';
 import type { PrRefStyle } from '../../prRef.js';
 import type { AssessmentVerdict } from '../assessment.js';
-import type { GoalAssayVerdictName } from '../goalAssay.js';
+import type { GoalAppraisalVerdictName } from '../goalAppraisal.js';
 import type { AreaPathTree } from '../../intake/placement.js';
 import type { RemedySubmission } from '../../remedies/remedies.js';
 import type { FactContradiction, FactProposal } from '../../knowledge/knowledge.js';
@@ -74,13 +74,13 @@ export interface AgentToolTarget {
     cause: ShortfallCause | null,
     part: string | null,
   ): { ok: true; issueOrigin: string; verdict: AssessmentVerdict } | { ok: false; error: string };
-  recordAssay(
+  recordAppraisal(
     agentId: string,
-    verdict: GoalAssayVerdictName,
+    verdict: GoalAppraisalVerdictName,
     summary: string,
     profile: string | null,
     /**
-     * Where the assayer says this goal belongs on the backlog — the container it
+     * Where the appraiser says this goal belongs on the backlog — the container it
      * should hang off, and the area node it should sit on. Both null where it
      * proposed neither, which is every `unclear` verdict and every flat tracker.
      *
@@ -94,7 +94,7 @@ export interface AgentToolTarget {
     | {
         ok: true;
         issueOrigin: string;
-        verdict: GoalAssayVerdictName;
+        verdict: GoalAppraisalVerdictName;
         /** Whether the proposal diverged and is now holding the funnel on a human. */
         profileHeld: boolean;
       }
@@ -146,8 +146,8 @@ export interface McpToolDeps {
   store: Store;
   agents: AgentToolTarget;
   /**
-   * This deployment's model profiles, cheapest first, as `assay_issue` presents
-   * them to an assayer (issue #342). Absent or empty for a deployment with no
+   * This deployment's model profiles, cheapest first, as `appraise_issue` presents
+   * them to an appraiser (issue #342). Absent or empty for a deployment with no
    * `agentModels`, which is what turns the whole proposal off: no argument is
    * offered, none is required, and every dispatch resolves on its rule alone.
    */

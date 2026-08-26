@@ -5,8 +5,8 @@ import type { AppState, JobAttachment } from '../types.js';
  * (issue #249).
  *
  * **Why this is one component used twice.** An attachment starts life keyed to a
- * queued blueprint (`job:<id>`) and, at the tracker fork, changes hands to the
- * ticket that blueprint became (`issue:<n>`). Those are two different cards in the
+ * queued brief (`job:<id>`) and, at the tracker fork, changes hands to the
+ * ticket that brief became (`issue:<n>`). Those are two different cards in the
  * cockpit, and the whole point of the re-key is that the operator can watch the
  * screenshot move from the first to the second rather than wondering where it
  * went. Two strips drawn by two components would sooner or later disagree about
@@ -29,7 +29,7 @@ export function AttachmentStrip({
   attachments,
   attachmentUrls,
 }: {
-  /** What the attachments hang off: `job:<id>` for a queued blueprint, `issue:<n>` for a ticket. */
+  /** What the attachments hang off: `job:<id>` for a queued brief, `issue:<n>` for a ticket. */
   targetRef: string;
   attachments: AppState['attachments'];
   attachmentUrls: AppState['attachmentUrls'];

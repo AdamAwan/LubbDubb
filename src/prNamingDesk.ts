@@ -19,7 +19,7 @@ interface PrNamingDeskDeps {
  * Keeps open pull requests tidy: named to the house convention, and targeting the
  * branch they should still be targeting.
  *
- * A desk beside the plan reconciler and the assay desk rather than an action
+ * A desk beside the plan reconciler and the appraisal desk rather than an action
  * through the executor, because it is mechanical bookkeeping in exactly the sense
  * `set_work_item_state` and the plan's status comment are: nothing is deciding
  * *whether* to rename, only carrying out a convention the operator configured. So

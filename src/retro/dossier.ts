@@ -2,7 +2,7 @@ import type {
   Decision,
   Escalation,
   KnowledgeFact,
-  IssueAssay,
+  IssueAppraisal,
   IssueConclusion,
   IssueDelivery,
   IssueShortfall,
@@ -86,7 +86,7 @@ export interface RetroDossierInput {
   agentCount: number;
   delivery: IssueDelivery | null;
   shortfall: IssueShortfall | null;
-  assay: IssueAssay | null;
+  appraisal: IssueAppraisal | null;
   conclusion: IssueConclusion | null;
   /** Summed from the agents' reported usage; null when the runtime reported none (PTY). */
   costUsd: number | null;
@@ -273,7 +273,8 @@ export function retroDossier(input: RetroDossierInput): string {
 
   lines.push('', '### Verdicts on the goal');
   const verdicts = lines.length;
-  if (input.assay) lines.push(`- Assay: \`${input.assay.verdict}\` (${input.assay.by}) — ${input.assay.summary}`);
+  if (input.appraisal)
+    lines.push(`- Appraisal: \`${input.appraisal.verdict}\` (${input.appraisal.by}) — ${input.appraisal.summary}`);
   if (input.delivery) {
     lines.push(`- Delivered by ${input.delivery.by} on ${input.delivery.decidedAt}: ${input.delivery.summary}`);
   }

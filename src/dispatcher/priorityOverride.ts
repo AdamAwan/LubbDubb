@@ -24,7 +24,7 @@ interface Rankable {
  *   2. **A goal the operator marked a priority**, every origin its work takes
  *      (`isExpedited`, from `goalPriority.ts`), keeping the **pipeline's own order
  *      among them**: the flag says which goal comes first and the pipeline already
- *      says what that goal needs first — assay before plan, plan before parts, a
+ *      says what that goal needs first — appraisal before plan, plan before parts, a
  *      review before a red build. A second opinion about the order *within* a goal
  *      is not what the operator asked for and would be a worse one.
  *   3. **Overridden origins next**, in ascending rank order (rank `0` = "do this

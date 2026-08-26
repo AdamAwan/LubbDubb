@@ -6,22 +6,38 @@ import { SubmitButton, AsyncButton, useAsyncAction } from './AsyncButton.js';
 import { relTime } from './util.js';
 
 /**
- * The blueprint plate: a blue sheet with a white grid, drawn inline rather than
+ * The brief sheet: a blue page with three written lines, drawn inline rather than
  * added to a presentation layer's own icon set because this panel is shared and
  * that set is not. It is the one glyph in the cockpit that is *not* `currentColor` — a
- * blueprint is blue the way a warning is amber, so the colour is the noun.
+ * brief is blue the way a warning is amber, so the colour is the noun.
  */
-function BlueprintMark() {
+function BriefMark() {
   return (
-    <svg className="launch-bp" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
-      <rect x="1" y="2" width="14" height="12" rx="1" fill="var(--blue-fill)" stroke="var(--blue)" strokeWidth="1.4" />
-      <path d="M5.5 2v12M10.5 2v12M1 6h14M1 10h14" fill="none" stroke="var(--blue)" strokeWidth="0.8" opacity=".7" />
+    <svg className="launch-mark" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+      <rect
+        x="2.5"
+        y="1.5"
+        width="11"
+        height="13"
+        rx="1"
+        fill="var(--blue-fill)"
+        stroke="var(--blue)"
+        strokeWidth="1.4"
+      />
+      <path
+        d="M5 5h6M5 8h6M5 11h3.5"
+        fill="none"
+        stroke="var(--blue)"
+        strokeWidth="1.1"
+        strokeLinecap="round"
+        opacity=".75"
+      />
     </svg>
   );
 }
 
 /**
- * An image waiting to be launched with the blueprint (issue #249). `data` is
+ * An image waiting to be launched with the brief (issue #249). `data` is
  * base64 of the file's bytes — the same string the wire carries — so the preview
  * and the request read one value and a thumbnail can never show something other
  * than what is sent.
@@ -57,10 +73,10 @@ async function readImage(file: File): Promise<Attached | null> {
 }
 
 /**
- * Stamp a new blueprint from the cockpit: a free-form prompt the harness turns
+ * Stamp a new brief from the cockpit: a free-form prompt the harness turns
  * into an agent. It's queued server-side and drained by the dispatcher ahead of
  * all world-driven work — so it takes the next free slot, or waits in the queue
- * when the fleet is at capacity. Queued blueprints are listed with their place in
+ * when the fleet is at capacity. Queued briefs are listed with their place in
  * line and a cancel button; once dispatched they graduate into the Fleet.
  */
 export function LaunchPanel({
@@ -118,7 +134,7 @@ export function LaunchPanel({
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Launch failed');
       // Rethrown so the button flashes: the message says what went wrong, the
-      // flash says it went wrong at all, and the blueprint is kept for a retry.
+      // flash says it went wrong at all, and the brief is kept for a retry.
       throw err;
     }
     setPrompt('');
@@ -131,11 +147,11 @@ export function LaunchPanel({
     <div className="launch">
       <div className="launch-head">
         <button className="btn ghost" onClick={() => setOpen((o) => !o)}>
-          <BlueprintMark />
-          {open ? '× New blueprint' : '+ New blueprint'}
+          <BriefMark />
+          {open ? '× New brief' : '+ New brief'}
         </button>
         {queued.length > 0 && (
-          <span className="chip small" title="Blueprints waiting for a free slot">
+          <span className="chip small" title="Briefs waiting for a free slot">
             {queued.length} queued
           </span>
         )}
@@ -259,12 +275,12 @@ export function LaunchPanel({
               <AsyncButton
                 className="ghost"
                 onClick={() => api.cancelJob(job.id).then(onChanged)}
-                title="Remove this blueprint from the queue"
+                title="Remove this brief from the queue"
               >
                 cancel
               </AsyncButton>
-              {/* What the operator attached, still keyed to this blueprint. When a
-                  code blueprint is filed as a ticket instead of dispatched, the
+              {/* What the operator attached, still keyed to this brief. When a
+                  code brief is filed as a ticket instead of dispatched, the
                   images change hands and reappear under the issue — the same strip,
                   one row down the funnel. */}
               <AttachmentStrip targetRef={`job:${job.id}`} attachments={attachments} attachmentUrls={attachmentUrls} />

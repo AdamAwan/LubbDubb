@@ -54,7 +54,7 @@ interface AgentProfile {
    * `profiles`, and refused at boot when it is not.
    *
    * Required because three things need to compare two profiles and none of them
-   * can do it from a name: the goal-profile gate has to say whether the assayer
+   * can do it from a name: the goal-profile gate has to say whether the appraiser
    * proposed something *cheaper* or *deeper* than what is standing, the cockpit
    * orders its dropdowns by it, and both draw a non-default choice loudly in the
    * direction it went. Declaration order was the alternative and is not one — a
@@ -69,8 +69,8 @@ interface AgentProfile {
    * One sentence saying what this profile is *for*, written for an agent rather
    * than an operator.
    *
-   * This is the whole of what the assayer knows about the deployment's profiles:
-   * `assay_issue` enumerates them with these descriptions, so the agent proposes
+   * This is the whole of what the appraiser knows about the deployment's profiles:
+   * `appraise_issue` enumerates them with these descriptions, so the agent proposes
    * from the operator's own vocabulary rather than from an abstract difficulty
    * scale that would then need mapping back. A profile whose description does not
    * say when to pick it makes the proposal a guess — which is the one failure here
@@ -192,11 +192,11 @@ export function validateAgentModels(models: AgentModels | undefined): void {
     if (typeof profile.description !== 'string' || profile.description.trim().length === 0)
       throw new Error(
         `Refusing to start: agentModels.profiles."${name}".description must be a non-empty sentence saying what ` +
-          `this profile is for. It is the whole of what the assayer is told about your profiles when it ` +
+          `this profile is for. It is the whole of what the appraiser is told about your profiles when it ` +
           `proposes one, so a missing or empty one makes every proposal a guess.`,
       );
   }
-  // Ranks decide a direction, so two profiles cannot share one: "the assayer
+  // Ranks decide a direction, so two profiles cannot share one: "the appraiser
   // proposed deeper than your pin" has no answer when the two compare equal, and
   // the cockpit's ordering would fall back to whatever order the object was
   // written in — the implicitness `rank` exists to remove.
@@ -275,7 +275,7 @@ export function resolveAgentProfile(
  * and agent-facing list of them uses.
  *
  * One function rather than each caller sorting, because the cockpit's dropdown,
- * the assay tool's enum and the gate's direction wording must agree about which
+ * the appraisal tool's enum and the gate's direction wording must agree about which
  * way "up" is. Empty for a deployment with no `agentModels`, which leaves every
  * surface that renders a choice with nothing to render — correct, since there is
  * no choice to make.

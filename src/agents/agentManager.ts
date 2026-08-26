@@ -49,8 +49,8 @@ type FilingTargetResult =
   | { ok: false; error: string };
 import { conclusionOrigin } from '../issueConclusion.js';
 import { assessmentOrigin, type AssessmentVerdict } from '../mcp/assessment.js';
-import { assayerOrigin, type GoalAssayVerdictName } from '../mcp/goalAssay.js';
-import { goalFingerprint } from '../intake/assay.js';
+import { appraiserOrigin, type GoalAppraisalVerdictName } from '../mcp/goalAppraisal.js';
+import { goalFingerprint } from '../intake/appraisal.js';
 import { padWriteTarget } from '../scratch/pad.js';
 import { retroSubmitOrigin } from '../retro/retro.js';
 import { remedyOrigin, type RemedySubmission } from '../remedies/remedies.js';
@@ -108,7 +108,7 @@ interface AgentManagerOptions {
     effort: string | null;
   }) => string[];
   /**
-   * What a goal's work runs on today, for the one decision `recordAssay` has to
+   * What a goal's work runs on today, for the one decision `recordAppraisal` has to
    * make about a proposal (issue #342).
    *
    * A function rather than the config, so the manager stays as ignorant of
@@ -282,8 +282,8 @@ interface AgentManagerEvents {
   /** The agent said whether its issue is finished (already persisted against the issue origin). */
   conclusion: [{ agentId: string; taskId: string; conclusion: IssueConclusion }];
   assessment: [{ agentId: string; taskId: string; issueOrigin: string; verdict: AssessmentVerdict }];
-  /** The assayer said whether its issue's goal can be worked from (already persisted against the issue origin). */
-  assay: [{ agentId: string; taskId: string; issueOrigin: string; verdict: GoalAssayVerdictName }];
+  /** The appraiser said whether its issue's goal can be worked from (already persisted against the issue origin). */
+  appraisal: [{ agentId: string; taskId: string; issueOrigin: string; verdict: GoalAppraisalVerdictName }];
   /** The agent closed its plan part without a pull request (already persisted on the part row). */
   partOutcome: [{ agentId: string; taskId: string; part: PlanPart }];
   /** The agent left a note on its issue's shared pad (already persisted, append-only). */
@@ -373,7 +373,7 @@ function retroClaim(claim: string): FactProposal {
  * grown, with nothing failing — `withCaller`'s own argument, one level up. The
  * clause costs a `import type` and nothing else: it is erased at compile time, and
  * the runtime edge it would notionally create already runs this way round (this
- * file value-imports `assessmentOrigin`, `assayerOrigin` and `partConclusionOrigin`
+ * file value-imports `assessmentOrigin`, `appraiserOrigin` and `partConclusionOrigin`
  * from `src/mcp/`, while `src/mcp/` reaches back only for types).
  */
 export class AgentManager extends EventEmitter implements AgentToolTarget {
@@ -1516,7 +1516,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
   }
 
   /**
-   * Record an assayer's verdict on the goal it was dispatched to judge.
+   * Record an appraiser's verdict on the goal it was dispatched to judge.
    *
    * Routed through the manager rather than straight to the store for
    * {@link recordConclusion}'s reason: the event repaints the cockpit now rather
@@ -1526,45 +1526,45 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
    * the load-bearing line. `originTitle`/`originSummary` are the issue's title and
    * body captured at dispatch — the exact text this agent was handed and therefore
    * the exact text it judged. Re-reading the issue here would stamp the verdict
-   * with whatever the ticket says *now*, so an edit made while the assayer was
+   * with whatever the ticket says *now*, so an edit made while the appraiser was
    * running would be silently swallowed: the verdict would claim to be about text
-   * nobody assayed, and `assayHold`'s first arm — the one that re-opens the
+   * nobody appraised, and `appraisalHold`'s first arm — the one that re-opens the
    * question when the ticket changes — could never fire for it.
 
    */
-  recordAssay(
+  recordAppraisal(
     agentId: string,
-    verdict: GoalAssayVerdictName,
+    verdict: GoalAppraisalVerdictName,
     summary: string,
     profile: string | null,
     placement?: { parent: number | null; areaPath: string | null },
   ):
-    | { ok: true; issueOrigin: string; verdict: GoalAssayVerdictName; profileHeld: boolean }
+    | { ok: true; issueOrigin: string; verdict: GoalAppraisalVerdictName; profileHeld: boolean }
     | { ok: false; error: string } {
     return this.withCaller(agentId, ({ task }) => {
-      const origin = assayerOrigin(task.originRef);
+      const origin = appraiserOrigin(task.originRef);
       if (!origin.ok) return { ok: false, error: origin.error };
 
       // Whether the proposal needs a human is decided **here**, once, because this
       // is where the ticket's own tag and the operator's config are both in hand.
       // Deciding it at read time instead would put a config lookup inside
-      // `assayHold`, and a caller that forgot to wire it would gate the whole
+      // `appraisalHold`, and a caller that forgot to wire it would gate the whole
       // fleet rather than none of it.
       const proposedProfile = this.opts.goalProfile && profile ? profile : null;
       const profileHeld =
         proposedProfile !== null && proposedProfile !== this.opts.goalProfile?.effective(origin.issueOrigin);
-      this.store.recordAssay({
+      this.store.recordAppraisal({
         originRef: origin.issueOrigin,
         verdict,
         summary,
         goalRef: goalFingerprint(task.originTitle, task.originSummary),
-        by: 'assayer',
+        by: 'appraiser',
         proposedProfile,
         profileDiverges: profileHeld,
         // Stored exactly as proposed, with **no check here that the work item is
         // still missing the field**. That reading is derived where the question is
         // drawn, off the live item — so an operator who sets the parent by hand
-        // while the assayer is running ends the question with no write at all,
+        // while the appraiser is running ends the question with no write at all,
         // and this stays a record of what was said rather than a second opinion
         // about the tracker.
         proposedParent: placement?.parent ?? null,
@@ -1572,7 +1572,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         agentId,
         taskId: task.id,
       });
-      this.emit('assay', { agentId, taskId: task.id, issueOrigin: origin.issueOrigin, verdict });
+      this.emit('appraisal', { agentId, taskId: task.id, issueOrigin: origin.issueOrigin, verdict });
       return { ok: true, issueOrigin: origin.issueOrigin, verdict, profileHeld };
     });
   }

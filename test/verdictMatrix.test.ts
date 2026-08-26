@@ -30,16 +30,16 @@ const FIXTURES: Record<VerdictKind, Fixture> = {
       void s.recordShortfall({ originRef: ref, cause: 'plan', summary: 'the shape was wrong', by: 'assessor' }),
     read: (s, ref) => s.getShortfall(ref),
   },
-  assay: {
+  appraisal: {
     write: (s, ref) =>
-      void s.recordAssay({
+      void s.recordAppraisal({
         originRef: ref,
         verdict: 'workable',
         summary: 'clear enough',
         goalRef: 'g1',
-        by: 'assayer',
+        by: 'appraiser',
       }),
-    read: (s, ref) => s.getAssay(ref),
+    read: (s, ref) => s.getAppraisal(ref),
   },
 };
 
@@ -69,17 +69,17 @@ test('every declared cell: writing a verdict clears exactly what the matrix says
 
 test('a kind that clears nothing is a declared empty row, not an omission', () => {
   // The one cell the prose could not distinguish from "nobody considered this".
-  assert.deepEqual(VERDICT_EXCLUSIONS.assay, []);
+  assert.deepEqual(VERDICT_EXCLUSIONS.appraisal, []);
 
   const s = new Store(':memory:');
   // A shortfall and a conclusion may stand together — the assessor's verdict does
   // not overwrite the working agent's own statement about its own run — so this
-  // is the widest honest state, and an assay written over it disturbs none of it.
+  // is the widest honest state, and an appraisal written over it disturbs none of it.
   FIXTURES.shortfall.write(s, 'issue:12');
   FIXTURES.conclusion.write(s, 'issue:12');
-  FIXTURES.assay.write(s, 'issue:12');
+  FIXTURES.appraisal.write(s, 'issue:12');
 
-  assert.ok(FIXTURES.assay.read(s, 'issue:12'));
+  assert.ok(FIXTURES.appraisal.read(s, 'issue:12'));
   assert.ok(FIXTURES.shortfall.read(s, 'issue:12'));
   assert.ok(FIXTURES.conclusion.read(s, 'issue:12'));
   s.close();
@@ -99,7 +99,7 @@ test('the matrix is applied per issue', () => {
 
 test('every kind names a real table', () => {
   // The walk above exercises a table name only where some kind clears it, so
-  // `assay`'s would otherwise be unchecked until a later row named it.
+  // `appraisal`'s would otherwise be unchecked until a later row named it.
   for (const kind of VERDICT_KINDS) {
     assert.ok(
       SCHEMA.includes(`CREATE TABLE IF NOT EXISTS ${VERDICT_TABLES[kind]}`),

@@ -35,13 +35,13 @@ interface McpBridgeServerOptions {
   /** The socket (POSIX) or named pipe (Windows) agents' bridges connect back on. */
   socketPath: string;
   /**
-   * This deployment's model profiles, cheapest first, for `assay_issue` to offer
-   * an assayer (issue #342). Absent/empty = no `agentModels`, and then no
+   * This deployment's model profiles, cheapest first, for `appraise_issue` to offer
+   * an appraiser (issue #342). Absent/empty = no `agentModels`, and then no
    * profile is asked for and none is stored.
    */
   profiles?: { name: string; description: string }[];
   /**
-   * The project's area tree, for `assay_issue` to offer an assayer when it says
+   * The project's area tree, for `appraise_issue` to offer an appraiser when it says
    * where a goal belongs. A thunk for {@link agents}' reason — the directory
    * behind it refreshes on the pulse. Absent/null = no tree the harness could
    * read, and then nothing is offered and nothing accepted.

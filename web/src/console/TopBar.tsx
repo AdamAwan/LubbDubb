@@ -469,7 +469,7 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
   }
 
   const faultCount = state.errors.length;
-  // The queue, not the history: a launched blueprint that has been dispatched is
+  // The queue, not the history: a launched brief that has been dispatched is
   // an agent in the Fleet, and counting it here would have the reading climb as
   // work starts rather than as it waits.
   const queued = state.jobs.filter((job) => job.status === 'queued').length;
@@ -505,7 +505,7 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
           value={`${queued}`}
           quiet={queued === 0}
           onOpen={() => actions.openPanel('launch')}
-          title="Blueprints waiting for a free slot — open the launch desk"
+          title="Briefs waiting for a free slot — open the launch desk"
         />
         <LocalRun view={view} actions={actions} />
         <Build view={view} actions={actions} />

@@ -9,15 +9,15 @@ import { buildSystem } from '../src/system.js';
 import { resolveAgentProfile } from '../src/agents/modelPolicy.js';
 import { resolveModelTag } from '../src/modelLabels.js';
 import { pinnedProfileFor } from '../src/profilePin.js';
-import { assayHold, goalFingerprint } from '../src/intake/assay.js';
-import type { Issue, IssueAssay } from '../src/types.js';
+import { appraisalHold, goalFingerprint } from '../src/intake/appraisal.js';
+import type { Issue, IssueAppraisal } from '../src/types.js';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { failPlanningOpen } from './support/plans.js';
 
 /**
  * Pinning one goal to a model profile (issue #342) — the precedence chain, the
- * tag it is read from, the origins it reaches, and the gate the assayer's
+ * tag it is read from, the origins it reaches, and the gate the appraiser's
  * proposal raises.
  *
  * Separate from `agentModels.test.ts`, which owns the rule-keyed policy those
@@ -117,11 +117,11 @@ test("a part's own profile beats the goal's, and a part with none inherits it", 
   assert.equal(pinnedProfileFor('issue:12:part:reader', LOOKUP), 'deep');
 });
 
-test('the retrospective and the assay run on their rules whatever the goal is pinned to', () => {
+test('the retrospective and the appraisal run on their rules whatever the goal is pinned to', () => {
   // The retro gates nothing, so a deep pin there is money for a document no
-  // dispatch reads; the assay is the stage that *proposes* the pin.
+  // dispatch reads; the appraisal is the stage that *proposes* the pin.
   assert.equal(pinnedProfileFor('issue:12:retro', LOOKUP), null);
-  assert.equal(pinnedProfileFor('issue:12:assay', LOOKUP), null);
+  assert.equal(pinnedProfileFor('issue:12:appraisal', LOOKUP), null);
 });
 
 test('an origin outside the issue subtree is never pinned', () => {
@@ -141,13 +141,13 @@ const ISSUE: Issue = {
   linkedPrNumber: null,
 };
 
-function assay(over: Partial<IssueAssay> = {}): IssueAssay {
+function appraisal(over: Partial<IssueAppraisal> = {}): IssueAppraisal {
   return {
     originRef: 'issue:12',
     verdict: 'workable',
     summary: 'Splitting the store module by table group.',
     goalRef: goalFingerprint(ISSUE.title, ISSUE.body),
-    by: 'assayer',
+    by: 'appraiser',
     proposedProfile: null,
     profileAnsweredAt: null,
     proposedParent: null,
@@ -164,34 +164,34 @@ function assay(over: Partial<IssueAssay> = {}): IssueAssay {
 }
 
 test('an unanswered proposal holds the funnel, and says what it proposed', () => {
-  const held = assayHold(assay({ proposedProfile: 'deep' }), ISSUE);
+  const held = appraisalHold(appraisal({ proposedProfile: 'deep' }), ISSUE);
   assert.match(held ?? '', /proposes running this on "deep"/);
 });
 
 test('an answered proposal holds nothing, whichever way it was answered', () => {
   assert.equal(
-    assayHold(assay({ proposedProfile: 'deep', profileAnsweredAt: '2026-08-15T10:00:00.000Z' }), ISSUE),
+    appraisalHold(appraisal({ proposedProfile: 'deep', profileAnsweredAt: '2026-08-15T10:00:00.000Z' }), ISSUE),
     null,
   );
 });
 
-test('an assay that proposed nothing holds nothing — the fail-open a blocking gate needs', () => {
-  // The whole safety of the gate: a crashed, killed or capped assayer writes no
+test('an appraisal that proposed nothing holds nothing — the fail-open a blocking gate needs', () => {
+  // The whole safety of the gate: a crashed, killed or capped appraiser writes no
   // row at all, and one that named no profile leaves the issue to the funnel it
   // would have entered anyway.
-  assert.equal(assayHold(assay(), ISSUE), null);
-  assert.equal(assayHold(null, ISSUE), null);
+  assert.equal(appraisalHold(appraisal(), ISSUE), null);
+  assert.equal(appraisalHold(null, ISSUE), null);
 });
 
 test('a rewritten ticket ends the hold, because the proposal is about text that no longer exists', () => {
   const edited = { ...ISSUE, body: 'It is one file, and three of the table groups are unrelated.' };
-  assert.equal(assayHold(assay({ proposedProfile: 'deep' }), edited), null);
+  assert.equal(appraisalHold(appraisal({ proposedProfile: 'deep' }), edited), null);
 });
 
 test('a refused goal reads as refused, not as unpriced', () => {
   // Both arms stand; asking the cheaper question second means an issue that is
   // both is reported as the one a human has to act on.
-  const held = assayHold(assay({ verdict: 'unclear', proposedProfile: 'deep' }), ISSUE);
+  const held = appraisalHold(appraisal({ verdict: 'unclear', proposedProfile: 'deep' }), ISSUE);
   assert.match(held ?? '', /could not act on this goal/);
 });
 

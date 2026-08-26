@@ -119,7 +119,7 @@ function issueRefFor(pr: PullRequest, world: WorldSnapshot): string | null {
   return issue === null ? null : `issue:${issue.number}`;
 }
 
-/** `issue:12` and nothing under it — a part, a plan and an assay are not goals. */
+/** `issue:12` and nothing under it — a part, a plan and an appraisal are not goals. */
 function isGoalRoot(ref: string): boolean {
   return /^issue:\d+$/.test(ref);
 }

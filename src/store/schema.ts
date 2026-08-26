@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   updated_at TEXT NOT NULL
 );
 
--- Recurring blueprints: the prompt an operator wants queued on a cron schedule.
+-- Recurring briefs: the prompt an operator wants queued on a cron schedule.
 --
 -- Intent, not work. A firing writes an ordinary jobs row, so everything
 -- downstream of the queue is unchanged — this table only ever says what to queue
@@ -55,17 +55,17 @@ CREATE TABLE IF NOT EXISTS job_schedules (
   updated_at    TEXT NOT NULL
 );
 
--- Images an operator attached to a blueprint (issue #249). The bytes live on disk
+-- Images an operator attached to a brief (issue #249). The bytes live on disk
 -- under attachmentRoot; this row is the record of what they are and where.
 --
 -- Keyed on target_ref, not on a job id, because what an attachment belongs to
--- outlives the row it arrived with: a code blueprint becomes a desk *filing* job
+-- outlives the row it arrived with: a code brief becomes a desk *filing* job
 -- and then a ticket, and the image has to follow the goal rather than the job.
--- While it is a blueprint the ref is job:<id>.
+-- While it is a brief the ref is job:<id>.
 --
 -- Nothing ages these out. Attachments live as long as what they are attached to,
 -- so a plan written days later — and the retrospective after it — can still refer
--- back to the screenshot the goal started as. The one deletion is a blueprint
+-- back to the screenshot the goal started as. The one deletion is a brief
 -- cancelled before it filed, which nothing downstream can want.
 CREATE TABLE IF NOT EXISTS job_attachments (
   id         TEXT PRIMARY KEY,
@@ -474,25 +474,25 @@ CREATE TABLE IF NOT EXISTS issue_shortfalls (
   updated_at TEXT NOT NULL
 );
 
--- Whether an issue's goal text can be acted on at all — the goal assay's verdict,
+-- Whether an issue's goal text can be acted on at all — the goal appraisal's verdict,
 -- cast before anything is dispatched against it (issue #158). Written for BOTH
--- outcomes, or the assayer re-runs on the same issue every cycle; only 'unclear'
+-- outcomes, or the appraiser re-runs on the same issue every cycle; only 'unclear'
 -- holds pickup.
 --
--- goal_ref fingerprints the text that was judged. An assay is a verdict about a
+-- goal_ref fingerprints the text that was judged. An appraisal is a verdict about a
 -- *text*, so it stops standing the moment the text differs — which is how a ticket
--- edited after a failed assay is re-assayed without the harness having to have
--- witnessed the edit. A missing row is 'not assayed', which holds nothing: that is
--- what makes a crashed or capped assayer fail open to ordinary pickup.
-CREATE TABLE IF NOT EXISTS issue_assays (
+-- edited after a failed appraisal is re-appraised without the harness having to have
+-- witnessed the edit. A missing row is 'not appraised', which holds nothing: that is
+-- what makes a crashed or capped appraiser fail open to ordinary pickup.
+CREATE TABLE IF NOT EXISTS issue_appraisals (
   origin_ref  TEXT PRIMARY KEY,     -- "issue:12"
   verdict     TEXT NOT NULL,        -- workable | unclear
   summary     TEXT NOT NULL,
   goal_ref    TEXT NOT NULL,        -- fingerprint of the title+body judged
-  by          TEXT NOT NULL,        -- assayer | operator
-  proposed_profile    TEXT,         -- the model profile the assayer proposed for this goal's work
+  by          TEXT NOT NULL,        -- appraiser | operator
+  proposed_profile    TEXT,         -- the model profile the appraiser proposed for this goal's work
   profile_answered_at TEXT,         -- null while that proposal is waiting on a human (the gate)
-  -- Where the goal belongs on the backlog, proposed by the same assayer. Neither
+  -- Where the goal belongs on the backlog, proposed by the same appraiser. Neither
   -- holds anything: whether the question still stands is derived from the live work
   -- item, and only the operator's "does not apply" is stored.
   proposed_parent       INTEGER,    -- the container work item it should hang off

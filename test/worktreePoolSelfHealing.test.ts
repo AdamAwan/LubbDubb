@@ -176,10 +176,10 @@ test('a stranded slot on a detached HEAD is reclaimed too — there is no branch
   const wt = manager(repo, 1, recorder());
 
   // A read-only checkout: detached at a commit, with no ref of its own anywhere.
-  const dir = await wt.ensureReadOnly('assay/issue/1', 'main');
+  const dir = await wt.ensureReadOnly('appraisal/issue/1', 'main');
   assert.equal(git(dir, ['rev-parse', '--abbrev-ref', 'HEAD']), 'HEAD');
   strand(dir);
-  await wt.remove('assay/issue/1');
+  await wt.remove('appraisal/issue/1');
 
   assert.equal(await wt.ensure('issue/2', 'main'), dir);
   assert.equal(salvageRefs(repo).length, 1, 'the stash takes whatever HEAD is, named or not');

@@ -17,6 +17,47 @@ export type ColumnMigrations = Record<string, Record<string, string>>;
  * column on a database that predates it would read `undefined`.
  */
 /**
+ * A table that was **renamed**, declared by the module that owns it — the same rule
+ * {@link ColumnMigrations} follows, for the same reason.
+ *
+ * Distinct from a {@link TableRebuild}: the shape is unchanged and the rows are
+ * already right, so there is nothing to copy and nothing to resolve. What makes it
+ * a migration at all is that `SCHEMA` creates tables by name, so on a database from
+ * before the rename the new name is simply absent — and `CREATE TABLE IF NOT
+ * EXISTS` would then make it, empty, beside a full table under the old name that
+ * nothing reads any more. Nothing errors; every row that predates the rename is
+ * just gone from the harness's point of view.
+ *
+ * Which is why {@link renameTables} runs **before** the schema pass rather than
+ * beside the other migrations: after it, the rename is a no-op forever, because the
+ * empty new table already exists.
+ *
+ * It needs no `runOnce` id. The old name is what says the rename is outstanding,
+ * and the rename is what removes it — so a second boot finds nothing to do without
+ * having to remember that the first one ran.
+ */
+export type TableRename = { from: string; to: string };
+
+/**
+ * `ALTER TABLE … RENAME TO`, for every declared rename still outstanding.
+ *
+ * Both names existing is a state nothing can produce — a fresh database has only
+ * the new one, a migrated one has only the new one, and an old one has only the
+ * old — so it is left alone rather than merged: there is no honest merge, and the
+ * untouched old table is the evidence somebody would need.
+ */
+export function renameTables(db: Database.Database, renames: readonly TableRename[]): void {
+  for (const { from, to } of renames) {
+    if (!tableExists(db, from) || tableExists(db, to)) continue;
+    db.exec(`ALTER TABLE ${from} RENAME TO ${to}`);
+  }
+}
+
+function tableExists(db: Database.Database, table: string): boolean {
+  return db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`).get(table) !== undefined;
+}
+
+/**
  * A table whose shape changed in a way `ALTER TABLE` cannot express, declared by
  * the module that owns it — the same rule {@link ColumnMigrations} follows, for
  * the same reason: the question "did this table's new shape get a migration?"

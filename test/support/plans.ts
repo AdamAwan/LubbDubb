@@ -2,7 +2,7 @@ import type { Decision, Plan } from '../../src/types.js';
 import type { Store } from '../../src/store/store.js';
 import { DEFAULT_COOLDOWN } from '../../src/dispatcher/dispatchCooldown.js';
 import { planOrigin } from '../../src/plans/planning.js';
-import { assayOrigin } from '../../src/intake/assay.js';
+import { appraisalOrigin } from '../../src/intake/appraisal.js';
 
 /**
  * The state in which rule `issue-pickup` works an issue: **the funnel gave up on
@@ -43,32 +43,32 @@ export function spentPlannerAttempts(issueNumber: number, at = '2026-07-25T00:00
 }
 
 /**
- * The assay's half of the same story: **the goal assay gave up on it.**
+ * The appraisal's half of the same story: **the goal appraisal gave up on it.**
  *
- * The assay is unconditional and sits in front of the planner, so a fresh issue is
- * one an assayer is owed and every rule behind it is narrowed away from. Spending
+ * The appraisal is unconditional and sits in front of the planner, so a fresh issue is
+ * one an appraiser is owed and every rule behind it is narrowed away from. Spending
  * its attempt cap is the fail-open arm — deliberately the same shape as the
  * planner's above, because it is the same statement, and a verdict row would say
  * something stronger (that a goal *was* judged) than a test downstream of the
  * funnel means.
  */
-export function spentAssayAttempts(issueNumber: number, at = '2026-07-25T00:00:00.000Z'): Decision[] {
-  const origin = assayOrigin(issueNumber);
+export function spentAppraisalAttempts(issueNumber: number, at = '2026-07-25T00:00:00.000Z'): Decision[] {
+  const origin = appraisalOrigin(issueNumber);
   return Array.from({ length: DEFAULT_COOLDOWN.maxAttempts }, (_, i) => ({
-    id: `dec_assay_${issueNumber}_${i}`,
-    cycleId: `cyc_assay_${issueNumber}_${i}`,
+    id: `dec_appraisal_${issueNumber}_${i}`,
+    cycleId: `cyc_appraisal_${issueNumber}_${i}`,
     action: {
       type: 'dispatch_code_agent' as const,
-      branch: `assay/issue/${issueNumber}`,
-      title: `Assay issue #${issueNumber}`,
-      prompt: 'assay it',
+      branch: `appraisal/issue/${issueNumber}`,
+      title: `Appraise issue #${issueNumber}`,
+      prompt: 'appraise it',
       originRef: origin,
-      rule: 'issue-assay',
+      rule: 'issue-appraisal',
       reason: `Issue #${issueNumber} needs a goal check.`,
     },
     outcome: 'executed' as const,
     detail: '',
-    rule: 'issue-assay',
+    rule: 'issue-appraisal',
     admission: null,
     createdAt: at,
   }));
@@ -77,12 +77,12 @@ export function spentAssayAttempts(issueNumber: number, at = '2026-07-25T00:00:0
 /**
  * Everything in front of rule `issue-pickup`, failed open at once.
  *
- * The funnel is two gates deep now — assay, then plan — and a test about anything
+ * The funnel is two gates deep now — appraisal, then plan — and a test about anything
  * downstream of pickup wants to be past both. Naming them together keeps the next
  * gate from having to be found in twenty test files one failure at a time.
  */
 export function pastTheFunnel(issueNumber: number, at = '2026-07-25T00:00:00.000Z'): Decision[] {
-  return [...spentAssayAttempts(issueNumber, at), ...spentPlannerAttempts(issueNumber, at)];
+  return [...spentAppraisalAttempts(issueNumber, at), ...spentPlannerAttempts(issueNumber, at)];
 }
 
 /**
@@ -95,11 +95,11 @@ export function failPlanningOpen(store: Store, issueNumber: number): void {
 }
 
 /**
- * Just the assay's gate, persisted — for a whole-cycle test that wants the
- * *planner* to run, which the assay would otherwise pre-empt.
+ * Just the appraisal's gate, persisted — for a whole-cycle test that wants the
+ * *planner* to run, which the appraisal would otherwise pre-empt.
  */
-export function failAssayOpen(store: Store, issueNumber: number): void {
-  record(store, spentAssayAttempts(issueNumber));
+export function failAppraisalOpen(store: Store, issueNumber: number): void {
+  record(store, spentAppraisalAttempts(issueNumber));
 }
 
 function record(store: Store, decisions: Decision[]): void {

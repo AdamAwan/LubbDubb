@@ -83,7 +83,7 @@ test('the filer resolves the type, the assignee and the relation from config and
   assert.equal(created[1]!.relatedTo, 12);
 });
 
-test('a blueprint’s watch label rides on the create, and an empty one is not a label', async () => {
+test('a brief’s watch label rides on the create, and an empty one is not a label', async () => {
   const created: IssueCreateInput[] = [];
   const file = ticketFiler(azure(), sinkRecording(created));
   await file({ title: 'Build X', body: 'the request', labels: ['lubbdubb-watch'] });
