@@ -82,6 +82,21 @@ export interface Place {
    * → `docs/spec/27-knowledge.md#in-the-cockpit`
    */
   knowledgeFolded: string[];
+  /**
+   * The goal page's reference sections that are **open**, by name — `ticket` and
+   * `record`.
+   *
+   * Open rather than closed, which is the other way round from `collapsed` and
+   * `ticketColumns`, and for the same underlying rule: the empty list has to be
+   * the page as it stands. Both of these are drawn shut — neither is owed
+   * anything, and the ticket is read once at pickup — so "nothing open" is the
+   * default and a bare URL.
+   *
+   * A place rather than a `useState` in the page for the reason every field here
+   * is one: a disclosure opened and then stepped back out of has to come back, and
+   * a link somebody sends to a goal's ticket body has to open on it.
+   */
+  goalOpen: string[];
   /** Which section of the config page is in front. */
   configTab: ConfigTab;
   /** The config group the page is showing, or null for the first one. */
@@ -189,6 +204,7 @@ export const NOWHERE: Place = {
   hatch: null,
   scratchpad: null,
   fact: null,
+  goalOpen: [],
   knowledgeView: 'list',
   knowledgeShow: 'all',
   knowledgeSort: 'reach',
@@ -264,6 +280,13 @@ const KNOWLEDGE_SORT: readonly Place['knowledgeSort'][] = [
   'asks',
   'age',
 ];
+/**
+ * The goal page's two reference sections, validated like every other parameter
+ * here: a name this list does not carry is dropped rather than carried, because a
+ * hand-edited `?open=` is an input an operator can type and an unknown entry would
+ * be a section held open that does not exist.
+ */
+const GOAL_SECTIONS: readonly string[] = ['record', 'ticket'];
 const TICKET_WATCH: readonly TicketWatchFilter[] = ['any', 'watched', 'unwatched'];
 const TICKET_TRACKING: readonly TicketTrackingFilter[] = ['any', 'live', 'frozen'];
 const TICKET_GROUP = ['feature', 'flat'] as const;
@@ -337,6 +360,7 @@ export function readPlace(search: string): Place {
     hatch: param(query, 'hatch'),
     scratchpad: param(query, 'pad'),
     fact: param(query, 'fact'),
+    goalOpen: readStrings(param(query, 'open')).filter((name) => GOAL_SECTIONS.includes(name)),
     // `kn`, not `view`: the tickets tab and the Insights page already share that
     // parameter between them, and a third reader of it is a page that opens
     // showing whatever one of the other two was last set to.
@@ -559,6 +583,10 @@ export function placeQuery(place: Place): string {
   if (place.hatch !== null) query.set('hatch', place.hatch);
   if (place.scratchpad !== null) query.set('pad', place.scratchpad);
   if (place.fact !== null) query.set('fact', place.fact);
+  // `readStrings` already sorted these on the way in, so opening the ticket then
+  // the record and the record then the ticket are one place rather than two
+  // history entries.
+  if (place.goalOpen.length > 0) query.set('open', place.goalOpen.join(','));
   if (place.knowledgeView !== 'list') query.set('kn', place.knowledgeView);
   if (place.knowledgeShow !== 'all') query.set('show', place.knowledgeShow);
   // One parameter for the pair, because they are one answer: a column and the end

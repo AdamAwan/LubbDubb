@@ -1,4 +1,7 @@
+import { allGoalReach } from '../environments/reach.js';
+import type { EnvironmentConfig } from '../environments/policy.js';
 import { validatePlanDocument } from '../plans/planDocument.js';
+import type { PrRefStyle } from '../prRef.js';
 import { ingestPlanDocument } from '../plans/planIngest.js';
 import { issueOrigin } from '../plans/planning.js';
 import { acceptanceCriteria, currentPlanSummary } from '../plans/parts.js';
@@ -7,6 +10,8 @@ import type { ProposalDesk } from '../proposals/proposalDesk.js';
 import type { Store } from '../store/store.js';
 import type { LocalRunner } from '../localRun/runner.js';
 import { localRunIsLive } from '../store/localRuns.js';
+import { retroDossier } from '../retro/dossier.js';
+import { goalRecord } from '../retro/record.js';
 import type { Plan } from '../types.js';
 import {
   claimStaleBefore,
@@ -52,6 +57,24 @@ export interface DesktopToolDeps {
   claimMinutes: number;
   /** `config.validationRoot` — where a goal's fixtures live, which the session has to be told. */
   validationRoot: string;
+  /**
+   * `config.environments` — the deployments a goal's merged work travels to, in
+   * the order the operator declared them.
+   *
+   * Here because "is it on hallway yet" is one of the questions {@link goalRead}
+   * exists to answer, and the answer is a fold over the operator's own list: an
+   * environment nobody configured is not a place work can have failed to reach.
+   * Empty is the honest answer on a deployment that configured none, and the tool
+   * says so rather than drawing a verdict about nowhere.
+   */
+  environments: EnvironmentConfig[];
+  /**
+   * How the configured provider links a pull request in prose, so the plan
+   * rendering here names a part's pull request the way the operator's own
+   * session can follow it. Omitted means `#`, which is right everywhere but
+   * Azure DevOps. → `src/prRef.ts`
+   */
+  prRefStyle?: PrRefStyle;
   /**
    * The machine's one dev environment, lazily — the runner is built after this
    * server in `system.ts`, the same thunk `proposals` uses for the same reason.
@@ -396,7 +419,7 @@ const planRead: DesktopToolFactory = (deps) => ({
       document: plan.document,
       // The same rendering a replanning agent is given, rather than a second one:
       // it carries each part's slug, which is the merge key an amendment turns on.
-      parts: currentPlanSummary(plan, parts),
+      parts: currentPlanSummary(plan, parts, deps.prRefStyle ?? '#'),
       acceptance: parts.map((p) => ({ slug: p.slug, criteria: acceptanceCriteria(p).map((c) => c.text) })),
       validation: checks.map((c) => ({ letter: c.letter, id: c.id, title: c.title, state: c.state })),
       next: PLAN_READ_NEXT,
@@ -617,7 +640,172 @@ function describeRun(runner: LocalRunner): Record<string, unknown> {
  * registry's reason: a name with no factory fails to build, and a factory cannot
  * name itself something the list never declared.
  */
+/**
+ * How far a question may reach back before the answer stops being about this run.
+ *
+ * The scratchpad and the retrospective are the two lists here with no cap of their
+ * own — a pad is a conversation and a write-up is a document — and both are read
+ * whole everywhere else because their readers were dispatched on the goal they
+ * belong to. This reader was not: it is a session the operator opened to ask one
+ * question, and a goal worked over three weeks by nine agents can carry a pad
+ * longer than the answer. The tail is what is kept, for `retroDossier`'s reason:
+ * the end of a run is what somebody is usually asking about.
+ */
+const MAX_PAD_ENTRIES = 40;
+
+/**
+ * The answer to "what happened here" — the whole record of one goal, for a
+ * session that has to answer a question about it rather than act on it.
+ *
+ * **It is a read and only a read.** Every other tool on this channel is a step in
+ * a job: claim this, report that, amend the plan, bring the application up. This
+ * one settles nothing and schedules nothing, which is what lets it be the widest
+ * read on the channel — an operator asking "why did this take four goes" or "is
+ * it on hallway yet" is asking about rows the harness already holds, and the
+ * failure worth preventing is not a write but an answer assembled from the
+ * repository instead of the record.
+ *
+ * **The history comes back as the dossier the retrospective agent gets**, through
+ * the same {@link goalRecord} read and the same {@link retroDossier} rendering
+ * rather than a second account beside it. That is the point of the shared
+ * assembly: a retrospective and an operator asking about the same run cannot be
+ * given two different histories, and a prose account of a run is what a session
+ * answering a question in prose actually needs.
+ *
+ * **What rides beside it is what the dossier does not carry**, and only that —
+ * the issue's own text, the validation checks, where the work has reached, the
+ * write-up if one exists, and the pad. The dossier already holds the plan, the
+ * parts, the pull requests, the decisions, the escalations, the claims and the
+ * verdicts; repeating any of them here would be two renderings of one row in one
+ * reply, free to disagree by the next change to either.
+ *
+ * **An environment verdict is passed through three-valued.** `unknown` is not
+ * folded into `absent` anywhere below: an expired credential, a probe that could
+ * not run and work that genuinely has not shipped are different answers, and a
+ * session told `absent` will say in the operator's own words that the work is not
+ * deployed for a reason that has nothing to do with deployment.
+ * → `docs/spec/24-environments.md#the-three-verdicts`
+ */
+const goalRead: DesktopToolFactory = (deps) => ({
+  description:
+    'Answer a question about a goal from what the harness actually recorded: the plan and its parts, every ' +
+    'pull request opened for it and what became of each, what the dispatcher decided and when, what was ' +
+    'escalated to a person, what agents concluded and what it cost, the validation checks and their ' +
+    'readings, which environments the work has reached, the retrospective if one was written, and the notes ' +
+    "agents left each other. Call this before answering anything about a goal's history or its state — the " +
+    'repository shows what the code says now, and this is the only account of how it got there.',
+  inputSchema: {
+    type: 'object',
+    properties: { issue: { type: 'number', description: 'The goal number, e.g. 284.' } },
+    required: ['issue'],
+  },
+  handler: (args) => {
+    const ref = desktopIssueRef(args);
+    if (!ref.ok) return toolError(ref.error);
+    const originRef = issueOrigin(ref.issue);
+    const record = goalRecord(deps.store, originRef);
+    const world = deps.store.getWorldBaseline();
+    const issue = world?.issues.find((i) => i.number === ref.issue) ?? null;
+    // Nothing recorded *and* nothing in the world is the one case worth refusing:
+    // a number nobody has ever tracked is a typo far more often than it is a goal,
+    // and an empty account of it reads as a goal nothing has happened on yet.
+    if (issue === null && record.plan === null && record.decisions.length === 0) {
+      return toolError(
+        `The harness holds nothing about issue #${ref.issue} — no plan, no decisions, and the last world ` +
+          `snapshot does not list it. Check the number: this is what an untracked issue looks like, not a ` +
+          `goal nothing has happened on.`,
+      );
+    }
+
+    const checks = liveChecks(deps.store.listValidationChecks(originRef));
+    const retro = deps.store.getRetrospective(originRef);
+    const pad = deps.store.listScratchEntries(originRef);
+    return toolJson({
+      issue: {
+        number: ref.issue,
+        ref: originRef,
+        title: issue?.title ?? record.issueTitle,
+        // The ticket's own words. A question about a goal is very often a question
+        // about whether what was built is what was asked for, and the answer needs
+        // both halves — the record below is only ever the second one.
+        body: issue?.body ?? null,
+        state: issue?.state ?? null,
+        workItemState: issue?.workItemState ?? null,
+        labels: issue?.labels ?? [],
+        url: issue?.url ?? null,
+      },
+      // Said rather than implied: everything below the issue is a pulse-old
+      // reading, and a session answering "has it shipped" needs to know it is
+      // reading a snapshot rather than asking the provider.
+      observedAt: world?.takenAt ?? null,
+      record: retroDossier(record),
+      validation: checks.map((c) => ({
+        letter: c.letter,
+        id: c.id,
+        title: c.title,
+        state: c.state,
+        resultNote: c.resultNote,
+        resultBy: c.resultBy,
+        resultAt: c.resultAt,
+      })),
+      environments: goalEnvironments(deps, originRef),
+      retrospective: retro === null ? null : { summary: retro.summary, document: retro.document },
+      scratchpad: pad
+        .slice(-MAX_PAD_ENTRIES)
+        .map((e) => ({ at: e.createdAt, by: e.authorOriginRef, topic: e.topic, note: e.note })),
+      next: GOAL_READ_NEXT,
+    });
+  },
+});
+
+/**
+ * Where this goal's work has got to, in each environment the operator declared.
+ *
+ * The cockpit's own fold ({@link allGoalReach}), not a reading of the arrivals
+ * table: the denominator is the goal's *work* rather than its merges, and a count
+ * taken here would call a four-part plan arrived on the day its first part landed
+ * — which is the mistake that fold exists to have already made once.
+ * → `docs/spec/24-environments.md#the-lens`
+ */
+function goalEnvironments(deps: DesktopToolDeps, originRef: string): Record<string, unknown>[] {
+  if (deps.environments.length === 0) return [];
+  const reach = allGoalReach({
+    landings: deps.store.listGoalLandings(),
+    readings: deps.store.listEnvironmentReach(),
+    nodes: deps.store.listWorkNodes(),
+    landed: deps.store.landedPrs(),
+    plans: deps.store.listPlans(),
+    parts: deps.store.listAllPlanParts(),
+    environments: deps.environments,
+  }).find((g) => g.goalRef === originRef);
+  return (reach?.environments ?? []).map((e) => ({
+    environment: e.environment,
+    // Verbatim, all three values. → the note on `goalRead`.
+    status: e.status,
+    landed: e.landed,
+    total: e.total,
+    at: e.at,
+  }));
+}
+
+/**
+ * What the reply says to do with itself.
+ *
+ * Two sentences and both are about honesty rather than procedure, because this is
+ * the one tool on the channel whose output is read straight back to a person: the
+ * record is what the harness saw, and the gap between that and what happened is
+ * the thing a session is most likely to paper over when it is asked a question it
+ * can nearly answer.
+ */
+const GOAL_READ_NEXT =
+  'Answer from this. Where the record does not say — a decision nobody wrote down, a pull request the ' +
+  'snapshot has aged out, an environment whose status is "unknown" — say that it does not say, rather than ' +
+  'inferring it from the repository: the operator is asking what happened, and a plausible reconstruction ' +
+  'is the one answer they cannot tell apart from the real one. "unknown" for an environment means the ' +
+  'harness could not get an answer, which is not the same as the work not being there.';
+
 const DESKTOP_TOOLS: Record<DesktopToolName, DesktopToolFactory> = {
+  goal_read: goalRead,
   validation_read: validationRead,
   validation_claim: validationClaim,
   validation_report: validationReport,

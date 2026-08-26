@@ -1,9 +1,16 @@
 import type { ErrorRecorder } from '../../errorLog.js';
-import type { IssueCommentInput, IssueCreateInput, IssueLabelInput, SendResult } from '../../sink/actionSink.js';
+import type {
+  IssueCloseInput,
+  IssueCommentInput,
+  IssueCreateInput,
+  IssueLabelInput,
+  SendResult,
+} from '../../sink/actionSink.js';
 import type { Issue, IssueState, TrackerItem } from '../../types.js';
 import type {
   WorldCapability,
   Integration,
+  IssueCloseCapable,
   IssueCommentCapable,
   IssueCreateCapable,
   IssueLabelCapable,
@@ -42,6 +49,7 @@ export class GitHubIssuesIntegration
     Integration,
     RefResolvable,
     IssueLabelCapable,
+    IssueCloseCapable,
     IssueCreateCapable,
     IssueCommentCapable,
     TicketHistoryCapable
@@ -120,6 +128,17 @@ export class GitHubIssuesIntegration
   async setIssueLabel(input: IssueLabelInput): Promise<SendResult> {
     await this.opts.api.setIssueLabel(input.number, input.label, input.present);
     return { ok: true };
+  }
+
+  /**
+   * Close the issue — the plan back-out's tracker half. The operator's words are a
+   * comment written beside it rather than anything smuggled in here: GitHub's own
+   * vocabulary for *why* an issue closed is the two `state_reason` words, and
+   * `not_planned` is the one that reads as "we are not doing this" on the timeline.
+   */
+  async closeIssue(input: IssueCloseInput): Promise<SendResult> {
+    await this.opts.api.closeIssue(input.number, input.reason);
+    return { ok: true, ref: `issue:${input.number}` };
   }
 
   /**

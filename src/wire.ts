@@ -689,6 +689,19 @@ export interface PlanHistory {
 }
 
 /**
+ * What `GET /api/proposals/:id/comment-draft` ships: a comment an operator may
+ * edit and post when they close a ticket from the plan approval card.
+ *
+ * A draft and never a default — nothing posts it, and the back-out refuses a close
+ * with no words at all. It is a route of its own for {@link PlanHistory}'s reason:
+ * it quotes the plan's prose, and it is read when somebody asks for it rather than
+ * every poll.
+ */
+export interface ProposalCommentDraft {
+  draft: string;
+}
+
+/**
  * The last cycle's ordered pickup plan (issue #69) — "what's next as of this
  * pulse". A projection recomputed every cycle, not a persisted queue; `at` is the
  * world snapshot it was planned against.

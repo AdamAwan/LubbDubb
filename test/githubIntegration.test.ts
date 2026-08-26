@@ -82,6 +82,7 @@ interface Recorded {
   /** Instants `listIssuesChangedSince` was called with. */
   historySince: string[];
   labelSets: Array<{ number: number; label: string; present: boolean }>;
+  closed: Array<{ number: number; reason: string }>;
   closedSince: string[];
   annotationReads: number[];
   jobLogReads: number[];
@@ -103,6 +104,7 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     issueLabelQueries: [],
     historySince: [],
     labelSets: [],
+    closed: [],
     closedSince: [],
     annotationReads: [],
     jobLogReads: [],
@@ -211,6 +213,9 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     },
     async setIssueLabel(number, label, present) {
       recorded.labelSets.push({ number, label, present });
+    },
+    async closeIssue(number, reason) {
+      recorded.closed.push({ number, reason });
     },
   };
   return { api, recorded };
@@ -795,6 +800,17 @@ test('issues snapshot fetches every open issue (no ingest label filter)', async 
   const issues = new GitHubIssuesIntegration({ api });
   await issues.snapshot();
   assert.deepEqual(recorded.issueLabelQueries, [undefined], 'no label is passed — all open issues are ingested');
+  store.close();
+});
+
+test('closeIssue closes with the reason GitHub draws on the timeline', async () => {
+  const { api, recorded } = fakeApi();
+  const store = new Store(':memory:');
+  const issues = new GitHubIssuesIntegration({ api });
+  // `not_planned` rather than `completed`: the plan back-out is "we are not doing
+  // this", and the two read very differently to whoever finds the ticket later.
+  await issues.closeIssue({ number: 7, reason: 'not_planned' });
+  assert.deepEqual(recorded.closed, [{ number: 7, reason: 'not_planned' }]);
   store.close();
 });
 

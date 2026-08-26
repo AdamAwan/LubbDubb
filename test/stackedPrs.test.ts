@@ -339,7 +339,7 @@ test('a replan carries the current plan into the prompt, slugs included', async 
   assert.match(planner.prompt, /"a": The a part \[merged, PR #40\]/);
   assert.match(planner.prompt, /"b": The b part \[ready, no branch yet, stacks on "a"\]/);
   // The state summary itself is pure and directly testable.
-  assert.match(currentPlanSummary(plan({ status: 'planning' }), parts), /It was split because: Schema first\./);
+  assert.match(currentPlanSummary(plan({ status: 'planning' }), parts, '#'), /It was split because: Schema first\./);
 });
 
 test('a replan is not throttled by the planner that produced the plan it is amending', () => {

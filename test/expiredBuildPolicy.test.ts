@@ -197,6 +197,10 @@ function azureSink(evals: AzPolicyEvaluation[], requeue: RequeueScript): ActionS
     throw new Error(`${name} is not scripted in this test`);
   };
   return {
+    canCloseIssue: () => false,
+    closeIssue: (): never => {
+      throw new Error('closeIssue is not scripted in this test');
+    },
     canSetWorkItemState: () => false,
     canPlaceWorkItem: () => false,
     setWorkItemParent: () => Promise.reject(new Error('not used')),

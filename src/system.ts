@@ -1,4 +1,5 @@
 import { tmpdir } from 'node:os';
+import { prRefStyle } from './prRef.js';
 import { join } from 'node:path';
 import { configFilePath, projectConfigFilePath, type Config } from './config.js';
 import { Store } from './store/store.js';
@@ -609,6 +610,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
       // than on the next pulse — the fleet's own work is never briefly invisible
       // to the fleet.
       watchLabel,
+      // So the body guidance names the sigil this provider reads as "pull
+      // request" — `#12` is work item 12 on Azure, and a stacked part naming its
+      // base pull request that way links to an unrelated ticket.
+      prRefStyle: prRefStyle(config.integrations.sourceControl),
     }),
     // Lazy for the same reason: `link_ticket` files the item an agent wrote up
     // (issue #394), and the sink it files through is built below.
@@ -638,6 +643,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     argsRetentionDays: config.mcpArgsRetentionDays,
     claimMinutes: config.validation.desktopClaimMinutes,
     validationRoot: config.validationRoot,
+    // `goal_read` answers "has it reached hallway yet" off the operator's own list.
+    environments: config.environments,
+    prRefStyle: prRefStyle(config.integrations.sourceControl),
     // Lazily, for `proposals`' reason: the runner is built further down, and both
     // this channel and the cockpit's panel must start *the same* run.
     localRun: (): LocalRunner => localRun,
@@ -749,7 +757,13 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // own — which is all of them. It runs an accepted act through the executor, so
   // the outbound sink keeps a single caller and the human's authorization lands in
   // the audit log.
-  const proposals = new ProposalDesk(store, escalations, executor);
+  const proposals = new ProposalDesk(store, escalations, executor, {
+    // The same sink an accepted act runs through, so the back-out's comment and
+    // close are the one outbound seam rather than a second route to the tracker.
+    sink: opts.sink ?? connector,
+    config,
+    errors,
+  });
 
   // Dispatcher-level issue-pickup policy (gate + label-encoded priority), honoured
   // by whichever dispatcher is selected — provider-agnostic.
@@ -777,6 +791,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     config.ci,
     config.validation,
     config.validationRoot,
+    prRefStyle(config.integrations.sourceControl),
   );
   const dispatcher: Dispatcher = rules;
 
@@ -796,6 +811,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     sink: opts.sink ?? connector,
     planning: config.planning,
     defaultBranch: config.defaultBranch,
+    prRefStyle: prRefStyle(config.integrations.sourceControl),
     fetch: opts.gitObserver ? undefined : () => fetchRemote(config.repoRoot),
     errors,
   });

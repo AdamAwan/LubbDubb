@@ -59,3 +59,20 @@ export function discussPrompt(issueNumber: number): string {
 export function localRunPrompt(issueNumber: number): string {
   return `/lubbdubb run ${issueNumber}`;
 }
+
+/**
+ * What the operator's Claude is asked when they hit *ask* on a goal — the skill's
+ * fourth argument form, and the goal's number for the other three's reason.
+ *
+ * **No question in the prompt.** The other three controls start a job with one
+ * meaning, so the whole command can be prefilled and sent; this one starts a
+ * conversation whose subject the operator has not said yet. `q` fills the composer
+ * without sending, so what lands is `/lubbdubb ask 284` with the cursor after it
+ * and the goal already settled — which is exactly the half they should not have to
+ * type. Guessing a question for them would be a control that asked something else
+ * on the occasions it was wrong, and there is no reading of a click that says
+ * which question it was.
+ */
+export function askPrompt(issueNumber: number): string {
+  return `/lubbdubb ask ${issueNumber} `;
+}

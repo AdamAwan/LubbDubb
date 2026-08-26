@@ -544,9 +544,11 @@ way to stop the harness working:
   `undeclared`-vs-`more_work` again: the harness acts on what was said, never on silence.
 - **The hold expires on its own** (below).
 - **The operator can clear or override it** (`POST /api/issues/:number/assay`), from either cockpit:
-  the tickets tab pulls a refused goal **out of the list into its intake call-out**, quotes the
-  assayer's sentence and puts the override beside it
-  ([17](17-cockpit.md#intake-is-pulled-out-never-greyed-inside-the-list)). Only a refusal draws the affordance — a
+  a refused goal is raised **on the queue rail** as an `intake` row, which quotes the assayer's sentence
+  whole and puts the override under it, and is marked with a lamp in the tickets list
+  ([17](17-cockpit.md#intake-is-raised-on-the-rail-and-marked-in-the-list)). The rail rather than that
+  list alone, because a hold nobody sees is a goal stopped for good, and the tickets tab is a page an
+  operator opens to groom the backlog rather than to find out what is waiting on them. Only a refusal draws the affordance — a
   `workable` verdict blocks nothing — and clearing is a distinct third option rather than the same
   toggle's other end.
 

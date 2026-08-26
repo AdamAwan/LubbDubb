@@ -17,6 +17,7 @@ export const KIND_LABEL: Record<NeedKind, string> = {
   reply: 'Reply',
   merge: 'Merge',
   shortfall: 'Shortfall',
+  intake: 'Intake',
   profile: 'Profile',
   placement: 'Backlog',
   bench: 'Bench',
@@ -68,6 +69,12 @@ export const KIND_TONE: Record<NeedKind, 'red' | 'amber' | 'blue' | 'green'> = {
   reply: 'amber',
   merge: 'amber',
   shortfall: 'blue',
+  // Blue on the profile gate's terms: the assay refused to say this goal is
+  // workable, and what is waiting is a reading — the goal's own text against the
+  // assayer's sentence — rather than a repair. Red would file a goal whose brief
+  // is unclear beside a restart that orphaned six runs, which is the one thing it
+  // is not: nothing broke, and nothing is lost while it stands.
+  intake: 'blue',
   profile: 'blue',
   // Amber on `config_gap`'s terms rather than blue on the profile gate's: nothing
   // is held and nothing failed, and what is wrong is that work the fleet is doing
@@ -121,6 +128,10 @@ export const KIND_SYMBOL: Record<NeedKind, string> = {
   // goal's checks passing, the other is an assessment saying the goal was not
   // reached.
   shortfall: '\u2717',
+  // A dotted circle against the profile gate's ringed dot: the two asks the same
+  // assay leaves behind, one a proposal it made and the other a verdict it could
+  // not reach.
+  intake: '\u25cc',
   profile: '\u2299',
   // A box: where the item is filed, against the profile gate's ringed dot.
   placement: '\u25a3',

@@ -490,6 +490,10 @@ export class OctokitGitHubApi implements GitHubApi {
     await this.setLabel(number, label, present);
   }
 
+  async closeIssue(number: number, reason: 'completed' | 'not_planned'): Promise<void> {
+    await this.octokit.issues.update({ ...this.base, issue_number: number, state: 'closed', state_reason: reason });
+  }
+
   async createIssue(input: {
     title: string;
     body: string;

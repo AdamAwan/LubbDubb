@@ -658,8 +658,13 @@ deciding whether to re-run a check before closing a goal is deciding on exactly 
 
 ### The skill
 
-`/lubbdubb 284:C`, `/lubbdubb discuss 284`, `/lubbdubb run 284` — three jobs told apart by the
-argument, one file. Installed to `validation.desktopSkillPath` when the channel starts, from
+`/lubbdubb 284:C`, `/lubbdubb discuss 284`, `/lubbdubb run 284`, `/lubbdubb ask 284 …` — four jobs
+told apart by the argument, one file. The fourth is the only one that settles nothing:
+[`goal_read`](11-mcp-tools.md#answering-a-question-about-a-goal) hands back the harness's record of a
+goal and the skill says what to do with it. Its longest section is about the one way a session with
+the repository open gets a question about a run wrong — reconstructing a plausible history from the
+code, which is the one answer an operator cannot tell from the real one — and about `unknown` on an
+environment not being `absent`. Installed to `validation.desktopSkillPath` when the channel starts, from
 `DESKTOP_SKILL` in `src/validation/desktopSkill.ts` — a string in a `.ts` module rather than a `.md`
 asset, the prompt templates' reason: the build emits `.ts` and nothing copies a stray `.md` into
 `dist`, so an asset works in development and is missing in a deployment. There is no second copy
@@ -669,7 +674,10 @@ The skill is the interface, not a convenience. Without it the operator types the
 at their Claude every time — which is the friction the whole channel exists to remove, and the reason
 the bench design was rejected. It says what the three answers mean, that `handback` is a right
 answer, and the two things a session with the repository open is most able to do wrong: report
-`passed` from evidence it did not gather, and change code to make a check pass. Everything about
+`passed` from evidence it did not gather, and change code to make a check pass. The `ask` section
+carries the same shape of warning for the same reason — a question is answerable wrongly and
+confidently — plus the one line that keeps the read a read: change nothing, and offer `discuss` if
+the answer turns out to be that the plan is wrong. Everything about
 _how_ to run a given check comes back from the tools, which read the live plan; a skill that restated
 any of it would be a second copy of the procedure, drifting.
 
@@ -789,7 +797,7 @@ changes five readings:
   swallowed clicks. The bench's Done reads `Done…` and opens the same box Decline uses; End the run
   opens `EndRunModal` — on **every** goal now, because ending a run also kills the goal's agents and
   cancels its queued work ([16](16-http-api.md#post-apiissuesnumberdismiss-run)), so it confirms
-  whether or not a plan is flagged. What the flag still decides is what happens *inside* that modal:
+  whether or not a plan is flagged. What the flag still decides is what happens _inside_ that modal:
   the note is required and the confirm disabled until it is filled. Both mirror the route in its
   **condition only** — `close_out` on a goal whose
   `validation` is `flagged` — and never in its counts, which stay the server's fold; and the route
@@ -889,6 +897,11 @@ the document that proposed it is a control nobody finds. Each row draws its lett
 a part's sequence number sits, because it is the same kind of handle, and collapses to its head — with
 the amendment band, the hand-back band and the result note staying visible on a closed row, because
 those are what a reader must not scroll past. → [17](17-cockpit.md#validation-on-the-goal)
+
+A **settled** head — passed or waived — is drawn a step back from one still to run, so the card reads
+as the work that is left rather than as the whole list. Scoped to the head, lifted when the row is
+opened, and lighter than the treatment a withdrawn check gets: withdrawn and done are not the same
+news. → [17](17-cockpit.md#validation-on-the-goal)
 
 The **plan sheet** keeps a read-only `ValidationDigest` between the parts and the caveats, with a rail
 entry carrying the settled count — the reading order is answer, then work, then how anyone knows it

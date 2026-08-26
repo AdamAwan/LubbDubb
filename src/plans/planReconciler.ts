@@ -5,6 +5,7 @@ import type { Store } from '../store/store.js';
 import type { Plan, PlanPart, PlanPartBlocker, PullRequest, TaskSummary, WorldSnapshot } from '../types.js';
 import { issueBranch } from '../dispatcher/issuePickup.js';
 import { renderPlanComment } from './planComment.js';
+import { type PrRefStyle } from '../prRef.js';
 import {
   bySlug,
   dependenciesOf,
@@ -25,6 +26,12 @@ interface PlanReconcilerDeps {
   sink: ActionSink;
   planning: PlanningPolicy;
   defaultBranch: string;
+  /**
+   * How the configured provider links a pull request in prose — the status
+   * comment names each part's PR, and this comment is published on the tracker.
+   * Omitted means `#`, which is right everywhere but Azure. → `src/prRef.ts`
+   */
+  prRefStyle?: PrRefStyle;
   /**
    * Refresh the remote-tracking refs before reading them. Omitted = never fetch,
    * which is what tests injecting a scripted observer want (and what a harness with
@@ -311,7 +318,12 @@ export class PlanReconciler {
     // threaded down from the caller because it is the same one living body: a
     // check marked off changes what the ticket says, so it has to reach the
     // memoisation below or the edit is never written.
-    const body = renderPlanComment(plan, parts, this.deps.store.listValidationChecks(plan.originRef));
+    const body = renderPlanComment(
+      plan,
+      parts,
+      this.deps.prRefStyle ?? '#',
+      this.deps.store.listValidationChecks(plan.originRef),
+    );
     // The caller gates on observed news before it gets here; this is the second
     // guard, and the one that makes a re-render free. Memoised rather than stored:
     // a restart costs one idempotent edit, and a column would be a copy of the

@@ -22,6 +22,7 @@ import type {
 import type { ActionSink } from '../../sink/actionSink.js';
 import type { TicketFiler } from '../../tickets/filing.js';
 import type { PromptTemplates } from '../../dispatcher/promptTemplates.js';
+import type { PrRefStyle } from '../../prRef.js';
 import type { AssessmentVerdict } from '../assessment.js';
 import type { GoalAssayVerdictName } from '../goalAssay.js';
 import type { AreaPathTree } from '../../intake/placement.js';
@@ -183,6 +184,13 @@ export interface McpToolDeps {
      * the gate is off, and nothing is tagged because nothing needs to be.
      */
     watchLabel: string;
+    /**
+     * How this provider links a pull request in prose, so the body guidance can
+     * name the sigil rather than leave the agent to GitHub's habit. On Azure a
+     * sibling pull request written `#12` links to *work item* 12.
+     * → `src/prRef.ts`
+     */
+    prRefStyle: PrRefStyle;
   };
   /**
    * Where `reply_to_review` hands the reply it was given. The `ActionExecutor`,

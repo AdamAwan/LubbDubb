@@ -20,8 +20,11 @@ import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import { validatePlanDocument } from '../src/plans/planDocument.js';
 import { DESKTOP_SKILL, installDesktopSkill } from '../src/validation/desktopSkill.js';
+import { retroDossier } from '../src/retro/dossier.js';
+import { goalRecord } from '../src/retro/record.js';
+import type { EnvironmentConfig } from '../src/environments/policy.js';
 import { claimIsLive, claimStaleBefore, withLiveClaim } from '../src/validation/desktop.js';
-import type { Issue, IssueDelivery, Plan, ValidationCheck } from '../src/types.js';
+import type { Issue, IssueDelivery, Plan, ValidationCheck, WorldSnapshot } from '../src/types.js';
 
 /**
  * The desktop channel: the operator's own Claude Code running a validation check
@@ -88,6 +91,7 @@ async function desk(
     now: () => string;
     socketPath: string;
   }> = {},
+  environments: EnvironmentConfig[] = [],
 ): Promise<{ server: McpDesktopServer; dir: string; socketPath: string }> {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-cred-'));
   const socketPath = over.socketPath ?? throwawaySocketPath();
@@ -95,6 +99,7 @@ async function desk(
     store: system.store,
     claimMinutes: over.claimMinutes ?? 60,
     validationRoot: '/srv/validation',
+    environments,
     localRun: () => system.localRun,
     now: over.now ?? ((): string => new Date().toISOString()),
     socketPath,
@@ -233,6 +238,7 @@ test('two harnesses do not fight over the stable socket', async () => {
     store: system.store,
     claimMinutes: 60,
     validationRoot: '/srv/validation',
+    environments: [],
     localRun: () => system.localRun,
     now: () => NOW,
     socketPath,
@@ -864,4 +870,171 @@ test('the registration command quotes a path with spaces', () => {
     shellArgv(['/usr/bin/node', '/srv/lubbdubb/bridge.mjs', '--desktop']),
     '/usr/bin/node /srv/lubbdubb/bridge.mjs --desktop',
   );
+});
+
+// -- answering a question about a goal ---------------------------------------
+
+/**
+ * `goal_read` is the channel's fourth job and the only one that settles nothing:
+ * an operator asking what happened on a goal, answered from the rows the harness
+ * kept rather than from a session's reading of the repository.
+ *
+ * Three properties, and each has a plausible twin that would be wrong:
+ *
+ * 1. **The history is the retrospective's, through one assembly.** Two gathers of
+ *    "what happened on this goal" would be two answers free to disagree, and the
+ *    disagreement would be silent — so the assertion is that the dossier a
+ *    retrospective agent is briefed with is the same string this hands back.
+ * 2. **What rides beside it is what the dossier does not carry.** The four extras
+ *    are there; the plan and the parts are *not* repeated beside them.
+ * 3. **An environment verdict is three-valued out of the door.** `unknown` folded
+ *    into `absent` is the sharp edge this whole surface inherits, and it fails as
+ *    a sentence rather than as an error.
+ */
+function goalWith(system: System): string {
+  const goal = planWith(system);
+  system.store.setWorldBaseline({
+    takenAt: NOW,
+    pullRequests: [],
+    closedPullRequests: [],
+    issues: [
+      {
+        number: 12,
+        title: 'Ship it',
+        body: 'The export comes out empty.',
+        state: 'open',
+        labels: [],
+        linkedPrNumber: null,
+      } as unknown as Issue,
+    ],
+  } as unknown as WorldSnapshot);
+  return goal;
+}
+
+test('goal_read answers with the record, and with the four things the record does not carry', async () => {
+  const system = build();
+  const goal = goalWith(system);
+  system.store.recordRetrospective({
+    originRef: goal,
+    summary: 'Two goes at the export.',
+    document: '# What happened\n\nThe first attempt read the wrong column.',
+    agentId: 'a1',
+    taskId: 't1',
+  });
+  const { server } = await desk(system);
+  try {
+    const read = await call(server, 'c1', 'goal_read', { issue: 12 });
+    assert.ok(!read.isError, read.text);
+    const payload = read.json();
+
+    // The ticket's own words. A question about a goal is very often a question
+    // about whether what was built is what was asked for, and half that answer is
+    // the ask — which the record below never carries.
+    assert.deepEqual((payload.issue as Record<string, unknown>).body, 'The export comes out empty.');
+
+    // Property 1: one assembly, one history. Asserted against `retroDossier` over
+    // `goalRecord` rather than against a transcribed excerpt — a literal here
+    // would be a second rendering of the run, which is the thing being ruled out.
+    assert.equal(payload.record, retroDossier(goalRecord(system.store, goal)));
+
+    // Property 2: the four extras are here...
+    const validation = payload.validation as { letter: string; id: string }[];
+    assert.deepEqual(
+      validation.map((c) => c.id).sort(),
+      CHECKS.map((c) => c.id).sort(),
+      'the checks ride beside the record — the dossier never carried them',
+    );
+    assert.equal((payload.retrospective as { summary: string }).summary, 'Two goes at the export.');
+    assert.ok(Array.isArray(payload.scratchpad));
+    assert.ok(Array.isArray(payload.environments));
+
+    // ...and the plan is *not* repeated beside them. It is in the record already,
+    // and two renderings of one row in one reply are two things to keep in step.
+    assert.equal(payload.plan, undefined, 'the plan is in the record, not beside it');
+    assert.equal(payload.parts, undefined, 'so are the parts');
+    assert.match(payload.record as string, /Part `whole`/);
+
+    // The reading is a pulse old and says so, exactly as `world_read` does: a
+    // session answering "has it shipped" has to know it is reading a snapshot.
+    assert.equal(payload.observedAt, NOW);
+  } finally {
+    await server.close();
+    system.store.close();
+  }
+});
+
+/**
+ * A number nobody has ever tracked is a typo far more often than it is a goal, and
+ * an empty account of one reads exactly like a goal nothing has happened on yet —
+ * which is the answer a session would then give the operator, confidently.
+ */
+test('goal_read refuses a number the harness holds nothing about', async () => {
+  const system = build();
+  goalWith(system);
+  const { server } = await desk(system);
+  try {
+    const read = await call(server, 'c1', 'goal_read', { issue: 9999 });
+    assert.ok(read.isError, 'an untracked number is refused, not answered with an empty record');
+    assert.match(read.text, /9999/);
+    assert.match(read.text, /not a\s*\n?\s*goal nothing has happened on/);
+  } finally {
+    await server.close();
+    system.store.close();
+  }
+});
+
+/**
+ * The three verdicts, out of the door. An expired credential, a probe that would
+ * not run and work that genuinely has not shipped are different answers, and only
+ * the last is about deployment — read as `absent` they are indistinguishable, and
+ * the session says in the operator's own words that the work is not there.
+ */
+test('goal_read passes an environment verdict through three-valued', async () => {
+  const system = build();
+  const goal = goalWith(system);
+  const { server } = await desk(system, {}, [
+    { name: 'hallway', at: 'echo sha-31' },
+    { name: 'production', at: 'echo nothing' },
+  ]);
+  try {
+    // One landing, confirmed on hallway and never answered for on production.
+    system.store.recordGoalLanding({ prNumber: 31, goalRef: goal, sha: 'sha-31' });
+    system.store.recordEnvironmentReach({ sha: 'sha-31', environment: 'hallway', status: 'reached', detail: null });
+
+    const rows = (await call(server, 'c1', 'goal_read', { issue: 12 })).json().environments as {
+      environment: string;
+      status: string;
+      landed: number;
+      total: number;
+    }[];
+    const hallway = rows.find((r) => r.environment === 'hallway');
+    const production = rows.find((r) => r.environment === 'production');
+    assert.ok(hallway && production, 'a row per configured environment, in the operator’s order');
+    // `partial`, not `reached`: the plan's one part has yet to merge, so the
+    // denominator is the goal's *work* rather than its landings — half a feature
+    // in an environment is the fact worth having, and a rollup that called this
+    // "reached" is what `allGoalReach` exists to have already got wrong once.
+    assert.equal(hallway.status, 'partial');
+    assert.deepEqual([hallway.landed, hallway.total], [1, 2]);
+    // The one that matters. Nothing came back for this sha on production, and the
+    // honest answer is that nobody can say — not that the work is not there.
+    assert.equal(production.status, 'unknown', 'an unanswered probe is `unknown`, never folded to `absent`');
+    assert.equal(production.landed, 0);
+  } finally {
+    await server.close();
+    system.store.close();
+  }
+});
+
+/** A deployment that configured no environments gets no verdict about nowhere. */
+test('goal_read draws no environment rows when none are configured', async () => {
+  const system = build();
+  goalWith(system);
+  const { server } = await desk(system);
+  try {
+    assert.deepEqual((await call(server, 'c1', 'goal_read', { issue: 12 })).json().environments, []);
+  } finally {
+    await server.close();
+    system.store.close();
+  }
 });

@@ -10,6 +10,7 @@ import type {
   SetupVerdict,
 } from '../types.js';
 import { goalIssue, goalOfPr } from './goalPage.js';
+import { watchBucket } from '../worldBuckets.js';
 
 /**
  * What kind of answer a row wants. `permission` and the four proposal kinds are
@@ -37,6 +38,15 @@ import { goalIssue, goalOfPr } from './goalPage.js';
  * but something of yours is hiding work from it).
  */
 /**
+ * `intake` is the goal assay's refusal (#158): an `unclear` verdict stops pickup
+ * for the whole goal, and it is raised on the queue rather than only on the
+ * tickets tab. It lived there alone, which put the one reading that stops a goal
+ * dead on a page an operator opens to *groom* the backlog — while the rail, the
+ * surface that exists to say what is waiting on a person, said nothing about it.
+ * An operator who never opens that tab sees a goal that looks like it simply has
+ * not come up yet. → `docs/spec/06-issue-pickup.md#block-or-inform-and-why-blocking-is-safe`
+ */
+/**
  * `dispatch` is the one kind derived from the *decision log* rather than from a
  * row somebody raised — a dispatch the executor has refused on every pulse for
  * three pulses running. Nothing else in the harness records that: no escalation
@@ -54,6 +64,7 @@ export type NeedKind =
   | 'reply'
   | 'merge'
   | 'shortfall'
+  | 'intake'
   | 'profile'
   | 'placement'
   | 'bench'
@@ -702,6 +713,44 @@ export function buildNeedsYou(
       // The park has no row of its own to be stamped, so the agent's own clock is
       // the honest reading: it is the last thing that happened to it.
       raisedAt: agent.startedAt,
+    });
+  }
+
+  // The goal assay's refusal (#158). Like the profile gate below it, the hold has
+  // no row of its own anywhere — no escalation, no human task, no parked agent —
+  // so a queue reading only those four sources left the one verdict that stops a
+  // goal's pickup legible on the tickets tab alone.
+  //
+  // Read off `world.issues` for the profile gate's reason, and filtered on the
+  // watch tag for the tickets tab's: nothing assays a goal nobody opted in, so a
+  // verdict on an unwatched item is left over from before it was dropped, and the
+  // drop outranks it.
+  for (const issue of state.world.issues) {
+    if (issue.state !== 'open' || issue.assay?.verdict !== 'unclear') continue;
+    if (watchBucket(issue.labels, state.config.watchLabel) !== 'watched') continue;
+    const goalRef = `issue:${issue.number}`;
+    rows.push({
+      // Prefixed, for the profile gate's reason: the row is derived from the goal
+      // rather than from a row of its own, and the ask panel resolves one by id.
+      id: `intake:${goalRef}`,
+      kind: 'intake',
+      group: 'yours',
+      // The line says which ask it is and which goal it is about, and no more: the
+      // assayer's sentence is prose somebody wrote and belongs in the band, which
+      // quotes it whole rather than clamping the only account of why this is held.
+      title: askLine('Held at intake', goalRef, state),
+      goalRef,
+      originRef: goalRef,
+      opens: opensAt(goalRef, state),
+      // The assayer that cast the verdict is gone, and nothing was ever parked on
+      // the answer — an id here would point at a run that ended.
+      agentId: null,
+      agentLabel: null,
+      // The hold stops the goal before there is a plan to hold any parts, so a
+      // count invented here would sort it against asks that really are holding
+      // work.
+      holding: 0,
+      raisedAt: issue.assay.decidedAt,
     });
   }
 

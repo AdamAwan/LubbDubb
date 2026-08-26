@@ -321,7 +321,7 @@ test('the status comment carries the planner narrative, folded, once there is on
     createdAt: '2026-08-01T00:00:00.000Z',
     updatedAt: '2026-08-01T00:00:00.000Z',
   };
-  const body = renderPlanComment(plan, [part('schema', {})]);
+  const body = renderPlanComment(plan, [part('schema', {})], '#');
   assert.match(body, /<details>/);
   assert.match(body, /What's wrong/);
   assert.match(body, /How we'll know it worked/);
@@ -346,6 +346,7 @@ test('the status comment carries the planner narrative, folded, once there is on
       document: null,
     },
     [part('schema', {})],
+    '#',
   );
   assert.doesNotMatch(bare, /<details>/);
 });

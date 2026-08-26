@@ -97,9 +97,18 @@ function orphan(over: Partial<OrphanedWork> = {}): OrphanedWork {
   };
 }
 
-/** A snapshot with the four lists this suite varies replaced, and nothing cast. */
+/**
+ * A snapshot with the four lists this suite varies replaced, and nothing cast.
+ *
+ * The fixtures' own assay verdicts go with them. A goal the demo assay refused
+ * raises an `intake` row off `world.issues` alone, so a suite asserting exact row
+ * lists would otherwise be asserting the fixture backlog as well as its own — the
+ * three tests whose subject *is* an assay put one back on the goal they name.
+ */
 function stateWith(over: Partial<AppState>): AppState {
-  return { ...buildDemoState(), ...over };
+  const base = buildDemoState();
+  const world = { ...base.world, issues: base.world.issues.map((i) => ({ ...i, assay: null })) };
+  return { ...base, world, ...over };
 }
 
 test('partHolding counts live direct dependents and ignores retired ones', () => {
@@ -348,7 +357,7 @@ test('an unanswered profile proposal is a row, and an answered one is not', () =
                   placement: [],
                 },
               }
-            : i,
+            : { ...i, assay: null },
         ),
       },
     });
@@ -366,6 +375,73 @@ test('an unanswered profile proposal is a row, and an answered one is not', () =
   assert.ok(rows[0]?.title.includes('deep'), 'the row names the profile it is asking about');
 
   assert.deepEqual(buildNeedsYou(proposed({ awaiting: false })), [], 'a settled proposal asks nothing');
+});
+
+/**
+ * The goal assay's refusal (#158), which was raised on the tickets tab and nowhere
+ * else until it was raised here too.
+ *
+ * `yours` on the profile gate's terms — a whole goal's dispatch is held and no
+ * agent is sitting in it — and holding nothing, because the hold stops the goal
+ * before there is a plan to hold parts. The watch tag is the filter that matters:
+ * nothing assays a goal nobody opted in, so a verdict on an unwatched item is left
+ * over from before it was dropped.
+ */
+test('a goal the assay refused is a row, and an unwatched or workable one is not', () => {
+  const base = buildDemoState();
+  const goal = base.world.issues[0]!;
+  const watchLabel = base.config.watchLabel;
+  assert.ok(watchLabel, 'the demo config must name a watch tag for this to be a filter at all');
+
+  const held = (over: { verdict: 'unclear' | 'workable'; watched: boolean }) =>
+    stateWith({
+      escalations: [],
+      humanTasks: [],
+      proposals: [],
+      recovery: [],
+      world: {
+        ...base.world,
+        issues: base.world.issues.map((i) =>
+          i.number === goal.number
+            ? {
+                ...i,
+                state: 'open' as const,
+                labels: over.watched
+                  ? [...new Set([...i.labels, watchLabel])]
+                  : i.labels.filter((l) => l !== watchLabel),
+                assay: {
+                  verdict: over.verdict,
+                  summary: 'The ticket names two systems and does not say which one is wrong.',
+                  by: 'assayer' as const,
+                  decidedAt: '2026-02-02T00:00:00.000Z',
+                  commentRef: null,
+                  proposedProfile: null,
+                  awaitingProfileAnswer: false,
+                  placement: [],
+                },
+              }
+            : { ...i, assay: null },
+        ),
+      },
+    });
+
+  const rows = buildNeedsYou(held({ verdict: 'unclear', watched: true }));
+  assert.deepEqual(
+    rows.map((r) => [r.kind, r.group, r.goalRef]),
+    [['intake', 'yours', `issue:${goal.number}`]],
+  );
+  assert.equal(rows[0]?.id, `intake:issue:${goal.number}`, 'the ask panel resolves this row by its id');
+  assert.equal(rows[0]?.opens, 'goal');
+  assert.equal(rows[0]?.holding, 0, 'the hold stops the goal before there is a plan to hold parts');
+  assert.equal(rows[0]?.agentId, null, 'the assayer that cast the verdict is gone, not parked');
+  assert.equal(rows[0]?.raisedAt, '2026-02-02T00:00:00.000Z', 'the verdict is what was raised');
+
+  assert.deepEqual(buildNeedsYou(held({ verdict: 'workable', watched: true })), [], 'a workable goal holds nothing');
+  assert.deepEqual(
+    buildNeedsYou(held({ verdict: 'unclear', watched: false })),
+    [],
+    'the drop outranks a verdict cast before it',
+  );
 });
 
 /**
@@ -406,7 +482,7 @@ test('each open placement question is its own row, and a settled one is gone', (
                   placement,
                 },
               }
-            : i,
+            : { ...i, assay: null },
         ),
       },
     });

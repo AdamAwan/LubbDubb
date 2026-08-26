@@ -309,8 +309,9 @@ test('notifySnapshot reduces a whole AppState to the three lists', () => {
   assert.equal(reduced.agents.length, state.agents.length);
   assert.equal(reduced.errors.length, state.errors.length);
   // The needs-you rows are the *rendered* queue, not a raw list off the state —
-  // which is the point of diffing them: they cover the four sources that arrive
-  // as one coarse `dirty` and never announce themselves individually.
+  // which is the point of diffing them: they cover the sources that arrive as one
+  // coarse `dirty` and never announce themselves individually, the assay's own
+  // intake hold among them, which has no row anywhere to announce.
   assert.deepEqual(
     reduced.needsYou.map((r) => r.id).sort(),
     (state as AppState).escalations
@@ -318,6 +319,11 @@ test('notifySnapshot reduces a whole AppState to the three lists', () => {
       .map((e) => e.id)
       .concat((state.humanTasks ?? []).filter((t) => t.status === 'open').map((t) => t.id))
       .concat((state.recovery ?? []).length > 0 ? ['recovery'] : [])
+      .concat(
+        state.world.issues
+          .filter((i) => i.state === 'open' && i.assay?.verdict === 'unclear')
+          .map((i) => `intake:issue:${i.number}`),
+      )
       .sort(),
   );
 });

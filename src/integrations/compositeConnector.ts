@@ -3,6 +3,7 @@ import type {
   ActionSink,
   BranchDeleteInput,
   CiCheckRequeueInput,
+  IssueCloseInput,
   IssueCommentInput,
   IssueCreateInput,
   IssueLabelInput,
@@ -28,6 +29,7 @@ import {
   isCiCheckRequeueCapable,
   isCiEvidenceCapable,
   isInjectable,
+  isIssueCloseCapable,
   isIssueCommentCapable,
   isIssueCreateCapable,
   isIssueLabelCapable,
@@ -245,6 +247,16 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
     const handler = this.integrations.find(isWorkItemLinkCapable);
     if (!handler) return { ok: false };
     return handler.linkWorkItem(input);
+  }
+
+  canCloseIssue(): boolean {
+    return this.integrations.some(isIssueCloseCapable);
+  }
+
+  async closeIssue(input: IssueCloseInput): Promise<SendResult> {
+    const handler = this.integrations.find(isIssueCloseCapable);
+    if (!handler) throw new Error('no integration can close issues (no issues provider is IssueCloseCapable)');
+    return handler.closeIssue(input);
   }
 
   canSetWorkItemState(): boolean {

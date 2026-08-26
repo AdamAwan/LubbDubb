@@ -122,6 +122,73 @@ Three consequences worth stating, because each is a thing a reasonable change wo
 would be invisible to `tsx`, which has no CSS loader and would throw when `test/console.test.ts` pulls
 those modules in.
 
+### Fields
+
+A field — a text box, a note box, a dropdown — is drawn once, at the **element**, in the `fields`
+block of `styles.css`. Not as a class, and the reason is the failure it replaces.
+
+Left to the call sites, the cockpit had eleven answers to what a field looks like. Four grounds
+(`--bg`, `--well`, `--panel`, `--panel-2`) among sites two rows apart, two radii, five type sizes,
+seven paddings — and, because neither an `<input>` nor a `<select>` inherits the page's font, two of
+those rules forgot `font: inherit` and drew in the UA's Arial beside Segoe UI prose. Underneath that
+was the sharper version: **a bare `<select>` had no rule at all**, so the two on the queue rail that
+offer a different parent and a different area path were drawn white-on-black by the platform, in the
+middle of a dark instrument. The tick boxes were the same story in one property — no `accent-color`
+anywhere but one rule in the plan sheet, so every checkbox in the cockpit drew in the platform's
+blue.
+
+None of that is a thing a class fixes. A class reaches the controls somebody remembered to put it on,
+which is exactly the set that was already fine; the ones that read wrong are the ones nobody had
+looked at. An element selector has no such gap — there is no field it can miss, including the ones
+not written yet — which makes this the same argument [scrollbars](#scrollbars) settle the same way:
+some of what the cockpit draws is furniture rather than a component, and furniture is drawn once for
+everything.
+
+Four decisions inside the block are load-bearing:
+
+- **The type exclusions ride inside `:where()`.** A tick box, a radio, a colour swatch, a file
+  picker and a slider are not text boxes and a ground and a padding would wreck them, so they are
+  excluded — but `input:not([type='radio'])` counts (0,1,1), which beats every `.pm-note`-shaped rule
+  in the sheet and would take the sizing off the twelve fields that had it right. `:where()`
+  contributes nothing, so the base weighs (0,0,1) and a single class still wins. A plain `:not()`
+  here is the bug, and it is not a subtle one to look at — it is subtle to _write_.
+- **`font: inherit`**, for the reason above. It is the one declaration a field cannot be left to
+  inherit on its own.
+- **The ring is inset** — `outline-offset: -1px` — because fields sit in flex rows at 6px gaps and a
+  halo outside one overlaps the control beside it. `:focus-visible`, so a select that has been used
+  does not keep a ring while its value is being read.
+- **`option` is given a ground.** Chromium hangs the dropdown's list off the control from the
+  platform palette unless the options say otherwise, so a dark cockpit otherwise gets a white menu.
+  It is one answer for both families rather than one each, and that is the trade: the alternative is
+  a `.cn option` — the descendant-element trap below, on markup four shared components render — for a
+  menu the platform draws in its own geometry anyway. macOS draws it entirely itself and ignores this,
+  which is its right: that one is the platform's menu, not the cockpit's.
+
+What a call site is left to say is what makes its field _that_ field — how wide it is, whether it
+grows, a mono face for a cron expression, a smaller size in a dense row. Nothing in either sheet
+restates a ground, an edge or a radius, and the one field that overrides its ground says why in place:
+`.kn-commit textarea` sits in a panel that _is_ the well, where an inset box on an inset box is a
+border and nothing else.
+
+**The console draws its own fields with `.cn-in`**, the counterpart to `.cn-btn`. The base draws in
+the page's family, which is a step lighter and a different edge from a console card, so a control the
+console draws itself wears the `--cn-*` face instead — same as `.cfg-in` and `.th-search` already do.
+It is a class and **not `.cn input`**, and that is the [layering](#tokens) rule rather than a
+preference: the console _embeds_ shared components, so a descendant selector on the element reaches
+inside the escalation card and the launch composer at (0,1,1) and restyles a component that is
+supposed to be restyleable through tokens alone. Until this section was written, `test/console.test.ts`
+checked the named classes and nothing checked an element selector — which is how there came to be one:
+a `.cn textarea` no console markup needed, silently overriding five shared components' note boxes,
+`rows={2}` included, with a 64px floor. It guards both shapes now.
+
+**`accent-color` is settled by container, not by control.** It is one property the browser owns the
+shape of, and the only thing the cockpit gets to say is which hue — but the two families genuinely
+differ here, `--accent` being orange and `--cn-accent` blue, so a single answer is wrong on one of
+them. So `body` carries the shared hue and `.cn` carries the console's, and each tick box inherits
+whichever surface it landed on with no call site naming either. Keyed on `input[type='checkbox']`
+instead it would not work at all: a declaration on the element beats an inherited one unconditionally,
+so the console's answer could never reach a box inside the console.
+
 ### Scrollbars
 
 Left alone, a scrollbar is the one thing on the screen the theme does not reach: the browser draws it
@@ -260,21 +327,27 @@ in React as well — rendering a different tree per width — buys nothing and c
 re-render on every drag, and a second definition of each boundary that will disagree with the first
 time either moves.
 
-| width     | arrangement                                                                             |
-| --------- | --------------------------------------------------------------------------------------- |
-| < 1100    | one column — rail, then situation area, then vivarium — scrolling as a single page      |
-| 1100–1199 | the rail beside the situation area (360px), vivarium on its floor; situation one column |
-| 1200–1499 | overview cards in two tracks; Fleet, Goals and Pull requests span both                  |
-| 1500–1999 | the goal page gains its right-hand column, and its plan waves go side by side           |
-| ≥ 2000    | overview cards in four tracks; the three spanning cards take two each                   |
+| width     | arrangement                                                                                    |
+| --------- | ---------------------------------------------------------------------------------------------- |
+| < 1100    | one column — rail, then situation area, then vivarium — scrolling as a single page             |
+| 1100–1199 | the rail beside the situation area (360px), vivarium on its floor; situation one column        |
+| 1200–1999 | overview cards in two tracks; the goal page gains its rail, and its plan waves go side by side |
+| ≥ 2000    | overview cards in four tracks; the three spanning cards take two each                          |
 
 **The breakpoints are therefore stated once**, in `console.css`, and each is a statement about a
-different surface: 1100 is the shell, 1200 the overview grid, 1500 the goal page, 2000 the overview
-again. The plan's waves use `auto-fit` above 1500 rather than a fixed track count, so how many waves
-sit in a row is a question about the card and not about the viewport — the same 1500px that turns the
-waves sideways also halves the card by giving the goal its right-hand column.
+different surface: 1100 is the shell, 1200 the overview grid _and_ the goal page, 2000 the overview
+again. The plan's waves use `auto-fit` above 1200 rather than a fixed track count, so how many waves
+sit in a row is a question about the card and not about the viewport.
 
-**The plan's waves stack vertically below 1500px** rather than scrolling sideways. A horizontally
+**The goal page moved from 1500 to 1200, and that is a consequence rather than a decision.** Both
+numbers were the same number: the plan's waves needed width, and the card was inside a 1.6fr column,
+so the point at which the waves could turn sideways was the point at which the column stopped halving
+them — around 1680px in practice, for a plan of three waves. The plan and the validation card are
+[full width now](#the-goal-page), outside the two-column grid entirely, so the waves answer only to
+the card and what is left in the grid is four row-lists. Neither needs 1500 of its own, and at 1200
+the situation area clears 800px with the shell's 360 taken for the rail.
+
+**The plan's waves stack vertically below 1200px** rather than scrolling sideways. A horizontally
 scrolling plan is the failure this layout is a reaction to.
 
 **Document order is reading order.** No card carries a CSS `order`; a section moved in `Overview.tsx`
@@ -335,6 +408,7 @@ once.
 | `sort`                               | the Knowledge table's order, `-` for the far end: `-asks` is most-asked-for first; `reach` ascending is the absent value                                                                                                 |
 | `fold`                               | the Knowledge tails an operator has **folded away**, as `rejected,retired` — the folded ones, so the page as it stands is a bare URL and nothing is hidden on arrival                                                    |
 | `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                                                                                                                 |
+| `open`                               | the goal page's reference sections held open, as `record,ticket`                                                                                                                                                         |
 | `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                                                                                                        |
 | `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched`; `any` is the absent value                                                                                                                                       |
 | `tracking`                           | what the harness is doing about it: `any` / `frozen`; `live` is the absent value, since the tab is the surface work happens on                                                                                           |
@@ -381,8 +455,9 @@ reads the `ticket*` fields off `place.ts` and asserts the hook forwards every on
 ## The queue rail — "Needs you"
 
 A permanent left column holding **every** blocking item in one list: escalations, plan proposals,
-permission requests, unanswered goal-profile proposals, usage-limit parks, bench tasks, close-outs,
-validate rows, dispatches the executor keeps refusing and the recovery hold. `buildNeedsYou`
+permission requests, goals the assay refused at intake, unanswered goal-profile proposals, usage-limit
+parks, bench tasks, close-outs, validate rows, dispatches the executor keeps refusing and the recovery
+hold. `buildNeedsYou`
 (`web/src/view/needsYou.ts`) is the merge, and it is pure.
 
 **The snapshot carries only the escalations that are still open** — the rail's own
@@ -447,6 +522,28 @@ it, or three buttons collapse into one rubber stamp. Like the profile gate it is
 the write — a proposal answered by three buttons that all 400 is the dead end this cockpit's rules
 exist to prevent.
 
+**`intake` is the fourth kind with no row of its own underneath it**, and the only one of the four that
+is a refusal rather than a proposal. It is read off `issue.assay.verdict === 'unclear'` — the goal
+assay's own hold, which stops pickup for the whole goal ([06](06-issue-pickup.md#block-or-inform-and-why-blocking-is-safe)) —
+and it is `yours` on the profile gate's terms: a whole goal's dispatch is held and no agent is sitting
+in it.
+
+It was drawn on the **tickets tab and nowhere else**, as a call-out above the list. That is a page an
+operator opens to groom the backlog, not to find out what is waiting on them — so the one verdict that
+stops a goal dead was the one ask the surface that exists to say what is waiting never mentioned, and a
+held goal read to anybody who did not open that tab as a goal that simply had not come up yet. The same
+argument the profile gate is on the rail for, and the same fix.
+
+The row's line says which ask it is and which goal it is about; the **assayer's sentence is quoted whole
+in the band**, never reworded and never clamped, because it is the only account of why the goal is held.
+Its verdict is one button — `Override → workable`, through `setIssueAssay`, the call the tickets tab
+already used — because the hold's other two exits are not buttons: it expires when the goal's own text
+changes, and it is cleared in the tracker.
+
+An **unwatched** item is never intake, whatever a stale verdict says: nothing assays a goal nobody opted
+in, so a verdict on one is left over from before it was dropped, and the drop outranks it. Derived from
+`world.issues` and never the retained runs, for the profile gate's reason.
+
 **`limit` is the one kind with no row of its own underneath it.** It is built from the _fleet_ —
 `state.parkedOnLimit`, keyed on the agent — because a usage-limit park raises no escalation on purpose:
 there is no question in it to answer ([10](10-agent-runtimes.md#the-limit-park)). Its verdict is
@@ -504,6 +601,7 @@ within it.
 | `reply`      | Reply       | amber | `↵`   | A drafted reply, held until you send it.               |
 | `merge`      | Merge       | amber | `⊕`   | A merge waiting on your verdict.                       |
 | `shortfall`  | Shortfall   | blue  | `✗`   | Delivered work that did not reach its goal.            |
+| `intake`     | Intake      | blue  | `◌`   | The assay could not say a goal is workable.            |
 | `profile`    | Profile     | blue  | `⊙`   | Which profile a goal runs on.                          |
 | `placement`  | Backlog     | amber | `▣`   | Nothing is held; the ticket is off the board.          |
 | `bench`      | Bench       | blue  | `◆`   | Work only a person can do. Informative, not broken.    |
@@ -724,16 +822,10 @@ either settles the row and the next snapshot clears both, with nothing kept in s
 
 Order on the page, top to bottom:
 
-1. **The goal header** — number, title, item type, workflow state, the assay verdict with the
-   assayer's own summary in its title, the conclusion verdict, the validation verdict as a settled
-   count (absent when the goal has no checks — "no plan" is a third reading and not a synonym for
-   clear, [20](20-validation.md)), when the run started, the agent count,
-   what it has cost, and how many parts have merged. Every chip quotes a reading the server already
-   made; nothing here is a second opinion. A `null` spend draws no reading at all, because nothing
-   was ever measured and `$0.00` would report a goal that cost nothing
-   ([18](18-observability.md#per-goal-spend)). The validation chip is the one that is a **button**:
-   the checks are on this page now, so the reading has somewhere to go, and a verdict you can act on
-   should not be the only chip that does nothing.
+1. **The goal header**, in three rows with fixed roles — what the goal _is_, then what anybody has
+   decided about it, then what you can do to it ([The header](#the-header)).
+   1a. **The track** — the goal's pipeline in one row, each stretch a way to the section that owns it
+   ([The track](#the-track)).
 2. **The "Needs you" bands** — every open ask on this goal, stacked, answerable in place. Red for
    asks blocking an agent, amber for the operator's own, the rail's own split carried over so a row
    and the band it opens read the same. **A goal with no ask draws no band at all** — a band that is
@@ -742,27 +834,130 @@ Order on the page, top to bottom:
    goal page's private component, because the goal page is not the only place an ask is read: the ask
    panel draws the same band for a row with no goal page. One band, two placements — a second wiring
    is a second set of verdicts to keep in step.
-3. **Validation** — how anyone checks the goal was met, and what anybody concluded from running each
-   check. Full width, above the two columns ([Validation](#validation-on-the-goal)).
-4. **The plan**, left to right in dispatch order.
-5. **The ticket as it stood at pickup** — what a plan, an assay or an ask is judged against, drawn
-   through `renderRichText` because the body is the _tracker's_ prose and Azure DevOps writes it as
-   HTML ([Tracker-authored prose](#tracker-authored-prose)).
-6. **Pull requests for this goal**, open and closed, with the court chip and the CI ladder.
-7. **Environments** — what a delivered goal still owes ([Environments](#environments)).
-8. **The record** — this goal's own subtree of the durable work graph, last because it is the only
-   card in the column that asks nothing of the reader: the five above it are the live reading and
-   what is still owed, and this is what is left of the same work once the snapshot has forgotten it
-   ([The record](#the-record-on-the-goal-it-belongs-to)).
+3. **The plan**, left to right in dispatch order. **Full width**, because the waves are a board read
+   left to right and a column is what kept them stacked to 1500px.
+4. **Validation** — how anyone checks the goal was met, and what anybody concluded from running each
+   check. Full width ([Validation](#validation-on-the-goal)), and **below the plan**, which is the
+   ordering the card itself has always asked for: its own subtitle says the checks are written by the
+   plan, and the plan was underneath it.
+5. **Two columns**, from 1200px. The live reading and what is still owed on the left — **pull
+   requests for this goal**, open and closed, with the court chip and the CI ladder, then
+   **environments** ([Environments](#environments)). On the right, **On this goal** (who is working
+   it now), **What you've asked for**, **The tail** and **Spend**. Below 1200 the two stacks are one
+   column.
+6. **The reference footer** — the two surfaces that ask nothing of the reader, each folded away
+   behind its own name: **the ticket as it stood at pickup**, drawn through `renderRichText` because
+   the body is the _tracker's_ prose and Azure DevOps writes it as HTML
+   ([Tracker-authored prose](#tracker-authored-prose)); and **the record**, this goal's own subtree
+   of the durable work graph ([The record](#the-record-on-the-goal-it-belongs-to)).
 
-At ≥1500px a right-hand column carries **On this goal** (who is working it now), **Spend** and **The
-tail**. Below that, the two stacks are one column.
+### The reference footer
+
+The ticket and the record were full cards in the middle of the live work — the ticket between the
+plan and the pull requests, the record at the foot of the same column — and between them they put a
+screen and a half of prose in front of everything that was still moving. Neither is owed anything: the
+ticket is read once at pickup and then never again, and the record is what is left of the work once
+the snapshot has forgotten it.
+
+So both are drawn **shut**, below the columns, behind their own names.
+
+**Which of them is open is a `Place`**, `?open=ticket,record`. A disclosure held in a `useState`
+compiles, renders and works right up until the back button steps over it or a reload drops it, and
+both are silent ([The address bar](#the-address-bar)). Open rather than closed is the list — the other
+way round from `collapsed` and `ticketColumns` — because here the empty list _is_ the page as it
+stands, which is the rule those two are inverted to satisfy.
+
+**The record's disclosure is its own, not the footer's.** Its heading carries the node count and only
+it knows that, so a heading drawn outside it would either carry no count or carry a stale one. That
+also keeps "fetched on open, never polled" true now the card no longer opens with the page: folded
+away it issues no request at all.
+
+### The header
+
+**Three rows with fixed roles**, rather than one row of everything with the controls floated off its
+end.
+
+1. **What the goal is** — `#390 · Validate job payloads in the catalog`, the item type, and the
+   tracker's workflow state in the operator's own colour. Neither chip is a verdict anybody passed on
+   the work, which is why they are up here and not in the row below.
+2. **What anybody has decided about it** — the assay verdict with the assayer's own summary in its
+   title, the conclusion verdict, and the validation verdict as a settled count (absent when the goal
+   has no checks: "no plan" is a third reading and not a synonym for clear, [20](20-validation.md)).
+   Every chip quotes a reading the server already made; nothing here is a second opinion. The
+   validation chip is the one that is a **button**: the checks are on this page, so the reading has
+   somewhere to go, and a verdict you can act on should not be the only chip that does nothing. After
+   the verdicts, one plain run of the measurements — when the run started, the agent count, what it
+   has cost — a step fainter, which is the difference between a reading you scan and a judgement you
+   read. A `null` spend draws no reading at all, because nothing was ever measured and `$0.00` would
+   report a goal that cost nothing ([18](18-observability.md#per-goal-spend)).
+3. **What you can do to it**, [below](#the-headers-controls).
+
+**How many parts have merged is deliberately not in row 2 any more.** It is the track's first stage,
+and stating it in both places is how a header and the card it summarises come to disagree.
 
 ### The header's controls
 
-Watch, the priority flag, the profile pin, the conclusion, raising a bug, the ticket, and ending the
-run.
+Ask, watch, the priority flag, the profile pin, the conclusion, raising a bug, the ticket, and ending
+the run — **in three groups, with the destructive one held out of all three**.
 
+| group  | controls                                      |
+| ------ | --------------------------------------------- |
+| read   | Ask ↗, Open ticket ↗ (always drawn)         |
+| steer  | Watch, Prioritise, the profile pin, More work |
+| settle | Mark done / Unfinish, Raise a bug             |
+| —      | End the run…, pushed to the far end           |
+
+The row was nine controls at one weight that **wrapped**, so no control had a stable position and no
+muscle memory could form. The groups are the fix and they are ordered by what an operator reaches for:
+what only reads, what steers the work, what settles it. A group does not wrap internally, so a narrow
+page breaks _between_ groups rather than through one — a control never loses the neighbours that say
+what kind of control it is.
+
+**Open ticket is always drawn, and resolves through three keys in order of how much
+each can be trusted**: the item's own `url`, which is the provider's; then
+`issue:<n>`, which `stateSnapshot` keys for every world issue _and_ every retained
+run and which nothing else ever writes; then `#<n>` last, because `buildRefUrls`
+walks the pull requests before the issues and the first writer wins — so on a
+tracker carrying both issue 412 and PR 412, `#412` is the _pull request's_ address.
+
+Both halves of that were faults, and both were silent. Resolving through `#<n>`
+alone opened the wrong thing on a number collision, and it made the control vanish
+on a **retained run** — `#<n>` is built from `world.issues`, and a run the harness
+kept after its ticket left the world is by definition not in that list, so the goals
+whose ticket is hardest to find by hand were the ones offering no way to it.
+
+When nothing resolves the control is still drawn, **inert rather than absent**: a
+`<span>` with `aria-disabled`, dimmed, saying in its title that the tracker gave the
+item no address and the harness could not derive one. A control that comes and goes
+is a row whose shape depends on what a provider happened to resolve, which is the
+opposite of what the groups are for; and "the ticket is not reachable from here" is a
+fact worth stating, where a missing button says nothing and reads as the cockpit
+having forgotten. It stops being an `<a>` because a link that leads nowhere is the
+dead end [refs](#links) exists to prevent.
+
+**`End the run…` is in no group and sits at the far end**, on an `auto` margin. Distance is the half of
+the warning a colour cannot carry: `cn-danger` says what the control does, and being the only thing
+over there says it is not one of the others.
+
+- **Ask** is the row's one control that writes nothing, and it is first for that reason: everything
+  after it acts on the goal, and this one only asks about it. An `<a>` carrying
+  `claude://code/new?q=/lubbdubb ask <n> &folder=<config.desktopFolder>`, built by the same
+  `desktopDeepLink` the plan sheet's **Discuss…** and the validation card's **Run it in Claude Code**
+  use ([20](20-validation.md#starting-a-run-from-the-cockpit)), so it opens the operator's own Claude
+  Code on the goal's checkout with the command already in the composer and the harness's whole record
+  of the goal one `goal_read` away ([11](11-mcp-tools.md#answering-a-question-about-a-goal)). It is
+  what the cockpit had no answer for before: a question about a goal — what was actually done, which
+  pull request, why four goes, is it on hallway yet — was answered by reading this page, reading the
+  repository, and joining the two by hand.
+  - **The question is not in the link.** The other three deep links start a job with one meaning, so
+    the whole command is prefilled; this one starts a conversation whose subject the operator has not
+    said yet, and `q` fills the composer without sending. What lands is `/lubbdubb ask 284` with the
+    cursor after it — the half they should not have to type — because there is no reading of a click
+    that says which question it was.
+  - **The command is in the title as well as the `href`**, the deep link's standing rule: the link
+    fires only on the machine the browser is on, and a client that is not installed answers nothing
+    at all, so an operator reading the cockpit from another desk is left with the line to type rather
+    than a control that did nothing.
 - **The watch toggle writes one tag.** `setIssueWatched` adds the watch label or takes it off, and
   the title says which — un-watching writes nothing in its place, so the goal lands back in the
   tickets tab's Unwatched filter rather than in a bucket of its own.
@@ -812,6 +1007,39 @@ run.
   is one they cannot. The live count is read over the same `issue:<n>` subtree the header's agent
   count uses, so the two agree by construction. The flagged-plan note is one more requirement _inside_
   the modal — [below](#saying-the-sentence-a-refusal-asks-for).
+
+### The track
+
+**The goal's pipeline in one row, each stretch a way to the section that owns it.** Plan → Validation →
+Shipped → Close-out, built by `buildGoalStrip` (`web/src/view/goalPage.ts`).
+
+It exists because the answer to _where has this goal got to_ was in four places and none of them was
+one: "2 of 5 parts merged" and "Validation 3/7" in the header, "5 parts" on the plan card, "2/3" per
+environment, four lamps in The tail — three screens apart, in three vocabularies.
+
+Three rules make it safe to put at the top of the page.
+
+- **Every reading is one a card below already draws.** The strip folds `parts`, `issue.validation`,
+  `environments` and the tail's own fields; it computes no verdict of its own. A stage that measured
+  something itself would be a fifth opinion that can disagree with the card it points at, which is the
+  fault it replaces, made bigger and moved to the top.
+- **A stage with nothing to measure draws no bar**, and `done` is `number | null` for that reason. Null
+  is a third reading and not a synonym for zero: a goal with no validation plan has no checks
+  outstanding, and an empty bar under "no checks" would report every one of them still to run. The same
+  distinction `ValidationVerdict` makes one layer down, and the same one the three reach verdicts make
+  for an environment ([24](24-environments.md#the-three-verdicts)) — which is why the Shipped stage
+  answers `unknown` in its own words, before it would ever say "not shipped".
+- **The Shipped stage is absent when no environment is configured**, exactly as the card is. A stage of
+  question marks on a deployment that never set one up is a feature announcing itself as broken.
+
+Each stage takes its hue from a `cn-t-*` tone alias, so it invents no colour and owes no new token —
+green settled, blue moving, amber held or failed, grey not reached.
+
+They are **anchors, not refs**: each jumps to one element on this page, so each is a `<button>` with a
+`scrollIntoView` and not an `<a href="#…">`. The cockpit's address bar is `Place`, and a hash the place
+knows nothing about is a history entry the back button steps through to nowhere. The `ANCHOR` map in
+`GoalPage.tsx` is keyed on `GoalStageAt`, so a stage the strip learns to draw cannot ship without
+somewhere to land — a missing entry is a compile error rather than a control that does nothing.
 
 ### The bands
 
@@ -887,6 +1115,41 @@ names with a present/missing fact resolved server-side, and the controls: Passed
 Waive, each opening a one-line note the server also requires, the hand-over, **Run it in Claude
 Code**, and one way back to `unrun` from any settled state.
 
+**Every row carries a rail on its left, coloured by state, and the hues are weighted rather than
+merely coded.** The chip already says the state in a word; the rail says it in a scan, which is the
+reading a card of nine checks actually gets. What is still owed draws at full hue — amber for `unrun`,
+red for `failed` — and what is done draws at a fraction of one, a `color-mix` of green at 45% for
+`passed` and the flat `--grey` for `waived`. A list of checks is a list of work left, so a done row at
+full strength is the card overstating how much of it there is. A withdrawn row's rail is transparent:
+it is not a state anybody is owed an action on.
+
+**A row still owed is washed in its own hue** — amber at 15% for `unrun`, red at 15% for `failed`, and
+amber at 7% for `deferred`, which is half of one: still owed, but waiting on something named rather
+than on somebody finding the time — so the outstanding checks are one shape a glance resolves before it
+resolves a word. A pass is washed too, in green at 6% — a settled row with no ground at
+all only says "not amber", which is a thing a reader works out rather than sees. The **ratio** is the
+whole of it: green loud enough to be its own state, quiet enough that a card of nine shows what is left
+before it shows what is done. A waiver takes no wash, because it is the one settled row whose reason is
+a decision rather than a reading, and the grey rail is what says so.
+The rail and the muted head are readings of a _row_; the wash is a reading of the _card_. It is the
+outstanding rows that lift rather than the settled ones sinking, which was the first attempt: this
+component is drawn on two stations, and the console's card ground is already the darkest value in that
+palette, so there is nothing below it to sink onto. A translucent wash owns no ground and works on
+both. It stays a wash on purpose — the amendment and hand-back bands are the two things on a closed
+row that must remain the loudest, so this has to read as tinted paper behind them, never as a surface
+competing with them.
+
+**A settled head is drawn a step back.** A passed or waived check is a reading somebody already took,
+and at the weight of one still to run it reads as work — a card of nine says "nine things to do" at a
+glance when it means two. So the title drops to `--muted` at a lighter weight, the letter and the
+identifying chips fade, and hover puts the ink back so the row still reads as a control. Three limits
+make it a de-emphasis and not a hiding: it is scoped to the **head**, so the amendment band, the
+hand-back band and the result note keep their full weight — those are the things a reader must not
+scroll past, and dimming them would undo the reason a closed row draws them at all; it lifts the
+moment a row is **opened**, because an operator who opened one is reading it; and it is deliberately
+lighter than the `.gone` treatment on a withdrawn check, since _withdrawn_ and _done_ are not the same
+news.
+
 **Run it in Claude Code** is the odd one out and is the reason it exists: it writes nothing. A desktop
 session is started from the operator's own Claude Code, not from here, so the control is an `<a>`
 carrying a `claude://code/new` deep link that opens that client on the goal's checkout with
@@ -952,6 +1215,23 @@ which was retired, with those parts below it.
 
 A part's row names its pull request as a way there rather than as text (`PR #412`), the one ref a wave
 carries; the goal it is under is the page it is already on.
+
+**A part carrying an open pull request draws that request's CI ladder and court chip, embedded from
+the pull-request card rather than re-derived.** The column a part stands in says where it is in
+_dispatch order_ and nothing at all about whether it is moving: "Now" covered a part with red CI, a
+part sitting on a reviewer and a part an agent was mid-way through, and telling the three apart meant
+scrolling to the pull-request card and matching PR numbers by eye — on the one surface whose whole
+job is to be read at a glance. The two components are `CiLadder` and `CourtChip`, the same two
+exports the card draws, for the reason the track strip is folded rather than written: a second
+reading of `ciVerdict` or `attention` beside the first is a second chance to classify a check the CI
+policy already classified, or to disagree about whose court a PR is in, from a component sitting
+nowhere near the one it duplicates.
+
+**A dead pull request's word is drawn only where it disagrees with the column.** The ladder is not
+drawn for one at all — on a closed PR the checks are history, which is why the card's own closed rows
+carry a word and no dots — and `merged` under the **Merged** heading is the heading a second time. What
+survives that cut is the pair that says something the board cannot: a merged pull request on a part
+grouped anywhere else, and a pull request closed without merging.
 
 **The agent on a part is a door, not an id.** The row used to end ` · agent_ab4sc`, which named
 nothing — agent ids are minted and an agent has no name — while the one thing an operator wanted from
@@ -1244,9 +1524,10 @@ It is a **lens**: nothing here, and nothing in the dispatcher, decides anything 
 
 ### The record, on the goal it belongs to
 
-A goal's own subtree of the graph, drawn as a card on its page (`WorkRecord`), below **Pull
-requests**. The roots of the work graph _are_ `issue:<n>` nodes, so a goal page was already sitting on
-top of its own record without drawing it — the card is `GET /api/work/:ref` and nothing else.
+A goal's own subtree of the graph, drawn as a card on its page (`WorkRecord`), in the
+[reference footer](#the-reference-footer) and folded away. The roots of the work graph _are_
+`issue:<n>` nodes, so a goal page was already sitting on top of its own record without drawing it —
+the card is `GET /api/work/:ref` and nothing else.
 
 **It fills a hole the page already had.** Every other card there reads the snapshot, and
 `closedPullRequests` remembers a merge for `closedPrWindowMs` and then drops it — so a goal that
@@ -1255,8 +1536,11 @@ work that demonstrably happened. It also carries what nothing else on the page k
 chip on a merge the harness never watched, concerns raised and cleared, and the requeues, sitting
 under the part they redid.
 
-Three things it does deliberately:
+Four things it does deliberately:
 
+- **Its disclosure is its own**, not the footer's — the heading carries the node count, and only this
+  card knows it. Folded away it fetches nothing at all, which is what keeps "on open, never polled"
+  true now that the card no longer opens with the page.
 - **The root is dropped.** The route returns the root with its subtree, and the root here is the page
   you are standing on. `depth`'s missing-parent arm then lands its children flush left on their own.
 - **A row draws a ref only for `issue:<n>` or `pr:<n>` exactly.** `refLabel` shortens a whole family
@@ -1304,15 +1588,15 @@ same items plus the closed ones, filtered by the same bucket. Two surfaces that 
 things about one item is the drift `src/watchLabels.ts` exists to prevent, one level up — so the
 backlog is deleted and every part of it is named a destination here rather than assumed to survive.
 
-| The backlog had                                | It is now                                                  |
-| ---------------------------------------------- | ---------------------------------------------------------- |
-| four groups (watched/intake/unwatched/ignored) | the **Watch** filter's values, now two                     |
-| intake pulled out of Watched                   | the **intake call-out** above the list                     |
-| `Override → workable` on intake rows           | the same button, the same call, on the same rows           |
-| features as headings, folds on `Place`         | `group=feature`, the same `collapsed` field                |
-| the name opening the goal page                 | unchanged — `selectGoal`, refs beside it                   |
-| 25 rows then "…and 31 more"                    | the keyset cursor and infinite scroll this tab already had |
-| the nav's unwatched count                      | the same number on the Tickets badge (`untriagedCount`)    |
+| The backlog had                                | It is now                                                   |
+| ---------------------------------------------- | ----------------------------------------------------------- |
+| four groups (watched/intake/unwatched/ignored) | the **Watch** filter's values, now two                      |
+| intake pulled out of Watched                   | a **lamp** on the held row, and its ask on the queue rail   |
+| `Override → workable` on intake rows           | the same button, the same call, in the rail's `intake` band |
+| features as headings, folds on `Place`         | `group=feature`, the same `collapsed` field                 |
+| the name opening the goal page                 | unchanged — `selectGoal`, refs beside it                    |
+| 25 rows then "…and 31 more"                    | the keyset cursor and infinite scroll this tab already had  |
+| the nav's unwatched count                      | the same number on the Tickets badge (`untriagedCount`)     |
 
 `?tab=backlog` **resolves to this tab** rather than falling through to the overview, which is what an
 unknown tab does: every bookmark and shared link to it would otherwise land somewhere else with
@@ -1562,38 +1846,39 @@ attribute: the config route refuses one on the way in, but the map also arrives 
 file. **Frozen keeps its dashed border** whatever colour its state carries — closed in the tracker is a
 fact about the item, not a shade of the state it stopped in.
 
-### Intake is pulled out, never greyed inside the list
+### Intake is raised on the rail, and marked in the list
 
-An `unclear` assay is the one intake reading that **stops dispatch** ([06](06-issue-pickup.md)). Among
-a page of rows it reads as a detail rather than as the thing holding all the work, so it is drawn as a
-call-out **above** the list: what is held, the assayer's own sentence quoted whole, and
-`Override → workable` beside it. A lamp marks the same rows in the table.
+An `unclear` assay is the one intake reading that **stops dispatch** ([06](06-issue-pickup.md)), and it
+is raised where every other ask waiting on a person is raised: [the queue rail](#the-queue-rail--needs-you),
+as an `intake` row. What is left here is the reading — a **lamp** on the held row, so a page of tickets
+still says which of them nothing is moving on.
 
-The sentence is quoted and never reworded — it is the only account of why the goal is held, so a
-paraphrase would be the only account there is, and wrong. An **unwatched** item is never intake,
-whatever a stale verdict says: "leave this alone" is the operator's own instruction and outranks a
-reading about a goal nobody is going to work.
+It was a call-out above this list, and that was the whole of it. The argument for pulling it out of the
+rows still holds — among a page of rows a hold reads as a detail rather than as the thing stopping the
+work — but the surface was wrong: this tab is where an operator grooms the backlog, and the rail is where
+they find out what is waiting on them. A held goal was invisible to anybody who did not open this tab,
+which is the same fault the profile gate was moved onto the rail to fix, and it is the same fix.
 
-Unlike the group it replaces, the call-out is **absent when nothing is held** rather than drawn empty.
-A group that vanishes when quiet reads as one that broke; an exception nobody has is not a heading.
+An **unwatched** item is never intake, whatever a stale verdict says: "leave this alone" is the
+operator's own instruction and outranks a reading about a goal nobody is going to work. The rail's
+derivation asks the same question of the same tag, so the lamp here and the row there cannot disagree.
 
 ### Unrecorded work
 
 What the harness did that nothing in the tracker accounts for, with `File a work item` and `Ignore`
 beside each row — since nobody outside can ever mark done what nothing records. `UnrecordedWork`, drawn
-as a second call-out above the list, below intake.
+as a call-out above the list.
 
 **It is here because it is triage.** Filing or ignoring is a verdict cast on a row, which is what this
 whole tab is for; it sat at the head of the work tab while that existed, and by the end it was the only
-part of that tab an operator ever acted on. It is drawn **below** the intake
-call-out because intake is the louder of the two: an unclear assay stops dispatch, while an unrecorded
-job is a debt that costs nothing until somebody outside asks what the harness has been doing.
+part of that tab an operator ever acted on. It is now the tab's only call-out — it shared the head of the
+list with intake until the intake hold moved to the rail.
 
 It reads `/api/work` on mount, **fetched on open and never polled** — the same route and the same
 reasoning as [the record panel](#the-record-panel), and the rows change on a pulse at most. Both
 surfaces reading one route is also what keeps them from disagreeing about what is outstanding.
 
-Like intake, it draws **nothing at all** when there is nothing outstanding. That is the opposite of the
+It draws **nothing at all** when there is nothing outstanding. That is the opposite of the
 rule the overview's cards obey, and deliberately: those are gauges an operator glances at the same spot
 for, where a card that vanishes when quiet is indistinguishable from one that broke — this is a call-out
 above somebody else's list, and a permanent "nothing to record" heading over the tickets table is a row
@@ -1609,14 +1894,15 @@ rows cleared themselves on the next pulse. Worth stating because it is the failu
 this one has: a list of things that are owed is read exactly as long as everything on it is owed.
 → [16](16-http-api.md#get-apiwork)
 
-### Two controls, and no more
+### One control, and no more
 
 This tab used to state that nothing in it changed the world. That was true of a record and is false of
 a work surface, and the sentence changed with the code rather than after it. What it says now is
-narrower and holds: **the watch switch and the intake override, and nothing else.**
+narrower and holds: **the watch switch, and nothing else.** It was two until the intake override went
+with its ask to the rail; a row is otherwise a reading, the lamp included.
 
-- Both write through calls that already existed — `POST /api/issues/:number/watch` and
-  `setIssueAssay` — so the merged surface introduces no new way to change the world.
+- It writes through a call that already existed — `POST /api/issues/:number/watch` — so the merged
+  surface introduces no new way to change the world.
 - The switch is **two-valued**, in both directions: Watch adds the tag, Unwatch takes it off, and
   there is no third state to draw or to land in.
 - **A container cascades, and the heading says so before the click** — `cascadeNote` states the
@@ -3152,6 +3438,22 @@ no new route, nothing the server has to learn. Reading a five-part plan and disa
 them is the ordinary case, and the only way to say so used to be to remember the slug and type it into
 a box at the bottom.
 
+**Two of the four buttons are not about the plan.** Beside Approve and Reject sit **Close the ticket**
+and **Hold — stop watching**, with **Draft a comment** between them, all three drawn only on a plan
+proposal because only a plan has a ticket behind it ([08](08-planning.md#backing-out-of-a-plan)).
+They are here as well as on the inbox card because this is the surface where the plan has actually
+been _read_, and reading it is what produces "this is not really an issue" — for which the only "no"
+used to be Reject, which asks a planner for a different plan for a goal nobody wants.
+
+Close is **disabled until there is a note**, the way the shortfall's overrule is and for a sharper
+reason: the note is posted on the tracker as the closing comment and outlives this harness, so an
+empty one shuts somebody's ticket for a reason nobody can read. Draft a comment puts a server-composed
+placeholder _in the box_ to be edited — it posts nothing, and what lands on the ticket is whatever is
+sent with the verdict. Hold takes a note optionally rather than requiring one — it decides nothing
+about the work, and its words are read by a planner rather than posted anywhere: it drops the watch
+tag and sends the plan back, so watching the ticket again produces a fresh plan instead of this one
+again.
+
 Approve / Reject appear only while the plan is `awaiting_approval`, and route through the same
 `decideProposal` the escalation card uses — one verdict, one implementation, so the rail's row clears
 whichever surface you decided from. Replan sits apart, because it settles nothing about the proposal in
@@ -3451,6 +3753,17 @@ delivery's reason and the correction the ticket gets, and an overrule with an em
 name on it. So the button is disabled rather than hidden until there is text, and the placeholder
 says which of the three arms needs it.
 
+A **plan proposal carries two more arms**, `Close the ticket` and `Hold — stop watching`, set apart
+below the two verdicts the way `Dismiss` is — because neither answers the question the card asked.
+Approve and Reject are both about the plan, and a rejection sends the goal back to a planner; these
+two are about the **ticket**, and they are what an operator reaches for when the plan is fine and the
+work is not wanted ([08](08-planning.md#backing-out-of-a-plan)). They post to
+[`/api/proposals/:id/back-out`](16-http-api.md#post-apiproposalsidback-out). `Draft a comment` sits
+between them and fills the note box from
+[`/api/proposals/:id/comment-draft`](16-http-api.md#get-apiproposalsidcomment-draft), which serves a
+draft and posts nothing. Close is disabled until there is text, for the overrule arm's reason and one
+more: those words go on somebody else's tracker as the reason the item closed.
+
 A card raised by an **unannounced stop** carries a clock. The chip in its head reads `done in 4m 12s`
 and the row beside `Open agent transcript` gains **Give me 15 minutes** next to **Mark work done** —
 the harness settles that agent itself when the countdown runs out
@@ -3561,6 +3874,16 @@ produced. Eleven of the thirteen are reachable by clicking, through the tickets 
 and `retained` are carried without being listed anywhere, because no surface lists a closed goal — both
 are still readings the wire ships and the goal page draws.
 
+**Every state a check can be in has a check in the fixtures.** Goal #395 carries ten, for the reason
+the pickup roll-call carries thirteen: `passed`, `failed`, `waived`, `deferred` and `unrun` are each
+weighted differently on the card ([Validation on the goal](#validation-on-the-goal)), and a weighting
+is not a thing anybody can judge from a demo that only ever shows two of them. The three readings that
+are not a pass are the ones a demo would otherwise never reach — recording one needs a note, and a note
+needs somebody to type it — and the withdrawn check is there because nothing in the cockpit amends a
+plan, so the fold that lists what an amendment dropped would never draw at all. The same fixture set
+carries every marker for _who_ ran a check: by hand, by the fleet, from a desktop session, claimed by
+one right now, handed back, and amended out from under a reading.
+
 **Schedules are real in the demo, and never fire there.** Writing a recurrence, editing it, pausing it
 and deleting it all work against the fixture state, and "run now" queues the job exactly as the launch
 composer does — which is the honest demo of the feature, since what a schedule _does_ is queue a job and
@@ -3593,7 +3916,9 @@ Ten files, split on what they can see:
 - `test/cockpitTheme.test.ts` — [the theme](#the-theme) and the token layer, which is also the only
   thing in `check` that reads the stylesheets: no literal outside a declaration, every `var()`
   resolving, the registry and the sheets naming the same tokens in both directions, each token's kind
-  matching the value it is declared with, and every preset — and paper — answering every literal.
+  matching the value it is declared with, every preset — and paper — answering every literal, and the
+  two [field](#fields) guards: that the base's type exclusions stay inside `:where()` where they cost
+  no specificity, and that `accent-color` is only ever declared on a container.
 - `test/insightExport.test.ts` — the [exports](#exporting-a-reading): the CSV quoting, the sections and
   their order, that figures leave unrounded, and that each caveat the panel speaks leaves as a row.
 - `test/markdown.test.ts` and `test/richText.test.ts` — the two prose renderers, and the line between
@@ -3605,8 +3930,10 @@ Ten files, split on what they can see:
 The renders are wrapped in a **clock pin**, because `buildDemoState` stamps every timestamp relative to
 `Date.now()` and the rendered relative times would drift between runs otherwise.
 
-`test/console.test.ts` holds the two structural assertions the layer split rests on — nothing under
-`console/` imports `api.js`, and `console.css` never targets a shared component's class — and pins the
+`test/console.test.ts` holds the three structural assertions the layer split rests on — nothing under
+`console/` imports `api.js`, `console.css` never targets a shared component's class, and it reaches no
+form control through `.cn` either, which is [the same rule](#fields) at the one selector shape that
+gets past naming a class — and pins the
 renders where being wrong would be worse than being absent: the rail carrying every blocking kind in one
 list, its array order surviving the grouping, the holding count agreeing with its noun, an empty queue
 muting rather than removing the rail, a group with no rows drawing no heading, a row with a goal being a
@@ -3614,7 +3941,8 @@ button and the recovery hold not, the ask drawn above the plan, a goal with no a
 goal page answering through the shared card, a held part quoting the reconciler, a retired plan drawing
 what it proposed rather than only saying it has no live parts, an HTML ticket drawn as HTML, a goal with
 no measured spend drawing no `$0.00`, the overview's five cards, an empty rack still drawing, the
-tickets tab's intake call-out, its rows being ways into their goals and its container cascade, the fault
+the intake hold arriving on the rail rather than on the tickets tab, that tab's rows being ways into
+their goals and its container cascade, the fault
 log keeping its clear at zero, a panel's two ways out, the demo gate on injection, the precedence
 between a goal and whichever tab the nav is on, all three tabs appearing in the nav (a destination added
 to `ConsoleTab` and forgotten there is a view nothing can reach) and `Work` appearing in none of them,

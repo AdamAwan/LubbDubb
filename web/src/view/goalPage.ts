@@ -277,3 +277,151 @@ export function buildGoalTrack(parts: readonly GoalPartView[]): GoalTrack {
     total: parts.length,
   };
 }
+
+/**
+ * Which of the goal page's sections a track stage points at. A name rather than
+ * an element id, because *where a reading lives on the page* is the page's
+ * business and this module has no business knowing what it called the `<section>`.
+ */
+export type GoalStageAt = 'plan' | 'validation' | 'environments' | 'tail';
+
+/** A tone the console already declares as a `cn-t-*` alias. No stage invents a colour. */
+type GoalStageTone = 'green' | 'blue' | 'amber' | 'grey';
+
+/**
+ * One stage of the goal's track — a stretch of the pipeline, with the reading
+ * that says how far through it the goal is.
+ */
+export interface GoalStage {
+  at: GoalStageAt;
+  /** The stage's own name, as the section it points at calls it. */
+  label: string;
+  /** How far through, in the words that section uses. Never a verdict of its own. */
+  reading: string;
+  tone: GoalStageTone;
+  /**
+   * How far through as a proportion, or **null when there is nothing to measure**.
+   *
+   * Null is a third reading and not a synonym for zero: a goal with no validation
+   * plan has no checks outstanding, and a bar drawn empty for it would say every
+   * check is still to run. The same distinction `ValidationVerdict` makes one
+   * layer down, and the same one `GoalReachStatus` makes for an environment.
+   */
+  done: number | null;
+}
+
+/**
+ * The goal's track: the pipeline in four stretches, each a way to the section that
+ * owns it.
+ *
+ * **Every reading here is one the page already draws further down.** The strip
+ * computes no verdict of its own — it folds `parts`, `issue.validation`,
+ * `environments` and the tail's own fields, which is what stops the top of the
+ * page disagreeing with the card it points at. That disagreement is the fault the
+ * strip replaces: the merged count, the settled count, the reach and the ticket
+ * state were four readings in four places, and answering "where has this goal got
+ * to" meant scrolling past all of them.
+ *
+ * The environments stage is **absent** when no environment is configured, exactly
+ * as the card is — a stage of question marks on a deployment that never set one up
+ * would be a feature announcing itself as broken.
+ */
+export function buildGoalStrip(page: GoalPageView): GoalStage[] {
+  const stages: GoalStage[] = [planStage(page), validationStage(page)];
+  if (page.environments.length > 0) stages.push(environmentStage(page));
+  stages.push(tailStage(page));
+  return stages;
+}
+
+/**
+ * The plan, and how much of it has landed.
+ *
+ * A plan that is not yet approved reads as its own status rather than as
+ * "0/0 merged": the parts do not exist until it is, so a proportion would be a
+ * measurement of nothing.
+ */
+function planStage(page: GoalPageView): GoalStage {
+  const base = { at: 'plan', label: 'Plan' } as const;
+  if (page.plan === null) return { ...base, reading: 'not drawn', tone: 'grey', done: null };
+  if (page.plan.status === 'planning') return { ...base, reading: 'being drawn', tone: 'blue', done: null };
+  if (page.plan.status === 'awaiting_approval')
+    return { ...base, reading: 'waiting on you', tone: 'amber', done: null };
+  if (page.plan.status === 'abandoned') return { ...base, reading: 'abandoned', tone: 'grey', done: null };
+
+  const track = buildGoalTrack(page.parts);
+  // A single-PR plan is a first-class outcome of the funnel with no parts at all,
+  // so "0 parts" is the shape of the plan rather than work outstanding.
+  if (track.total === 0) return { ...base, reading: 'one pull request', tone: 'grey', done: null };
+  return {
+    ...base,
+    reading: `${track.merged}/${track.total} parts merged`,
+    tone: track.merged === track.total ? 'green' : track.held > 0 ? 'amber' : track.now > 0 ? 'blue' : 'grey',
+    done: (track.merged / track.total) * 100,
+  };
+}
+
+/**
+ * The checks, settled against live. `failed` is what earns amber — a plan whose
+ * checks are merely unrun is in progress, and drawing that as a warning would make
+ * the tone meaningless on the goals that have actually gone wrong.
+ */
+function validationStage(page: GoalPageView): GoalStage {
+  const base = { at: 'validation', label: 'Validation' } as const;
+  const v = page.issue.validation;
+  if (v === null || v.total === 0) return { ...base, reading: 'no checks', tone: 'grey', done: null };
+  const settled = v.passed + v.waived;
+  return {
+    ...base,
+    reading: `${settled}/${v.total} settled`,
+    tone: v.state === 'clear' ? 'green' : v.failed > 0 ? 'amber' : 'blue',
+    done: (settled / v.total) * 100,
+  };
+}
+
+/**
+ * How far the landed work has travelled.
+ *
+ * `unknown` is answered before "not shipped" and in its own words, because the
+ * two are the reading this stage most needs to keep apart: a probe that could not
+ * say and work that genuinely has not moved look identical once folded together,
+ * and only one of them is about deployment.
+ * → docs/spec/24-environments.md#the-three-verdicts
+ */
+function environmentStage(page: GoalPageView): GoalStage {
+  const base = { at: 'environments', label: 'Shipped' } as const;
+  const envs = page.environments;
+  const reached = envs.filter((e) => e.status === 'reached');
+  const furthest = reached[reached.length - 1];
+  const done = (reached.length / envs.length) * 100;
+  if (furthest !== undefined) {
+    return {
+      ...base,
+      reading: `reached ${furthest.environment}`,
+      tone: reached.length === envs.length ? 'green' : 'blue',
+      done,
+    };
+  }
+  const partial = envs.find((e) => e.status === 'partial');
+  if (partial !== undefined) {
+    return { ...base, reading: `${partial.environment} ${partial.landed}/${partial.total}`, tone: 'amber', done };
+  }
+  if (envs.some((e) => e.status === 'unknown')) return { ...base, reading: 'not known', tone: 'grey', done: null };
+  return { ...base, reading: 'not shipped', tone: 'grey', done };
+}
+
+/**
+ * What is left once the parts are in: whether anything checked the goal itself,
+ * and whether the ticket is shut.
+ *
+ * No proportion — the tail is three unlike things rather than a count of one
+ * thing, so the honest answer to "how far through" is that there is nothing to
+ * measure.
+ */
+function tailStage(page: GoalPageView): GoalStage {
+  const base = { at: 'tail', label: 'Close-out' } as const;
+  const { issue } = page;
+  if (issue.state !== 'open') return { ...base, reading: issue.state, tone: 'green', done: 100 };
+  if (issue.shortfall) return { ...base, reading: 'fell short', tone: 'amber', done: null };
+  if (issue.delivery) return { ...base, reading: 'delivered, ticket open', tone: 'blue', done: null };
+  return { ...base, reading: 'not reached', tone: 'grey', done: null };
+}

@@ -157,6 +157,7 @@ const NEED_KIND_LABEL: Record<NeedKind, string> = {
   reply: 'A drafted reply is waiting to be sent',
   merge: 'A merge is waiting on your verdict',
   shortfall: 'Delivered work did not reach its goal',
+  intake: 'The assay could not say a goal is workable',
   permission: 'An agent wants a command',
   profile: 'A goal is waiting on which profile to run on',
   placement: 'A goal is missing from the backlog',

@@ -148,6 +148,23 @@ export interface IssueCreateInput {
   relatedTo: number | null;
 }
 
+/**
+ * A tracker item the harness is closing without doing the work — the operator's
+ * "this is not really an issue" (the plan back-out).
+ *
+ * `reason` is the provider's own vocabulary for *why* it closed, not prose: GitHub
+ * carries `not_planned` alongside `completed`, and the two read very differently on
+ * a timeline. It is deliberately the only field beyond the number, because the
+ * operator's words are a **comment** — a separate write, and one every provider has
+ * — rather than something smuggled into a state change only one of them can hold.
+ */
+export interface IssueCloseInput {
+  /** The issue / work item to close. */
+  number: number;
+  /** Why it closed, in the two readings every tracker distinguishes. */
+  reason: 'completed' | 'not_planned';
+}
+
 export interface IssueCommentInput {
   /** The issue / work item to comment on. */
   number: number;
@@ -197,6 +214,24 @@ export interface ActionSink {
   setPrLabel(input: PrLabelInput): Promise<SendResult>;
   /** Add/remove a label on an issue / work item — the cockpit's watch/ignore toggle. Throws if it fails. */
   setIssueLabel(input: IssueLabelInput): Promise<SendResult>;
+  /**
+   * Whether any configured integration can close a tracker item at all.
+   *
+   * Asked rather than inferred, for {@link canSetWorkItemState}'s reason and with
+   * the same caller in mind: the plan back-out **offers** "close the ticket", and a
+   * surface that promised it where nothing implements it would leave the operator
+   * believing the item is shut when it is still on the board. Where this is false
+   * the back-out still comments, concludes and un-watches — the tracker transition
+   * is simply left as the human act it has always been on that provider.
+   */
+  canCloseIssue(): boolean;
+  /**
+   * Close a tracker item — the plan back-out's "this is not really an issue".
+   * Idempotent: closing an item that is already closed is a success. Throws if it
+   * fails, including where nothing implements it, which is why
+   * {@link canCloseIssue} exists.
+   */
+  closeIssue(input: IssueCloseInput): Promise<SendResult>;
   /**
    * Whether any configured integration can write a work item's state at all.
    *

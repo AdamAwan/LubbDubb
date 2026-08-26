@@ -435,3 +435,57 @@ test('a refused value is not written, so a half-typed hex cannot blank the cockp
   applyToken('--bg', null, target);
   assert.deepEqual([...target.props], []);
 });
+
+/**
+ * The field base is an element rule, which is what lets it reach a control nobody
+ * remembered — and the reason it can be one is that its type exclusions sit inside
+ * `:where()` and cost no specificity. Written as a plain `input:not(…)` the rule
+ * counts (0,1,1) and beats every `.pm-note`-shaped rule in the sheet, so twelve
+ * fields silently lose the width, the padding and the mono face their own class
+ * gives them. Nothing else in `check` reads a selector.
+ * → docs/spec/17-cockpit.md#fields
+ */
+test('the field base leaves its type exclusions weightless', () => {
+  const heavy: string[] = [];
+  for (const sheet of SHEETS) {
+    const visible = withoutComments(readFileSync(sheet, 'utf8'));
+    // The exclusion list itself carries commas, so this reads the *start* of a
+    // form-control selector rather than trying to split one off a selector list.
+    for (const match of visible.matchAll(/(input|textarea|select):not\(/g)) heavy.push(`${sheet} → ${match[0]}`);
+  }
+  assert.deepEqual(heavy, [], 'an exclusion outside :where() outranks the classes that size a field');
+  const base = withoutComments(readFileSync('web/src/styles.css', 'utf8'));
+  assert.ok(base.includes('input:where(:not('), 'the base is still there to be outranked');
+});
+
+/**
+ * `accent-color` is answered by *container* and never by control, because the two
+ * families disagree — `--accent` is orange, `--cn-accent` blue — and an inherited
+ * value loses to any declaration. So a rule keyed on the input type does not merely
+ * pick the wrong hue in one place: it makes the console's answer unreachable for
+ * every tick box inside the console, which is the whole set that surface has.
+ * → docs/spec/17-cockpit.md#fields
+ */
+test('accent-color is inherited from a container, never declared on a control', () => {
+  const owners: string[] = [];
+  for (const sheet of ['web/src/styles.css', 'web/src/console/console.css']) {
+    const lines = withoutComments(readFileSync(sheet, 'utf8')).split('\n');
+    let selector = '';
+    lines.forEach((line) => {
+      const open = /^([^{}]+)\{\s*$/.exec(line);
+      if (open) selector = open[1]!.trim();
+      else if (/accent-color\s*:/.test(line)) owners.push(`${sheet} → ${selector}`);
+    });
+  }
+  assert.deepEqual(
+    owners,
+    [
+      'web/src/styles.css → body',
+      // The one exception, and it is not a family: a met acceptance criterion is
+      // green because it is a verdict, not because of the surface it is on.
+      'web/src/styles.css → .pm-crit input',
+      'web/src/console/console.css → .cn',
+    ],
+    'the hue belongs to the surface a box lands on',
+  );
+});
