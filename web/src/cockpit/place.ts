@@ -68,7 +68,7 @@ export interface Place {
    * out would draw a demotion that did not happen.
    * → `docs/spec/27-knowledge.md#in-the-cockpit`
    */
-  knowledgeView: 'list' | 'table';
+  knowledgeView: 'queue' | 'list' | 'table';
   knowledgeShow: 'all' | 'waiting' | 'reaching' | 'settled';
   knowledgeSort: 'reach' | 'claim' | 'scope' | 'observers' | 'disputes' | 'asks' | 'age';
   knowledgeDesc: boolean;
@@ -82,6 +82,35 @@ export interface Place {
    * → `docs/spec/27-knowledge.md#in-the-cockpit`
    */
   knowledgeFolded: string[];
+  /**
+   * Which claim the Knowledge **queue** is standing on, by fact id, or null for
+   * the oldest one that needs a ruling.
+   *
+   * On `Place` and not a `useState` for the reason every field here is one, and
+   * this one twice over: a reload has to land on the card the operator was ruling
+   * on rather than back at the top of a queue they have half drained, and *later*
+   * has to be a step the back button can step back through. Null rather than the
+   * first id, so a bare link to the tab is the queue as the harness orders it and
+   * never a claim pinned by whoever last shared the URL.
+   * → `docs/spec/27-knowledge.md#the-queue-is-the-page`
+   */
+  knowledgeQueue: string | null;
+  /**
+   * The Knowledge **queue's** three folds that an operator has opened, by id.
+   *
+   * Open rather than closed, which is the other way round from
+   * {@link knowledgeFolded} and deliberately a second field rather than the same
+   * one read backwards: the empty list has to be the page as it stands, and the
+   * queue's tails start shut where the list's start drawn. One field carrying both
+   * meanings would be a field that means the opposite thing depending on `?kn=`,
+   * which is the drift every parameter here is spelled apart to avoid.
+   *
+   * What the old rule protected is kept by the count on each heading: a fold that
+   * states its own size cannot let *retired* read as *deleted*, and it tells a list
+   * you have finished with from one that lost rows.
+   * → `docs/spec/27-knowledge.md#the-queue-is-the-page`
+   */
+  knowledgeOpen: string[];
   /**
    * The goal page's reference sections that are **open**, by name — `ticket` and
    * `record`.
@@ -215,11 +244,16 @@ export const NOWHERE: Place = {
   scratchpad: null,
   fact: null,
   goalOpen: [],
-  knowledgeView: 'list',
+  // The queue, which is what a bare link to the tab means: the page an operator
+  // opens several times a day answers *what is on me*, and the nine headings that
+  // answer *what is in this store* are a click away at `?kn=list`.
+  knowledgeView: 'queue',
   knowledgeShow: 'all',
   knowledgeSort: 'reach',
   knowledgeDesc: false,
   knowledgeFolded: [],
+  knowledgeQueue: null,
+  knowledgeOpen: [],
   configTab: 'values',
   configGroup: null,
   insightsView: 'economics',
@@ -279,7 +313,15 @@ const PANEL_ALIASES: Readonly<Record<string, ConsoleTab>> = {
   findings: 'knowledge',
   lessons: 'knowledge',
 };
-const KNOWLEDGE_VIEW: readonly Place['knowledgeView'][] = ['list', 'table'];
+const KNOWLEDGE_VIEW: readonly Place['knowledgeView'][] = ['queue', 'list', 'table'];
+/**
+ * The queue's three folds, validated on the way in like every other parameter
+ * here: a hand-edited `?see=` naming no fold is a section held open that does not
+ * exist. Spelled here rather than imported from `knowledgeQuery.ts` because that
+ * module names this one — the list is held to `QUEUE_FOLDS` by
+ * `test/knowledgeQuery.test.ts`.
+ */
+const KNOWLEDGE_QUEUE_FOLDS: readonly string[] = ['cold', 'settled', 'store'];
 const KNOWLEDGE_SHOW: readonly Place['knowledgeShow'][] = ['all', 'waiting', 'reaching', 'settled'];
 const KNOWLEDGE_SORT: readonly Place['knowledgeSort'][] = [
   'reach',
@@ -374,10 +416,15 @@ export function readPlace(search: string): Place {
     // `kn`, not `view`: the tickets tab and the Insights page already share that
     // parameter between them, and a third reader of it is a page that opens
     // showing whatever one of the other two was last set to.
-    knowledgeView: KNOWLEDGE_VIEW.find((v) => v === param(query, 'kn')) ?? 'list',
+    knowledgeView: KNOWLEDGE_VIEW.find((v) => v === param(query, 'kn')) ?? 'queue',
     knowledgeShow: KNOWLEDGE_SHOW.find((s) => s === param(query, 'show')) ?? 'all',
     ...readKnowledgeSort(param(query, 'sort')),
     knowledgeFolded: readStrings(param(query, 'fold')),
+    knowledgeQueue: param(query, 'q'),
+    // `see`, not `open`: the goal page's disclosures already own that parameter,
+    // and two places reading one is a page that opens showing whatever the other
+    // one was set to.
+    knowledgeOpen: readStrings(param(query, 'see')).filter((id) => KNOWLEDGE_QUEUE_FOLDS.includes(id)),
     configTab: CONFIG_TABS.find((t) => t === param(query, 'section')) ?? 'values',
     // `keys`, not `group`: the tickets tab already owns `?group=` (its feature
     // heading mode), and two places reading one parameter is a place that opens
@@ -597,7 +644,13 @@ export function placeQuery(place: Place): string {
   // the record and the record then the ticket are one place rather than two
   // history entries.
   if (place.goalOpen.length > 0) query.set('open', place.goalOpen.join(','));
-  if (place.knowledgeView !== 'list') query.set('kn', place.knowledgeView);
+  if (place.knowledgeView !== 'queue') query.set('kn', place.knowledgeView);
+  if (place.knowledgeQueue !== null) query.set('q', place.knowledgeQueue);
+  // Sorted on the way out as on the way in, so opening cold then settled and
+  // settled then cold are one place rather than two history entries.
+  if (place.knowledgeOpen.length > 0) {
+    query.set('see', [...place.knowledgeOpen].sort((a, b) => a.localeCompare(b)).join(','));
+  }
   if (place.knowledgeShow !== 'all') query.set('show', place.knowledgeShow);
   // One parameter for the pair, because they are one answer: a column and the end
   // of it you are reading from. Two would make `?sort=asks&dir=desc` and

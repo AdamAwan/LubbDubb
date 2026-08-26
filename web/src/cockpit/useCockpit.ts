@@ -278,6 +278,7 @@ export function useCockpit(): CockpitStatus {
       placePet: (id, placed) => then(api.placePet(id, placed)),
       blendPet: (id) => then(api.blendPet(id)),
       setFactReach: (id, reach) => then(api.setFactReach(id, reach)),
+      mergeFacts: (id, members) => then(api.mergeFacts(id, members)),
       // A store write and never a publish: the desk's next pulse re-derives the
       // document and puts it, so an operator's click never waits on a push to
       // another continent.
@@ -397,6 +398,8 @@ export function useCockpit(): CockpitStatus {
       knowledgeSort: place.knowledgeSort,
       knowledgeDesc: place.knowledgeDesc,
       knowledgeFolded: place.knowledgeFolded,
+      knowledgeQueue: place.knowledgeQueue,
+      knowledgeOpen: place.knowledgeOpen,
       insightsView: place.insightsView,
       insightsWindow: place.insightsWindow,
       poolProject: place.poolProject,

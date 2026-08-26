@@ -28,7 +28,7 @@ import type { GoalAppraisalVerdictName } from '../goalAppraisal.js';
 import type { AreaPathTree } from '../../intake/placement.js';
 import type { RemedySubmission } from '../../remedies/remedies.js';
 import type { FactContradiction, FactProposal } from '../../knowledge/knowledge.js';
-import type { FactContradictionOutcome, FactProposalOutcome } from '../../store/knowledge.js';
+import type { FactAgreementOutcome, FactContradictionOutcome, FactProposalOutcome } from '../../store/knowledge.js';
 import { issueOrigin, originIssueNumber } from '../../plans/planning.js';
 import { type McpTool, toolJson, type ToolCallResult } from '../protocol.js';
 
@@ -134,6 +134,11 @@ export interface AgentToolTarget {
     agentId: string,
     proposal: FactProposal,
   ): { ok: true; outcome: FactProposalOutcome } | { ok: false; error: string };
+  agreeWithFact(
+    agentId: string,
+    factId: string,
+    evidence: string,
+  ): { ok: true; outcome: FactAgreementOutcome } | { ok: false; error: string };
   contradictFact(
     agentId: string,
     contradiction: FactContradiction,

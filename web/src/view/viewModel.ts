@@ -190,11 +190,15 @@ export interface CockpitView {
    * reason: every surface reads one shape, and the panel stays a component that is
    * *told* where it is.
    */
-  knowledgeView: 'list' | 'table';
+  knowledgeView: 'queue' | 'list' | 'table';
   knowledgeShow: 'all' | 'waiting' | 'reaching' | 'settled';
   knowledgeSort: 'reach' | 'claim' | 'scope' | 'observers' | 'disputes' | 'asks' | 'age';
   knowledgeDesc: boolean;
   knowledgeFolded: string[];
+  /** Which claim the queue is standing on, or null for the oldest one waiting. */
+  knowledgeQueue: string | null;
+  /** Which of the queue's three folds are open — opened, never folded away. */
+  knowledgeOpen: string[];
   /** Which reading the Insights page is showing. */
   insightsView: InsightsView;
   /** The stretch of time every reading on that page is measured over. */
@@ -279,11 +283,13 @@ interface ViewInputs {
    */
   viewingFact?: string | null;
   /** Optional for `collapsed`'s reason: the defaults are what a bare URL means. */
-  knowledgeView?: 'list' | 'table';
+  knowledgeView?: 'queue' | 'list' | 'table';
   knowledgeShow?: 'all' | 'waiting' | 'reaching' | 'settled';
   knowledgeSort?: 'reach' | 'claim' | 'scope' | 'observers' | 'disputes' | 'asks' | 'age';
   knowledgeDesc?: boolean;
   knowledgeFolded?: string[];
+  knowledgeQueue?: string | null;
+  knowledgeOpen?: string[];
   /** Which reading the Insights page is showing. */
   insightsView: InsightsView;
   /** The stretch of time every reading on that page is measured over. */
@@ -408,10 +414,14 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     hatching: input.hatching,
     viewingScratchpad: input.viewingScratchpad,
     viewingFact: input.viewingFact ?? null,
-    knowledgeView: input.knowledgeView ?? 'list',
+    // The queue, for `Place`'s reason: a bare link to the tab is *what is on me*,
+    // and the nine headings that answer *what is in this store* are a click away.
+    knowledgeView: input.knowledgeView ?? 'queue',
     knowledgeShow: input.knowledgeShow ?? 'all',
     knowledgeSort: input.knowledgeSort ?? 'reach',
     knowledgeDesc: input.knowledgeDesc ?? false,
     knowledgeFolded: input.knowledgeFolded ?? [],
+    knowledgeQueue: input.knowledgeQueue ?? null,
+    knowledgeOpen: input.knowledgeOpen ?? [],
   };
 }

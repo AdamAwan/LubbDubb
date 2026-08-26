@@ -18,6 +18,7 @@ export function ConfirmButton({
   title,
   pendingLabel = 'Working…',
   resetMs = 3000,
+  hotkey,
 }: {
   label: string;
   confirmLabel: string;
@@ -26,6 +27,15 @@ export function ConfirmButton({
   title?: string;
   pendingLabel?: string;
   resetMs?: number;
+  /**
+   * The key a surface with a keyboard presses this button by, as a `data-kn-key`
+   * attribute for that surface to find — never a listener of its own.
+   *
+   * The whole point of it being an attribute: a keyboard that clicks the rendered
+   * button cannot fire a confirmation the button is not offering, and the two
+   * presses this control exists for stay two presses on the key as well.
+   */
+  hotkey?: string;
 }) {
   const [armed, setArmed] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -59,6 +69,7 @@ export function ConfirmButton({
 
   return (
     <button
+      data-kn-key={hotkey}
       className={`btn danger ${armed ? 'armed' : ''} ${flash} ${className}`.replace(/\s+/g, ' ').trim()}
       onClick={handleClick}
       onBlur={disarm}

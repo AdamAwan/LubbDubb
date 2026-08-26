@@ -438,6 +438,7 @@ test('a claim queued as a job carries its provenance into the job it becomes', (
       createdAt: TAKEN_AT,
       project: null,
       keepLocal: false,
+      supersededBy: null,
       updatedAt: TAKEN_AT,
     },
     [
@@ -1097,6 +1098,10 @@ test('a claim is a write, so it stays structurally attributed — there is no ar
   // actually did. So the schema offers nothing that could name a different agent.
   const schema = advertisedSchema(system, one, 'raise');
   assert.deepEqual(Object.keys(schema.properties).sort(), [
+    // `agreeWith` names a *claim*, never an agent or a goal: the observer on the
+    // corroboration it writes is still the credential's, so agreeing on purpose
+    // widens what an agent can say and not who it can say it as.
+    'agreeWith',
     'claim',
     'contradicts',
     'evidence',

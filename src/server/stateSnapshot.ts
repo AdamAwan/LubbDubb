@@ -59,6 +59,7 @@ import {
   ridesSystemPrompt,
 } from '../knowledge/block.js';
 import { knowledgeBlockCost } from '../knowledge/cost.js';
+import { isCold } from '../knowledge/cold.js';
 import { checkScopeDrift, checkSightings } from '../knowledge/drift.js';
 import { defaultWindow } from '../insightsWindow.js';
 import { acceptanceCriteria, bySlug, partDepth, planIssueNumber } from '../plans/parts.js';
@@ -809,6 +810,7 @@ export function buildStateSnapshot(
       // world it reads, and a "days since" computed from `Date.now()` in the view
       // layer would be a second implementation of the verdict.
       const drift = checkScopeDrift(fact, sightings, { now: readAt, staleDays: config.knowledgeScopeStaleDays });
+      const counts = factCounts.get(fact.id);
       return {
         ...fact,
         corroborations: 0,
@@ -817,9 +819,21 @@ export function buildStateSnapshot(
         openContradictions: 0,
         asks: 0,
         lastAskedAt: null,
-        ...factCounts.get(fact.id),
+        ...counts,
         scopeStale: drift?.stale ?? false,
         scopeLastMatchedAt: drift?.lastMatchedAt ?? null,
+        // Derived here rather than recorded, and taken beside the counts it reads
+        // for `scopeStale`'s reason: an age against a configured window computed in
+        // the browser would be a second implementation of the verdict the fold's
+        // own count is taken from.
+        cold: isCold(
+          fact,
+          { corroborations: counts?.corroborations ?? 0, asks: counts?.asks ?? 0 },
+          {
+            now: readAt,
+            coldDays: config.knowledgeColdDays,
+          },
+        ),
       };
     }),
     // Every attempt to put one in the repository, the abandoned ones included:
@@ -828,6 +842,10 @@ export function buildStateSnapshot(
     // verdict over the work graph, taken here rather than in the browser for the
     // reason every other count on this row is.
     knowledgeGraduations: graduations,
+    // Which proposals a machine thinks are one claim. A suggestion table read
+    // straight out — nothing here has joined, promoted or barred anything, and the
+    // page draws a cluster whose merge is the operator's click.
+    knowledgeSimilarities: store.listSimilarities(),
     // What that list actually sends, from the renderers that send it.
     knowledgeDelivery: delivery,
     // What sending it costs, over the window Insights opens on. The block's length

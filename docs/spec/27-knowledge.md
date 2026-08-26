@@ -343,6 +343,93 @@ Corroborations are rows in their own table, each carrying the agent, the goal, t
 agent's own words** — never a counter on the fact. The count is what promotes; the words are what an
 operator reads to decide whether it should have.
 
+### One claim, written two ways
+
+Agreement is what carries a claim out of one agent's head, and `claimsMatch` is what decides whether a
+call is agreement. It is prose containment — two keys equal, or one wholly inside the other over a
+twenty-four character floor — so it answers yes for a restatement that appends a qualifier and no for
+everything else. Two agents who hit one wall and wrote it down in their own words are everything else.
+
+What that costs is not the duplicate row, which is cheap. It is that **the gate never fires**: both
+claims sit at `proposal`, each with one voice, each reaching nobody, and the second agent's call — the
+most useful call anybody makes here — was recorded as a second copy of a claim nothing will ever carry.
+The store then grows in the one section that answers no question, which is the half an operator sees,
+and the fleet re-learns the same wall a third time, which is the half nobody sees.
+
+**So there are two matchers, and the second one never reaches the bar.** `claimsMatch` is untouched: it
+decides what `proposeFact` joins, and it is what a rejection is enforced by. Beside it,
+`claimsSimilar` in `src/claims.ts` — token overlap within one scope, above a floor, and no
+containment rule — which decides **nothing**. It proposes.
+
+One matcher doing both is the version of this that must not be built. Loosening `claimsMatch` widens
+the rejection bar by exactly what it gains in agreement: a claim nobody has rejected is refused by
+name, and the refusal names a rejected claim that is not the one being raised. The agent is told it is
+barred and cannot argue, the operator is told nothing at all, and the claim the fleet needed is the one
+that never lands. Two functions, one strict and one advisory, is what keeps a suggestion from being
+enforcement — and `test/knowledgeCluster.test.ts` holds `proposeFact` and the bar against the strict one, so a
+merge of the two fails rather than passes.
+
+**A similarity is a suggestion, and a merge is an operator's click.** `KnowledgeClusterDesk`
+(`src/knowledge/cluster.ts`) takes the pass on a clock of its own rather than every pulse — the
+comparison is every proposal against every other within its scope, the proposal set is the part of the
+store that grows, and nothing waits on a cluster. It writes rows to `knowledge_similarities` — a pair,
+a score and when it was taken — and the [page](#in-the-cockpit) draws a cluster: one row, the members'
+own sentences under it, and a control **on each member**, because the operator picks which wording the
+fleet reads and a machine that chose would be choosing that on a reading it was explicitly not trusted
+to act on. Nothing merges itself.
+`MIN_CONTAINMENT`'s argument is the whole reason, one step out: a wrong merge is worse than a duplicate
+because it hides one agent's report inside another's, and a merge nobody approved is a wrong merge
+nobody can see.
+
+**A merge rides `superseded`, and invents nothing.** The members' corroborations move onto the
+surviving claim and the members become `superseded` naming it — through `superseded_by`, the other end
+of `supersedes`, which an amendment fills from the sharper side and a merge has no way to — the reach that already means *a
+sharper claim stands in its place*, which is what a merge asserts. They are not deleted and not
+retired: four phrasings of one wall are the evidence it was hit four times, and an operator asking
+whether the survivor is worth injecting is asking exactly that. The scope is part of the match, as it
+is everywhere else here: the same sentence about one check and about the fleet is two claims, and a
+cluster never crosses that line.
+
+**The gate is untouched by any of it.** After a merge the count is `distinctCorroborators`' as before —
+observations, unioned over goal and session — so four voices from four goals carry the survivor to
+`lookup` by the rule two voices from two goals already carry anything. A merge does not promote; it
+lets the promotion that was already earned be counted.
+
+## What has gone cold
+
+This store has exactly one exit and it is a person. Nothing ages, nothing lapses but a notice, and
+`retired` is a click. A fleet fills it at fleet speed and an operator drains it at operator speed, so
+the arithmetic has one answer over a long enough run: the page is mostly claims nobody will ever rule
+on, and the four that need a decision are somewhere in them.
+
+A claim is **cold** when all of these are true, and it is a reading of the rows the store already
+holds:
+
+| It is                             | Because                                                             |
+| --------------------------------- | ------------------------------------------------------------------- |
+| at `proposal`                     | the one reach that reaches nobody                                   |
+| carrying one voice, its author's  | nothing has agreed, which is the only thing that moves a proposal   |
+| never asked for                   | no agent has gone looking for it either                             |
+| older than `knowledgeColdDays`    | thirty days by default; `0` turns the reading off                   |
+
+**Derived, never recorded**, for `scopeStale`'s reason exactly: a recorder is a second record that has
+to be kept true, and a recorder that quietly stopped writing would reproduce the silence rather than
+reveal it.
+
+**It applies to `proposal` and to nothing else, and that is what makes it safe.** A proposal rides no
+block, answers no `knowledge_ask`, and is in no prompt — so there is nothing for cold to take off any
+agent. It changes what the page draws and it changes nothing else: the reach is untouched, the row goes
+on saying what it said, and a claim that went cold is answered to nobody exactly as it was the day
+before. Pointed at any live reach it would be a demotion by a clock the claim never carried, which is
+the thing this document refuses in every other place it could have been introduced —
+[no reading acts](#what-nothing-does), and this one is no exception because it acts on nothing.
+
+**Cold is not retired and not a fourth terminal state.** Nothing has been judged and nothing is barred.
+The next corroboration makes it warm again by making it a claim two goals have seen, and the case that
+matters most is a corroboration arriving through a
+[merge](#one-claim-written-two-ways): four cold singletons are one warm claim with four voices, and
+neither the fold nor the clock had an opinion about it.
+
 ## Contradiction, and why it does not delete
 
 An agent that finds a fact contradicted by the code in front of it says so, through `raise`'s
@@ -680,6 +767,78 @@ Both are named in `MCP_PROTOCOL_ADDENDUM` rather than at a point of use — the 
 `test/mcpChannel.test.ts` forces on every tool. Every agent may write to this store and every agent
 may read it, so there is no one dispatch prompt that could name them.
 
+### The frame is not the claim
+
+An agent hits a flaky check while working `pr:512` and writes down what it saw: _"test X is flaky and
+nothing to do with PR 512."_ Every word of it is true, and it is the wrong sentence — because it was
+written to whoever is reading PR 512, and PR 512 is the one place this claim will never be needed
+again.
+
+It costs twice, and the second cost is the expensive one. The claim is not a statement about the
+repository, so an agent that meets it in a prompt next month has to work out whose task it was and
+whether any of it still applies. And the ref is **inside the claim key**, so no other agent's wording
+can equal it or contain it: the claim most in need of being found again is the one the matcher can
+never find. Every wall hit on a different goal files a fresh singleton, forever.
+
+**So the harness takes its own ref out, and keeps the agent's sentence.** The caller's `originRef` is
+resolved from the credential already; a claim naming it is naming the one thing the store does not need
+told. The ref is stripped from the claim, the agent's original wording is kept verbatim as the first
+line of the evidence — where the task context has always belonged — and the tool result says what was
+done and why. It is `aboutRef` is never `originRef`, arriving at the same rule from the other end.
+
+**A mechanical edit and never a semantic one.** The only thing removed is a ref the harness can prove
+redundant, because it holds it. Nothing here judges whether prose is "about the repository", ranks a
+claim's wording, or rewrites a sentence it merely dislikes — that is a classifier, it would be wrong in
+a way no test could see, and the agent would have no way to tell that what it filed is not what it
+said.
+
+`stripOwnFrame` in `src/knowledge/frame.ts` is the whole of it, and its one rule beyond removing the ref
+is held to a closed list of function words: a fragment the ref leaves behind — *"and nothing to do
+with"* — is dropped only where every word in it is on that list, so a tail carrying any word that
+asserts something stays exactly where the agent put it, dangling or not. Every word added to that list
+is a word the harness may delete from somebody's sentence, which is why it is short and why
+`test/knowledgeFrame.test.ts` asserts a real clause survives.
+
+**And it is not a refusal.** A refusal an agent cannot satisfy is a claim lost, and a lost claim is the
+one outcome this store cannot recover from: filing has never been what puts a sentence in front of the
+fleet, so a badly framed row costs almost nothing and a row that was never filed costs the whole
+purpose. What the result must not do is stay quiet — an agent told nothing files the same shape
+tomorrow, and the rewrite that nobody was told about is a second thing to be wrong about silently.
+
+### Agreeing on purpose
+
+The most useful call an agent can make here is agreement, and today it can only be made by accident —
+by typing a sentence that happens to contain, or be contained by, one somebody else already typed. An
+agent that has read a claim in its own prompt, hit exactly that wall, and wants to say so has no way to
+say it.
+
+`raise` takes one more optional argument. `agreeWith` names a claim by id, and the call is recorded as
+a corroboration of it with the caller's own observation — the matcher is not consulted at all, because
+there is nothing left for it to guess.
+
+| Present       | And the call is                                                                        |
+| ------------- | -------------------------------------------------------------------------------------- |
+| `contradicts` | an amendment: this claim does not fit the code in front of me, and here is what does    |
+| `agreeWith`   | a corroboration: I saw the same thing, on my own goal, and here is what I saw          |
+| neither       | a claim, matched against what stands as it is today                                    |
+
+The two cannot both be present: a call that agrees with a claim and contradicts it is two rulings on
+one row, and the refusal says so rather than picking one.
+
+**It is also what the near-match answer asks for.** A filed claim whose
+[similarities](#one-claim-written-two-ways) found near neighbours it did not join comes back naming
+them — ids, wording, and how many voices each already has — with the one sentence that makes the answer
+actionable: if one of these is what you meant, call `raise` again with `agreeWith`. **The claim is
+filed either way**, never held pending a reply, because a round trip is a claim that may not come back:
+an agent that runs out of turn, or decides it has better things to do, must not be the reason the fleet
+never learned something.
+
+**The gate is untouched, and the bar is too.** An agreement is a corroboration from the caller's goal,
+and two different goals are still what carries a claim to `lookup` — so an agent agreeing with its own
+earlier claim moves nothing. `agreeWith` naming a rejected claim is refused by name exactly as raising
+its words would be: the bar is about the claim, never about the spelling of the call that reaches for
+it.
+
 ### The doors that closed, and what is left of them
 
 `report_finding`, `knowledge_propose`, `knowledge_notice` and `knowledge_contradict` are **gone**. No
@@ -808,7 +967,7 @@ is a link to *what the fleet keeps asking for that nobody has vouched for*, and 
 which the tickets tab and the Insights page already share between them — a third reader of one
 parameter is a page that opens showing whatever one of the other two was last set to.
 
-The page reads top to bottom in the order things demand attention: **Live notices** with their clocks,
+`?kn=list` reads top to bottom in the order things demand attention: **Live notices** with their clocks,
 **Needs you** — the corroborated claims waiting on the one decision that is yours — then **Injected**,
 **On lookup**, **One voice**, **Gone somewhere better**, **Superseded**, **Retired**, and the **Rejected**
 tail. A row carries the claim, its scope as a reference, its corroboration count, its contradiction
@@ -827,11 +986,86 @@ which of them is a tail.
 **A tail may be folded away, and none of them starts that way.** *On lookup* and everything below it
 carries a fold, so an operator who has finished with a list can collapse it and `?fold=rejected,retired`
 is what that spells; the heading and its count stay either way, so a collapsed tail still says what it
-holds. **Nothing is folded by default**, because a claim hidden on arrival would leave no way to tell a
-list you have finished with from one that lost rows, and *retired* would read as *deleted* — the
-collision the two words were separated to avoid, asserted in `test/console.test.ts`. The three headings
+holds. **Nothing is folded by default** on the list, because a claim hidden on arrival would leave no way to
+tell a list you have finished with from one that lost rows, and *retired* would read as *deleted* — the
+collision the two words were separated to avoid, asserted in `test/console.test.ts` against `?kn=list`,
+where the rule holds unrevised. The [queue](#the-queue-is-the-page) revises it for itself, and the same
+test holds it to what the revision rests on: a fold that states its own size. The three headings
 that reach an agent — *Live notices*, *Needs you*, *Injected* — carry no fold at all: a page that can
 hide what the fleet is being told is not a governance surface.
+
+### The queue is the page
+
+Nine headings, every one of them open, is a page that answers *what is in this store* — and an operator
+opens it several times a day to answer *what is on me*. As a list, that question is a chip they have to
+click, and the four rows behind it are somewhere in three hundred and seventy-eight.
+
+`?kn=` takes a third value, and **`queue` is the absent one**: a bare link to the tab opens on the
+queue, `?kn=list` is the nine headings exactly as they are, and `?kn=table` is unchanged. Nothing is
+deleted — the list is one click away and it is still the surface that shows the store's shape.
+
+**The queue draws one claim: the oldest that [`waitingOn`](#narrowing-is-a-filter-and-a-filter-never-moves-a-claim)
+answers for.** Oldest first, because a queue whose top is the same claim every morning is a queue an
+operator stops opening — the one they keep skipping is exactly the one that must come back up. It is
+the same predicate the filter uses and never a second copy of it: the card that is drawn, the count in
+the nav badge and the reason on the row are three readings of one function.
+
+The card carries the claim, its scope as a reference, why it is waiting in the words the filter already
+uses, and the corroborations with **each observer's own sentence** — an operator ruling on whether the
+fleet should be told something is reading the evidence, not a count of it.
+
+**The controls are the five rulings and the three exits, each drawn only where the store would take
+it** — and the only thing this changes about the exits is where they stand. **Queue job** and **File
+ticket** sit beside promote and retire rather than behind them, because *this is work somebody should
+do* is one of the answers to *how far does this claim carry*, and a control an operator has to go
+looking for is a claim that stays in the store. Sending a claim on is also what
+[empties this page for good](#graduated-is-not-the-top-of-a-ladder--it-is-a-different-medium): the
+tracker holds it, the fleet stops being told about work already in hand, and the row leaves.
+
+**Nothing reads a claim to decide what it is for.** Every card offers the exits the store permits, and
+no classifier sorts claims into work and knowledge on the operator's behalf. That is the taxonomy
+`raise` exists to remove ([the intake asks nothing an agent cannot answer](#the-intake-asks-nothing-an-agent-cannot-answer)),
+and putting it back at the operator's end would be the same mistake with a different victim.
+
+**A key for every ruling, and rejection still takes two.** The keyboard is what makes a queue faster
+than a list, and the one asymmetry it must not flatten is the one the two words were separated for:
+retiring is the cheap act and rejecting bars a claim by name. So reject is the same key twice, the
+second on the confirmation — [retire is one and reject is two](#retiring-is-not-rejecting) is a rule
+about what each costs, not about which surface happens to be saying it.
+
+**Later is not a ruling and writes nothing.** It advances to the next card, and where the queue stands
+is `?q=<id>` on `Place` like every other piece of where-am-I in the cockpit — so a reload lands on the
+same claim, and the back button steps back through the ones already ruled on rather than out of the
+tab. A `?q=` naming a claim that has since been ruled on is not an error worth a screen: it is the
+ordinary case — a ruling takes the claim out of the queue — and the answer to it is the next card.
+
+The keyboard **presses the control the card actually drew**, found by a `data-kn-key` attribute rather
+than by a handler of its own. A second implementation of *which ruling the store would take here* is a
+key that offers an exit on a claim the route refuses, with nothing red; this way a key that names no
+button on this card does nothing at all, and rejection stays two presses because the button it presses
+is the same two-step confirm.
+
+Under the card sit **three folds, each carrying its count**: what has [gone cold](#what-has-gone-cold),
+what is settled, and the whole store as the table. That is the page. Which of them is open is `?see=`
+on `Place` — the other way round from `?fold=`, and a second parameter rather than that one read
+backwards: these start shut where the list's tails start drawn, and one parameter meaning the opposite
+thing depending on `?kn=` is exactly the drift every parameter in the address bar is spelled apart to
+avoid ([17](17-cockpit.md#the-address-bar)).
+
+**This revises "nothing is folded by default", and keeps what that rule was protecting.** The rule
+exists so that _retired_ can never read as _deleted_, and so that a list an operator has finished with
+can be told from one that lost rows. A fold with its count on it says both of those in one line: the
+tail is named, its size is stated, and one click has it back. What the old rule bought at the price of
+nine open sections, the count buys at the price of one — and what it was actually protecting against
+was a claim disappearing without trace, which a heading that states its own size cannot do. The three
+headings that reach an agent are not foldable there and are not folded here: they are what an empty
+queue draws.
+
+**An empty queue is a state worth drawing.** It says what the fleet is being told, what that costs
+against the block budget, and leaves the three folds where they were — never a blank page and never a
+congratulation. Nothing on you is the state this store is meant to be in, and an operator arriving at
+it should be able to see, without clicking anything, what their last decisions actually put in front of
+the fleet.
 
 ### Narrowing is a filter, and a filter never moves a claim
 

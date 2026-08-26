@@ -110,6 +110,7 @@ import type {
   KnowledgeCorroboration,
   KnowledgeFact,
   KnowledgeGraduation,
+  KnowledgeSimilarity,
   GraduationReading,
   LocalRun,
   Plan,
@@ -435,6 +436,21 @@ export interface KnowledgeFactView extends KnowledgeFact {
    * rather than assert it.
    */
   scopeLastMatchedAt: string | null;
+  /**
+   * Whether this claim has gone **cold**: a `proposal` nobody has agreed with, no
+   * agent has asked for and no operator has ruled on, older than
+   * `knowledgeColdDays`.
+   *
+   * The verdict is the server's for `scopeStale`'s reason — it is a comparison
+   * against a configured window, and an age taken from `Date.now()` in the browser
+   * would be a second implementation of it, free to disagree with the count on the
+   * fold beside it.
+   *
+   * **A reading about drawing and nothing else.** It moves no reach, takes no claim
+   * out of any prompt — a proposal is in none — and the next corroboration makes it
+   * warm again. Always false while `knowledgeColdDays` is `0`.
+   */
+  cold: boolean;
 }
 
 /**
@@ -1160,6 +1176,17 @@ export interface CockpitState {
    * attempt that failed and the one in flight.
    */
   knowledgeGraduations: KnowledgeGraduationView[];
+  /**
+   * Which proposals a machine thinks are one claim, as pairs — most alike first.
+   *
+   * **Suggestions, and the page draws them as clusters an operator merges with a
+   * click.** Nothing here has joined, promoted or barred anything: `claimsMatch` is
+   * strict and untouched, and this is `claimsSimilar`'s advisory answer. Shipped as
+   * rows for the reason every other count on that page is server-side — a
+   * similarity recomputed in the browser is free to disagree with the one an
+   * operator acted on. → [27](../docs/spec/27-knowledge.md#one-claim-written-two-ways)
+   */
+  knowledgeSimilarities: KnowledgeSimilarity[];
   /**
    * Bugs the operator raised from a story row, oldest first — `filing` while the
    * desk agent writes one, `filed` with a ref once it exists.
@@ -1978,6 +2005,7 @@ export type {
   KnowledgeCorroboration,
   KnowledgeFact,
   KnowledgeGraduation,
+  KnowledgeSimilarity,
   Plan,
   PlanEvidence,
   PlanNarrative,

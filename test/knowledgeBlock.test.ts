@@ -200,6 +200,7 @@ function fact(id: string, over: Partial<KnowledgeFact> = {}): KnowledgeFact {
     supersedes: null,
     project: null,
     keepLocal: false,
+    supersededBy: null,
     originRef: 'issue:41',
     ruledAt: '2026-01-01T00:00:00.000Z',
     resolvesWhen: null,

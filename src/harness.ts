@@ -215,6 +215,7 @@ interface HarnessDeps {
    * what it writes.
    */
   graduations?: { run(): void };
+  clusters?: { run(): void };
   /**
    * The cross-fleet pool's one desk: polls everybody else's documents into the
    * mirror, and publishes this fleet's when they have moved. Absent = no pool
@@ -448,6 +449,12 @@ export class Harness extends EventEmitter {
       // states. Beside the other bookkeeping and not in the dispatcher for
       // `notices`' reason: it staffs nobody and no rule reads a fact.
       this.deps.graduations?.run();
+      // Which proposals a machine thinks are one claim. Beside the two desks above
+      // and not in the dispatcher for their reason — it staffs nobody and no rule
+      // reads a suggestion — and its position in the pulse is not load-bearing at
+      // all: nothing waits on a cluster, it takes its own cadence, and the page an
+      // operator opens is the only thing that reads what it writes.
+      this.deps.clusters?.run();
       // The distance above `fleet`: what other fleets have vouched for, landed here,
       // and what this fleet has vouched for, sent out.
       //

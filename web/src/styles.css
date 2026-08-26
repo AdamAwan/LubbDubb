@@ -2025,6 +2025,16 @@ select:disabled {
   font-size: 13px;
   margin: 0;
 }
+/* The queue's one card, given the room a page's subject gets. Everything on it is
+   the section above's — a card, a heading, an act row — so this sets the spacing
+   and takes no colour of its own: a hex here would be a surface no theme can
+   reach. → docs/spec/17-cockpit.md#tokens */
+.kn-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
 .kn-section > p {
   margin: 0;
 }
@@ -2034,6 +2044,23 @@ select:disabled {
   border-radius: var(--r-lg);
   padding: 8px 12px;
   font-size: 13px;
+}
+/* A suggested cluster: the members drawn together, so four phrasings of one wall
+   read as four phrasings rather than as four rows a page apart. Bordered rather
+   than tinted — a merge has not happened, and a colour would say something has.
+   Every value here is a token for the sheet's one rule: a hex at a use site is a
+   surface no theme can reach. → docs/spec/17-cockpit.md#tokens */
+.kn-cluster {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-left: 2px solid var(--border);
+  padding-left: 8px;
+}
+.kn-cluster-member {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 /* Rejected and committed alike: settled, kept visible, and out of the way. */
 .kn-card.resolved {

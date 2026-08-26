@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3';
 import { nanoid } from 'nanoid';
-import { claimKey, claimsMatch } from '../claims.js';
+import { claimKey, claimOverlap, claimsMatch, claimsSimilar } from '../claims.js';
 import {
   amendmentProposal,
   contradictableFact,
@@ -24,6 +24,7 @@ import type {
   KnowledgeCorroboration,
   KnowledgeFact,
   KnowledgeGraduation,
+  KnowledgeSimilarity,
 } from '../types.js';
 import { tableColumns, type ColumnMigrations, type TableRebuild } from './migrate.js';
 import type { StoreContext } from './context.js';
@@ -67,6 +68,12 @@ export const KNOWLEDGE_COLUMNS: ColumnMigrations = {
     where_at: 'TEXT',
     project: 'TEXT',
     keep_local: 'INTEGER',
+    // Which claim stands in a superseded one's place. Null on every row from
+    // before it existed, and null spells *nothing stands in its place* — which is
+    // what those rows already drew, so there is no backfill here: an older
+    // superseded claim was replaced by an amendment that names it from the other
+    // side, and the page has never drawn the link the other way round.
+    superseded_by: 'TEXT',
   },
   knowledge_corroborations: { fleet_id: 'TEXT' },
   knowledge_graduations: { exit: 'TEXT', ticket_ref: 'TEXT' },
@@ -273,7 +280,226 @@ export class KnowledgeStore {
       outcome: existing ? 'corroborated' : 'filed',
       fact: this.promoteOnCorroboration(fact, corroborations),
       corroborations,
+      // The near neighbours this claim did *not* join, so the intake can say so.
+      // **The claim is filed either way** and never held pending a reply: a round
+      // trip is a claim that may not come back, and an agent that runs out of turn
+      // — or decides it has better things to do — must not be the reason the fleet
+      // never learned something. Only on a fresh row: a call that joined a claim
+      // has already found the one it meant.
+      nearby: existing
+        ? []
+        : this.nearMatches(fact).map((other) => ({
+            id: other.id,
+            claim: other.claim,
+            corroborations: distinctCorroborators(this.listCorroborations(other.id)),
+          })),
     };
+  }
+
+  /**
+   * Record that this agent saw what a claim already says — an agreement made **on
+   * purpose** rather than by accident (`raise` naming `agreeWith`).
+   *
+   * The most useful call an agent can make here is agreement, and until this it
+   * could only be made by typing a sentence that happened to contain, or be
+   * contained by, one somebody else had already typed. An agent that has read a
+   * claim in its own prompt, hit exactly that wall, and wants to say so had no way
+   * to say it.
+   *
+   * **The matcher is not consulted at all**, because there is nothing left for it
+   * to guess: the agent named the row. What is *not* skipped is the bar — a
+   * rejected claim is refused by name exactly as raising its words would be, since
+   * the bar is about the claim and never about the spelling of the call that
+   * reaches for it.
+   *
+   * **The gate is untouched.** An agreement is a corroboration from the caller's
+   * own goal, and two *different* goals are still what carries a claim to
+   * `lookup` — so an agent agreeing with its own earlier claim moves nothing.
+   * → `docs/spec/27-knowledge.md#agreeing-on-purpose`
+   */
+  agreeWithFact(id: string, observer: FactObservation): FactAgreementOutcome {
+    const fact = this.getFact(id);
+    if (!fact) return { outcome: 'unknown' };
+    if (fact.reach === 'rejected') {
+      return {
+        outcome: 'refused',
+        error:
+          `An operator has rejected that claim, so agreeing with it changes nothing: "${fact.claim}" (${fact.id}). ` +
+          `Rejected means it was judged not true. If what you saw genuinely differs from it, raise the sharper ` +
+          `version with contradicts: "${fact.id}" — an amendment is exempt from its parent's bar.`,
+      };
+    }
+    // The reaches a re-raise may not join either, and refused in the same words:
+    // a claim nobody is being told is not a claim a voice can carry anywhere, and
+    // an agent that believes it has agreed with one has been told something untrue
+    // about what it just did. Raising it afresh re-dates it, with its own evidence,
+    // which is the rule `retired` exists to state.
+    if (fact.reach === 'superseded' || fact.reach === 'retired') {
+      return {
+        outcome: 'refused',
+        error:
+          `That claim is ${fact.reach} and reaches nobody, so a voice on it carries nothing: "${fact.claim}" ` +
+          `(${fact.id}). If you saw it yourself, raise it as its own claim — that files a fresh row with your ` +
+          `evidence and today's date rather than resurrecting a judgement nobody has revisited.`,
+      };
+    }
+    this.recordCorroboration(fact.id, observer);
+    const corroborations = distinctCorroborators(this.listCorroborations(fact.id));
+    return { outcome: 'recorded', fact: this.promoteOnCorroboration(fact, corroborations), corroborations };
+  }
+
+  /**
+   * Replace the whole set of suggested clusters with what the pass just saw.
+   *
+   * A whole replace and never an append, because a suggestion is a reading of the
+   * store as it stands: a claim that has since been corroborated, merged or ruled
+   * on is not a member of anything, and a row left behind would go on offering a
+   * merge into a claim that is no longer there. The score and the stamp are the
+   * pass's own, so *when this was taken* is a fact about the reading rather than
+   * about the first time anything like it was noticed.
+   *
+   * It decides nothing. → `docs/spec/27-knowledge.md#one-claim-written-two-ways`
+   */
+  recordSimilarities(pairs: readonly { leftId: string; rightId: string; score: number }[]): void {
+    const at = this.ctx.now();
+    this.ctx.db.transaction(() => {
+      this.ctx.db.prepare(`DELETE FROM knowledge_similarities`).run();
+      const insert = this.ctx.db.prepare(
+        `INSERT INTO knowledge_similarities (id, left_id, right_id, score, created_at) VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT (left_id, right_id) DO UPDATE SET score=excluded.score, created_at=excluded.created_at`,
+      );
+      for (const pair of pairs) insert.run(`kns_${nanoid(10)}`, pair.leftId, pair.rightId, pair.score, at);
+    })();
+  }
+
+  /**
+   * The live claims in one scope that look like this one and are not it — the
+   * answer a freshly filed claim comes back with.
+   *
+   * **Taken now rather than read off `knowledge_similarities`**, because the row
+   * being asked about was written a millisecond ago and the pass runs on its own
+   * clock: a near-match answer that waited ten minutes to exist is a near-match
+   * answer no agent is still in a turn to act on.
+   *
+   * It decides nothing, exactly as the table does not. What it is for is the one
+   * sentence that makes the answer actionable: *if one of these is what you meant,
+   * call raise again with agreeWith*.
+   */
+  nearMatches(fact: KnowledgeFact, limit = 3): KnowledgeFact[] {
+    const key = claimKey(fact.claim);
+    const rows = this.ctx.db
+      .prepare(
+        `SELECT * FROM knowledge_facts
+           WHERE scope=? AND id<>? AND reach IN ('proposal','lookup','injected')
+             AND (expires_at IS NULL OR expires_at > ?)`,
+      )
+      .all(fact.scope, fact.id, this.ctx.now()) as FactRow[];
+    return rows
+      .map(rowToFact)
+      .map((other) => ({ other, score: claimOverlap(key, claimKey(other.claim)) }))
+      .filter(({ other }) => claimsSimilar(key, claimKey(other.claim)))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map(({ other }) => other);
+  }
+
+  /** Every suggested cluster, as pairs. Read by the cockpit and by nothing that decides anything. */
+  listSimilarities(): KnowledgeSimilarity[] {
+    const rows = this.ctx.db
+      .prepare(`SELECT * FROM knowledge_similarities ORDER BY score DESC, rowid ASC`)
+      .all() as SimilarityRow[];
+    return rows.map((r) => ({
+      id: r.id,
+      leftId: r.left_id,
+      rightId: r.right_id,
+      score: r.score,
+      createdAt: r.created_at,
+    }));
+  }
+
+  /**
+   * Fold a cluster into the claim an operator kept.
+   *
+   * **A merge rides `superseded` and invents nothing.** The members' corroborations
+   * move onto the survivor and the members become `superseded` naming it — the
+   * reach that already means *a sharper claim stands in its place*, which is what a
+   * merge asserts. They are not deleted and not retired: four phrasings of one wall
+   * are the evidence it was hit four times, and an operator asking whether the
+   * survivor is worth injecting is asking exactly that.
+   *
+   * **The gate is untouched by any of it.** After the merge the count is
+   * {@link distinctCorroborators}' as before — observations, unioned over goal and
+   * session — so four voices from four goals carry the survivor to `lookup` by the
+   * rule two voices from two goals already carry anything. A merge does not
+   * promote; it lets the promotion that was already earned be counted.
+   *
+   * The scope is part of the match everywhere else here, so it is part of this: the
+   * same sentence about one check and about the fleet are two claims, and a merge
+   * never crosses that line.
+   */
+  mergeFacts(survivorId: string, memberIds: readonly string[]): FactMergeOutcome {
+    const survivor = this.getFact(survivorId);
+    if (!survivor) return { outcome: 'unknown' };
+    const members = memberIds.filter((id) => id !== survivorId).map((id) => this.getFact(id));
+    if (members.some((member) => member === null)) return { outcome: 'unknown' };
+    const live = members as KnowledgeFact[];
+    if (live.length === 0) return { outcome: 'refused', error: 'a merge needs a claim to fold in' };
+    if (survivor.reach === 'rejected' || survivor.reach === 'superseded') {
+      return {
+        outcome: 'refused',
+        error: `the claim you kept is ${survivor.reach} and reaches nobody — folding voices onto it carries nothing`,
+      };
+    }
+    const crossed = live.find((member) => member.scope !== survivor.scope);
+    if (crossed) {
+      return {
+        outcome: 'refused',
+        error:
+          `these are not one claim: "${crossed.claim}" is scoped ${crossed.scope} and the one you kept is ` +
+          `scoped ${survivor.scope}. The same sentence about one check and about the fleet carry different ` +
+          `costs to be wrong and reach different agents`,
+      };
+    }
+    const settled = live.find((member) => member.reach === 'rejected' || member.reach === 'superseded');
+    if (settled) {
+      return {
+        outcome: 'refused',
+        error: `"${settled.claim}" is ${settled.reach} already — there is nothing left of it to fold in`,
+      };
+    }
+    const at = this.ctx.now();
+    return this.ctx.db.transaction((): FactMergeOutcome => {
+      for (const member of live) {
+        // The voices move rather than being counted twice: a corroboration is an
+        // observation, and the observation was made whichever wording it was
+        // written under. `distinctCorroborators` unions them over goal and session
+        // afterwards, so two phrasings from one goal stay one voice.
+        this.ctx.db
+          .prepare(`UPDATE knowledge_corroborations SET fact_id=? WHERE fact_id=?`)
+          .run(survivor.id, member.id);
+        this.ctx.db
+          .prepare(
+            `UPDATE knowledge_facts SET reach='superseded', superseded_by=?, updated_at=?, ruled_at=? WHERE id=?`,
+          )
+          .run(survivor.id, at, at, member.id);
+      }
+      // The suggestion that offered this merge is spent, and so is every other one
+      // naming a member: a row still pointing at a claim that now reaches nobody
+      // would offer the same merge again.
+      const holes = live.map(() => '?').join(',');
+      this.ctx.db
+        .prepare(`DELETE FROM knowledge_similarities WHERE left_id IN (${holes}) OR right_id IN (${holes})`)
+        .run(...live.map((m) => m.id), ...live.map((m) => m.id));
+      const corroborations = distinctCorroborators(this.listCorroborations(survivor.id));
+      return {
+        outcome: 'merged',
+        // Promotion is the ordinary one, on the ordinary rule: the merge let the
+        // voices be counted, and the count is what carries a claim to lookup.
+        fact: this.promoteOnCorroboration(this.getFact(survivor.id) ?? survivor, corroborations),
+        merged: live.length,
+        corroborations,
+      };
+    })();
   }
 
   /**
@@ -1091,6 +1317,7 @@ export class KnowledgeStore {
       // whole history.
       project: this.project,
       keepLocal: false,
+      supersededBy: null,
       createdAt: ts,
       updatedAt: ts,
     };
@@ -1108,6 +1335,9 @@ export class KnowledgeStore {
         // the literal 0 above (better-sqlite3 refuses a JS boolean), and the driver
         // throws on a named parameter the statement does not use.
         keepLocal: undefined,
+        // Dropped for `keepLocal`'s reason: nothing supersedes a row on the pulse
+        // it is filed on, so the column is left at its default rather than bound.
+        supersededBy: undefined,
         resolvesWhen: fact.resolvesWhen === null ? null : JSON.stringify(fact.resolvesWhen),
       });
     return fact;
@@ -1166,9 +1396,40 @@ export class KnowledgeStore {
   }
 }
 
+/**
+ * What an agreement did.
+ *
+ * `refused` carries its reason in the words the agent is given, for
+ * {@link FactContradictionOutcome}'s reason: an agent that believes it has carried
+ * a claim the fleet is not being told stops looking at it.
+ */
+export type FactAgreementOutcome =
+  | { outcome: 'recorded'; fact: KnowledgeFact; corroborations: number }
+  | { outcome: 'refused'; error: string }
+  | { outcome: 'unknown' };
+
+/** What a merge did, and the survivor as it now stands. */
+export type FactMergeOutcome =
+  | { outcome: 'merged'; fact: KnowledgeFact; merged: number; corroborations: number }
+  | { outcome: 'refused'; error: string }
+  | { outcome: 'unknown' };
+
 /** What a proposal did. `barred` carries the rejected claim that refused it, so the agent can amend it. */
 export type FactProposalOutcome =
-  | { outcome: 'filed' | 'corroborated'; fact: KnowledgeFact; corroborations: number }
+  | {
+      outcome: 'filed' | 'corroborated';
+      fact: KnowledgeFact;
+      corroborations: number;
+      /**
+       * Live claims in the same scope that {@link claimsSimilar} thinks are this
+       * one, and that the strict matcher did not join — with how many voices each
+       * already has, which is what makes the answer worth acting on.
+       *
+       * Advisory, and nothing was done about them: the claim is filed, and what the
+       * agent is offered is `agreeWith`.
+       */
+      nearby: { id: string; claim: string; corroborations: number }[];
+    }
   | { outcome: 'barred'; barredBy: KnowledgeFact };
 
 /**
@@ -1303,6 +1564,14 @@ function lapsesAt(from: string, hours: number): string {
   return new Date(new Date(from).getTime() + hours * 3_600_000).toISOString();
 }
 
+interface SimilarityRow {
+  id: string;
+  left_id: string;
+  right_id: string;
+  score: number;
+  created_at: string;
+}
+
 interface FactRow {
   id: string;
   claim: string;
@@ -1324,6 +1593,8 @@ interface FactRow {
   project: string | null;
   /** 1 when the operator has withheld this claim from the pool. Nullable and possibly absent. */
   keep_local: number | null;
+  /** Which claim stands in this one's place. Nullable and possibly absent, for {@link FactRow.ruled_at}'s reason. */
+  superseded_by: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -1357,6 +1628,7 @@ function rowToFact(r: FactRow): KnowledgeFact {
     // absent, and both of those are "not withheld" — the one value that must be
     // true is the explicit 1 an operator's click writes.
     keepLocal: r.keep_local === 1,
+    supersededBy: r.superseded_by ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
