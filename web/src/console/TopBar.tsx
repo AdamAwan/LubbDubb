@@ -65,6 +65,7 @@ export const TAB_LABEL: Record<ConsoleTab, string> = {
   overview: 'Overview',
   tickets: 'Tickets',
   knowledge: 'Knowledge',
+  features: 'Features',
   insights: 'Insights',
   pets: 'Pets',
   config: 'Config',
@@ -98,7 +99,18 @@ function Nav({ view, actions }: { view: CockpitView; actions: CockpitActions }):
   // Appended rather than listed, so the nav is the same four tabs on a deployment
   // drawing no vivarium and the fifth cannot be reached by a stale URL either
   // — `tabBody` refuses it for the same reason.
-  const tabs = view.state.pets === null ? TABS : [...TABS, 'pets' as const];
+  //
+  // Features rides the same rule and is **inserted** rather than appended, because
+  // it belongs beside Tickets: the two are the same backlog read at two altitudes,
+  // and a reader moving between them should not cross Knowledge to do it. It is
+  // absent unless the deployment has a board at all — the operator's flag *and* a
+  // provider with a hierarchy, folded server-side by `featureBoardOn` so the tab
+  // and the route can never disagree. A tab that opens on a page explaining a
+  // hierarchy this tracker does not have is worse than no tab.
+  const withFeatures: readonly ConsoleTab[] = view.state.config.featureBoard
+    ? ['overview', 'tickets', 'features', 'knowledge', 'insights']
+    : TABS;
+  const tabs = view.state.pets === null ? withFeatures : [...withFeatures, 'pets' as const];
 
   return (
     <nav className="cn-nav">

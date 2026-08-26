@@ -304,6 +304,9 @@ export function buildDemoState(): DemoSeed {
       maxConcurrentAgents: 3,
       watchLabel: 'lubbdubb-watch',
       containerTypes: ['Feature', 'Epic'],
+      // The demo's tracker is a fake with no hierarchy to roll up, so the board is
+      // absent here exactly as it is on a GitHub deployment.
+      featureBoard: false,
       // A plausible checkout, so the demo's Discuss link is a real `claude://code/new`
       // rather than one pointing at nothing. It opens whatever the visitor has —
       // which is the honest demonstration: the control hands off to their machine.

@@ -303,6 +303,21 @@ export interface Config {
    */
   planning: PlanningPolicy;
   /**
+   * The feature board (`src/features/`) — the cockpit tab that reads the fleet's
+   * work one tier up, per Feature rather than per story.
+   *
+   * **Off by default**, and off is the honest default rather than a cautious one:
+   * the board is a roll-up over a container hierarchy, and a tracker with no
+   * hierarchy has nothing to roll up. On a flat tracker every item is its own
+   * orphan and the page is one grey card — so the flag turning it on is only half
+   * the gate. The other half is the provider's, asked of the connector rather than
+   * inferred from its name, exactly as `canCloseIssue` and `canSetWorkItemState`
+   * are: with `featureBoard: true` and a provider that cannot place a work item,
+   * the tab is **absent** rather than empty.
+   * → `docs/spec/17-cockpit.md#the-feature-board`
+   */
+  featureBoard: boolean;
+  /**
    * The live burn watch (`src/spendBurn.ts`) — what to do about a run that is
    * spending far past what its kind of work costs, while it is still running.
    * **On by default**, because it spends no agent and gates nothing: it files a
@@ -909,6 +924,9 @@ const DEFAULTS: Config = {
   // Each policy's own module owns the operator default; the dispatcher's fallback
   // for an *omitted* policy is a separate answer (off) and lives with the rules.
   planning: DEFAULT_PLANNING,
+  // Off, and the provider gate above it is the reason a bare `true` is still not
+  // enough to draw the tab.
+  featureBoard: false,
   spendBurn: DEFAULT_BURN,
   runway: DEFAULT_RUNWAY,
   // One switch and no rates. Everything a pet costs lives in `src/pets/rules.ts`

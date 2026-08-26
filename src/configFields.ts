@@ -412,6 +412,12 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
 
   // ---- Features ----------------------------------------------------------
   {
+    path: 'featureBoard',
+    type: 'boolean',
+    access: 'plain',
+    why: 'Draw the Feature board — the fleet’s work rolled up per Feature. Needs a tracker with a container hierarchy; on a provider without one the tab stays absent.',
+  },
+  {
     path: 'planning.maxConcurrentPartsPerIssue',
     type: 'number',
     access: 'plain',

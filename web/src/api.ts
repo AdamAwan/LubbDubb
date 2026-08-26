@@ -42,6 +42,7 @@ import type {
   SpendTrendPayload,
   WorkRootsPayload,
   TicketsPayload,
+  FeatureBoardPayload,
   WorkSubtreePayload,
 } from '../../src/wire.js';
 import { demoApi, connectDemoWs } from './demo/demoBackend.js';
@@ -176,6 +177,11 @@ const realApi = {
     const search = params.toString();
     return authFetch(`/api/tickets${search === '' ? '' : `?${search}`}`).then((r) => json<TicketsPayload>(r));
   },
+  // The feature board, fetched when the tab opens and never polled — it reads the
+  // whole mirror, exactly as `/api/tickets` does. No query: the board is the whole
+  // of what the tracker's hierarchy holds, and the narrowing an operator wants is
+  // the Tickets tab one click down.
+  getFeatures: () => authFetch('/api/features').then((r) => json<FeatureBoardPayload>(r)),
   // A goal's retrospective, fetched when the Manifest station is opened. The
   // snapshot carries only the summary, for the reason the work graph is not
   // polled: a document per issue on every poll pays for the feature in bandwidth.

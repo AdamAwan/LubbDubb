@@ -62,8 +62,25 @@ function includesType(types: readonly string[], type: string): boolean {
  * what keeps every flat tracker behaving exactly as it did.
  */
 export function isContainerIssue(issue: Issue, containerTypes: readonly string[] | undefined): boolean {
-  if (issue.issueType === undefined) return false;
-  return includesType(containerTypes ?? DEFAULT_CONTAINER_TYPES, issue.issueType);
+  return isContainerType(issue.issueType ?? null, containerTypes);
+}
+
+/**
+ * The same question asked of a bare type word — what the mirror holds, where
+ * {@link isContainerIssue} needs a whole world issue.
+ *
+ * Split out rather than duplicated for the feature board (`src/features/`), which
+ * reads `tracker_items` and never the world: a second case-folding of the
+ * operator's `issueContainerTypes` is a second opinion about which items are work,
+ * and the two would disagree on exactly the deployment that spells its process
+ * template differently.
+ *
+ * A null type (GitHub, the fake) is never a container, which is what keeps every
+ * flat tracker behaving exactly as it did.
+ */
+export function isContainerType(type: string | null, containerTypes: readonly string[] | undefined): boolean {
+  if (type === null) return false;
+  return includesType(containerTypes ?? DEFAULT_CONTAINER_TYPES, type);
 }
 
 /**

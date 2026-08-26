@@ -7897,3 +7897,277 @@ select:disabled {
 .pool-fleet-at {
   color: var(--cn-fg-dim);
 }
+
+/* ---------------------------------------------------------------------------
+   The feature board (issue #—) — the fleet's work read one tier up.
+
+   Styled here rather than in `console.css` because the component sits in
+   `components/` — it rides its own route, and nothing under `console/` may import
+   `api.js`. It draws `--cn-*` tokens all the same: the prefix boundary is by
+   component *family*, not by file, exactly as the Tickets tab and the config page
+   are console-family surfaces styled in this sheet.
+
+   Every colour here is a `var(--cn-*)`, which is not a tidiness rule: the token
+   layer *is* the theme an operator picks, so a hex at a use site is a surface
+   that stays dark when somebody switches to Light. `test/cockpitTheme.test.ts`
+   is the only thing in `npm run check` that reads CSS at all.
+   → docs/spec/17-cockpit.md#tokens
+   --------------------------------------------------------------------------- */
+
+.cn-fb {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cn-fb-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.cn-fb-head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.cn-fb-legend {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: 0;
+  font-size: 12px;
+  color: var(--cn-fg-dim);
+}
+.cn-fb-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.cn-fb-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex: none;
+}
+
+.cn-fb-card {
+  position: relative;
+  background: var(--cn-panel);
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+/* A Feature with something waiting on a person is marked, never ranked: the
+   border says "read this one first" and the card says what and why. No card
+   here asserts that a Feature is late, at risk or slipping — see `wantsYou`. */
+.cn-fb-card.cn-fb-wants {
+  border-color: var(--cn-amber-line);
+  background: var(--cn-amber-fill);
+}
+.cn-fb-orphans {
+  border-style: dashed;
+}
+
+.cn-fb-top {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+.cn-fb-top h3 {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 600;
+}
+.cn-fb-hue {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex: none;
+  align-self: center;
+}
+
+/* -- the roll-up bar ------------------------------------------------------ */
+
+.cn-fb-bar {
+  display: flex;
+  height: 9px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--cn-track);
+}
+.cn-fb-seg {
+  display: block;
+  height: 100%;
+}
+.cn-fb-delivered {
+  background: var(--cn-green);
+}
+.cn-fb-inFlight {
+  background: var(--cn-accent);
+}
+.cn-fb-fellShort {
+  background: var(--cn-red);
+}
+.cn-fb-settled {
+  background: var(--cn-violet);
+}
+.cn-fb-queued {
+  background: var(--cn-inert);
+}
+/* Hatched rather than a sixth colour, exactly as the Tickets tab hatches "no
+   feature": an item the fleet cannot see is the *absence* of it having looked,
+   and a solid block would read as a fifth kind of progress. */
+.cn-fb-unwatched {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--cn-fg-faint),
+    var(--cn-fg-faint) 2px,
+    var(--cn-line) 2px,
+    var(--cn-line) 5px
+  );
+}
+
+.cn-fb-counts {
+  display: flex;
+  gap: 13px;
+  flex-wrap: wrap;
+  margin: 0;
+  font-size: 12px;
+  color: var(--cn-fg-dim);
+  font-variant-numeric: tabular-nums;
+}
+.cn-fb-count b {
+  color: var(--cn-fg);
+  font-weight: 500;
+}
+.cn-fb-c-delivered b {
+  color: var(--cn-green-ink);
+}
+.cn-fb-c-inFlight b {
+  color: var(--cn-blue-ink);
+}
+.cn-fb-c-fellShort b {
+  color: var(--cn-red-ink);
+}
+.cn-fb-c-unwatched b {
+  color: var(--cn-amber-ink);
+}
+
+.cn-fb-attn {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--cn-fg-dim);
+}
+.cn-fb-attn b {
+  color: var(--cn-fg);
+}
+
+/* -- the readings beside it ----------------------------------------------- */
+
+.cn-fb-side {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+  font-size: 12px;
+  color: var(--cn-fg-dim);
+}
+.cn-fb-reading b {
+  color: var(--cn-fg-faint);
+  font-weight: 500;
+  margin-right: 4px;
+}
+.cn-fb-never {
+  color: var(--cn-fg-faint);
+  font-style: normal;
+}
+
+.cn-fb-reach {
+  display: inline-flex;
+  gap: 5px;
+}
+.cn-fb-env {
+  font-size: 11px;
+  font-style: normal;
+  padding: 1px 7px;
+  border-radius: var(--cn-r-sm);
+  border: 1px solid var(--cn-line-hi);
+  color: var(--cn-fg-faint);
+  background: var(--cn-panel-2);
+}
+.cn-fb-r-reached {
+  color: var(--cn-green-ink);
+  border-color: var(--cn-green-line);
+  background: var(--cn-green-fill);
+}
+.cn-fb-r-partial {
+  color: var(--cn-blue-ink);
+  border-color: var(--cn-blue-line);
+  background: var(--cn-blue-fill);
+}
+/* Dashed and amber, and never the same as `absent`: an expired credential and
+   work that genuinely has not shipped read identically otherwise, and only one
+   of them is about deployment.
+   → docs/spec/24-environments.md#the-three-verdicts */
+.cn-fb-r-unknown {
+  color: var(--cn-amber-ink);
+  border-color: var(--cn-amber-line);
+  border-style: dashed;
+  background: var(--cn-amber-fill);
+}
+
+/* -- the children --------------------------------------------------------- */
+
+.cn-fb-kids {
+  border-top: 1px solid var(--cn-line-soft);
+  padding-top: 9px;
+  overflow-x: auto;
+}
+.cn-fb-kids table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12.5px;
+}
+.cn-fb-kids td {
+  padding: 5px 10px 5px 0;
+  border-bottom: 1px solid var(--cn-line-soft);
+  color: var(--cn-fg-dim);
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+.cn-fb-kids tr:last-child td {
+  border-bottom: 0;
+}
+.cn-fb-kind {
+  color: var(--cn-fg-faint);
+  font-size: 11px;
+}
+.cn-fb-title {
+  width: 100%;
+  white-space: normal;
+}
+.cn-fb-title button {
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  color: var(--cn-fg);
+  font: inherit;
+  cursor: pointer;
+}
+.cn-fb-title button:hover {
+  color: var(--cn-blue-ink);
+}
+.cn-fb-num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.cn-fb-unresolved {
+  margin: 0;
+}

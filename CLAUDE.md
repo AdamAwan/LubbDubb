@@ -164,8 +164,8 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
   write `appraising` / `assessing` on the `StageContext` for later stages to read. Moving either
   below its readers compiles fine and silently puts two agents on one issue.
 - **Lenses must stay out of `src/dispatcher/`.** The work graph (`src/graph/`), `buildStacks`,
-  `prAttentionStatus`, `knowledge` and `overlaps` are all read-only views for the cockpit; a rule
-  consulting one would be a second opinion about a decision made elsewhere. Asserted structurally
+  `prAttentionStatus`, `knowledge`, `overlaps` and `src/features/` are read-only views for the
+  cockpit; a rule consulting one would be a second opinion about a decision made elsewhere. Asserted structurally
   in `test/workGraph.test.ts`, `test/stacks.test.ts` and `test/prAttention.test.ts` — if one fails,
   fix the file it names, not the assertion.
 
