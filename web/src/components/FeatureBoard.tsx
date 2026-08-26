@@ -6,12 +6,17 @@ import type { CockpitView } from '../view/viewModel.js';
 import { Ref } from './refs.js';
 import { fmtUsd, relAge } from './util.js';
 import type {
+  FeatureBlockKind,
+  FeatureBlockRow,
   FeatureBoardPayload,
+  FeatureBriefing,
   FeatureChildRow,
   FeatureChildStanding,
   FeatureCounts,
   FeatureReach,
+  FeatureReportRow,
   FeatureRollup,
+  FeatureWorkingRow,
 } from '../types.js';
 
 /**
@@ -103,6 +108,7 @@ export function FeatureBoard({ view, actions }: { view: CockpitView; actions: Co
           <p className="cn-fb-attn">
             {money(orphans.costUsd)} spent under no Feature — so every roll-up above understates its own.
           </p>
+          <Briefing briefing={orphans.briefing} now={view.now} actions={actions} />
           <Children rows={orphans.children} total={orphans.counts.total} actions={actions} />
         </section>
       )}
@@ -154,6 +160,8 @@ function FeatureCard({
 
       {attention !== null && <p className="cn-fb-attn">{attention}</p>}
 
+      <Briefing briefing={feature.briefing} now={now} actions={actions} />
+
       <div className="cn-fb-side">
         {feature.reach.length > 0 && <Reach reach={feature.reach} />}
         <span className="cn-fb-reading">
@@ -167,6 +175,175 @@ function FeatureCard({
 
       <Children rows={feature.children} total={feature.counts.total} actions={actions} />
     </section>
+  );
+}
+
+/**
+ * The briefing: what is happening, what is done, and what is stopping the rest.
+ *
+ * The three lists are the questions somebody outside the fleet asks in order —
+ * _is this moving, what of it is usable, what is in the way_ — and the card
+ * answers them **in the words of whoever said it**. A delivery line is the
+ * summary its author wrote, a blocked line is the agent's own question or the
+ * assessor's shortfall, and nothing here is composed from the counts above.
+ *
+ * That is the same discipline as {@link wantsYou} one line up, arrived at from the
+ * other side: that line counts facts and phrases them, this one quotes sentences
+ * and phrases nothing. Neither ever says a Feature is on track, at risk or late,
+ * because no module owns those words.
+ *
+ * Absent entirely on a Feature with nothing worked, nothing delivered and nothing
+ * blocked — the bar has already said so, and an empty heading three times over
+ * would be the card's loudest element saying nothing.
+ */
+function Briefing({
+  briefing,
+  now,
+  actions,
+}: {
+  briefing: FeatureBriefing;
+  now: number;
+  actions: CockpitActions;
+}): JSX.Element | null {
+  const { working, delivered, blocking } = briefing;
+  if (working.length === 0 && delivered.length === 0 && blocking.length === 0) return null;
+
+  return (
+    <div className="cn-fb-brief">
+      {blocking.length > 0 && (
+        // First, because it is the only one of the three that is asking for
+        // something. Delivered work needs nobody.
+        <BriefList title="In the way" total={briefing.blockingTotal} shown={blocking.length}>
+          {blocking.map((row) => (
+            <BlockedLine key={`${row.kind}:${row.number}`} row={row} now={now} actions={actions} />
+          ))}
+        </BriefList>
+      )}
+      {working.length > 0 && (
+        <BriefList title="Being worked" total={briefing.workingTotal} shown={working.length}>
+          {working.map((row) => (
+            <WorkingLine key={row.number} row={row} now={now} actions={actions} />
+          ))}
+        </BriefList>
+      )}
+      {delivered.length > 0 && (
+        <BriefList title="Delivered" total={briefing.deliveredTotal} shown={delivered.length}>
+          {delivered.map((row) => (
+            <DeliveredLine key={row.number} row={row} now={now} actions={actions} />
+          ))}
+        </BriefList>
+      )}
+    </div>
+  );
+}
+
+/**
+ * One list, with what it stood for.
+ *
+ * The count is drawn whenever it exceeds the rows, never trimmed silently: three
+ * of eleven blocked items read as three blocked items, which is the one number on
+ * this card somebody would act on being wrong about.
+ */
+function BriefList({
+  title,
+  total,
+  shown,
+  children,
+}: {
+  title: string;
+  total: number;
+  shown: number;
+  children: ReactNode;
+}): JSX.Element {
+  return (
+    <section className="cn-fb-brief-list">
+      <h4>
+        {title} <span className="cn-psub">{total > shown ? `${shown} of ${total}` : total}</span>
+      </h4>
+      <ul>{children}</ul>
+    </section>
+  );
+}
+
+function WorkingLine({
+  row,
+  now,
+  actions,
+}: {
+  row: FeatureWorkingRow;
+  now: number;
+  actions: CockpitActions;
+}): JSX.Element {
+  return (
+    <li>
+      <GoalLink number={row.number} title={row.title} actions={actions} />{' '}
+      {/* The run's age, and nothing about whether it is too long: how long is too
+          long is a policy no config file states. → docs/spec/17-cockpit.md#the-briefing */}
+      <span className="cn-psub">for {relAge(row.since, now)}</span>
+    </li>
+  );
+}
+
+function DeliveredLine({
+  row,
+  now,
+  actions,
+}: {
+  row: FeatureReportRow;
+  now: number;
+  actions: CockpitActions;
+}): JSX.Element {
+  return (
+    <li>
+      <GoalLink number={row.number} title={row.title} actions={actions} />
+      {/* Quoted, and attributed, because the two together are what make it
+          checkable: a sentence with no author is the board's own claim. */}
+      <span className="cn-fb-said">“{row.summary}”</span>
+      <span className="cn-psub">
+        — {row.by}, {relAge(row.at, now)}
+      </span>
+    </li>
+  );
+}
+
+const BLOCK_WORD: Record<FeatureBlockKind, string> = {
+  question: 'asked',
+  fellShort: 'fell short',
+};
+
+function BlockedLine({
+  row,
+  now,
+  actions,
+}: {
+  row: FeatureBlockRow;
+  now: number;
+  actions: CockpitActions;
+}): JSX.Element {
+  return (
+    <li>
+      {/* Two words and not one: `asked` is an agent stopped waiting for a reply,
+          `fell short` is a decision nobody has made. A reader owes each a
+          different thing. */}
+      <span className={`cn-chip cn-fb-b-${row.kind}`}>{BLOCK_WORD[row.kind]}</span>{' '}
+      <GoalLink number={row.number} title={row.title} actions={actions} />
+      <span className="cn-fb-said">“{row.summary}”</span>
+      <span className="cn-psub">{relAge(row.since, now)}</span>
+    </li>
+  );
+}
+
+/** The goal as a control, with its reference beside it — never one inside the other. */
+function GoalLink({ number, title, actions }: { number: number; title: string; actions: CockpitActions }): JSX.Element {
+  return (
+    <>
+      <span className="cn-refs">
+        <Ref to={`issue:${number}`} />
+      </span>{' '}
+      <button type="button" className="cn-fb-goal" onClick={() => actions.selectGoal(`issue:${number}`)}>
+        {title}
+      </button>
+    </>
   );
 }
 

@@ -58,6 +58,11 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
         issues: store.getWorldBaseline()?.issues ?? [],
         runs,
       });
+      // Read once and quoted twice: `ticketOutcomes` folds these into its word and
+      // the briefing carries the sentence their authors wrote. Two reads of the
+      // same rows would let a card's word and its quotation disagree.
+      const deliveries = store.listDeliveries();
+      const shortfalls = store.listShortfalls();
       const items = store.listTrackerItems();
       // The same persisted ladder the Tickets tab's legend draws from, so a Feature
       // is the same colour on both surfaces. Assigned on being *drawn*, exactly as
@@ -69,18 +74,24 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
         outcomes: ticketOutcomes({
           runs,
           conclusions: store.listIssueConclusions(),
-          deliveries: store.listDeliveries(),
-          shortfalls: store.listShortfalls(),
+          deliveries,
+          shortfalls,
           plans: store.listPlans(),
           planParts: store.listAllPlanParts(),
         }),
+        deliveries,
+        shortfalls,
+        // Every escalation; the briefing keeps the open ones that name a goal. The
+        // filtering is the lens's, not the route's, for the reason every other
+        // reading here is quoted rather than prepared.
+        escalations: store.listEscalations(),
         costs: new Map(goals.map((g) => [g.issueNumber, g.costUsd])),
         featureSlots,
         // A run the harness minted and has not finished, and that the operator has
         // not dismissed — the run row's own three-field reading of "still going",
         // not a second definition of it. → `docs/spec/03-world-model.md`
-        running: new Set(
-          runs.filter((r) => r.completedAt === null && r.dismissedAt === null).map((r) => r.issueNumber),
+        running: new Map(
+          runs.filter((r) => r.completedAt === null && r.dismissedAt === null).map((r) => [r.issueNumber, r.startedAt]),
         ),
         reach: allGoalReach({
           landings: store.listGoalLandings(),

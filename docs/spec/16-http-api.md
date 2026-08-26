@@ -938,8 +938,13 @@ the `config.featureBoard` on `/api/state` the nav draws its tab off. One predica
 drift into a tab whose every fetch 404s.
 
 Returns `{ features, orphans, unresolved, environments, backfilling, refUrls }`. Each feature carries
-its identity and hue slot, a six-way `counts` of its children, a bounded slice of the child rows, its
-rolled-up `costUsd`, its per-environment `reach` and `lastLandingAt`. `orphans` is the same fold over
+its identity and hue slot, a six-way `counts` of its children, a `briefing`, a bounded slice of the
+child rows, its rolled-up `costUsd`, its per-environment `reach` and `lastLandingAt`. The briefing is
+three bounded lists — what is being worked, what a delivery verdict stands on, and what is blocked,
+each carrying the sentence its author wrote, and each with the total it stood for
+([17](17-cockpit.md#the-briefing)). It reads escalations as well as the verdicts the rest of the
+payload folds, and quotes all of them: the route prepares nothing and filters nothing, so the lens
+holds the one definition of which escalations block. `orphans` is the same fold over
 the items the tracker says hang off nothing, and is `null` where there are none; `unresolved` counts
 the items whose parent link could not be read at all, which is **neither** of the other two — the same
 three-valued distinction `TicketRow.parent` keeps by being optional rather than nullable.

@@ -8068,6 +8068,85 @@ select:disabled {
   color: var(--cn-fg);
 }
 
+/* -- the briefing --------------------------------------------------------- */
+
+/* Three lists, in the order the questions get asked: what is in the way, what is
+   moving, what is done. Every line in them is a quotation — see `Briefing`. */
+.cn-fb-brief {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  border-top: 1px solid var(--cn-line-soft);
+  padding-top: 9px;
+}
+.cn-fb-brief-list {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.cn-fb-brief-list h4 {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+}
+.cn-fb-brief-list h4 .cn-psub {
+  text-transform: none;
+  letter-spacing: 0;
+  margin-left: 5px;
+}
+.cn-fb-brief-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.cn-fb-brief-list li {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--cn-fg-dim);
+  min-width: 0;
+}
+
+/* The sentence somebody actually wrote. Clamped rather than truncated at the
+   server, so the whole of it is in the DOM for a reader who wants it: an
+   assessor's shortfall is whatever length its author felt like. */
+.cn-fb-said {
+  display: block;
+  color: var(--cn-fg);
+  overflow-wrap: anywhere;
+}
+.cn-fb-goal {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--cn-fg);
+  cursor: pointer;
+  text-align: left;
+}
+.cn-fb-goal:hover {
+  color: var(--cn-accent);
+  text-decoration: underline;
+}
+
+/* An agent is stopped against a question and nobody is stopped by a shortfall,
+   so the two never wear one colour: red asks for a reply, amber asks for a
+   decision. */
+.cn-fb-b-question {
+  color: var(--cn-red-ink);
+  border-color: var(--cn-red-line);
+  background: var(--cn-red-fill);
+}
+.cn-fb-b-fellShort {
+  color: var(--cn-amber-ink);
+  border-color: var(--cn-amber-line);
+  background: var(--cn-amber-fill);
+}
+
 /* -- the readings beside it ----------------------------------------------- */
 
 .cn-fb-side {
