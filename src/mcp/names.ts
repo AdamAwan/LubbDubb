@@ -24,6 +24,7 @@ export const MCP_SERVER_ID = 'lubbdubb';
  */
 export const MCP_TOOL_NAMES = [
   'plan_submit',
+  'plan_not_needed',
   'escalate',
   'world_read',
   'request_human_task',
@@ -108,6 +109,11 @@ export const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use'> = {
   reply_to_review: 'point-of-use',
   // Terminal or task-scoped: the dispatch prompt names these where they are used.
   link_ticket: 'point-of-use',
+  // The planner's other verdict, named by `issue-plan` where the planner is told
+  // what its job is. Deliberately *not* in the addendum beside `plan_submit`: an
+  // agent that is not planning cannot cast it, and the addendum is read by every
+  // one of them.
+  plan_not_needed: 'point-of-use',
   conclude_work: 'point-of-use',
   conclude_part: 'point-of-use',
   assess_issue: 'point-of-use',

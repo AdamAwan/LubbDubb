@@ -1,3 +1,4 @@
+import { DELIVERY_AUTHOR } from './delivery.js';
 import { DESK_SETTLED, deskSettled } from '../benchSettlement.js';
 import type { HumanTask, Issue, IssueDelivery, IssueShortfall, ValidationVerdict } from '../types.js';
 
@@ -233,7 +234,11 @@ function closeOutDetail(
   delivery: IssueDelivery,
   validation: { verdict: ValidationVerdict; outstanding: readonly string[] } | null,
 ): string {
-  const by = delivery.by === 'operator' ? 'You' : 'The assessor';
+  // Capitalised here rather than held as a second record: the words are the same
+  // words `deliveryHold` uses, and two records is how the two sentences come to
+  // name one verdict's author differently.
+  const author = DELIVERY_AUTHOR[delivery.by];
+  const by = author.charAt(0).toUpperCase() + author.slice(1);
   const lines = [
     `${by} marked **${issue.title}** delivered${delivery.summary ? ` — "${delivery.summary}"` : ''}.`,
     '',
