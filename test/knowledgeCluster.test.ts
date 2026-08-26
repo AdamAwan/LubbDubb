@@ -85,6 +85,41 @@ test('the pass suggests within a scope, over proposals, and never what already m
   assert.ok(pairs[0]!.score > 0.6);
 });
 
+test('the bar is enforced by the strict matcher, and the advisory one has not widened it', () => {
+  // The whole argument for two functions, spelled as a store assertion rather than
+  // as a claim about a helper. A claim an operator rejected bars its own words;
+  // what it must **not** bar is a different claim that merely looks like it — a
+  // fleet refused by the name of a claim nobody is being told, with the agent
+  // unable to argue and the operator told nothing at all.
+  const store = new Store(':memory:');
+  const file = (claim: string, goal: string) =>
+    store.proposeFact(
+      {
+        claim,
+        scope: 'fleet',
+        lifetime: 'standing',
+        expiresInHours: null,
+        evidence: 'saw it',
+        supersedes: null,
+        resolvesWhen: null,
+        aboutRef: null,
+        where: null,
+      },
+      { agentId: null, taskId: null, goalRef: goal, sessionId: null, words: 'saw it' },
+    );
+  const killed = file(ONE, 'issue:1');
+  assert.ok(killed.outcome === 'filed');
+  store.setFactReach(killed.fact.id, 'rejected');
+  // Its own words: barred, by name.
+  assert.equal(file(ONE, 'issue:2').outcome, 'barred');
+  // A wording the advisory matcher calls the same claim: filed, because the bar
+  // asks the strict one. If these two functions ever became one, this is the
+  // assertion that fails rather than the fleet going quiet.
+  assert.ok(claimsSimilar(claimKey(ONE), claimKey(OTHER)));
+  assert.equal(file(OTHER, 'issue:3').outcome, 'filed');
+  store.close();
+});
+
 test('a merge rides superseded, moves the voices, and promotes by the ordinary rule', () => {
   const store = new Store(':memory:');
   const observe = (goal: string, words: string) => ({

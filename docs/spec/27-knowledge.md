@@ -366,7 +366,7 @@ the rejection bar by exactly what it gains in agreement: a claim nobody has reje
 name, and the refusal names a rejected claim that is not the one being raised. The agent is told it is
 barred and cannot argue, the operator is told nothing at all, and the claim the fleet needed is the one
 that never lands. Two functions, one strict and one advisory, is what keeps a suggestion from being
-enforcement — and _test/claims.test.ts_ holds `proposeFact` and the bar against the strict one, so a
+enforcement — and `test/knowledgeCluster.test.ts` holds `proposeFact` and the bar against the strict one, so a
 merge of the two fails rather than passes.
 
 **A similarity is a suggestion, and a merge is an operator's click.** `KnowledgeClusterDesk`

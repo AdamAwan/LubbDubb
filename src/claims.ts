@@ -158,8 +158,8 @@ const MIN_SIMILARITY = 0.6;
  * agreement, so a claim nobody has rejected would be refused by name, the agent
  * could not argue, and the operator would be told nothing at all. Two functions,
  * one strict and one advisory, is what keeps a suggestion from being enforcement —
- * and `test/claims.test.ts` holds `proposeFact` and the bar against the strict one
- * so a merge of the two fails rather than passes.
+ * and `test/knowledgeCluster.test.ts` holds `proposeFact` and the bar against the
+ * strict one so a merge of the two fails rather than passes.
  *
  * What this one answers is a question nobody is bound by: *do these look like one
  * claim to a machine?* The pass that asks it writes rows to

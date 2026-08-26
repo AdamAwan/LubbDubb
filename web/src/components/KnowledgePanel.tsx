@@ -524,7 +524,11 @@ function KnowledgeBar({
 }): JSX.Element {
   return (
     <div className="kn-bar">
-      <div className="kn-fgroup">
+      {/* The narrowing belongs to the surfaces it narrows. The queue is already the
+          claims waiting on you — the same predicate the *Waiting on you* chip is —
+          so a filter row over it would be four chips, three of which draw nothing
+          and one of which draws what is already on screen. */}
+      <div className="kn-fgroup" hidden={query.view === 'queue'}>
         <span className="kn-flabel" title="Which claims the page is showing. It narrows and never moves one">
           Show
         </span>
