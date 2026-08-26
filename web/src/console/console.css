@@ -2936,3 +2936,61 @@ button.cn-grow {
     animation: none;
   }
 }
+
+/* A row with work happening on it, as you read it.
+   The edge says which row; the sweep says it is moving. Both green, the fleet
+   lamp's own colour for a running agent, so this is the same reading that card
+   gives rather than a second vocabulary for it. */
+.cn-frow.cn-live,
+.cn-drow.cn-live {
+  box-shadow: inset 2px 0 0 var(--cn-green);
+  background: color-mix(in srgb, var(--cn-green) 3%, transparent);
+}
+/* The sweep. An overlay rather than an animated background on the row itself,
+   because the row's own background is what `cn-spent` and the hover use, and two
+   rules writing one property is how a row ends up flickering between them. */
+.cn-frow.cn-live::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 34%,
+    color-mix(in srgb, var(--cn-green) 9%, transparent) 50%,
+    transparent 66%
+  );
+  background-size: 260% 100%;
+  background-repeat: no-repeat;
+  animation: cn-live-sweep 3.6s linear infinite;
+}
+@keyframes cn-live-sweep {
+  from {
+    background-position: -80% 0;
+  }
+  to {
+    background-position: 180% 0;
+  }
+}
+/* A table row is not a containing block anywhere reliable, so the same statement
+   is made on the cells' ground instead of over them. */
+.cn-drow.cn-live > td {
+  animation: cn-live-tint 3.6s ease-in-out infinite;
+}
+@keyframes cn-live-tint {
+  0%,
+  100% {
+    background-color: transparent;
+  }
+  50% {
+    background-color: color-mix(in srgb, var(--cn-green) 6%, transparent);
+  }
+}
+/* The edge and the tint say it standing still; the motion is the part somebody
+   may have asked us not to make. */
+@media (prefers-reduced-motion: reduce) {
+  .cn-frow.cn-live::after,
+  .cn-drow.cn-live > td {
+    animation: none;
+  }
+}

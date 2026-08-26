@@ -117,6 +117,19 @@ export interface PanelRowModel {
   /** A row that no dispatch cut — the desk run's dashed edge and hollow lamp. */
   desk?: boolean;
   /**
+   * Work is happening on this row **right now** — an agent on the branch, not a
+   * verdict about it.
+   *
+   * The row itself carries it: a green edge and a slow sweep across the whole
+   * line, rather than one more mark in one more slot. Which is the honest shape
+   * for what it says — every other reading on the row is a *fact about the thing*
+   * and sits in the slot for that fact, while this one is a fact about the row's
+   * subject being under somebody's hands as you read it, and it is about to make
+   * the rest of the row out of date. A card of rows where one is moving is
+   * readable across the room; a 6px mark in the fifth column is not.
+   */
+  live?: boolean;
+  /**
    * The card's own modifier, where the sheet already carries a rule for one —
    * `cn-goal-row`, whose track must not stretch with the title beside it. Not a
    * way for a card to restyle a row: what it names is a rule that exists.
@@ -468,7 +481,13 @@ function Why({ row }: { row: PanelRowModel }): JSX.Element | null {
 }
 
 function rowClass(row: PanelRowModel, base: string): string {
-  return [base, row.spent === true ? 'cn-spent' : '', row.desk === true ? 'cn-desk' : '', row.className ?? '']
+  return [
+    base,
+    row.spent === true ? 'cn-spent' : '',
+    row.desk === true ? 'cn-desk' : '',
+    row.live === true ? 'cn-live' : '',
+    row.className ?? '',
+  ]
     .filter((part) => part !== '')
     .join(' ');
 }

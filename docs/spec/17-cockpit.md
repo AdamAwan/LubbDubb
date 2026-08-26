@@ -1305,6 +1305,15 @@ comes to wear two tones nobody chose. `CourtChip` stays here: the rack draws the
 word in its state column, which is where every card on the overview puts its state, and this page has
 no such column. `waitedFor` is shared for the chip's reason — the rack draws the same age as a fact.
 
+**And the row itself carries it.** `PanelRowModel.live` puts a green edge down the row and a slow
+sweep across it — the whole line, rather than one more mark in one more slot. That is the honest shape
+for what it says: every other reading on a row is a fact *about the thing* and sits in the slot for
+that fact, while this one says the row's subject is under somebody's hands as you read it, and is
+about to make the rest of the row out of date. A card where one row is moving is readable across a
+room; a 6px mark in the fifth column is not. The two are one signal with two jobs — the sweep is what
+is *happening*, the marker is where to *go* — and the motion is what a `prefers-reduced-motion` reader
+gives up, never the edge or the marker.
+
 **A live agent on the branch replaces the ladder, on the overview's rack.** Not beside it —
 it supersedes it: the checks are a reading of a commit the agent is in the middle of replacing, so a
 green dot next to a working agent is the least true thing the row can say. The marker is a way into

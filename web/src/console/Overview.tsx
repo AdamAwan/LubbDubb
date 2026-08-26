@@ -639,6 +639,9 @@ function prRow(pr: OpenPullRequest, view: CockpitView, actions: CockpitActions, 
       </AsyncButton>
     ),
     spent: unwatched,
+    // And the row itself says so, which is the reading that carries across a card:
+    // the marker above is where to *go*, this is what is *happening*.
+    live: onIt !== undefined,
   };
 }
 
