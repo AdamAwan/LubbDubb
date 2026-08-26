@@ -1591,8 +1591,13 @@ a.cn-tgl {
    Packed, a slot's position depended on what the slots before it happened to
    hold — so the fleet card's verdict sat where the rack's control did, and every
    row moved when the row above it grew a chip. `cn-row` stays for the surfaces
-   that are still flex lines (the goal page's own lists). */
-.cn-frow {
+   that are still flex lines (the goal page's own lists).
+
+   The class is doubled because a row carries `cn-row` too and that rule is
+   declared *below* this one: at equal specificity its `display: flex` won on
+   source order, and a grid row that quietly stayed a flex line looks exactly
+   like one that was never made a grid. */
+.cn-frow.cn-frow {
   display: grid;
   align-items: center;
 }

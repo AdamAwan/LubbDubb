@@ -135,6 +135,42 @@ test('the why marker holds prose, never a reference and never a control', () => 
   }
 });
 
+/**
+ * The rail is a grid, and every row of a card is on the same one.
+ *
+ * Pinned because the way this breaks is invisible: the template was set on the
+ * row *container* — a flex column, where `grid-template-columns` applies to
+ * nothing — and every row went on rendering as the flex line it had always been.
+ * Nothing errored, no test failed, and the only symptom was that the slots did
+ * not line up, which is what the rail exists for and what a screenshot of a card
+ * with two similar rows does not show.
+ */
+test('every row of a card sits on that card’s own grid', () => {
+  const html = render(view('facts'));
+  // Per card, because the subject column differs between them: what has to agree
+  // is the rows of one card, which is what "always look here" means on a page of
+  // five different-shaped cards.
+  const cards = html.split('class="cn-card').slice(1);
+  let checked = 0;
+  for (const card of cards) {
+    const templates = card
+      .split('class="cn-row cn-frow')
+      .slice(1)
+      .map((chunk) => /style="grid-template-columns:([^"]+)"/.exec(chunk.slice(0, 400)));
+    if (templates.length === 0) continue;
+    for (const found of templates) {
+      assert.ok(found, 'a facts row carries no grid template — the rail is a flex line again');
+      assert.match(found[1] ?? '', /var\(--cn-w-/, 'the rail’s widths come from the sheet, not from a literal here');
+    }
+    const first = templates[0]?.[1];
+    for (const found of templates) {
+      assert.equal(found?.[1], first, 'two rows of one card are on different grids');
+    }
+    checked += 1;
+  }
+  assert.ok(checked >= 4, `only ${checked} cards drew rows — this test is about the ones that do`);
+});
+
 /** The grammar is a place, so both readings are a link somebody can send. */
 test('the row grammar round-trips through the query string', () => {
   assert.equal(placeQuery(NOWHERE), '', 'the default grammar is a bare URL');

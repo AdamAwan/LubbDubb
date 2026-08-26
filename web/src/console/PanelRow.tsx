@@ -199,10 +199,15 @@ export function PanelRows({
   if (grammar === 'columns') {
     return <ColumnsTable rows={rows} has={has} subject={subject} refsLabel={refsLabel ?? 'Refs'} />;
   }
+  // On each row, never on the list: `.cn-rows` is a flex column, and
+  // `grid-template-columns` on a flex container is inherited by nothing and
+  // applies to nothing. It renders exactly as it did before — which is how this
+  // was wrong for a whole build without looking wrong.
+  const columns = gridTemplate(has);
   return (
-    <div className="cn-rows" style={{ gridTemplateColumns: gridTemplate(has) }}>
+    <div className="cn-rows">
       {rows.map((row) => (
-        <FactsRow key={row.key} row={row} has={has} />
+        <FactsRow key={row.key} row={row} has={has} columns={columns} />
       ))}
     </div>
   );
@@ -223,10 +228,10 @@ export function PanelRows({
  * up, which is what makes the column mean something: this row has no verdict, as
  * against this row said nothing.
  */
-function FactsRow({ row, has }: { row: PanelRowModel; has: SlotsUsed }): JSX.Element {
+function FactsRow({ row, has, columns }: { row: PanelRowModel; has: SlotsUsed; columns: string }): JSX.Element {
   const asks = row.why != null && row.why !== '';
   return (
-    <div className={rowClass(row, 'cn-row cn-frow')} title={row.hint}>
+    <div className={rowClass(row, 'cn-row cn-frow')} style={{ gridTemplateColumns: columns }} title={row.hint}>
       {has.lamp && <span className="cn-slot">{row.lamp}</span>}
       <Subject row={row} />
       {has.why && <span className="cn-slot cn-slot-why">{asks && <Why why={row.why as string} />}</span>}
