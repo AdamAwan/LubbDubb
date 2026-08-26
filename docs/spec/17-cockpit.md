@@ -1465,6 +1465,19 @@ being forgotten:
   happen to either on its own. The chip is gone from the overview and stays on the goal page, where
   there is no state column to put it in. → `test/panelGrammar.test.ts`
 
+  **The Goals in flight card's word is `pickup.status`, in the operator's words.** Same shape as the
+  rack's, one card up: the verdict was a `pickup` fact with a bare `?` beside it holding
+  `pickup.reasons`, which is one verdict said twice and a marker that said nothing until hovered. It
+  now wears the state column and the reasons stay behind it. The words are translated, because the
+  kind is an identifier the dispatcher passes between its own rules and every one of them reached the
+  glass unedited — `has_pr` is the shape of that, and it asks the operator to know the enum before the
+  row means anything: `in review`, `working`, `up next`, `no capacity`, `kept`, `a container`. A kind
+  with no translation falls through as itself, so one added server-side degrades to the old reading
+  rather than to a blank. `escalated` is the only `ask` — the one status parked on a person by design;
+  `unwatched`, `blocked`, `cooldown` and `appraisal` are `hold`, the harness stopped and waiting on
+  something. The tone is about whether the row wants anything, never about how far along it is.
+  → `test/panelGrammar.test.ts`
+
 - **`toggle` is the row's switch, and it is pinned left of the subject.** Whether the harness takes an
   interest in this row at all — the rack's watch tag — is not the row's *work*, which is what `action`
   is for and why `action` has the width. It is the same control in the same place on every row of the
@@ -1550,8 +1563,16 @@ pins the prose-only rule on the marker.
   (`active` / `has_pr` / `planning` / `delivered`). Read off the dispatcher's own word rather than
   re-inferred from agents, plans and pull requests, which are three inputs the server has already
   folded into one. Each row is a way into that goal's page, carries its segment track, and takes a
-  **court chip read off `needsYou`** — a goal is in your court exactly when the rail is holding an ask
-  about it. Anything else would let a chip say "you" with nothing to answer.
+  **court read off `needsYou`** — a goal is in your court exactly when the rail is holding an ask
+  about it. Anything else would let the row say "you" with nothing to answer. That is said **once**,
+  as the alarmed `asking you` count: the `You` / `Harness` chip that used to sit beside it had no
+  reading of its own beyond that count being non-zero. The row also takes the `live` treatment while an
+  agent is on one of its parts — read off the parts' `agentLive`, not off the track, because the
+  track's moving segment counts `in_review` too and an open pull request is not somebody's hands on
+  the work.
+  The track's four colours carry their key in the **hover**: a legend would cost more room than the
+  bar, and four tones with nothing to read them against is a reading only somebody who has read the
+  source can take.
 - **Pull requests** — every open PR with its court in the state column, its CI ladder, and the watch
   eye pinned left of the title.
   An **unwatched** PR stays in the list, with its health, and is drawn **spent** — the same dimming a

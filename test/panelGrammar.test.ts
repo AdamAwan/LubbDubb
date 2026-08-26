@@ -295,6 +295,34 @@ test('a pull-request row draws the agent on its branch instead of its checks', (
   for (const pr of staffed) assert.match(rowFor(quiet, pr.title), /cn-cd/, `#${pr.number} lost its checks`);
 });
 
+/**
+ * The goal row's state column carries the pickup verdict, in words.
+ *
+ * Two things at once, and both were real bugs on the card: the verdict was a fact
+ * with a bare `?` beside it holding its own reasons — one verdict said twice, the
+ * second half saying nothing until hovered — and the word it said was the
+ * dispatcher's identifier. `has_pr` is a value passed between rules.
+ */
+test('a goal row wears its pickup verdict in words, not as an enum', () => {
+  const state = buildDemoState().state;
+  const html = render(view('facts'));
+  const card = html.slice(html.indexOf('Goals in flight'), html.indexOf('Pull requests'));
+  const rows = card.split(ROW).slice(1);
+  assert.ok(rows.length > 0, 'the fixtures must put a goal in flight');
+  assert.ok(!card.includes('>pickup<'), 'the pickup verdict is still drawn as a fact as well');
+
+  const inFlight = state.world.issues.filter((issue) => card.includes(`#${issue.number} ${issue.title}`));
+  assert.ok(
+    inFlight.some((issue) => issue.pickup.status === 'has_pr'),
+    'the fixtures must exercise a status whose identifier is not a phrase',
+  );
+  for (const issue of inFlight) {
+    const row = rows.find((chunk) => chunk.includes(`#${issue.number} ${issue.title}`));
+    assert.ok(row, `no row drew goal #${issue.number}`);
+    assert.ok(!/>[a-z]+_[a-z]+</.test(row), `goal #${issue.number} shows an identifier where a word belongs`);
+  }
+});
+
 /** The grammar is a place, so both readings are a link somebody can send. */
 test('the row grammar round-trips through the query string', () => {
   assert.equal(placeQuery(NOWHERE), '', 'the default grammar is a bare URL');

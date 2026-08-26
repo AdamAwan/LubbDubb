@@ -458,10 +458,12 @@ const IN_FLIGHT = new Set(['active', 'has_pr', 'planning', 'delivered']);
  * disagree — that is the whole reason the helper exists rather than a second
  * pass over `PlanPart.status` here.
  *
- * The court chip is read off `needsYou`, the rail's own queue: a goal is in your
- * court exactly when the rail is holding an ask about it. Anything else would let
- * a chip say "you" with nothing to answer, or the rail hold a row the overview
- * marks as the harness's business.
+ * The court is read off `needsYou`, the rail's own queue: a goal is in your court
+ * exactly when the rail is holding an ask about it. Anything else would let the row
+ * say "you" with nothing to answer, or the rail hold a row the overview marks as
+ * the harness's business — and it is said once, as the alarmed `asking you` count,
+ * rather than a second time as a chip whose only reading was that count being
+ * non-zero.
  */
 function GoalsInFlight({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const goals = view.state.world.issues.filter((issue) => IN_FLIGHT.has(issue.pickup.status));
@@ -504,13 +506,23 @@ function goalRow(issue: Issue, view: CockpitView, actions: CockpitActions): Pane
             { label: 'merged', value: track.merged },
           ]
         : []),
-      { label: 'pickup', value: issue.pickup.status },
       ...(asks > 0 ? [{ label: 'asking you', value: asks, alarm: true }] : []),
     ],
+    // The pickup status *is* the row's state, so it wears the state column rather
+    // than sitting as a fact with a bare `?` beside it holding its own reasons.
+    // Two readings of one verdict, and the marker was the half that said nothing
+    // until you hovered it. In the operator's words, not the enum's: `has_pr` is a
+    // value the dispatcher passes to itself.
+    whyLabel: PICKUP_WORD[issue.pickup.status] ?? issue.pickup.status,
+    whyTone: PICKUP_TONE[issue.pickup.status] ?? 'quiet',
     // The dispatcher's own account of what it is doing with this goal — most
     // actionable first, and until now on no overview surface at all.
     why: issue.pickup.reasons.join(' '),
     reading: track !== null ? <Track track={track} /> : undefined,
+    // An agent on one of this goal's parts, read off the parts rather than off the
+    // track: `now` counts `in_review` too, and a pull request sitting open is not
+    // somebody's hands on the work.
+    live: page !== null && page.parts.some((part) => part.agentLive),
     chips: (
       <>
         {/* Where the work actually got to, on the row rather than a page deeper.
@@ -518,11 +530,42 @@ function goalRow(issue: Issue, view: CockpitView, actions: CockpitActions): Pane
             has no furthest anything, and a chip claiming one would be the boolean
             rollup the reach fold exists to refuse. */}
         {furthest !== null && <i className="cn-chip cn-ok">{furthest}</i>}
-        <i className={`cn-chip ${asks > 0 ? 'cn-you' : 'cn-harness'}`}>{asks > 0 ? 'You' : 'Harness'}</i>
       </>
     ),
   };
 }
+
+/**
+ * `IssuePickupStatusKind` in the words the page is written in. The kind is an
+ * identifier the dispatcher passes between its own rules, and every one of them
+ * that reached the glass did so unedited — `has_pr` is the shape of that, and it
+ * asks the operator to know the enum before the row means anything.
+ *
+ * A status with no entry falls through as itself, so a kind added server-side
+ * degrades to the old reading rather than to a blank.
+ */
+const PICKUP_WORD: Record<string, string> = {
+  has_pr: 'in review',
+  active: 'working',
+  eligible: 'up next',
+  blocked: 'no capacity',
+  retained: 'kept',
+  container: 'a container',
+};
+
+/**
+ * `hold` is the harness stopped and waiting on something: no capacity, no watch
+ * label, a cooldown to sit out. `ask` is the one status parked on a person by
+ * design. Everything else is the harness getting on with it, and quiet — the tone
+ * is about whether the row wants anything, not about how far along it is.
+ */
+const PICKUP_TONE: Record<string, 'ask' | 'hold' | 'quiet'> = {
+  escalated: 'ask',
+  unwatched: 'hold',
+  blocked: 'hold',
+  cooldown: 'hold',
+  appraisal: 'hold',
+};
 
 /**
  * One segment per part, in the four groups the goal page draws its waves in and
@@ -538,12 +581,29 @@ function Track({ track }: { track: GoalTrack }): JSX.Element {
     ...Array<string>(track.waiting).fill(''),
   ];
   return (
-    <span className="cn-track">
+    <span className="cn-track" title={trackTitle(track)}>
       {segs.map((tone, i) => (
         <i className={`cn-seg ${tone}`} key={i} />
       ))}
     </span>
   );
+}
+
+/**
+ * What the segments mean, in words, on hover. Four colours with no legend is a
+ * reading only somebody who has read this file can take, and a legend on the card
+ * would cost more room than the track itself — so the bar keeps the shape and the
+ * hover carries the key. Only the groups this goal actually has, most advanced
+ * first, so the sentence is about *this* goal rather than the vocabulary.
+ */
+function trackTitle(track: GoalTrack): string {
+  const parts = [
+    track.merged > 0 ? `${track.merged} merged` : '',
+    track.now > 0 ? `${track.now} in progress` : '',
+    track.held > 0 ? `${track.held} blocked` : '',
+    track.waiting > 0 ? `${track.waiting} not started` : '',
+  ].filter((part) => part !== '');
+  return `${track.total} ${track.total === 1 ? 'part' : 'parts'} — ${parts.join(', ')}`;
 }
 
 /**
