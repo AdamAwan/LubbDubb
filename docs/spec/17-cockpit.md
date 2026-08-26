@@ -2453,14 +2453,14 @@ about permission, and a 403 would send whoever reported it looking for a token p
 The bar over each card is segmented, and the four segments that are not `delivered` are the ones a
 reader acts on differently. The precedence is strict and every step of it is load-bearing:
 
-| Standing    | Is                                             | Beaten by                        |
-| ----------- | ---------------------------------------------- | -------------------------------- |
-| `unwatched` | no watch tag — **nothing has ever read it**    | nothing; it wins outright        |
-| `inFlight`  | a run the harness minted and has not finished  | `unwatched`                      |
-| `delivered` | `ticketOutcomes`' word                          | `unwatched`, `inFlight`          |
-| `fellShort` | worked, and the goal still not reached         | `unwatched`, `inFlight`          |
-| `settled`   | `concluded` or `abandoned`                     | `unwatched`, `inFlight`          |
-| `queued`    | watched, and none of the above                 | everything                       |
+| Standing    | Is                                            | Beaten by                 |
+| ----------- | --------------------------------------------- | ------------------------- |
+| `unwatched` | no watch tag — **nothing has ever read it**   | nothing; it wins outright |
+| `inFlight`  | a run the harness minted and has not finished | `unwatched`               |
+| `delivered` | `ticketOutcomes`' word                        | `unwatched`, `inFlight`   |
+| `fellShort` | worked, and the goal still not reached        | `unwatched`, `inFlight`   |
+| `settled`   | `concluded` or `abandoned`                    | `unwatched`, `inFlight`   |
+| `queued`    | watched, and none of the above                | everything                |
 
 **`unwatched` first, and it is the reading the whole board most has to get right.** An item carrying
 no watch tag has not been appraised, not been read and not been spent on — it is _unseen_, not late.
@@ -2489,6 +2489,50 @@ to no container is invisible at portfolio level by construction, and a board tha
 would report a fleet whose every hour rolls up somewhere. It carries its own spend for that reason:
 _this much was spent under no Feature_, which is also the sentence that says every roll-up above it
 understates its own.
+
+### The briefing
+
+Under the bar, each card carries three short lists — **In the way**, **Being worked**, **Delivered** —
+which are the questions somebody outside the fleet asks in that order: _what is stopping this_, _is it
+moving_, _what of it is done_. The counts above answer none of them: `3 fell short` is a number, and
+what a person needs is the sentence saying what fell short.
+
+**Every line in it was written by somebody.** A delivered line is `IssueDelivery.summary` as its
+author wrote it, attributed to them; a blocked line is either the agent's own escalation prompt or the
+assessor's shortfall summary; a working line is a goal and the age of the run on it. Nothing in the
+briefing is composed, scored, summarised or forecast — which is the same discipline the attention line
+one row up keeps from the other side. That line **counts facts and phrases them**; this one **quotes
+sentences and phrases nothing**. A briefing that wrote its own sentence would be exactly the verdict
+about a Feature this surface refuses, wearing an agent's voice.
+
+**Blocked is two words, not one.** `asked` is an agent parked on an escalation nobody has answered —
+the fleet is stopped and what it needs is a reply. `fell short` is an assessor's verdict that the work
+did not reach the goal — nothing is stopped, and what it needs is a decision. Folded into one word a
+reader could not tell which of the two things they owe, so they are drawn in two colours and questions
+sort first: one has an agent waiting against it and the other has been waiting anyway.
+
+**A question counts only where the escalation names the goal.** One raised against a pull request
+(`pr:42:ci`) names no goal here, and it is counted under **no** Feature rather than attributed to a
+guess at which one the PR was for. It is still on the needs-you rail, which is where a parked agent is
+answered.
+
+**Only `open` escalations block**, never "unanswered": `dismissEscalation` stamps no `answeredAt`, so a
+briefing keyed on that field would leave a Feature reporting a question nobody is being asked any more.
+
+**The outcome word decides the done and blocked lists, not the standing.** A re-picked goal is
+`inFlight` and still carries the verdict of its last attempt, and both readings are true at once —
+keying the delivered list off the standing would take finished work off the board for as long as an
+agent is on the goal.
+
+Each list is bounded (`FEATURE_BRIEFING_ROWS`, `src/features/featureBoard.ts`) and **says what it stood for**: `3 of 11`, never three
+rows and silence. Three of eleven blocked items read as three blocked items is the one number on this
+card somebody would act on being wrong about. The orphan card carries a briefing on the same terms —
+work answering to no container is still work, and a person asking what is in the way wants that answer
+too.
+
+A Feature with nothing worked, nothing delivered and nothing blocked draws **no briefing at all**. The
+bar has already said so, and three empty headings would be the loudest thing on the card saying
+nothing.
 
 ### What it deliberately does not draw
 

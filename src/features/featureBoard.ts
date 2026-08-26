@@ -1,19 +1,29 @@
 import { rollUpReach } from '../environments/reach.js';
 import { isContainerType } from '../issueRelations.js';
 import type { MirroredTicket } from '../store/tickets.js';
-import type { GoalEnvironmentReach, GoalLanding } from '../types.js';
+import type { Escalation, GoalEnvironmentReach, GoalLanding, IssueDelivery, IssueShortfall } from '../types.js';
 import { isWatched } from '../watchLabels.js';
 import type {
+  FeatureBlockRow,
   FeatureBoardPayload,
+  FeatureBriefing,
   FeatureChildRow,
   FeatureChildStanding,
   FeatureCounts,
   FeatureReach,
+  FeatureReportRow,
   FeatureRollup,
+  FeatureWorkingRow,
 } from '../wire.js';
 
 /** How many of a Feature's children the board ships. Enough to read; the Tickets tab has the rest. */
 export const FEATURE_CHILDREN = 25;
+
+/**
+ * How many rows of each briefing list the board ships. Enough to read at a glance;
+ * the count beside it says how many were cut, and the children below carry the rest.
+ */
+export const FEATURE_BRIEFING_ROWS = 3;
 
 interface BuildInput {
   items: readonly MirroredTicket[];
@@ -24,11 +34,21 @@ interface BuildInput {
   /** Which hue each feature draws in — the store's persisted assignment. */
   featureSlots: ReadonlyMap<number, number>;
   /**
-   * Goals with a run the harness minted and has not finished — the `inFlight`
-   * standing, and the one reading here that is about *now* rather than about a
-   * verdict somebody reached.
+   * Goals with a run the harness minted and has not finished, to when that run
+   * started — the `inFlight` standing, and the one reading here that is about
+   * *now* rather than about a verdict somebody reached.
+   *
+   * A map rather than a set because the briefing draws the age of the work, and
+   * the run's own `startedAt` is the only stamp that means "the harness has been
+   * on this since" — an agent's would restart on every re-dispatch.
    */
-  running: ReadonlySet<number>;
+  running: ReadonlyMap<number, string>;
+  /** The standing delivery verdicts — quoted for the briefing, never re-derived. */
+  deliveries: readonly IssueDelivery[];
+  /** The standing shortfall verdicts, likewise. */
+  shortfalls: readonly IssueShortfall[];
+  /** Every escalation; the briefing reads the open ones. */
+  escalations: readonly Escalation[];
   /** Per-goal environment standing — `allGoalReach`' answer, folded one tier up here. */
   reach: readonly { goalRef: string; environments: GoalEnvironmentReach[] }[];
   landings: readonly GoalLanding[];
@@ -67,6 +87,12 @@ export function buildFeatureBoard(input: BuildInput): Omit<FeatureBoardPayload, 
 
   const reachByGoal = new Map(input.reach.map((r) => [r.goalRef, r.environments]));
   const landedAt = lastLandingByGoal(input.landings);
+  const brief: BriefingContext = {
+    running,
+    deliveries: byIssueNumber(input.deliveries),
+    shortfalls: byIssueNumber(input.shortfalls),
+    questions: openQuestionsByGoal(input.escalations),
+  };
 
   const groups = new Map<number, { title: string; rows: FeatureChildRow[] }>();
   const orphanRows: FeatureChildRow[] = [];
@@ -110,6 +136,7 @@ export function buildFeatureBoard(input: BuildInput): Omit<FeatureBoardPayload, 
       workItemState: self?.workItemState ?? null,
       issueType: self?.issueType ?? null,
       counts: countStandings(group.rows),
+      briefing: briefingFor(group.rows, brief),
       children: orderChildren(group.rows).slice(0, FEATURE_CHILDREN),
       costUsd: totalCost(group.rows),
       reach: foldReach(group.rows, reachByGoal, input.environments),
@@ -124,6 +151,7 @@ export function buildFeatureBoard(input: BuildInput): Omit<FeatureBoardPayload, 
         ? null
         : {
             counts: countStandings(orphanRows),
+            briefing: briefingFor(orphanRows, brief),
             children: orderChildren(orphanRows).slice(0, FEATURE_CHILDREN),
             costUsd: totalCost(orphanRows),
             lastLandingAt: latestLanding(orphanRows, landedAt),
@@ -139,7 +167,7 @@ function childRow(
   ctx: {
     outcomes: ReadonlyMap<number, string>;
     costs: ReadonlyMap<number, number>;
-    running: ReadonlySet<number>;
+    running: ReadonlyMap<number, string>;
     watchLabel: string;
   },
 ): FeatureChildRow {
@@ -197,6 +225,113 @@ function countStandings(rows: readonly FeatureChildRow[]): FeatureCounts {
   };
   for (const row of rows) counts[row.standing] += 1;
   return counts;
+}
+
+interface BriefingContext {
+  running: ReadonlyMap<number, string>;
+  deliveries: ReadonlyMap<number, IssueDelivery>;
+  shortfalls: ReadonlyMap<number, IssueShortfall>;
+  questions: ReadonlyMap<number, Escalation[]>;
+}
+
+/**
+ * The three lists a person outside the fleet reads first: what is being worked,
+ * what was delivered, and what is stopping the rest.
+ *
+ * **Every sentence in it was written by somebody.** The delivery line is
+ * `IssueDelivery.summary`, the shortfall line is `IssueShortfall.summary` and the
+ * question is the escalation's own prompt — quoted, never reworded and never
+ * assembled from the counts above. That is the whole discipline of this function:
+ * the card ships no verdict about a Feature, and a briefing that composed its own
+ * sentence would be that verdict in an agent's voice.
+ *
+ * The **outcome word** decides the done and blocked lists, not the standing — a
+ * re-picked goal is `inFlight` and still carries the verdict of its last attempt,
+ * and both readings are true at once. Dropping the delivery while an agent works
+ * the next attempt would take finished work off the board for the duration.
+ *
+ * A question is only counted where the escalation names the goal itself
+ * (`issue:<n>`). One raised against a pull request names no goal here and is
+ * counted under no Feature rather than attributed to a guess — it is still on the
+ * needs-you rail, which is where a parked agent is answered.
+ */
+function briefingFor(rows: readonly FeatureChildRow[], ctx: BriefingContext): FeatureBriefing {
+  const working: FeatureWorkingRow[] = [];
+  const delivered: FeatureReportRow[] = [];
+  const blocking: FeatureBlockRow[] = [];
+
+  for (const { number, title, standing, outcome } of rows) {
+    const since = ctx.running.get(number);
+    if (since !== undefined && standing === 'inFlight') working.push({ number, title, since });
+
+    const delivery = ctx.deliveries.get(number);
+    if (outcome === 'delivered' && delivery) {
+      delivered.push({ number, title, summary: delivery.summary, by: delivery.by, at: delivery.decidedAt });
+    }
+
+    for (const ask of ctx.questions.get(number) ?? []) {
+      blocking.push({ number, title, kind: 'question', summary: ask.prompt, since: ask.createdAt });
+    }
+
+    const shortfall = ctx.shortfalls.get(number);
+    if (outcome === 'fell short' && shortfall) {
+      blocking.push({ number, title, kind: 'fellShort', summary: shortfall.summary, since: shortfall.decidedAt });
+    }
+  }
+
+  working.sort((a, b) => b.since.localeCompare(a.since));
+  delivered.sort((a, b) => b.at.localeCompare(a.at));
+  // A question outranks a shortfall of any age: one has an agent stopped against
+  // it, the other is a decision that has been waiting anyway.
+  blocking.sort((a, b) => blockRank(a) - blockRank(b) || b.since.localeCompare(a.since));
+
+  return {
+    working: working.slice(0, FEATURE_BRIEFING_ROWS),
+    workingTotal: working.length,
+    delivered: delivered.slice(0, FEATURE_BRIEFING_ROWS),
+    deliveredTotal: delivered.length,
+    blocking: blocking.slice(0, FEATURE_BRIEFING_ROWS),
+    blockingTotal: blocking.length,
+  };
+}
+
+function blockRank(row: FeatureBlockRow): number {
+  return row.kind === 'question' ? 0 : 1;
+}
+
+/** The standing verdict per issue number — one row per origin, as the store holds it. */
+function byIssueNumber<T extends { originRef: string }>(rows: readonly T[]): Map<number, T> {
+  const out = new Map<number, T>();
+  for (const row of rows) {
+    const number = issueNumberOf(row.originRef);
+    if (number !== null) out.set(number, row);
+  }
+  return out;
+}
+
+/**
+ * The open escalations that name a goal, keyed on it.
+ *
+ * `open` and not "unanswered": an escalation dismissed without an answer has
+ * `answeredAt` null for ever, and counting one as blocking would leave a Feature
+ * reporting a question nobody is being asked any more.
+ */
+function openQuestionsByGoal(escalations: readonly Escalation[]): Map<number, Escalation[]> {
+  const out = new Map<number, Escalation[]>();
+  for (const escalation of escalations) {
+    if (escalation.status !== 'open') continue;
+    const number = issueNumberOf(escalation.context.originRef ?? '');
+    if (number === null) continue;
+    const seen = out.get(number);
+    if (seen) seen.push(escalation);
+    else out.set(number, [escalation]);
+  }
+  return out;
+}
+
+function issueNumberOf(ref: string): number | null {
+  const match = /^issue:(\d+)$/.exec(ref);
+  return match ? Number(match[1]) : null;
 }
 
 /**
