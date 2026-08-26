@@ -808,14 +808,22 @@ function queueRow(item: QueueItem, view: CockpitView, actions: CockpitActions): 
     key: `${item.origin}|${item.rule}`,
     title: item.title,
     refs: <Ref to={item.origin} />,
-    facts: [
-      { label: 'rule', value: item.rule },
-      { label: 'status', value: item.status, alarm: held },
-    ],
+    facts: [{ label: 'rule', value: item.rule }],
+    // `QueueStatus` *is* the row's state — dispatching, or one of the named
+    // reasons it is not — so it wears the state column rather than sitting as a
+    // fact beside a bare `?`. Same duplication the rack and the goals card had:
+    // the word and the sentence that expands it were a column apart, and the one
+    // with the width said nothing until hovered.
+    whyLabel: item.status,
+    // `unapproved` is the one held reason that is *your* move — a decomposition
+    // nobody has accepted waits on a person, not on the harness. The rest are the
+    // harness stopped: a throttle to sit out, a per-plan cap, an earlier rule
+    // holding the issue, no headroom.
+    whyTone: item.status === 'unapproved' ? 'ask' : held ? 'hold' : 'quiet',
     // The queue's own sentence, verbatim and unre-worded — the direct answer to
     // "are we working on the right thing". Behind the marker rather than on the
     // glass: it is a paragraph on the rows that are held, and the word that says
-    // *which* rows those are is a fact above.
+    // *which* rows those are is now the marker's own label.
     why: item.reason,
     chips:
       // Why this row is where it is. Without it a flagged goal's parts sit at the

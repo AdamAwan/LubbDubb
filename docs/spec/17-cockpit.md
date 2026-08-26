@@ -1307,11 +1307,11 @@ no such column. `waitedFor` is shared for the chip's reason — the rack draws t
 
 **And the row itself carries it.** `PanelRowModel.live` puts a green edge down the row and a slow
 sweep across it — the whole line, rather than one more mark in one more slot. That is the honest shape
-for what it says: every other reading on a row is a fact *about the thing* and sits in the slot for
+for what it says: every other reading on a row is a fact _about the thing_ and sits in the slot for
 that fact, while this one says the row's subject is under somebody's hands as you read it, and is
 about to make the rest of the row out of date. A card where one row is moving is readable across a
 room; a 6px mark in the fifth column is not. The two are one signal with two jobs — the sweep is what
-is *happening*, the marker is where to *go* — and the motion is what a `prefers-reduced-motion` reader
+is _happening_, the marker is where to _go_ — and the motion is what a `prefers-reduced-motion` reader
 gives up, never the edge or the marker.
 
 The chip itself is **`web/src/components/AgentOnIt.tsx`, shared**, because it is one fact and the
@@ -1478,16 +1478,34 @@ being forgotten:
   something. The tone is about whether the row wants anything, never about how far along it is.
   → `test/panelGrammar.test.ts`
 
+  **The Up next card's word is `QueueStatus`** — `dispatching`, or the named reason it is not:
+  `cooldown`, `capped`, `unapproved`, `superseded`, `waiting`. Third card with the same fix: the
+  status was a fact and the sentence expanding it was a bare `?` one column over, so the slot with the
+  width said nothing until hovered. `unapproved` is the only `ask` — a decomposition nobody has
+  accepted waits on a person; the rest are the harness stopped, and `hold`. The reason itself is still
+  quoted verbatim and still behind the marker: it is a paragraph on the held rows, and re-wording it
+  would put the cockpit's opinion where the queue's own answer to "are we working on the right thing"
+  belongs.
+
+- **Every rail is a ceiling, and the subject has a floor.** The widths are `minmax(0, var(--cn-w-*))`
+  and the subject is `minmax(var(--cn-w-title), 1fr)`. Fixed, the rails were sized against a
+  full-width card and simply overran a half-width one — `1fr` takes what is _left_, so with nothing
+  below it the title was the only track that could give: the Up next card's titles had 80px of 534 and
+  clipped to a word, while World signals — same width, fewer slots — kept 277. The floor is what makes
+  the ceilings bite. It does not make an over-subscribed card fit: a card carrying a state word, a
+  control and a refs group at half width is short on room whatever gives way, and the honest fix for
+  that one is the card's width or one slot fewer.
+
 - **`toggle` is the row's switch, and it is pinned left of the subject.** Whether the harness takes an
-  interest in this row at all — the rack's watch tag — is not the row's *work*, which is what `action`
+  interest in this row at all — the rack's watch tag — is not the row's _work_, which is what `action`
   is for and why `action` has the width. It is the same control in the same place on every row of the
   card, so it goes where an eye can skip it. It is drawn as the **state it is in** rather than as the
   word for the other one: `watch` / `unwatch` was a verb that contradicted every row it appeared on
-  (a row said `unwatch` precisely when it *was* watched) until you worked out it was an instruction.
+  (a row said `unwatch` precisely when it _was_ watched) until you worked out it was an instruction.
   An open eye is the harness looking; a struck one is not. The verb survives in the hover, where an
   instruction belongs.
 
-  What a pull-request row states in `facts` are the three *reasons it is not merged yet* — unresolved
+  What a pull-request row states in `facts` are the three _reasons it is not merged yet_ — unresolved
   `comments`, a `merge` conflict, how long it has been `waiting` on a reviewer — each drawn only where
   it is true, so a row with none of them is visibly a pull request with nothing in its way. `branch`
   used to be the only one and was the row's least useful fact: the title says what the work is and the
@@ -1495,10 +1513,10 @@ being forgotten:
 
 The model has **two renderings**, because the layout was worth settling separately from the rule:
 
-| Grammar   | The card is                   | Drawn as                                                                          |
-| --------- | ----------------------------- | --------------------------------------------------------------------------------- |
+| Grammar   | The card is                   | Drawn as                                                                                |
+| --------- | ----------------------------- | --------------------------------------------------------------------------------------- |
 | `facts`   | a list of rows                | one line each on a fixed rail: lamp, switch, subject, why, reading, chips, action, refs |
-| `columns` | a table with its own headings | a cell each; the fact labels **are** the headings, plus `Why` and the refs column |
+| `columns` | a table with its own headings | a cell each; the fact labels **are** the headings, plus `Why` and the refs column       |
 
 Both put the same slots in the same order, and both hold a slot open on every row of a card where any
 row fills it — the census is one function, `slotsUsed`, read once per card and shared. In `facts` that

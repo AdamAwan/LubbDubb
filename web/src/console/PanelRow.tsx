@@ -205,16 +205,26 @@ function slotsUsed(rows: readonly PanelRowModel[]): SlotsUsed {
  * `console.css`, so the rail is one edit for every card rather than five.
  */
 function gridTemplate(has: SlotsUsed): string {
+  // Every rail is a *ceiling*, not a width. Fixed, they were sized against a
+  // full-width card and simply overran a half-width one: six slots on the Up next
+  // card left its titles 80px of 534 and clipped every one of them to a word,
+  // while World signals — same width, four slots — gave its own 277. A rail that
+  // gives way keeps the row's shape on a wide card and costs the slots, not the
+  // subject, on a narrow one.
+  const rail = (w: string): string => `minmax(0, var(${w}))`;
   return [
     has.lamp ? 'var(--cn-w-lamp)' : '',
     has.toggle ? 'var(--cn-w-eye)' : '',
-    'minmax(0, 1fr)',
+    // And the subject has a floor, which is what makes the ceilings bite: `1fr`
+    // takes what is left over, so with nothing below it the title is the one track
+    // that collapses and the rails never shrink at all.
+    'minmax(var(--cn-w-title), 1fr)',
     // A column of words needs the width of a word; a column of markers does not.
-    has.why ? (has.whyLabel ? 'var(--cn-w-state)' : 'var(--cn-w-why)') : '',
-    has.reading ? 'var(--cn-w-read)' : '',
-    has.chips ? 'var(--cn-w-chips)' : '',
-    has.action ? 'var(--cn-w-act)' : '',
-    has.refs ? 'var(--cn-w-refs)' : '',
+    has.why ? rail(has.whyLabel ? '--cn-w-state' : '--cn-w-why') : '',
+    has.reading ? rail('--cn-w-read') : '',
+    has.chips ? rail('--cn-w-chips') : '',
+    has.action ? rail('--cn-w-act') : '',
+    has.refs ? rail('--cn-w-refs') : '',
   ]
     .filter((part) => part !== '')
     .join(' ');

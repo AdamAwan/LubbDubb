@@ -1592,6 +1592,12 @@ a.cn-tgl {
   --cn-w-chips: 132px;
   --cn-w-act: 124px;
   --cn-w-refs: 108px;
+  /* The subject's floor, and the only one of these that is a minimum rather than a
+     ceiling. Every rail above gives way to it, because a title clipped to one word
+     is the row saying nothing at all while the slots beside it keep room they do
+     not need. Enough for a short sentence; a long one still ellipses, which is the
+     honest failure. */
+  --cn-w-title: 168px;
 }
 /* A row on the card's grid, rather than a flex line that packs to the right.
    Packed, a slot's position depended on what the slots before it happened to
