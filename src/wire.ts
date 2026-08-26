@@ -434,6 +434,21 @@ export interface KnowledgeFactView extends KnowledgeFact {
    * rather than assert it.
    */
   scopeLastMatchedAt: string | null;
+  /**
+   * Whether this claim has gone **cold**: a `proposal` nobody has agreed with, no
+   * agent has asked for and no operator has ruled on, older than
+   * `knowledgeColdDays`.
+   *
+   * The verdict is the server's for `scopeStale`'s reason — it is a comparison
+   * against a configured window, and an age taken from `Date.now()` in the browser
+   * would be a second implementation of it, free to disagree with the count on the
+   * fold beside it.
+   *
+   * **A reading about drawing and nothing else.** It moves no reach, takes no claim
+   * out of any prompt — a proposal is in none — and the next corroboration makes it
+   * warm again. Always false while `knowledgeColdDays` is `0`.
+   */
+  cold: boolean;
 }
 
 /**

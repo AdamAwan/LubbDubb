@@ -859,11 +859,13 @@ test('the page draws every reach, the rejected tail included', async () => {
 
   const state = buildDemoState().state;
   const draw = (query: {
-    view: 'list' | 'table';
+    view: 'queue' | 'list' | 'table';
     show: 'all' | 'waiting' | 'reaching' | 'settled';
     sort: 'reach' | 'claim' | 'scope' | 'observers' | 'disputes' | 'asks' | 'age';
     desc: boolean;
     fold: string[];
+    standing?: string | null;
+    open?: string[];
   }): string =>
     renderToStaticMarkup(
       createElement(RefLinks, {
@@ -879,7 +881,7 @@ test('the page draws every reach, the rejected tail included', async () => {
           now: Date.now(),
           refUrls: state.refUrls,
           viewingFact: null,
-          query,
+          query: { standing: null, open: [], ...query },
           onQuery: () => undefined,
           onReach: () => undefined,
           onExit: () => undefined,
@@ -893,6 +895,8 @@ test('the page draws every reach, the rejected tail included', async () => {
       }),
     );
 
+  // `list`, not the queue a bare URL now means: every assertion below is about the
+  // nine headings, which is what `?kn=list` draws and the queue puts behind a click.
   const bare = { view: 'list' as const, show: 'all' as const, sort: 'reach' as const, desc: false };
   // Nothing folded, which is what a bare URL means and what every assertion below
   // is made against: a claim hidden by default would leave no way to tell a list

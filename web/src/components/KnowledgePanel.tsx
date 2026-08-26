@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import type { JSX } from 'react';
 import type {
   ContradictionRuling,
@@ -19,9 +19,14 @@ import { absDate, fmtTokens, fmtUsd, relTime, untilTime } from './util.js';
 import { Ref } from './refs.js';
 import {
   groupFor,
+  inQueueFold,
   inShow,
   KNOWLEDGE_GROUPS,
   nextSort,
+  QUEUE_FOLDS,
+  queueNext,
+  queueOrder,
+  queueStanding,
   sortFacts,
   waitingOn,
   type KnowledgeQuery,
@@ -146,6 +151,12 @@ export function KnowledgePanel({
   }
   const shown = facts.filter((fact) => inShow(query.show, fact, waiting.get(fact.id) ?? null));
   const folded = new Set(query.fold);
+  // The queue, and where in it the operator is standing — `waitingOn`'s own answer
+  // ordered oldest first, never a second predicate. Taken here rather than inside
+  // the queue component so the nav's count, the card and the reason on the row are
+  // three readings of one function.
+  const queue = queueOrder(facts, waiting);
+  const standing = queueStanding(queue, query.standing);
   const shared = {
     now,
     refUrls,
@@ -162,6 +173,39 @@ export function KnowledgePanel({
     graduationOf,
     waiting,
   };
+  const bar = (
+    <KnowledgeBar
+      query={query}
+      onQuery={onQuery}
+      counts={{
+        all: facts.length,
+        waiting: facts.filter((f) => waiting.has(f.id)).length,
+        reaching: facts.filter((f) => inShow('reaching', f, null)).length,
+        settled: facts.filter((f) => inShow('settled', f, null)).length,
+      }}
+    />
+  );
+  // The queue is the page an operator opens several times a day, and it is what a
+  // bare link to the tab means. The nine headings answer *what is in this store*;
+  // this answers *what is on me*, which is the question they arrive with.
+  if (query.view === 'queue') {
+    return (
+      <div className="kn">
+        {bar}
+        <KnowledgeQueue
+          queue={queue}
+          standing={standing}
+          facts={facts}
+          delivery={delivery}
+          cost={cost}
+          query={query}
+          onQuery={onQuery}
+          onRaise={onRaise}
+          {...shared}
+        />
+      </div>
+    );
+  }
   return (
     <div className="kn">
       <p className="muted small kn-note">
@@ -174,16 +218,7 @@ export function KnowledgePanel({
         forget. Every heading below carries its own rule — hover one to read it.
       </p>
       <ClaimComposer onRaise={onRaise} />
-      <KnowledgeBar
-        query={query}
-        onQuery={onQuery}
-        counts={{
-          all: facts.length,
-          waiting: facts.filter((f) => waiting.has(f.id)).length,
-          reaching: facts.filter((f) => inShow('reaching', f, null)).length,
-          settled: facts.filter((f) => inShow('settled', f, null)).length,
-        }}
-      />
+      {bar}
       {/* The budget is the page's, not a section's, since the page grew a filter
           and a second view: a reading about what every agent receives that
           disappears because somebody narrowed to the settled tail is a reading they
@@ -237,6 +272,233 @@ export function KnowledgePanel({
  * shows the same rows in another order; nothing here is a ruling, and nothing here
  * is a reading the server did not already take.
  */
+/**
+ * The queue: one claim at a time, the oldest that needs a ruling.
+ *
+ * **This is what a bare link to the tab opens on.** Nine headings, every one of
+ * them open, is a page that answers *what is in this store* — and an operator
+ * opens it several times a day to answer *what is on me*. Nothing is deleted for
+ * it: the list is one click away in the bar above, and it is still the surface
+ * that shows the store's shape.
+ *
+ * **Nothing here reads a claim to decide what it is for.** The card offers the
+ * exits the store permits and no classifier sorts claims into work and knowledge
+ * on the operator's behalf — that is the taxonomy `raise` exists to remove, and
+ * putting it back at this end would be the same mistake with a different victim.
+ * The only thing the queue changes about the exits is where they stand: beside
+ * promote and retire, because *this is work somebody should do* is one of the
+ * answers to *how far does this claim carry*.
+ * → `docs/spec/27-knowledge.md#the-queue-is-the-page`
+ */
+function KnowledgeQueue({
+  queue,
+  standing,
+  facts,
+  delivery,
+  cost,
+  query,
+  onQuery,
+  onRaise,
+  ...row
+}: {
+  /** Every claim waiting on a person, oldest first — `waitingOn`'s own answer. */
+  queue: KnowledgeFactView[];
+  /** The card in front, or null when nothing is waiting. */
+  standing: KnowledgeFactView | null;
+  facts: KnowledgeFactView[];
+  delivery: KnowledgeDeliveryView;
+  cost: KnowledgeCost;
+  query: KnowledgeQuery;
+  onQuery: (next: Partial<KnowledgeQuery>) => void;
+  onRaise: (claim: string, originRef: string | null) => Promise<unknown>;
+} & RowProps): JSX.Element {
+  const opened = new Set(query.open);
+  const next = queueNext(queue, standing);
+  // The keyboard is what makes a queue faster than a list, and it **clicks the
+  // control the card actually drew** rather than calling a handler of its own. A
+  // second implementation of *which ruling the store would take here* is a key that
+  // offers an exit on a claim the route refuses, with nothing red — this way a key
+  // that names no button on this card does nothing at all. It is also what keeps
+  // the one asymmetry the two words were separated for: reject is the same key
+  // twice because the button it presses is the same two-step confirm.
+  const cardRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.metaKey || event.ctrlKey || event.altKey || event.key.length !== 1) return;
+      // Never over somebody's typing: the composer sits on this page too, and a
+      // ruling fired by a keystroke meant for a textarea is a ruling nobody made.
+      const from = event.target as HTMLElement | null;
+      if (from !== null && (from.isContentEditable || from.tagName === 'INPUT' || from.tagName === 'TEXTAREA')) return;
+      const key = event.key.toLowerCase();
+      const control = cardRef.current?.querySelector<HTMLButtonElement>(`[data-kn-key="${key}"]`);
+      if (!control || control.disabled) return;
+      event.preventDefault();
+      control.click();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  const at = standing === null ? 0 : queue.findIndex((fact) => fact.id === standing.id) + 1;
+  return (
+    <>
+      {standing === null ? (
+        <QueueEmpty facts={facts} delivery={delivery} cost={cost} {...row} />
+      ) : (
+        <section className="kn-queue">
+          <h3 className="kn-head">
+            <span title="The oldest claim that needs a ruling. Oldest first, because a queue whose top is the same claim every morning is a queue you stop opening — the one you keep skipping is exactly the one that has to come back up.">
+              Waiting on you{' '}
+              <span className="muted small">
+                · {at} of {queue.length}
+              </span>
+            </span>
+          </h3>
+          <p className="muted small kn-note">
+            One at a time, with the evidence under it. The keys are on the controls — hover one to read its rule.{' '}
+            <b>Later</b> writes nothing: it moves you on and leaves the claim exactly where it is.
+          </p>
+          {/* The provenance is open rather than a click away: an operator ruling on
+              whether the fleet should be told something is reading the evidence,
+              not a count of it. That is the one thing this card does that a row in
+              the list does not. */}
+          <div ref={cardRef}>
+            <FactCard fact={standing} evidenceOpen {...row} />
+            <div className="kn-acts">
+              <span className="spacer" />
+              <button
+                type="button"
+                className="ghost"
+                data-kn-key="n"
+                disabled={next === null}
+                title="Not a ruling, and it writes nothing — the next card, with this claim exactly as you found it. Where you are standing is in the address bar, so a reload lands here and the back button steps back through the ones behind you. (n)"
+                onClick={() => onQuery({ standing: next === null ? null : next.id })}
+              >
+                Later
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+      {/* Three folds, each carrying its count. This is what revises "nothing is
+          folded by default", and it keeps what that rule was protecting: a fold
+          that states its own size cannot let *retired* read as *deleted*, and it
+          tells a list you have finished with from one that lost rows. The three
+          headings that reach an agent carry no fold — they are what an empty queue
+          draws. */}
+      {QUEUE_FOLDS.map((fold) => {
+        const inFold = facts.filter((fact) => inQueueFold(fold.id, fact));
+        const open = opened.has(fold.id);
+        return (
+          <QueueFold
+            key={fold.id}
+            fold={fold}
+            count={inFold.length}
+            open={open}
+            onToggle={() =>
+              onQuery({
+                open: open ? query.open.filter((id) => id !== fold.id) : [...query.open, fold.id],
+              })
+            }
+          >
+            {fold.id === 'store' ? (
+              <KnowledgeTable facts={inFold} sort={query.sort} desc={query.desc} onQuery={onQuery} {...row} />
+            ) : inFold.length === 0 ? (
+              <p className="empty">Nothing here.</p>
+            ) : (
+              inFold.map((fact) => <FactCard key={fact.id} fact={fact} {...row} />)
+            )}
+          </QueueFold>
+        );
+      })}
+      {/* Under the folds rather than over the card: the queue is for ruling on what
+          the fleet raised, and a composer at the top of it is a form between an
+          operator and the four rows they came for. It is the same one the list
+          draws, and it lands the same one-voice proposal. */}
+      <ClaimComposer onRaise={onRaise} />
+    </>
+  );
+}
+
+/**
+ * A fold under the queue, carrying its count.
+ *
+ * Closed to start, which is the revision this view makes and the whole of it: the
+ * count on the heading is what says a tail is there and how big it is, so nothing
+ * disappears without trace and one click has it back.
+ */
+function QueueFold({
+  fold,
+  count,
+  open,
+  onToggle,
+  children,
+}: {
+  fold: (typeof QUEUE_FOLDS)[number];
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+  children: JSX.Element | JSX.Element[];
+}): JSX.Element {
+  return (
+    <section className="kn-section">
+      <h3 className="kn-head">
+        <button
+          type="button"
+          className="chip-button kn-fold"
+          aria-expanded={open}
+          title={fold.blurb}
+          onClick={onToggle}
+        >
+          <span aria-hidden="true">{open ? '▾' : '▸'}</span> {fold.title} <span className="muted small">· {count}</span>
+        </button>
+      </h3>
+      {open && children}
+    </section>
+  );
+}
+
+/**
+ * Nothing on you — the state this store is meant to be in, and one worth drawing.
+ *
+ * It says what the fleet is being told and what that costs, rather than a blank
+ * page or a congratulation: an operator arriving here should be able to see,
+ * without clicking anything, what their last decisions actually put in front of
+ * the fleet. The three headings that reach an agent are what it draws, and they
+ * carry no fold here for the reason they carry none on the list — a page that can
+ * hide what the fleet is being told is not a governance surface.
+ */
+function QueueEmpty({
+  facts,
+  delivery,
+  cost,
+  ...row
+}: {
+  facts: KnowledgeFactView[];
+  delivery: KnowledgeDeliveryView;
+  cost: KnowledgeCost;
+} & RowProps): JSX.Element {
+  return (
+    <>
+      <p className="empty">
+        Nothing is waiting on you. Everything below is what the fleet is being told — this is the state the store is
+        meant to be in.
+      </p>
+      <BlockBudget delivery={delivery} cost={cost} />
+      {KNOWLEDGE_GROUPS.filter((group) => !group.tail).map((group) => (
+        <KnowledgeSection
+          key={group.id}
+          group={group}
+          facts={facts.filter((fact) => groupFor(fact, row.now) === group.id)}
+          open
+          onToggle={() => undefined}
+          {...row}
+        />
+      ))}
+      <Receives delivery={delivery} />
+    </>
+  );
+}
+
 function KnowledgeBar({
   query,
   onQuery,
@@ -313,6 +575,12 @@ const SHOW_OPTIONS: ReadonlyArray<{ value: KnowledgeQuery['show']; label: string
 ];
 
 const VIEW_OPTIONS: ReadonlyArray<{ value: KnowledgeQuery['view']; label: string; title: string }> = [
+  {
+    value: 'queue',
+    label: 'Queue',
+    title:
+      'One claim at a time — the oldest that needs a ruling, with the evidence under it. What a bare link to this tab opens on: the question an operator arrives with is what is on me, and nine headings answer what is in this store',
+  },
   { value: 'list', label: 'List', title: 'Grouped by where each claim stands, with the long tails folded away' },
   {
     value: 'table',
@@ -832,6 +1100,7 @@ function KnowledgeSection({
  */
 function FactCard({
   fact,
+  evidenceOpen = false,
   now,
   refUrls,
   viewingFact,
@@ -846,8 +1115,16 @@ function FactCard({
   dropped,
   graduationOf,
   waiting,
-}: { fact: KnowledgeFactView } & RowProps) {
-  const open = viewingFact === fact.id;
+}: {
+  fact: KnowledgeFactView;
+  /**
+   * Draw the observers' own sentences without being asked — the queue's card, and
+   * nothing else. `?fact=` still says which row an operator *opened*, so a link
+   * out of the queue lands on the same provenance in the list.
+   */
+  evidenceOpen?: boolean;
+} & RowProps) {
+  const open = evidenceOpen || viewingFact === fact.id;
   const graduation = graduationOf.get(fact.id) ?? null;
   // Why this claim is waiting on a person — drawn only where the heading above it
   // does not already say so. Under **Needs you** it would be the section's own
@@ -1007,9 +1284,11 @@ function FactCard({
         {/* The words behind the count — what an operator reads to decide whether
             the claim should have carried. Its own fetch, and a place, so a link to
             it opens on it. */}
-        <button type="button" className="ghost" onClick={() => onViewFact(open ? null : fact.id)}>
-          {open ? 'Hide what was seen' : 'What was seen'}
-        </button>
+        {!evidenceOpen && (
+          <button type="button" className="ghost" onClick={() => onViewFact(open ? null : fact.id)}>
+            {open ? 'Hide what was seen' : 'What was seen'}
+          </button>
+        )}
         <span className="spacer" />
         <FactExits
           fact={fact}
@@ -1173,16 +1452,18 @@ function FactExits({
     <>
       <AsyncButton
         className="ghost"
+        data-kn-key="j"
         onClick={() => onExit(fact.id, { exit: 'job' })}
-        title="Queue this as a job — an agent verifies the claim and works it now. Nothing here says the claim is true; the prompt tells it to check first and stop if it does not hold"
+        title="Queue this as a job — an agent verifies the claim and works it now. Nothing here says the claim is true; the prompt tells it to check first and stop if it does not hold. (j)"
       >
         Queue job
       </AsyncButton>
       {canFileTickets && (
         <AsyncButton
           className="ghost"
+          data-kn-key="t"
           onClick={() => onExit(fact.id, { exit: 'ticket' })}
-          title="File it in the tracker so it can wait its turn there — an agent writes it up, and the claim leaves every prompt once the item exists"
+          title="File it in the tracker so it can wait its turn there — an agent writes it up, and the claim leaves every prompt once the item exists. (t)"
         >
           File ticket
         </AsyncButton>
@@ -1191,8 +1472,9 @@ function FactExits({
         <button
           type="button"
           className="ghost"
+          data-kn-key="d"
           onClick={() => onCommitting(!committing)}
-          title="Open a documentation pull request for this claim. It keeps reaching agents until that pull request merges, and leaves every prompt when it does"
+          title="Open a documentation pull request for this claim. It keeps reaching agents until that pull request merges, and leaves every prompt when it does. (d)"
         >
           {committing ? 'Not now' : 'Commit to the repository'}
         </button>
@@ -1392,8 +1674,9 @@ function FactRulings({
     return (
       <AsyncButton
         className="ghost"
+        data-kn-key="c"
         onClick={() => onReach(fact.id, 'lookup')}
-        title="Carry it again — answered when an agent asks. Retiring was a prune, not a judgement, so this needs no appeal"
+        title="Carry it again — answered when an agent asks. Retiring was a prune, not a judgement, so this needs no appeal. (c)"
       >
         Carry again
       </AsyncButton>
@@ -1404,8 +1687,9 @@ function FactRulings({
       {fact.reach === 'proposal' && (
         <AsyncButton
           className="ghost"
+          data-kn-key="l"
           onClick={() => onReach(fact.id, 'lookup')}
-          title="Answer asks with this, without waiting for a second agent to see it"
+          title="Answer asks with this, without waiting for a second agent to see it. (l)"
         >
           Put on lookup
         </AsyncButton>
@@ -1413,8 +1697,9 @@ function FactRulings({
       {fact.reach === 'lookup' && fact.ruledAt === null && (
         <AsyncButton
           className="ghost"
+          data-kn-key="l"
           onClick={() => onReach(fact.id, 'lookup')}
-          title="True, but not worth every agent's context — leave it here, and stop being asked about it"
+          title="True, but not worth every agent's context — leave it here, and stop being asked about it. (l)"
         >
           Keep on lookup
         </AsyncButton>
@@ -1422,16 +1707,18 @@ function FactRulings({
       {fact.reach === 'injected' ? (
         <AsyncButton
           className="ghost"
+          data-kn-key="l"
           onClick={() => onReach(fact.id, 'lookup')}
-          title="Take it out of every agent's prompt, and leave it answerable when somebody asks"
+          title="Take it out of every agent's prompt, and leave it answerable when somebody asks. (l)"
         >
           Demote to lookup
         </AsyncButton>
       ) : (
         <AsyncButton
           className="primary"
+          data-kn-key="i"
           onClick={() => onReach(fact.id, 'injected')}
-          title="Put this in front of every agent, before it reads any code. Yours alone to say"
+          title="Put this in front of every agent, before it reads any code. Yours alone to say. (i)"
         >
           Inject
         </AsyncButton>
@@ -1444,16 +1731,18 @@ function FactRulings({
           raises it again with its own evidence and today's date. */}
       <AsyncButton
         className="ghost"
+        data-kn-key="r"
         onClick={() => onReach(fact.id, 'retired')}
-        title="Stop carrying it — not a judgement that it is false. An agent that sees it again may raise it, which re-dates the claim"
+        title="Stop carrying it — not a judgement that it is false. An agent that sees it again may raise it, which re-dates the claim. (r)"
       >
         Retire
       </AsyncButton>
       <ConfirmButton
         className="ghost"
+        hotkey="x"
         label="Reject"
         confirmLabel="Say it is not true?"
-        title="Not true — and barred from being raised again. Terminal: what comes back is an amendment naming this claim, filed by an agent"
+        title="Not true — and barred from being raised again. Terminal: what comes back is an amendment naming this claim, filed by an agent. Twice — x, then x again: retiring is the cheap act and rejecting bars a claim by name"
         onConfirm={() => onReach(fact.id, 'rejected')}
       />
     </>

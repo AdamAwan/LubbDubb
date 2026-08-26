@@ -2025,6 +2025,16 @@ select:disabled {
   font-size: 13px;
   margin: 0;
 }
+/* The queue's one card, given the room a page's subject gets. Everything on it is
+   the section above's — a card, a heading, an act row — so this sets the spacing
+   and takes no colour of its own: a hex here would be a surface no theme can
+   reach. → docs/spec/17-cockpit.md#tokens */
+.kn-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
 .kn-section > p {
   margin: 0;
 }

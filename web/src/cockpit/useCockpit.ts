@@ -396,6 +396,8 @@ export function useCockpit(): CockpitStatus {
       knowledgeSort: place.knowledgeSort,
       knowledgeDesc: place.knowledgeDesc,
       knowledgeFolded: place.knowledgeFolded,
+      knowledgeQueue: place.knowledgeQueue,
+      knowledgeOpen: place.knowledgeOpen,
       insightsView: place.insightsView,
       insightsWindow: place.insightsWindow,
       poolProject: place.poolProject,

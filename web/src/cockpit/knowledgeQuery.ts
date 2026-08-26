@@ -26,6 +26,10 @@ export interface KnowledgeQuery {
   sort: Place['knowledgeSort'];
   desc: Place['knowledgeDesc'];
   fold: Place['knowledgeFolded'];
+  /** Which claim the queue is standing on, or null for the oldest one waiting. */
+  standing: Place['knowledgeQueue'];
+  /** Which of the queue's three folds are open — opened rather than folded away. */
+  open: Place['knowledgeOpen'];
 }
 
 /**
@@ -277,4 +281,107 @@ export function nextSort(
   if (current === key) return { knowledgeSort: key, knowledgeDesc: !desc };
   const countsDown = key === 'observers' || key === 'disputes' || key === 'asks' || key === 'age';
   return { knowledgeSort: key, knowledgeDesc: countsDown };
+}
+
+/**
+ * The queue, oldest first: every claim {@link waitingOn} answers for, in the order
+ * an operator has to meet them.
+ *
+ * **Oldest and not newest.** A queue whose top is the same claim every morning is
+ * a queue an operator stops opening, and the one they keep skipping is exactly the
+ * one that has to come back up. Newest-first would put the claim they have already
+ * decided not to decide at the bottom for ever.
+ *
+ * **It is the filter's own predicate and never a second copy of it.** The card
+ * that is drawn, the count on the fold and the reason on the row are three
+ * readings of one function — which is how a queue that says four and holds three
+ * is made unreachable rather than merely unlikely.
+ */
+export function queueOrder(
+  facts: readonly KnowledgeFactView[],
+  waiting: ReadonlyMap<string, string>,
+): KnowledgeFactView[] {
+  return facts
+    .filter((fact) => waiting.has(fact.id))
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+}
+
+/**
+ * Which card the queue is on: the one `?q=` names while it is still waiting, and
+ * the oldest otherwise.
+ *
+ * The fallback is what keeps a ruling from emptying the page: the moment an
+ * operator promotes the claim they were standing on it stops being waited on, so
+ * `?q=` names a card that is no longer in the queue and the next one is what
+ * should be in front of them. A stale id is therefore not an error worth a screen
+ * — it is a claim that has been dealt with, which is the ordinary case here.
+ */
+export function queueStanding(order: readonly KnowledgeFactView[], standing: string | null): KnowledgeFactView | null {
+  return order.find((fact) => fact.id === standing) ?? order[0] ?? null;
+}
+
+/**
+ * The card after this one, or null at the end — what *later* advances to.
+ *
+ * *Later* is not a ruling and writes nothing: it moves where the operator is
+ * standing and leaves the claim exactly as it was, which is why the queue's own
+ * order is what it steps through rather than a list of what has been skipped.
+ */
+export function queueNext(
+  order: readonly KnowledgeFactView[],
+  standing: KnowledgeFactView | null,
+): KnowledgeFactView | null {
+  if (standing === null) return null;
+  const at = order.findIndex((fact) => fact.id === standing.id);
+  return at < 0 ? null : (order[at + 1] ?? null);
+}
+
+/**
+ * The three folds under the card, each carrying its count.
+ *
+ * **This is what revises "nothing is folded by default", and it keeps what that
+ * rule was protecting.** The rule exists so that *retired* can never read as
+ * *deleted*, and so a list an operator has finished with can be told from one that
+ * lost rows — and a fold that states its own size says both of those in one line.
+ * What the old rule bought at the price of nine open sections, the count buys at
+ * the price of one.
+ *
+ * The three headings that reach an agent are not here, exactly as they carry no
+ * fold on the list: a page that can hide what the fleet is being told is not a
+ * governance surface, and they are what an empty queue draws instead.
+ */
+export const QUEUE_FOLDS: readonly { id: string; title: string; blurb: string }[] = [
+  {
+    id: 'cold',
+    title: 'Gone cold',
+    blurb:
+      'Proposals nobody agreed with, no agent asked for and no operator has ruled on, older than knowledgeColdDays. Folded rather than dropped: nothing has been judged, nothing is barred, the row goes on saying what it said, and the next corroboration makes it warm again. It is a reading about drawing and nothing else — a proposal is in no prompt, so there is nothing here for a clock to take off an agent.',
+  },
+  {
+    id: 'settled',
+    title: 'Settled',
+    blurb:
+      'Gone somewhere better, superseded, retired and rejected — the four reaches that ask nothing. Drawn rather than dropped, so a list you have finished with can be told from one that lost rows.',
+  },
+  {
+    id: 'store',
+    title: 'The whole store',
+    blurb:
+      'Every claim as one sortable row — what should I do now is a question about a group, and what is the fleet asking for that nobody has vouched for is a question about an order.',
+  },
+];
+
+/**
+ * Whether a claim belongs under one of the queue's folds — the same reaches
+ * {@link inShow}'s `settled` gathers, and {@link KnowledgeFactView.cold}'s own
+ * server-side verdict.
+ *
+ * `cold` is read off the row rather than taken here for the reason every other
+ * count on this page is server-side: an age against a configured window computed
+ * in the browser is free to disagree with the one the fold's count was taken from.
+ */
+export function inQueueFold(id: string, fact: KnowledgeFactView): boolean {
+  if (id === 'cold') return fact.cold;
+  if (id === 'settled') return inShow('settled', fact, null);
+  return true;
 }

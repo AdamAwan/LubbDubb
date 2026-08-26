@@ -1066,6 +1066,7 @@ class DemoServer {
         lastAskedAt: null,
         scopeStale: false,
         scopeLastMatchedAt: null,
+        cold: false,
       },
       ...this.state.knowledge,
     ];

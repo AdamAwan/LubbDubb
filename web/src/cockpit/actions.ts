@@ -361,7 +361,16 @@ export interface CockpitActions {
    */
   setKnowledgeQuery(
     next: Partial<
-      Pick<Place, 'knowledgeView' | 'knowledgeShow' | 'knowledgeSort' | 'knowledgeDesc' | 'knowledgeFolded'>
+      Pick<
+        Place,
+        | 'knowledgeView'
+        | 'knowledgeShow'
+        | 'knowledgeSort'
+        | 'knowledgeDesc'
+        | 'knowledgeFolded'
+        | 'knowledgeQueue'
+        | 'knowledgeOpen'
+      >
     >,
   ): void;
   /**

@@ -394,8 +394,6 @@ lets the promotion that was already earned be counted.
 
 ## What has gone cold
 
-**Not yet built.** Nothing described in this section exists; `knowledgeColdDays` is not a key yet.
-
 This store has exactly one exit and it is a person. Nothing ages, nothing lapses but a notice, and
 `retired` is a click. A fleet fills it at fleet speed and an operator drains it at operator speed, so
 the arithmetic has one answer over a long enough run: the page is mostly claims nobody will ever rule
@@ -963,7 +961,7 @@ is a link to *what the fleet keeps asking for that nobody has vouched for*, and 
 which the tickets tab and the Insights page already share between them — a third reader of one
 parameter is a page that opens showing whatever one of the other two was last set to.
 
-The page reads top to bottom in the order things demand attention: **Live notices** with their clocks,
+`?kn=list` reads top to bottom in the order things demand attention: **Live notices** with their clocks,
 **Needs you** — the corroborated claims waiting on the one decision that is yours — then **Injected**,
 **On lookup**, **One voice**, **Gone somewhere better**, **Superseded**, **Retired**, and the **Rejected**
 tail. A row carries the claim, its scope as a reference, its corroboration count, its contradiction
@@ -982,19 +980,18 @@ which of them is a tail.
 **A tail may be folded away, and none of them starts that way.** *On lookup* and everything below it
 carries a fold, so an operator who has finished with a list can collapse it and `?fold=rejected,retired`
 is what that spells; the heading and its count stay either way, so a collapsed tail still says what it
-holds. **Nothing is folded by default**, because a claim hidden on arrival would leave no way to tell a
-list you have finished with from one that lost rows, and *retired* would read as *deleted* — the
-collision the two words were separated to avoid, asserted in `test/console.test.ts`. The three headings
+holds. **Nothing is folded by default** on the list, because a claim hidden on arrival would leave no way to
+tell a list you have finished with from one that lost rows, and *retired* would read as *deleted* — the
+collision the two words were separated to avoid, asserted in `test/console.test.ts` against `?kn=list`,
+where the rule holds unrevised. The [queue](#the-queue-is-the-page) revises it for itself, and the same
+test holds it to what the revision rests on: a fold that states its own size. The three headings
 that reach an agent — *Live notices*, *Needs you*, *Injected* — carry no fold at all: a page that can
 hide what the fleet is being told is not a governance surface.
 
 ### The queue is the page
 
-**Not yet built.** The page opens on the list of headings described above; `?kn=queue` does not exist
-yet, and neither do the folds this section puts the tails behind.
-
 Nine headings, every one of them open, is a page that answers *what is in this store* — and an operator
-opens it several times a day to answer *what is on me*. Today that question is a chip they have to
+opens it several times a day to answer *what is on me*. As a list, that question is a chip they have to
 click, and the four rows behind it are somewhere in three hundred and seventy-eight.
 
 `?kn=` takes a third value, and **`queue` is the absent one**: a bare link to the tab opens on the
@@ -1033,10 +1030,21 @@ about what each costs, not about which surface happens to be saying it.
 **Later is not a ruling and writes nothing.** It advances to the next card, and where the queue stands
 is `?q=<id>` on `Place` like every other piece of where-am-I in the cockpit — so a reload lands on the
 same claim, and the back button steps back through the ones already ruled on rather than out of the
-tab.
+tab. A `?q=` naming a claim that has since been ruled on is not an error worth a screen: it is the
+ordinary case — a ruling takes the claim out of the queue — and the answer to it is the next card.
+
+The keyboard **presses the control the card actually drew**, found by a `data-kn-key` attribute rather
+than by a handler of its own. A second implementation of *which ruling the store would take here* is a
+key that offers an exit on a claim the route refuses, with nothing red; this way a key that names no
+button on this card does nothing at all, and rejection stays two presses because the button it presses
+is the same two-step confirm.
 
 Under the card sit **three folds, each carrying its count**: what has [gone cold](#what-has-gone-cold),
-what is settled, and the whole store as the table. That is the page.
+what is settled, and the whole store as the table. That is the page. Which of them is open is `?see=`
+on `Place` — the other way round from `?fold=`, and a second parameter rather than that one read
+backwards: these start shut where the list's tails start drawn, and one parameter meaning the opposite
+thing depending on `?kn=` is exactly the drift every parameter in the address bar is spelled apart to
+avoid ([17](17-cockpit.md#the-address-bar)).
 
 **This revises "nothing is folded by default", and keeps what that rule was protecting.** The rule
 exists so that _retired_ can never read as _deleted_, and so that a list an operator has finished with

@@ -203,6 +203,8 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
               sort: view.knowledgeSort,
               desc: view.knowledgeDesc,
               fold: view.knowledgeFolded,
+              standing: view.knowledgeQueue,
+              open: view.knowledgeOpen,
             }}
             onQuery={(next) =>
               actions.setKnowledgeQuery({
@@ -211,6 +213,8 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
                 ...(next.sort !== undefined && { knowledgeSort: next.sort }),
                 ...(next.desc !== undefined && { knowledgeDesc: next.desc }),
                 ...(next.fold !== undefined && { knowledgeFolded: next.fold }),
+                ...(next.standing !== undefined && { knowledgeQueue: next.standing }),
+                ...(next.open !== undefined && { knowledgeOpen: next.open }),
               })
             }
             onReach={(id, reach) => actions.setFactReach(id, reach)}

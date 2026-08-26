@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { isCold } from '../../knowledge/cold.js';
 import { checkScopeDrift, checkSightings } from '../../knowledge/drift.js';
 import {
   exitableFact,
@@ -98,6 +99,17 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
           ...counts,
           scopeStale: drift?.stale ?? false,
           scopeLastMatchedAt: drift?.lastMatchedAt ?? null,
+          // The fold's own reading, taken from the same counts the row above is —
+          // the payload is what a reader opens, and a `cold` that disagreed with the
+          // fold the reader clicked out of would be the row disagreeing with itself.
+          cold: isCold(
+            fact,
+            { corroborations: counts?.corroborations ?? 0, asks: counts?.asks ?? 0 },
+            {
+              now: Date.now(),
+              coldDays: system.config.knowledgeColdDays,
+            },
+          ),
         },
         corroborations,
         contradictions: contradictions.map(

@@ -1836,6 +1836,7 @@ export function buildDemoState(): DemoSeed {
         lastAskedAt: null,
         scopeStale: false,
         scopeLastMatchedAt: ago(3),
+        cold: false,
       },
       {
         // The harness's own, and the other half of phase 4: it read this rather
@@ -1867,6 +1868,7 @@ export function buildDemoState(): DemoSeed {
         lastAskedAt: null,
         scopeStale: false,
         scopeLastMatchedAt: ago(2),
+        cold: false,
       },
       {
         id: 'fact-needsyou',
@@ -1895,6 +1897,7 @@ export function buildDemoState(): DemoSeed {
         lastAskedAt: ago(5),
         scopeStale: false,
         scopeLastMatchedAt: null,
+        cold: false,
       },
       {
         id: 'fact-injected',
@@ -1927,6 +1930,7 @@ export function buildDemoState(): DemoSeed {
         lastAskedAt: null,
         scopeStale: false,
         scopeLastMatchedAt: null,
+        cold: false,
       },
       {
         // The amendment, filed by the agent that contradicted the claim above and
@@ -1959,6 +1963,7 @@ export function buildDemoState(): DemoSeed {
         lastAskedAt: null,
         scopeStale: false,
         scopeLastMatchedAt: null,
+        cold: false,
       },
       {
         id: 'fact-lookup',
@@ -1988,6 +1993,7 @@ export function buildDemoState(): DemoSeed {
         lastAskedAt: ago(7),
         scopeStale: false,
         scopeLastMatchedAt: null,
+        cold: false,
       },
       {
         // A check scope that has drifted (#27 phase 7). The job was renamed when
@@ -2022,6 +2028,7 @@ export function buildDemoState(): DemoSeed {
         lastAskedAt: null,
         scopeStale: true,
         scopeLastMatchedAt: ago(24 * 47),
+        cold: false,
       },
       {
         // Goal-scoped and on lookup, which is the other prompt: it never rides the
@@ -2053,6 +2060,40 @@ export function buildDemoState(): DemoSeed {
         lastAskedAt: ago(19),
         scopeStale: false,
         scopeLastMatchedAt: null,
+        cold: false,
+      },
+      {
+        // Gone cold: a proposal nobody agreed with, no agent asked for and no
+        // operator has ruled on, older than `knowledgeColdDays`. Behind the queue's
+        // counted fold rather than out of the store — the row says exactly what it
+        // said, and the next corroboration makes it warm again.
+        id: 'fact-cold',
+        claim:
+          'The staging seed script writes its fixtures before the migrations run, so a fresh database comes ' +
+          'up with the old column names.',
+        scope: 'fleet',
+        lifetime: 'standing',
+        expiresAt: null,
+        reach: 'proposal',
+        supersedes: null,
+        project: 'lubbdubb',
+        keepLocal: false,
+        originRef: 'issue:288',
+        ruledAt: null,
+        resolvesWhen: null,
+        aboutRef: null,
+        where: 'scripts/seed.ts',
+        createdAt: ago(24 * 71),
+        updatedAt: ago(24 * 71),
+        corroborations: 1,
+        contradictions: 0,
+        contradictionRatio: 0,
+        openContradictions: 0,
+        asks: 0,
+        lastAskedAt: null,
+        scopeStale: false,
+        scopeLastMatchedAt: null,
+        cold: true,
       },
       {
         id: 'fact-proposal',
@@ -2079,6 +2120,7 @@ export function buildDemoState(): DemoSeed {
         lastAskedAt: null,
         scopeStale: false,
         scopeLastMatchedAt: null,
+        cold: false,
       },
       {
         // Also out of every prompt, and by a different exit: an operator filed this
@@ -2112,6 +2154,7 @@ export function buildDemoState(): DemoSeed {
         lastAskedAt: null,
         scopeStale: false,
         scopeLastMatchedAt: null,
+        cold: false,
       },
       {
         // Committed, and therefore out of every prompt (#27 phase 6): the claim is
@@ -2146,6 +2189,7 @@ export function buildDemoState(): DemoSeed {
         lastAskedAt: null,
         scopeStale: false,
         scopeLastMatchedAt: null,
+        cold: false,
       },
       {
         // Retired rather than rejected, and drawn rather than dropped: the check it
@@ -2179,6 +2223,7 @@ export function buildDemoState(): DemoSeed {
         lastAskedAt: null,
         scopeStale: false,
         scopeLastMatchedAt: null,
+        cold: false,
       },
       {
         id: 'fact-rejected',
@@ -2205,6 +2250,7 @@ export function buildDemoState(): DemoSeed {
         lastAskedAt: null,
         scopeStale: false,
         scopeLastMatchedAt: null,
+        cold: false,
       },
     ],
     // Every attempt to put a claim in the repository (#27 phase 6). Two, because

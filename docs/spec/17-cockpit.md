@@ -402,11 +402,12 @@ once.
 | `agent`                              | the open drawer's agent                                                                                                                                                                                                  |
 | `plan` / `retro` / `pad`             | the plan sheet, the retrospective, the notepad                                                                                                                                                                           |
 | `fact`                               | the claim whose provenance is open on the Knowledge tab, by fact id                                                                                                                                                      |
-| `kn`                                 | the Knowledge tab's layout: `table` for one sortable row per claim; `list` is the absent value. Not `view`, which the Tickets tab and Insights already share. **Not yet built:** a third value `queue`, which becomes the absent one — one claim at a time, the list a click away → [27](27-knowledge.md#the-queue-is-the-page)                                                             |
-| `q`                                  | **Not yet built.** which claim the Knowledge queue is standing on, by fact id. On `Place` and not a `useState` for the usual reason: a reload has to land on the card the operator was ruling on, and the back button has to step back through the ones behind it → [27](27-knowledge.md#the-queue-is-the-page)                                                             |
+| `kn`                                 | the Knowledge tab's layout: `list` for the nine headings, `table` for one sortable row per claim; `queue` — one claim at a time — is the absent value. Not `view`, which the Tickets tab and Insights already share → [27](27-knowledge.md#the-queue-is-the-page)                                                             |
+| `q`                                  | which claim the Knowledge queue is standing on, by fact id. On `Place` and not a `useState` for the usual reason: a reload has to land on the card the operator was ruling on, and the back button has to step back through the ones behind it → [27](27-knowledge.md#the-queue-is-the-page)                                                             |
 | `show`                               | how the Knowledge tab is narrowed: `waiting` / `reaching` / `settled`; `all` is the absent value. A filter, never a move — a claim stays under the heading its reach puts it in                                          |
 | `sort`                               | the Knowledge table's order, `-` for the far end: `-asks` is most-asked-for first; `reach` ascending is the absent value                                                                                                 |
 | `fold`                               | the Knowledge tails an operator has **folded away**, as `rejected,retired` — the folded ones, so the page as it stands is a bare URL and nothing is hidden on arrival                                                    |
+| `see`                                | the Knowledge **queue's** three folds an operator has **opened**, as `cold,settled` — the other way round from `fold`, and a second parameter rather than that one read backwards: the queue's tails start shut where the list's start drawn, and one parameter meaning the opposite thing depending on `kn` is the drift these are spelled apart to avoid → [27](27-knowledge.md#the-queue-is-the-page)                       |
 | `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                                                                                                                 |
 | `open`                               | the goal page's reference sections held open, as `record,ticket`                                                                                                                                                         |
 | `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                                                                                                        |
@@ -2166,9 +2167,9 @@ Four panels open from the bar, the ask panel opens from a queue row ([the rail](
   **Superseded**, **Retired**, and the **Rejected** tail. Read top to bottom in the order things
   demand attention rather than in the order of the machine.
 
-  **Not yet built:** the page opens on a **queue** instead — the oldest claim that needs a ruling, one
-  card at a time, with the nine sections behind `?kn=list` and the tails behind three counted folds.
-  The sections above are what `?kn=list` goes on drawing, unchanged. → [27](27-knowledge.md#the-queue-is-the-page)
+  **The page opens on a queue**, and the sections above are what `?kn=list` draws: the oldest claim
+  that needs a ruling, one card at a time, with the evidence under it, and the tails behind three
+  counted folds. → [27](27-knowledge.md#the-queue-is-the-page)
 
   **One page and one card, because there is one store.** What an agent noticed outside its own task,
   what working a goal taught, and what the fleet knows were three surfaces asking the same question of
