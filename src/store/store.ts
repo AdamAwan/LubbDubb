@@ -1281,6 +1281,9 @@ export class Store {
   listErrors(limit?: number): ErrorLogEntry[] {
     return this.errors.listErrors(limit);
   }
+  listErrorsSince(since: string): ErrorLogEntry[] {
+    return this.errors.listErrorsSince(since);
+  }
   clearErrors(): number {
     return this.errors.clearErrors();
   }

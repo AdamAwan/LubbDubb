@@ -3918,6 +3918,16 @@ export interface PoolDigestDocument extends PoolEnvelope {
   unaccounted: PoolDigestRow[];
   /** Runs that reported no usage at all. Without it a PTY fleet is drawn as a cheap fleet. */
   unmeasured: PoolDigestRow[];
+  /**
+   * Faults this fleet recorded, keyed by `ErrorLogEntry['source']` — a closed
+   * vocabulary of five, and the same word the Faults panel draws.
+   *
+   * **It carries no cost and it is never mirrored**, which is what makes it a
+   * different animal from the four sections above it: nothing at the far end reads
+   * it, so it exists to be read in this fleet's own `digest.md` and nowhere else.
+   * → `docs/spec/28-cross-fleet-pool.md#the-faults-section`
+   */
+  byFault: PoolDigestRow[];
 }
 
 /** One document, whichever kind. The layer above splits on `kind`; the transport stays opaque. */

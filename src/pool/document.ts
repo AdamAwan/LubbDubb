@@ -142,6 +142,10 @@ function readDigest(raw: Record<string, unknown>): PoolParse {
     byCheck: readRows(raw.byCheck),
     unaccounted: readRows(raw.unaccounted),
     unmeasured: readRows(raw.unmeasured),
+    // Read like every other section even though nothing consumes it: a document
+    // from a build that predates the section answers `[]` here, which is what keeps
+    // adding one a backward-compatible change rather than a version bump.
+    byFault: readRows(raw.byFault),
   };
   return { ok: true, document };
 }

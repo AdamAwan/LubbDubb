@@ -48,6 +48,7 @@ function digestDoc(over: Partial<PoolDigestDocument> = {}): PoolDigestDocument {
     byCheck: [],
     unaccounted: [],
     unmeasured: [],
+    byFault: [],
     ...over,
   };
 }
@@ -178,7 +179,7 @@ test('an unmeasured cost is drawn as an absence, and the countless sections carr
 
 test('a section with nothing in it says so rather than drawing an empty table', () => {
   const markdown = renderPoolMarkdown(digestDoc());
-  assert.equal(markdown.match(/Nothing recorded in the last ninety days\./g)?.length, 5);
+  assert.equal(markdown.match(/Nothing recorded in the last ninety days\./g)?.length, 6);
   assert.doesNotMatch(markdown, /\|/);
 });
 
@@ -191,6 +192,38 @@ test('a cause key is drawn in the operator’s words rather than as its key', ()
   const markdown = renderPoolMarkdown(digestDoc({ byCause: [row('2026-08-24', 'ci/flake/unpreventable', 2, 0.8)] }));
   assert.match(markdown, /\| CI · /);
   assert.doesNotMatch(markdown, /ci\/flake\/unpreventable/);
+});
+
+/**
+ * The faults section: what went wrong in the harness, counted per source per day.
+ *
+ * It carries no cost column — a fault has no dollar figure anywhere in the harness
+ * — and it carries its caveat under the table, because the fault log is a list an
+ * operator clears and an empty table would otherwise read as a clean quarter.
+ * → `docs/spec/28-cross-fleet-pool.md#the-faults-section`
+ */
+test('the faults section counts by source, carries no cost column, and says what a clear costs it', () => {
+  const markdown = renderPoolMarkdown(
+    digestDoc({
+      byFault: [
+        row('2026-08-24', 'provider', 3, null),
+        row('2026-08-24', 'agent', 1, null),
+        row('2026-07-01', 'provider', 9, null),
+      ],
+    }),
+  );
+
+  assert.match(markdown, /\| Source \| Faults 7d \| Faults 30d \| Faults 90d \|/);
+  // The 90-day window is the only one the July row falls in.
+  assert.match(markdown, /\| provider \| 3 \| 3 \| 12 \|/);
+  assert.match(markdown, /\| agent \| 1 \| 1 \| 1 \|/);
+  assert.doesNotMatch(markdown, /Faults 7d \| Cost/);
+  assert.match(markdown, /a quiet quarter here may be a cleared one/);
+});
+
+/** The caveat rides the empty table too — which is exactly what a cleared log looks like. */
+test('an empty faults section still says a clear costs it its rows', () => {
+  assert.match(renderPoolMarkdown(digestDoc()), /a quiet quarter here may be a cleared one/);
 });
 
 /** Same document in, same bytes out: the companion holds no state and reads no clock. */

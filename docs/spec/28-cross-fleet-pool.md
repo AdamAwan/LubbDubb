@@ -273,7 +273,7 @@ is a pure function of the same `PoolDocument` the JSON is serialised from, and h
 alone, so an idle fleet writes nothing and a publish that happens writes both. A companion that were
 committed separately would be a second commit an hour saying the same thing.
 
-**The digest companion summarises rather than transcribes.** Ninety days across five sections is some
+**The digest companion summarises rather than transcribes.** Ninety days across six sections is some
 thousands of rows, and a markdown table of them is a file nobody opens — which defeats the one thing it
 is for. It totals the trailing 7, 30 and 90 days per key and says in the file that `digest.json` holds
 the series. The windows are cut on the **document's own** publish day rather than the reader's clock,
@@ -472,6 +472,7 @@ Every dimension is a closed vocabulary that already exists, and none of them is 
 | `byCheck`     | the check's own name                         | accounts, costUsd                       |
 | `unaccounted` | —                                            | return dispatches that filed no account |
 | `unmeasured`  | —                                            | runs that reported no usage at all      |
+| `byFault`     | `ErrorLogEntry['source']`                    | faults recorded (no cost)               |
 
 `RemedyCause` and `RemedyGuard` are resolved from the dispatch origin rather than claimed, with the
 copy for every value in one place (`src/remedies/remedies.ts`). Two fleets on two providers produce
@@ -548,6 +549,36 @@ visible until it is.
 year-over-year reading is not available. On the `git` transport the older rows do survive in commit
 history, and that is deliberately **not** part of the contract — a service has no such history, and a
 promise that rested on one substrate would be one the interface could not keep.
+
+### The faults section
+
+Four of the five sections above measure the **work**, and every one of them sums across fleets into the
+shared insights page. `byFault` measures the **harness**: what the fleet's own error log
+([18](18-observability.md)) recorded, keyed by `ErrorLogEntry['source']` — `cycle`, `provider`, `agent`,
+`server`, `boot` — and counted per UTC day like everything else here.
+
+**It goes into the file and no further.** Nothing mirrors it, nothing aggregates it, and nothing at any
+far end reads it back: `digestSections` in `src/store/pool.ts` names the five sections the mirror stores
+and this is deliberately not among them. A fault is this harness failing on this operator's machine —
+comparable to nothing on anybody else's, and answering no question a company page asks. What it is for
+is a person opening the fleet's own `digest.md` in the pool repository and seeing what has been going
+wrong, which is the one place the harness's faults are readable without a cockpit in front of you.
+
+So it is in the document rather than only in the markdown, and the reason is
+[the companion's](#the-human-readable-companion): `renderPoolMarkdown` is a pure function of the
+`PoolDocument` and holds no state of its own. A section the markdown drew from somewhere else would be
+a second source for one page, and the two would disagree the first time either moved.
+
+**It carries no cost, and that is not an omission.** A fault has no dollar figure anywhere in the
+harness, and deriving one here would be a new measurement invented for the pool rather than a move of
+what exists — which is the rule the whole digest arm is held to. The companion draws no cost column for
+it at all; a column of dashes is worse than no column.
+
+**What it counts is the fault log as it stands, and the file says so under the table.** `clearErrors`
+drops the whole table ([18](18-observability.md)) — it is a list an operator reads and clears, not a
+record anything decides on — so an operator who clears the log publishes a fleet that had no faults this
+quarter. Unstated, an empty table reads as a clean quarter, which is the one way this section can lie.
+Stated where a person reads it, it is a reading like every other number here.
 
 ## The clocks
 
@@ -767,6 +798,8 @@ on `:root` with an entry in `web/src/cockpit/tokens.ts`, and every reference on 
 - **Nothing deletes a local fact because a remote fleet withdrew it.**
 - **No reading acts.** The origin's counts, a withdrawal, a stale mirror and a fleet that has not
   published in a month are all drawn for the person who can act on them, and none of them moves a claim.
+- **Nothing reads another fleet's faults.** `byFault` is published and never mirrored, never summed and
+  never drawn on the shared insights page — see [the faults section](#the-faults-section).
 
 ## Persistence
 
