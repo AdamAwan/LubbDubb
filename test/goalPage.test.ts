@@ -159,6 +159,42 @@ test('parts group by status, and a retired part joins none of the groups', () =>
   ]);
 });
 
+/**
+ * A part names the agent that worked it, and says separately whether it still is.
+ *
+ * Two fields because the card draws both, and they are not the same claim: a
+ * finished agent is still the way to what happened here, while only a live one is
+ * a claim that something is happening now — which is what `AgentOnIt` says, in the
+ * green it says it in. Folded into one field, a merged part pulses.
+ */
+test('a part’s agent is live only while it is running', () => {
+  const state = buildDemoState().state;
+  const issue = state.world.issues[0]!;
+  const ref = `issue:${issue.number}`;
+  const parts = [part({ id: 'p:1', slug: 'one', status: 'in_review' })];
+  const base = { ...state, planParts: parts, plans: [plan(ref)] };
+  const task = { ...state.tasks[0]!, id: 't:one', originRef: `${ref}:part:one` };
+
+  const worked = (endedAt: string | null): GoalPartView => {
+    const page = buildGoalPage(
+      { ...base, tasks: [task], agents: [agent({ id: 'a:one', taskId: 't:one', endedAt })] },
+      ref,
+      [],
+    );
+    const found = page?.parts[0];
+    assert.ok(found, 'the part must be on the page');
+    return found;
+  };
+
+  const live = worked(null);
+  assert.equal(live.agentId, 'a:one');
+  assert.equal(live.agentLive, true);
+
+  const over = worked('2026-01-01T01:00:00.000Z');
+  assert.equal(over.agentId, 'a:one', 'a finished agent is still the way to what happened here');
+  assert.equal(over.agentLive, false, 'and is not a claim that anything still is');
+});
+
 test('the track folds the same groups the page draws, so the two cannot disagree', () => {
   const parts = [
     part({ id: 'p:1', slug: 'one', status: 'merged' }),

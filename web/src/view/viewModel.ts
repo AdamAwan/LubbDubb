@@ -16,7 +16,7 @@ import type {
 } from '../types.js';
 import { buildNeedsYou } from './needsYou.js';
 import type { AppliedFix, NeedRow } from './needsYou.js';
-import { buildGoalPage } from './goalPage.js';
+import { buildGoalPage, goalOfOrigin } from './goalPage.js';
 import type { GoalPageView } from './goalPage.js';
 import type { ConfigTab, ConsolePanel, ConsoleTab, InsightsView } from '../cockpit/actions.js';
 
@@ -118,7 +118,6 @@ export interface CockpitView {
   ticketOrder: TicketOrder;
   ticketView: 'table' | 'card';
   ticketColumns: string[];
-
   /** The agent whose drawer is open, if any. */
   selectedAgent: Agent | null;
   /** Streamed output for the open drawer only; undefined for everyone else. */
@@ -173,6 +172,27 @@ export interface CockpitView {
 
   /** The task an agent is working, or null if the row has outlived it. */
   taskFor(agent: Agent): TaskSummary | null;
+  /**
+   * branch → the live agent working it, for the surfaces that draw a *branch* and
+   * want to say somebody is on it.
+   *
+   * Derived here rather than at the call site because the join is two hops — an
+   * agent carries a `taskId` and a task carries the branch — and a card doing it
+   * itself is a card that will do it slightly differently. Live only: a finished
+   * agent's branch is history, and drawn as "an agent is on this" it would be a
+   * pull request that looks staffed forever.
+   */
+  agentOnBranch: ReadonlyMap<string, Agent>;
+  /**
+   * goal ref → the live agent working it, for the surfaces that draw a *goal*.
+   *
+   * A second map rather than a lookup through {@link CockpitView.agentOnBranch},
+   * because a branch is not how a goal finds its agent: the dispatch names an
+   * origin, and the origin is as often a pull request as the goal itself. Resolved
+   * through {@link goalOfOrigin} for that reason, and live only, for
+   * `agentOnBranch`'s.
+   */
+  agentOnGoal: ReadonlyMap<string, Agent>;
 
   /** Which plan's modal is open, or null when none is. */
   viewingPlan: string | null;
@@ -321,6 +341,7 @@ interface ViewInputs {
   ticketOrder?: TicketOrder;
   ticketView?: 'table' | 'card';
   ticketColumns?: string[];
+  /** Optional for `collapsed`'s reason: the default is what a bare URL means. */
 }
 
 function groupByAgent<T extends { agentId: string }>(rows: readonly T[] | undefined): Map<string, T[]> {
@@ -409,6 +430,21 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     tailByAgent: input.tails,
 
     taskFor: (agent) => state.tasks.find((t) => t.id === agent.taskId) ?? null,
+    agentOnBranch: new Map(
+      state.agents.flatMap((agent) => {
+        if (agent.endedAt !== null) return [];
+        const branch = state.tasks.find((t) => t.id === agent.taskId)?.branch ?? null;
+        return branch === null ? [] : ([[branch, agent]] as [string, Agent][]);
+      }),
+    ),
+    agentOnGoal: new Map(
+      state.agents.flatMap((agent) => {
+        if (agent.endedAt !== null) return [];
+        const origin = state.tasks.find((t) => t.id === agent.taskId)?.originRef ?? null;
+        const goal = goalOfOrigin(state, origin);
+        return goal === null ? [] : ([[goal, agent]] as [string, Agent][]);
+      }),
+    ),
     viewingPlan: input.viewingPlan,
     viewingRetro: input.viewingRetro,
     hatching: input.hatching,

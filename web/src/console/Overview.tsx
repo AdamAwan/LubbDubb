@@ -1,13 +1,15 @@
 import { useState, type JSX } from 'react';
 import type { CockpitView, DeskRun } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
-import type { Agent, GoalArrival, Issue, QueueItem, SupplyState, WorldEvent } from '../types.js';
+import type { Agent, GoalArrival, Issue, OpenPullRequest, QueueItem, SupplyState, WorldEvent } from '../types.js';
 import { buildGoalPage, buildGoalTrack, furthestEnvironment, goalOfPr, type GoalTrack } from '../view/goalPage.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { elapsed, fmtUsd, relTime } from '../components/util.js';
 import { Ref, RefText, refLabel } from '../components/refs.js';
-import { CiLadder, CourtChip } from './GoalPage.js';
+import { CiLadder, waitedFor } from './GoalPage.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
+import { PanelRows, type PanelRowModel } from './PanelRow.js';
+import { AgentOnIt } from '../components/AgentOnIt.js';
 
 /**
  * What is shown when no goal is selected: five cards, rows rather than pictures.
@@ -73,24 +75,18 @@ function Fleet({ view, actions }: { view: CockpitView; actions: CockpitActions }
           {ended.length} shift{ended.length === 1 ? '' : 's'} ended {showEnded ? '⌄' : '›'}
         </button>
       </h3>
-      <div className="cn-rows">
-        {view.live.length === 0 && desk.length === 0 && <p className="cn-empty">Nobody is out.</p>}
-        {view.live.map((agent) => (
-          <AgentRow key={agent.id} agent={agent} view={view} actions={actions} />
-        ))}
-        {/* Below the dispatched agents, because that is the order the harness
-            answers "what is happening" in: what it sent out, then what it did
-            not send. */}
-        {desk.map((run) => (
-          <DeskRow key={`${run.originRef}|${run.checkId}`} run={run} view={view} />
-        ))}
-        {showEnded &&
-          (ended.length === 0 ? (
-            <p className="cn-empty">No shift has ended.</p>
-          ) : (
-            ended.map((agent) => <AgentRow key={agent.id} agent={agent} view={view} actions={actions} />)
-          ))}
-      </div>
+      {view.live.length === 0 && desk.length === 0 && <p className="cn-empty">Nobody is out.</p>}
+      {showEnded && ended.length === 0 && <p className="cn-empty">No shift has ended.</p>}
+      <PanelRows
+        rows={[
+          ...view.live.map((agent) => agentRow(agent, view, actions)),
+          // Below the dispatched agents, because that is the order the harness
+          // answers "what is happening" in: what it sent out, then what it did
+          // not send.
+          ...desk.map((run) => deskRow(run, view)),
+          ...(showEnded ? ended.map((agent) => agentRow(agent, view, actions)) : []),
+        ]}
+      />
       <RunwayBand view={view} />
     </section>
   );
@@ -230,53 +226,113 @@ const RUNWAY_LABEL: Record<SupplyState, string> = {
  * not already what the origin says. A ticketless pull request resolves to no goal
  * and draws none, which is the honest answer rather than an invented one.
  */
-function AgentRow({ agent, view, actions }: { agent: Agent; view: CockpitView; actions: CockpitActions }): JSX.Element {
+function agentRow(agent: Agent, view: CockpitView, actions: CockpitActions): PanelRowModel {
   const task = view.taskFor(agent);
   const origin = task?.originRef ?? null;
   const done = agent.endedAt !== null;
   const limited = view.limitParked.has(agent.id);
   const lamp = view.escalationByAgent.has(agent.id)
-    ? 'cn-ask'
+    ? 'cn-lamp-ask'
     : done
       ? 'cn-off'
       : agent.status === 'waiting'
         ? 'cn-wait'
         : 'cn-run';
-  return (
-    <div className={`cn-row ${done ? 'cn-spent' : ''}`}>
-      <i className={`cn-lamp ${lamp}`} />
-      <button
-        type="button"
-        className="cn-grow"
-        onClick={() => actions.select(agent.id)}
-        title="Open this agent's drawer"
+  return {
+    key: agent.id,
+    lamp: <i className={`cn-lamp ${lamp}`} />,
+    title: task?.title ?? agent.id,
+    open: () => actions.select(agent.id),
+    openTitle: "Open this agent's drawer",
+    // Two refs where there are two: the origin it was dispatched at, and the goal
+    // behind it when that origin is a pull request some ticket owns.
+    refs: <OnWhat origin={origin} view={view} />,
+    facts: [
+      // A limit park says so where the note would be. The note underneath is
+      // whatever the agent last said it was doing, which on a parked row reads as
+      // though it still is.
+      { label: 'doing', value: limited ? 'Out of account limit' : (agent.note ?? agent.status), alarm: limited },
+      { label: 'for', value: elapsed(agent.startedAt, agent.endedAt, view.now) },
+      ...(agent.costUsd !== null ? [{ label: 'cost', value: fmtUsd(agent.costUsd) }] : []),
+    ],
+    // What is going on with this row, as a word, with the harness's own sentence
+    // behind it.
+    ...agentState(agent, view),
+    // The way out of the park, where the park is shown — beside the name rather
+    // than inside it, since the row's own click opens the transcript.
+    action: limited ? (
+      <AsyncButton
+        className="cn-btn"
+        onClick={() => actions.resumeAgent(agent.id)}
+        title={agent.waitingReason ?? 'Resume this agent now the limit has cleared'}
+        pendingLabel="Resuming…"
       >
-        <b className="cn-name">{task?.title ?? agent.id}</b>
-        <span className="cn-sub">
-          {/* A limit park says so on the row itself. The note underneath is whatever
-              the agent last said it was doing, which on a parked row reads as though
-              it still is. */}
-          {limited ? 'Out of account limit' : (agent.note ?? agent.status)} ·{' '}
-          {elapsed(agent.startedAt, agent.endedAt, view.now)}
-        </span>
-      </button>
-      <OnWhat origin={origin} view={view} />
-      {/* The way out of the park, where the park is shown — beside the name rather
-          than inside it, since the row's own click opens the transcript. */}
-      {limited && (
-        <AsyncButton
-          className="cn-btn"
-          onClick={() => actions.resumeAgent(agent.id)}
-          title={agent.waitingReason ?? 'Resume this agent now the limit has cleared'}
-          pendingLabel="Resuming…"
-        >
-          Resume
-        </AsyncButton>
-      )}
-      {agent.costUsd !== null && <span className="cn-num">{fmtUsd(agent.costUsd)}</span>}
-    </div>
-  );
+        Resume
+      </AsyncButton>
+    ) : undefined,
+    spent: done,
+  };
 }
+
+/**
+ * Why a fleet row is not moving, as one word and the sentence behind it.
+ *
+ * The four states are the harness's own and are read from four different facts,
+ * because they are four different things — an escalation naming the agent, the
+ * limit park, the stall park, and a plain wait. They are ranked rather than
+ * merged: an agent that is asking you something and also parked is your move
+ * first, and a row can only wear one word.
+ *
+ * A running agent wears none. That is the point of the column: on a fleet of five
+ * the two words in it are the two rows worth looking at, where five `?` markers
+ * were five rows to hover.
+ */
+function agentState(agent: Agent, view: CockpitView): Pick<PanelRowModel, 'why' | 'whyLabel' | 'whyTone'> {
+  const escalation = view.escalationByAgent.get(agent.id);
+  if (escalation !== undefined) {
+    // The ask itself, not a summary of it: the rail carries the same sentence, and
+    // two surfaces wording one question differently is the drift the refs rule
+    // exists to stop one layer down.
+    return { whyLabel: 'question', whyTone: 'ask', why: escalation.prompt };
+  }
+  if (view.limitParked.has(agent.id)) {
+    return {
+      whyLabel: 'limit',
+      whyTone: 'hold',
+      why:
+        (agent.waitingReason ?? 'The account’s usage limit is spent.') +
+        ' It takes a fleet slot until it is resumed or ended.',
+    };
+  }
+  const stallExpiry = view.stallExpiryByAgent.get(agent.id);
+  if (stallExpiry !== undefined) {
+    return {
+      whyLabel: 'stalled',
+      whyTone: 'hold',
+      why:
+        'It stopped without saying so. The harness records it done by itself ' +
+        `${relTime(stallExpiry, view.now)} unless it speaks again.`,
+    };
+  }
+  if (agent.status === 'waiting') {
+    return { whyLabel: 'blocked', whyTone: 'hold', why: agent.waitingReason };
+  }
+  // How a shift ended, on the rows behind the disclosure. `done` is the ordinary
+  // ending and wears nothing — a word on every ended row would say only that the
+  // row has ended, which the list it is in already says.
+  if (ENDED_BADLY[agent.status] !== undefined) {
+    return { whyLabel: ENDED_BADLY[agent.status], whyTone: 'quiet', why: agent.waitingReason };
+  }
+  return {};
+}
+
+/** The endings worth a word, in the harness's own vocabulary. */
+const ENDED_BADLY: Partial<Record<Agent['status'], string>> = {
+  failed: 'failed',
+  crashed: 'crashed',
+  killed: 'killed',
+  interrupted: 'stopped',
+};
 
 /**
  * What a dispatch was aimed at, as ways there: the origin itself, and the goal
@@ -294,10 +350,10 @@ function OnWhat({ origin, view }: { origin: string | null; view: CockpitView }):
   const pr = origin === null ? null : /^pr:(\d+)/.exec(origin);
   const goal = pr ? goalOfPr(view.state, Number(pr[1])) : null;
   return (
-    <span className="cn-refs">
+    <>
       {origin !== null && <Ref to={origin} label={pr ? `PR ${refLabel(origin)}` : refLabel(origin)} />}
       {goal !== null && <Ref to={goal} />}
-    </span>
+    </>
   );
 }
 
@@ -324,29 +380,29 @@ function OnWhat({ origin, view }: { origin: string | null; view: CockpitView }):
  * claim the server has already put through `claimIsLive`, so it goes at the same
  * instant the claim stops blocking `validate-check`.
  */
-function DeskRow({ run, view }: { run: DeskRun; view: CockpitView }): JSX.Element {
-  return (
-    <div
-      className="cn-row cn-desk"
-      title={
-        `${run.label} is running check ${run.letter} of ${refLabel(run.originRef)} — claimed ${relTime(run.claimedAt, view.now)}. ` +
-        'Nobody dispatched it: it takes no fleet slot, and it ends when the reading lands, ' +
-        'when the session closes, or when the claim ages out.'
-      }
-    >
-      <i className="cn-lamp cn-desk-lamp" />
-      <span className="cn-grow">
-        <b className="cn-name">{run.title}</b>
-        <span className="cn-sub">
-          check {run.letter} · {run.label} · {elapsed(run.claimedAt, null, view.now)}
-        </span>
-      </span>
-      <span className="cn-refs">
-        <Ref to={run.originRef} />
-      </span>
-      <i className="cn-chip cn-desk-chip">at a keyboard</i>
-    </div>
-  );
+function deskRow(run: DeskRun, view: CockpitView): PanelRowModel {
+  return {
+    key: `${run.originRef}|${run.checkId}`,
+    lamp: <i className="cn-lamp cn-desk-lamp" />,
+    title: run.title,
+    refs: <Ref to={run.originRef} />,
+    facts: [
+      { label: 'check', value: run.letter },
+      { label: 'who', value: run.label },
+      { label: 'for', value: elapsed(run.claimedAt, null, view.now) },
+    ],
+    // The desk run's own state, in the same column the agents wear theirs: this is
+    // what is going on with the row, and it is not a dispatch. The two things a
+    // glance cannot carry are behind it — that it takes no slot, and that it ends
+    // on its own.
+    whyLabel: 'at a keyboard',
+    whyTone: 'quiet',
+    why:
+      `Nobody dispatched this: ${run.label} claimed check ${run.letter} of ${refLabel(run.originRef)} ` +
+      `${relTime(run.claimedAt, view.now)}, at their own keyboard. It takes no fleet slot, and it ends ` +
+      'when the reading lands, when the session closes, or when the claim ages out.',
+    desk: true,
+  };
 }
 
 /**
@@ -365,10 +421,12 @@ const IN_FLIGHT = new Set(['active', 'has_pr', 'planning', 'delivered']);
  * disagree — that is the whole reason the helper exists rather than a second
  * pass over `PlanPart.status` here.
  *
- * The court chip is read off `needsYou`, the rail's own queue: a goal is in your
- * court exactly when the rail is holding an ask about it. Anything else would let
- * a chip say "you" with nothing to answer, or the rail hold a row the overview
- * marks as the harness's business.
+ * The court is read off `needsYou`, the rail's own queue: a goal is in your court
+ * exactly when the rail is holding an ask about it. Anything else would let the row
+ * say "you" with nothing to answer, or the rail hold a row the overview marks as
+ * the harness's business — and it is said once, as the alarmed `asking you` count,
+ * rather than a second time as a chip whose only reading was that count being
+ * non-zero.
  */
 function GoalsInFlight({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const goals = view.state.world.issues.filter((issue) => IN_FLIGHT.has(issue.pickup.status));
@@ -378,45 +436,101 @@ function GoalsInFlight({ view, actions }: { view: CockpitView; actions: CockpitA
       <h3>
         Goals in flight <i className="cn-n">{goals.length}</i>
       </h3>
-      <div className="cn-rows">
-        {goals.length === 0 && <p className="cn-empty">No goal is in flight.</p>}
-        {goals.map((issue) => (
-          <GoalRow key={issue.number} issue={issue} view={view} actions={actions} />
-        ))}
-      </div>
+      {goals.length === 0 && <p className="cn-empty">No goal is in flight.</p>}
+      <PanelRows rows={goals.map((issue) => goalRow(issue, view, actions))} />
     </section>
   );
 }
 
-function GoalRow({ issue, view, actions }: { issue: Issue; view: CockpitView; actions: CockpitActions }): JSX.Element {
+function goalRow(issue: Issue, view: CockpitView, actions: CockpitActions): PanelRowModel {
   const ref = `issue:${issue.number}`;
   const page = buildGoalPage(view.state, ref, view.needsYou);
   const track = page === null ? null : buildGoalTrack(page.parts);
   const asks = view.needsYou.filter((n) => n.goalRef === ref).length;
+  const onIt = view.agentOnGoal.get(ref);
   const furthest = furthestEnvironment(view.state, ref);
 
-  return (
-    <button type="button" className="cn-row cn-goal-row" onClick={() => actions.selectGoal(ref)}>
-      <span className="cn-grow">
-        <b className="cn-name">
-          #{issue.number} {issue.title}
-        </b>
-        <span className="cn-sub">
-          {track !== null && track.total > 0 && `${track.total} parts · ${track.merged} merged · `}
-          {issue.pickup.status}
-          {asks > 0 && ` · ${asks} asking you`}
-        </span>
-      </span>
-      {track !== null && <Track track={track} />}
-      {/* Where the work actually got to, on the row rather than a page deeper.
-          Only ever drawn for an environment holding the goal *whole* — `partial`
-          has no furthest anything, and a chip claiming one would be the boolean
-          rollup the reach fold exists to refuse. */}
-      {furthest !== null && <i className="cn-chip cn-ok">{furthest}</i>}
-      <i className={`cn-chip ${asks > 0 ? 'cn-you' : 'cn-harness'}`}>{asks > 0 ? 'You' : 'Harness'}</i>
-    </button>
-  );
+  return {
+    key: String(issue.number),
+    title: `#${issue.number} ${issue.title}`,
+    className: 'cn-goal-row',
+    open: () => actions.selectGoal(ref),
+    openTitle: `Open goal #${issue.number} — its plan, its pull requests and anything it is asking you`,
+    // The row *is* the way to this goal, so it names nothing else: a ref beside
+    // the title would be a second token for the destination the row already is.
+    refs: null,
+    facts: [
+      ...(track !== null && track.total > 0
+        ? [
+            { label: 'parts', value: track.total },
+            { label: 'merged', value: track.merged },
+          ]
+        : []),
+      ...(asks > 0 ? [{ label: 'asking you', value: asks, alarm: true }] : []),
+    ],
+    // The pickup status *is* the row's state, so it wears the state column rather
+    // than sitting as a fact with a bare `?` beside it holding its own reasons.
+    // Two readings of one verdict, and the marker was the half that said nothing
+    // until you hovered it. In the operator's words, not the enum's: `has_pr` is a
+    // value the dispatcher passes to itself.
+    whyLabel: PICKUP_WORD[issue.pickup.status] ?? issue.pickup.status,
+    whyTone: PICKUP_TONE[issue.pickup.status] ?? 'quiet',
+    // The dispatcher's own account of what it is doing with this goal — most
+    // actionable first, and until now on no overview surface at all.
+    why: issue.pickup.reasons.join(' '),
+    reading: track !== null ? <Track track={track} /> : undefined,
+    // Somebody's hands on this goal as you read it, off the dispatch's own origin
+    // rather than off the track: `now` counts `in_review` too, and a pull request
+    // sitting open is nobody working.
+    live: onIt !== undefined,
+    chips: (
+      <>
+        {/* Where the work actually got to, on the row rather than a page deeper.
+            Only ever drawn for an environment holding the goal *whole* — `partial`
+            has no furthest anything, and a chip claiming one would be the boolean
+            rollup the reach fold exists to refuse. */}
+        {furthest !== null && <i className="cn-chip cn-ok">{furthest}</i>}
+        {/* Beside the environment rather than in place of the track: on a pull
+            request the marker supersedes the checks, because those are a verdict on
+            a commit being replaced. A goal's track is how far the plan got, which
+            an agent working does not make untrue. */}
+        {onIt !== undefined && <AgentOnIt agentId={onIt.id} note={onIt.note} actions={actions} />}
+      </>
+    ),
+  };
 }
+
+/**
+ * `IssuePickupStatusKind` in the words the page is written in. The kind is an
+ * identifier the dispatcher passes between its own rules, and every one of them
+ * that reached the glass did so unedited — `has_pr` is the shape of that, and it
+ * asks the operator to know the enum before the row means anything.
+ *
+ * A status with no entry falls through as itself, so a kind added server-side
+ * degrades to the old reading rather than to a blank.
+ */
+const PICKUP_WORD: Record<string, string> = {
+  has_pr: 'in review',
+  active: 'working',
+  eligible: 'up next',
+  blocked: 'no capacity',
+  retained: 'kept',
+  container: 'a container',
+};
+
+/**
+ * `hold` is the harness stopped and waiting on something: no capacity, no watch
+ * label, a cooldown to sit out. `ask` is the one status parked on a person by
+ * design. Everything else is the harness getting on with it, and quiet — the tone
+ * is about whether the row wants anything, not about how far along it is.
+ */
+const PICKUP_TONE: Record<string, 'ask' | 'hold' | 'quiet'> = {
+  escalated: 'ask',
+  unwatched: 'hold',
+  blocked: 'hold',
+  cooldown: 'hold',
+  appraisal: 'hold',
+};
 
 /**
  * One segment per part, in the four groups the goal page draws its waves in and
@@ -432,12 +546,29 @@ function Track({ track }: { track: GoalTrack }): JSX.Element {
     ...Array<string>(track.waiting).fill(''),
   ];
   return (
-    <span className="cn-track">
+    <span className="cn-track" title={trackTitle(track)}>
       {segs.map((tone, i) => (
         <i className={`cn-seg ${tone}`} key={i} />
       ))}
     </span>
   );
+}
+
+/**
+ * What the segments mean, in words, on hover. Four colours with no legend is a
+ * reading only somebody who has read this file can take, and a legend on the card
+ * would cost more room than the track itself — so the bar keeps the shape and the
+ * hover carries the key. Only the groups this goal actually has, most advanced
+ * first, so the sentence is about *this* goal rather than the vocabulary.
+ */
+function trackTitle(track: GoalTrack): string {
+  const parts = [
+    track.merged > 0 ? `${track.merged} merged` : '',
+    track.now > 0 ? `${track.now} in progress` : '',
+    track.held > 0 ? `${track.held} blocked` : '',
+    track.waiting > 0 ? `${track.waiting} not started` : '',
+  ].filter((part) => part !== '');
+  return `${track.total} ${track.total === 1 ? 'part' : 'parts'} — ${parts.join(', ')}`;
 }
 
 /**
@@ -464,54 +595,137 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
         Pull requests <i className="cn-n">{open.length} open</i>
         {merged !== null && <span className="cn-more">{merged} merged</span>}
       </h3>
-      <div className="cn-rows">
-        {open.length === 0 && <p className="cn-empty">No pull request is open.</p>}
-        {open.map((pr) => {
-          // The server's verdict, not a second reading of the labels: `unwatched`
-          // is the first arm `prAttentionStatus` takes, so on an open PR it *is* the
-          // absent tag. Drawn as a spent row for the reason the backlog dims an
-          // unwatched goal — the chip alone leaves a row the harness will never
-          // touch sitting at the same weight as the ones it is working.
-          const unwatched = pr.attention.status === 'unwatched';
-          // The goal this PR is delivering, joined the server's own three ways
-          // rather than through the plan parts alone: a goal worked whole has no
-          // parts at all, which is most finished goals, and the rack drew no goal
-          // for any of them.
-          const goal = goalOfPr(view.state, pr.number);
-          return (
-            <div className={`cn-row ${unwatched ? 'cn-spent' : ''}`} key={pr.number}>
-              <span className="cn-grow">
-                <b className="cn-name">
-                  <Ref to={`pr:${pr.number}`} /> {pr.title}
-                </b>
-                <span className="cn-sub">{pr.branch}</span>
-              </span>
-              <span className="cn-refs">
-                {goal !== null && (
-                  <Ref to={goal} title={`Open the goal this pull request is delivering — ${refLabel(goal)}`} />
-                )}
-              </span>
-              <CiLadder pr={pr} />
-              <CourtChip pr={pr} now={view.now} />
-              <AsyncButton
-                className="ghost"
-                disabled={watchLabel === ''}
-                onClick={() => actions.setPrWatched(pr.number, unwatched)}
-                title={
-                  watchLabel === ''
-                    ? 'No watch label configured — the watch gate is off'
-                    : unwatched
-                      ? `Tag this PR "${watchLabel}" and let the harness work it`
-                      : `Take the "${watchLabel}" tag off so the harness leaves this PR alone`
-                }
-              >
-                {unwatched ? 'watch' : 'unwatch'}
-              </AsyncButton>
-            </div>
-          );
-        })}
-      </div>
+      {open.length === 0 && <p className="cn-empty">No pull request is open.</p>}
+      <PanelRows rows={open.map((pr) => prRow(pr, view, actions, watchLabel))} />
     </section>
+  );
+}
+
+/**
+ * One open pull request: its checks, whose court it is in, and the toggle that
+ * takes it off the harness's books.
+ */
+function prRow(pr: OpenPullRequest, view: CockpitView, actions: CockpitActions, watchLabel: string): PanelRowModel {
+  // The server's verdict, not a second reading of the labels: `unwatched` is the
+  // first arm `prAttentionStatus` takes, so on an open PR it *is* the absent tag.
+  // Drawn as a spent row for the reason the backlog dims an unwatched goal — the
+  // chip alone leaves a row the harness will never touch sitting at the same
+  // weight as the ones it is working.
+  const unwatched = pr.attention.status === 'unwatched';
+  // The goal this PR is delivering, joined the server's own three ways rather
+  // than through the plan parts alone: a goal worked whole has no parts at all,
+  // which is most finished goals, and the rack drew no goal for any of them.
+  const goal = goalOfPr(view.state, pr.number);
+  const onIt = view.agentOnBranch.get(pr.branch);
+  return {
+    key: String(pr.number),
+    title: pr.title,
+    // The pull request's own number moves out of the title and into the refs
+    // slot, where every other card keeps what a row names: as a prefix it was a
+    // way somewhere that only this card put there.
+    refs: (
+      <>
+        <Ref to={`pr:${pr.number}`} />
+        {goal !== null && <Ref to={goal} title={`Open the goal this pull request is delivering — ${refLabel(goal)}`} />}
+      </>
+    ),
+    facts: prFacts(pr, view.now),
+    // Whose court it is in, which is the one question the card is for — the
+    // server's word, with the server's own reasoning behind it. It was drawn
+    // twice before, as a `?` holding the reasons and as a chip holding the same
+    // reasons in a `title`, one column apart: two hovers, one sentence, and a
+    // state column that said nothing.
+    whyLabel: pr.attention.status,
+    whyTone: COURT_TONE[pr.attention.status] ?? 'quiet',
+    why: pr.attention.reasons.join(' '),
+    // What is happening to this pull request *now* beats what its checks last
+    // said: an agent on the branch is about to change them, so the ladder is a
+    // reading of a commit that is being replaced. Only while one is actually on
+    // it — every other row keeps its checks. The chip is `AgentOnIt`, the same one
+    // a plan part draws, because it is the same sentence.
+    reading:
+      onIt === undefined ? <CiLadder pr={pr} /> : <AgentOnIt agentId={onIt.id} note={onIt.note} actions={actions} />,
+    toggle: (
+      <AsyncButton
+        className="cn-eye"
+        disabled={watchLabel === ''}
+        onClick={() => actions.setPrWatched(pr.number, unwatched)}
+        title={
+          watchLabel === ''
+            ? 'No watch label configured — the watch gate is off'
+            : unwatched
+              ? `Tag this PR "${watchLabel}" and let the harness work it`
+              : `Take the "${watchLabel}" tag off so the harness leaves this PR alone`
+        }
+      >
+        <Eye open={!unwatched} />
+      </AsyncButton>
+    ),
+    spent: unwatched,
+    // And the row itself says so, which is the reading that carries across a card:
+    // the marker above is where to *go*, this is what is *happening*.
+    live: onIt !== undefined,
+  };
+}
+
+/**
+ * Whose court, in the tones the state column already speaks.
+ *
+ * `you` is the only one that is your move, so it is the only `ask`. A pull request
+ * nobody's turn — stalled, or opted out — is amber for the reason the fleet's
+ * parks are: nothing is going to happen to it on its own.
+ */
+const COURT_TONE: Record<string, 'ask' | 'hold' | 'quiet'> = {
+  you: 'ask',
+  stalled: 'hold',
+  unwatched: 'hold',
+};
+
+/**
+ * What is true of this pull request that the ladder and the court do not say.
+ *
+ * `branch` used to be the only one, and it is the row's least useful fact: the
+ * title says what the work is, the refs say where it is, and a slug repeats both
+ * in a form nothing here is asked in. These three are each a *reason a pull
+ * request is not merged yet*, which is the question a rack of open pull requests
+ * exists to answer — and each is drawn only where it is true, so a row with none
+ * of them is visibly a pull request with nothing in its way.
+ */
+function prFacts(pr: OpenPullRequest, now: number): PanelRowModel['facts'] {
+  const facts: { label: string; value: string; alarm?: boolean }[] = [];
+  if (pr.unresolvedComments.length > 0) {
+    facts.push({ label: 'comments', value: String(pr.unresolvedComments.length), alarm: true });
+  }
+  // Only the real conflict: `behind` is a base the harness updates by itself, and
+  // an alarm on it would be an alarm on every pull request open while main moves.
+  if (pr.mergeableState === 'dirty') facts.push({ label: 'merge', value: 'conflict', alarm: true });
+  const since = pr.attention.reviewWaitingSince;
+  if (since !== undefined) facts.push({ label: 'waiting', value: waitedFor(since, now) });
+  return facts.length === 0 ? undefined : facts;
+}
+
+/**
+ * The watch switch, as the state it is in rather than as the word for the other
+ * one.
+ *
+ * `watch` / `unwatch` was a verb that changed under the pointer: a row said
+ * `unwatch` precisely when it *was* watched, so the card's own text contradicted
+ * every row it appeared on until you worked out it was an instruction. An open eye
+ * says the harness is looking at this; a struck one says it is not. The verb
+ * survives in the hover, where an instruction belongs.
+ */
+function Eye({ open }: { open: boolean }): JSX.Element {
+  return (
+    <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false">
+      <path
+        d="M1 8s2.6-4.2 7-4.2S15 8 15 8s-2.6 4.2-7 4.2S1 8 1 8Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.3"
+      />
+      <circle cx="8" cy="8" r="1.9" fill="currentColor" />
+      {!open && <path d="M2.5 13.5 13.5 2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />}
+    </svg>
   );
 }
 
@@ -522,20 +736,22 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
  * working on the right thing" — so it wraps rather than being clipped to one
  * line, and nothing here re-words it. A held item is toned amber off `status`,
  * which is a fact the same sentence already states in words.
+ *
+ * **A wide card, because its rows are wide rows.** A queue row carries a state
+ * word, a control and a refs group beside a title that is a sentence — that is a
+ * full-width row's worth of slots, and at a quarter of the page it left the title
+ * 80px and clipped three of four. Rails that give way ({@link PanelRows}) share the
+ * shortfall out; they cannot conjure room a card does not have.
  */
 function UpNext({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const items = view.state.upcoming?.items ?? [];
   return (
-    <section className="cn-card">
+    <section className="cn-card cn-span2">
       <h3>
         Up next <i className="cn-n">{items.length} queued</i>
       </h3>
-      <div className="cn-rows">
-        {items.length === 0 && <p className="cn-empty">Nothing is queued.</p>}
-        {items.map((item) => (
-          <QueueRow key={`${item.origin}|${item.rule}`} item={item} view={view} actions={actions} />
-        ))}
-      </div>
+      {items.length === 0 && <p className="cn-empty">Nothing is queued.</p>}
+      <PanelRows rows={items.map((item) => queueRow(item, view, actions))} />
     </section>
   );
 }
@@ -546,42 +762,44 @@ function UpNext({ view, actions }: { view: CockpitView; actions: CockpitActions 
  * provider unconditionally, and the reason it quotes carries `#n` mentions of its
  * own.
  */
-function QueueRow({
-  item,
-  view,
-  actions,
-}: {
-  item: QueueItem;
-  view: CockpitView;
-  actions: CockpitActions;
-}): JSX.Element {
+function queueRow(item: QueueItem, view: CockpitView, actions: CockpitActions): PanelRowModel {
   const config = view.state.config;
-  return (
-    <div className="cn-row">
-      <span className="cn-grow">
-        <b className="cn-name">
-          <Ref to={item.origin} /> {item.title}
-          {/* Why this row is where it is. Without it a flagged goal's parts sit at
-              the top of the panel with their own rule's reason underneath and
-              nothing anywhere connecting the order to the click that caused it. */}
-          {item.expedited === true && (
-            <i className="cn-chip" title="Its goal is marked a priority, so everything under it is ranked first">
-              priority
-            </i>
-          )}
-        </b>
-        <span className={`cn-sub cn-wrap ${item.status === 'dispatching' ? '' : 'cn-held'}`}>
-          <RefText text={item.reason} />
-        </span>
-      </span>
-      {/* What this row will run on, and the one place it can be changed before it
-          runs. The queue is where the judgement is available — an operator
-          reading "resolve the conflict on issue/390/watcher" knows it is
-          mechanical work, and the row is in front of them; the goal's ticket is
-          two clicks away and says nothing about which of its origins is the cheap
-          one. The empty option names what the row resolves to without an
-          override, so the panel answers "which profile" whether or not anyone has
-          touched it. */}
+  const held = item.status !== 'dispatching';
+  return {
+    key: `${item.origin}|${item.rule}`,
+    title: item.title,
+    refs: <Ref to={item.origin} />,
+    facts: [{ label: 'rule', value: item.rule }],
+    // `QueueStatus` *is* the row's state — dispatching, or one of the named
+    // reasons it is not — so it wears the state column rather than sitting as a
+    // fact beside a bare `?`. Same duplication the rack and the goals card had:
+    // the word and the sentence that expands it were a column apart, and the one
+    // with the width said nothing until hovered.
+    whyLabel: item.status,
+    // `unapproved` is the one held reason that is *your* move — a decomposition
+    // nobody has accepted waits on a person, not on the harness. The rest are the
+    // harness stopped: a throttle to sit out, a per-plan cap, an earlier rule
+    // holding the issue, no headroom.
+    whyTone: item.status === 'unapproved' ? 'ask' : held ? 'hold' : 'quiet',
+    // The queue's own sentence, verbatim and unre-worded — the direct answer to
+    // "are we working on the right thing". Behind the marker rather than on the
+    // glass: it is a paragraph on the rows that are held, and the word that says
+    // *which* rows those are is now the marker's own label.
+    why: item.reason,
+    chips:
+      // Why this row is where it is. Without it a flagged goal's parts sit at the
+      // top of the panel with nothing anywhere connecting the order to the click
+      // that caused it.
+      item.expedited === true ? (
+        <i className="cn-chip" title="Its goal is marked a priority, so everything under it is ranked first">
+          priority
+        </i>
+      ) : undefined,
+    // What this row will run on, and the one place it can be changed before it
+    // runs. The queue is where the judgement is available — an operator reading
+    // "resolve the conflict on issue/390/watcher" knows it is mechanical work, and
+    // the row is in front of them.
+    action: (
       <ProfilePicker
         profiles={config.profiles}
         value={item.override ?? null}
@@ -592,8 +810,8 @@ function QueueRow({
         inheritLabel={item.profileSource === 'pin' && item.override === undefined ? 'Pinned' : 'Auto'}
         onPick={(profile) => void actions.setUpNextProfile(item.origin, profile)}
       />
-    </div>
-  );
+    ),
+  };
 }
 
 /**
@@ -601,6 +819,11 @@ function QueueRow({
  * comments on one pull request are one signal, not three unrelated rows. The
  * server's order (newest first) is kept: re-sorting by count would move the row
  * an operator is watching the moment it moves again.
+ *
+ * Wide for its neighbour's sake rather than its own — two slots do not need the
+ * room. Left narrow it was the one card off the overview's grid, sitting a quarter
+ * wide under a page of half-width ones, which reads as a card that failed to lay
+ * out rather than as one with little to say.
  */
 function WorldSignals({ view }: { view: CockpitView }): JSX.Element {
   // Both halves of "what has happened", newest first: the world's own transitions
@@ -612,33 +835,29 @@ function WorldSignals({ view }: { view: CockpitView }): JSX.Element {
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, 10);
   return (
-    <section className="cn-card">
+    <section className="cn-card cn-span2">
       <h3>
         World signals <i className="cn-n">{rows.length}</i>
       </h3>
-      <div className="cn-rows">
-        {rows.length === 0 && <p className="cn-empty">The world has not moved.</p>}
-        {rows.map((row) => (
-          <div className="cn-row" key={row.key}>
-            <span className="cn-grow">
-              <b className="cn-name">
-                <RefText text={row.summary} />
-              </b>
-              <span className="cn-sub">
-                {row.kind} · {relTime(row.createdAt, view.now)}
-              </span>
-            </span>
-            {/* The goal behind the signal, beside the sentence rather than inside
-                it. The summary's own `#412` already links out to the provider, so
-                repeating the pull request here would be one ref twice — what a
-                signal never offers is the way onto the goal page. */}
-            <span className="cn-refs">
-              <Ref to={goalBehind(view, row.ref)} />
-            </span>
-            {row.count > 1 && <span className="cn-num">×{row.count}</span>}
-          </div>
-        ))}
-      </div>
+      {rows.length === 0 && <p className="cn-empty">The world has not moved.</p>}
+      <PanelRows
+        rows={rows.map((row) => ({
+          key: row.key,
+          title: <RefText text={row.summary} />,
+          // The goal behind the signal, beside the sentence rather than inside
+          // it. The summary's own `#412` already links out to the provider, so
+          // repeating the pull request here would be one ref twice — what a
+          // signal never offers is the way onto the goal page.
+          refs: <Ref to={goalBehind(view, row.ref)} />,
+          facts: [
+            { label: 'kind', value: row.kind },
+            { label: 'when', value: relTime(row.createdAt, view.now) },
+            // The count is a fact with a name now, rather than the same slot a
+            // fleet row puts a dollar figure in.
+            ...(row.count > 1 ? [{ label: 'times', value: `×${row.count}` }] : []),
+          ],
+        }))}
+      />
     </section>
   );
 }

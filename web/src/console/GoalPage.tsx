@@ -30,6 +30,7 @@ import { watchBucket } from '../worldBuckets.js';
 import { stateColour } from '../stateColour.js';
 import { WorkRecord } from '../components/WorkRecord.js';
 import { NeedsBand } from './NeedsBand.js';
+import { AgentOnIt } from '../components/AgentOnIt.js';
 
 /**
  * Where each of the track's stages jumps to. Anchors, not refs — one element on
@@ -779,6 +780,7 @@ function PlanWaves({
                 part={p.part}
                 group={p.group}
                 agentId={p.agentId}
+                agentLive={p.agentLive}
                 pr={p.part.prNumber === null ? null : (prs.get(p.part.prNumber) ?? null)}
                 now={view.now}
                 actions={actions}
@@ -795,6 +797,7 @@ function PlanWaves({
                 part={part}
                 group="retired"
                 agentId={null}
+                agentLive={false}
                 pr={null}
                 now={view.now}
                 actions={actions}
@@ -822,6 +825,7 @@ function Part({
   part,
   group,
   agentId,
+  agentLive,
   pr,
   now,
   actions,
@@ -830,6 +834,7 @@ function Part({
   /** The four the page groups by, plus the one that is drawn beside them and counted in none of them. */
   group: PartGroup | 'retired';
   agentId: string | null;
+  agentLive: boolean;
   /** The pull request this part's number names, when the page holds it. */
   pr: PartPr | null;
   now: number;
@@ -870,17 +875,24 @@ function Part({
             <Ref to={`pr:${part.prNumber}`} label={`PR #${part.prNumber}`} />
           </>
         )}
+        {/* A live agent gets the chip the whole cockpit says this with; a
+            finished one keeps the plain way in, because what it offers is the
+            record of what happened here and not a claim that anything still is. */}
         {agentId !== null && (
           <>
             {' · '}
-            <button
-              type="button"
-              className="cn-openagent"
-              title="Open the agent working this part — its transcript, what it has cost, and its controls"
-              onClick={() => actions.select(agentId)}
-            >
-              open the agent ↗
-            </button>
+            {agentLive ? (
+              <AgentOnIt agentId={agentId} actions={actions} />
+            ) : (
+              <button
+                type="button"
+                className="cn-openagent"
+                title="Open the agent that worked this part — its transcript, what it cost, and its controls"
+                onClick={() => actions.select(agentId)}
+              >
+                open the agent ↗
+              </button>
+            )}
           </>
         )}
       </span>
@@ -1134,8 +1146,14 @@ function courtTone(pr: OpenPullRequest): string {
   return COURT_TONE[pr.attention.status] ?? '';
 }
 
-/** A wait in the units it is read in: days past a day, hours below. */
-function waitedFor(sinceIso: string, now: number): string {
+/**
+ * A wait in the units it is read in: days past a day, hours below.
+ *
+ * Exported for the overview's rack, which draws the same age as a fact on the
+ * row. One threshold, in one place — the same reason the chip below was shared
+ * before the rack drew the court itself.
+ */
+export function waitedFor(sinceIso: string, now: number): string {
   const hours = Math.floor(Math.max(0, now - Date.parse(sinceIso)) / 3_600_000);
   return hours >= 24 ? `${Math.floor(hours / 24)}d` : `${hours}h`;
 }
@@ -1144,9 +1162,10 @@ function waitedFor(sinceIso: string, now: number): string {
  * Whose court a pull request is in, and — on the one arm that means it — how long
  * it has been in somebody else's.
  *
- * Exported for the overview's rack, which draws the same rows: this must read
- * identically on both surfaces, and the same chip written twice is how they come
- * to differ by a tone or a threshold nobody chose.
+ * The goal page's own reading. The overview's rack draws the court in its state
+ * column instead — a word in the column every card puts its state in beats the
+ * same word in a chip one column further right, which is what the row grammar is
+ * for. Both quote `attention`, so neither is a second opinion.
  *
  * **The age is drawn from the first pulse a pull request is observed waiting.**
  * There was a `reviewReminderMs` threshold here, on the argument that an age on
@@ -1158,7 +1177,7 @@ function waitedFor(sinceIso: string, now: number): string {
  * or filed at any age — the harness has no more idea than you do how to make a
  * review happen faster.
  */
-export function CourtChip({ pr, now }: { pr: OpenPullRequest; now: number }): JSX.Element {
+function CourtChip({ pr, now }: { pr: OpenPullRequest; now: number }): JSX.Element {
   const since = pr.attention.reviewWaitingSince;
   const waited = since !== undefined ? waitedFor(since, now) : null;
   return (
@@ -1236,7 +1255,7 @@ function OnThisGoal({
         {page.agents.map((agent) => (
           <button type="button" className="cn-row" key={agent.id} onClick={() => actions.select(agent.id)}>
             <i
-              className={`cn-lamp ${agent.status === 'waiting' ? 'cn-ask' : agent.endedAt === null ? 'cn-run' : 'cn-off'}`}
+              className={`cn-lamp ${agent.status === 'waiting' ? 'cn-lamp-ask' : agent.endedAt === null ? 'cn-run' : 'cn-off'}`}
             />
             <span className="cn-grow">
               <b className="cn-name">{view.taskFor(agent)?.title ?? agent.id}</b>
