@@ -1406,8 +1406,17 @@ The model has **two renderings**, because the layout was worth settling separate
 
 | Grammar   | The card is                   | Drawn as                                                                          |
 | --------- | ----------------------------- | --------------------------------------------------------------------------------- |
-| `facts`   | a list of rows                | one line each: lamp, subject, why, reading, chips, action, refs                    |
+| `facts`   | a list of rows                | one line each on a fixed rail: lamp, subject, why, reading, chips, action, refs    |
 | `columns` | a table with its own headings | a cell each; the fact labels **are** the headings, plus `Why` and the refs column |
+
+Both put the same slots in the same order, and both hold a slot open on every row of a card where any
+row fills it — the census is one function, `slotsUsed`, read once per card and shared. In `facts` that
+census becomes a `grid-template-columns` the card sets once, so a slot has a fixed **position** and not
+merely an order: packed as a flex line, the fleet card's verdict sat where the rack's control did and
+every row shifted when the row above it grew a chip, which is why "always look here" had only ever been
+true of the refs group. An empty cell in a column that exists says _this row has no verdict_; a closed-up
+gap says nothing and moves everything after it. The rail's widths are `--cn-w-*` on `.cn-rows`, stated
+once for every card.
 
 `columns` declares nothing extra. Its headings are the union of the `facts` labels its rows already
 carry, in first-seen order, so a card saying `branch` and `checks` gets those two columns and one

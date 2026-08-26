@@ -118,6 +118,59 @@ interface RowFact {
 type PanelGrammar = 'facts' | 'columns';
 
 /**
+ * Which slots any of a card's rows fill.
+ *
+ * Read once per card and shared by both grammars, because both need the same
+ * answer for the same reason: a slot no row fills draws no column, and a slot one
+ * row fills is held open on all of them. That is what makes a position mean
+ * something — an empty cell in a column that exists says *this row has no
+ * verdict*, where a row that simply closed the gap up says nothing at all and
+ * moves everything after it.
+ */
+interface SlotsUsed {
+  lamp: boolean;
+  why: boolean;
+  reading: boolean;
+  chips: boolean;
+  action: boolean;
+  refs: boolean;
+}
+
+function slotsUsed(rows: readonly PanelRowModel[]): SlotsUsed {
+  const asks = (row: PanelRowModel): boolean => row.why != null && row.why !== '';
+  return {
+    lamp: rows.some((row) => row.lamp !== undefined),
+    why: rows.some(asks),
+    reading: rows.some((row) => row.reading !== undefined),
+    chips: rows.some((row) => row.chips !== undefined),
+    action: rows.some((row) => row.action !== undefined),
+    refs: rows.some((row) => row.refs !== null && row.refs !== undefined),
+  };
+}
+
+/**
+ * The card's own grid: the subject takes what is left, and every slot after it
+ * is a fixed width the sheet states once.
+ *
+ * Built here rather than in CSS because *which* columns exist is a fact about the
+ * card's rows, and only this side can see them — but the widths stay in
+ * `console.css`, so the rail is one edit for every card rather than five.
+ */
+function gridTemplate(has: SlotsUsed): string {
+  return [
+    has.lamp ? 'var(--cn-w-lamp)' : '',
+    'minmax(0, 1fr)',
+    has.why ? 'var(--cn-w-why)' : '',
+    has.reading ? 'var(--cn-w-read)' : '',
+    has.chips ? 'var(--cn-w-chips)' : '',
+    has.action ? 'var(--cn-w-act)' : '',
+    has.refs ? 'var(--cn-w-refs)' : '',
+  ]
+    .filter((part) => part !== '')
+    .join(' ');
+}
+
+/**
  * A card's rows, in whichever grammar the place asks for.
  *
  * The whole set rather than one row at a time, because `columns` cannot be drawn
@@ -142,37 +195,45 @@ export function PanelRows({
   subject: string;
   refsLabel?: string;
 }): JSX.Element {
+  const has = slotsUsed(rows);
   if (grammar === 'columns') {
-    return <ColumnsTable rows={rows} subject={subject} refsLabel={refsLabel ?? 'Refs'} />;
+    return <ColumnsTable rows={rows} has={has} subject={subject} refsLabel={refsLabel ?? 'Refs'} />;
   }
   return (
-    <div className="cn-rows">
+    <div className="cn-rows" style={{ gridTemplateColumns: gridTemplate(has) }}>
       {rows.map((row) => (
-        <FactsRow key={row.key} row={row} />
+        <FactsRow key={row.key} row={row} has={has} />
       ))}
     </div>
   );
 }
 
 /**
- * The row as a line of quantities.
+ * The row as a line of quantities, on the card's own rail.
  *
- * Slot order is fixed and is the same on every card: state, subject, why,
- * reading, verdict, control, refs. The refs group stays last and keeps its rule,
- * which is where it already was on two of the five cards and is the position the
- * whole treatment was argued for — a token says *this is a way somewhere*, and
- * only a position says *this is where you look for one*.
+ * Slot order is fixed and the same on every card — state, subject, why, reading,
+ * verdict, control, refs — and since #651 so is each slot's *width*: the row is a
+ * grid the card sets once, not a flex line that packs to the right. That is the
+ * difference between an order and a position. Packed, the fleet card's verdict
+ * sat where the pull request card's control did, every row moved when the row
+ * above it grew a chip, and "always look here" was never true of anything but the
+ * refs group.
+ *
+ * A slot the row does not fill draws an empty cell rather than closing the gap
+ * up, which is what makes the column mean something: this row has no verdict, as
+ * against this row said nothing.
  */
-function FactsRow({ row }: { row: PanelRowModel }): JSX.Element {
+function FactsRow({ row, has }: { row: PanelRowModel; has: SlotsUsed }): JSX.Element {
+  const asks = row.why != null && row.why !== '';
   return (
-    <div className={rowClass(row, 'cn-row')} title={row.hint}>
-      {row.lamp}
+    <div className={rowClass(row, 'cn-row cn-frow')} title={row.hint}>
+      {has.lamp && <span className="cn-slot">{row.lamp}</span>}
       <Subject row={row} />
-      {row.why != null && row.why !== '' && <Why why={row.why} />}
-      {row.reading}
-      {row.chips}
-      {row.action}
-      <span className="cn-refs">{row.refs}</span>
+      {has.why && <span className="cn-slot cn-slot-why">{asks && <Why why={row.why as string} />}</span>}
+      {has.reading && <span className="cn-slot">{row.reading}</span>}
+      {has.chips && <span className="cn-slot">{row.chips}</span>}
+      {has.action && <span className="cn-slot">{row.action}</span>}
+      {has.refs && <span className="cn-refs">{row.refs}</span>}
     </div>
   );
 }
@@ -192,22 +253,16 @@ function FactsRow({ row }: { row: PanelRowModel }): JSX.Element {
  */
 function ColumnsTable({
   rows,
+  has,
   subject,
   refsLabel,
 }: {
   rows: readonly PanelRowModel[];
+  has: SlotsUsed;
   subject: string;
   refsLabel: string;
 }): JSX.Element {
   const factLabels = factColumns(rows);
-  const has = {
-    lamp: rows.some((row) => row.lamp !== undefined),
-    why: rows.some((row) => row.why != null && row.why !== ''),
-    reading: rows.some((row) => row.reading !== undefined),
-    chips: rows.some((row) => row.chips !== undefined),
-    action: rows.some((row) => row.action !== undefined),
-    refs: rows.some((row) => row.refs !== null && row.refs !== undefined),
-  };
   return (
     <div className="cn-dscroll">
       <table className="cn-dtable">

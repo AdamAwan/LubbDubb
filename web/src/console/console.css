@@ -1575,6 +1575,48 @@ a.cn-tgl {
 .cn-rows {
   display: flex;
   flex-direction: column;
+  /* The rail's widths, stated once for every card. Which of these columns a card
+     actually has is `slotsUsed`'s answer and arrives as an inline
+     `grid-template-columns`; how wide each one is when it exists is here, so the
+     rail is one edit rather than five. Wide enough for the widest thing each slot
+     holds: two chips, a five-segment track, a profile picker, two refs. */
+  --cn-w-lamp: 8px;
+  --cn-w-why: 16px;
+  --cn-w-read: 104px;
+  --cn-w-chips: 132px;
+  --cn-w-act: 124px;
+  --cn-w-refs: 108px;
+}
+/* A row on the card's grid, rather than a flex line that packs to the right.
+   Packed, a slot's position depended on what the slots before it happened to
+   hold — so the fleet card's verdict sat where the rack's control did, and every
+   row moved when the row above it grew a chip. `cn-row` stays for the surfaces
+   that are still flex lines (the goal page's own lists). */
+.cn-frow {
+  display: grid;
+  align-items: center;
+}
+/* Every rail slot is drawn whether or not this row fills it: an empty cell in a
+   column that exists says *this row has no verdict*, where a closed-up gap says
+   nothing and moves everything after it. */
+.cn-slot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.cn-slot-why {
+  justify-content: center;
+}
+/* A track in a slot of its own is one bar, not a wrapping list. The goal row's
+   own rule lets it wrap to keep it off the title beside it; on the rail the
+   column already does that, and wrapping turns one reading into a stack of them.
+   Three classes deep because `.cn-goal-row .cn-track` is declared further down
+   this sheet and would otherwise win on source order at equal specificity. */
+.cn-frow .cn-slot .cn-track {
+  flex-wrap: nowrap;
+  max-width: none;
+  overflow: hidden;
 }
 .cn-row {
   display: flex;
@@ -1669,6 +1711,13 @@ button.cn-grow {
 }
 .cn-refs:empty {
   border-left-color: transparent;
+}
+/* On the grid the column is the width, so the group stops setting its own — and
+   it keeps its rule even when this row's is empty, because the rule is the
+   card's edge between what a row *is* and what it *names*, not this row's. */
+.cn-frow .cn-refs {
+  min-width: 0;
+  border-left-color: var(--cn-line);
 }
 
 .cn-lamp {
