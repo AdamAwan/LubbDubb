@@ -6,6 +6,7 @@ import { resolveExecutable } from './resolveCommand.js';
 import type { ProcessReaper } from './processTree.js';
 import { assistantText, renderBlocks, type ContentBlock } from './streamTranscript.js';
 import type { AgentUsage } from '../types.js';
+import { debugLog } from '../debug.js';
 
 /**
  * Minimal child-process shape we depend on — injectable so tests drive a fake
@@ -66,6 +67,39 @@ const defaultSpawner: Spawner = (command, args, opts) => {
  * agent did wrong, so it emits `limited` rather than `waiting` or `failed`; see
  * {@link RateLimitPark}.
  */
+/**
+ * Parse one stdout line as a stream-JSON event, tolerating junk glued to its front.
+ *
+ * A plain `JSON.parse` per line assumes `claude` is the only writer on that pipe, and
+ * it is not: **anything that writes to stdout without a trailing newline lands on the
+ * front of the next event.** A `Stop` hook returning a `terminalSequence` is the case
+ * that cost us one — the OSC title escape it emits carries no newline, so the
+ * `result` closing the turn arrived as `\x1b]2;…\x07{"type":"result"…}` and threw.
+ *
+ * The old `catch { return }` then made that a **turn end that never happened**: no
+ * done, no waiting, not even the unannounced stop, because all three are decided on
+ * `result`. An agent that had printed `@@LUBBDUBB_DONE@@` and finished simply went
+ * quiet — its session still live, still holding its worktree lease, still accepting
+ * messages — and looked identical to one still working. Nothing was red, and the only
+ * way to notice was to ask the agent, which could only report what it had printed.
+ *
+ * So a line is retried from each `{` in it, taking the first that parses: the junk is
+ * always a prefix and the event always an object, so the event is always a suffix.
+ * Recovery cannot invent an event — a line with no parseable object still returns
+ * null — and the escape flavour never has to be enumerated, which is the point: the
+ * next writer to do this will not be a hook.
+ */
+function parseEventLine(line: string): StreamEvent | null {
+  for (let i = line.indexOf('{'); i !== -1; i = line.indexOf('{', i + 1)) {
+    try {
+      return JSON.parse(line.slice(i)) as StreamEvent;
+    } catch {
+      // This `{` opened something that is not the event; try the next one.
+    }
+  }
+  return null;
+}
+
 export class StreamJsonSession extends EventEmitter implements AgentSession {
   private child: StreamChild | null = null;
   private _status: AgentSessionStatus = 'starting';
@@ -225,11 +259,13 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
   }
 
   private handleEvent(line: string): void {
-    let ev: StreamEvent;
-    try {
-      ev = JSON.parse(line) as StreamEvent;
-    } catch {
-      return; // non-JSON noise
+    const ev = parseEventLine(line);
+    if (!ev) {
+      // Genuinely unreadable, as opposed to an event wearing a prefix. Logged rather
+      // than counted: the population is banners and stderr bleed, and a line that is
+      // not an event cannot be recovered into one.
+      debugLog('agent', `unparseable stream line (${line.length} bytes)`);
+      return;
     }
 
     if (ev.type === 'assistant') {
