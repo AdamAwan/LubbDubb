@@ -1381,8 +1381,8 @@ bug anybody filed; the overview is only ever read two cards at a time.
 
 So the row is a **value**, `PanelRowModel` in `web/src/console/PanelRow.tsx`, and the card builds one
 rather than writing markup. The fields are the grammar: `lamp`, `title` with its optional `open`,
-`refs`, `facts`, `why`, `reading`, `chips`, `action`. Three of them carry the rules that kept being
-forgotten:
+`toggle`, `refs`, `facts`, `why`, `reading`, `chips`, `action`. Three of them carry the rules that kept
+being forgotten:
 
 - **`refs` is required.** Null is how a row says it points at nothing — the goal rows say it, because
   the row _is_ the way to that goal — and a card that simply never got round to drawing a way
@@ -1418,13 +1418,36 @@ forgotten:
   row names how it ended where that is not `done` — `failed`, `crashed`, `killed`, `stopped`. The desk
   run wears `at a keyboard` here rather than a chip of its own, in its violet: the hollow lamp, the
   dashed edge and this word are one signal, and it is the same question the column answers on every
-  other row. → `test/panelGrammar.test.ts`
+  other row.
+
+  **The Pull requests card's word is the court itself** — `you`, `harness`, `elsewhere`, `stalled`,
+  `settled`, `unwatched`, `prAttentionStatus`'s own arms, quoted rather than re-read. The card drew
+  that verdict twice before: a `?` holding `attention.reasons` and a `CourtChip` holding the same
+  reasons in a `title`, one column apart — two hovers over one sentence, and a state column that said
+  nothing. `you` is the only `ask`; `stalled` and `unwatched` are `hold`, because nothing is going to
+  happen to either on its own. The chip is gone from the overview and stays on the goal page, where
+  there is no state column to put it in. → `test/panelGrammar.test.ts`
+
+- **`toggle` is the row's switch, and it is pinned left of the subject.** Whether the harness takes an
+  interest in this row at all — the rack's watch tag — is not the row's *work*, which is what `action`
+  is for and why `action` has the width. It is the same control in the same place on every row of the
+  card, so it goes where an eye can skip it. It is drawn as the **state it is in** rather than as the
+  word for the other one: `watch` / `unwatch` was a verb that contradicted every row it appeared on
+  (a row said `unwatch` precisely when it *was* watched) until you worked out it was an instruction.
+  An open eye is the harness looking; a struck one is not. The verb survives in the hover, where an
+  instruction belongs.
+
+  What a pull-request row states in `facts` are the three *reasons it is not merged yet* — unresolved
+  `comments`, a `merge` conflict, how long it has been `waiting` on a reviewer — each drawn only where
+  it is true, so a row with none of them is visibly a pull request with nothing in its way. `branch`
+  used to be the only one and was the row's least useful fact: the title says what the work is and the
+  refs say where it is.
 
 The model has **two renderings**, because the layout was worth settling separately from the rule:
 
 | Grammar   | The card is                   | Drawn as                                                                          |
 | --------- | ----------------------------- | --------------------------------------------------------------------------------- |
-| `facts`   | a list of rows                | one line each on a fixed rail: lamp, subject, why, reading, chips, action, refs   |
+| `facts`   | a list of rows                | one line each on a fixed rail: lamp, switch, subject, why, reading, chips, action, refs |
 | `columns` | a table with its own headings | a cell each; the fact labels **are** the headings, plus `Why` and the refs column |
 
 Both put the same slots in the same order, and both hold a slot open on every row of a card where any
@@ -1437,7 +1460,7 @@ gap says nothing and moves everything after it. The rail's widths are `--cn-w-*`
 once for every card.
 
 `columns` declares nothing extra. Its headings are the union of the `facts` labels its rows already
-carry, in first-seen order, so a card saying `branch` and `checks` gets those two columns and one
+carry, in first-seen order, so a card saying `comments` and `waiting` gets those two columns and one
 saying `kind` and `when` gets those — which is what keeps it a second reading of one model rather than
 a second description of every card. What a card _does_ name is its subject column (`Agent is on`,
 `Goal`, `Pull request`, `Dispatch`, `What happened`) and its refs column (`On`, `Goal`), because

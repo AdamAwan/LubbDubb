@@ -31,6 +31,16 @@ export interface PanelRowModel {
   key: string;
   /** The state lamp, where the row has a state. */
   lamp?: ReactNode;
+  /**
+   * A single-glyph control pinned to the *left* of the subject: whether the
+   * harness is to take an interest in this row at all.
+   *
+   * Left rather than in {@link action} because it is not the row's work. It is the
+   * same switch in the same place on every row of the card, so it belongs where an
+   * eye can skip it — while {@link action} is the one thing *this* row can be told
+   * to do, which is a different question and deserves the width.
+   */
+  toggle?: ReactNode;
   /** What the row is, in its own words. */
   title: ReactNode;
   /**
@@ -149,6 +159,7 @@ type PanelGrammar = 'facts' | 'columns';
  */
 interface SlotsUsed {
   lamp: boolean;
+  toggle: boolean;
   why: boolean;
   /** Any row wearing a word, which is what the column has to be wide enough for. */
   whyLabel: boolean;
@@ -162,6 +173,7 @@ function slotsUsed(rows: readonly PanelRowModel[]): SlotsUsed {
   const asks = (row: PanelRowModel): boolean => (row.why != null && row.why !== '') || row.whyLabel !== undefined;
   return {
     lamp: rows.some((row) => row.lamp !== undefined),
+    toggle: rows.some((row) => row.toggle !== undefined),
     why: rows.some(asks),
     whyLabel: rows.some((row) => row.whyLabel !== undefined),
     reading: rows.some((row) => row.reading !== undefined),
@@ -182,6 +194,7 @@ function slotsUsed(rows: readonly PanelRowModel[]): SlotsUsed {
 function gridTemplate(has: SlotsUsed): string {
   return [
     has.lamp ? 'var(--cn-w-lamp)' : '',
+    has.toggle ? 'var(--cn-w-eye)' : '',
     'minmax(0, 1fr)',
     // A column of words needs the width of a word; a column of markers does not.
     has.why ? (has.whyLabel ? 'var(--cn-w-state)' : 'var(--cn-w-why)') : '',
@@ -240,8 +253,8 @@ export function PanelRows({
 /**
  * The row as a line of quantities, on the card's own rail.
  *
- * Slot order is fixed and the same on every card — state, subject, why, reading,
- * verdict, control, refs — and since #651 so is each slot's *width*: the row is a
+ * Slot order is fixed and the same on every card — state, switch, subject, why,
+ * reading, verdict, control, refs — and since #651 so is each slot's *width*: the row is a
  * grid the card sets once, not a flex line that packs to the right. That is the
  * difference between an order and a position. Packed, the fleet card's verdict
  * sat where the pull request card's control did, every row moved when the row
@@ -256,6 +269,7 @@ function FactsRow({ row, has, columns }: { row: PanelRowModel; has: SlotsUsed; c
   return (
     <div className={rowClass(row, 'cn-row cn-frow')} style={{ gridTemplateColumns: columns }} title={row.hint}>
       {has.lamp && <span className="cn-slot">{row.lamp}</span>}
+      {has.toggle && <span className="cn-slot">{row.toggle}</span>}
       <Subject row={row} />
       {has.why && (
         <span className={`cn-slot ${row.whyLabel === undefined ? 'cn-slot-why' : ''}`}>
@@ -301,6 +315,7 @@ function ColumnsTable({
         <thead>
           <tr>
             {has.lamp && <th className="cn-dlamp" />}
+            {has.toggle && <th className="cn-dlamp" />}
             <th>{subject}</th>
             {factLabels.map((label) => (
               <th key={label}>{label}</th>
@@ -321,6 +336,7 @@ function ColumnsTable({
             return (
               <tr key={row.key} className={rowClass(row, 'cn-drow')} title={row.hint}>
                 {has.lamp && <td className="cn-dlamp">{row.lamp}</td>}
+                {has.toggle && <td className="cn-dlamp">{row.toggle}</td>}
                 <td className="cn-dsubject">
                   <Subject row={row} facts={false} />
                 </td>

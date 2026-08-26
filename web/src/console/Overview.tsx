@@ -6,7 +6,7 @@ import { buildGoalPage, buildGoalTrack, furthestEnvironment, goalOfPr, type Goal
 import { AsyncButton } from '../components/AsyncButton.js';
 import { elapsed, fmtUsd, relTime } from '../components/util.js';
 import { Ref, RefText, refLabel } from '../components/refs.js';
-import { CiLadder, CourtChip } from './GoalPage.js';
+import { CiLadder, waitedFor } from './GoalPage.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
 import { PanelRows, type PanelRowModel } from './PanelRow.js';
 
@@ -607,15 +607,19 @@ function prRow(pr: OpenPullRequest, view: CockpitView, actions: CockpitActions, 
         {goal !== null && <Ref to={goal} title={`Open the goal this pull request is delivering — ${refLabel(goal)}`} />}
       </>
     ),
-    facts: [{ label: 'branch', value: pr.branch }],
-    // Whose turn it is and why — the server's own sentence, which the card drew
-    // the verdict of and never the reasoning behind it.
+    facts: prFacts(pr, view.now),
+    // Whose court it is in, which is the one question the card is for — the
+    // server's word, with the server's own reasoning behind it. It was drawn
+    // twice before, as a `?` holding the reasons and as a chip holding the same
+    // reasons in a `title`, one column apart: two hovers, one sentence, and a
+    // state column that said nothing.
+    whyLabel: pr.attention.status,
+    whyTone: COURT_TONE[pr.attention.status] ?? 'quiet',
     why: pr.attention.reasons.join(' '),
     reading: <CiLadder pr={pr} />,
-    chips: <CourtChip pr={pr} now={view.now} />,
-    action: (
+    toggle: (
       <AsyncButton
-        className="ghost"
+        className="cn-eye"
         disabled={watchLabel === ''}
         onClick={() => actions.setPrWatched(pr.number, unwatched)}
         title={
@@ -626,11 +630,72 @@ function prRow(pr: OpenPullRequest, view: CockpitView, actions: CockpitActions, 
               : `Take the "${watchLabel}" tag off so the harness leaves this PR alone`
         }
       >
-        {unwatched ? 'watch' : 'unwatch'}
+        <Eye open={!unwatched} />
       </AsyncButton>
     ),
     spent: unwatched,
   };
+}
+
+/**
+ * Whose court, in the tones the state column already speaks.
+ *
+ * `you` is the only one that is your move, so it is the only `ask`. A pull request
+ * nobody's turn — stalled, or opted out — is amber for the reason the fleet's
+ * parks are: nothing is going to happen to it on its own.
+ */
+const COURT_TONE: Record<string, 'ask' | 'hold' | 'quiet'> = {
+  you: 'ask',
+  stalled: 'hold',
+  unwatched: 'hold',
+};
+
+/**
+ * What is true of this pull request that the ladder and the court do not say.
+ *
+ * `branch` used to be the only one, and it is the row's least useful fact: the
+ * title says what the work is, the refs say where it is, and a slug repeats both
+ * in a form nothing here is asked in. These three are each a *reason a pull
+ * request is not merged yet*, which is the question a rack of open pull requests
+ * exists to answer — and each is drawn only where it is true, so a row with none
+ * of them is visibly a pull request with nothing in its way.
+ */
+function prFacts(pr: OpenPullRequest, now: number): PanelRowModel['facts'] {
+  const facts: { label: string; value: string; alarm?: boolean }[] = [];
+  if (pr.unresolvedComments.length > 0) {
+    facts.push({ label: 'comments', value: String(pr.unresolvedComments.length), alarm: true });
+  }
+  // Only the real conflict: `behind` is a base the harness updates by itself, and
+  // an alarm on it would be an alarm on every pull request open while main moves.
+  if (pr.mergeableState === 'dirty') facts.push({ label: 'merge', value: 'conflict', alarm: true });
+  const since = pr.attention.reviewWaitingSince;
+  if (since !== undefined) facts.push({ label: 'waiting', value: waitedFor(since, now) });
+  return facts.length === 0 ? undefined : facts;
+}
+
+/**
+ * The watch switch, as the state it is in rather than as the word for the other
+ * one.
+ *
+ * `watch` / `unwatch` was a verb that changed under the pointer: a row said
+ * `unwatch` precisely when it *was* watched, so the card's own text contradicted
+ * every row it appeared on until you worked out it was an instruction. An open eye
+ * says the harness is looking at this; a struck one says it is not. The verb
+ * survives in the hover, where an instruction belongs.
+ */
+function Eye({ open }: { open: boolean }): JSX.Element {
+  return (
+    <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false">
+      <path
+        d="M1 8s2.6-4.2 7-4.2S15 8 15 8s-2.6 4.2-7 4.2S1 8 1 8Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.3"
+      />
+      <circle cx="8" cy="8" r="1.9" fill="currentColor" />
+      {!open && <path d="M2.5 13.5 13.5 2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />}
+    </svg>
+  );
 }
 
 /**

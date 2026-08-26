@@ -1581,6 +1581,9 @@ a.cn-tgl {
      rail is one edit rather than five. Wide enough for the widest thing each slot
      holds: two chips, a five-segment track, a profile picker, two refs. */
   --cn-w-lamp: 8px;
+  /* The watch switch: a glyph and the room to press it, and no more — it is the
+     one slot that is the same on every row, so its whole job is to be skippable. */
+  --cn-w-eye: 22px;
   --cn-w-why: 16px;
   /* The same column when its rows wear a word instead of a marker: wide enough for
      the longest state the fleet card has ("at a keyboard"). */
@@ -2858,4 +2861,29 @@ button.cn-grow {
 }
 .cn-grammar .cn-gap {
   flex: 1;
+}
+
+/* The watch switch. A glyph in the row's own ink, dimmed until it is wanted, so a
+   column of them reads as one repeated control rather than as a column of state —
+   which is what the state column beside it is for. */
+.cn-eye {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--cn-fg-dim);
+  cursor: pointer;
+  opacity: 0.6;
+}
+.cn-eye:hover,
+.cn-eye:focus-visible {
+  color: var(--cn-fg);
+  opacity: 1;
+}
+/* An unwatched row is drawn spent, and its own eye is the one thing on it that
+   must stay legible: it is how the row comes back. */
+.cn-spent .cn-eye {
+  opacity: 1;
 }

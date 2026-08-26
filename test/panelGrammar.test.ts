@@ -222,6 +222,36 @@ test('a fleet row wears the state it is in, and the strongest one it is in', () 
   assert.ok(!ranked.includes('blocked:hold'), 'and the row wears one word, not both');
 });
 
+/**
+ * The rack's state column is the server's court verdict, quoted.
+ *
+ * The card drew it twice before — a `?` holding `attention.reasons` and a chip
+ * holding the same reasons in a `title`, one column apart — and a second reading
+ * of one verdict is how the two come to disagree. What this pins is that there is
+ * one: the word in the state column is `attention.status` itself, not a word the
+ * cockpit chose for it.
+ */
+test('a pull-request row wears the court the server put it in', () => {
+  const state = buildDemoState().state;
+  const html = render(view('facts'));
+  const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('Up next'));
+  const rows = rack.split(ROW).slice(1);
+  assert.equal(rows.length, state.world.pullRequests.length, 'every open pull request is drawn');
+  for (const [i, row] of rows.entries()) {
+    const pr = state.world.pullRequests[i];
+    assert.ok(pr, 'the fixtures line up with the rows');
+    assert.ok(
+      row.includes(`>${pr.attention.status}</button>`),
+      `#${pr.number} should wear "${pr.attention.status}" in its state column`,
+    );
+    // And the switch that takes it off the harness's books is pinned left of the
+    // subject, ahead of the name: the same control in the same place on every
+    // row, which is what lets an eye skip it.
+    const eye = row.indexOf('cn-eye');
+    assert.ok(eye > 0 && eye < row.indexOf('cn-grow'), `#${pr.number} draws no watch switch left of its subject`);
+  }
+});
+
 /** The grammar is a place, so both readings are a link somebody can send. */
 test('the row grammar round-trips through the query string', () => {
   assert.equal(placeQuery(NOWHERE), '', 'the default grammar is a bare URL');
