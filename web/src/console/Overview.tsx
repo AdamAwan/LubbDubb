@@ -776,11 +776,17 @@ function Eye({ open }: { open: boolean }): JSX.Element {
  * working on the right thing" — so it wraps rather than being clipped to one
  * line, and nothing here re-words it. A held item is toned amber off `status`,
  * which is a fact the same sentence already states in words.
+ *
+ * **A wide card, because its rows are wide rows.** A queue row carries a state
+ * word, a control and a refs group beside a title that is a sentence — that is a
+ * full-width row's worth of slots, and at a quarter of the page it left the title
+ * 80px and clipped three of four. Rails that give way ({@link PanelRows}) share the
+ * shortfall out; they cannot conjure room a card does not have.
  */
 function UpNext({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const items = view.state.upcoming?.items ?? [];
   return (
-    <section className="cn-card">
+    <section className="cn-card cn-span2">
       <h3>
         Up next <i className="cn-n">{items.length} queued</i>
       </h3>
@@ -858,6 +864,11 @@ function queueRow(item: QueueItem, view: CockpitView, actions: CockpitActions): 
  * comments on one pull request are one signal, not three unrelated rows. The
  * server's order (newest first) is kept: re-sorting by count would move the row
  * an operator is watching the moment it moves again.
+ *
+ * Wide for its neighbour's sake rather than its own — two slots do not need the
+ * room. Left narrow it was the one card off the overview's grid, sitting a quarter
+ * wide under a page of half-width ones, which reads as a card that failed to lay
+ * out rather than as one with little to say.
  */
 function WorldSignals({ view }: { view: CockpitView }): JSX.Element {
   // Both halves of "what has happened", newest first: the world's own transitions
@@ -869,7 +880,7 @@ function WorldSignals({ view }: { view: CockpitView }): JSX.Element {
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, 10);
   return (
-    <section className="cn-card">
+    <section className="cn-card cn-span2">
       <h3>
         World signals <i className="cn-n">{rows.length}</i>
       </h3>

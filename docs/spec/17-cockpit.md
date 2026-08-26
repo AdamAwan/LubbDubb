@@ -1494,7 +1494,11 @@ being forgotten:
   clipped to a word, while World signals — same width, fewer slots — kept 277. The floor is what makes
   the ceilings bite. It does not make an over-subscribed card fit: a card carrying a state word, a
   control and a refs group at half width is short on room whatever gives way, and the honest fix for
-  that one is the card's width or one slot fewer.
+  that one is the card's width or one slot fewer. **Up next takes the width**: its rows carry a state
+  word, a profile picker and a refs group beside a title that is a sentence, which is a full-width
+  row's worth of slots. World signals widens with it — not for its own two slots, but because left
+  narrow it was the one card off the grid, a quarter wide under a page of half-width ones, which reads
+  as a card that failed to lay out rather than as one with little to say.
 
 - **`toggle` is the row's switch, and it is pinned left of the subject.** Whether the harness takes an
   interest in this row at all — the rack's watch tag — is not the row's _work_, which is what `action`
