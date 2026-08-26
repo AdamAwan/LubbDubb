@@ -74,7 +74,7 @@ export function goalReach(input: GoalReachInput): GoalEnvironmentReach[] {
     const unresolved = total - reached - absent;
     return {
       environment,
-      status: rollUp({ total, reached, unresolved }),
+      status: rollUpReach({ total, reached, unresolved }),
       landed: reached,
       total,
       at: reached === total && total > 0 ? latest : null,
@@ -184,7 +184,21 @@ function partsOwed(goalRef: string, plans: Plan[], parts: PlanPart[]): number {
   return owed;
 }
 
-function rollUp(counts: { total: number; reached: number; unresolved: number }): GoalEnvironmentReach['status'] {
+/**
+ * Fold a count of confirmed / unresolved into one word.
+ *
+ * Exported since #— for the feature board (`src/features/featureBoard.ts`), which
+ * asks the same question one tier up: a Feature is to its goals what a goal is to
+ * its landings, and the interesting value is `partial` in both places. One
+ * implementation rather than two, because the rule that matters —
+ * **`unknown` never folds to `absent`** — is the one a second copy would get
+ * wrong quietly. → `docs/spec/24-environments.md#the-three-verdicts`
+ */
+export function rollUpReach(counts: {
+  total: number;
+  reached: number;
+  unresolved: number;
+}): GoalEnvironmentReach['status'] {
   // A goal with nothing behind it at all has not been anywhere, and saying so is
   // not a guess: there is no merge to be uncertain about.
   if (counts.total === 0) return 'absent';

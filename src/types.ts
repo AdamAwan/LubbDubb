@@ -639,7 +639,7 @@ export interface Job {
 }
 
 /**
- * A recurring blueprint: a prompt the operator wants run on a cron schedule, and
+ * A recurring brief: a prompt the operator wants run on a cron schedule, and
  * how far through that recurrence the harness has got.
  *
  * It is **intent, not work**. What a firing produces is an ordinary {@link Job},
@@ -683,7 +683,7 @@ export interface JobSchedule {
 }
 
 /**
- * An image an operator attached to a blueprint, as it arrives on the wire
+ * An image an operator attached to a brief, as it arrives on the wire
  * (issue #249). `data` is base64 of the raw file — no data-URL prefix.
  *
  * There is deliberately **no `mime` field**: a client-declared type is
@@ -702,12 +702,12 @@ export interface JobAttachmentInput {
  * An attachment as stored: the file on disk, plus what an agent is told about it.
  *
  * Keyed on `targetRef` rather than on a job id, because the thing an attachment
- * belongs to outlives the row it arrived with — a code blueprint becomes a desk
+ * belongs to outlives the row it arrived with — a code brief becomes a desk
  * filing job and then a ticket, and the image has to follow.
  */
 export interface JobAttachment {
   id: string;
-  /** What it is attached to: `job:<id>` while the blueprint is one. */
+  /** What it is attached to: `job:<id>` while the brief is one. */
   targetRef: string;
   /** Position in the operator's list, 0-based — also the file's stem on disk. */
   index: number;
@@ -1934,8 +1934,18 @@ export interface IssueRun {
   updatedAt: string;
 }
 
-/** Who decided an issue was delivered: the assessing agent, or the operator directly. */
-export type DeliveryAuthor = 'assessor' | 'operator';
+/**
+ * Who decided an issue was delivered: the assessing agent, the operator directly,
+ * or the **planner** that found the goal already met before anything was built.
+ *
+ * The third is the same statement made at the other end of the run. An assessor
+ * judges delivered work; a planner judges a goal nothing has started on, and the
+ * answer "this is already true of the repository" is one it reaches often enough
+ * that the alternative — a plan whose one part exists so that an agent can
+ * discover the same thing and conclude it — was work invented to fit the shape.
+ * → `src/mcp/planNotNeeded.ts`
+ */
+export type DeliveryAuthor = 'assessor' | 'planner' | 'operator';
 
 /**
  * One issue's standing `delivered` verdict — the harness's own park.
@@ -1960,10 +1970,10 @@ export interface IssueDelivery {
   originRef: string;
   /** One line: what was delivered. Required — a bare verdict is not reviewable. */
   summary: string;
-  /** The account behind the headline, as markdown. Null when the assessor added none. */
+  /** The account behind the headline, as markdown. Null when its author added none. */
   detail: string | null;
   by: DeliveryAuthor;
-  /** The assessing agent and its task, from the credential. Null for an operator verdict. */
+  /** The agent that cast it and its task, from the credential. Null for an operator verdict. */
   agentId: string | null;
   taskId: string | null;
   /** When the verdict was first cast — the instant world signal is measured against. */
@@ -1972,40 +1982,40 @@ export interface IssueDelivery {
 }
 
 /**
- * What a goal assay may conclude about an issue's text (issue #158).
+ * What a goal appraisal may conclude about an issue's text (issue #158).
  *
  * `workable` is stored as much as `unclear` is, for the reason the planner
- * persists a `single` verdict: without a row for the affirmative the assayer
+ * persists a `single` verdict: without a row for the affirmative the appraiser
  * re-runs on the same issue every cycle. Only `unclear` holds anything.
  *
- * There is deliberately no third "not assayed" member — that is the absence of a
- * row, which is what makes a crashed assayer fail open (see `src/intake/assay.ts`).
+ * There is deliberately no third "not appraised" member — that is the absence of a
+ * row, which is what makes a crashed appraiser fail open (see `src/intake/appraisal.ts`).
  */
-export type GoalAssayVerdict = 'workable' | 'unclear';
+export type GoalAppraisalVerdict = 'workable' | 'unclear';
 
-/** Who judged an issue's goal text: the assaying agent, or the operator directly. */
-export type AssayAuthor = 'assayer' | 'operator';
+/** Who judged an issue's goal text: the appraising agent, or the operator directly. */
+export type AppraisalAuthor = 'appraiser' | 'operator';
 
 /**
- * One issue's standing goal assay — the answer to "is this ticket workable", cast
+ * One issue's standing goal appraisal — the answer to "is this ticket workable", cast
  * *before* anything is dispatched against it.
  *
  * Sibling of {@link IssueDelivery} and split from it for the reason that one is
  * split from {@link IssueConclusion}: the two verdicts are about opposite ends of
- * the same issue. A delivery says the work is *finished*; an assay says the goal
+ * the same issue. A delivery says the work is *finished*; an appraisal says the goal
  * could not be *started* from. They can be true at different times about one
  * issue, so they are two rows, and neither clears the other.
  *
- * The distinguishing field is {@link goalRef}: an assay judges a *text*, not a
+ * The distinguishing field is {@link goalRef}: an appraisal judges a *text*, not a
  * state of the world, so the verdict is bound to the exact text it judged. Change
  * the title or the body and the verdict no longer describes the ticket in front of
- * you, which is what makes "re-assay when it is edited" a lookup rather than an
+ * you, which is what makes "re-appraise when it is edited" a lookup rather than an
  * event the harness has to have witnessed.
  */
-export interface IssueAssay {
+export interface IssueAppraisal {
   /** The issue, as `issue:<n>` — the same origin every gate keys on. */
   originRef: string;
-  verdict: GoalAssayVerdict;
+  verdict: GoalAppraisalVerdict;
   /** What is missing, or why the goal is actionable. Required: a bare verdict is not reviewable. */
   summary: string;
   /**
@@ -2014,11 +2024,11 @@ export interface IssueAssay {
    * fingerprints differently — no timer, and no world event to have missed.
    */
   goalRef: string;
-  by: AssayAuthor;
+  by: AppraisalAuthor;
   /**
-   * The model profile the assayer proposed for this goal's work (issue #342), or
+   * The model profile the appraiser proposed for this goal's work (issue #342), or
    * null when it named none — which is every `unclear` verdict, every deployment
-   * with no `agentModels`, and any assayer that simply did not answer.
+   * with no `agentModels`, and any appraiser that simply did not answer.
    *
    * Kept whatever the operator then decides, so the pair (this, the tag on the
    * ticket) is what says a human intervened. Nothing reads it as the pin: the
@@ -2030,14 +2040,14 @@ export interface IssueAssay {
    * moment the proposal was written if there was nothing to ask.
    *
    * Null is the whole of the gate: a proposal with no answer holds the funnel
-   * (see `assayHold`). Stamped at write time when the assayer agreed with what
+   * (see `appraisalHold`). Stamped at write time when the appraiser agreed with what
    * was already standing, so agreement costs no click and raises no question.
    */
   profileAnsweredAt: string | null;
   /**
-   * The container work item the assayer proposed this goal should hang off, or
+   * The container work item the appraiser proposed this goal should hang off, or
    * null when it named none — every `unclear` verdict, every flat tracker, and any
-   * assayer that had nothing to suggest.
+   * appraiser that had nothing to suggest.
    *
    * A number rather than a resolved item: what the tracker holds is the id, and a
    * title cached here would be free to drift from the one on the board. The
@@ -2063,16 +2073,16 @@ export interface IssueAssay {
    * write and a row that reappeared for one refresh would read as a click that
    * did not take.
    *
-   * Scoped to this row, so a re-assay against rewritten goal text asks again: the
+   * Scoped to this row, so a re-appraisal against rewritten goal text asks again: the
    * ticket having been rewritten is the one signal that the old answer may no
    * longer be the right one.
    */
   parentSettledAt: string | null;
-  /** The area path the assayer proposed, from the candidates the harness offered it. */
+  /** The area path the appraiser proposed, from the candidates the harness offered it. */
   proposedAreaPath: string | null;
   /** {@link parentSettledAt} for the area path — the same three answers, the same scope. */
   areaPathSettledAt: string | null;
-  /** The assaying agent and its task, from the credential. Null for an operator verdict. */
+  /** The appraising agent and its task, from the credential. Null for an operator verdict. */
   agentId: string | null;
   taskId: string | null;
   /** The provider's id for the one comment this verdict maintains on the ticket, once written. */
@@ -2892,7 +2902,7 @@ export interface UsageEvent {
  *
  * The unit is the **issue**, because that is the unit the operator budgets in and
  * the one thing the tracker names. Everything downstream of it — the planner, the
- * assay, each part, and the pull requests those parts opened — is spend on that
+ * appraisal, each part, and the pull requests those parts opened — is spend on that
  * goal, so it rolls up rather than being counted as work of its own.
  *
  * A running figure, never a final one: `costUsd` is summed from the cumulative
@@ -3908,6 +3918,16 @@ export interface PoolDigestDocument extends PoolEnvelope {
   unaccounted: PoolDigestRow[];
   /** Runs that reported no usage at all. Without it a PTY fleet is drawn as a cheap fleet. */
   unmeasured: PoolDigestRow[];
+  /**
+   * Faults this fleet recorded, keyed by `ErrorLogEntry['source']` — a closed
+   * vocabulary of five, and the same word the Faults panel draws.
+   *
+   * **It carries no cost and it is never mirrored**, which is what makes it a
+   * different animal from the four sections above it: nothing at the far end reads
+   * it, so it exists to be read in this fleet's own `digest.md` and nowhere else.
+   * → `docs/spec/28-cross-fleet-pool.md#the-faults-section`
+   */
+  byFault: PoolDigestRow[];
 }
 
 /** One document, whichever kind. The layer above splits on `kind`; the transport stays opaque. */

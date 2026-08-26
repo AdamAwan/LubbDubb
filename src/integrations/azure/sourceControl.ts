@@ -8,6 +8,7 @@ import type {
   PrLabelInput,
   PrMergeInput,
   PrReplyInput,
+  PrThreadResolveInput,
   PrTitleInput,
   SendResult,
 } from '../../sink/actionSink.js';
@@ -24,6 +25,7 @@ import type {
   PrLabelCapable,
   PrMergeCapable,
   PrReplyCapable,
+  PrThreadResolveCapable,
   PrTitleCapable,
   RefResolvable,
   WorldSlice,
@@ -71,6 +73,7 @@ export class AzureDevOpsSourceControlIntegration
   implements
     Integration,
     PrReplyCapable,
+    PrThreadResolveCapable,
     PrMergeCapable,
     PrLabelCapable,
     PrCreateCapable,
@@ -187,6 +190,17 @@ export class AzureDevOpsSourceControlIntegration
         ? await api.createThreadReply(input.prNumber, Number(input.commentId), 1, input.body)
         : await api.createThread(input.prNumber, input.body);
     return { ok: true, ref: ref.url };
+  }
+
+  /**
+   * Mark a comment thread resolved. `commentId` carries the **thread** id here,
+   * as it does for a reply, and `fixed` is the status the resolved arm of
+   * {@link buildUnresolvedComments} already reads — so a thread resolved this way
+   * settles on the next poll exactly as one a reviewer closed themselves.
+   */
+  async resolvePrThread(input: PrThreadResolveInput): Promise<SendResult> {
+    await this.opts.api.setThreadStatus(input.prNumber, Number(input.commentId), 'fixed');
+    return { ok: true, ref: input.commentId };
   }
 
   async mergePr(input: PrMergeInput): Promise<SendResult> {

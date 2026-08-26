@@ -19,7 +19,7 @@ import type { RawAction, StageContext } from './context.js';
  *
  * `issueOriginRole(...) === 'work'` is the predicate for "an agent is doing the
  * work": it covers the pickup root `issue:<n>` and a plan part, and excludes the
- * deliberation runs — an assay, a planner, an assessor or a retro leaves the item
+ * deliberation runs — an appraisal, a planner, an assessor or a retro leaves the item
  * where it is, because none of them is work on the goal.
  *
  * **Mutually exclusive with {@link workItemInReview} by construction**: that rule

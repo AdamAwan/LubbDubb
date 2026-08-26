@@ -346,7 +346,7 @@ test('a retired top-level key and a retired whole block are both dropped, not me
       reapMergedBranches: false,
       issuePickupRequireOwnLabel: true,
       mcp: { enabled: false, permissionEscalation: false },
-      assay: { enabled: false },
+      appraisal: { enabled: false },
       github: { owner: 'acme', repo: 'app', defaultAssignee: 'someone-else' },
       maxConcurrentAgents: 9,
     }),
@@ -356,7 +356,7 @@ test('a retired top-level key and a retired whole block are both dropped, not me
   const cfg = loadDeploymentConfig();
   assert.equal(cfg.maxConcurrentAgents, 9, 'the rest of the file is still honoured');
   assert.deepEqual(cfg.github, { owner: 'acme', repo: 'app' }, 'the block survives, the retired field does not');
-  for (const key of ['reapMergedBranches', 'issuePickupRequireOwnLabel', 'mcp', 'assay'] as const) {
+  for (const key of ['reapMergedBranches', 'issuePickupRequireOwnLabel', 'mcp', 'appraisal'] as const) {
     assert.ok(!Object.hasOwn(cfg, key), `${key} must not survive onto the config object`);
     assert.ok(
       warnings.some((w) => w.includes(key)),

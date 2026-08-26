@@ -658,8 +658,13 @@ deciding whether to re-run a check before closing a goal is deciding on exactly 
 
 ### The skill
 
-`/lubbdubb 284:C`, `/lubbdubb discuss 284`, `/lubbdubb run 284` — three jobs told apart by the
-argument, one file. Installed to `validation.desktopSkillPath` when the channel starts, from
+`/lubbdubb 284:C`, `/lubbdubb discuss 284`, `/lubbdubb run 284`, `/lubbdubb ask 284 …` — four jobs
+told apart by the argument, one file. The fourth is the only one that settles nothing:
+[`goal_read`](11-mcp-tools.md#answering-a-question-about-a-goal) hands back the harness's record of a
+goal and the skill says what to do with it. Its longest section is about the one way a session with
+the repository open gets a question about a run wrong — reconstructing a plausible history from the
+code, which is the one answer an operator cannot tell from the real one — and about `unknown` on an
+environment not being `absent`. Installed to `validation.desktopSkillPath` when the channel starts, from
 `DESKTOP_SKILL` in `src/validation/desktopSkill.ts` — a string in a `.ts` module rather than a `.md`
 asset, the prompt templates' reason: the build emits `.ts` and nothing copies a stray `.md` into
 `dist`, so an asset works in development and is missing in a deployment. There is no second copy
@@ -669,7 +674,10 @@ The skill is the interface, not a convenience. Without it the operator types the
 at their Claude every time — which is the friction the whole channel exists to remove, and the reason
 the bench design was rejected. It says what the three answers mean, that `handback` is a right
 answer, and the two things a session with the repository open is most able to do wrong: report
-`passed` from evidence it did not gather, and change code to make a check pass. Everything about
+`passed` from evidence it did not gather, and change code to make a check pass. The `ask` section
+carries the same shape of warning for the same reason — a question is answerable wrongly and
+confidently — plus the one line that keeps the read a read: change nothing, and offer `discuss` if
+the answer turns out to be that the plan is wrong. Everything about
 _how_ to run a given check comes back from the tools, which read the live plan; a skill that restated
 any of it would be a second copy of the procedure, drifting.
 
@@ -779,17 +787,22 @@ changes five readings:
   off "plug the cable in" is the friction that gets the whole flag ignored. The harness's own
   settlement, when it observes the ticket closed, is unaffected: that is not an operator deciding to
   move on, and a guard in the store would either stop the sweep or make its resolution the excuse.
+  **`POST /api/human-tasks/:id/close-ticket` refuses on the same condition**, because the flag is
+  about the goal rather than about which verb settles the row — a button that closed the item in
+  silence would be the way around the rule.
+  → [13](13-jobs-and-tickets.md#the-step-after-the-launch-the-close-out)
 - **`POST /api/issues/:number/dismiss-run` refuses without a note**, kept on the run as
   `dismissNote`. The sharper of the two, because this is the button that ends the harness's run at a
   goal and it is one-way.
-- **Both controls ask for the sentence before they post**, which is what makes the two refusals above
+- **All three controls ask for the sentence before they post**, which is what makes the two refusals above
   something other than a control that does nothing. Neither used to: Done sent no note and had
   nowhere to type one, End the run sent none either, and the 400 reached a `catch` that dropped it
   and an unhandled rejection — so a rule stated as "it costs a sentence" arrived as a button that
-  swallowed clicks. The bench's Done reads `Done…` and opens the same box Decline uses; End the run
+  swallowed clicks. The bench's Done reads `Done…` and opens the same box Decline uses — and so does Close the
+  ticket…, one box for all three; End the run
   opens `EndRunModal` — on **every** goal now, because ending a run also kills the goal's agents and
   cancels its queued work ([16](16-http-api.md#post-apiissuesnumberdismiss-run)), so it confirms
-  whether or not a plan is flagged. What the flag still decides is what happens *inside* that modal:
+  whether or not a plan is flagged. What the flag still decides is what happens _inside_ that modal:
   the note is required and the confirm disabled until it is filled. Both mirror the route in its
   **condition only** — `close_out` on a goal whose
   `validation` is `flagged` — and never in its counts, which stay the server's fold; and the route
@@ -890,6 +903,11 @@ a part's sequence number sits, because it is the same kind of handle, and collap
 the amendment band, the hand-back band and the result note staying visible on a closed row, because
 those are what a reader must not scroll past. → [17](17-cockpit.md#validation-on-the-goal)
 
+A **settled** head — passed or waived — is drawn a step back from one still to run, so the card reads
+as the work that is left rather than as the whole list. Scoped to the head, lifted when the row is
+opened, and lighter than the treatment a withdrawn check gets: withdrawn and done are not the same
+news. → [17](17-cockpit.md#validation-on-the-goal)
+
 The **plan sheet** keeps a read-only `ValidationDigest` between the parts and the caveats, with a rail
 entry carrying the settled count — the reading order is answer, then work, then how anyone knows it
 worked. A plan under review has to show what it proposes to check; it just offers no verb, and points
@@ -908,7 +926,7 @@ what a plan withdrew — a surface that filtered them would leave a reader unabl
 was dropped from one that was never written. They stay on the **sheet**: what an amendment dropped is
 a fact about that plan, while the goal's card lists what is still to be checked.
 
-The goal page also carries the verdict as a chip beside the assay and the conclusion, inside neither —
+The goal page also carries the verdict as a chip beside the appraisal and the conclusion, inside neither —
 and that chip is a button, because the checks are now on the same page and a verdict you can act on
 should not be the one reading that goes nowhere.
 

@@ -5,6 +5,7 @@ import type { InjectableEvent } from '../connector/connector.js';
 import type {
   BranchDeleteInput,
   CiCheckRequeueInput,
+  IssueCloseInput,
   IssueCommentInput,
   IssueCreateInput,
   IssueLabelInput,
@@ -14,6 +15,7 @@ import type {
   PrLabelInput,
   PrMergeInput,
   PrReplyInput,
+  PrThreadResolveInput,
   PrTitleInput,
   SendResult,
   WorkItemAreaPathInput,
@@ -118,6 +120,24 @@ export interface PrReplyCapable {
 
 export function isPrReplyCapable(x: Integration): x is Integration & PrReplyCapable {
   return typeof (x as Partial<PrReplyCapable>).postPrReply === 'function';
+}
+
+/**
+ * An integration that can mark a review thread resolved.
+ *
+ * Separate from {@link PrReplyCapable} because the two are different provider
+ * operations — GitHub resolves a thread through GraphQL and replies through REST,
+ * Azure patches the thread's status — and because a provider may gain one without
+ * the other. The composite asks for it by capability, so a source-control
+ * provider that never learned to resolve refuses the act rather than silently
+ * dropping it.
+ */
+export interface PrThreadResolveCapable {
+  resolvePrThread(input: PrThreadResolveInput): Promise<SendResult>;
+}
+
+export function isPrThreadResolveCapable(x: Integration): x is Integration & PrThreadResolveCapable {
+  return typeof (x as Partial<PrThreadResolveCapable>).resolvePrThread === 'function';
 }
 
 /** An integration that can merge a pull request — the outbound side of PR monitoring. */
@@ -316,6 +336,26 @@ export interface IssueLabelCapable {
 
 export function isIssueLabelCapable(x: Integration): x is Integration & IssueLabelCapable {
   return typeof (x as Partial<IssueLabelCapable>).setIssueLabel === 'function';
+}
+
+/**
+ * An integration that can **close** a tracker item — the plan back-out's "this is
+ * not really an issue".
+ *
+ * Its own capability rather than a method on {@link WorkItemStateCapable}, for
+ * {@link PrBaseUpdateCapable}'s reason: closing and moving to a named workflow
+ * state are different operations, and a provider genuinely has one without the
+ * other. GitHub closes an issue and has no state model at all; Azure has a dozen
+ * states and no generic close, and which of them means "we are not doing this"
+ * belongs to the project's process template rather than to the harness. So Azure
+ * is not capable here, and the back-out says so instead of guessing a state word.
+ */
+export interface IssueCloseCapable {
+  closeIssue(input: IssueCloseInput): Promise<SendResult>;
+}
+
+export function isIssueCloseCapable(x: Integration): x is Integration & IssueCloseCapable {
+  return typeof (x as Partial<IssueCloseCapable>).closeIssue === 'function';
 }
 
 /** An integration that can move a work item to a provider-native state — the "in review" back-off. */

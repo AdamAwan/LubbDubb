@@ -1,7 +1,7 @@
 import type {
   Decision,
   Issue,
-  IssueAssay,
+  IssueAppraisal,
   IssueDelivery,
   IssueRun,
   Plan,
@@ -12,7 +12,7 @@ import type {
 } from '../types.js';
 import { deliveryHold } from '../delivery/delivery.js';
 import { containerPickupReason, isContainerIssue } from '../issueRelations.js';
-import { assayHold, assayOrigin, hasWorkStarted, isAssayed } from '../intake/assay.js';
+import { appraisalHold, appraisalOrigin, hasWorkStarted, isAppraised } from '../intake/appraisal.js';
 import { dispatchVerdict, type CooldownPolicy } from './dispatchCooldown.js';
 import { issueOrigin, planOrigin, plannerVerdict, resolvePlanRoute } from '../plans/planning.js';
 import { liveParts, planProgress } from '../plans/parts.js';
@@ -229,7 +229,7 @@ type IssuePickupStatusKind =
   | 'unwatched' // not opted in (no watch tag) or parked by a state gate
   | 'planning' // in the plan funnel — a verdict is owed, or it split into parts
   | 'delivered' // assessed as delivered — parked until the world or the operator says otherwise
-  | 'assay' // its goal is being checked, or was found unworkable — nothing is dispatched for it
+  | 'appraisal' // its goal is being checked, or was found unworkable — nothing is dispatched for it
   | 'cooldown' // attempted recently; waiting out the re-dispatch gap
   | 'escalated' // attempt cap spent; parked on a human
   | 'blocked' // eligible, but no capacity (paused or cap reached)
@@ -272,12 +272,12 @@ export interface IssuePickupContext {
   deliveries?: IssueDelivery[];
   deliverySignals?: WorldEvent[];
   /**
-   * Standing goal-assay verdicts and the transitions that may have ended one —
-   * the same two lists rule `issue-assay` and the `eligibleIssues` filter gate on, so the chip
-   * predicts them. Absent = nothing assayed, which holds nothing.
+   * Standing goal-appraisal verdicts and the transitions that may have ended one —
+   * the same two lists rule `issue-appraisal` and the `eligibleIssues` filter gate on, so the chip
+   * predicts them. Absent = nothing appraised, which holds nothing.
    */
-  assays?: IssueAssay[];
-  assaySignals?: WorldEvent[];
+  appraisals?: IssueAppraisal[];
+  appraisalSignals?: WorldEvent[];
   /**
    * The harness's runs at each goal, so a closed issue can be told from a closed
    * *ticket* (issue #234). Absent = nothing retained, which reads exactly as it did
@@ -409,12 +409,12 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
   }
 
   // The content gate (issue #158), asked *after* the intrinsic policy gates and
-  // *before* the plan funnel — which is exactly where rule `issue-assay` sits. After, because
-  // an unwatched or state-parked issue is never assayed, so reporting an assay for
-  // one would promise something that cannot happen; before, because an assay that
+  // *before* the plan funnel — which is exactly where rule `issue-appraisal` sits. After, because
+  // an unwatched or state-parked issue is never appraised, so reporting an appraisal for
+  // one would promise something that cannot happen; before, because an appraisal that
   // refused the goal is the reason no planner and no pickup agent is coming.
-  const assay = assayFor(issue, ctx);
-  if (assay) return { eligible: false, status: 'assay', reasons: [assay] };
+  const appraisal = appraisalFor(issue, ctx);
+  if (appraisal) return { eligible: false, status: 'appraisal', reasons: [appraisal] };
 
   // The rest of the funnel sits between eligibility and pickup: narrowing rule `issue-pickup`
   // without reporting it here would leave the chip saying "eligible" for an issue
@@ -459,13 +459,13 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
 }
 
 /**
- * Why the goal assay is the reason nothing is happening to this issue, or null
+ * Why the goal appraisal is the reason nothing is happening to this issue, or null
  * when it isn't.
  *
- * Two arms, in the order rule `issue-assay` resolves them. A **standing** `unclear` verdict
- * first — asked through the same pure `assayHold` the dispatcher asks, so the chip
+ * Two arms, in the order rule `issue-appraisal` resolves them. A **standing** `unclear` verdict
+ * first — asked through the same pure `appraisalHold` the dispatcher asks, so the chip
  * cannot say "parked" for an issue the next cycle dispatches, nor the reverse.
- * Then the **pending** case: an issue rule `issue-assay` would assay, or is assaying now.
+ * Then the **pending** case: an issue rule `issue-appraisal` would appraise, or is appraising now.
  * Reporting that matters as much as the hold — an issue silently waiting a cycle
  * for a verdict looks exactly like an idle fleet, which is the invisibility
  * `capped` and `unapproved` were added to `QueueItem` to fix.
@@ -473,22 +473,22 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
  * A `workable` verdict returns null from both arms: it releases the issue to
  * whatever the funnel says next, which is the whole of its effect.
  */
-function assayFor(issue: Issue, ctx: IssuePickupContext): string | null {
+function appraisalFor(issue: Issue, ctx: IssuePickupContext): string | null {
   const origin = `issue:${issue.number}`;
-  const stored = ctx.assays?.find((a) => a.originRef === origin) ?? null;
-  const held = assayHold(stored, issue, { signals: ctx.assaySignals });
+  const stored = ctx.appraisals?.find((a) => a.originRef === origin) ?? null;
+  const held = appraisalHold(stored, issue, { signals: ctx.appraisalSignals });
   if (held) return held;
-  // Same preconditions rule `issue-assay` applies, in its order.
-  if (isAssayed(stored, issue)) return null;
+  // Same preconditions rule `issue-appraisal` applies, in its order.
+  if (isAppraised(stored, issue)) return null;
   if (hasWorkStarted(issue.number, ctx.tasks)) return null;
   if (ctx.plans?.some((p) => p.originRef === origin)) return null;
-  const running = ctx.tasks.find((t) => t.originRef === assayOrigin(issue.number) && isActiveTask(t));
-  if (running) return running.status === 'waiting' ? 'goal assay waiting on you' : 'a goal assay is running';
-  const verdict = dispatchVerdict(assayOrigin(issue.number), ctx.now, ctx.recentDecisions, ctx.cooldown);
+  const running = ctx.tasks.find((t) => t.originRef === appraisalOrigin(issue.number) && isActiveTask(t));
+  if (running) return running.status === 'waiting' ? 'goal appraisal waiting on you' : 'a goal appraisal is running';
+  const verdict = dispatchVerdict(appraisalOrigin(issue.number), ctx.now, ctx.recentDecisions, ctx.cooldown);
   // A spent cap is the fail-open: the issue carries on into the funnel, so this
   // says nothing about it and lets the arms below explain what happens instead.
   if (verdict.kind === 'escalate' || verdict.kind === 'hold') return null;
-  return verdict.kind === 'cooldown' ? 'goal assay on cooldown' : 'awaiting a goal assay';
+  return verdict.kind === 'cooldown' ? 'goal appraisal on cooldown' : 'awaiting a goal appraisal';
 }
 
 /** Executed dispatches for one origin in the recent audit window. */

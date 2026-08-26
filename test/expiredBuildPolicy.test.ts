@@ -144,6 +144,7 @@ function fakeApi(evals: AzPolicyEvaluation[], requeue: RequeueScript = { asked: 
     async listPullThreads() {
       return [];
     },
+    async setThreadStatus() {},
     async listPolicyEvaluations() {
       return evals;
     },
@@ -197,6 +198,14 @@ function azureSink(evals: AzPolicyEvaluation[], requeue: RequeueScript): ActionS
     throw new Error(`${name} is not scripted in this test`);
   };
   return {
+    canCloseIssue: () => false,
+    canResolvePrThread: () => false,
+    resolvePrThread: (): never => {
+      throw new Error('resolvePrThread is not scripted in this test');
+    },
+    closeIssue: (): never => {
+      throw new Error('closeIssue is not scripted in this test');
+    },
     canSetWorkItemState: () => false,
     canPlaceWorkItem: () => false,
     setWorkItemParent: () => Promise.reject(new Error('not used')),

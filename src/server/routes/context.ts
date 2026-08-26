@@ -20,7 +20,7 @@ export interface RouteContext {
    */
   artifactSigner?: (flagId: string) => string;
   /**
-   * The same, per blueprint attachment (issue #249) — an `<img>` load cannot carry
+   * The same, per brief attachment (issue #249) — an `<img>` load cannot carry
    * the bearer token any more than a navigation can. Undefined when auth is off.
    */
   attachmentSigner?: (attachmentId: string) => string;

@@ -14,7 +14,7 @@ import { bugFilingType, filingType } from '../ticketTypes.js';
  * `az boards work-item create … --type …` followed by
  * `az boards work-item relation add …` — and handed it to a model to type back.
  * The judgement in that (dedupe, and writing the thing up) is real; the command is
- * not, and it was the half that could silently go wrong. A blueprint whose ticket
+ * not, and it was the half that could silently go wrong. A brief whose ticket
  * lost its watch label is created, linked, and shown in the cockpit as a completed
  * filing while **nothing is ever dispatched for it** — nothing errors, and nothing
  * is red.
@@ -43,7 +43,7 @@ interface TicketFiling {
   title: string;
   body: string;
   /**
-   * Labels / tags to create it with — the effective watch label for a blueprint,
+   * Labels / tags to create it with — the effective watch label for a brief,
    * which is the whole of why that arm could not stay a prompt.
    */
   labels?: string[];

@@ -87,7 +87,7 @@ The dispatcher ranks every candidate, then applies the concurrency cut. Roughly,
 1. An operator queued a job from the cockpit — takes the next free slot.
 2. A PR with problems: failing CI, a stale or conflicting base, an unhandled review comment.
 3. A PR that is ready to merge.
-4. Planning, approval, assay and assessment for issues.
+4. Planning, approval, appraisal and assessment for issues.
 5. Plan parts, then fresh issue pickup.
 
 PR work runs _before_ new issue pickup, so a PR in trouble is always worked ahead of starting new
@@ -113,23 +113,60 @@ Two things are deliberately fixed: every act reaching the outside world is autho
 
 ## Getting started
 
+Node **^20.19 || >=22.12** and git. A fresh clone installs with `npm ci` — `better-sqlite3` and
+`node-pty` are native builds, so it is not instant.
+
 ```bash
-npm install                                          # builds native deps (better-sqlite3, node-pty)
+npm ci                                               # native deps: better-sqlite3, node-pty
 cp lubbdubb.config.example.json lubbdubb.config.json # your local config (gitignored)
 npm start                                            # builds the cockpit, serves on 127.0.0.1:4300
 ```
 
-The example config runs a mock agent, so no model or provider credentials are needed to see the loop
-turn. `npm start` prints the link to open:
+Every key in the config is optional and the harness boots with no file at all — but the defaults
+select the real Claude Code runtime, while the shipped example selects the mock one (`agentMode: "raw"`
+against the built-in `fake` providers). So copy it for a first run and the whole loop turns with no
+model or provider credentials. From then on the cockpit's **Settings** tab edits that same file
+directly, key by key, leaving its comments and ordering alone — hand-editing and the form are two ways
+at one file.
+
+`npm start` builds the cockpit bundle and then runs the server. Two variants matter:
+`npm run start:server` skips the build and serves whatever `web/dist` already holds, and
+**`npm run serve`** runs the server under the supervisor that can replace it — which is what
+self-update needs, and the way to run it under systemd, NSSM or a long-lived terminal.
+→ [docs/spec/21](docs/spec/21-self-update.md#applying-it)
+
+Boot prints what it decided, and the link to open:
 
 ```
+[lubbdubb] cockpit listening on 127.0.0.1:4300
 [lubbdubb] open the cockpit: http://127.0.0.1:4300/#t=<token>
+[lubbdubb] token minted at .lubbdubb/cockpit-token (0600) — reused on the next start
+[lubbdubb] heartbeat=300000ms cap=3
+[lubbdubb] agent tools: on
 ```
 
 Open it once per browser and the cockpit remembers the token. The harness binds **loopback only** and
 every route needs that token, because the cockpit can queue a job — and a job spawns a real agent with
-write access to your repo. The token is minted into `.lubbdubb/cockpit-token` (0600, gitignored) and
-reused across restarts.
+write access to your repo. The token file is gitignored, along with the rest of `.lubbdubb/` (the
+SQLite database, worktrees, desk scratch dirs and attachments all live under it).
+
+### The one manual step: the desktop validation channel
+
+The harness also listens on a second MCP socket so **your own** Claude Code can take a validation
+check the fleet would otherwise run unattended. It starts by itself, but Claude Code has to be told
+about it **once** — boot prints the exact command, which is the only thing here you type by hand:
+
+```
+[lubbdubb] desktop validation channel on — register it in Claude Code once with:
+[lubbdubb]   claude mcp add --scope user lubbdubb -- <node> <bridge> --desktop
+[lubbdubb] credential at ~/.lubbdubb/desktop.json (0600), reminted every start
+[lubbdubb] /lubbdubb skill installed at ~/.claude/skills/lubbdubb/SKILL.md
+```
+
+Copy the line as printed — the paths are resolved for your install. The credential is reminted every
+start, so the registration keeps working; the `/lubbdubb` skill is rewritten alongside it. Skip this
+and nothing breaks: every check simply falls to the fleet.
+→ [docs/spec/20](docs/spec/20-validation.md#the-desktop-channel)
 
 ### Sharing a config with your team
 
@@ -149,19 +186,32 @@ the same job the composer does, so it waits for a free slot like everything else
 shows what was decided each
 cycle and which rule produced it; **Activity** shows how the world itself changed.
 
+**Needs you** also carries the configuration checks — one row per setting that can stop the fleet
+silently, each ending in a check against the real world rather than a sentence of advice. On a fresh
+install that rail is the shortest route from the mock loop to a working deployment.
+→ [docs/spec/26](docs/spec/26-setup.md)
+
 ### Pointing it at real work
 
-Set `integrations` to choose a provider per capability, and configure that provider:
+Set `repoRoot` to the git repository you want worked — it defaults to the directory you launch from,
+which is LubbDubb's own checkout. Then set `integrations` to choose a provider per capability, and
+configure that provider:
 
 ```json
 {
+  "repoRoot": "/path/to/your/repo",
   "integrations": { "sourceControl": "github", "issues": "github" },
   "github": { "owner": "acme", "repo": "app" },
+  "userId": "your-github-login",
   "agentMode": "stream",
   "maxConcurrentAgents": 3,
   "defaultBranch": "main"
 }
 ```
+
+`userId` is not optional in practice: pickup reads label _authorship_, so a harness without it — or a
+provider that cannot report it — picks nothing up and says nothing about why.
+→ [docs/spec/06](docs/spec/06-issue-pickup.md)
 
 Tokens never live in the config file: `GITHUB_TOKEN` for GitHub, `AZURE_DEVOPS_PAT` (or a logged-in
 `az` CLI) for Azure DevOps. Agents inherit your shell's model credentials — note that a stray
@@ -200,8 +250,8 @@ state; this is how it got there.
 | **Jul 26** — a typed channel back                            | An MCP server gave agents `world_read`, `report_finding` and `note_progress` instead of prose. A human decision became a first-class object: a decomposition gated on an accept, a rejection that ends on world signal and hands its reason to the next agent. The cockpit was authenticated and bound to loopback. `docs/spec/` began, written as fact.                                              |
 | **Jul 27** — permission, and a second skin                   | A harness-owned Bash allow-list for unattended agents, with an un-allowlisted call routed to the operator. Agents orphaned by a restart are parked rather than resumed. The cockpit draws the world from the pulse instead of fetching it, a finding can be deferred into the tracker, and the layout split so skins can exist — the second draws a production line.                                  |
 | **Jul 28** — the work graph, and the plan you approve        | `work_nodes`: a durable record of what was done for a work item, folded once per pulse and served at `/api/work`. On it, the assessor and the delivery gate, then job↔PR↔issue filing. Plan approval became the default; a plan carries risks, scope-outs and a write-up, and can be discussed with a conversational planner. CI acts per failing check, not on red alone.                          |
-| **Jul 29** — closing the loop                                | The goal assay validates a goal before anything plans it, with an operator override on its refusal. A negative assessment routes somewhere, so **goal achieved**'s `no` arm is real work rather than a dead end. The Goal Floor draws one ticket's whole production line, and a plan may rejoin rather than only chain.                                                                               |
-| **Jul 30** — the retrospective, and Azure's checks           | A shared scratchpad agents append to, and a desk agent that writes one retrospective per goal from it and the harness's own record. Azure branch policies are named, classified per kind, and selected by config. Crash recovery reclaims a dead orphan's branch. Planning, assessment, the assay and the retrospective turned on by default.                                                         |
+| **Jul 29** — closing the loop                                | The goal appraisal validates a goal before anything plans it, with an operator override on its refusal. A negative assessment routes somewhere, so **goal achieved**'s `no` arm is real work rather than a dead end. The Goal Floor draws one ticket's whole production line, and a plan may rejoin rather than only chain.                                                                           |
+| **Jul 30** — the retrospective, and Azure's checks           | A shared scratchpad agents append to, and a desk agent that writes one retrospective per goal from it and the harness's own record. Azure branch policies are named, classified per kind, and selected by config. Crash recovery reclaims a dead orphan's branch. Planning, assessment, the appraisal and the retrospective turned on by default.                                                     |
 | **Jul 31–Aug 1** — stacks first-party, the rule book as data | An agent opens its own PR through the tool channel, and a stack rung retargets when the rung beneath it merges. A PR review is answered as a whole, off GitHub's own thread resolution. The rule order became data, the thirteen rule bodies moved into `src/dispatcher/rules/`, and the rule numbers were deleted. The REST surface is zod-validated.                                                |
 | **Aug 4–6** — structure, and what an operator hands over     | `Store` split into domain modules behind a delegating facade, and the issue-verdict exclusion matrix declared as data. A run lives until dismissed. Every plan verdict is gated on approval, not only decompositions. Attachments follow the issue, so an operator's screenshot reaches the agent working it.                                                                                         |
 | **Aug 10–11** — reading what happened                        | A whole stack lands from the rack as a standing intent, and a merged PR's branch is reaped. A review is answered before the CI and the conflict it invalidates. Findings get named slots, and every ref links out — Azure's too. Work only a person can do has somewhere to live, an escalation leads with a headline, and tool calls fold to one line.                                               |

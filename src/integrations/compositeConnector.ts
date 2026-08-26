@@ -3,6 +3,7 @@ import type {
   ActionSink,
   BranchDeleteInput,
   CiCheckRequeueInput,
+  IssueCloseInput,
   IssueCommentInput,
   IssueCreateInput,
   IssueLabelInput,
@@ -12,6 +13,7 @@ import type {
   PrLabelInput,
   PrMergeInput,
   PrReplyInput,
+  PrThreadResolveInput,
   PrTitleInput,
   SendResult,
   WorkItemLinkInput,
@@ -28,6 +30,7 @@ import {
   isCiCheckRequeueCapable,
   isCiEvidenceCapable,
   isInjectable,
+  isIssueCloseCapable,
   isIssueCommentCapable,
   isIssueCreateCapable,
   isIssueLabelCapable,
@@ -37,6 +40,7 @@ import {
   isPrLabelCapable,
   isPrMergeCapable,
   isPrReplyCapable,
+  isPrThreadResolveCapable,
   isPrTitleCapable,
   isRefResolvable,
   isTicketHistoryCapable,
@@ -163,6 +167,19 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
     return handler.postPrReply({ ...input, body: this.signed(handler, input.body) });
   }
 
+  canResolvePrThread(): boolean {
+    return this.integrations.some(isPrThreadResolveCapable);
+  }
+
+  async resolvePrThread(input: PrThreadResolveInput): Promise<SendResult> {
+    const handler = this.integrations.find(isPrThreadResolveCapable);
+    if (!handler)
+      throw new Error(
+        'no integration can resolve review threads (no sourceControl provider is PrThreadResolveCapable)',
+      );
+    return handler.resolvePrThread(input);
+  }
+
   async mergePr(input: PrMergeInput): Promise<SendResult> {
     const handler = this.integrations.find(isPrMergeCapable);
     if (!handler) throw new Error('no integration can merge PRs (no sourceControl provider is PrMergeCapable)');
@@ -245,6 +262,16 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
     const handler = this.integrations.find(isWorkItemLinkCapable);
     if (!handler) return { ok: false };
     return handler.linkWorkItem(input);
+  }
+
+  canCloseIssue(): boolean {
+    return this.integrations.some(isIssueCloseCapable);
+  }
+
+  async closeIssue(input: IssueCloseInput): Promise<SendResult> {
+    const handler = this.integrations.find(isIssueCloseCapable);
+    if (!handler) throw new Error('no integration can close issues (no issues provider is IssueCloseCapable)');
+    return handler.closeIssue(input);
   }
 
   canSetWorkItemState(): boolean {

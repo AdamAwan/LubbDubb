@@ -2,7 +2,7 @@ import { CAUSES_BY_KIND, GUARD_ORDER } from '../remedies/remedies.js';
 import { isReturnOrigin } from '../remedyInsights.js';
 import { PHASE_ORDER, phaseOf, type SpendPhase } from '../spendInsights.js';
 import type { Store } from '../store/store.js';
-import type { Agent, PoolDigestDocument, PoolDigestRow, Remedy, UsageEvent } from '../types.js';
+import type { Agent, ErrorLogEntry, PoolDigestDocument, PoolDigestRow, Remedy, UsageEvent } from '../types.js';
 import { POOL_SCHEMA_VERSION } from './document.js';
 
 /**
@@ -82,6 +82,7 @@ export function buildDigestDocument(
     byCheck: byCheck(remedies, usage, today),
     unaccounted: unaccounted(tasks, remedies, since, today),
     unmeasured: unmeasured(agents, since, today),
+    byFault: byFault(store.listErrorsSince(since), today),
   };
 }
 
@@ -212,6 +213,31 @@ function unmeasured(agents: readonly Agent[], since: string, today: string): Poo
     if (at < since) continue;
     rows.add(utcDay(at), '', { count: 1 });
   }
+  return rows.rows(today);
+}
+
+/**
+ * Faults per source per day.
+ *
+ * **The one section that measures the harness rather than the work**, and the only
+ * one that carries no money: a fault has no cost figure anywhere in the harness, and
+ * inventing one here would be a new measurement rather than a move of what exists.
+ * `costUsd` therefore stays null on every row, which the companion draws as no
+ * column at all — a column of dashes is worse than no column.
+ *
+ * The key is `ErrorLogEntry['source']` unchanged: five words, closed, and the same
+ * five the Faults panel already draws, so nobody had to agree on a vocabulary and
+ * there is no second spelling of one.
+ *
+ * **What it counts is the fault log as it stands, and the file says so.**
+ * `Store.clearErrors` drops the whole table, so an operator who clears the log
+ * republishes a fleet that had no faults this quarter. That is a reading and never a
+ * trigger — nothing anywhere reads these rows back, and the section exists to be
+ * read by a person in `digest.md`.
+ */
+function byFault(errors: readonly ErrorLogEntry[], today: string): PoolDigestRow[] {
+  const rows = new Bucket();
+  for (const error of errors) rows.add(utcDay(error.createdAt), error.source, { count: 1 });
   return rows.rows(today);
 }
 

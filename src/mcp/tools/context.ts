@@ -22,8 +22,9 @@ import type {
 import type { ActionSink } from '../../sink/actionSink.js';
 import type { TicketFiler } from '../../tickets/filing.js';
 import type { PromptTemplates } from '../../dispatcher/promptTemplates.js';
+import type { PrRefStyle } from '../../prRef.js';
 import type { AssessmentVerdict } from '../assessment.js';
-import type { GoalAssayVerdictName } from '../goalAssay.js';
+import type { GoalAppraisalVerdictName } from '../goalAppraisal.js';
 import type { AreaPathTree } from '../../intake/placement.js';
 import type { RemedySubmission } from '../../remedies/remedies.js';
 import type { FactContradiction, FactProposal } from '../../knowledge/knowledge.js';
@@ -73,13 +74,22 @@ export interface AgentToolTarget {
     cause: ShortfallCause | null,
     part: string | null,
   ): { ok: true; issueOrigin: string; verdict: AssessmentVerdict } | { ok: false; error: string };
-  recordAssay(
+  /**
+   * The planner's "there is nothing to build here". Takes no issue argument for
+   * the reason none of these do: the issue is the credential's own.
+   */
+  recordGoalMet(
     agentId: string,
-    verdict: GoalAssayVerdictName,
+    summary: string,
+    detail: string,
+  ): { ok: true; issueOrigin: string } | { ok: false; error: string };
+  recordAppraisal(
+    agentId: string,
+    verdict: GoalAppraisalVerdictName,
     summary: string,
     profile: string | null,
     /**
-     * Where the assayer says this goal belongs on the backlog — the container it
+     * Where the appraiser says this goal belongs on the backlog — the container it
      * should hang off, and the area node it should sit on. Both null where it
      * proposed neither, which is every `unclear` verdict and every flat tracker.
      *
@@ -93,7 +103,7 @@ export interface AgentToolTarget {
     | {
         ok: true;
         issueOrigin: string;
-        verdict: GoalAssayVerdictName;
+        verdict: GoalAppraisalVerdictName;
         /** Whether the proposal diverged and is now holding the funnel on a human. */
         profileHeld: boolean;
       }
@@ -145,8 +155,8 @@ export interface McpToolDeps {
   store: Store;
   agents: AgentToolTarget;
   /**
-   * This deployment's model profiles, cheapest first, as `assay_issue` presents
-   * them to an assayer (issue #342). Absent or empty for a deployment with no
+   * This deployment's model profiles, cheapest first, as `appraise_issue` presents
+   * them to an appraiser (issue #342). Absent or empty for a deployment with no
    * `agentModels`, which is what turns the whole proposal off: no argument is
    * offered, none is required, and every dispatch resolves on its rule alone.
    */
@@ -183,6 +193,13 @@ export interface McpToolDeps {
      * the gate is off, and nothing is tagged because nothing needs to be.
      */
     watchLabel: string;
+    /**
+     * How this provider links a pull request in prose, so the body guidance can
+     * name the sigil rather than leave the agent to GitHub's habit. On Azure a
+     * sibling pull request written `#12` links to *work item* 12.
+     * → `src/prRef.ts`
+     */
+    prRefStyle: PrRefStyle;
   };
   /**
    * Where `reply_to_review` hands the reply it was given. The `ActionExecutor`,
@@ -213,6 +230,7 @@ interface PrReplyDesk {
     prNumber: number;
     commentId: string | null;
     draft: string;
+    resolve: boolean;
     reason: string;
   }): Promise<{ outcome: DecisionOutcome; detail: string }>;
 }

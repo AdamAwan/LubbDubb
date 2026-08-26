@@ -103,7 +103,7 @@ type CardReasonTone = 'held' | 'outcome' | 'pickup' | 'frozen' | 'unwatched';
  *
  * Precedence is the whole subject, and each step earns its place:
  *
- * 1. **Held at intake** — an unclear assay is the one reading that stops dispatch, so
+ * 1. **Held at intake** — an unclear appraisal is the one reading that stops dispatch, so
  *    among a column of cards it must not read as a detail.
  * 2. **The outcome word** — the harness has finished deciding, which outranks its
  *    account of what it would do next.
@@ -111,7 +111,7 @@ type CardReasonTone = 'held' | 'outcome' | 'pickup' | 'frozen' | 'unwatched';
  * 4. **Frozen** — nothing in the tracker's open set has a next cycle to explain.
  * 5. **Unwatched** — nobody opted it in, which is why nothing has an opinion.
  *
- * An **unwatched** item is never held, whatever a stale verdict says: nothing assays a
+ * An **unwatched** item is never held, whatever a stale verdict says: nothing appraisals a
  * goal nobody opted in, so a verdict on one is left over from before it was dropped,
  * and the drop outranks it. That is the table's rule, and reading it the other way
  * would light the intake lamp on work the harness has been told to leave alone.
@@ -132,8 +132,8 @@ export function cardReason(
 ): { tone: CardReasonTone; words: string } {
   const watched = (issue === null ? row.watch : watchBucket(issue.labels, watchLabel)) === 'watched';
 
-  if (watched && issue?.assay?.verdict === 'unclear') {
-    return { tone: 'held', words: 'held at intake — the assay is unclear, so nothing under it moves' };
+  if (watched && issue?.appraisal?.verdict === 'unclear') {
+    return { tone: 'held', words: 'held at intake — the appraisal is unclear, so nothing under it moves' };
   }
   if (row.outcome !== null) return { tone: 'outcome', words: row.outcome };
 

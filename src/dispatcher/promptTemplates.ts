@@ -31,6 +31,7 @@ type PromptId =
   | 'issue-pickup-escalation'
   | 'issue-assess'
   | 'issue-assay'
+  | 'issue-appraisal'
   | 'issue-retro'
   | 'validation-check'
   | 'local-run'
@@ -47,6 +48,7 @@ type PromptId =
   | 'blueprint-ticket'
   | 'work-item-ticket-body'
   | 'blueprint-ticket-body'
+  | 'brief-ticket-body'
   | 'pr-title';
 
 interface TemplateDef {
@@ -61,8 +63,9 @@ interface TemplateDef {
    */
   readonly doc: string;
   /**
-   * Set on an id the harness no longer renders (issue #394 filed two of the four
-   * ticket arms directly, so their prompts have no agent left to send them to).
+   * Set on an id the harness no longer renders — because the work it prompted for
+   * moved (issue #394 filed two of the four ticket arms directly, so their prompts
+   * have no agent left to send them to), or because the id was renamed under it.
    *
    * The id stays in the book rather than being deleted, because `loadPromptTemplates`
    * **throws** on a file naming no known id: removing one would turn an operator's
@@ -235,9 +238,23 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'fields above are the summary; this is the argument. Do not repeat them back — cover how you got to the ' +
       'diagnosis, what the code actually looked like when you got there, and what a reviewer of the finished ' +
       'work should check. Markdown, and written for the person deciding.\n\n' +
+      '## If there is nothing to build\n\n' +
+      'Read the repository before you decide what the work is, and sometimes what you find is that the ' +
+      'goal is already met: the code, the setting or the document this ticket asks for is in there now. ' +
+      'Somebody fixed it by hand, another goal covered it, or the ticket was filed against a version that ' +
+      'predates the fix. **Say so with the plan_not_needed tool.** Do not write a plan with a part in it ' +
+      'so that there is something to submit — that part costs an agent, a branch and often a pull request ' +
+      'to discover what you already know, and the person who reads it is being asked to approve work ' +
+      'nobody needs. plan_not_needed takes a one-line "summary" and a required "detail": point at the ' +
+      'files, the commits or the pull requests that already do what the ticket asks, and say what you ' +
+      'checked to be sure nothing it asks for is missing. Nothing further is scheduled for the issue while ' +
+      'that stands, the ticket is not closed, and an operator can undo it.\n\n' +
+      'The bar is *met*, not *nearly met*: a goal that is half there is a plan for the other half. And a ' +
+      'goal you cannot make sense of is not this either — that is not a plan you should be writing, so ' +
+      'raise it instead.\n\n' +
       'Do not implement anything and do not open a pull request. Writing the plan is the whole job — you are ' +
       'on branch {branch} only so you have the repository to read.',
-    doc: 'Sent to a code agent when the planning funnel is enabled and a watched open issue has no plan yet (rule `issue-plan`). The agent writes its plan to the plan file; nothing else it does is read. Every plan is a list of parts and at least one is required — work that is one pull request is a one-part plan, not a separate shape. Most of its length is spent on *what a good plan says* rather than on JSON shape, since `plan_submit` validates and returns its own reasons: the headline four (`diagnosis`, `approach`, `alternatives`, `openQuestions`), the four that make them checkable (`evidence`, `verification`, `reason`, `risks`/`outOfScope`), and per-part `touches`/`size`/`acceptance`/`rationale`. All optional, so an older override that omits them still validates. The `validation` block gets a section of its own stating the bar and the grouping rule — a check is what only running the delivered goal can answer, never the suite, the diff or a green build; one run of the thing is one check, so what that run settles is listed in a single `expect` rather than split into a check per place you look; what the check needs to be runnable is a line in its `do` rather than a resource, since a resource is a file and an unprovided one becomes somebody’s errand; and declaring none is a legitimate answer. Placeholders: {number} {title} {body} {branch} {planFile}.',
+    doc: "Sent to a code agent when the planning funnel is enabled and a watched open issue has no plan yet (rule `issue-plan`). The agent writes its plan to the plan file; nothing else it does is read. Every plan is a list of parts and at least one is required — work that is one pull request is a one-part plan, not a separate shape. Most of its length is spent on *what a good plan says* rather than on JSON shape, since `plan_submit` validates and returns its own reasons: the headline four (`diagnosis`, `approach`, `alternatives`, `openQuestions`), the four that make them checkable (`evidence`, `verification`, `reason`, `risks`/`outOfScope`), and per-part `touches`/`size`/`acceptance`/`rationale`. All optional, so an older override that omits them still validates. The `validation` block gets a section of its own stating the bar and the grouping rule — a check is what only running the delivered goal can answer, never the suite, the diff or a green build; one run of the thing is one check, so what that run settles is listed in a single `expect` rather than split into a check per place you look; what the check needs to be runnable is a line in its `do` rather than a resource, since a resource is a file and an unprovided one becomes somebody’s errand; and declaring none is a legitimate answer. A closing section names the planner's *other* verdict, `plan_not_needed` — the goal is already met, so no plan is written at all — and says what the bar for it is, because the failure it exists to stop is a plan with an invented part in it. Placeholders: {number} {title} {body} {branch} {planFile}.",
   },
   'issue-replan': {
     placeholders: ['number', 'title', 'body', 'branch', 'planFile', 'current'],
@@ -404,8 +421,19 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
   'issue-assay': {
     placeholders: ['number', 'title', 'body', 'branch'],
     template:
-      'Nothing has been started for issue #{number} ("{title}"). Before anything is, decide whether there is a goal here an agent could work from.\n\n{body}\n\nYou are in a read-only checkout of the default branch, so what you can see is the repository as it stands. Nothing here is on a branch and nothing you do is committed or pushed. Read the ticket against it: do the things it names exist, does it say what "done" would look like, does it contradict itself or something already true of the code? Call world_read("issue", "issue:{number}") for the harness\'s own record of the issue, and read anything it points you at.\n\nThen call assay_issue:\n\n- "workable" if there is an identifiable goal to start on. The bar is *actionable*, not *good* or *small* — an opinionated, large or awkward ticket is still workable, and saying so schedules nothing by itself.\n- "unclear" if starting would be guessing. Say exactly what you would need, addressed to the person who wrote the ticket: the specific question, not "it is vague". Nothing is dispatched for this issue while that stands, so a wrong "unclear" stops real work — but it is undone by an edit, a comment, or an operator clearing it.\n\nThen leave one note on this goal\'s scratchpad with scratch_append, on either verdict. Finding where in the repository this ticket lands is most of what you just did, and nothing else carries it out of here: the summary you hand assay_issue is written to justify the verdict, and the next agent dispatched on this goal is given the title, the body and a branch name. Write where the goal lives — the files and areas you read to decide — what you found when you read them, and what you expect the shape of the work to be. On "unclear" it is worth more, not less: that hold ends when somebody edits the ticket, and whoever picks it up then should know what you went looking for and did not find.\n\nA paragraph, not a tour. It is read as testimony rather than instruction — the agent reading it is told to check anything it relies on, because the repository is the truth and your note is one agent\'s reading of it — so write what you actually saw, and no more of the codebase than that. A note longer than the pad takes is trimmed to fit rather than refused, so the end of a long one is lost without anyone being told.\n\nDo not implement anything, do not open a pull request, and do not edit the ticket. The note is an observation, not a head start: no design, no patch, nothing for the next agent to apply. If you are torn, say "workable": the agent that picks it up can escalate to a human from inside the work, which is a better place to ask from than here.',
-    doc: "Sent to a code agent for a watched open issue nothing has been started for (rule `issue-assay`). It reads the ticket against the default branch and casts a verdict with assay_issue, and leaves one note on the goal's scratchpad with scratch_append — on either verdict, since an `unclear` hold ends with an edit and the agent that picks it up then is the one with least to go on. The orientation it did to answer the question is otherwise discarded at exit, and `priorWorkBriefing` already renders the pad to every later agent on the goal as testimony, so asking for the note is the whole mechanism. A deployment that overrides this template keeps its own body and gets no note — the ordinary cost of an override, not a fault. It runs in a read-only checkout rather than on a branch of its own (issue #396), so {branch} is the name its worktree is leased under and not a ref — it is still rendered for an override that predates that. Placeholders: {number} {title} {body} {branch}.",
+      'Nothing has been started for issue #{number} ("{title}"). Before anything is, decide whether there is a goal here an agent could work from.\n\n{body}\n\nYou are in a read-only checkout of the default branch, so what you can see is the repository as it stands. Nothing here is on a branch and nothing you do is committed or pushed. Read the ticket against it: do the things it names exist, does it say what "done" would look like, does it contradict itself or something already true of the code? Call world_read("issue", "issue:{number}") for the harness\'s own record of the issue, and read anything it points you at.\n\nThen call appraise_issue:\n\n- "workable" if there is an identifiable goal to start on. The bar is *actionable*, not *good* or *small* — an opinionated, large or awkward ticket is still workable, and saying so schedules nothing by itself.\n- "unclear" if starting would be guessing. Say exactly what you would need, addressed to the person who wrote the ticket: the specific question, not "it is vague". Nothing is dispatched for this issue while that stands, so a wrong "unclear" stops real work — but it is undone by an edit, a comment, or an operator clearing it.\n\nThen leave one note on this goal\'s scratchpad with scratch_append, on either verdict. Finding where in the repository this ticket lands is most of what you just did, and nothing else carries it out of here: the summary you hand appraise_issue is written to justify the verdict, and the next agent dispatched on this goal is given the title, the body and a branch name. Write where the goal lives — the files and areas you read to decide — what you found when you read them, and what you expect the shape of the work to be. On "unclear" it is worth more, not less: that hold ends when somebody edits the ticket, and whoever picks it up then should know what you went looking for and did not find.\n\nA paragraph, not a tour. It is read as testimony rather than instruction — the agent reading it is told to check anything it relies on, because the repository is the truth and your note is one agent\'s reading of it — so write what you actually saw, and no more of the codebase than that. A note longer than the pad takes is trimmed to fit rather than refused, so the end of a long one is lost without anyone being told.\n\nDo not implement anything, do not open a pull request, and do not edit the ticket. The note is an observation, not a head start: no design, no patch, nothing for the next agent to apply. If you are torn, say "workable": the agent that picks it up can escalate to a human from inside the work, which is a better place to ask from than here.',
+    retired: true,
+    doc:
+      '**Retired \u2014 renamed to `issue-appraisal`.** The goal appraisal was called an *assay* until ' +
+      'the rename, and the id followed the word. The old id stays loadable so a deployment holding an ' +
+      '`issue-assay.md` override still boots, but it is no longer rendered \u2014 move the wording to ' +
+      '`issue-appraisal`. Placeholders: {number} {title} {body} {branch}.',
+  },
+  'issue-appraisal': {
+    placeholders: ['number', 'title', 'body', 'branch'],
+    template:
+      'Nothing has been started for issue #{number} ("{title}"). Before anything is, decide whether there is a goal here an agent could work from.\n\n{body}\n\nYou are in a read-only checkout of the default branch, so what you can see is the repository as it stands. Nothing here is on a branch and nothing you do is committed or pushed. Read the ticket against it: do the things it names exist, does it say what "done" would look like, does it contradict itself or something already true of the code? Call world_read("issue", "issue:{number}") for the harness\'s own record of the issue, and read anything it points you at.\n\nThen call appraise_issue:\n\n- "workable" if there is an identifiable goal to start on. The bar is *actionable*, not *good* or *small* — an opinionated, large or awkward ticket is still workable, and saying so schedules nothing by itself.\n- "unclear" if starting would be guessing. Say exactly what you would need, addressed to the person who wrote the ticket: the specific question, not "it is vague". Nothing is dispatched for this issue while that stands, so a wrong "unclear" stops real work — but it is undone by an edit, a comment, or an operator clearing it.\n\nThen leave one note on this goal\'s scratchpad with scratch_append, on either verdict. Finding where in the repository this ticket lands is most of what you just did, and nothing else carries it out of here: the summary you hand appraise_issue is written to justify the verdict, and the next agent dispatched on this goal is given the title, the body and a branch name. Write where the goal lives — the files and areas you read to decide — what you found when you read them, and what you expect the shape of the work to be. On "unclear" it is worth more, not less: that hold ends when somebody edits the ticket, and whoever picks it up then should know what you went looking for and did not find.\n\nA paragraph, not a tour. It is read as testimony rather than instruction — the agent reading it is told to check anything it relies on, because the repository is the truth and your note is one agent\'s reading of it — so write what you actually saw, and no more of the codebase than that. A note longer than the pad takes is trimmed to fit rather than refused, so the end of a long one is lost without anyone being told.\n\nDo not implement anything, do not open a pull request, and do not edit the ticket. The note is an observation, not a head start: no design, no patch, nothing for the next agent to apply. If you are torn, say "workable": the agent that picks it up can escalate to a human from inside the work, which is a better place to ask from than here.',
+    doc: "Sent to a code agent for a watched open issue nothing has been started for (rule `issue-appraisal`). It reads the ticket against the default branch and casts a verdict with appraise_issue, and leaves one note on the goal's scratchpad with scratch_append — on either verdict, since an `unclear` hold ends with an edit and the agent that picks it up then is the one with least to go on. The orientation it did to answer the question is otherwise discarded at exit, and `priorWorkBriefing` already renders the pad to every later agent on the goal as testimony, so asking for the note is the whole mechanism. A deployment that overrides this template keeps its own body and gets no note — the ordinary cost of an override, not a fault. It runs in a read-only checkout rather than on a branch of its own (issue #396), so {branch} is the name its worktree is leased under and not a ref — it is still rendered for an override that predates that. Placeholders: {number} {title} {body} {branch}.",
   },
   'issue-retro': {
     placeholders: ['number', 'title', 'body'],
@@ -610,11 +638,11 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'not to file because a suitable item already exists, call link_ticket with that item\u2019s ref.',
     retired: true,
     doc:
-      '**Retired in #394 — no longer rendered.** A blueprint\u2019s ticket is now filed by the harness ' +
+      '**Retired in #394 — no longer rendered.** A brief\u2019s ticket is now filed by the harness ' +
       'directly, because its body is the operator\u2019s own request verbatim and its correctness rested ' +
       'entirely on the agent remembering to add the watch label: without it the item is created, the ' +
       'filing shows as complete, and nothing is ever dispatched for it. Word the item through ' +
-      '`blueprint-ticket-body` instead. An override left here still loads — it is simply not sent.',
+      '`brief-ticket-body` instead. An override left here still loads — it is simply not sent.',
   },
   'work-item-ticket': {
     placeholders: ['ref', 'workTitle', 'produced', 'tracker'],
@@ -665,15 +693,29 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
   'blueprint-ticket-body': {
     placeholders: ['request'],
     template:
-      'An operator asked for this work from the cockpit, as a blueprint. It is filed as a ticket ' +
+      'An operator asked for this work from the cockpit, as a brief. It is filed as a ticket ' +
+      'rather than coded straight off, so it flows through the same planning funnel as any other ' +
+      'issue.\n\nThe request, verbatim:\n\n{request}',
+    retired: true,
+    doc:
+      '**Retired \u2014 renamed to `brief-ticket-body`.** What the cockpit calls a *brief* was called a ' +
+      '*blueprint* until the rename; the id followed the word. The old id stays loadable so a ' +
+      'deployment carrying a `blueprint-ticket-body.md` override still boots, but it is no longer ' +
+      'rendered \u2014 move the wording to `brief-ticket-body`. Placeholders: {request}.',
+  },
+  'brief-ticket-body': {
+    placeholders: ['request'],
+    template:
+      'An operator asked for this work from the cockpit, as a brief. It is filed as a ticket ' +
       'rather than coded straight off, so it flows through the same planning funnel as any other ' +
       'issue.\n\nThe request, verbatim:\n\n{request}',
     doc:
-      'The **body** of the ticket the harness files when an operator injects a code blueprint and a ' +
+      'The **body** of the ticket the harness files when an operator injects a code brief and a ' +
       'tracker is configured (issue #198). Not a prompt: it is written straight into the tracker, so ' +
       'an override is house style for how such a ticket reads. The harness adds the watch label ' +
       'itself, which is what makes the funnel pick the ticket up. Replaces the retired ' +
-      '`blueprint-ticket` (#394). Placeholders: {request}.',
+      '`blueprint-ticket` (#394), and the `blueprint-ticket-body` this was called before the rename. ' +
+      'Placeholders: {request}.',
   },
 };
 

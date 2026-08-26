@@ -6,14 +6,14 @@ import { ConfirmButton } from './ConfirmButton.js';
 import { relTime } from './util.js';
 
 /**
- * A clock face, drawn inline beside the blueprint plate for the same reason that
+ * A clock face, drawn inline beside the brief sheet for the same reason that
  * one is: this panel is shared, and a presentation layer's icon set is not. It is
- * `currentColor` — a recurrence is not a *kind* of thing the way a blueprint is,
- * it is the same blueprint on a timer.
+ * `currentColor` — a recurrence is not a *kind* of thing the way a brief is,
+ * it is the same brief on a timer.
  */
 function ClockMark() {
   return (
-    <svg className="launch-bp" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+    <svg className="launch-mark" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
       <circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" strokeWidth="1.4" />
       <path d="M8 4.6V8l2.4 1.6" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
@@ -43,13 +43,13 @@ function untilTime(iso: string, now: number = Date.now()): string {
 }
 
 /**
- * Recurring blueprints: the prompts an operator wants queued on a clock rather
+ * Recurring briefs: the prompts an operator wants queued on a clock rather
  * than by hand.
  *
  * It sits under the launch composer because it is the same act with a `when`
  * attached, and every control on it bottoms out in the same place: a firing writes
  * the identical `jobs` row the composer above writes, so nothing here can put an
- * agent on the fleet that "+ New blueprint" could not.
+ * agent on the fleet that "+ New brief" could not.
  *
  * What the rows show is the two things a standing intention is judged on — when it
  * next runs, and when it last did. A schedule that has never fired and a schedule
@@ -92,7 +92,7 @@ export function SchedulePanel({ schedules, onChanged }: { schedules: JobSchedule
           {open ? '× New schedule' : '+ New schedule'}
         </button>
         {schedules.length > 0 && (
-          <span className="chip small" title="Recurrences that queue a blueprint on a clock">
+          <span className="chip small" title="Recurrences that queue a brief on a clock">
             {schedules.filter((s) => s.enabled).length} running
           </span>
         )}
@@ -135,7 +135,7 @@ export function SchedulePanel({ schedules, onChanged }: { schedules: JobSchedule
             rows={3}
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={(e) => {
-              // ⌘/Ctrl+Enter submits, matching the blueprint composer above.
+              // ⌘/Ctrl+Enter submits, matching the brief composer above.
               if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
                 e.preventDefault();
                 void submit.run(create);

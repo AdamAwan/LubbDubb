@@ -150,7 +150,7 @@ function partCandidate(
   const origin = partOrigin(issueNumber, part.slug);
   const branch = part.branch ?? partBranch(issueNumber, part.slug);
   const base = partBase(part, index, issueNumber, s.defaultBranch);
-  const { done, remaining } = siblingContext(parts, part);
+  const { done, remaining } = siblingContext(parts, part, s.prRefStyle);
   const title = `Issue #${issueNumber} part: ${part.title}`;
   const stacks =
     base === s.defaultBranch

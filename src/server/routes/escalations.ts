@@ -2,8 +2,12 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { isRecoveryVerdict, type RecoveryVerdict } from '../../agents/crashRecovery.js';
 import { formatAnswers } from '../../escalation/questionnaire.js';
+import { backOutCommentDraft } from '../../plans/planBackOut.js';
+import { originIssueNumber } from '../../plans/planning.js';
+import { readProposedAct } from '../../proposals/proposals.js';
 import { checked, IdParams, optionalText, requiredBoolean, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
+import type { ProposalCommentDraft } from '../../wire.js';
 
 /**
  * Everything in "Needs you": a question answered, an item cleared, a permission
@@ -182,6 +186,66 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       if (!result) return reply.code(409).send({ error: 'proposal not found or already decided' });
       hub.broadcast({ type: 'dirty' });
       return { ok: true, ...result };
+    }),
+  );
+
+  // The two ways out of a plan verdict that are not a verdict on the plan (issue
+  // #109's gate, widened). Approve and Reject both agree the work is worth doing —
+  // a rejection sends the goal straight back to a planner — so an operator who has
+  // read a plan and concluded the *ticket* is the problem had only the wrong "no"
+  // to say it with, and the harness answered by re-planning a goal nobody wanted
+  // until the attempt cap ran out.
+  //
+  // `close` requires the comment, and that is the whole of why the two verdicts do
+  // not share `NoteBody`: closing somebody's ticket is a write on a tracker that
+  // outlives this harness, and one with no words on it is the "closed for reasons
+  // nobody can read" the feature exists to stop. The operator writes it or asks for
+  // the draft below and edits that; nothing posts a comment the harness composed
+  // and nobody read. `hold` takes an optional note for the ordinary reason every
+  // other "no" here does — it is recorded, and it changes nothing about what the
+  // hold does.
+  const BackOutBody = z
+    .object({
+      verdict: z.enum(['close', 'hold'], { errorMap: () => ({ message: "verdict must be 'close' or 'hold'" }) }),
+      note: optionalText('note'),
+    })
+    .refine((b) => b.verdict !== 'close' || (b.note !== undefined && b.note.trim() !== ''), {
+      message: 'note is required to close a ticket — it is posted on the ticket as the reason',
+    });
+  app.post(
+    '/api/proposals/:id/back-out',
+    checked({ params: IdParams, body: BackOutBody }, async ({ params, body, reply }) => {
+      const result = await proposals.backOut(params.id, body.verdict, body.note);
+      if (!result)
+        return reply.code(409).send({
+          error: 'proposal not found, already decided, or not a plan (only a plan has a ticket to back out of)',
+        });
+      // `world:changed` rather than `dirty`: the watch tag came off, and a close
+      // moved the tracker item — the cockpit is drawing a world that is now wrong.
+      hub.broadcast({ type: 'world:changed' });
+      return { ok: true, ...result };
+    }),
+  );
+
+  // The placeholder comment, for an operator who would rather edit one than write
+  // one from nothing. A route of its own rather than a field on `/api/state`, for
+  // the reason `/api/plans/:id/history` is one: it is read when somebody asks for
+  // it, and it carries the plan's prose, which would otherwise ride in every poll.
+  //
+  // It is served, never posted. The draft quotes the plan's own diagnosis so the
+  // ticket's readers can see what was considered, and what actually goes on the
+  // ticket is whatever the operator sends back to the route above.
+  app.get(
+    '/api/proposals/:id/comment-draft',
+    checked({ params: IdParams }, async ({ params, reply }) => {
+      const proposal = store.getProposal(params.id);
+      if (!proposal || proposal.kind !== 'plan') return reply.code(404).send({ error: 'no plan proposal by that id' });
+      const read = readProposedAct(proposal);
+      if (!read.ok || read.act.kind !== 'plan') return reply.code(409).send({ error: 'that proposal names no plan' });
+      const plan = store.getPlan(read.act.planId);
+      const issueNumber = originIssueNumber(read.act.originRef);
+      if (!plan || issueNumber === null) return reply.code(404).send({ error: 'the plan behind it is gone' });
+      return { draft: backOutCommentDraft(plan, issueNumber) } satisfies ProposalCommentDraft;
     }),
   );
 

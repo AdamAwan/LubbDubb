@@ -72,6 +72,52 @@ test('unset optionals are omitted entirely', () => {
   );
 });
 
+/**
+ * The exception, and the reason it is one: `fleetId` is required the moment
+ * `integrations.pool` leaves `fake`, and that key is edited on the same page. Left
+ * out while unset, the field an operator must fill in is the field that is not
+ * there — and the only thing that tells them is a 400 from the save, raised by the
+ * next boot's own refusal.
+ */
+test('a key another key can require is drawn even while unset', () => {
+  const config = loadConfig();
+  assert.equal(config.fleetId, undefined);
+  const row = entry(config, 'fleetId');
+  assert.ok(row, 'the row is drawn');
+  assert.equal(row.value, '');
+  assert.equal(row.isDefault, true, 'nobody chose it, so there is nothing to reset');
+  assert.deepEqual(row.requiredWhen, { path: 'integrations.pool', unless: 'fake' });
+});
+
+/**
+ * The suggestion is `userId@pool.project` — an offer beside an empty field, never
+ * a value anything writes. `fleetId` names person and target repo, and the harness
+ * already holds both.
+ */
+test('an unset fleetId is offered userId@pool.project, and nothing less', () => {
+  const whole = loadConfig({ userId: 'adam', pool: { project: 'lubbdubb' } });
+  assert.equal(entry(whole, 'fleetId')?.suggestion, 'adam@lubbdubb');
+
+  // Half a suggestion is `adam@`, which is an address that reads as a mistake to
+  // every other fleet in the pool. Absent is the honest answer.
+  const noProject = loadConfig({ userId: 'adam' });
+  assert.equal(entry(noProject, 'fleetId')?.suggestion, undefined);
+  const noUser = loadConfig({ pool: { project: 'lubbdubb' } });
+  assert.equal(entry(noUser, 'fleetId')?.suggestion, undefined);
+});
+
+/**
+ * `spendBurn.ceilingUsd` is `null` by default, and null is a *configured* value
+ * meaning "no ceiling" — the reading that means unset is `undefined` alone. The
+ * empty-row arm above coalesced the two once, which turned a default into a row
+ * reading as the operator's own choice on every deployment.
+ */
+test('a null default is a value, not an unset key', () => {
+  const config = loadConfig();
+  assert.equal(entry(config, 'spendBurn.ceilingUsd')?.value, null);
+  assert.equal(entry(config, 'spendBurn.ceilingUsd')?.isDefault, true);
+});
+
 /** A configured optional has no default to be, so it reads as chosen — which it was. */
 test('a configured optional with no default reads as chosen', () => {
   const config = loadConfig({ github: { owner: 'someone', repo: 'something' } });

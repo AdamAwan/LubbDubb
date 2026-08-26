@@ -4,7 +4,26 @@ import { openPrFailure, resolveOpenPr } from '../openPr.js';
 import { linkPrWorkItem } from '../../prWorkItemDesk.js';
 import { seedPrWatch } from '../../prWatchDesk.js';
 import { toolError } from '../protocol.js';
+import type { PrRefStyle } from '../../prRef.js';
 import type { ToolFactory } from './context.js';
+
+/**
+ * How the agent is told to name *another pull request* in the body it writes.
+ *
+ * The one reference the harness writes itself is the issue's, and `#12` is right
+ * for that on both providers. Everything else in the body is the agent's own
+ * prose — and a stacked part naturally names the rung beneath it — so this is the
+ * only place the distinction can be stated at the moment it is used. On Azure
+ * DevOps `#12` is *work item* 12 and `!12` is pull request 12, and getting it
+ * wrong is silent: the description renders and the link resolves, to something
+ * else entirely. → `src/prRef.ts`
+ */
+function prRefGuidance(style: PrRefStyle): string {
+  return style === '!'
+    ? 'If you name another pull request in it — the one your work stacks on, say — write it as `!12`, ' +
+        'not `#12`: this provider reads `#12` as work item 12, so the wrong sigil links to an unrelated ticket.'
+    : 'If you name another pull request in it — the one your work stacks on, say — write it as `#12`.';
+}
 
 export const openPr: ToolFactory = ({ deps, task, ok }) => ({
   description:
@@ -42,7 +61,8 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
           'Optional PR body. The harness adds the issue reference itself, so describe the change, not ' +
           'which ticket it belongs to. Write it as a bullet list: at most five bullets, why the change ' +
           'is needed first and what it does after, one line each. No headings, no prose paragraphs — a ' +
-          'reviewer reads this before the diff, not instead of it.',
+          'reviewer reads this before the diff, not instead of it. ' +
+          prRefGuidance(deps.openPr?.prRefStyle ?? '#'),
       },
     },
     required: ['summary'],

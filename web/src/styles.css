@@ -151,6 +151,16 @@ body {
      the page with it, or the console's panels change face while the shared
      components around them do not. */
   font: 14px/1.5 var(--font-ui);
+  /* The tick and the radio dot: furniture in the sense the scrollbars are — one
+     property, the browser owns the shape, and the only thing the cockpit gets to
+     say is which hue. Said by *container* and not by control, which is the whole
+     mechanism: a declaration on the element beats an inherited one unconditionally,
+     so keyed on `input[type='checkbox']` this would shadow the console's own answer
+     and every tick box on the config page would go orange. Inherited, `.cn`'s
+     `--cn-accent` wins inside the console and this wins everywhere else — the modals,
+     the drawer, the settings sheet — and no call site names it either way.
+     → docs/spec/17-cockpit.md#fields */
+  accent-color: var(--accent);
 }
 
 /* ---------- scrollbars ----------
@@ -343,6 +353,84 @@ a.btn {
   }
 }
 
+/* ---------- fields ----------
+   Every text box, dropdown and note box in the cockpit, drawn once here.
+
+   Element selectors rather than a class, and that is the whole point: a class only
+   reaches the controls somebody remembered to put it on, so the failure mode is a
+   surface nobody has looked at lately sitting there in the platform's own palette —
+   which is what a bare <select> did on the queue rail, white on black, until this
+   block existed. There is no field a rule keyed on the element can miss, including
+   the ones not written yet.
+
+   Two things follow from that and both are deliberate:
+
+   - **The exclusions ride in `:where()`, so the base weighs (0,0,1).** A tick box
+     and a colour swatch are not text boxes and a ground and a padding would wreck
+     them, so they are excluded by type — but `input:not([type='radio'])` counts
+     (0,1,1), which would beat every `.pm-note`-shaped rule in this sheet and take
+     the sizing off fields that had it right. Inside `:where()` the exclusion costs
+     nothing, so a single class still wins. That is the only reason it is there; a
+     plain `:not()` is the bug.
+   - **`font: inherit`.** Neither an input nor a select inherits the page's font, so
+     without this a field renders in the UA's Arial beside Segoe UI prose — which is
+     how `.raw input` and the profile picker read for a long time, two fonts and two
+     heights in one row.
+
+   What a call site is still left to say is what makes its field *that* field: how
+   wide it is, whether it grows, a mono face for an expression, a smaller size in a
+   dense row. Nothing below restates a ground, an edge or a radius.
+   → docs/spec/17-cockpit.md#fields */
+input:where(:not([type='checkbox'], [type='radio'], [type='color'], [type='file'], [type='range'])),
+textarea,
+select {
+  background: var(--well);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font: inherit;
+  padding: 6px 9px;
+}
+/* Vertical only. A note box that can be dragged wider than its column takes the
+   modal's layout with it. */
+textarea {
+  resize: vertical;
+}
+/* The dropdown's own list, which the UA draws from the platform palette unless the
+   options say otherwise — a dark cockpit otherwise gets a white menu hanging off a
+   dark control. macOS draws that menu itself and ignores this, which is its right:
+   it is the platform's menu, not the cockpit's. */
+option {
+  background: var(--panel);
+  color: var(--text);
+}
+/* `opacity: 1` because Firefox dims a placeholder on top of whatever colour it is
+   given, so the token alone lands a step fainter there than here. */
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+/* The ring is the field's own edge rather than a halo outside it: fields sit in
+   flex rows at 6px gaps, and an outset ring on one overlaps the control beside it.
+   `:focus-visible` and not `:focus` — a text box gets it on a click as well as on a
+   tab, and a select that has been used should not keep a ring while its value is
+   read. */
+input:where(:not([type='checkbox'], [type='radio'], [type='color'], [type='file'], [type='range'])):focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 1px solid var(--blue);
+  outline-offset: -1px;
+}
+/* Half-lit and not clickable, the same pair `.btn:disabled` uses — a field the
+   harness has taken away reads as the same kind of unavailable as a button. */
+input:disabled,
+textarea:disabled,
+select:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .fleet-control {
   display: flex;
   align-items: center;
@@ -407,14 +495,9 @@ a.btn {
 .raw input,
 .reply input {
   flex: 1;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: var(--r-md);
-  padding: 6px 10px;
 }
 
-/* Launch-a-job panel, opened from the blueprint desk. */
+/* Launch-a-job panel, opened from the brief desk. */
 .launch {
   display: flex;
   flex-direction: column;
@@ -435,7 +518,7 @@ a.btn {
   align-items: center;
   gap: 6px;
 }
-.launch-bp {
+.launch-mark {
   flex: none;
 }
 .launch-form {
@@ -446,16 +529,9 @@ a.btn {
 }
 .launch-prompt {
   width: 100%;
-  resize: vertical;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: var(--r-md);
-  padding: 8px 10px;
-  font: inherit;
 }
 /* Attached images (issue #249): a strip of thumbnails between the prompt and the
-   controls, so what is going with the blueprint is visible without leaving the
+   controls, so what is going with the brief is visible without leaving the
    composer. The thumbnail is the operator's own bytes scaled by CSS — nothing
    re-encodes or resizes them anywhere in this feature. */
 .launch-attachments {
@@ -536,14 +612,6 @@ a.btn {
   gap: 8px;
   align-items: center;
 }
-.launch-kind select {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: var(--r-md);
-  padding: 6px 8px;
-  font: inherit;
-}
 .launch-queue {
   list-style: none;
   margin: 0;
@@ -586,8 +654,8 @@ a.btn {
 
 /* Recurrences. The panel reuses the composer's own rules — it is the same act with
    a `when` attached, and a second set of boxes that looked *almost* like the
-   blueprint composer would read as a different kind of thing. What is added here is
-   only what a schedule has and a blueprint does not: an expression, and a way to
+   brief composer would read as a different kind of thing. What is added here is
+   only what a schedule has and a brief does not: an expression, and a way to
    say the expression is off. */
 .sched {
   border-bottom: 1px solid var(--border);
@@ -599,11 +667,6 @@ a.btn {
 }
 .sched-cron-input {
   flex: 1;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: var(--r-md);
-  padding: 8px 10px;
   font-family: var(--font-mono);
   font-size: 13px;
 }
@@ -638,8 +701,8 @@ a.btn {
   opacity: 0.55;
 }
 
-/* The strip of images attached to a piece of work — a queued blueprint, or the
-   issue that blueprint became (issue #249). One rule set for both, because it is
+/* The strip of images attached to a piece of work — a queued brief, or the
+   issue that brief became (issue #249). One rule set for both, because it is
    one component drawn in two places and the operator is meant to recognise the
    same images across the tracker fork.
 
@@ -1294,14 +1357,21 @@ a.btn {
   gap: 6px;
   margin-top: 10px;
 }
+/* The two ways out of a plan verdict that are not verdicts on the plan. Set apart
+   below the answers the way `.esc-dismiss` is, because neither answers the
+   question the card asked — they are about the ticket. */
+.esc-backout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
 .esc-decide input {
   flex: 1;
   min-width: 160px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: var(--r-md);
-  padding: 6px 10px;
 }
 
 .world {
@@ -1733,11 +1803,6 @@ a.btn {
   flex: 1;
 }
 .lesson-goal {
-  background: var(--well);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  color: var(--text);
-  font: inherit;
   font-size: 12px;
   padding: 4px 8px;
   width: 22ch;
@@ -2051,13 +2116,6 @@ a.btn {
   margin-top: 6px;
 }
 .kn-narrow textarea {
-  background: var(--well);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  color: var(--text);
-  font: inherit;
-  padding: 6px 8px;
-  resize: vertical;
   width: 100%;
 }
 
@@ -2085,14 +2143,11 @@ a.btn {
 .kn-commit-target input {
   margin-top: 3px;
 }
+/* The one field in the sheet that overrides the base's ground, because the panel
+   it sits in *is* the well — an inset box on an inset box is a border and nothing
+   else. Raised instead, which is what makes it read as the thing to type in. */
 .kn-commit textarea {
   background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  color: var(--text);
-  font: inherit;
-  padding: 6px 8px;
-  resize: vertical;
   width: 100%;
 }
 
@@ -3270,8 +3325,14 @@ a.btn {
 .pm-vrow {
   display: flex;
   gap: 8px;
-  padding: 8px 0;
+  padding: 8px 9px;
   border-top: 1px solid var(--border);
+  /* A rail per row, coloured by state. The chip already says the state in a word;
+     the rail says it in a scan, which is the reading a card of nine checks is
+     actually given. Weighted rather than merely coded: what is still owed is drawn
+     at full hue, what is done at a fraction of one — a list of checks is a list of
+     work left, and a done row that shouts is the card lying about how much. */
+  border-left: 2px solid transparent;
 }
 .pm-vrow:first-of-type {
   border-top: none;
@@ -3282,6 +3343,82 @@ a.btn {
 }
 .pm-vrow.gone {
   opacity: 0.55;
+}
+.pm-vrow.unrun {
+  border-left-color: var(--amber);
+}
+.pm-vrow.failed {
+  border-left-color: var(--red);
+}
+.pm-vrow.deferred {
+  border-left-color: color-mix(in srgb, var(--amber) 55%, transparent);
+}
+.pm-vrow.passed {
+  border-left-color: color-mix(in srgb, var(--green) 45%, transparent);
+}
+.pm-vrow.waived {
+  border-left-color: var(--grey);
+}
+/* An outstanding row is washed in its own hue, so the checks still owed are one
+   shape a glance resolves before it resolves a word — the rail and the muted head
+   are readings of a *row*, and this is a reading of the *card*. Lifted rather than
+   the settled rows sunk, which was the first attempt: this component is drawn on
+   two stations, and the console's card ground is already the darkest value in that
+   palette, so there is nothing below it to sink onto. A translucent wash needs no
+   ground of its own and works on both. Kept at 8% for the reason the sinking was
+   tried first — the amendment and hand-back bands are the two things on a closed
+   row that must stay the loudest, and this has to read as tinted paper behind them,
+   never as a surface competing with them. */
+.pm-vrow.unrun:not(.open) {
+  background: color-mix(in srgb, var(--amber) 15%, transparent);
+}
+/* A deferral is half of one: still owed, but waiting on something named rather
+   than on somebody finding the time — so it draws in the same hue at half the
+   strength, between the checks nobody has got to and the ones that are settled. */
+.pm-vrow.deferred:not(.open) {
+  background: color-mix(in srgb, var(--amber) 7%, transparent);
+}
+.pm-vrow.failed:not(.open) {
+  background: color-mix(in srgb, var(--red) 15%, transparent);
+}
+/* A pass is tinted too, and deliberately at a third of what is owed: the card
+   should read as settled/outstanding at a glance, and a settled row with no ground
+   at all only says "not amber", which is a thing you work out rather than see. The
+   ratio is the whole of it — green loud enough to be its own state, quiet enough
+   that a card of nine still shows what is left before it shows what is done. */
+.pm-vrow.passed:not(.open) {
+  background: color-mix(in srgb, var(--green) 6%, transparent);
+}
+/* A settled check is a reading somebody already took, and drawn at the weight of
+   one still to run it reads as work: a sheet of nine says "nine things to do" at a
+   glance when it means two. So a passed or waived head steps back — the title
+   loses its weight and its ink, and the chips that only identify the row fade.
+   Scoped to the head, and only while the row is shut: the amendment and hand-back
+   bands are the two things that must never dim, an open row is one somebody is
+   reading, and hover puts the ink back so it still reads as a control. Deliberately
+   lighter than `.gone` above — withdrawn and done are not the same news. */
+.pm-vrow.passed:not(.open) .pm-vletter,
+.pm-vrow.waived:not(.open) .pm-vletter {
+  opacity: 0.6;
+}
+.pm-vrow.passed:not(.open) .pm-vtitle,
+.pm-vrow.waived:not(.open) .pm-vtitle {
+  font-weight: 400;
+  color: var(--muted);
+}
+.pm-vrow.passed:not(.open) .pm-vnote,
+.pm-vrow.waived:not(.open) .pm-vnote {
+  color: var(--muted);
+}
+.pm-vrow.passed:not(.open) .pm-vhead .chip,
+.pm-vrow.waived:not(.open) .pm-vhead .chip {
+  opacity: 0.55;
+}
+.pm-vrow:not(.open) .pm-vhead:hover .pm-vtitle {
+  color: var(--text);
+}
+.pm-vrow:not(.open) .pm-vhead:hover .chip {
+  opacity: 1;
 }
 .pm-vletter {
   color: var(--muted);
@@ -3473,11 +3610,6 @@ a.btn {
   flex: 1;
 }
 .pm-note {
-  background: var(--well);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  color: var(--text);
-  font: inherit;
   font-size: 12px;
   padding: 5px 7px;
   min-width: 160px;
@@ -3520,16 +3652,10 @@ a.btn {
   padding: 8px 10px 8px 26px;
 }
 .rb-text {
-  background: var(--well);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  color: var(--text);
-  font: inherit;
   font-size: 13px;
   line-height: 1.5;
   margin-bottom: 12px;
   padding: 7px 9px;
-  resize: vertical;
   width: 100%;
 }
 /* Raise-an-issue modal. It reuses the bug modal's frame and prose fields whole —
@@ -3643,11 +3769,6 @@ a.btn {
 }
 .pm-say input {
   flex: 1;
-  background: var(--well);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  color: var(--text);
-  font: inherit;
   font-size: 12px;
   padding: 5px 7px;
 }
@@ -3900,13 +4021,6 @@ a.btn {
   width: 100%;
   min-height: 2.4em;
   margin-top: 6px;
-  resize: vertical;
-  background: var(--well);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  color: var(--text);
-  font: inherit;
-  padding: 6px 8px;
 }
 .qn-foot {
   display: flex;
@@ -4726,28 +4840,10 @@ a.btn {
   font-style: normal;
 }
 
-/* Intake sits *above* the list rather than as a filter on it: an unclear assay is
-   the one intake reading that stops dispatch, and among a page of rows it reads as
-   a detail rather than as the thing holding all the work. */
-.tickets-intake {
-  border: 1px solid var(--cn-amber-line);
-  border-radius: var(--cn-r);
-  background: var(--cn-amber-bg);
-  margin-bottom: 10px;
-  overflow: hidden;
-}
-.tickets-intake-head {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 9px 12px;
-  font-size: 12.5px;
-  flex-wrap: wrap;
-}
-.tickets-intake-head span {
-  color: var(--cn-fg-faint);
-  font-size: 12px;
-}
+/* The mark on a row the appraisal is holding. The call-out above the list is gone —
+   the hold is raised on the queue rail, where every other ask waiting on a person
+   already is — so this is what is left of intake here: which rows are held, and
+   nothing that decides for them. */
 .tickets-lamp {
   width: 8px;
   height: 8px;
@@ -4755,39 +4851,6 @@ a.btn {
   background: var(--cn-amber);
   flex: none;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--cn-amber) 14%, transparent);
-}
-.tickets-intake-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  border-top: 1px solid var(--cn-amber-fill);
-}
-.tickets-intake-name {
-  flex: 1;
-  min-width: 0;
-  text-align: left;
-  background: none;
-  border: 0;
-  color: inherit;
-  cursor: pointer;
-  padding: 0;
-}
-.tickets-intake-name b {
-  display: block;
-  font-size: 13px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* The assayer's own sentence, quoted whole — it is the only account of why the goal
-   is held, so it is styled as a quotation rather than as a status line. */
-.tickets-quote {
-  display: block;
-  margin-top: 3px;
-  font-size: 11.5px;
-  font-style: italic;
-  color: var(--cn-amber-ink);
 }
 
 /* The tracking axis saying it moved, between the control that moved and the one
@@ -5911,6 +5974,28 @@ a.btn {
 .cfg-row.staged {
   background: var(--cn-amber-bg);
 }
+/* A key another key requires, with nothing in it. Marked on the row rather than
+   only in the save bar: the bar says one field is missing, and the row is the
+   only thing that says which. */
+.cfg-row.needed {
+  background: var(--cn-red-bg);
+}
+.cfg-need {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid var(--cn-red);
+  border-radius: var(--cn-r-sm);
+  font: 10px var(--cn-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--cn-red);
+}
+/* The value on offer for an empty field. A control, so accepting it is the
+   operator's act and not the form's. */
+.cfg-suggest code {
+  font: 11px var(--cn-mono);
+}
 .cfg-key {
   font: 12px var(--cn-mono);
   color: var(--cn-fg-dim);
@@ -6723,10 +6808,6 @@ a.btn {
 .pet-name input {
   flex: 1;
   min-width: 0;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font: inherit;
   padding: 3px 6px;
 }
 .pet-rarity {
@@ -7837,4 +7918,357 @@ a.btn {
 .pool-fleet-p,
 .pool-fleet-at {
   color: var(--cn-fg-dim);
+}
+
+/* ---------------------------------------------------------------------------
+   The feature board (issue #—) — the fleet's work read one tier up.
+
+   Styled here rather than in `console.css` because the component sits in
+   `components/` — it rides its own route, and nothing under `console/` may import
+   `api.js`. It draws `--cn-*` tokens all the same: the prefix boundary is by
+   component *family*, not by file, exactly as the Tickets tab and the config page
+   are console-family surfaces styled in this sheet.
+
+   Every colour here is a `var(--cn-*)`, which is not a tidiness rule: the token
+   layer *is* the theme an operator picks, so a hex at a use site is a surface
+   that stays dark when somebody switches to Light. `test/cockpitTheme.test.ts`
+   is the only thing in `npm run check` that reads CSS at all.
+   → docs/spec/17-cockpit.md#tokens
+   --------------------------------------------------------------------------- */
+
+.cn-fb {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cn-fb-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.cn-fb-head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.cn-fb-legend {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: 0;
+  font-size: 12px;
+  color: var(--cn-fg-dim);
+}
+.cn-fb-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.cn-fb-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex: none;
+}
+
+.cn-fb-card {
+  position: relative;
+  background: var(--cn-panel);
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+/* A Feature with something waiting on a person is marked, never ranked: the
+   border says "read this one first" and the card says what and why. No card
+   here asserts that a Feature is late, at risk or slipping — see `wantsYou`. */
+.cn-fb-card.cn-fb-wants {
+  border-color: var(--cn-amber-line);
+  background: var(--cn-amber-fill);
+}
+.cn-fb-orphans {
+  border-style: dashed;
+}
+
+.cn-fb-top {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+.cn-fb-top h3 {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 600;
+}
+.cn-fb-hue {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex: none;
+  align-self: center;
+}
+
+/* -- the roll-up bar ------------------------------------------------------ */
+
+.cn-fb-bar {
+  display: flex;
+  height: 9px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--cn-track);
+}
+.cn-fb-seg {
+  display: block;
+  height: 100%;
+}
+.cn-fb-delivered {
+  background: var(--cn-green);
+}
+.cn-fb-inFlight {
+  background: var(--cn-accent);
+}
+.cn-fb-fellShort {
+  background: var(--cn-red);
+}
+.cn-fb-settled {
+  background: var(--cn-violet);
+}
+.cn-fb-queued {
+  background: var(--cn-inert);
+}
+/* Hatched rather than a sixth colour, exactly as the Tickets tab hatches "no
+   feature": an item the fleet cannot see is the *absence* of it having looked,
+   and a solid block would read as a fifth kind of progress. */
+.cn-fb-unwatched {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--cn-fg-faint),
+    var(--cn-fg-faint) 2px,
+    var(--cn-line) 2px,
+    var(--cn-line) 5px
+  );
+}
+
+.cn-fb-counts {
+  display: flex;
+  gap: 13px;
+  flex-wrap: wrap;
+  margin: 0;
+  font-size: 12px;
+  color: var(--cn-fg-dim);
+  font-variant-numeric: tabular-nums;
+}
+.cn-fb-count b {
+  color: var(--cn-fg);
+  font-weight: 500;
+}
+.cn-fb-c-delivered b {
+  color: var(--cn-green-ink);
+}
+.cn-fb-c-inFlight b {
+  color: var(--cn-blue-ink);
+}
+.cn-fb-c-fellShort b {
+  color: var(--cn-red-ink);
+}
+.cn-fb-c-unwatched b {
+  color: var(--cn-amber-ink);
+}
+
+.cn-fb-attn {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--cn-fg-dim);
+}
+.cn-fb-attn b {
+  color: var(--cn-fg);
+}
+
+/* -- the briefing --------------------------------------------------------- */
+
+/* Three lists, in the order the questions get asked: what is in the way, what is
+   moving, what is done. Every line in them is a quotation — see `Briefing`. */
+.cn-fb-brief {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  border-top: 1px solid var(--cn-line-soft);
+  padding-top: 9px;
+}
+.cn-fb-brief-list {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.cn-fb-brief-list h4 {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+}
+.cn-fb-brief-list h4 .cn-psub {
+  text-transform: none;
+  letter-spacing: 0;
+  margin-left: 5px;
+}
+.cn-fb-brief-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.cn-fb-brief-list li {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--cn-fg-dim);
+  min-width: 0;
+}
+
+/* The sentence somebody actually wrote. Clamped rather than truncated at the
+   server, so the whole of it is in the DOM for a reader who wants it: an
+   assessor's shortfall is whatever length its author felt like. */
+.cn-fb-said {
+  display: block;
+  color: var(--cn-fg);
+  overflow-wrap: anywhere;
+}
+.cn-fb-goal {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--cn-fg);
+  cursor: pointer;
+  text-align: left;
+}
+.cn-fb-goal:hover {
+  color: var(--cn-accent);
+  text-decoration: underline;
+}
+
+/* An agent is stopped against a question and nobody is stopped by a shortfall,
+   so the two never wear one colour: red asks for a reply, amber asks for a
+   decision. */
+.cn-fb-b-question {
+  color: var(--cn-red-ink);
+  border-color: var(--cn-red-line);
+  background: var(--cn-red-fill);
+}
+.cn-fb-b-fellShort {
+  color: var(--cn-amber-ink);
+  border-color: var(--cn-amber-line);
+  background: var(--cn-amber-fill);
+}
+
+/* -- the readings beside it ----------------------------------------------- */
+
+.cn-fb-side {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+  font-size: 12px;
+  color: var(--cn-fg-dim);
+}
+.cn-fb-reading b {
+  color: var(--cn-fg-faint);
+  font-weight: 500;
+  margin-right: 4px;
+}
+.cn-fb-never {
+  color: var(--cn-fg-faint);
+  font-style: normal;
+}
+
+.cn-fb-reach {
+  display: inline-flex;
+  gap: 5px;
+}
+.cn-fb-env {
+  font-size: 11px;
+  font-style: normal;
+  padding: 1px 7px;
+  border-radius: var(--cn-r-sm);
+  border: 1px solid var(--cn-line-hi);
+  color: var(--cn-fg-faint);
+  background: var(--cn-panel-2);
+}
+.cn-fb-r-reached {
+  color: var(--cn-green-ink);
+  border-color: var(--cn-green-line);
+  background: var(--cn-green-fill);
+}
+.cn-fb-r-partial {
+  color: var(--cn-blue-ink);
+  border-color: var(--cn-blue-line);
+  background: var(--cn-blue-fill);
+}
+/* Dashed and amber, and never the same as `absent`: an expired credential and
+   work that genuinely has not shipped read identically otherwise, and only one
+   of them is about deployment.
+   → docs/spec/24-environments.md#the-three-verdicts */
+.cn-fb-r-unknown {
+  color: var(--cn-amber-ink);
+  border-color: var(--cn-amber-line);
+  border-style: dashed;
+  background: var(--cn-amber-fill);
+}
+
+/* -- the children --------------------------------------------------------- */
+
+.cn-fb-kids {
+  border-top: 1px solid var(--cn-line-soft);
+  padding-top: 9px;
+  overflow-x: auto;
+}
+.cn-fb-kids table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12.5px;
+}
+.cn-fb-kids td {
+  padding: 5px 10px 5px 0;
+  border-bottom: 1px solid var(--cn-line-soft);
+  color: var(--cn-fg-dim);
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+.cn-fb-kids tr:last-child td {
+  border-bottom: 0;
+}
+.cn-fb-kind {
+  color: var(--cn-fg-faint);
+  font-size: 11px;
+}
+.cn-fb-title {
+  width: 100%;
+  white-space: normal;
+}
+.cn-fb-title button {
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  color: var(--cn-fg);
+  font: inherit;
+  cursor: pointer;
+}
+.cn-fb-title button:hover {
+  color: var(--cn-blue-ink);
+}
+.cn-fb-num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.cn-fb-unresolved {
+  margin: 0;
 }

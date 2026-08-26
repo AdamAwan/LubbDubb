@@ -11,7 +11,7 @@ import type {
   TaskSummary,
 } from '../web/src/types.js';
 import type { GoalPageView, GoalPartView, GoalTrack, PartGroup } from '../web/src/view/goalPage.js';
-import { buildGoalPage, buildGoalTrack } from '../web/src/view/goalPage.js';
+import { buildGoalPage, buildGoalStrip, buildGoalTrack } from '../web/src/view/goalPage.js';
 import { buildNeedsYou } from '../web/src/view/needsYou.js';
 
 const { buildDemoState } = await import('../web/src/demo/fixtures.js');
@@ -394,4 +394,78 @@ test('a plan with no live parts still carries what it proposed', () => {
     'in the order the plan declared them',
   );
   assert.deepEqual(buildGoalTrack(page?.parts ?? []), { merged: 0, now: 0, held: 0, waiting: 0, total: 0 });
+});
+
+/**
+ * The track's three rules, each of which is silent when it breaks.
+ *
+ * Every one of them is a way for the strip to become the fault it replaced: a
+ * reading at the top of the page that disagrees with the card it points at.
+ */
+test('a stage with nothing to measure draws no proportion', () => {
+  const state = buildDemoState().state;
+  const issue = state.world.issues[0]!;
+  const ref = `issue:${issue.number}`;
+  const page = buildGoalPage({ ...state, plans: [], planParts: [], environmentReach: [] }, ref, [])!;
+
+  const strip = buildGoalStrip({ ...page, issue: { ...page.issue, validation: null } });
+  const plan = strip.find((s) => s.at === 'plan')!;
+  const validation = strip.find((s) => s.at === 'validation')!;
+
+  assert.equal(plan.reading, 'not drawn');
+  assert.equal(plan.done, null, 'a goal with no plan has no parts outstanding, so nothing to measure');
+  assert.equal(validation.reading, 'no checks');
+  assert.equal(
+    validation.done,
+    null,
+    'a goal with no validation plan has no checks outstanding — a bar at 0 would report every one still to run',
+  );
+});
+
+test('the strip quotes the parts and the checks rather than re-reading them', () => {
+  const state = buildDemoState().state;
+  const issue = state.world.issues[0]!;
+  const ref = `issue:${issue.number}`;
+  const parts = [
+    part({ id: 'p:1', slug: 'one', seq: 1, status: 'merged' }),
+    part({ id: 'p:2', slug: 'two', seq: 2, status: 'dispatched' }),
+    part({ id: 'p:3', slug: 'three', seq: 3, status: 'pending' }),
+  ];
+  const page = buildGoalPage({ ...state, planParts: parts, plans: [plan(ref)] }, ref, [])!;
+  const withChecks: GoalPageView = {
+    ...page,
+    issue: {
+      ...page.issue,
+      validation: { state: 'flagged', total: 4, passed: 1, failed: 1, unrun: 2, deferred: 0, waived: 0 },
+    },
+  };
+  const strip = buildGoalStrip(withChecks);
+
+  const planStage = strip.find((s) => s.at === 'plan')!;
+  assert.equal(planStage.reading, '1/3 parts merged', 'the same fold the plan card draws');
+  assert.equal(planStage.done, (1 / 3) * 100);
+  assert.equal(planStage.tone, 'blue', 'something is moving and nothing is held');
+
+  const validation = strip.find((s) => s.at === 'validation')!;
+  assert.equal(validation.reading, '1/4 settled', 'passed plus waived, as the header chip counts them');
+  assert.equal(validation.tone, 'amber', 'a check actually failed');
+});
+
+test('the shipped stage is absent without environments, and never folds unknown into absent', () => {
+  const state = buildDemoState().state;
+  const issue = state.world.issues[0]!;
+  const ref = `issue:${issue.number}`;
+  const bare = buildGoalPage({ ...state, environmentReach: [] }, ref, [])!;
+  assert.deepEqual(
+    buildGoalStrip(bare).map((s) => s.at),
+    ['plan', 'validation', 'tail'],
+    'a stage of question marks on a deployment with no environments is a feature announcing itself as broken',
+  );
+
+  const unknown = buildGoalStrip({
+    ...bare,
+    environments: [{ environment: 'prod', status: 'unknown', landed: 0, total: 2, at: null, opens: [] }],
+  }).find((s) => s.at === 'environments')!;
+  assert.equal(unknown.reading, 'not known', 'a probe that could not say is not work that has not shipped');
+  assert.equal(unknown.done, null);
 });

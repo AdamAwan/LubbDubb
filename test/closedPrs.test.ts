@@ -192,6 +192,9 @@ function ghApi(closed: GhClosedPull[], recorded: string[]): GitHubApi {
     async listPullReviewThreads() {
       return [];
     },
+    async resolveReviewThread() {
+      return false;
+    },
     async listRecentlyClosedPulls(since) {
       recorded.push(since);
       return closed.filter((p) => p.closedAt >= since);
@@ -209,6 +212,9 @@ function ghApi(closed: GhClosedPull[], recorded: string[]): GitHubApi {
     updateIssueComment: unused,
     mergePull: unused,
     setPullLabel: unused,
+    closeIssue: (): never => {
+      throw new Error('closeIssue is not scripted in this test');
+    },
     setIssueLabel: unused,
     createIssue: unused,
     createPull: unused,
@@ -311,6 +317,7 @@ function azApi(closed: AzClosedPull[], recorded: string[]): AzureDevOpsApi {
       return closed.filter((p) => p.closedAt >= since);
     },
     listPullThreads: unused,
+    setThreadStatus: unused,
     listPolicyEvaluations: unused,
     listPullLabels: unused,
     listOpenWorkItems: unused,

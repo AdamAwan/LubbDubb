@@ -16,6 +16,7 @@ import type { CockpitView } from '../web/src/view/viewModel.js';
 import type { GoalPartView } from '../web/src/view/goalPage.js';
 import type { CockpitActions, ConsolePanel } from '../web/src/cockpit/actions.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE } from '../web/src/console/QueueRail.js';
+import { buildNeedsYou } from '../web/src/view/needsYou.js';
 import { PRESETS } from '../web/src/cockpit/theme.js';
 
 // `tsx` compiles JSX with the classic runtime, which emits bare
@@ -108,6 +109,23 @@ test('console.css never targets a shared component’s class', () => {
   for (const cls of ['.escalation-card', '.recovery-panel', '.findings-panel', '.human-task-actions']) {
     assert.ok(!css.includes(cls), `console.css styles ${cls}; shared components restyle through tokens only`);
   }
+});
+
+/**
+ * The same rule, at the one selector shape that gets past the check above. `.cn`
+ * *contains* nearly every shared component the cockpit embeds, so `.cn textarea`
+ * names no shared class and reaches all of them anyway — at (0,1,1), which outranks
+ * the single class each one styles itself with. There was one, and it was silently
+ * redrawing five components' note boxes and overriding the `rows` their callers
+ * chose. The console's own fields wear `.cn-in`, which reaches only what it is put
+ * on. → docs/spec/17-cockpit.md#fields
+ */
+test('console.css reaches no form control through .cn', () => {
+  const css = readFileSync(fileURLToPath(new URL('../web/src/console/console.css', import.meta.url)), 'utf8');
+  const offenders = [...css.matchAll(/^\s*(\.cn[\w-]*\s+(?:input|textarea|select|option)\b[^,{]*)/gm)].map((m) =>
+    m[1]!.trim(),
+  );
+  assert.deepEqual(offenders, [], 'a descendant element rule restyles the components the console embeds');
 });
 
 test('a dropped socket draws no gauge, no rail and no situation area', () => {
@@ -605,10 +623,16 @@ function goalRef(): string {
   return ref;
 }
 
-function goalView(mutate: (state: CockpitView['state']) => void = () => {}, ref: string = goalRef()): CockpitView {
+function goalView(
+  mutate: (state: CockpitView['state']) => void = () => {},
+  ref: string = goalRef(),
+  /** The reference footer's disclosures to open — `[]` is the page as it arrives. */
+  goalOpen: readonly string[] = [],
+): CockpitView {
   const state = buildDemoState().state;
   mutate(state);
   return buildViewModel({
+    goalOpen,
     state,
     now: Date.now(),
     connected: true,
@@ -643,9 +667,18 @@ function goalView(mutate: (state: CockpitView['state']) => void = () => {}, ref:
  * and catches a card that renders an empty box while its route is in flight.
  */
 test('a goal draws its own durable record, not only the live snapshot', () => {
-  const html = render(goalView());
-  assert.ok(html.includes('The record'), 'the goal page must carry the history the snapshot forgets');
-  assert.ok(html.includes('Reading the record'), 'the card must say it is fetching rather than draw an empty box');
+  // Folded away as the page arrives, and *named* all the same: the heading is what
+  // says the history is here to be had, and a card that drew nothing at all would
+  // be indistinguishable from a page that had lost it.
+  const shut = render(goalView());
+  assert.ok(shut.includes('The record'), 'the goal page must carry the history the snapshot forgets');
+  assert.ok(
+    !shut.includes('Reading the record'),
+    'folded away it fetches nothing — "on open, never polled" is the disclosure now, not the page',
+  );
+
+  const open = render(goalView(() => {}, goalRef(), ['record']));
+  assert.ok(open.includes('Reading the record'), 'the card must say it is fetching rather than draw an empty box');
 });
 
 /**
@@ -696,10 +729,10 @@ test('an unanswered profile proposal reaches the rail, not only the goal page', 
   const gated = (state: CockpitView['state']) => {
     const issue = state.world.issues.find((i) => `issue:${i.number}` === ref);
     assert.ok(issue, 'the fixture goal must be in the world');
-    issue.assay = {
+    issue.appraisal = {
       verdict: 'workable',
       summary: 'Three subsystems and an auth guard between them.',
-      by: 'assayer',
+      by: 'appraiser',
       decidedAt: new Date(Date.now() - 3600_000).toISOString(),
       commentRef: null,
       proposedProfile: 'deep',
@@ -710,7 +743,7 @@ test('an unanswered profile proposal reaches the rail, not only the goal page', 
 
   const html = decode(render(goalView(gated)));
   assert.ok(html.includes(KIND_LABEL.profile), 'the rail names the kind');
-  assert.ok(html.includes('The goal assay wants this run on “deep”'), 'and says what is being asked');
+  assert.ok(html.includes('The goal appraisal wants this run on “deep”'), 'and says what is being asked');
   assert.ok(html.includes('Use “deep”'), 'the band offers the proposal');
   assert.ok(html.includes('Leave it unpinned') || /Keep “/.test(html), 'and the way to keep what is standing');
 
@@ -933,7 +966,7 @@ test('a goal with no plan draws no way into one', () => {
 });
 
 test('the ticket is drawn as HTML when the tracker wrote HTML', () => {
-  const v = goalView();
+  const v = goalView(() => {}, goalRef(), ['ticket']);
   const page = v.goalPage;
   assert.ok(page, 'the fixture goal must resolve to a page');
 
@@ -946,16 +979,38 @@ test('the ticket is drawn as HTML when the tracker wrote HTML', () => {
   assert.ok(!html.includes('&lt;div&gt;'), 'the tags are structure, not text to print');
 });
 
+/**
+ * The reference footer arrives shut, and its state is the address bar's.
+ *
+ * Both halves are the point. Shut, because neither surface is owed anything — the
+ * ticket is read once at pickup and the record is what is left after the snapshot
+ * forgets — and between them they used to put a screen and a half of prose in
+ * front of everything still moving. Named while shut, because a section that
+ * vanished would be a page that had lost it.
+ *
+ * And it is a `Place`, so a link to a goal's ticket body opens on it and the back
+ * button steps out of a disclosure it stepped into. Held in a `useState` all of
+ * that fails silently, which is why it is pinned here rather than left to reading.
+ */
+test('the reference footer arrives shut, and opens from the place', () => {
+  const shut = render(goalView());
+  assert.ok(shut.includes('The ticket'), 'the ticket is named even while it is folded away');
+  assert.ok(!shut.includes('as it stood at pickup</span><div class="cn-tick"'), 'and its body is not drawn');
+
+  const open = render(goalView(() => {}, goalRef(), ['ticket']));
+  assert.ok(open.includes('cn-tick'), 'the place is what opens it');
+});
+
 test('a held goal is a way into the goal it names', () => {
   // One way into a goal, from every surface that lists one — the queue row, the
-  // overview row and this. It is the name rather than the whole row, because the
-  // row carries controls of its own and a button cannot hold them.
-  //
-  // The tickets tab's rows come from its own route, which nothing fetches in a
-  // static render; the intake call-out is drawn from the snapshot, so it is the
-  // part of the tab this seam can see.
-  const html = render(view({ tab: 'tickets' }));
-  assert.ok(html.includes('tickets-intake-name'));
+  // overview row and this. The intake hold is raised on the rail rather than on
+  // the tickets tab, so the row that names it is a queue row, and its click opens
+  // the goal like every other row's.
+  const v = view();
+  const row = v.needsYou.find((n) => n.kind === 'intake');
+  assert.ok(row, 'the demo fixtures must carry a goal the appraisal refused');
+  assert.equal(row.opens, 'goal', 'a held goal has a page, so the row opens it');
+  assert.ok(decode(render(v)).includes(row.title), 'and the rail draws it');
 });
 
 /**
@@ -1046,6 +1101,139 @@ test('the tracker-state colour picker draws the shared field', () => {
   assert.ok(html.includes('aria-label="Colour for In Review"'), 'named for the state it colours');
   // The state the map does not colour is offered, the one it does is not.
   assert.ok(html.includes('value="Done"'), 'an uncoloured state is offered in the datalist');
+});
+
+/**
+ * A key another key requires, drawn while the requirement is raised by an edit
+ * that has not been written yet.
+ *
+ * The whole point of the requirement living in the browser: the pool provider is
+ * `fake` in the config this page was handed, and `git` only in what is staged. A
+ * `required` computed on the server would answer for the running config and let
+ * the operator write a file the next boot refuses — over a key whose row would
+ * not have been drawn at all, since an unset optional is not.
+ */
+test('a key the staged config requires is marked, offered a value, and blocks the write', () => {
+  const html = renderToStaticMarkup(
+    createElement(ConfigValues, {
+      payload: {
+        groups: [
+          {
+            title: 'Integrations',
+            entries: [
+              {
+                path: 'integrations.pool',
+                value: 'fake',
+                isDefault: true,
+                type: 'enum' as const,
+                options: ['fake', 'git'],
+                access: 'plain' as const,
+                live: false,
+                env: null,
+                why: 'Which substrate carries the cross-fleet pool.',
+              },
+              {
+                path: 'fleetId',
+                value: '',
+                isDefault: true,
+                type: 'string' as const,
+                access: 'plain' as const,
+                live: false,
+                env: null,
+                why: 'Who this fleet is in the pool.',
+                requiredWhen: { path: 'integrations.pool', unless: 'fake' },
+                suggestion: 'adam@lubbdubb',
+              },
+            ],
+          },
+        ],
+        file: 'lubbdubb.config.json',
+        projectFile: null,
+        text: '{}',
+        revision: 'abc123',
+        pending: [],
+        canRestart: false,
+      },
+      staged: { set: { 'integrations.pool': 'git' }, clear: [] },
+      saved: null,
+      group: 'Integrations',
+      control: { cap: 2, paused: false },
+      states: [],
+      onGroup: () => undefined,
+      onStage: () => undefined,
+      onReview: () => undefined,
+      onReloaded: () => undefined,
+    }),
+  );
+  assert.ok(html.includes('cfg-need'), 'the row is marked as needed');
+  assert.ok(html.includes('cfg-suggest'), 'the suggestion is offered as a control');
+  assert.ok(html.includes('adam@lubbdubb'), 'and it is userId@pool.project');
+  assert.match(
+    html,
+    /<button class="btn primary small" disabled="">Review &amp; write<\/button>/,
+    'the write is refused while the requirement is unmet',
+  );
+  // Named rather than counted: the row is usually in a group the operator has
+  // already navigated away from.
+  assert.ok(html.includes('fleetId is needed while'), 'and the save bar says which key and why');
+});
+
+/** The same page with the requirement satisfied writes normally. */
+test('a required key that is filled in does not block the write', () => {
+  const html = renderToStaticMarkup(
+    createElement(ConfigValues, {
+      payload: {
+        groups: [
+          {
+            title: 'Integrations',
+            entries: [
+              {
+                path: 'integrations.pool',
+                value: 'git',
+                isDefault: false,
+                type: 'enum' as const,
+                options: ['fake', 'git'],
+                access: 'plain' as const,
+                live: false,
+                env: null,
+                why: 'Which substrate carries the cross-fleet pool.',
+              },
+              {
+                path: 'fleetId',
+                value: 'adam@lubbdubb',
+                isDefault: false,
+                type: 'string' as const,
+                access: 'plain' as const,
+                live: false,
+                env: null,
+                why: 'Who this fleet is in the pool.',
+                requiredWhen: { path: 'integrations.pool', unless: 'fake' },
+                suggestion: 'adam@lubbdubb',
+              },
+            ],
+          },
+        ],
+        file: 'lubbdubb.config.json',
+        projectFile: null,
+        text: '{}',
+        revision: 'abc123',
+        pending: [],
+        canRestart: false,
+      },
+      staged: { set: { fleetId: 'adam@lubbdubb' }, clear: [] },
+      saved: null,
+      group: 'Integrations',
+      control: { cap: 2, paused: false },
+      states: [],
+      onGroup: () => undefined,
+      onStage: () => undefined,
+      onReview: () => undefined,
+      onReloaded: () => undefined,
+    }),
+  );
+  assert.ok(!html.includes('cfg-need'), 'nothing is marked as needed');
+  // The suggestion is an offer for an empty field, so a filled one does not draw it.
+  assert.ok(!html.includes('cfg-suggest'), 'and the offer is gone');
 });
 
 test('the shared colour field keeps the alpha a picker cannot express', () => {
@@ -1193,35 +1381,39 @@ test('a goal row is a way into its page', () => {
 
 /**
  * The backlog's four groups became the tickets tab's watch filter (#351), and its
- * intake group became the call-out above the list. What the group *argued* — that
- * an `unclear` assay is the one intake reading that stops dispatch, so it must be
- * pulled out rather than greyed inside the watched rows — is what these assert.
+ * intake group became an ask on the queue rail. What the group *argued* — that an
+ * `unclear` appraisal is the one intake reading that stops dispatch, so it must be
+ * pulled out rather than greyed inside the watched rows — is what these assert,
+ * one surface further along: it is pulled out onto the rail, where the operator
+ * reads what is waiting on them, rather than onto a page they open to groom the
+ * backlog.
  *
  * The tab's rows arrive from its own route, which a static render does not fetch,
  * so the arrangement those groups used to cover is tested against `featureBlocks`
  * in `test/issueGroups.test.ts` instead.
  */
-test('a goal the assay refused is pulled out of the list, quoted, with its override beside it', () => {
-  const v = view({ tab: 'tickets' });
-  const intake = v.state.world.issues.find((i) => i.assay?.verdict === 'unclear');
-  assert.ok(intake, 'the demo fixtures must carry a goal the assay refused');
-  const assay = intake.assay;
-  assert.ok(assay);
+test('a goal the appraisal refused is raised on the rail, quoted whole, with its override under it', () => {
+  const v = view();
+  const row = v.needsYou.find((n) => n.kind === 'intake');
+  assert.ok(row, 'the demo fixtures must carry a goal the appraisal refused');
+  const appraisal = v.state.world.issues.find((i) => `issue:${i.number}` === row.goalRef)?.appraisal;
+  assert.ok(appraisal);
 
-  const decoded = decode(render(v));
-  assert.ok(decoded.includes('held at intake'), 'the call-out names what is holding the work');
-  assert.ok(decoded.includes(assay.summary), 'the assayer’s own words are quoted, never reworded');
-  assert.ok(decoded.includes('Override → workable'), 'and the one button that unblocks it sits on the row');
+  // The band the row opens, drawn in front rather than behind the rail: it is the
+  // ask panel's body, and the same one the goal page draws.
+  const decoded = decode(render({ ...v, consolePanel: { ask: row.id } }));
+  assert.ok(decoded.includes('could not say this is workable'), 'the band names what is holding the work');
+  assert.ok(decoded.includes(appraisal.summary), 'the appraiser’s own words are quoted, never reworded');
+  assert.ok(decoded.includes('Override → workable'), 'and the one button that unblocks it sits under them');
 });
 
-test('nothing held at intake draws no call-out at all', () => {
-  // Unlike the group it replaces, which was drawn empty because a group that
-  // vanishes reads as one that broke: a call-out is an exception being raised, and
-  // an exception nobody has is not a heading, it is silence.
-  const v = view({ tab: 'tickets' });
-  const issues = v.state.world.issues.map((i) => ({ ...i, assay: null }));
-  const html = render({ ...v, state: { ...v.state, world: { ...v.state.world, issues } } });
-  assert.ok(!html.includes('tickets-intake'), 'no goal is held, so nothing claims one is');
+test('a goal nothing is holding raises no intake row at all', () => {
+  // A call-out is an exception being raised, and an exception nobody has is not a
+  // heading, it is silence — the same rule the rail keeps for every other kind.
+  const v = view();
+  const issues = v.state.world.issues.map((i) => ({ ...i, appraisal: null }));
+  const cleared = buildNeedsYou({ ...v.state, world: { ...v.state.world, issues } });
+  assert.equal(cleared.filter((r) => r.kind === 'intake').length, 0, 'no goal is held, so nothing claims one is');
 });
 
 /**
@@ -1506,4 +1698,52 @@ test('the shell renders the console, and the drawer that the console only asks f
   // down the reason a build failure.
   assert.ok(!/import\s+\{[^}]*RecordPanel/.test(src), 'the shell must not import the work graph');
   assert.ok(!src.includes('<RecordPanel'), 'the work graph is a console panel, not a strip under the shell');
+});
+
+/**
+ * The way to the tracker is always drawn, and it never leads to the wrong thing.
+ *
+ * Two faults, and both were silent. The control was drawn only when a URL
+ * resolved, so on a goal whose ticket could not be addressed it simply was not
+ * there — indistinguishable from the cockpit having forgotten it, and absent
+ * exactly where finding the ticket by hand is hardest. And it resolved through
+ * `#<n>` alone, a key `buildRefUrls` writes for pull requests *first*: on a tracker
+ * carrying both issue 412 and PR 412, "Open ticket" opened the pull request.
+ */
+test('the way to the tracker is always drawn, and prefers the unambiguous key', () => {
+  const v = goalView();
+  const page = v.goalPage;
+  assert.ok(page, 'the fixture goal must resolve to a page');
+  const n = page.issue.number;
+  const noUrl = { ...page, issue: { ...page.issue, url: undefined } };
+
+  // `#<n>` is shared with pull requests and the pull requests are keyed first, so
+  // the colon form is the only one that certainly names this goal.
+  const both = render({
+    ...v,
+    state: {
+      ...v.state,
+      refUrls: {
+        ...v.state.refUrls,
+        [`#${n}`]: 'https://tracker/pull/collision',
+        [`issue:${n}`]: 'https://tracker/browse/right',
+      },
+    },
+    goalPage: noUrl,
+  });
+  // Read off the control itself rather than off the page: `#<n>` is a ref other
+  // surfaces here legitimately draw, so a whole-page search would pass on their
+  // links and never see this one.
+  const opener = /<a[^>]*href="([^"]*)"[^>]*>Open ticket/.exec(both);
+  assert.ok(opener, 'the control is drawn as a link when there is somewhere to go');
+  assert.equal(opener[1], 'https://tracker/browse/right', 'the goal’s own ref wins over the number a PR shares');
+
+  // Nothing resolves at all: still drawn, still named, and no longer a link.
+  const nowhere = render({ ...v, state: { ...v.state, refUrls: {} }, goalPage: noUrl });
+  assert.ok(nowhere.includes('Open ticket'), 'the row’s shape must not depend on what a provider resolved');
+  assert.ok(nowhere.includes('aria-disabled="true"'), 'and it says it is unavailable rather than pretending');
+  assert.ok(
+    !/<a[^>]*>Open ticket/.test(nowhere),
+    'a link that leads nowhere is the dead end refs exist to prevent, so it stops being one',
+  );
 });

@@ -13,6 +13,7 @@ import type {
 // each call site: the server declares each one as its return type, so a renamed
 // or re-nested key is a compile error here instead of an empty panel.
 import type {
+  AgentTranscript,
   CiPolicyPayload,
   FilingTargetProbe,
   IssueFiled,
@@ -28,6 +29,7 @@ import type {
   PoolInsightsPayload,
   PoolStatePayload,
   PromptsPayload,
+  ProposalCommentDraft,
   RetrospectivePayload,
   RunClearOut,
   RunningConfigPayload,
@@ -41,6 +43,7 @@ import type {
   SpendTrendPayload,
   WorkRootsPayload,
   TicketsPayload,
+  FeatureBoardPayload,
   WorkSubtreePayload,
 } from '../../src/wire.js';
 import { demoApi, connectDemoWs } from './demo/demoBackend.js';
@@ -143,8 +146,12 @@ function post<T>(url: string, body?: unknown): Promise<T> {
 
 const realApi = {
   getState: () => authFetch('/api/state').then((r) => json<AppState>(r)),
-  getTranscript: (agentId: string) =>
-    authFetch(`/api/agents/${agentId}/transcript`).then((r) => json<{ transcript: string }>(r)),
+  // Ranged: `from` is what the caller already holds, so the drawer's five-second
+  // poll ships the tail rather than the whole record each time (issue #639).
+  getTranscript: (agentId: string, from = 0) =>
+    authFetch(`/api/agents/${agentId}/transcript${from > 0 ? `?from=${from}` : ''}`).then((r) =>
+      json<AgentTranscript>(r),
+    ),
   // The work graph is fetched, never polled: `/api/state` comes round every couple
   // of seconds and the graph only ever grows, so the roots are read once on mount
   // and a subtree when one is opened.
@@ -175,6 +182,11 @@ const realApi = {
     const search = params.toString();
     return authFetch(`/api/tickets${search === '' ? '' : `?${search}`}`).then((r) => json<TicketsPayload>(r));
   },
+  // The feature board, fetched when the tab opens and never polled — it reads the
+  // whole mirror, exactly as `/api/tickets` does. No query: the board is the whole
+  // of what the tracker's hierarchy holds, and the narrowing an operator wants is
+  // the Tickets tab one click down.
+  getFeatures: () => authFetch('/api/features').then((r) => json<FeatureBoardPayload>(r)),
   // A goal's retrospective, fetched when the Manifest station is opened. The
   // snapshot carries only the summary, for the reason the work graph is not
   // polled: a document per issue on every poll pays for the feature in bandwidth.
@@ -304,6 +316,15 @@ const realApi = {
     post<{ ok: boolean; detail: string }>(`/api/proposals/${id}/accept`, { note }),
   rejectProposal: (id: string, note?: string) =>
     post<{ ok: boolean; detail: string }>(`/api/proposals/${id}/reject`, { note }),
+  // Backing out of a plan verdict: the ticket is closed with the operator's comment,
+  // or un-watched until somebody has thought about it. Not a rejection — that asks a
+  // planner for a different plan for a goal nobody wants.
+  backOutProposal: (id: string, verdict: 'close' | 'hold', note?: string) =>
+    post<{ ok: boolean; detail: string }>(`/api/proposals/${id}/back-out`, { verdict, note }),
+  // The placeholder comment for a close. Served, never posted — what lands on the
+  // ticket is whatever the operator sends back with the verdict.
+  proposalCommentDraft: (id: string) =>
+    authFetch(`/api/proposals/${id}/comment-draft`).then((r) => json<ProposalCommentDraft>(r)),
   respondAgent: (id: string, text: string) => post(`/api/agents/${id}/respond`, { text }),
   setControl: (patch: { cap?: number; paused?: boolean }) =>
     post<{ ok: true; cap: number; paused: boolean }>('/api/control', patch),
@@ -331,14 +352,14 @@ const realApi = {
   setGoalPriority: (issueNumber: number, priority: boolean) =>
     post<{ ok: true; priority: boolean }>(`/api/issues/${issueNumber}/priority`, { priority }),
   // Pin this goal's work to a model profile, or clear the pin (#342). The same
-  // call answers a standing proposal from the assayer, whichever way it went —
+  // call answers a standing proposal from the appraiser, whichever way it went —
   // the route settles the question on any write, which is what makes "keep mine"
   // a decision rather than a refusal to answer.
   setIssueProfile: (issueNumber: number, profile: string | null) =>
     post<{ ok: true }>(`/api/issues/${issueNumber}/profile`, { profile: profile ?? '' }),
   // Settle where this goal belongs on the backlog — the container it hangs off,
   // and the area node that puts it on a board. `null` is the third answer, "this
-  // goal wants no such thing"; the other two are the assay's proposal and a value
+  // goal wants no such thing"; the other two are the appraisal's proposal and a value
   // the operator picked instead, and the route cannot tell them apart because it
   // does not need to. The write is the harness's either way.
   setIssueParent: (issueNumber: number, parent: number | null) =>
@@ -381,8 +402,8 @@ const realApi = {
   // The operator's override of the intake verdict (#158). `unclear` is the one
   // reading that blocks dispatch, so this is the escape hatch that gate has to
   // have; `null` clears it, which is a delete and not a synonym for `workable`.
-  setIssueAssay: (issueNumber: number, verdict: 'workable' | 'unclear' | null) =>
-    post<{ ok: true }>(`/api/issues/${issueNumber}/assay`, { verdict }),
+  setIssueAppraisal: (issueNumber: number, verdict: 'workable' | 'unclear' | null) =>
+    post<{ ok: true }>(`/api/issues/${issueNumber}/appraisal`, { verdict }),
   // Raise a bug against a story: the operator ran it and it does not do what they
   // expect. Unlike its neighbours this files into the *tracker* rather than writing
   // the harness's own record, and it leaves the story's verdict where it found it —
@@ -542,6 +563,12 @@ const realApi = {
   completeHumanTask: (id: string, note?: string) =>
     post<{ ok: true }>(`/api/human-tasks/${id}/done`, note === undefined ? undefined : { note }),
   declineHumanTask: (id: string, note: string) => post<{ ok: true }>(`/api/human-tasks/${id}/decline`, { note }),
+  // Close the tracker item the close-out row names, and settle the row with it.
+  // The obligation is the close, so this is the act rather than a third verdict:
+  // the same `note` the flagged-validation rule asks of `done`, and the same
+  // absence-not-empty-string discipline.
+  closeHumanTaskTicket: (id: string, note?: string) =>
+    post<{ ok: true }>(`/api/human-tasks/${id}/close-ticket`, note === undefined ? undefined : { note }),
   // Off the bench. Settled rows only — it says nothing about the work, so it is
   // not a third verdict and settles nothing.
   dismissHumanTask: (id: string) => post<{ ok: true }>(`/api/human-tasks/${id}/dismiss`),

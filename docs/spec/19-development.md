@@ -127,7 +127,7 @@ AgentSession`, `AgentManager implements AgentToolTarget`), or tag the member `@p
   should not depend on backwards. An `import type` is erased at compile time, so it adds no runtime
   module edge and cannot invert a layering: the question to ask is what the _value_ graph already
   does. `AgentManager` was tagged for eleven methods on that reasoning while the same file
-  value-imported `assessmentOrigin`, `assayerOrigin` and `partConclusionOrigin` from `src/mcp/` —
+  value-imported `assessmentOrigin`, `appraiserOrigin` and `partConclusionOrigin` from `src/mcp/` —
   the edge was already there, and the tags bought nothing but the loss of a checked contract.
 
   That leaves `@public` for the case where the interface genuinely cannot be named — it would close

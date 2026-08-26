@@ -78,7 +78,7 @@ export type ConsolePanel =
  * rather than a number glanced at, and a panel drew over the rail the operator came
  * from. `readPlace` aliases `?panel=knowledge` onto the tab for `work`'s reason.
  */
-export type ConsoleTab = 'overview' | 'tickets' | 'knowledge' | 'insights' | 'pets' | 'config';
+export type ConsoleTab = 'overview' | 'tickets' | 'knowledge' | 'features' | 'insights' | 'pets' | 'config';
 
 /**
  * Which reading the Insights page is showing.
@@ -134,6 +134,20 @@ export interface CockpitActions {
   answerQuestions(id: string, answers: (string | null)[]): Promise<void>;
   dismissEscalation(id: string, note?: string): Promise<void>;
   decideProposal(id: string, verdict: 'accept' | 'reject', note?: string): Promise<void>;
+  /**
+   * The two ways out of a plan verdict that are about the **ticket** rather than
+   * the plan: close it with the operator's comment, or take the watch tag off and
+   * think about it later. Neither is `decideProposal`'s reject — that sends the
+   * goal back to a planner, which is the wrong answer to "this is not really an
+   * issue".
+   */
+  backOutProposal(id: string, verdict: 'close' | 'hold', note?: string): Promise<void>;
+  /**
+   * The placeholder comment for a close, fetched when the operator asks for one to
+   * edit. Returns the draft rather than posting it: what goes on the ticket is
+   * whatever they send with {@link backOutProposal}.
+   */
+  proposalCommentDraft(id: string): Promise<string>;
   /**
    * The third arm of a shortfall proposal: the assessment itself is wrong, and
    * `text` is why. Two calls because they settle two different things — the
@@ -304,6 +318,14 @@ export interface CockpitActions {
    * and a toggle read from stale props would fight a fold restored from the URL.
    */
   collapseFeature(issueNumber: number, collapsed: boolean): void;
+  /**
+   * Open one of the goal page's reference sections — `ticket` or `record` — or
+   * shut it again. The state being *set* is the argument rather than a bare
+   * toggle, for {@link collapseFeature}'s reason: the caller already knows which
+   * way the caret points, and a toggle read from stale props would fight a
+   * disclosure restored from the URL.
+   */
+  openGoalSection(section: string, open: boolean): void;
   reorderUpNext(origins: string[]): Promise<void>;
   /**
    * Override which model profile the next dispatch on one queued origin runs on,
@@ -420,6 +442,15 @@ export interface CockpitActions {
   /** `note` is required by the route on a close-out whose goal's validation is flagged. */
   completeHumanTask(id: string, note?: string): Promise<void>;
   declineHumanTask(id: string, note: string): Promise<void>;
+  /**
+   * Close the ticket a close-out row names, in the tracker, and settle the row.
+   *
+   * The row's own act rather than a verdict about it — `config.canCloseIssue` says
+   * whether this deployment's tracker can take it, and the button is not drawn
+   * where it cannot. `note` is required by the route on the same flagged-validation
+   * condition `completeHumanTask` is.
+   */
+  closeHumanTaskTicket(id: string, note?: string): Promise<void>;
   /** Clear a settled task off the bench. Settled only — it answers nothing. */
   dismissHumanTask(id: string): Promise<void>;
 
@@ -474,7 +505,7 @@ export interface CockpitActions {
   setPartProfile(planId: string, slug: string, profile: string | null): Promise<void>;
   setIssueConclusion(issueNumber: number, verdict: 'done' | 'more_work' | null): Promise<void>;
   /**
-   * Override the goal assay's verdict (#158). On the seam rather than in the
+   * Override the goal appraisal's verdict (#158). On the seam rather than in the
    * drawing code for the reason every mutation is: `console/` may not import
    * `api.js`, and an
    * `unclear` verdict is the one intake reading that *blocks* dispatch — so
@@ -482,9 +513,9 @@ export interface CockpitActions {
    *
    * `null` clears the row, which is a third option and not `workable`: the store
    * keeps one representation of "nobody has decided", and that is also what a
-   * crashed assayer leaves behind.
+   * crashed appraiser leaves behind.
    */
-  setIssueAssay(issueNumber: number, verdict: 'workable' | 'unclear' | null): Promise<void>;
+  setIssueAppraisal(issueNumber: number, verdict: 'workable' | 'unclear' | null): Promise<void>;
 
   /**
    * Tell the fleet what to do on a goal, in the operator's own words — "change the

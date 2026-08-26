@@ -216,6 +216,10 @@ export function useCockpit(): CockpitStatus {
       dismissEscalation: (id, note) => then(api.dismissEscalation(id, note)),
       decideProposal: (id, verdict, note) =>
         then(verdict === 'accept' ? api.acceptProposal(id, note) : api.rejectProposal(id, note)),
+      backOutProposal: (id, verdict, note) => then(api.backOutProposal(id, verdict, note)),
+      // No refetch: nothing on the glass changes until the operator sends the
+      // verdict, and the draft is the modal's own state until they do.
+      proposalCommentDraft: (id) => api.proposalCommentDraft(id).then((r) => r.draft),
       overruleShortfall: (issueNumber, proposalId, text) =>
         then(api.overruleShortfall(issueNumber, text).then(() => api.rejectProposal(proposalId, text))),
       releaseEnvironmentGate: (issueNumber, released, note) =>
@@ -250,6 +254,12 @@ export function useCockpit(): CockpitStatus {
             ? [...current.collapsed, issueNumber]
             : current.collapsed.filter((n) => n !== issueNumber),
         })),
+      openGoalSection: (section, open) =>
+        go((current) => ({
+          goalOpen: open
+            ? [...current.goalOpen, section].sort((a, b) => a.localeCompare(b))
+            : current.goalOpen.filter((name) => name !== section),
+        })),
       reorderUpNext: (origins) => then(api.reorderUpNext(origins)),
       setUpNextProfile: (origin, profile) => then(api.setUpNextProfile(origin, profile)),
 
@@ -281,6 +291,7 @@ export function useCockpit(): CockpitStatus {
       resolveContradiction: (id, ruling) => then(api.resolveContradiction(id, ruling)),
       completeHumanTask: (id, note) => then(api.completeHumanTask(id, note)),
       declineHumanTask: (id, note) => then(api.declineHumanTask(id, note)),
+      closeHumanTaskTicket: (id, note) => then(api.closeHumanTaskTicket(id, note)),
       dismissHumanTask: (id) => then(api.dismissHumanTask(id)),
 
       setPrWatched: (n, watched) => then(api.setPrWatched(n, watched)),
@@ -293,7 +304,7 @@ export function useCockpit(): CockpitStatus {
       setIssueAreaPath: (n, areaPath) => then(api.setIssueAreaPath(n, areaPath)),
       setPartProfile: (planId, slug, profile) => then(api.setPartProfile(planId, slug, profile)),
       setIssueConclusion: (n, verdict) => then(api.setIssueConclusion(n, verdict)),
-      setIssueAssay: (n, verdict) => then(api.setIssueAssay(n, verdict)),
+      setIssueAppraisal: (n, verdict) => then(api.setIssueAppraisal(n, verdict)),
       addInstruction: (n, text) => then(api.addInstruction(n, text)),
       withdrawInstruction: (n, id) => then(api.withdrawInstruction(n, id)),
       raiseBug: (n, summary, title) => then(api.raiseBug(n, summary, title)),
@@ -393,6 +404,7 @@ export function useCockpit(): CockpitStatus {
       consolePanel: place.panel,
       tab: place.tab,
       collapsed: place.collapsed,
+      goalOpen: place.goalOpen,
       configTab: place.configTab,
       configGroup: place.configGroup,
       ticketWatch: place.ticketWatch,

@@ -18,6 +18,16 @@ export interface PrReplyInput {
   body: string;
 }
 
+export interface PrThreadResolveInput {
+  prNumber: number;
+  /**
+   * The review thread to mark resolved — the same id a reply is threaded under
+   * (`PrComment.id`), never a provider-native node id. Required: resolving is a
+   * verdict on one thread, and there is no such thing as resolving a pull request.
+   */
+  commentId: string;
+}
+
 export type MergeMethod = 'merge' | 'squash' | 'rebase';
 
 export interface PrMergeInput {
@@ -148,6 +158,23 @@ export interface IssueCreateInput {
   relatedTo: number | null;
 }
 
+/**
+ * A tracker item the harness is closing without doing the work — the operator's
+ * "this is not really an issue" (the plan back-out).
+ *
+ * `reason` is the provider's own vocabulary for *why* it closed, not prose: GitHub
+ * carries `not_planned` alongside `completed`, and the two read very differently on
+ * a timeline. It is deliberately the only field beyond the number, because the
+ * operator's words are a **comment** — a separate write, and one every provider has
+ * — rather than something smuggled into a state change only one of them can hold.
+ */
+export interface IssueCloseInput {
+  /** The issue / work item to close. */
+  number: number;
+  /** Why it closed, in the two readings every tracker distinguishes. */
+  reason: 'completed' | 'not_planned';
+}
+
 export interface IssueCommentInput {
   /** The issue / work item to comment on. */
   number: number;
@@ -191,12 +218,50 @@ export interface SendResult {
 export interface ActionSink {
   /** Post a reply on a pull request. Throws if the send fails. */
   postPrReply(input: PrReplyInput): Promise<SendResult>;
+  /**
+   * Whether any configured integration can resolve a review thread at all.
+   *
+   * Asked rather than inferred, for {@link canCloseIssue}'s reason: an agent that
+   * says it dealt with a thread is told which happened, and a harness that could
+   * not resolve it must say so rather than let the agent believe the thread is
+   * shut when it is still open in front of the reviewer.
+   */
+  canResolvePrThread(): boolean;
+  /**
+   * Mark a review thread resolved — the verdict a reviewer would otherwise have to
+   * click themselves, now that the reply goes out through the harness rather than
+   * from the agent's own shell.
+   *
+   * Idempotent: a thread already resolved is a success. `ok: false` is "the
+   * provider has no such thread" — a root comment id that matches nothing, which
+   * is a stale reading rather than a fault — and throws when the provider has the
+   * operation and it failed.
+   */
+  resolvePrThread(input: PrThreadResolveInput): Promise<SendResult>;
   /** Merge a pull request (the last step of the issue → PR → merge loop). Throws if the merge fails. */
   mergePr(input: PrMergeInput): Promise<SendResult>;
   /** Add/remove a label on a PR — the operator's exclusion tag toggle. Throws if it fails. */
   setPrLabel(input: PrLabelInput): Promise<SendResult>;
   /** Add/remove a label on an issue / work item — the cockpit's watch/ignore toggle. Throws if it fails. */
   setIssueLabel(input: IssueLabelInput): Promise<SendResult>;
+  /**
+   * Whether any configured integration can close a tracker item at all.
+   *
+   * Asked rather than inferred, for {@link canSetWorkItemState}'s reason and with
+   * the same caller in mind: the plan back-out **offers** "close the ticket", and a
+   * surface that promised it where nothing implements it would leave the operator
+   * believing the item is shut when it is still on the board. Where this is false
+   * the back-out still comments, concludes and un-watches — the tracker transition
+   * is simply left as the human act it has always been on that provider.
+   */
+  canCloseIssue(): boolean;
+  /**
+   * Close a tracker item — the plan back-out's "this is not really an issue".
+   * Idempotent: closing an item that is already closed is a success. Throws if it
+   * fails, including where nothing implements it, which is why
+   * {@link canCloseIssue} exists.
+   */
+  closeIssue(input: IssueCloseInput): Promise<SendResult>;
   /**
    * Whether any configured integration can write a work item's state at all.
    *

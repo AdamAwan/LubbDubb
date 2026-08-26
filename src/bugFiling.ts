@@ -9,7 +9,7 @@
  * one writes a fixed note (`Set by the operator from the cockpit.`) carrying not
  * one word of what is actually wrong.
  *
- * That observation is the one fact no agent on the goal can derive. The assayer
+ * That observation is the one fact no agent on the goal can derive. The appraiser
  * read the ticket, the planner read the repository, the working agent read its
  * own diff — none of them ran the thing and formed an expectation about it.
  *

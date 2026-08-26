@@ -85,6 +85,9 @@ function ghApi(script: GhScript): GitHubApi {
     async listPullReviewThreads() {
       return [];
     },
+    async resolveReviewThread() {
+      return false;
+    },
     async getCombinedStatus() {
       return { state: '', totalCount: 0 };
     },
@@ -108,6 +111,9 @@ function ghApi(script: GhScript): GitHubApi {
     updateIssueComment: unused('updateIssueComment'),
     mergePull: unused('mergePull'),
     setPullLabel: unused('setPullLabel'),
+    closeIssue: (): never => {
+      throw new Error('closeIssue is not scripted in this test');
+    },
     setIssueLabel: unused('setIssueLabel'),
     createIssue: unused('createIssue'),
     createPull: unused('createPull'),
@@ -175,6 +181,7 @@ function azApi(script: AzScript): AzureDevOpsApi {
     async listPullThreads() {
       return [];
     },
+    async setThreadStatus() {},
     async listPolicyEvaluations() {
       return [evaluation];
     },

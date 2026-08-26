@@ -13,15 +13,15 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { AreaPathDirectory } from '../src/intake/areaPaths.js';
 import type { ErrorRecorder } from '../src/errorLog.js';
 import { normalizeAreaPath, placementAsks, truncateAreaPaths, type AreaPathTree } from '../src/intake/placement.js';
-import { validateGoalAssay } from '../src/mcp/goalAssay.js';
-import { goalFingerprint } from '../src/intake/assay.js';
+import { validateGoalAppraisal } from '../src/mcp/goalAppraisal.js';
+import { goalFingerprint } from '../src/intake/appraisal.js';
 import { AzureDevOpsWorkItemsIntegration } from '../src/integrations/azure/workItems.js';
 import type { AzureDevOpsApi } from '../src/integrations/azure/azureDevOpsApi.js';
-import type { Issue, IssueAssay, WorldSnapshot } from '../src/types.js';
+import type { Issue, IssueAppraisal, WorldSnapshot } from '../src/types.js';
 
 /**
  * Where a goal belongs on the backlog — the parent it rolls up to and the area
- * node that puts it on a board — proposed by the assay and settled by one click.
+ * node that puts it on a board — proposed by the appraisal and settled by one click.
  *
  * The failure this exists to stop is silent by construction: the work is done
  * correctly and the ticket is invisible to whoever plans the backlog. So the tests
@@ -32,13 +32,13 @@ import type { Issue, IssueAssay, WorldSnapshot } from '../src/types.js';
 
 const TREE: AreaPathTree = { root: 'Contoso', paths: ['Contoso\\Web', 'Contoso\\Web\\Checkout', 'Contoso\\Billing'] };
 
-function assay(over: Partial<IssueAssay> = {}): IssueAssay {
+function appraisal(over: Partial<IssueAppraisal> = {}): IssueAppraisal {
   return {
     originRef: 'issue:12',
     verdict: 'workable',
     summary: 'Reconcile the statement totals.',
     goalRef: 'abc123',
-    by: 'assayer',
+    by: 'appraiser',
     proposedProfile: null,
     profileAnsweredAt: null,
     proposedParent: null,
@@ -73,7 +73,7 @@ function issue(over: Partial<Issue> = {}): Issue {
 // -- the two readings, and what ends them ------------------------------------
 
 test('a proposal is asked while the live item still lacks the field, and not after', () => {
-  const proposed = assay({ proposedParent: 345, proposedAreaPath: 'Contoso\\Web' });
+  const proposed = appraisal({ proposedParent: 345, proposedAreaPath: 'Contoso\\Web' });
 
   const both = placementAsks(proposed, issue(), TREE, 'abc123');
   assert.deepEqual(
@@ -111,7 +111,7 @@ test('a proposal is asked while the live item still lacks the field, and not aft
 });
 
 test('an unclassified item is one on the project root, not one with an empty area path', () => {
-  const proposed = assay({ proposedAreaPath: 'Contoso\\Web' });
+  const proposed = appraisal({ proposedAreaPath: 'Contoso\\Web' });
   assert.equal(placementAsks(proposed, issue({ areaPath: 'Contoso' }), TREE, 'abc123').length, 1);
   // The separator and the casing are the provider's, not a value: an item filed
   // under the root by a client that wrote it either way is still unfiled, and a
@@ -123,7 +123,7 @@ test('an unclassified item is one on the project root, not one with an empty are
 });
 
 test('nothing is asked without a tree, on a flat tracker, or against superseded goal text', () => {
-  const proposed = assay({ proposedParent: 345, proposedAreaPath: 'Contoso\\Web' });
+  const proposed = appraisal({ proposedParent: 345, proposedAreaPath: 'Contoso\\Web' });
   assert.deepEqual(
     placementAsks(proposed, issue(), null, 'abc123').map((a) => a.field),
     ['parent'],
@@ -137,13 +137,13 @@ test('nothing is asked without a tree, on a flat tracker, or against superseded 
   assert.deepEqual(
     placementAsks(proposed, issue(), TREE, 'a-rewritten-ticket'),
     [],
-    'a verdict about text the ticket no longer has asks nothing until it is assayed again',
+    'a verdict about text the ticket no longer has asks nothing until it is appraised again',
   );
   assert.deepEqual(placementAsks(null, issue(), TREE, 'abc123'), []);
 });
 
 test('a settled question stays settled, whichever of the three answers it got', () => {
-  const proposed = assay({ proposedParent: 345, proposedAreaPath: 'Contoso\\Web' });
+  const proposed = appraisal({ proposedParent: 345, proposedAreaPath: 'Contoso\\Web' });
   const settled = { ...proposed, parentSettledAt: '2026-08-02T00:00:00.000Z' };
   assert.deepEqual(
     placementAsks(settled, issue(), TREE, 'abc123').map((a) => a.field),
@@ -162,30 +162,30 @@ test('the area offer is capped, and says how much it left out', () => {
   assert.deepEqual(truncateAreaPaths(TREE), { paths: TREE.paths, omitted: 0 });
 });
 
-test('the assay tool takes a parent freely and an area path only from the offer', () => {
+test('the appraisal tool takes a parent freely and an area path only from the offer', () => {
   const base = { status: 'workable', summary: 'clear enough' };
 
-  const free = validateGoalAssay({ ...base, parent: 345 }, [], TREE.paths);
+  const free = validateGoalAppraisal({ ...base, parent: 345 }, [], TREE.paths);
   assert.equal(free.ok && free.parent, 345);
   // A container the harness never listed is still a legal answer: the board it can
   // see is narrowed by tag and assignee, so the right parent is often not in it.
-  assert.equal(validateGoalAssay({ ...base, parent: '#9001' }, [], TREE.paths).ok, true);
-  assert.equal(validateGoalAssay({ ...base, parent: 'the billing feature' }, [], TREE.paths).ok, false);
+  assert.equal(validateGoalAppraisal({ ...base, parent: '#9001' }, [], TREE.paths).ok, true);
+  assert.equal(validateGoalAppraisal({ ...base, parent: 'the billing feature' }, [], TREE.paths).ok, false);
 
-  const chosen = validateGoalAssay({ ...base, area_path: 'contoso/web' }, [], TREE.paths);
+  const chosen = validateGoalAppraisal({ ...base, area_path: 'contoso/web' }, [], TREE.paths);
   assert.equal(
     chosen.ok && chosen.areaPath,
     'Contoso\\Web',
     "answered in the provider's own spelling, since that is the string the write has to carry",
   );
-  assert.equal(validateGoalAssay({ ...base, area_path: 'Contoso\\Payments' }, [], TREE.paths).ok, false);
+  assert.equal(validateGoalAppraisal({ ...base, area_path: 'Contoso\\Payments' }, [], TREE.paths).ok, false);
   assert.equal(
-    validateGoalAssay({ ...base, area_path: 'Contoso\\Web' }, [], []).ok,
+    validateGoalAppraisal({ ...base, area_path: 'Contoso\\Web' }, [], []).ok,
     true,
     'a deployment whose tree the harness could not read asks nothing and refuses nothing',
   );
 
-  const unclear = validateGoalAssay(
+  const unclear = validateGoalAppraisal(
     { status: 'unclear', summary: 'no idea', parent: 345, area_path: 'Contoso\\Web' },
     [],
     TREE.paths,
@@ -196,41 +196,41 @@ test('the assay tool takes a parent freely and an area path only from the offer'
 
 // -- the store ---------------------------------------------------------------
 
-test('a placement proposal round-trips, is settled per field, and is re-asked after a re-assay', () => {
+test('a placement proposal round-trips, is settled per field, and is re-asked after a re-appraisal', () => {
   const store = new Store(':memory:');
   try {
-    store.recordAssay({
+    store.recordAppraisal({
       originRef: 'issue:12',
       verdict: 'workable',
       summary: 's',
       goalRef: 'abc123',
-      by: 'assayer',
+      by: 'appraiser',
       proposedParent: 345,
       proposedAreaPath: 'Contoso\\Web',
     });
-    const stored = store.getAssay('issue:12');
+    const stored = store.getAppraisal('issue:12');
     assert.equal(stored?.proposedParent, 345);
     assert.equal(stored?.proposedAreaPath, 'Contoso\\Web');
     assert.equal(stored?.parentSettledAt, null);
 
-    assert.equal(store.settleAssayPlacement('issue:12', 'not-the-text-they-read', 'parent'), false);
-    assert.equal(store.settleAssayPlacement('issue:12', 'abc123', 'parent'), true);
-    assert.equal(store.settleAssayPlacement('issue:12', 'abc123', 'parent'), false, 'settling twice settles once');
-    const half = store.getAssay('issue:12');
+    assert.equal(store.settleAppraisalPlacement('issue:12', 'not-the-text-they-read', 'parent'), false);
+    assert.equal(store.settleAppraisalPlacement('issue:12', 'abc123', 'parent'), true);
+    assert.equal(store.settleAppraisalPlacement('issue:12', 'abc123', 'parent'), false, 'settling twice settles once');
+    const half = store.getAppraisal('issue:12');
     assert.notEqual(half?.parentSettledAt, null);
     assert.equal(half?.areaPathSettledAt, null, 'the other question is untouched');
 
     // A rewritten ticket is a fresh reading, so the answer to the old one does not
     // carry over — the one signal that a dismissal may no longer be right.
-    store.recordAssay({
+    store.recordAppraisal({
       originRef: 'issue:12',
       verdict: 'workable',
       summary: 's',
       goalRef: 'rewritten',
-      by: 'assayer',
+      by: 'appraiser',
       proposedParent: 777,
     });
-    const again = store.getAssay('issue:12');
+    const again = store.getAppraisal('issue:12');
     assert.equal(again?.parentSettledAt, null);
     assert.equal(again?.proposedParent, 777);
   } finally {
@@ -351,12 +351,12 @@ test('a proposal reaches the cockpit only while it stands, and one click settles
   const placed = (system as System & { placed: string[] }).placed;
   await system.areaPaths.refresh();
   worldWith(system);
-  system.store.recordAssay({
+  system.store.recordAppraisal({
     originRef: 'issue:12',
     verdict: 'workable',
     summary: 'Reconcile the statement totals.',
     goalRef: goalRefOf(system),
-    by: 'assayer',
+    by: 'appraiser',
     proposedParent: 345,
     proposedAreaPath: 'Contoso\\Web',
   });
@@ -364,23 +364,27 @@ test('a proposal reaches the cockpit only while it stands, and one click settles
   const { app } = await buildApp(system);
   try {
     const before = buildStateSnapshot(system);
-    const asks = before.world.issues.find((i) => i.number === 12)?.assay?.placement ?? [];
+    const asks = before.world.issues.find((i) => i.number === 12)?.appraisal?.placement ?? [];
     assert.deepEqual(
       asks.map((a) => a.field),
       ['parent', 'areaPath'],
       'both questions ship, derived from the live item rather than from anything stored',
     );
-    assert.deepEqual(before.config.areaPaths, TREE.paths, 'and the operator is offered the same nodes the assayer was');
+    assert.deepEqual(
+      before.config.areaPaths,
+      TREE.paths,
+      'and the operator is offered the same nodes the appraiser was',
+    );
 
     const answered = await app.inject({ method: 'POST', url: '/api/issues/12/parent', payload: { parent: 345 } });
     assert.equal(answered.statusCode, 200);
     assert.deepEqual(placed, ['parent:12->345'], 'the write is the harness’s, through the sink');
-    assert.notEqual(system.store.getAssay('issue:12')?.parentSettledAt, null);
+    assert.notEqual(system.store.getAppraisal('issue:12')?.parentSettledAt, null);
 
     const dismissed = await app.inject({ method: 'POST', url: '/api/issues/12/area-path', payload: {} });
     assert.equal(dismissed.statusCode, 200);
     assert.deepEqual(placed, ['parent:12->345'], 'and "not applicable" writes nothing to the tracker at all');
-    assert.notEqual(system.store.getAssay('issue:12')?.areaPathSettledAt, null);
+    assert.notEqual(system.store.getAppraisal('issue:12')?.areaPathSettledAt, null);
 
     // Re-seeded with the item exactly as it was — still unparented, still on the
     // root — because that is the state the stamp exists for: the derived read is a
@@ -388,7 +392,7 @@ test('a proposal reaches the cockpit only while it stands, and one click settles
     // read as a click that did not take.
     worldWith(system);
     const after = buildStateSnapshot(system);
-    assert.deepEqual(after.world.issues.find((i) => i.number === 12)?.assay?.placement, []);
+    assert.deepEqual(after.world.issues.find((i) => i.number === 12)?.appraisal?.placement, []);
   } finally {
     await app.close();
     system.store.close();
@@ -400,17 +404,17 @@ test('nothing is drawn where nothing can write it', async () => {
   system.connector.canPlaceWorkItem = () => false;
   await system.areaPaths.refresh();
   worldWith(system);
-  system.store.recordAssay({
+  system.store.recordAppraisal({
     originRef: 'issue:12',
     verdict: 'workable',
     summary: 's',
     goalRef: goalRefOf(system),
-    by: 'assayer',
+    by: 'appraiser',
     proposedParent: 345,
   });
   const state = buildStateSnapshot(system);
   assert.deepEqual(
-    state.world.issues.find((i) => i.number === 12)?.assay?.placement,
+    state.world.issues.find((i) => i.number === 12)?.appraisal?.placement,
     [],
     'three buttons that all 400 is the cockpit dead end in its purest form',
   );
@@ -425,7 +429,7 @@ test('nothing is drawn where nothing can write it', async () => {
   }
 });
 
-/** The fingerprint of the goal text the world is carrying, as the assay stamps it. */
+/** The fingerprint of the goal text the world is carrying, as the appraisal stamps it. */
 function goalRefOf(system: System): string {
   const live = system.store.getWorldBaseline()?.issues.find((i) => i.number === 12);
   return goalFingerprint(live?.title ?? null, live?.body ?? null);

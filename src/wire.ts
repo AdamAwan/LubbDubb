@@ -74,7 +74,7 @@ import type {
   Agent,
   AgentFile,
   AgentFlag,
-  AssayAuthor,
+  AppraisalAuthor,
   BugFiling,
   CiStatus,
   ConclusionAuthor,
@@ -85,8 +85,9 @@ import type {
   Escalation,
   FactReach,
   GoalArrival,
-  GoalAssayVerdict,
+  GoalAppraisalVerdict,
   GoalEnvironmentReach,
+  GoalReachStatus,
   HumanTask,
   IssueConclusionVerdict,
   IssueInstruction,
@@ -210,15 +211,15 @@ export interface Issue extends WorldIssue {
   } | null;
   /**
    * The intake verdict (#158). Null is a third reading, not a synonym for
-   * `workable`: a goal nothing has assayed has no drill on its floor at all.
+   * `workable`: a goal nothing has appraised has no drill on its floor at all.
    */
-  assay: {
-    verdict: GoalAssayVerdict;
+  appraisal: {
+    verdict: GoalAppraisalVerdict;
     summary: string;
-    by: AssayAuthor;
+    by: AppraisalAuthor;
     decidedAt: string;
     /**
-     * The standing comment the assay desk keeps on the ticket, as a canonical
+     * The standing comment the appraisal desk keeps on the ticket, as a canonical
      * ref to look up in {@link CockpitState.refUrls} (#171) — null when no
      * comment was written, and absent from `refUrls` when the provider builds no
      * URLs. Both draw nothing: a caption with no link would assert a comment
@@ -226,7 +227,7 @@ export interface Issue extends WorldIssue {
      */
     commentRef: string | null;
     /**
-     * The model profile the assayer proposed for this goal's work (#342), and
+     * The model profile the appraiser proposed for this goal's work (#342), and
      * whether it is still waiting on an answer. Null profile = it named none,
      * which is every `unclear` verdict and every deployment with no profiles.
      *
@@ -237,8 +238,8 @@ export interface Issue extends WorldIssue {
     proposedProfile: string | null;
     awaitingProfileAnswer: boolean;
     /**
-     * Where the assayer says this goal belongs on the backlog, for the questions
-     * that are **still open** — the assayer proposed a value, the operator has
+     * Where the appraiser says this goal belongs on the backlog, for the questions
+     * that are **still open** — the appraiser proposed a value, the operator has
      * not said it does not apply, and the live work item still lacks the field.
      * Empty is the ordinary case, and covers a flat tracker entirely.
      *
@@ -306,7 +307,7 @@ export interface Issue extends WorldIssue {
   validation: ValidationVerdict | null;
   /**
    * What this goal has cost so far, over every agent under it — its planner, its
-   * assay, its parts, and the agents its pull requests pulled in (`rollUpIssueSpend`).
+   * appraisal, its parts, and the agents its pull requests pulled in (`rollUpIssueSpend`).
    *
    * **Null is "nothing was ever measured", not zero.** PTY agents report no usage
    * at all, so a goal worked entirely in that mode has no spend row; drawing it as
@@ -689,6 +690,19 @@ export interface PlanHistory {
 }
 
 /**
+ * What `GET /api/proposals/:id/comment-draft` ships: a comment an operator may
+ * edit and post when they close a ticket from the plan approval card.
+ *
+ * A draft and never a default — nothing posts it, and the back-out refuses a close
+ * with no words at all. It is a route of its own for {@link PlanHistory}'s reason:
+ * it quotes the plan's prose, and it is read when somebody asks for it rather than
+ * every poll.
+ */
+export interface ProposalCommentDraft {
+  draft: string;
+}
+
+/**
  * The last cycle's ordered pickup plan (issue #69) — "what's next as of this
  * pulse". A projection recomputed every cycle, not a persisted queue; `at` is the
  * world snapshot it was planned against.
@@ -842,11 +856,34 @@ interface CockpitConfig {
    */
   canSetWorkItemState: boolean;
   /**
+   * Whether the provider can close a tracker item — the close-out row's **Close
+   * the ticket** button, and nothing else, depends on it.
+   *
+   * Asked of the connector for `canSetWorkItemState`'s reason, and shipped for the
+   * same one: `closeIssue` throws where no integration implements it, so a button
+   * drawn off the provider's *name* would be a control that fails on exactly the
+   * deployments nobody tested. False draws no button, and the row still reads the
+   * way it always did — close it in the tracker, and the sweep settles it.
+   */
+  canCloseIssue: boolean;
+  /**
+   * Whether this deployment has a feature board — the operator's `featureBoard`
+   * flag **and** a provider with a container hierarchy to roll up.
+   *
+   * The conjunction rather than the flag, and shipped rather than left to the
+   * cockpit to work out, for `canSetWorkItemState`'s reason: the one place that
+   * decides is the one the route asks — `featureBoardOn` in
+   * `src/server/routes/features.ts`, read by that route's refusal and by this
+   * field. False draws no tab at all, which is what keeps a stale `?tab=features`
+   * URL from landing on a page whose every fetch 404s.
+   */
+  featureBoard: boolean;
+  /**
    * The project's area nodes, as the harness last read them from the tracker —
    * what the cockpit offers when the operator answers a placement question with a
    * value of their own.
    *
-   * Shipped rather than left to the browser to guess, for the reason the assayer
+   * Shipped rather than left to the browser to guess, for the reason the appraiser
    * is offered them rather than free-typing one: an area path has to match a node
    * exactly, and a plausible near-miss is refused by the provider and visibly
    * wrong to nobody until then. Empty for a tracker with no such tree, and then
@@ -1033,7 +1070,7 @@ export interface CockpitState {
   /** Operator-launched jobs, newest first — the queue and its recent history. */
   jobs: Job[];
   /**
-   * Recurring blueprints, oldest first — every one the operator has written,
+   * Recurring briefs, oldest first — every one the operator has written,
    * enabled or not. What a firing produces is an ordinary entry in {@link jobs},
    * so the queue above is where a recurrence becomes visible as work.
    */
@@ -1070,8 +1107,8 @@ export interface CockpitState {
    */
   artifactUrls: Record<string, string>;
   /**
-   * Images an operator attached to a blueprint (issue #249), every ref in one
-   * list. The cockpit filters by `targetRef`: `job:<id>` while the blueprint is
+   * Images an operator attached to a brief (issue #249), every ref in one
+   * list. The cockpit filters by `targetRef`: `job:<id>` while the brief is
    * queued, `issue:<n>` once it has been filed as a ticket.
    *
    * The domain type, `path` and all — the same absolute-paths-are-shipped stance
@@ -1229,6 +1266,32 @@ export interface GoalReachView {
   gateHold: string | null;
   /** The operator's "this one is not waiting on an environment", when they have said so. */
   released: EnvironmentGateRelease | null;
+}
+
+/**
+ * One agent's transcript, or the tail of it — `GET /api/agents/:id/transcript`.
+ *
+ * **Ranged, because the drawer polls it.** The socket carries an agent's output
+ * the moment it happens, but only for what it produced *since the drawer opened*
+ * — so a run already deep into its transcript has nothing on the wire that can be
+ * appended to the copy the cockpit fetched, and the pane sat frozen at its seed
+ * for as long as it was watched (issue #639). The fix is the drawer re-reading
+ * this every few seconds, and re-reading it whole would ship the entire
+ * transcript per poll — megabytes on a long run, per open drawer.
+ *
+ * `from` is the caller's count of the characters it already holds, echoed back
+ * **clamped to `total`** so a client that asks past the end learns where the end
+ * is rather than guessing. `transcript` is the slice from there on, so a poll on
+ * a quiet run costs an empty string.
+ */
+export interface AgentTranscript {
+  agentId: string;
+  /** Where {@link transcript} starts — the requested offset, clamped to {@link total}. */
+  from: number;
+  /** The whole transcript's length in characters, whatever slice was asked for. */
+  total: number;
+  /** Everything from {@link from} to the end. */
+  transcript: string;
 }
 
 export interface WorkRootsPayload {
@@ -1471,6 +1534,240 @@ export interface TicketsPayload {
    * snapshot's map: `buildRefUrls` is built from the world, and most rows here
    * have long left it.
    */
+  refUrls: Record<string, string>;
+}
+
+// ---------------------------------------------------------------------------
+// `/api/features` — the feature board
+// ---------------------------------------------------------------------------
+
+/**
+ * How one of a Feature's children stands, folded from the verdicts the harness
+ * already holds.
+ *
+ * Six words rather than a done/not-done pair, because the four that are not
+ * "delivered" answer different questions and a reader acts on each differently:
+ *
+ * - `unwatched` is the one that is not a delay at all. The item carries no watch
+ *   tag, so no agent has ever read it, nothing was appraised and nothing was
+ *   spent — it is **unseen**, not late, and it wins over every other reading
+ *   precisely because a board that drew it as `queued` would report a fleet
+ *   working on something it cannot see. → `docs/spec/06-issue-pickup.md`
+ * - `inFlight` is a run the harness minted and has not finished. It outranks the
+ *   outcome words below it because a re-picked goal carries the verdict of its
+ *   *last* attempt while an agent is working its next one, and the board is a
+ *   reading of now.
+ * - `fellShort` is an assessor's "this was worked and the goal is still not
+ *   reached" — a decision waiting on somebody, and never the same fact as queued.
+ * - `settled` is `concluded` or `abandoned`: finished, with nobody having
+ *   declared it delivered. Folded into `delivered` it would overstate the
+ *   Feature; folded into `queued` it would understate it for ever.
+ */
+export type FeatureChildStanding = 'delivered' | 'inFlight' | 'queued' | 'fellShort' | 'settled' | 'unwatched';
+
+/** One of a Feature's children, as the board draws its row. */
+export interface FeatureChildRow {
+  number: number;
+  title: string;
+  /** `User Story` / `Bug` / … — the tracker's own word, null where it has none. */
+  issueType: string | null;
+  standing: FeatureChildStanding;
+  /**
+   * The harness's own outcome word (`ticketOutcomes`), or null where it never
+   * reached a verdict. Beside `standing` rather than folded into it: `standing`
+   * says where the item is now, and this says what was concluded — a re-picked
+   * goal is `inFlight` and still carries `fell short`.
+   */
+  outcome: string | null;
+  /** The provider's own state word, or null where the provider has none. */
+  workItemState: string | null;
+  /** Dollars spent under this goal, or **null** where the fleet never ran on it. */
+  costUsd: number | null;
+  changedAt: string;
+}
+
+/** How many of a Feature's children stand each way. */
+export interface FeatureCounts {
+  delivered: number;
+  inFlight: number;
+  queued: number;
+  fellShort: number;
+  settled: number;
+  unwatched: number;
+  /** Every child counted above — the denominator the board's bar is drawn against. */
+  total: number;
+}
+
+/**
+ * Where a Feature's work has got to in one environment, folded across its goals.
+ *
+ * The fold is `rollUpReach`, the **same function** a goal's own landings are
+ * folded with (`src/environments/reach.ts`) — a Feature is to its goals what a
+ * goal is to its landings. That is what keeps `unknown` from collapsing into
+ * `absent` one tier up, which is the whole reason the verdict is three-valued.
+ * → `docs/spec/24-environments.md#the-three-verdicts`
+ */
+export interface FeatureReach {
+  environment: string;
+  status: GoalReachStatus;
+  /** Children this environment confirmedly holds, out of those with anything landed. */
+  goals: number;
+  total: number;
+}
+
+/** One of a Feature's goals with a run the harness minted and has not finished. */
+export interface FeatureWorkingRow {
+  number: number;
+  title: string;
+  /** When that run started — a stamp, drawn as an age and never judged. */
+  since: string;
+}
+
+/**
+ * One goal a delivery verdict stands on, with the sentence its author wrote.
+ *
+ * The summary is quoted, never paraphrased and never assembled from the counts:
+ * it is the one line somebody who read the work committed to, and a board that
+ * reworded it would be asserting something nobody said.
+ */
+export interface FeatureReportRow {
+  number: number;
+  title: string;
+  summary: string;
+  /** Who cast it — `assessor`, `planner` or `operator`, the verdict row's own word. */
+  by: string;
+  at: string;
+}
+
+/**
+ * Why a blocked goal is blocked, and the two are not the same call.
+ *
+ * - `question` is an agent parked on an escalation nobody has answered: the fleet
+ *   is stopped and the thing it needs is a reply.
+ * - `fellShort` is an assessor's verdict that the work did not reach the goal:
+ *   nothing is stopped, and what it needs is a decision about what happens next.
+ *
+ * Folded into one word a reader could not tell "answer me" from "decide", which
+ * are the two different things a person is being asked for.
+ */
+export type FeatureBlockKind = 'question' | 'fellShort';
+
+/** One thing standing between a Feature's work and the next step, in its author's words. */
+export interface FeatureBlockRow {
+  number: number;
+  title: string;
+  kind: FeatureBlockKind;
+  /** The agent's question, or the assessor's shortfall summary. Quoted. */
+  summary: string;
+  /** When it was raised — a stamp, drawn as an age and never judged stale. */
+  since: string;
+}
+
+/**
+ * The briefing: what is happening under a Feature, what of it is done, and what
+ * is stopping the rest — the three questions somebody outside the fleet asks
+ * before they ask anything else.
+ *
+ * **Every line of it is a quotation.** The working rows are the same `inFlight`
+ * reading the bar is drawn from, the done rows carry `IssueDelivery.summary` as
+ * its author wrote it, and the blocking rows carry an escalation's prompt or a
+ * shortfall's summary. Nothing here is composed, scored or forecast — the board
+ * ships no verdict about a Feature ({@link FeatureRollup}), and a briefing that
+ * wrote its own sentence would be exactly that verdict wearing an agent's voice.
+ *
+ * Each list is bounded and says how many it stood for, because a list that simply
+ * stopped would read as the whole Feature.
+ * → `docs/spec/17-cockpit.md#the-briefing`
+ */
+export interface FeatureBriefing {
+  /** Goals being worked now, newest run first. Bounded by `FEATURE_BRIEFING_ROWS`. */
+  working: FeatureWorkingRow[];
+  /** How many goals are being worked in all — the same number as `counts.inFlight`. */
+  workingTotal: number;
+  /**
+   * Goals a delivery verdict stands on, newest first. Only `delivered`, never
+   * `settled`: a delivery says *this was done and here is what it was*, where a
+   * conclusion is an agent closing a goal and asserts nothing about usable work.
+   */
+  delivered: FeatureReportRow[];
+  deliveredTotal: number;
+  /** Questions first, then shortfalls; newest first inside each. */
+  blocking: FeatureBlockRow[];
+  blockingTotal: number;
+}
+
+/** One Feature, with its children folded. */
+export interface FeatureRollup {
+  number: number;
+  title: string;
+  /** The hue slot, from the same persisted ladder the Tickets tab's legend draws. */
+  slot: number;
+  /**
+   * The Feature's own state word, and its type — **null when the mirror does not
+   * hold the container itself**, which is the ordinary case on a tracker whose
+   * assignment filter returns only the work. The identity above always resolves
+   * (it is the parent link on a child); these two do not, and a blank is the
+   * honest reading rather than a guess at the container's state.
+   */
+  workItemState: string | null;
+  issueType: string | null;
+  counts: FeatureCounts;
+  /**
+   * What is happening, what is done and what is blocked, in the words of whoever
+   * said it. Above `children` because it is the answer to the question the card
+   * is opened with; the rows below it are the evidence.
+   */
+  briefing: FeatureBriefing;
+  children: FeatureChildRow[];
+  /**
+   * What the fleet has spent across every child, or **null** where it never ran
+   * on any of them. Null rather than `0` for {@link TicketRow.costUsd}'s reason:
+   * never worked and worked for free are different facts.
+   */
+  costUsd: number | null;
+  /** Empty on a deployment with no environments configured — the whole column is then absent. */
+  reach: FeatureReach[];
+  /**
+   * When any of this Feature's goals last landed a commit, or null for one that
+   * has landed nothing. A **stamp, never a verdict**: how old is too old is a
+   * policy no config file states, so the board draws the age and says nothing
+   * about it.
+   */
+  lastLandingAt: string | null;
+}
+
+/**
+ * `/api/features` — the feature board (issue #—).
+ *
+ * **Fetched, never polled**, for the Tickets tab's reason: it reads the whole
+ * mirror and the list is all-time.
+ *
+ * A lens. Nothing here decides anything, every reading it carries is quoted from
+ * the module that owns it, and no rule under `src/dispatcher/` reads it.
+ * → `docs/spec/17-cockpit.md#the-feature-board`
+ */
+export interface FeatureBoardPayload {
+  /** Ordered by what wants a person first, then by size. See `buildFeatureBoard`. */
+  features: FeatureRollup[];
+  /**
+   * The work the tracker says hangs off no container at all — counted the same
+   * way, because a fifth of a fleet's effort answering to no Feature is the one
+   * thing a roll-up page must not hide. Null where there is none.
+   */
+  orphans: Omit<FeatureRollup, 'number' | 'title' | 'slot' | 'workItemState' | 'issueType' | 'reach'> | null;
+  /**
+   * Items whose parent link was **never resolved** — no hierarchy, or a read that
+   * failed. Neither a Feature's nor an orphan's, and counted separately for the
+   * reason {@link TicketRow.parent} is optional rather than nullable: putting them
+   * in the orphan bucket would tell a reader the tracker says they have no parent
+   * when the truth is that nobody could tell.
+   */
+  unresolved: number;
+  /** The configured environment names, in the operator's own order. Empty turns the column off. */
+  environments: string[];
+  /** True while the first sweep is still filling the mirror — an empty board versus a broken one. */
+  backfilling: boolean;
+  /** Reference → web URL, resolved off the connector for the Tickets tab's reason. */
   refUrls: Record<string, string>;
 }
 

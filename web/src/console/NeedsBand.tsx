@@ -93,6 +93,25 @@ function noteOwedOnDone(task: HumanTask, view: CockpitView): string | null {
 }
 
 /**
+ * Whether this row's ticket can be closed from here.
+ *
+ * Three conditions, and each is a different kind of no. Only a `close_out` row
+ * asks for a close at all; only an `issue:` origin names something to close; and
+ * only a deployment whose tracker the harness can write has anywhere to send it —
+ * `config.canCloseIssue` is the connector's own answer, asked once on the server
+ * rather than inferred here from the provider's name.
+ *
+ * A false draws no button rather than a disabled one: the row already says the
+ * other way to discharge it, and a control that cannot work teaches nothing the
+ * sentence above it does not.
+ */
+function closeTicketFor(task: HumanTask, view: CockpitView): boolean {
+  if (task.kind !== 'close_out' || task.status !== 'open') return false;
+  if (task.originRef === null || !/^issue:\d+$/.test(task.originRef)) return false;
+  return view.state.config.canCloseIssue;
+}
+
+/**
  * What answers this ask — the shared component that owns its verdict, wired the
  * way the stamp desk and the bench wire it. `buttonClass` is the one seam a
  * station passes, so the console's buttons and a modal's are one component
@@ -129,7 +148,47 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
             noteOnDone={noteOwedOnDone(task, view)}
             onDone={(id, note) => actions.completeHumanTask(id, note)}
             onDecline={(id, note) => actions.declineHumanTask(id, note)}
+            onCloseTicket={closeTicketFor(task, view) ? (id, note) => actions.closeHumanTaskTicket(id, note) : null}
           />
+        </div>
+      </>
+    );
+  }
+  // The goal appraisal's refusal (#158). It was drawn only as a call-out on the
+  // tickets tab, which is a page an operator opens to groom the backlog rather
+  // than to find out what is waiting on them — so the one verdict that stops a
+  // goal's pickup outright was the one ask the queue never mentioned.
+  //
+  // The appraiser's sentence is quoted **whole**, and never reworded: it is the only
+  // account of why this goal is held, so a paraphrase would be the only account
+  // there is, and wrong.
+  if (row.kind === 'intake') {
+    const issue = row.goalRef === null ? undefined : goalIssue(view.state, row.goalRef);
+    const appraisal = issue?.appraisal;
+    // The verdict cleared, or the goal was dropped from the watch tag, between the
+    // snapshot this row was derived from and this draw. Either way nothing is held
+    // any more, and a band offering an override for a hold that is gone would
+    // change a verdict nobody is waiting on.
+    if (!issue || appraisal?.verdict !== 'unclear') return null;
+    return (
+      <>
+        <p>
+          <strong>The goal appraisal could not say this is workable</strong> — nothing is dispatched for it until the
+          verdict moves.
+        </p>
+        <p className="cn-tick">“{appraisal.summary}”</p>
+        <p className="cn-tick">
+          The hold clears by itself when the goal&rsquo;s own text changes, so sharpening the ticket is the other answer
+          and costs no click here. Overriding says the brief is good enough as it stands.
+        </p>
+        <div className="cn-acts">
+          <AsyncButton
+            className="cn-btn cn-primary"
+            onClick={() => actions.setIssueAppraisal(issue.number, 'workable')}
+            title="Work it anyway — the harness stops holding pickup and runs a cycle now"
+          >
+            Override → workable
+          </AsyncButton>
         </div>
       </>
     );
@@ -137,7 +196,7 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
   // The goal-profile gate (#342). Its two buttons are the whole of it, and both
   // go through the same write: the pin is re-affirmed and the question settled in
   // one act, so "keep mine" leaves the tag deliberately disagreeing with the
-  // assayer rather than re-readable as an unanswered disagreement for ever.
+  // appraiser rather than re-readable as an unanswered disagreement for ever.
   //
   // Drawn here rather than on the goal page, though the goal page is where it is
   // usually read: the page draws its own rows through this same band, so one arm
@@ -145,23 +204,23 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
   // set of buttons to keep in step with the write.
   if (row.kind === 'profile') {
     const issue = row.goalRef === null ? undefined : goalIssue(view.state, row.goalRef);
-    const assay = issue?.assay;
-    if (!issue || !assay?.awaitingProfileAnswer || assay.proposedProfile === null) return null;
+    const appraisal = issue?.appraisal;
+    if (!issue || !appraisal?.awaitingProfileAnswer || appraisal.proposedProfile === null) return null;
     const { config } = view.state;
-    const proposed = assay.proposedProfile;
+    const proposed = appraisal.proposedProfile;
     const pinned = issue.modelPin.profile;
     const standing = pinned ?? config.defaultProfile;
     const described = config.profiles.find((p) => p.name === proposed)?.description;
     return (
       <>
         <p>
-          <strong>The goal assay wants this run on “{proposed}”</strong>
+          <strong>The goal appraisal wants this run on “{proposed}”</strong>
           {standing !== null &&
             ` — ${pinned === null ? 'it would otherwise run on' : 'you pinned it to'} “${standing}”`}
           {standing === null && ' — nothing is pinned to it yet'}
         </p>
         <p className="cn-tick">
-          {described ?? assay.summary} Nothing is dispatched for this goal until you say which to use — that is one
+          {described ?? appraisal.summary} Nothing is dispatched for this goal until you say which to use — that is one
           click either way, and it is not a rejection.
         </p>
         <div className="cn-acts">
@@ -198,7 +257,7 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
   // the rail's panel and the console.
   if (row.kind === 'placement') {
     const issue = row.goalRef === null ? undefined : goalIssue(view.state, row.goalRef);
-    const ask = (issue?.assay?.placement ?? []).find((p) => `placement:${p.field}:${row.goalRef}` === row.id);
+    const ask = (issue?.appraisal?.placement ?? []).find((p) => `placement:${p.field}:${row.goalRef}` === row.id);
     if (!issue || !ask) return null;
     return ask.field === 'parent' ? (
       <ParentAsk issue={issue} proposed={ask.proposedParent} view={view} actions={actions} />
@@ -283,6 +342,8 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
       onAnswer={(text) => actions.answerEscalation(escalation.id, text)}
       onAnswerQuestions={(answers) => actions.answerQuestions(escalation.id, answers)}
       onDecide={(id, verdict, note) => actions.decideProposal(id, verdict, note)}
+      onBackOut={(id, verdict, note) => actions.backOutProposal(id, verdict, note)}
+      onCommentDraft={(id) => actions.proposalCommentDraft(id)}
       onOverrule={(issueNumber, proposalId, text) => actions.overruleShortfall(issueNumber, proposalId, text)}
       onPermission={(id, allow, note) => actions.decidePermission(id, allow, note)}
       onDismiss={(id, note) => actions.dismissEscalation(id, note)}
@@ -296,7 +357,7 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
 }
 
 /**
- * The parent question: take the assay's container, pick another, or say this goal
+ * The parent question: take the appraisal's container, pick another, or say this goal
  * wants none.
  *
  * The proposed container is drawn as a `<Ref>` **beside** the button and never
@@ -330,7 +391,7 @@ function ParentAsk({
   return (
     <>
       <p>
-        <strong>This goal rolls up to nothing.</strong> The assay suggests{' '}
+        <strong>This goal rolls up to nothing.</strong> The appraisal suggests{' '}
         {container ? `“${container.title}”` : `work item #${proposed}`}.
         <span className="cn-refs">
           <Ref to={`issue:${proposed}`} title="Open the suggested parent and check it before you accept it" />
@@ -350,7 +411,12 @@ function ParentAsk({
         </AsyncButton>
         {options.length > 0 && (
           <>
-            <select value={chosen} aria-label="A different parent" onChange={(e) => setChosen(e.currentTarget.value)}>
+            <select
+              className="cn-in"
+              value={chosen}
+              aria-label="A different parent"
+              onChange={(e) => setChosen(e.currentTarget.value)}
+            >
               <option value="">Choose another…</option>
               {options.map((o) => (
                 <option key={o.number} value={String(o.number)}>
@@ -384,7 +450,7 @@ function ParentAsk({
  * The area-path question, in {@link ParentAsk}'s three answers.
  *
  * The alternatives come from `config.areaPaths` — the tracker's own tree, read by
- * the harness — and never from a text box, for the reason the assayer is offered
+ * the harness — and never from a text box, for the reason the appraiser is offered
  * them: a path has to match a node exactly, and a near-miss is refused by the
  * provider and visibly wrong to nobody before then. An empty list is a deployment
  * whose tree the harness could not read, and then the proposal stands alone with
@@ -407,7 +473,7 @@ function AreaPathAsk({
   return (
     <>
       <p>
-        <strong>This goal is on no team’s board.</strong> The assay suggests the area “{proposed}”.
+        <strong>This goal is on no team’s board.</strong> The appraisal suggests the area “{proposed}”.
       </p>
       <p className="cn-tick">
         It is still on the project root, which is where an item nobody has filed sits. Nothing is held up — the work
@@ -424,6 +490,7 @@ function AreaPathAsk({
         {options.length > 0 && (
           <>
             <select
+              className="cn-in"
               value={chosen}
               aria-label="A different area path"
               onChange={(e) => setChosen(e.currentTarget.value)}

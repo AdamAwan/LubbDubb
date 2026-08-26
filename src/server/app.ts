@@ -14,6 +14,7 @@ import { register as registerAgents } from './routes/agents.js';
 import { artifactSignerFor, attachmentSignerFor, register as registerArtifacts } from './routes/artifacts.js';
 import { register as registerControl } from './routes/control.js';
 import { register as registerEscalations } from './routes/escalations.js';
+import { register as registerFeatures } from './routes/features.js';
 import { register as registerHumanTasks } from './routes/humanTasks.js';
 import { register as registerIssues } from './routes/issues.js';
 import { register as registerJobs } from './routes/jobs.js';
@@ -48,6 +49,7 @@ const ROUTE_MODULES: RouteModule[] = [
   registerArtifacts,
   registerControl,
   registerEscalations,
+  registerFeatures,
   registerHumanTasks,
   registerIssues,
   registerJobs,

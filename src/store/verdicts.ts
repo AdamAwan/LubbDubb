@@ -24,10 +24,15 @@
  */
 
 /** The four verdicts an issue can carry, in the domain's own vocabulary. */
-export type VerdictKind = 'conclusion' | 'delivery' | 'shortfall' | 'assay';
+export type VerdictKind = 'conclusion' | 'delivery' | 'shortfall' | 'appraisal';
 
 /** Every verdict kind, for callers that need to walk the matrix. */
-export const VERDICT_KINDS = ['conclusion', 'delivery', 'shortfall', 'assay'] as const satisfies readonly VerdictKind[];
+export const VERDICT_KINDS = [
+  'conclusion',
+  'delivery',
+  'shortfall',
+  'appraisal',
+] as const satisfies readonly VerdictKind[];
 
 /**
  * The table each verdict lives in. The SQL identifier appears here once, so the
@@ -38,7 +43,7 @@ export const VERDICT_TABLES: Record<VerdictKind, string> = {
   conclusion: 'issue_conclusions',
   delivery: 'issue_deliveries',
   shortfall: 'issue_shortfalls',
-  assay: 'issue_assays',
+  appraisal: 'issue_appraisals',
 };
 
 /**
@@ -63,7 +68,7 @@ export const VERDICT_TABLES: Record<VerdictKind, string> = {
  *   working agent's own statement about its own run, and overwriting it is
  *   precisely the bug the shortfall table was created to stop.
  *   `resolveIssueConclusion` ranks the two instead.
- * - **assay → nothing.** An assay answers a *different* question — whether the
+ * - **appraisal → nothing.** An appraisal answers a *different* question — whether the
  *   goal could be started from, not whether the work is finished — so an issue
  *   may honestly carry it alongside any of the other three.
  */
@@ -71,5 +76,5 @@ export const VERDICT_EXCLUSIONS: Record<VerdictKind, readonly VerdictKind[]> = {
   conclusion: ['delivery'],
   delivery: ['conclusion', 'shortfall'],
   shortfall: ['delivery'],
-  assay: [],
+  appraisal: [],
 };

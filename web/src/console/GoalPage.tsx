@@ -1,7 +1,8 @@
 import { useState, type JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
-import type { GoalPageView, PartGroup } from '../view/goalPage.js';
+import type { GoalPageView, GoalStage, GoalStageAt, PartGroup } from '../view/goalPage.js';
+import { buildGoalStrip } from '../view/goalPage.js';
 import type {
   Agent,
   EnvironmentGate,
@@ -22,15 +23,33 @@ import { renderRichText } from '../components/richText.js';
 import { issueTypeTone } from '../issueGroups.js';
 import { fmtUsd, relTime } from '../components/util.js';
 import { Ref } from '../components/refs.js';
-import { desktopDeepLink, localRunPrompt } from '../cockpit/desktopLink.js';
+import { askPrompt, desktopDeepLink, localRunPrompt } from '../cockpit/desktopLink.js';
 import { ValidationSection } from '../components/ValidationSection.js';
 import { watchBucket } from '../worldBuckets.js';
 import { stateColour } from '../stateColour.js';
 import { WorkRecord } from '../components/WorkRecord.js';
 import { NeedsBand } from './NeedsBand.js';
 
-/** Where the header's validation chip jumps to. Anchors, not refs — one element. */
-const VALIDATION_ANCHOR = 'cn-validation';
+/**
+ * Where each of the track's stages jumps to. Anchors, not refs — one element on
+ * this page — so they are ids rather than `<Ref>`s, and the controls that carry
+ * them are buttons.
+ *
+ * The map is keyed on {@link GoalStageAt} so a stage the strip learns to draw
+ * cannot ship without somewhere to land: a missing entry is a compile error here
+ * rather than a control that does nothing, which is the cockpit's most repeated
+ * bug and the one thing this strip must not become.
+ */
+const ANCHOR: Record<GoalStageAt, string> = {
+  plan: 'cn-plan',
+  validation: 'cn-validation',
+  environments: 'cn-environments',
+  tail: 'cn-tail',
+};
+
+/** Which of the reference footer's two disclosures is which, in the address bar. */
+const TICKET_OPEN = 'ticket';
+const RECORD_OPEN = 'record';
 
 /** The three statuses that mean an agent is still going, as `countLiveAgents` reads them. */
 const LIVE_AGENT = new Set<Agent['status']>(['starting', 'running', 'waiting']);
@@ -44,6 +63,19 @@ const LIVE_AGENT = new Set<Agent['status']>(['starting', 'running', 'waiting']);
  * come under them — and a goal with nothing to ask draws no band at all rather
  * than an empty one, because a band that is sometimes furniture stops being read
  * as a demand.
+ *
+ * Under the bands the page is **three full-width zones and then two columns**,
+ * which is a claim about width rather than about importance. The plan is a board
+ * read left to right and the validation card draws a check's steps beside what to
+ * expect from it; both were laid out in a 1.6fr column, and that column is the
+ * whole reason the waves only went side by side at 1500px. Full width they lay out
+ * from 1200 — and, with the two wide cards out of the grid, what is left is four
+ * row-lists that split comfortably at the same 1200 rather than needing 1500 of
+ * their own. One breakpoint for the page instead of two.
+ *
+ * The plan is also now **above** validation, which is the ordering the cards
+ * themselves have always asked for: the validation card's own subtitle says the
+ * checks are written by the plan, and the plan was underneath it.
  *
  * The goal-profile gate (#342) is one of those bands rather than a section of
  * its own, which is what puts it in the rail as well: it holds every dispatch for
@@ -74,9 +106,11 @@ export function GoalPage({
   return (
     <div className="cn-goal">
       <Header page={page} view={view} actions={actions} />
+      <TrackStrip page={page} />
       {page.needs.map((row) => (
         <NeedsBand key={row.id} row={row} view={view} actions={actions} />
       ))}
+      <PlanWaves page={page} view={view} actions={actions} />
       <Validation
         page={page}
         actions={actions}
@@ -85,35 +119,151 @@ export function GoalPage({
       />
       <div className="cn-gcols">
         <div className="cn-stack">
-          <PlanWaves page={page} actions={actions} />
-          <Instructions issue={page.issue} actions={actions} />
-          <Ticket issue={page.issue} refUrls={view.state.refUrls} />
           <PullRequests page={page} view={view} />
           <Environments page={page} actions={actions} now={view.now} />
-          {/* Embedded exactly as the work tree and the launch desk are: it reaches
-              its own route, which `console/` may not, but rendering a component
-              that does is not reaching — the import ban is on `api.js` and still
-              holds. Last in the column, and below `PullRequests` and
-              `Environments` on purpose: both of those are the live reading and
-              something the goal still owes, and this is what is left of the same
-              work once the snapshot has forgotten it. Nothing here is owed. */}
-          <section className="cn-card">
-            <WorkRecord goalRef={`issue:${page.issue.number}`} now={view.now} />
-          </section>
         </div>
         <div className="cn-stack">
           <OnThisGoal page={page} view={view} actions={actions} />
-          <Spend issue={page.issue} />
+          <Instructions issue={page.issue} actions={actions} />
           <Tail issue={page.issue} actions={actions} />
+          <Spend issue={page.issue} />
         </div>
       </div>
+      <Reference page={page} view={view} actions={actions} />
     </div>
   );
 }
 
 /**
+ * The goal's pipeline in one row, each stretch a way to the section that owns it.
+ *
+ * It is the page's only surface that says nothing of its own: every reading on it
+ * is folded by {@link buildGoalStrip} out of what a card below already draws, so
+ * the top of the page cannot disagree with the thing it points at. That is the
+ * whole of why the counters it replaced came out of the header — "2 of 5 parts
+ * merged" beside "Validation 3/7" beside a reach chip two screens down was four
+ * answers to one question, in four places, none of which was where the question
+ * gets asked.
+ *
+ * Buttons rather than `<a href="#…">`, for `cn-jump`'s reason: an anchor changes
+ * the address bar, and the cockpit's address bar is `Place` — a hash the place
+ * knows nothing about is a history entry the back button steps through to nowhere.
+ */
+function TrackStrip({ page }: { page: GoalPageView }): JSX.Element {
+  return (
+    <div className="cn-strip">
+      {buildGoalStrip(page).map((stage) => (
+        <Stage key={stage.at} stage={stage} />
+      ))}
+    </div>
+  );
+}
+
+function Stage({ stage }: { stage: GoalStage }): JSX.Element {
+  return (
+    <button
+      type="button"
+      className={`cn-tk cn-t-${stage.tone}`}
+      onClick={() => document.getElementById(ANCHOR[stage.at])?.scrollIntoView({ block: 'start', behavior: 'smooth' })}
+      title={`${stage.label}: ${stage.reading} — go to it`}
+    >
+      <span className="cn-tkk">{stage.label}</span>
+      <span className="cn-tkv">{stage.reading}</span>
+      {/* Drawn only for a stage with a proportion to draw. An empty bar under
+          "no checks" would report every check outstanding, which is the one thing
+          a null `done` exists to keep it from saying. */}
+      <span className={`cn-tkb ${stage.done === null ? 'cn-none' : ''}`}>
+        {stage.done !== null && <i style={{ width: `${stage.done}%` }} />}
+      </span>
+    </button>
+  );
+}
+
+/**
+ * What the goal is judged against and what is left of it — the two surfaces on
+ * the page that ask nothing of the reader, folded away behind their own names.
+ *
+ * The ticket is read once, at pickup, and then never again: it was a full card in
+ * the middle of the live work, between the plan and the pull requests, pushing
+ * everything that is still moving a screen further down. The record is what is
+ * left of the same work once the snapshot has forgotten it. Neither is owed
+ * anything, so neither is drawn open.
+ *
+ * **Which of them is open is a `Place`**, not a `useState`. A disclosure held in
+ * component state works right up until the back button steps over it or a reload
+ * drops it, and both are silent. → docs/spec/17-cockpit.md#the-address-bar
+ */
+function Reference({
+  page,
+  view,
+  actions,
+}: {
+  page: GoalPageView;
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element {
+  const open = view.goalOpen;
+  const ref = `issue:${page.issue.number}`;
+  return (
+    <div className="cn-refs-foot">
+      <section className="cn-card">
+        <h3>
+          <Disclosure
+            open={open.has(TICKET_OPEN)}
+            onToggle={(next) => actions.openGoalSection(TICKET_OPEN, next)}
+            label="The ticket"
+          />
+          <span className="cn-more">as it stood at pickup</span>
+        </h3>
+        {open.has(TICKET_OPEN) && <Ticket issue={page.issue} refUrls={view.state.refUrls} />}
+      </section>
+      {/* Embedded exactly as the work tree and the launch desk are: it reaches its
+          own route, which `console/` may not, but rendering a component that does
+          is not reaching — the import ban is on `api.js` and still holds.
+
+          Its disclosure is *its own* rather than one of ours, because the count in
+          its heading is: only it knows how many nodes there are, and a heading
+          drawn out here would either carry no count or carry a stale one. Folded
+          away it also fetches nothing, which is what keeps "on open, never polled"
+          true now that the card no longer opens with the page. */}
+      <section className="cn-card">
+        <WorkRecord
+          goalRef={ref}
+          now={view.now}
+          open={open.has(RECORD_OPEN)}
+          onToggle={(next) => actions.openGoalSection(RECORD_OPEN, next)}
+        />
+      </section>
+    </div>
+  );
+}
+
+/**
+ * A card heading that opens its own card. The state being *set* is the argument
+ * rather than a bare toggle, for `collapseFeature`'s reason: the caller already
+ * knows which way the caret points, and a toggle read from stale props would
+ * fight a disclosure restored from the URL.
+ */
+function Disclosure({
+  open,
+  onToggle,
+  label,
+}: {
+  open: boolean;
+  onToggle: (open: boolean) => void;
+  label: string;
+}): JSX.Element {
+  return (
+    <button type="button" className="cn-disc" aria-expanded={open} onClick={() => onToggle(!open)}>
+      <i className="cn-caret">{open ? '▾' : '▸'}</i>
+      {label}
+    </button>
+  );
+}
+
+/**
  * The goal itself, and the verdicts anyone has passed on it. Each chip quotes a
- * reading the server already made — the assay's own word with its summary in the
+ * reading the server already made — the appraisal's own word with its summary in the
  * title, the tracker's own workflow state — so nothing here is a second opinion.
  *
  * A null `spend` draws no reading at all. It means nothing was ever measured (a
@@ -151,8 +301,22 @@ function Header({
   // What ending the run kills, in the same subtree the header's agent count reads
   // — so the confirmation states a number the operator can already see above it.
   const live = page.agents.filter((a) => LIVE_AGENT.has(a.status)).length;
-  const merged = page.parts.filter((p) => p.group === 'merged').length;
-  const url = issue.url ?? refUrls[`#${issue.number}`];
+  // Three ways to the tracker, in the order of how much each can be trusted.
+  //
+  // The item's own `url` is the provider's, and authoritative. `issue:<n>` is next
+  // because it is **unambiguous**: `stateSnapshot` keys it for every world issue
+  // *and* every retained run, and nothing else ever writes it. `#<n>` is last
+  // because it is shared — `buildRefUrls` walks the pull requests before the
+  // issues and the first writer wins, so on a tracker where issue 412 and PR 412
+  // both exist, `#412` is the pull request's address and this control was quietly
+  // opening the wrong thing.
+  //
+  // Trying only `#<n>`, as this did, is also why the control disappeared on a
+  // **retained run**: `#<n>` is built from `world.issues`, and a run the harness
+  // kept after the ticket left the world is by definition not in that list. So the
+  // goals whose ticket is hardest to find by hand were the ones offering no way to
+  // it.
+  const url = issue.url ?? refUrls[`issue:${issue.number}`] ?? refUrls[`#${issue.number}`];
   // Keyed on the run existing and not having been ended, never on anything the
   // page itself is showing: the button is how a run is abandoned, so it has to be
   // reachable for exactly as long as the harness still holds one.
@@ -160,159 +324,227 @@ function Header({
 
   return (
     <div className="cn-gh">
-      <div className="cn-ghwho">
+      <div className="cn-ghid">
         <h1>
           #{issue.number} · {issue.title}
         </h1>
-        <div className="cn-ghmeta">
-          {issue.issueType !== undefined && (
-            <i className={`cn-chip cn-type ${issueTypeTone(issue.issueType)}`}>{issue.issueType}</i>
-          )}
-          <StateChip state={issue.workItemState ?? issue.state} colours={config.stateColours} />
-          {issue.assay !== null && (
-            <i
-              className={`cn-chip ${issue.assay.verdict === 'workable' ? 'cn-ok' : 'cn-stall'}`}
-              title={issue.assay.summary}
-            >
-              Assay: {issue.assay.verdict}
-            </i>
-          )}
-          {issue.conclusion.verdict !== 'undeclared' && (
-            <i className="cn-chip" title={issue.conclusion.note}>
-              {issue.conclusion.verdict.replace(/_/g, ' ')}
-            </i>
-          )}
-          {/* Whether the goal's validation plan is settled, beside the other
+        {/* What the goal *is*, beside its name: the tracker's own two words for it.
+            Neither is a verdict anybody passed on the work, which is why they sit
+            up here rather than in the row below. */}
+        {issue.issueType !== undefined && (
+          <i className={`cn-chip cn-type ${issueTypeTone(issue.issueType)}`}>{issue.issueType}</i>
+        )}
+        <StateChip state={issue.workItemState ?? issue.state} colours={config.stateColours} />
+      </div>
+      {/* The verdicts, and nothing else. The counters that used to share this row —
+          how long it has run, how many agents, what it cost, how many parts had
+          merged — read as noise beside a judgement, and three of the four are now
+          on the track. What is left of them is one plain run at the end, which is
+          the reading nothing else on the page states in one place. */}
+      <div className="cn-ghmeta">
+        {issue.appraisal !== null && (
+          <i
+            className={`cn-chip ${issue.appraisal.verdict === 'workable' ? 'cn-ok' : 'cn-stall'}`}
+            title={issue.appraisal.summary}
+          >
+            Appraisal: {issue.appraisal.verdict}
+          </i>
+        )}
+        {issue.conclusion.verdict !== 'undeclared' && (
+          <i className="cn-chip" title={issue.conclusion.note}>
+            {issue.conclusion.verdict.replace(/_/g, ' ')}
+          </i>
+        )}
+        {/* Whether the goal's validation plan is settled, beside the other
               verdicts and inside none of them. Absent when there are no checks —
               a goal nobody wrote a plan for is not "clear", and a chip claiming
               it was would be the one lie this whole surface exists to prevent.
               A button rather than the bare chip its neighbours are: the checks are
               now on this page, so the reading has somewhere to go, and a verdict
               you can act on should not be the one chip that does nothing. */}
-          {issue.validation !== null && (
-            <button
-              type="button"
-              className={`cn-chip cn-jump ${issue.validation.state === 'clear' ? 'cn-ok' : 'cn-stall'}`}
-              onClick={() =>
-                document.getElementById(VALIDATION_ANCHOR)?.scrollIntoView({ block: 'start', behavior: 'smooth' })
-              }
-              title={
-                issue.validation.state === 'clear'
-                  ? `All ${issue.validation.total} validation checks are settled — go to them`
-                  : `${issue.validation.failed} failed, ${issue.validation.unrun} never run, ${issue.validation.deferred} deferred — go to them`
-              }
-            >
-              Validation: {issue.validation.passed + issue.validation.waived}/{issue.validation.total}
-            </button>
-          )}
-          {issue.run !== undefined && <span>started {relTime(issue.run.startedAt, view.now)}</span>}
-          <span>
-            {page.agents.length} agent{page.agents.length === 1 ? '' : 's'}
-          </span>
-          {issue.spend !== null && <span>{fmtUsd(issue.spend.costUsd)}</span>}
-          {page.parts.length > 0 && (
-            <span>
-              {merged} of {page.parts.length} parts merged
-            </span>
-          )}
-        </div>
-      </div>
-      <div className="cn-ghacts">
-        <button
-          type="button"
-          className={`cn-tgl ${watched === 'watched' ? 'cn-watch' : ''}`}
-          onClick={() => void actions.setIssueWatched(issue.number, watched !== 'watched')}
-          // One label, both ways: un-watching takes the tag off and writes nothing
-          // in its place, which is why the goal lands back in Unwatched rather than
-          // in a bucket of its own.
-          title={
-            watched === 'watched'
-              ? `Remove "${config.watchLabel}" so the harness leaves this goal alone`
-              : `Tag this goal "${config.watchLabel}" so the harness picks it up`
-          }
-        >
-          {watched === 'watched' ? 'Watching' : 'Watch'}
-        </button>
-        {/* "Work this one first." Beside the watch toggle because it is the next
-            thing an operator says after "work this" — and deliberately worded as a
-            queue statement rather than an importance one: it changes what the
-            fleet reaches for while it is short of slots, and it changes nothing
-            about whether the goal is allowed to move. A goal sitting on a cooldown
-            or an unapproved plan is still sitting there, flagged. */}
-        <button
-          type="button"
-          className={`cn-tgl ${issue.priority !== null ? 'cn-watch' : ''}`}
-          onClick={() => void actions.setGoalPriority(issue.number, issue.priority === null)}
-          title={
-            issue.priority === null
-              ? 'Work this goal first: everything under it — its plan, its parts, its pull requests — takes the next free slots ahead of the rest. It does not lift a cooldown, a part cap or an unapproved plan.'
-              : `Marked a priority ${relTime(issue.priority.since, view.now)} — click to hand the queue back to its natural order`
-          }
-        >
-          {issue.priority !== null ? 'Priority' : 'Prioritise'}
-        </button>
-        {/* Which profile this goal's work runs on (#342). Beside the watch toggle
-            because it is the same kind of statement about the same object — "work
-            this" and "work this at this depth" — and because an operator who has
-            just read a hard ticket is already here. */}
-        <ProfilePicker
-          profiles={config.profiles}
-          value={issue.modelPin.profile}
-          defaultProfile={config.defaultProfile}
-          inheritLabel="Not pinned"
-          onPick={(profile) => void actions.setIssueProfile(issue.number, profile)}
-        />
-        <button
-          type="button"
-          className="cn-tgl"
-          onClick={() => void actions.setIssueConclusion(issue.number, finished ? null : 'done')}
-          title={
-            finished
-              ? 'Withdraw "finished" — the goal goes back to whatever its agents and its plan say'
-              : 'Mark this goal finished, so the harness schedules nothing more for it'
-          }
-        >
-          {finished ? 'Unfinish' : 'Mark done'}
-        </button>
-        {issue.state === 'open' && (
+        {issue.validation !== null && (
           <button
             type="button"
-            className={`cn-tgl ${moreWork ? 'cn-watch' : ''}`}
-            onClick={() => setInstructing(true)}
+            className={`cn-chip cn-jump ${issue.validation.state === 'clear' ? 'cn-ok' : 'cn-stall'}`}
+            onClick={() =>
+              document.getElementById(ANCHOR.validation)?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+            }
             title={
-              standing === 0
-                ? 'Say what you want done next on this goal — your words go to the next agent, and the goal goes back in front of the harness: a "delivered" verdict is retracted, and a plan whose parts have all landed is sent back to a planner for you to approve again'
-                : `Add to the ${standing} instruction${standing === 1 ? '' : 's'} already standing on this goal`
+              issue.validation.state === 'clear'
+                ? `All ${issue.validation.total} validation checks are settled — go to them`
+                : `${issue.validation.failed} failed, ${issue.validation.unrun} never run, ${issue.validation.deferred} deferred — go to them`
             }
           >
-            More work{standing > 0 ? ` · ${standing}` : ''}
+            Validation: {issue.validation.passed + issue.validation.waived}/{issue.validation.total}
           </button>
         )}
-        {config.canFileTickets && (
+        {/* The measurements, in one run at the end rather than as three more chips.
+            `parts merged` is deliberately not among them: it is the track's first
+            stage now, and stating it twice is how the header and the plan card
+            came to disagree. */}
+        <span className="cn-ghfacts">
+          {issue.run !== undefined && <>started {relTime(issue.run.startedAt, view.now)} · </>}
+          {page.agents.length} agent{page.agents.length === 1 ? '' : 's'}
+          {issue.spend !== null && <> · {fmtUsd(issue.spend.costUsd)}</>}
+        </span>
+      </div>
+      <div className="cn-ghacts">
+        {/* Three groups, in the order an operator reaches for them — what only
+            reads, what steers the work, what settles it — with the one destructive
+            control held out of all three and pushed to the far end. The groups do
+            not wrap internally, so a narrow page breaks between them rather than
+            through one: every control keeps its neighbours, which is what a row of
+            nine identical toggles could never offer. */}
+        <span className="cn-ghgrp">
+          {/* The one control up here that changes nothing. It opens the operator's
+            own Claude Code on this goal with `/lubbdubb ask <n>` already in the
+            box, so a question about the work — what was done, which pull request,
+            is it on hallway yet — is a click from the goal rather than a cockpit
+            read joined to a repository read by hand. An anchor rather than a
+            button, as the other two deep links are: a deep link is a destination.
+            First in the row because it is the read, and everything after it acts.
+            The command is in the title as well as the href for `desktopPrompt`'s
+            reason — the link reaches only the machine this browser is on, and a
+            client that is not installed answers nothing at all, so an operator
+            reading the cockpit from another desk is left with the line to type. */}
+          <a
+            className="cn-tgl"
+            href={desktopDeepLink(config.desktopFolder, askPrompt(issue.number))}
+            title={`Opens your own Claude Code with "${askPrompt(issue.number).trim()}" ready for your question, answered from what the harness actually recorded about this goal — the plan, the pull requests, what was escalated, what it cost, and where the work has reached.`}
+          >
+            Ask ↗
+          </a>
+          {/* The tracker, beside the other control that only reads. It used to sit
+              between "Raise a bug" and "End the run…", which put a destination in
+              the middle of the two controls that write.
+
+              **Always drawn, and inert rather than absent when there is nowhere to
+              go.** A control that comes and goes is a row whose shape depends on
+              what the provider happened to resolve, which is the opposite of what
+              the three groups are for — and "the ticket is not reachable from here"
+              is a fact about this goal worth stating, where a missing button says
+              nothing at all and reads as the cockpit having forgotten. It is a
+              `<span>`, not an `<a>` with no `href`: a link that leads nowhere is
+              the dead end refs exist to prevent, so this stops being a link. */}
+          {url !== undefined ? (
+            <a className="cn-tgl" href={url} target="_blank" rel="noopener noreferrer">
+              Open ticket ↗
+            </a>
+          ) : (
+            <span
+              className="cn-tgl"
+              aria-disabled="true"
+              title="No address for this ticket: the tracker did not give the item one, and the harness could not resolve it from the goal’s ref either. Nothing to open."
+            >
+              Open ticket ↗
+            </span>
+          )}
+        </span>
+        <i className="cn-ghsep" />
+        <span className="cn-ghgrp">
+          <button
+            type="button"
+            className={`cn-tgl ${watched === 'watched' ? 'cn-watch' : ''}`}
+            onClick={() => void actions.setIssueWatched(issue.number, watched !== 'watched')}
+            // One label, both ways: un-watching takes the tag off and writes nothing
+            // in its place, which is why the goal lands back in Unwatched rather than
+            // in a bucket of its own.
+            title={
+              watched === 'watched'
+                ? `Remove "${config.watchLabel}" so the harness leaves this goal alone`
+                : `Tag this goal "${config.watchLabel}" so the harness picks it up`
+            }
+          >
+            {watched === 'watched' ? 'Watching' : 'Watch'}
+          </button>
+          {/* "Work this one first." Beside the watch toggle because it is the next
+              thing an operator says after "work this" — and deliberately worded as a
+              queue statement rather than an importance one: it changes what the
+              fleet reaches for while it is short of slots, and it changes nothing
+              about whether the goal is allowed to move. A goal sitting on a cooldown
+              or an unapproved plan is still sitting there, flagged. */}
+          <button
+            type="button"
+            className={`cn-tgl ${issue.priority !== null ? 'cn-watch' : ''}`}
+            onClick={() => void actions.setGoalPriority(issue.number, issue.priority === null)}
+            title={
+              issue.priority === null
+                ? 'Work this goal first: everything under it — its plan, its parts, its pull requests — takes the next free slots ahead of the rest. It does not lift a cooldown, a part cap or an unapproved plan.'
+                : `Marked a priority ${relTime(issue.priority.since, view.now)} — click to hand the queue back to its natural order`
+            }
+          >
+            {issue.priority !== null ? 'Priority' : 'Prioritise'}
+          </button>
+          {/* Which profile this goal's work runs on (#342). Beside the watch toggle
+              because it is the same kind of statement about the same object — "work
+              this" and "work this at this depth" — and because an operator who has
+              just read a hard ticket is already here. */}
+          <ProfilePicker
+            profiles={config.profiles}
+            value={issue.modelPin.profile}
+            defaultProfile={config.defaultProfile}
+            inheritLabel="Not pinned"
+            onPick={(profile) => void actions.setIssueProfile(issue.number, profile)}
+          />
+          {issue.state === 'open' && (
+            <button
+              type="button"
+              className={`cn-tgl ${moreWork ? 'cn-watch' : ''}`}
+              onClick={() => setInstructing(true)}
+              title={
+                standing === 0
+                  ? 'Say what you want done next on this goal — your words go to the next agent, and the goal goes back in front of the harness: a "delivered" verdict is retracted, and a plan whose parts have all landed is sent back to a planner for you to approve again'
+                  : `Add to the ${standing} instruction${standing === 1 ? '' : 's'} already standing on this goal`
+              }
+            >
+              More work{standing > 0 ? ` · ${standing}` : ''}
+            </button>
+          )}
+        </span>
+        <i className="cn-ghsep" />
+        {/* What settles the goal: the verdict, and the one control that starts a
+            second ticket about it. Both write, neither is reversible by clicking
+            the same button again, and that is what separates them from the group
+            before. */}
+        <span className="cn-ghgrp">
           <button
             type="button"
             className="cn-tgl"
-            onClick={() => setRaisingBug(true)}
-            title="Report that this does not work as you expect — an agent files it as a bug against this goal"
+            onClick={() => void actions.setIssueConclusion(issue.number, finished ? null : 'done')}
+            title={
+              finished
+                ? 'Withdraw "finished" — the goal goes back to whatever its agents and its plan say'
+                : 'Mark this goal finished, so the harness schedules nothing more for it'
+            }
           >
-            Raise a bug
+            {finished ? 'Unfinish' : 'Mark done'}
           </button>
-        )}
-        {url !== undefined && (
-          <a className="cn-tgl" href={url} target="_blank" rel="noopener noreferrer">
-            Open ticket ↗
-          </a>
-        )}
+          {config.canFileTickets && (
+            <button
+              type="button"
+              className="cn-tgl"
+              onClick={() => setRaisingBug(true)}
+              title="Report that this does not work as you expect — an agent files it as a bug against this goal"
+            >
+              Raise a bug
+            </button>
+          )}
+        </span>
         {/* Destructive, and always confirmed. Ending a run no longer merely clears
             the card: it kills the goal's live agents, cancels its queued jobs and
             settles its standing instructions, none of which can be undone — so the
             one thing the header must not do is fire it on a stray click. The modal
             is where what it costs is stated, and the flagged-plan note is one more
-            requirement inside it rather than the reason it opens. */}
+            requirement inside it rather than the reason it opens.
+
+            Held out of all three groups and pushed to the far end, because
+            *distance* is the part of the warning a colour cannot carry: red at
+            rest says what the control does, and being the only thing over there
+            says it is not one of the others. */}
         {retained && (
           <button
             type="button"
-            className="cn-tgl cn-danger"
+            className="cn-tgl cn-danger cn-ghend"
             onClick={() => setEndingRun(true)}
             title="End the harness's run at this goal — one way, terminal for the dispatcher, and it stops the agents, jobs and instructions still standing on it. It asks before it does."
           >
@@ -414,7 +646,7 @@ function Validation({
   const settled = live.filter((c) => c.state === 'passed' || c.state === 'waived').length;
 
   return (
-    <section className="cn-card cn-val" id={VALIDATION_ANCHOR}>
+    <section className="cn-card" id={ANCHOR.validation}>
       <h3>
         Validation
         {live.length > 0 && (
@@ -470,6 +702,15 @@ function Validation({
   );
 }
 
+/**
+ * A part's pull request as the page holds it, with the flag that says which list
+ * it came off. A boolean rather than a check for `attention` at the draw site:
+ * the closed list ships {@link PullRequest}, where every verdict is optional
+ * because nothing folds one for a dead PR, and narrowing it back to
+ * {@link OpenPullRequest} by sniffing a field is a cast wearing a condition.
+ */
+type PartPr = { open: true; pr: OpenPullRequest } | { open: false; pr: PullRequest };
+
 const GROUP_ORDER: PartGroup[] = ['merged', 'now', 'held', 'waiting'];
 const GROUP_LABEL: Record<PartGroup, string> = {
   merged: 'Merged',
@@ -501,16 +742,29 @@ const GROUP_LABEL: Record<PartGroup, string> = {
  * from a goal was the validation card's aside about amending the checks, which
  * reads as being about checks.
  */
-function PlanWaves({ page, actions }: { page: GoalPageView; actions: CockpitActions }): JSX.Element {
+function PlanWaves({
+  page,
+  view,
+  actions,
+}: {
+  page: GoalPageView;
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element {
   const groups = GROUP_ORDER.map((group) => ({
     group,
     parts: page.parts.filter((p) => p.group === group),
   })).filter((g) => g.parts.length > 0);
   const retired = page.retiredParts;
   const plan = page.plan;
+  // Keyed on the number the part carries, and the open list written second so an
+  // open pull request wins a collision rather than the recently-closed copy of it.
+  const prs = new Map<number, PartPr>();
+  for (const pr of page.closedPullRequests) prs.set(pr.number, { open: false, pr });
+  for (const pr of page.openPullRequests) prs.set(pr.number, { open: true, pr });
 
   return (
-    <section className="cn-card">
+    <section className="cn-card" id={ANCHOR.plan}>
       <h3>
         The plan
         {page.parts.length > 0 && <i className="cn-n">{page.parts.length} parts</i>}
@@ -548,7 +802,15 @@ function PlanWaves({ page, actions }: { page: GoalPageView; actions: CockpitActi
           <div className="cn-col" key={group}>
             <div className="cn-coln">{GROUP_LABEL[group]}</div>
             {parts.map((p) => (
-              <Part key={p.part.id} part={p.part} group={p.group} agentId={p.agentId} actions={actions} />
+              <Part
+                key={p.part.id}
+                part={p.part}
+                group={p.group}
+                agentId={p.agentId}
+                pr={p.part.prNumber === null ? null : (prs.get(p.part.prNumber) ?? null)}
+                now={view.now}
+                actions={actions}
+              />
             ))}
           </div>
         ))}
@@ -556,7 +818,15 @@ function PlanWaves({ page, actions }: { page: GoalPageView; actions: CockpitActi
           <div className="cn-col">
             <div className="cn-coln">Retired</div>
             {retired.map((part) => (
-              <Part key={part.id} part={part} group="retired" agentId={null} actions={actions} />
+              <Part
+                key={part.id}
+                part={part}
+                group="retired"
+                agentId={null}
+                pr={null}
+                now={view.now}
+                actions={actions}
+              />
             ))}
           </div>
         )}
@@ -580,12 +850,17 @@ function Part({
   part,
   group,
   agentId,
+  pr,
+  now,
   actions,
 }: {
   part: PlanPart;
   /** The four the page groups by, plus the one that is drawn beside them and counted in none of them. */
   group: PartGroup | 'retired';
   agentId: string | null;
+  /** The pull request this part's number names, when the page holds it. */
+  pr: PartPr | null;
+  now: number;
   actions: CockpitActions;
 }): JSX.Element {
   return (
@@ -595,6 +870,26 @@ function Part({
       </b>
       {group === 'held' && part.blockedReason !== null && <p className="cn-why">{part.blockedReason}</p>}
       {part.scope !== '' && <p>{part.scope}</p>}
+      {/* A dead pull request's word is drawn only where it disagrees with the
+          column the part is standing in: "merged" under the Merged heading is the
+          heading again, while a merged PR on a part grouped anywhere else — or a
+          PR closed unmerged — is the one thing the board cannot say for itself. */}
+      {pr !== null && (pr.open || pr.pr.merged !== (group === 'merged')) && (
+        <span className="cn-pstate">
+          {/* The ladder is drawn for an open pull request only, which is what the
+              pull-request card does with the same two components: on a dead PR
+              the checks are history, and the card's closed rows carry a word and
+              no dots for exactly that reason. */}
+          {pr.open ? (
+            <>
+              <CiLadder pr={pr.pr} />
+              <CourtChip pr={pr.pr} now={now} />
+            </>
+          ) : (
+            <i className={`cn-chip ${pr.pr.merged ? 'cn-ok' : ''}`}>{pr.pr.merged ? 'merged' : 'closed'}</i>
+          )}
+        </span>
+      )}
       <span className="cn-dep">
         {part.dependsOn.length > 0 ? `depends on ${part.dependsOn.join(', ')}` : 'depends on nothing'}
         {part.prNumber !== null && (
@@ -622,7 +917,7 @@ function Part({
 }
 
 /**
- * The ticket as it stood at pickup — what a plan, an assay or an ask is judged
+ * The ticket as it stood at pickup — what a plan, an appraisal or an ask is judged
  * against.
  *
  * Through `renderRichText`, not `renderMarkdown`: Azure DevOps stores a
@@ -677,15 +972,10 @@ function Instructions({ issue, actions }: { issue: Issue; actions: CockpitAction
 
 function Ticket({ issue, refUrls }: { issue: Issue; refUrls: Record<string, string> }): JSX.Element {
   return (
-    <section className="cn-card">
-      <h3>
-        The ticket <span className="cn-more">as it stood at pickup</span>
-      </h3>
-      <div className="cn-tick">
-        {issue.body.trim() === '' ? <p className="cn-empty">The ticket has no description.</p> : null}
-        {renderRichText(issue.body, refUrls)}
-      </div>
-    </section>
+    <div className="cn-tick">
+      {issue.body.trim() === '' ? <p className="cn-empty">The ticket has no description.</p> : null}
+      {renderRichText(issue.body, refUrls)}
+    </div>
   );
 }
 
@@ -764,7 +1054,7 @@ function Environments({
   if (page.environments.length === 0) return null;
   const number = page.issue.number;
   return (
-    <section className="cn-card">
+    <section className="cn-card" id={ANCHOR.environments}>
       <h3>Environments</h3>
       <div className="cn-rows">
         {page.environments.map((env) => (
@@ -1039,7 +1329,7 @@ function Tail({ issue, actions }: { issue: Issue; actions: CockpitActions }): JS
   const ref = `issue:${issue.number}`;
   const check = issue.delivery?.summary ?? issue.shortfall?.summary ?? null;
   return (
-    <section className="cn-card">
+    <section className="cn-card" id={ANCHOR.tail}>
       <h3>The tail</h3>
       <div className="cn-rows">
         <div className="cn-row">

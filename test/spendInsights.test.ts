@@ -173,7 +173,7 @@ test('every origin shape lands in the phase it belongs to', () => {
     ],
     tasks: [
       task('a1', 'issue:12:plan'),
-      task('a2', 'issue:12:assay'),
+      task('a2', 'issue:12:appraisal'),
       task('a3', 'issue:12'),
       task('a4', 'issue:12:part:auth'),
       task('a5', 'issue:12:assess'),
@@ -187,7 +187,7 @@ test('every origin shape lands in the phase it belongs to', () => {
   });
 
   const byPhase = new Map(insights.phases.map((p) => [p.phase, p.costUsd]));
-  assert.equal(byPhase.get('deliberation'), 7, 'the planner and the assay are deliberation');
+  assert.equal(byPhase.get('deliberation'), 7, 'the planner and the appraisal are deliberation');
   assert.equal(byPhase.get('build'), 3, 'the pickup root and a part are both build');
   assert.equal(byPhase.get('evidence'), 5, 'the assessment is evidence');
   assert.equal(byPhase.get('ci'), 16, 'a failing check and a blocked gate are one pipeline’s bill');

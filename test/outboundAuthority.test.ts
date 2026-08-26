@@ -85,6 +85,14 @@ function countingSink(fail = false): ActionSink & { merges: number[]; replies: n
   return {
     merges,
     replies,
+    canCloseIssue: () => false,
+    canResolvePrThread: () => false,
+    resolvePrThread: (): never => {
+      throw new Error('resolvePrThread is not scripted in this test');
+    },
+    closeIssue: (): never => {
+      throw new Error('closeIssue is not scripted in this test');
+    },
     canSetWorkItemState: () => false,
     canPlaceWorkItem: () => false,
     setWorkItemParent: () => Promise.reject(new Error('not used')),

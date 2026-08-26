@@ -27,11 +27,11 @@ export interface Worktrees {
   /**
    * Path to a **read-only** checkout of `of`, leased under `key` (issue #396).
    *
-   * For the dispatches that need a repository and no branch — the assay, the
+   * For the dispatches that need a repository and no branch — the appraisal, the
    * assessment, a validation check — each of which is told in its prompt not to
    * commit or push anything, and each of which used to mint a branch cut from the
    * default one. That branch never got a pull request, so it was never merged, so
-   * `reapableBranches` never deleted it: one ref per assay, per assessment and per
+   * `reapableBranches` never deleted it: one ref per appraisal, per assessment and per
    * check, accumulating for the life of the deployment.
    *
    * So nothing is minted at all. The slot is checked out **detached** at the commit
@@ -82,7 +82,7 @@ export interface Worktrees {
  * A bounded pool of git worktree directories, leased to branches on demand.
  *
  * **Why a pool and not a directory per branch.** Every goal mints branches — the
- * assay, the pickup, one per plan part — and the old manager created a directory
+ * appraisal, the pickup, one per plan part — and the old manager created a directory
  * per branch and deleted it when the work ended. So a branch that came back — a CI
  * failure to chase, a review comment to answer, a part picked up again — landed in
  * a tree with nothing installed and paid to install it before it could run one
@@ -266,7 +266,7 @@ export class WorktreeManager implements Worktrees {
    * 2. (Read-only only) a free slot that is already a read-only checkout of the
    *    same ref. Handing it over costs nothing and burns nothing — every read-only
    *    checkout of one ref is the same tree to whoever gets it — so it beats both
-   *    a spare and a fresh slot, and it is what stops a fleet of assays and
+   *    a spare and a fresh slot, and it is what stops a fleet of appraisals and
    *    validation checks paying for a cold install each.
    * 3. A **spare** slot — free, and on a detached HEAD nothing marks or a branch
    *    whose ref is gone, so it holds nothing anybody can come back for.
@@ -413,8 +413,9 @@ export class WorktreeManager implements Worktrees {
    * checked out anywhere, and the directory is no longer this branch's to delete —
    * detaching frees the ref and leaves the warm tree standing for the next occupant.
    * The repo's own main worktree is left alone: detaching an operator's checkout to
-   * reap a branch would be a rude surprise, and `-D` failing loudly is the honest
-   * answer there.
+   * reap a branch would be a rude surprise. It is refused **by name** rather than
+   * left to `-D` — see {@link reapBlockedByCheckout} for why the honest answer still
+   * needs to be the harness's sentence and not git's.
    *
    * A branch that is not there is a no-op rather than a failure: the reap's question
    * is whether the ref is gone, and both answers satisfy it.
@@ -448,7 +449,8 @@ export class WorktreeManager implements Worktrees {
       }
     }
     await this.remove(branch);
-    if (holding !== null && holding !== resolve(this.repoRoot)) await runGit(holding, ['switch', '--detach']);
+    if (holding === resolve(this.repoRoot)) throw new Error(this.reapBlockedByCheckout(branch, holding));
+    if (holding !== null) await runGit(holding, ['switch', '--detach']);
     if (!(await this.branchExists(branch))) return;
     await this.git(['branch', '-D', branch]);
   }
@@ -540,7 +542,7 @@ export class WorktreeManager implements Worktrees {
    * branch checked out in it, or the key its mark names.
    *
    * **The mark is why a read-only slot survives a restart.** A detached checkout
-   * has no ref for `pool.held` to be asked about, so without it a restored assayer's
+   * has no ref for `pool.held` to be asked about, so without it a restored appraiser's
    * tree would read as a spare and be cleaned and switched under the agent still
    * sitting in it — the exact damage the lease exists to refuse, and silent.
    */
@@ -693,7 +695,7 @@ export class WorktreeManager implements Worktrees {
    * exists because the previous occupant's output answers a different source, and
    * here it answers the same one — the default branch as the harness resolves it —
    * so `-ffd` takes the last agent's scratch and leaves the build state standing.
-   * That is what stops a queue of assays and validation checks paying for a cold
+   * That is what stops a queue of appraisals and validation checks paying for a cold
    * install each, which the pool could never give work that warms nothing of its
    * own. The mark is the whole of the evidence: it is written only by a read-only
    * hand-over and cleared by every other, so a tree the harness cannot vouch for is
@@ -846,6 +848,28 @@ export class WorktreeManager implements Worktrees {
       `(the pool is ${this.worktreeRoot}). Git refuses to check one branch out twice, and this checkout is not ` +
       `the harness's to switch — it is most likely the repository's own working copy. Switch it to another ` +
       `branch and the dispatch goes through on the next pulse.`
+    );
+  }
+
+  /**
+   * What the reap says when the branch is checked out in the repository's own
+   * working copy — the counterpart to {@link checkedOutElsewhere}, on the method
+   * that deletes a ref rather than the one that leases a directory.
+   *
+   * The refusal is not new; only the sentence is. `git branch -D` was always going
+   * to fail here, and its message names a path and no remedy — so an operator
+   * standing on a merged branch to read what an agent did got
+   * `cannot delete branch … used by worktree at …` recorded once per pulse for the
+   * whole `closedPrWindowMs` window, with nothing in it to say the checkout was
+   * theirs to move. Refusing by name says which of the two things stuck is which:
+   * the ref and its remote copy both stay, and one `git switch` clears it.
+   */
+  private reapBlockedByCheckout(branch: string, path: string): string {
+    return (
+      `Cannot reap ${branch}: it is checked out at ${path}, the repository's own working copy, which is not ` +
+      `the harness's to switch — detaching it would move an operator off their branch without asking. Git ` +
+      `refuses to delete a branch that is checked out, so the local ref and the remote copy both stay. Switch ` +
+      `that checkout to another branch and the reap completes on the next pulse.`
     );
   }
 

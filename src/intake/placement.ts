@@ -1,8 +1,8 @@
-import type { Issue, IssueAssay } from '../types.js';
+import type { Issue, IssueAppraisal } from '../types.js';
 
 /**
  * Where a goal sits on the backlog — its **parent** and its **area path** — and
- * whether the assay's proposal for either is still worth putting to a human.
+ * whether the appraisal's proposal for either is still worth putting to a human.
  *
  * ## The gap this closes
  *
@@ -17,7 +17,7 @@ import type { Issue, IssueAssay } from '../types.js';
  * The goal-profile gate (issue #342) blocks because a wrong profile spends real
  * money irreversibly before anyone sees the result, so it has to be settled
  * first. Nothing here is like that: a missing parent costs nothing at dispatch
- * and is fixable at any point afterwards. So {@link assayHold} is not touched and
+ * and is fixable at any point afterwards. So {@link appraisalHold} is not touched and
  * neither is `goalFingerprint` — this is read only where it is drawn.
  *
  * ## Derived visibility, not stored expiry
@@ -25,12 +25,12 @@ import type { Issue, IssueAssay } from '../types.js';
  * The question is asked while the **live** work item still lacks the field, and
  * that is the whole of its lifetime. An operator who sets the parent by hand in
  * the tracker ends the question on the next world read: no timer, no world event
- * to have missed, and nothing to remember. This is `assayHold`'s fingerprint arm
+ * to have missed, and nothing to remember. This is `appraisalHold`'s fingerprint arm
  * pointed at a different fact — the state of the item rather than of its text —
  * and it is a lookup against current state for the same reason.
  *
  * The one thing that *is* stored is the operator's answer
- * ({@link IssueAssay.parentSettledAt}), which exists for the third of the three:
+ * ({@link IssueAppraisal.parentSettledAt}), which exists for the third of the three:
  * "this goal wants no parent" changes nothing out there for a later read to find,
  * so without it a goal that legitimately has none would sit in the needs band for
  * ever.
@@ -67,7 +67,7 @@ export interface AreaPathTree {
 }
 
 /**
- * How many area nodes the assayer is offered.
+ * How many area nodes the appraiser is offered.
  *
  * A cap rather than the whole tree, because a tree long enough to be a directory
  * stops being a choice — the same argument `candidateParents`' own limit makes
@@ -81,7 +81,7 @@ const AREA_PATH_LIMIT = 40;
  * The nodes to offer, and how many were left out.
  *
  * The count is returned rather than dropped so the caller can **say** the list is
- * partial. A silent truncation is the failure worth naming here: an assayer shown
+ * partial. A silent truncation is the failure worth naming here: an appraiser shown
  * thirty of two hundred nodes reads them as the project's areas and picks the
  * least-wrong of them, which is a plausible answer nobody can tell from a right
  * one.
@@ -138,31 +138,35 @@ export interface PlacementAsk {
 /**
  * The placement questions still open on this goal, in a stable order.
  *
- * Three conditions, all of them cheap and all of them read fresh: the assayer
+ * Three conditions, all of them cheap and all of them read fresh: the appraiser
  * proposed something, the operator has not said it does not apply, and the live
  * item still lacks the field. Order is fixed — parent before area path — because
  * a pair of rows that reorder themselves between two draws is a pair an operator
  * cannot learn.
  *
- * A goal with no assay row, or an assay against text the ticket no longer has,
- * yields nothing: the second is the same reading `isAssayed` takes, so a
- * rewritten ticket stops being asked about until it has been assayed again.
+ * A goal with no appraisal row, or an appraisal against text the ticket no longer has,
+ * yields nothing: the second is the same reading `isAppraised` takes, so a
+ * rewritten ticket stops being asked about until it has been appraised again.
  */
 export function placementAsks(
-  assay: IssueAssay | null,
+  appraisal: IssueAppraisal | null,
   issue: Issue,
   tree: AreaPathTree | null,
   goalRef: string,
 ): PlacementAsk[] {
-  if (!assay || assay.goalRef !== goalRef) return [];
+  if (!appraisal || appraisal.goalRef !== goalRef) return [];
   const asks: PlacementAsk[] = [];
-  if (assay.proposedParent !== null && assay.parentSettledAt === null && isPlacementMissing(issue, 'parent', tree))
-    asks.push({ field: 'parent', proposedParent: assay.proposedParent, proposedAreaPath: null });
   if (
-    assay.proposedAreaPath !== null &&
-    assay.areaPathSettledAt === null &&
+    appraisal.proposedParent !== null &&
+    appraisal.parentSettledAt === null &&
+    isPlacementMissing(issue, 'parent', tree)
+  )
+    asks.push({ field: 'parent', proposedParent: appraisal.proposedParent, proposedAreaPath: null });
+  if (
+    appraisal.proposedAreaPath !== null &&
+    appraisal.areaPathSettledAt === null &&
     isPlacementMissing(issue, 'areaPath', tree)
   )
-    asks.push({ field: 'areaPath', proposedParent: null, proposedAreaPath: assay.proposedAreaPath });
+    asks.push({ field: 'areaPath', proposedParent: null, proposedAreaPath: appraisal.proposedAreaPath });
   return asks;
 }

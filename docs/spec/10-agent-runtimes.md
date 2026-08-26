@@ -278,7 +278,7 @@ root. Two mechanisms replace that, on an "authorise the routine, ask about the r
 Every launch also carries `permissions.additionalDirectories: [attachmentRoot]`, in the same
 `--settings` fragment as the allow-list and for the same reason it is not on `--allowedTools`.
 
-It exists because a blueprint's attachments (issue #249) are stored **once**, outside every worktree —
+It exists because a brief's attachments (issue #249) are stored **once**, outside every worktree —
 see [09](09-execution.md#an-operators-attachments-reach-the-agent) — so the absolute path the prompt
 names is one the agent could not otherwise open. It is a **standing grant for the life of the launch**
 and it is not per-goal: an agent working an unrelated issue can read another goal's attachments. That
@@ -294,6 +294,29 @@ so "how agents run" is usually _not_ a terminal.
 
 Each `result` event carries **cumulative** `total_cost_usd`, `usage` and `num_turns`, which become a
 `usage` session event.
+
+### Reading the event stream
+
+Each stdout line is one JSON event, and `claude` is **not the only writer on that pipe**. Anything that
+writes to it without a trailing newline lands on the **front of the next event**: a `Stop` hook
+returning a `terminalSequence` is the case that cost us one, since the OSC title escape it emits
+carries no newline, so the `result` closing the turn arrived as `\x1b]2;…\x07{"type":"result"…}` and
+threw.
+
+A `catch { return }` on that line made it a **turn end that never happened**. Done, waiting and the
+unannounced stop are all decided on `result` ([below](#a-result-is-the-end-of-a-turn-not-of-the-session)),
+so an agent that had printed `@@LUBBDUBB_DONE@@` and finished simply went quiet — session still live,
+worktree lease still held, still accepting messages — and read identically to one still working.
+Nothing was red, and the only way to notice was to ask the agent, which could report only what it had
+printed.
+
+`parseEventLine` therefore retries a line from **each `{` in it**, taking the first that parses. The
+junk is always a prefix and an event is always an object, so an event is always a suffix; a whole JSON
+object glued on (a hook printing its own) does not hide the one behind it. Recovery cannot invent an
+event — a line with no parseable object returns null and is logged, not counted — and no escape
+flavour has to be enumerated, which is the point: the next writer to do this will not be a hook.
+
+Tests: `test/streamLineNoise.test.ts`.
 
 ### A `result` is the end of a turn, not of the session
 
@@ -315,6 +338,15 @@ stray message into a working agent.
 
 Each turn is judged on **its own** text: the text is taken and cleared before the queued-turn check,
 so a sentinel printed in the interrupted turn cannot be read again at the end of the queued one.
+
+**`@@LUBBDUBB_DONE@@` is the exception, and it is decided _above_ the queued-turn check.** Skipping the
+interrupted turn is right for a question, because the message queued behind it is usually the answer
+and re-parking would ask again — but nothing anyone types makes "I finished" untrue. Honoured only
+when the queue happened to be empty, a done is one lost to a race: the agent announces it, the harness
+hears nothing, and the session it should have torn down sits holding a worktree lease, on the glass
+indistinguishable from an agent that stopped without saying why. `send` therefore does **not** clear
+`turnText` either; every `result` clears it, so it never spans two turns anyway, and the only thing
+the earlier clear did was erase a sentinel already printed into the turn the message was landing in.
 
 A path that never calls `send` (a resume delivering no first message) leaves the count at zero and is
 judged exactly as before.
@@ -367,9 +399,10 @@ genuinely finished invents work, and one told "you are done" that had not abando
   so the turn that asked ends with no sentinel in it — a stop by the letter of it, a real question in
   fact. Nudging there types "carry on" into an agent waiting on a person.
 - **A dead process is not nudged**, because it cannot answer; the stop is all there is, so it parks.
-- **The nudge is written to the transcript** as a sent message (`renderBlocks` with a `human` block)
-  before it goes out. It is the harness taking a turn in the agent's conversation, and a transcript
-  showing the agent apparently answering a question nobody asked is the same unexplained gap moved.
+- **The nudge is written to the transcript** as a sent message, through the same `noteSent` every
+  other sent message goes through ([above](#messages-sent-to-the-agent)), before it goes out. It is
+  the harness taking a turn in the agent's conversation, and a transcript showing the agent
+  apparently answering a question nobody asked is the same unexplained gap moved.
 
 `agentStallNudges: 0` restores the immediate park exactly.
 
@@ -517,11 +550,24 @@ the two exclusions).
 The raw event stream is never dumped. Each message's content blocks go through the pure `renderBlocks`
 (`src/agents/streamTranscript.ts`):
 
-- assistant text passes through with sentinels stripped;
+- assistant text passes through with sentinels stripped — and a `done` or a `waiting` leaves a
+  **marker** where its token was (`✓ announced done`, `⏸ asked for a person · <reason>`);
 - a `tool_use` becomes a labelled line with a one-line input summary (capped at 140 chars);
 - a `tool_result` (which arrives as a `user` event) is sanitised — ANSI and control characters removed
   — and truncated to `MAX_RESULT_LINES` (200) with a `+N more lines` marker;
 - a `human` block renders injected/human messages.
+
+**A stripped sentinel leaves a marker, because a strip that leaves nothing is a record that says
+nothing.** The token is removed so the protocol never leaks into the reading, and for a long time that
+meant a turn announcing `done` and a turn that simply stopped were byte-identical on the glass. That is
+not cosmetic: an operator who cannot see the announcement asks the agent whether it forgot to finish,
+and the agent — which can consult only its own memory of the turn — answers that it did not and prints
+the token again, which is stripped again. Neither party can reach the one thing that would settle it.
+The marker is written from the **same bytes with the same helpers** the runtime judges the turn with,
+so it can neither claim a sentinel the runtime did not see nor stay silent about one it did. A `flag`
+gets none: it carries no status meaning and already surfaces as its own artifact. A `human` block gets
+none either, whatever it quotes — `STALL_NUDGE` names both sentinels at the agent verbatim, and marking
+that would put an "announced done" in the transcript for the harness asking whether there was one.
 
 **Every labelled line is stamped** with a dim local `[HH:MM:SS]`: a tool call and a sent message
 carry it in front of the label, a result carries it _after_ the label and before the count. That
@@ -553,6 +599,36 @@ Labels carry SGR colour, which the cockpit's drawer renders through the pure par
 so escapes never show as literal text there.
 
 **Detection still scans the raw turn text**, so the raw-vs-display split must stay intact.
+
+#### Messages sent to the agent
+
+A transcript that shows only what comes back is half a conversation. **Every message the harness or
+the operator sends into a live agent is written to that agent's transcript as a `human` block**
+(`AgentManager.noteSent`), rendered by the same `renderBlocks` as a green `▸ sent` label with the
+message indented under it, and emitted on the `output` event so an open drawer shows it at once.
+
+The stream runtime is why this has to be explicit: it renders the protocol's own events, and the
+protocol only ever carries what the agent says. An answer typed into the drawer therefore left **no
+trace at all** — and the cockpit deliberately does not refetch after one ([17](17-cockpit.md)), so the
+pane sat unchanged until the agent next spoke, and the only evidence the answer had gone anywhere was
+a reply to a question the transcript never showed. It reads exactly like a box that does nothing.
+
+- **A runtime that already records both halves says so**, with `AgentSession.recordsSentMessages`, and
+  is never echoed. The PTY runtime sets it: its transcript _is_ Claude Code's session file, which
+  records the human turns, and its degraded screen fallback shows what was typed — so an echo there
+  would print every message twice.
+- **The echo goes out only where the message did.** `respond` on an agent with no live session
+  refuses, and refuses before it writes: a transcript claiming a message was sent to a session that
+  is gone is worse than the silence it replaced.
+- **The first message of a dispatch is not echoed.** A task prompt is kilobytes and no cockpit
+  surface reads one ([16](16-http-api.md)); the transcript is the agent's working record, not a copy
+  of its brief. A **resume**'s carry-on message _is_ echoed — it is a sentence, sent into a
+  conversation the operator has already been reading.
+
+That covers the operator's answer, a permission rule's canned response, the stall nudge, and the
+sentence that ends a usage-limit park.
+
+Tests: `test/sentMessages.test.ts`.
 
 ### The usage-limit park (issue #318)
 

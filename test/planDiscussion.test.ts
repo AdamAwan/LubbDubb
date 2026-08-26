@@ -193,6 +193,7 @@ async function buildDesk(): Promise<{ system: System; session: Session; close: (
     store: system.store,
     claimMinutes: 60,
     validationRoot: join(dir, 'validation'),
+    environments: [],
     localRun: () => system.localRun,
     proposals: () => system.proposals,
     runCycle: () => system.harness.runCycle('manual').then(() => undefined),

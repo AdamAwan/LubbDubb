@@ -24,6 +24,7 @@ export const MCP_SERVER_ID = 'lubbdubb';
  */
 export const MCP_TOOL_NAMES = [
   'plan_submit',
+  'plan_not_needed',
   'escalate',
   'world_read',
   'request_human_task',
@@ -33,7 +34,7 @@ export const MCP_TOOL_NAMES = [
   'conclude_work',
   'assess_issue',
   'conclude_part',
-  'assay_issue',
+  'appraise_issue',
   'scratch_append',
   'scratch_read',
   'retro_submit',
@@ -108,10 +109,15 @@ export const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use'> = {
   reply_to_review: 'point-of-use',
   // Terminal or task-scoped: the dispatch prompt names these where they are used.
   link_ticket: 'point-of-use',
+  // The planner's other verdict, named by `issue-plan` where the planner is told
+  // what its job is. Deliberately *not* in the addendum beside `plan_submit`: an
+  // agent that is not planning cannot cast it, and the addendum is read by every
+  // one of them.
+  plan_not_needed: 'point-of-use',
   conclude_work: 'point-of-use',
   conclude_part: 'point-of-use',
   assess_issue: 'point-of-use',
-  assay_issue: 'point-of-use',
+  appraise_issue: 'point-of-use',
   retro_submit: 'point-of-use',
   scratch_append: 'point-of-use',
   scratch_read: 'point-of-use',
@@ -206,6 +212,16 @@ export const ALLOWED_MCP_TOOLS: string[] = MCP_TOOL_NAMES.map((name) => `mcp__${
  * document schema they genuinely do share is one export
  * (`src/mcp/planDocumentSchema.ts`) rather than two literals.
  *
+ * `goal_read` is the one tool here that is *only* a read, and the only one whose
+ * answer is not about a next step: it is what the harness kept about a goal — the
+ * plan, the parts, the pull requests, the decisions the dispatcher took, what was
+ * escalated, what was concluded — handed over so the operator can ask a question
+ * about the work and get an answer from the record rather than from a session's
+ * reading of the repository. It is named `goal_read` and not `world_read`
+ * deliberately: the fleet's `world_read` answers a provider's view of one item,
+ * where this answers the harness's own history of a run, and one name over both
+ * would be the `validation_report` trap a third time.
+ *
  * `local_run` is the one tool here with no goal in it and nothing to write. It
  * answers "how does this project start on this machine", which is the question a
  * session has to settle before it can carry out most checks — and the reason it
@@ -216,6 +232,7 @@ export const ALLOWED_MCP_TOOLS: string[] = MCP_TOOL_NAMES.map((name) => `mcp__${
  * at the prompt to approve a call. Here somebody is, and it is their own machine.
  */
 export const DESKTOP_TOOL_NAMES = [
+  'goal_read',
   'validation_read',
   'validation_claim',
   'validation_report',

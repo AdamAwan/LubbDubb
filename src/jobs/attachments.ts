@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { JobAttachmentInput } from '../types.js';
 
 /**
- * What a blueprint may carry, and how it is decided (issue #249).
+ * What a brief may carry, and how it is decided (issue #249).
  *
  * Pure: this module decodes, measures and *identifies* the bytes an operator
  * pasted, and nothing here touches the disk or the store. Every bound is stated
@@ -20,7 +20,7 @@ import type { JobAttachmentInput } from '../types.js';
  *   of sanitising it. The operator's name survives as a display label only.
  */
 
-/** How many images one blueprint may carry. */
+/** How many images one brief may carry. */
 export const MAX_ATTACHMENTS = 4;
 
 /** Decoded size cap, per file. A full-screen retina PNG is ~2–4 MB. */
@@ -64,7 +64,7 @@ const AttachmentInputSchema: z.ZodType<JobAttachmentInput, z.ZodTypeDef, unknown
 /** The optional `attachments` field, with the count bound stated in its refusal. */
 export const AttachmentsField = z
   .array(AttachmentInputSchema, { invalid_type_error: 'attachments must be an array' })
-  .max(MAX_ATTACHMENTS, `at most ${MAX_ATTACHMENTS} attachments per blueprint`)
+  .max(MAX_ATTACHMENTS, `at most ${MAX_ATTACHMENTS} attachments per brief`)
   .optional();
 
 /** One attachment that passed every bound: the bytes, and what to call them. */
@@ -88,13 +88,12 @@ type Prepared = { ok: true; files: PreparedAttachment[] } | { ok: false; error: 
  *
  * A refusal names the file (by the operator's own label, since that is what they
  * see in the composer) and the bound it broke. The caller returns it as a 400 and
- * queues nothing: a blueprint whose image was dropped is worse than no blueprint,
+ * queues nothing: a brief whose image was dropped is worse than no brief,
  * because the prompt says "like this" and there is no "this".
  */
 export function prepareAttachments(inputs: JobAttachmentInput[] | undefined): Prepared {
   if (!inputs?.length) return { ok: true, files: [] };
-  if (inputs.length > MAX_ATTACHMENTS)
-    return { ok: false, error: `at most ${MAX_ATTACHMENTS} attachments per blueprint` };
+  if (inputs.length > MAX_ATTACHMENTS) return { ok: false, error: `at most ${MAX_ATTACHMENTS} attachments per brief` };
   const files: PreparedAttachment[] = [];
   for (const [index, input] of inputs.entries()) {
     const label = input.name?.trim() || `attachment ${index + 1}`;

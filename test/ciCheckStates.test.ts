@@ -103,6 +103,7 @@ function fakeApi(evals: AzPolicyEvaluation[], pulls: AzPull[] = [pull()]): Azure
     async listPullThreads() {
       return [];
     },
+    async setThreadStatus() {},
     async listPolicyEvaluations() {
       return evals;
     },

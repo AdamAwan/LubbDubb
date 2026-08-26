@@ -33,10 +33,18 @@ the money is still being spent — it acts on nothing and files a visible obliga
 emitter and tests can pass a plain capture object.
 
 The log is the one record an operator can **clear** (`POST /api/errors/clear`, the cockpit's
-Faults head): it is a list read and cleared rather than a record anything decides on — nothing in the
-harness reads `error_events` back — so the only thing a clear can lose is a row nobody had read. The
-other three tables have no such button, because every one of them is read back by something. Clearing
-stops nothing: the next failure records as usual.
+Faults head): it is a list read and cleared rather than a record anything **decides** on, so the only
+thing a clear can lose is a row nobody had read. The other three tables have no such button, because
+every one of them is read back by something a decision depends on. Clearing stops nothing: the next
+failure records as usual.
+
+**One thing does read it back, and it decides nothing.** The pool's digest arm counts the log per
+`source` per UTC day into the `byFault` section of the fleet's published digest, so a person opening
+the fleet's `digest.md` in the pool repository can see what has been going wrong without a cockpit in
+front of them ([28](28-cross-fleet-pool.md#the-faults-section)). It is a reading and never a trigger,
+it is never mirrored to any other fleet, and a clear therefore costs it exactly what it costs the
+panel — which is why the published table says under itself that a quiet quarter may be a cleared one,
+rather than the clear button acquiring a warning about a file somewhere else.
 
 The event is named **`logged`, not `error`**: an unlistened `error` event throws on an EventEmitter,
 and recording a failure must never throw.
@@ -323,7 +331,7 @@ hold: **where did it go**. It is served by `GET /api/spend` ([16](16-http-api.md
 and drawn by the Insights page's Economics and Work mix tabs ([17](17-cockpit.md#economics)). Three
 splits of one pot of money, plus the coverage caveat:
 
-- **By phase** — `deliberation` (`:plan`, `:assay`), `build` (the pickup root and every `:part:`),
+- **By phase** — `deliberation` (`:plan`, `:appraisal`), `build` (the pickup root and every `:part:`),
   `ci` (`pr:<n>:ci`, `pr:<n>:ci-gate`), `landing` (every other `pr:*`), `evidence` (`:assess`,
   `:retro`), `local` (a local run), `job` (`job:*`) and `other`. A partition: they sum to the fleet
   total. The issue-subtree phases are `issueOriginRole`'s vocabulary rather than a second one, so **a

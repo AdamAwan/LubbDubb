@@ -1,6 +1,7 @@
 import type { Plan, PlanPart, ValidationCheck } from '../types.js';
 import { liveChecks, validationVerdict } from '../validation/verdict.js';
 import { partOutcomeKind, planProgress } from './parts.js';
+import { prRef, type PrRefStyle } from '../prRef.js';
 
 /**
  * The plan's status comment on the tracker item — the one progress channel both
@@ -15,7 +16,12 @@ import { partOutcomeKind, planProgress } from './parts.js';
  * {@link narrative}. The two belong in one comment because they are one thing from
  * the thread's point of view: what the harness is doing here, and why.
  */
-export function renderPlanComment(plan: Plan, parts: PlanPart[], checks: ValidationCheck[] = []): string {
+export function renderPlanComment(
+  plan: Plan,
+  parts: PlanPart[],
+  style: PrRefStyle,
+  checks: ValidationCheck[] = [],
+): string {
   const { settled, total } = planProgress(parts);
   // "merged" was the only terminal when this was written, and is not any more. An
   // operator reading "3/4 parts merged" on a plan whose fourth part was a write-up
@@ -24,7 +30,7 @@ export function renderPlanComment(plan: Plan, parts: PlanPart[], checks: Validat
     plan.status === 'complete'
       ? `**Plan complete** — all ${total} part${total === 1 ? '' : 's'} finished.`
       : `**Plan in progress** — ${settled}/${total} part${total === 1 ? '' : 's'} done.`;
-  const lines = parts.map((p) => `- ${statusMark(p)} **${p.title}** (\`${p.slug}\`) — ${where(p)}`);
+  const lines = parts.map((p) => `- ${statusMark(p)} **${p.title}** (\`${p.slug}\`) — ${where(p, style)}`);
   const why = plan.reason ? `\n\n${plan.reason}` : '';
   // Never a closing instruction, and never a close: completion goes no further
   // than review, and whether the issue is done is a human's call.
@@ -182,7 +188,7 @@ function statusMark(part: PlanPart): string {
   }
 }
 
-function where(part: PlanPart): string {
+function where(part: PlanPart, style: PrRefStyle): string {
   if (part.status === 'concluded') {
     const kind = partOutcomeKind(part) ?? 'concluded';
     // Surfaced, never validated: the planner expecting code and the agent finding a
@@ -192,7 +198,9 @@ function where(part: PlanPart): string {
     const summary = part.outcomeSummary ? ` — ${part.outcomeSummary}` : '';
     return `${kind}${planned}${summary}`;
   }
-  if (part.prNumber !== null) return `${label(part)} · PR #${part.prNumber}`;
+  // The provider's own sigil: this comment is published on the tracker, and on
+  // Azure a pull request named `#12` links to work item 12 instead.
+  if (part.prNumber !== null) return `${label(part)} · PR ${prRef(part.prNumber, style)}`;
   if (part.branch !== null) return `${label(part)} · \`${part.branch}\``;
   return label(part);
 }

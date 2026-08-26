@@ -20,6 +20,14 @@ function recordingSink(): { sink: ActionSink; comments: IssueCommentInput[] } {
   return {
     comments,
     sink: {
+      canCloseIssue: () => false,
+      canResolvePrThread: () => false,
+      resolvePrThread: (): never => {
+        throw new Error('resolvePrThread is not scripted in this test');
+      },
+      closeIssue: (): never => {
+        throw new Error('closeIssue is not scripted in this test');
+      },
       canSetWorkItemState: () => false,
       canPlaceWorkItem: () => false,
       setWorkItemParent: () => Promise.reject(new Error('not used')),
@@ -546,7 +554,7 @@ test('the rendered comment reports progress and the PR numbers', () => {
     },
   ]);
   store.updatePlanPart(parts[0]!.id, { status: 'merged', prNumber: 40 });
-  const body = renderPlanComment(plan, store.listPlanParts(plan.id));
+  const body = renderPlanComment(plan, store.listPlanParts(plan.id), '#');
   assert.match(body, /1\/2 parts done/);
   assert.match(body, /Schema first\./);
   assert.match(body, /\[x\] \*\*Schema\*\* \(`schema`\) — merged · PR #40/);

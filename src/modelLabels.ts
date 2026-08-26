@@ -21,10 +21,10 @@ import { orderedProfiles, profileRank, type AgentModels } from './agents/modelPo
  * with no mechanism behind it — a human can see it and take it off.
  *
  * The tag holds the **resolved answer**, not an operator override sitting beside
- * an inferred one. The assayer proposes a profile, a human confirms or changes
+ * an inferred one. The appraiser proposes a profile, a human confirms or changes
  * it, and what lands here is the outcome — so dispatch does one lookup rather
  * than ranking two sources, and "who decided this" is still answerable by
- * comparing the tag against the proposal the assay row kept.
+ * comparing the tag against the proposal the appraisal row kept.
  */
 
 /** The label that pins a goal to `profile`. Empty prefix yields an empty label — the feature off. */

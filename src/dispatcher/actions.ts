@@ -153,6 +153,14 @@ const ActionSchema = z.discriminatedUnion('type', [
     prNumber: z.number().int(),
     commentId: z.string().nullable().default(null),
     draft: z.string().min(1),
+    /**
+     * Mark the thread resolved once the reply lands. The agent's own verdict on
+     * the thread it answered (`reply_to_review`'s `resolved`), carried on the act
+     * so the operator authorizes the reply and the resolution together — the
+     * reply is what the resolution claims to justify. Ignored without a
+     * `commentId`: there is no thread to resolve on a reply to the pull request.
+     */
+    resolve: z.boolean().default(false),
     ...base,
   }),
   z.object({

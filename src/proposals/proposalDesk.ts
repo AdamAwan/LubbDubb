@@ -3,6 +3,7 @@ import type { EscalationInbox } from '../escalation/escalationInbox.js';
 import type { ActionExecutor } from '../executor/actionExecutor.js';
 import type { Proposal } from '../types.js';
 import { refusePlan } from '../plans/planApproval.js';
+import { backOutOfPlan, type BackOutContext, type BackOutVerdict } from '../plans/planBackOut.js';
 import { readProposedAct } from './proposals.js';
 
 interface DecideResult {
@@ -44,6 +45,13 @@ export class ProposalDesk {
     private readonly store: Store,
     private readonly escalations: EscalationInbox,
     private readonly executor: ActionExecutor,
+    /**
+     * What backing out of a plan needs beyond the store — the outbound seam and
+     * the error log. Carried rather than reached for, because the two back-out
+     * verdicts write to somebody else's tracker and the desk is where a verdict's
+     * effect belongs (see {@link ProposalDesk.backOut}).
+     */
+    private readonly backOutCtx: Omit<BackOutContext, 'store'>,
   ) {}
 
   /** Authorize the act. Returns null if it was already decided (or never existed). */
@@ -73,6 +81,52 @@ export class ProposalDesk {
     // is what leaves it a route — see there for which one and why.
     const consequence = this.settlePlan(proposal);
     const detail = `Rejected by you${proposal.note ? `: ${proposal.note}` : ''} — nothing was sent${consequence} (${proposal.id}).`;
+    this.store.recordDecision({
+      cycleId: `human:${proposal.id}`,
+      action: proposal.action,
+      outcome: 'skipped',
+      detail,
+    });
+    return { proposal, outcome: 'none', detail };
+  }
+
+  /**
+   * Back out of a plan without answering the question it asked — the two verdicts
+   * that are about the **ticket** rather than about the plan (see
+   * `src/plans/planBackOut.ts`).
+   *
+   * It settles the proposal exactly as {@link reject} does, and for the same
+   * reason: the act was not authorized, so the row must leave `pending` in the one
+   * direction that says so, the inbox item must be answered with it, and the
+   * decision log must carry what the click did. What differs is entirely the
+   * effect. A close ends the plan outright (`declinePlan`) and concludes the goal;
+   * a hold reaches `refusePlan` after all, but with the watch tag off — so the
+   * replan it sets up costs nothing until somebody asks for the goal again, and
+   * what comes back then is a new plan rather than this one re-proposed.
+   *
+   * Refused for anything but a `plan` proposal: a merge or a reply draft has no
+   * ticket behind it to close or hold, and a shortfall's ticket is one the harness
+   * has already delivered against. Null when it was already decided, exactly as
+   * accepting and rejecting are.
+   */
+  async backOut(id: string, verdict: BackOutVerdict, note?: string): Promise<DecideResult | null> {
+    // Read before the transition, so a proposal of the wrong kind is refused rather
+    // than settled into a verdict whose effect cannot run.
+    const standing = this.store.getProposal(id);
+    if (!standing || standing.status !== 'pending') return null;
+    if (standing.kind !== 'plan') return null;
+
+    const proposal = this.store.decideProposal(id, 'rejected', note?.trim() || null, 'human');
+    if (!proposal) return null;
+    const what = verdict === 'close' ? 'Closed the ticket' : 'Put the ticket on hold';
+    this.closeEscalation(proposal, `${what}${proposal.note ? `: ${proposal.note}` : '.'}`);
+
+    const read = readProposedAct(proposal);
+    const consequence =
+      read.ok && read.act.kind === 'plan'
+        ? (await backOutOfPlan({ ...this.backOutCtx, store: this.store }, read.act, verdict, proposal.note)).detail
+        : `the plan could not be settled (${read.ok ? 'the row names no plan' : read.error})`;
+    const detail = `${what} by you${proposal.note ? `: ${proposal.note}` : ''} — nothing was scheduled; ${consequence} (${proposal.id}).`;
     this.store.recordDecision({
       cycleId: `human:${proposal.id}`,
       action: proposal.action,

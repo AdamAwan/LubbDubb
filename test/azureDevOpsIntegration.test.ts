@@ -76,6 +76,8 @@ interface Script {
 }
 
 interface Recorded {
+  /** Thread status writes — the resolution of a review thread. */
+  threadStatuses: Array<{ pullRequestId: number; threadId: number; status: string }>;
   threadReplies: Array<{ prId: number; threadId: number; parentCommentId: number; content: string }>;
   newThreads: Array<{ prId: number; content: string }>;
   completions: Array<{ prId: number; commit: string; method: MergeMethod }>;
@@ -114,6 +116,7 @@ interface Recorded {
 
 function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded } {
   const recorded: Recorded = {
+    threadStatuses: [],
     threadReplies: [],
     requeues: [],
     newThreads: [],
@@ -177,6 +180,9 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     },
     async listPullThreads(prId) {
       return script.threads?.[prId] ?? [];
+    },
+    async setThreadStatus(pullRequestId, threadId, status) {
+      recorded.threadStatuses.push({ pullRequestId, threadId, status });
     },
     async listPolicyEvaluations(prId) {
       return script.policyEvals?.[prId] ?? [];
@@ -940,6 +946,16 @@ test('postPrReply opens a new thread when commentId is null', async () => {
   assert.equal(res.ok, true);
   assert.deepEqual(recorded.newThreads, [{ prId: 7, content: 'ping' }]);
   assert.equal(recorded.threadReplies.length, 0);
+  store.close();
+});
+
+test('resolvePrThread marks the thread fixed — the status the resolved arm reads back', async () => {
+  const { api, recorded } = fakeApi();
+  const store = new Store(':memory:');
+  const sc = new AzureDevOpsSourceControlIntegration({ api });
+  const res = await sc.resolvePrThread({ prNumber: 7, commentId: '300' });
+  assert.equal(res.ok, true);
+  assert.deepEqual(recorded.threadStatuses, [{ pullRequestId: 7, threadId: 300, status: 'fixed' }]);
   store.close();
 });
 

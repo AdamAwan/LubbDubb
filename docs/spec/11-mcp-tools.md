@@ -20,13 +20,14 @@ assembles them (see [How a tool is built](#how-a-tool-is-built)).
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `raise`              | The one door for anything an agent learns. Says what is true and what it saw; the harness works out where the claim goes and an operator settles what it is for. No kind, no lifetime word, no destination. → [27](27-knowledge.md#the-intake-asks-nothing-an-agent-cannot-answer)                                                                                                                                                                                                            |
 | `plan_submit`        | Submit a decomposition verdict. Replaces writing `.lubbdubb/plan.json`.                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `plan_not_needed`    | The planner's other verdict: this goal is already met, so no plan is written at all. Records the delivery park, writes no plan row. Fenced to `issue:<n>:plan` origins, and refused on a replan. → [08](08-planning.md#when-there-is-nothing-to-plan)                                                                                                                                                                                                                                          |
 | `escalate`           | Ask the human a question and park. The typed form of the WAITING sentinel.                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `world_read`         | Read the harness's own view of a PR or issue.                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `request_human_task` | Ask for work only a person can do. Files a durable work item, parks nobody, dispatches nobody.                                                                                                                                                                                                                                                                                                                                                                                                |
 | `note_progress`      | Say in one line what the agent is working on right now.                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `link_ticket`        | File the tracker item for a filed finding or a bug an operator raised: the agent hands over the title and body, or names an existing item it duplicates.                                                                                                                                                                                                                                                                                                                                      |
 | `conclude_work`      | Say whether the **issue** the agent was dispatched for is finished. The only thing that concludes a ticket in the harness's view.                                                                                                                                                                                                                                                                                                                                                             |
-| `assay_issue`        | The gate in front of the work: say whether the issue an assayer was dispatched to judge has a goal that can be worked from. Fenced to `issue:<n>:assay` origins.                                                                                                                                                                                                                                                                                                                              |
+| `appraise_issue`        | The gate in front of the work: say whether the issue an appraiser was dispatched to judge has a goal that can be worked from. Fenced to `issue:<n>:appraisal` origins.                                                                                                                                                                                                                                                                                                                              |
 | `assess_issue`       | The second look: say whether the issue an assessor was dispatched to judge is actually delivered. Fenced to `issue:<n>:assess` origins.                                                                                                                                                                                                                                                                                                                                                       |
 | `conclude_part`      | Close **one plan part** that finished without a pull request — a report, or the determination that nothing needs building. Fenced to `issue:<n>:part:<slug>` origins.                                                                                                                                                                                                                                                                                                                         |
 | `scratch_append`     | Leave a note on the shared scratchpad for the issue this agent is working. Append-only, attributed from the credential. Refused outside an issue subtree.                                                                                                                                                                                                                                                                                                                                     |
@@ -36,7 +37,7 @@ assembles them (see [How a tool is built](#how-a-tool-is-built)).
 | `validation_amend`   | Correct the validation plan for the goal this agent is working: add or amend checks, withdraw one with a reason, declare a resource. **Merge-only** — an omitted check is untouched. Open to every agent on the goal; refused to the planner, which has `plan_submit`. → [20](20-validation.md)                                                                                                                                                                                               |
 | `validation_report`  | Record the reading of the one validation check this agent was dispatched to run: `passed`, `failed`, or `handback` — could not run it, which records nothing and returns the check to the operator with the reason. Refused to every caller but that check's own agent, by name. → [20](20-validation.md#the-hand-over)                                                                                                                                                                       |
 | `knowledge_ask`      | Read what the fleet has learned, for this caller's own scopes or about a question. Answers only with claims two independent goals have seen or an operator has vouched for — never a bare proposal. → [27](27-knowledge.md)                                                                                                                                                                                                                                                                   |
-| `reply_to_review`    | Hand the harness your reply to a review thread, instead of posting it yourself. Raises the same `reply_on_pr` act a rule raises and sends nothing: the operator's authority, the harness's signature and the audit row all follow from that. Fenced to `pr:<n>:comments` origins. → [09](09-execution.md#where-a-reply_on_pr-comes-from)                                                                                                                                                       |
+| `reply_to_review`    | Hand the harness your reply to a review thread, instead of posting it yourself — and say with `resolved` whether the thread is now dealt with, which is the only thing that closes one. Raises the same `reply_on_pr` act a rule raises and sends nothing: the operator's authority, the harness's signature and the audit row all follow from that. Fenced to `pr:<n>:comments` origins. → [09](09-execution.md#where-a-reply_on_pr-comes-from)                                                                                                                                                       |
 | `request_permission` | Harness-internal (issue #130). Claude Code calls it via `--permission-prompt-tool` to route an un-allowlisted tool call to the operator. The one tool an agent never calls itself, and the one whose response is **bare** (no `_status`).                                                                                                                                                                                                                                                     |
 
 There is a **second, much shorter list** for the desktop channel below — six tools, none of them
@@ -80,6 +81,44 @@ tells a planner to submit one landed with no checks, and an absent block is a le
 (`ingestPlanDocument` reads absence as "leave the existing checks alone") that nothing reports.
 `validation` is passed through **undefined-preserving** for that reason: an empty block is a planner
 withdrawing every check, which is not what silence means. → [20](20-validation.md#the-document-block)
+
+### `plan_not_needed`
+
+Arguments `{summary, detail}`. The planner's **other** verdict: what this issue asks for is already
+in the repository, so there is no plan to write. Same fence as `plan_submit` — `plannerOrigin`
+(`src/mcp/planNotNeeded.ts`) resolves the caller's `issue:<n>:plan` origin and refuses every other
+agent **by name**, pointing each at the verdict that is its own: `conclude_work` for the agent
+delivering the issue, `conclude_part` for a part agent, `assess_issue` for an assessor,
+`appraise_issue` for an appraiser.
+
+- **It exists because `PlanDocumentSchema` requires a part, and that refusal is right.** Work that is
+  one pull request is a one-part plan ([08](08-planning.md#a-plan-is-a-list-of-parts)); what the
+  schema cannot express is *no work at all*. Without this tool a planner that reads the repository and
+  finds the goal already met has three moves, and each of them spends an agent to rediscover what it
+  already knows — an invented part, a part that redoes the work, or silence until the attempt cap
+  fails the issue open to `issue-pickup`. → [08](08-planning.md#when-there-is-nothing-to-plan)
+- **It records a delivery, not a plan.** `issue_deliveries` already means "what the issue asked for is
+  present; schedule nothing further", and `deliveryHold` already gates `eligibleIssues` — which is
+  both rules the planner would otherwise be re-dispatched by. `by` is `planner`, a third author beside
+  the assessor and the operator ([06](06-issue-pickup.md#the-delivery-verdict)), so the cockpit and the
+  close-out card can say who decided it. Nothing is written to the plan graph, and a goal parked this
+  way shows no decomposition at all.
+- **`detail` is required, where an assessment's is optional.** An assessor corroborates work the
+  harness watched happen and its headline is read against that record; a planner is contradicting a
+  ticket with no run behind it, so the evidence *is* the verdict. A bare "already done" is not
+  reviewable by the operator who has to decide whether to believe it, and the refusal says so. The
+  `summary` rules are `assess_issue`'s, refusal for a newline included, so an operator learns one
+  shape.
+- **Two refusals are plan-aware and live at the fleet seam** (`AgentManager.recordGoalMet`), for
+  `assess_issue`'s reason — a rejection the agent never hears costs a whole agent to discover.
+  A **replan** is refused: the plan row would go on owning the issue while the delivery parked pickup,
+  and any part already dispatched would keep running underneath a goal marked delivered. A **standing
+  shortfall** is refused because writing a delivery clears it through the exclusion matrix
+  ([14](14-persistence.md#issue-verdicts-and-the-exclusion-matrix)) — the harness overturning its own
+  better-informed judgement with its less-informed one, silently.
+
+It routes through `AgentManager.recordGoalMet` for the `goalMet` event, so the cockpit repaints on the
+verdict rather than on the next pulse.
 
 ### `escalate`
 
@@ -312,7 +351,7 @@ the finding or the bug filing that job was created for`. A job is created for at
 It routes through `AgentManager.linkTicket`, which emits the `finding` event on the finding arm so the
 cockpit repaints on the link rather than on the next pulse.
 
-Two things it is **not** for any more. A **work item** for unrecorded work and a **blueprint's** ticket
+Two things it is **not** for any more. A **work item** for unrecorded work and a **brief's** ticket
 are filed by the harness on the operator's request, with no agent and no job in between — their bodies
 were already harness- or operator-composed text, so a desk agent was being spent on one API call. See
 [13](13-jobs-and-tickets.md#filing-a-ticket).
@@ -415,22 +454,22 @@ resolved from the credential.
 It routes through `AgentManager.recordAssessment` for the `assessment` event, so the cockpit
 repaints on the verdict rather than on the next pulse.
 
-### `assay_issue`
+### `appraise_issue`
 
-Arguments `{status: 'workable'|'unclear', summary, profile?}`. Rule `issue-assay`'s assayer casts its verdict here, with
+Arguments `{status: 'workable'|'unclear', summary, profile?}`. Rule `issue-appraisal`'s appraiser casts its verdict here, with
 identity structural as everywhere else — no issue argument, the origin resolved from the credential.
 
-- **`assayerOrigin` refuses every agent that is _doing_ the work**, and refuses the assessor too,
+- **`appraiserOrigin` refuses every agent that is _doing_ the work**, and refuses the assessor too,
   each by name and pointed at the tool that is theirs. An agent already at work has answered the
   question by starting, and an `unclear` from it would park an issue it is mid-way through — so the
   refusal tells it to **escalate** instead, which reaches a human who can actually answer.
-- **The verdict is stored for both outcomes.** `workable` gates nothing; it exists so the assay is
+- **The verdict is stored for both outcomes.** `workable` gates nothing; it exists so the appraisal is
   not asked again for the same text — the planner's reason for persisting a plan whatever its size.
 - **`unclear` is a question, not a rejection**, and the tool description and response both say so:
   nothing is closed, and the hold ends by itself when the ticket is edited or anything happens on it.
 - The verdict is fingerprinted against the title and body **the agent was dispatched with**, read off
   its task, so an edit made mid-run is not silently swallowed.
-- **`profile` is the assayer sizing the work** (issue #342), and the tool builds its `enum` and its
+- **`profile` is the appraiser sizing the work** (issue #342), and the tool builds its `enum` and its
   description from _this deployment's_ `agentModels.profiles` — so the agent proposes from the
   operator's own vocabulary rather than a difficulty scale that would then need mapping back. It is
   required with `workable` when any profile is configured, because an optional field is one most
@@ -438,9 +477,9 @@ identity structural as everywhere else — no issue argument, the origin resolve
   harness would then act on, at the default's price, having asked. It is dropped rather than refused
   with `unclear`: a goal nobody can start from has no work to size. A proposal that differs from what
   is already standing holds the funnel until a human answers, and the tool's own reply says so.
-  → [02](02-configuration.md#the-gate-the-assayer-proposes-a-human-confirms)
+  → [02](02-configuration.md#the-gate-the-appraiser-proposes-a-human-confirms)
 
-It routes through `AgentManager.recordAssay` for the `assay` event, so the cockpit repaints on the
+It routes through `AgentManager.recordAppraisal` for the `appraisal` event, so the cockpit repaints on the
 verdict rather than on the next pulse.
 
 ### `conclude_part`
@@ -489,7 +528,7 @@ Arguments `{summary, type?, scope?, body?}` — and **nothing that names work**.
   no plan" and opened its pull request by hand: on the default branch rather than the rung beneath
   it, un-stacked, unseeded and unlinked.
 - **Every other origin is refused by name**, and told which tool it actually wants — a PR-concern
-  agent already has a pull request; a planner, assayer, assessor or desk job writes no code. Refusing
+  agent already has a pull request; a planner, appraiser, assessor or desk job writes no code. Refusing
   beats silently scoping: an agent handed a target it did not ask for would open a PR for work it is
   not doing.
 - **The branch must already be pushed, and that is stated in three places.** Nothing in the harness
@@ -526,6 +565,10 @@ Arguments `{summary, type?, scope?, body?}` — and **nothing that names work**.
   why first, one line each, no headings and no prose paragraphs. Unlike the title, the body ships as
   the agent wrote it (the reference is appended and nothing is rewritten), so the schema is the only
   place a form is expressible at all. Left unsaid, agents write thirty lines under `##` headings.
+  It states the **sigil a pull request takes** on the configured provider too (`!12` on Azure DevOps,
+  where `#12` is work item 12). The harness writes the issue reference itself, but a stacked part
+  naming the rung beneath it is the agent's own prose, and this description is the last thing it reads
+  before writing one. → [07](07-pull-requests.md#naming-a-pull-request)
 - **It is named in `MCP_PROTOCOL_ADDENDUM`, and that is load-bearing.** No dispatch prompt names it at
   its point of use, so for its first release nothing named it anywhere and every dispatched agent
   shelled out to `gh`/`az` instead — wired, allow-listed, unused. `test/mcpChannel.test.ts` now
@@ -539,8 +582,9 @@ asserts that rather than intending it.
 
 ### `reply_to_review`
 
-Hands the harness the reply an agent has written for a review thread. Arguments `{body, thread?}` —
-and, like every tool here, **nothing that names a pull request**: it comes from the caller's origin.
+Hands the harness the reply an agent has written for a review thread. Arguments
+`{body, thread?, resolved?}` — and, like every tool here, **nothing that names a pull request**: it
+comes from the caller's origin.
 
 - **It sends nothing.** The handler calls `ActionExecutor.proposeReply`, which raises the same
   `reply_on_pr` act a dispatch rule raises, and returns. Calling `ActionSink.postPrReply` from here
@@ -551,12 +595,24 @@ and, like every tool here, **nothing that names a pull request**: it comes from 
   → [09](09-execution.md#where-a-reply_on_pr-comes-from)
 - **Fenced to `pr:<n>:comments`** (`replyOrigin`, `src/dispatcher/reviewThreads.ts`) — the review
   dispatch. A CI agent is answering a red check, and a reply from it lands on a thread another agent
-  is working; a planner, assayer or desk job has no review at all. Every other origin is refused by
+  is working; a planner, appraiser or desk job has no review at all. Every other origin is refused by
   name and told what to do instead, because the thing being displaced is the agent doing it by hand.
 - **The `thread` is the id the prompt already handed it.** Omitted, the reply is on the pull request
   rather than in a thread — said in the schema, since an unthreaded answer to a threaded question is
   one nobody reading the thread sees. The id is what `replyProposalRef` keys the hold on, so two
   agents on two threads of one review do not hold each other.
+- **`resolved` is how a thread gets closed, and it is the only way.** It rides on the same
+  `reply_on_pr` act, so the operator authorizing the reply authorizes closing the thread the reply is
+  about — one question, not two — and the executor resolves it through `ActionSink.resolvePrThread`
+  once the reply lands ([09](09-execution.md#resolving-the-thread-the-reply-answers)). Without it the
+  routing of replies through the harness left every thread the fleet dealt with open in front of the
+  reviewer: an agent has no credential of its own to click resolve with, and the prompt tells it not
+  to reach for the operator's. The schema says **when not to set it** as plainly as when to — a
+  defence of an approach the reviewer may still reject, or an answer that leaves them something to
+  decide, is their thread to close — because an agent told only that the flag exists resolves the
+  threads it is arguing with. Ignored with no `thread`: a reply on the pull request itself closes
+  nothing, and the call reports `resolveRequested: false` rather than letting the agent believe
+  otherwise.
 - **The reply comes back with the executor's own account of what happened** — proposed and waiting, or
   sent — rather than a second wording of it here. Either is a finished call: nothing is waiting on the
   agent afterwards.
@@ -656,7 +712,7 @@ Three things carry the split:
   reading.
 - **The origin fence is declared in the tool's own module.** Only `plan_submit` has one at this layer
   (`plannerIssue`, pure — it resolves nothing but the issue number). The others — `conclusionOrigin`,
-  `partConclusionOrigin`, `padOriginFor`, `retroSubmitOrigin`, `assessmentOrigin`, `assayerOrigin` —
+  `partConclusionOrigin`, `padOriginFor`, `retroSubmitOrigin`, `assessmentOrigin`, `appraiserOrigin` —
   are asked at the fleet seam because each _resolves_ something out of the store as it refuses (the
   part, the pad, the issue), so a copy in the tool layer would be a second answer to a question already
   answered next to the write it guards.
@@ -700,26 +756,70 @@ load-bearing both ways:
 ## The desktop channel
 
 `src/mcp/desktop.ts`. A second socket, for the operator's **own** Claude Code rather than for a
-spawned agent. Three jobs go there: a validation check needing a browser and a login the fleet does
+spawned agent. Four jobs go there: a validation check needing a browser and a login the fleet does
 not have, run at their keyboard and reported onto the same row; a conversation about a plan, held
-where there is room to have one; and asking for the application itself to be brought up, which most
+where there is room to have one; asking for the application itself to be brought up, which most
 checks need before their first step is possible — the harness runs that one, so the tool asks rather
-than instructs ([23](23-local-runs.md#two-triggers-one-owner)). **Unconditional** — every start binds the stable socket, mints the
+than instructs ([23](23-local-runs.md#two-triggers-one-owner)); and
+[a question about a goal](#answering-a-question-about-a-goal), which is the only one of the four that
+settles nothing. **Unconditional** — every start binds the stable socket, mints the
 credential at `validation.desktopCredentialPath` (`0600`) and rewrites the skill at
 `validation.desktopSkillPath`, on a deployment that configured none of it. That footprint is the whole
-of what the channel costs a deployment that never uses it, and it is the price of the cockpit's three
+of what the channel costs a deployment that never uses it, and it is the price of the cockpit's four
 deep links reaching something. [20](20-validation.md#the-desktop-channel) owns the check behaviour
 and [the run](20-validation.md#getting-the-application-up);
-[08](08-planning.md#discussing-a-plan) owns the plan one.
+[08](08-planning.md#discussing-a-plan) owns the plan one;
+[Answering a question about a goal](#answering-a-question-about-a-goal) below owns the fourth.
 
 | Tool                | Purpose                                                                                               |
 | ------------------- | ----------------------------------------------------------------------------------------------------- |
+| `goal_read`         | The harness's whole record of one goal, for answering a question about it. Records nothing.           |
 | `validation_read`   | Read a goal's validation plan, or one check's full procedure. Records nothing.                        |
 | `validation_claim`  | Take the one check this session is about to run. One claim at a time, harness-wide.                   |
 | `validation_report` | Record what was seen: `passed`, `failed`, or `handback`. Reported against the claim, not an argument. |
 | `plan_read`         | Read a goal's delivery plan: the verdict, the parts and their slugs, the agenda. Records nothing.     |
 | `plan_amend`        | Rewrite it after talking it through. Refuses outside `awaiting_approval`; withdraws the stale card.   |
 | `local_run`         | The machine's dev environment: what is running, and — given a goal — start it on that goal's code.    |
+
+### Answering a question about a goal
+
+The other three jobs are steps in a piece of work. This one is a person wanting to understand one:
+_what did we actually do here, which pull request was it, why did it take four goes, is it on hallway
+yet._ Every one of those is answerable from rows the harness already holds, and before `goal_read`
+every one of them was answered by reading the cockpit, reading the repository, and joining the two by
+hand.
+
+`goal_read` takes a goal number and answers with the record. It is the widest read on either channel
+and that is what being a read buys: it settles nothing, schedules nothing and claims nothing, so the
+argument that fences every other tool on this socket — which check is this report about — has nothing
+to fence.
+
+**The history is the dossier the retrospective agent gets, through the same read and the same
+rendering.** `goalRecord` (`src/retro/record.ts`) is the one assembly of "what happened on this goal"
+and `retroDossier` is the one rendering of it; `goal_read` and the retrospective briefing in
+`src/executor/actionExecutor.ts` are its two callers. A second gather beside the first is the obvious
+way to build this — each caller wants a different shape — and what it produces is two answers to one
+question, free to disagree the next time the subtree predicate or the escalation matching changes.
+The reading is shared; the rendering is the caller's.
+
+**What rides beside the dossier is what the dossier does not carry, and only that**: the ticket's own
+text, the validation checks and their readings, where the work has reached in each environment, the
+retrospective if one was written, and the tail of the scratchpad. The plan, the parts, the pull
+requests, the decisions, the escalations, the claims, the cost and the verdicts are all in the
+dossier already, and a second rendering of any of them in the same reply would be two accounts of one
+row that the next change to either is free to separate.
+
+**An environment verdict is passed through three-valued.** The fold is `allGoalReach`
+([24](24-environments.md#the-lens)) — the cockpit's own, so an operator asking their Claude and an
+operator reading the panel get one answer — and `unknown` is never folded into `absent` on the way
+out. Both the tool's hand-back note and the skill's own section say what the distinction means,
+because the failure is a sentence: a session told `absent` reports in the operator's words that the
+work has not shipped, when what happened is that a probe could not answer.
+→ [24](24-environments.md#the-three-verdicts)
+
+**It refuses a number the harness holds nothing about** — no plan, no decisions, and absent from the
+last world snapshot. An empty account is what a typo produces far more often than a goal, and it
+reads exactly like a goal nothing has happened on yet.
 
 **`plan_amend` is deliberately not a second `plan_submit`.** They write the same document through the
 same `ingestPlanDocument`, and they share the schema as one export (`src/mcp/planDocumentSchema.ts`)
@@ -823,7 +923,9 @@ So every tool is named in one of two places, and which one is a decision, not a 
   an agent learns something rather than at a point somebody predicted.
 - **Its point of use** — the dispatch prompt or the instruction block for the work it belongs to — for
   a tool only one kind of agent ever calls: `conclude_work`, `conclude_part`, `assess_issue`,
-  `assay_issue`, `retro_submit`, `link_ticket`, the scratch pair, the validation pair. Keeping them out
+  `appraise_issue`, `plan_not_needed`, `retro_submit`, `link_ticket`, the scratch pair, the validation
+  pair. `plan_not_needed` sits here rather than beside `plan_submit` in the addendum because only a
+  planner can cast it, and the addendum is read by every agent there is. Keeping them out
   of the addendum is what keeps it short enough to be read. `request_permission` is named in neither,
   because no agent calls it: Claude Code invokes it through `--permission-prompt-tool`.
 
@@ -918,7 +1020,7 @@ a `finish()` the model forgets to call is silence, and silence is indistinguisha
 ### The finish reminder on a terminal tool
 
 Having no tool for done has one cost, and it lands on the tools that _are_ the whole of a dispatch:
-`assess_issue`, `conclude_work` and `conclude_part`. Their success responses read as the end of the
+`assess_issue`, `conclude_work`, `conclude_part` and `plan_not_needed`. Their success responses read as the end of the
 job — "Recorded. The harness will schedule nothing further for this issue" — while the sentinel was
 stated once, in the system prompt, thousands of tokens earlier. An agent that records its verdict,
 narrates it and stops has therefore done everything its prompt asked and still ends its turn with no
@@ -926,12 +1028,12 @@ sentinel in it, which
 [10](10-agent-runtimes.md#the-unannounced-stop) can only read as a stop — which costs the fleet a
 nudge over a job that finished, and the operator an inbox item once the nudges are spent.
 
-So each of those three appends `DONE_REMINDER` (`src/agents/agentProtocol.ts`, built from
+So each of those four appends `DONE_REMINDER` (`src/agents/agentProtocol.ts`, built from
 `DONE_SENTINEL` so there is never a second copy of the string) to its success note. It states the
 _condition_ — "when you have finished everything your task asked for" — rather than announcing the
-end, because the call is not itself the end: an assayer has a `scratch_append` note to leave after
-`assay_issue`, and wording that read as "you are finished now" would cut that short. For that reason
-`assay_issue` does not carry the reminder; the last thing its prompt asks for is the note, not the
+end, because the call is not itself the end: an appraiser has a `scratch_append` note to leave after
+`appraise_issue`, and wording that read as "you are finished now" would cut that short. For that reason
+`appraise_issue` does not carry the reminder; the last thing its prompt asks for is the note, not the
 verdict.
 
 The reminder does not make a tool call imply done. That asymmetry is `note_progress`'s, for the same

@@ -6,6 +6,8 @@ import {
   envOverride,
   readPath,
   type ConfigFieldAccess,
+  type ConfigFieldRequirement,
+  type ConfigFieldSuggestion,
   type ConfigFieldType,
 } from '../configFields.js';
 
@@ -77,6 +79,29 @@ export interface RunningConfigEntry {
   why: string;
   /** A duration in milliseconds, so the cockpit can say "5m" beside the number. */
   ms?: boolean;
+  /**
+   * The key that makes this one required, and the one value of it that does not
+   * — shipped as the declaration rather than as a resolved `required: boolean`.
+   *
+   * The exception to "the server decides and this only draws", and a narrow one:
+   * the answer depends on what is **staged**, which is the one thing this side
+   * cannot see. A `required` computed here would be the answer for the config the
+   * harness is *running*, so an operator who picks the pool provider and saves
+   * gets a 400 from the next boot's own refusal with no field on the page to fix
+   * it. The rule is still stated once, in `configFields.ts`; the browser only
+   * evaluates it. → `docs/spec/02-configuration.md#a-key-another-key-requires`
+   */
+  requiredWhen?: ConfigFieldRequirement;
+  /**
+   * A value to *offer* for an unset key, joined from keys the config already
+   * holds — `userId` and `pool.project` make `alice@acme-api` for `fleetId`.
+   *
+   * Absent unless every part resolves to a non-empty string: half a suggestion is
+   * `alice@` typed into a field whose whole job is to be an address nobody else
+   * writes to. Nothing writes it on the operator's behalf, which is what keeps
+   * "never derived" true — it is a button beside an empty field.
+   */
+  suggestion?: string;
 }
 
 /** Named for the wire contract (`src/wire.ts`), which the settings modal reads it through. */
@@ -160,6 +185,7 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
   {
     title: 'Features',
     keys: [
+      'featureBoard',
       'planning',
       'validation',
       'spendBurn',
@@ -249,14 +275,46 @@ function flatten(
   });
 }
 
-/** One declared field, read out of the running config. `null` for an unset optional. */
+/**
+ * The value to offer for an unset key, or undefined where there is nothing whole
+ * to offer.
+ *
+ * Every part must resolve to a non-empty string. `alice@` is not a suggestion,
+ * it is a half-typed one — and the operator who accepts it publishes under an
+ * address that reads like a mistake to every other fleet in the pool.
+ */
+function suggestionFor(suggest: ConfigFieldSuggestion | undefined, config: Config): string | undefined {
+  if (!suggest) return undefined;
+  const parts = suggest.join.map((path) => readPath(config, path));
+  if (!parts.every((part) => typeof part === 'string' && part !== '')) return undefined;
+  return parts.join(suggest.with);
+}
+
+/**
+ * One declared field, read out of the running config. `null` for an unset
+ * optional — **except** one another key can require, which is drawn empty.
+ *
+ * An unset optional is not a configured value, and a column of blanks buries the
+ * rest, so `github.owner` on a deployment with no GitHub target is absent rather
+ * than empty. A key with a `requiredWhen` is the one thing that rule cannot
+ * survive: the key it depends on is editable on this very page, so the moment an
+ * operator selects the pool provider the field they must fill in is the field
+ * that is not there — and the only thing that tells them is a 400 from the save.
+ * One empty row is the cheaper of the two.
+ */
 function entryFor(path: string, config: Config, baseline: Config, project: Partial<Config>): RunningConfigEntry | null {
   const field = configField(path);
   /* istanbul ignore next — callers iterate CONFIG_FIELDS, so the lookup always hits. */
   if (!field) return null;
-  const value = readPath(config, path);
-  if (value === undefined) return null;
-  const base = readPath(baseline, path);
+  const held = readPath(config, path);
+  if (held === undefined && !field.requiredWhen) return null;
+  // Empty, and reported as inherited: the operator has not chosen it, so there is
+  // nothing for a reset to put back and no `file` chip to draw. `undefined` is the
+  // only reading that means unset — `??` here would swallow `spendBurn.ceilingUsd`'s
+  // null, which is a configured value meaning "no ceiling".
+  const value = held === undefined ? '' : held;
+  const base = held === undefined ? value : readPath(baseline, path);
+  const suggestion = suggestionFor(field.suggest, config);
   return {
     path,
     value,
@@ -274,6 +332,8 @@ function entryFor(path: string, config: Config, baseline: Config, project: Parti
     env: envOverride(field) ?? null,
     why: field.why,
     ...(field.ms ? { ms: true } : {}),
+    ...(field.requiredWhen ? { requiredWhen: field.requiredWhen } : {}),
+    ...(suggestion !== undefined ? { suggestion } : {}),
   };
 }
 

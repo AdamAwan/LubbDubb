@@ -5,7 +5,7 @@ import type { Config } from './config.js';
  *
  * ## The gap this closes
  *
- * All four filing arms — a deferred finding, unrecorded work, a blueprint, a bug
+ * All four filing arms — a deferred finding, unrecorded work, a brief, a bug
  * the operator raised — created their item **unassigned**, and an unassigned item
  * is in nobody's queue. The operator who asked for the ticket then has to go and
  * claim it in the tracker by hand, on a ticket they are already the owner of.

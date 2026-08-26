@@ -186,8 +186,8 @@ anything above changing.
 Three rules follow from the repository not being the pool's, and each of them is a way to damage
 somebody else's work:
 
-- **The write set is exactly `<path>/fleets/<fleetId>/`.** The transport stages its own two files by
-  name and commits those paths. Never `git add -A`, never `git add .`, and never `git clean` anywhere
+- **The write set is exactly `<path>/fleets/<fleetId>/`.** The transport stages its own files by
+  name — each document and its companion — and commits those paths. Never `git add -A`, never `git add .`, and never `git clean` anywhere
   in the clone. In a dedicated repository a broad stage is untidy; in a wiki it commits whatever else
   happens to be in the tree, under the harness's name, on a schedule, with nobody having asked.
 - **The read is scoped to `<path>/fleets/`** rather than to the tree. A pool sharing a wiki is a pool
@@ -218,11 +218,12 @@ and consented to.
 | Read by      | the importer, per fleet, sentence by sentence | an aggregator, summed across fleets |
 | Retention    | while the claim is true                       | ninety days, rolling                |
 
-So they are two documents at two addresses:
+So they are two documents at two addresses, each with a companion a person can read
+([below](#the-human-readable-companion)):
 
 ```
-<pool.path>/fleets/<fleetId>/claims.json
-<pool.path>/fleets/<fleetId>/digest.json
+<pool.path>/fleets/<fleetId>/claims.json   <pool.path>/fleets/<fleetId>/claims.md
+<pool.path>/fleets/<fleetId>/digest.json   <pool.path>/fleets/<fleetId>/digest.md
 ```
 
 **The cadence difference is the one that decides it.** One document means republishing the claim text
@@ -252,6 +253,41 @@ early adopter silently emptying the pool for everybody.
 address is the transport's, and a text substrate may have none that survives a round trip. A fleet
 publishing under another fleet's name is the single thing that can break one writer per namespace, so
 it is checked rather than assumed.
+
+## The human-readable companion
+
+A pool lives where people already are — a team's wiki, a repository somebody browses on the web. What
+they find there is a JSON document written for an importer, and the fleet's own knowledge is
+consequently readable only by the fleets. So each document is published with a markdown rendering of
+itself beside it, at the same address with a `.md` extension.
+
+**It is derived output and never an input.** `fetch` names `claims.json` and `digest.json` by name, so
+nothing ever reads a companion back — which is the whole of why it is safe to have one. A markdown file
+the importer parsed would be a second grammar for one fact, free to disagree with the JSON the moment
+either is edited, and it would disagree silently: a hand-corrected sentence in a wiki would arrive at
+every other fleet as a claim the origin never vouched for. `renderPoolMarkdown` in `src/pool/markdown.ts`
+is a pure function of the same `PoolDocument` the JSON is serialised from, and holds no state of its own.
+
+**The two files are written and committed together.** The write set is unchanged — still exactly
+`<path>/fleets/<fleetId>/`, still staged by name — and the content hash still covers the JSON document
+alone, so an idle fleet writes nothing and a publish that happens writes both. A companion that were
+committed separately would be a second commit an hour saying the same thing.
+
+**The digest companion summarises rather than transcribes.** Ninety days across six sections is some
+thousands of rows, and a markdown table of them is a file nobody opens — which defeats the one thing it
+is for. It totals the trailing 7, 30 and 90 days per key and says in the file that `digest.json` holds
+the series. The windows are cut on the **document's own** publish day rather than the reader's clock,
+since a reader a few hours the other side of midnight would otherwise drop the origin's newest day out
+of its own seven-day window.
+
+**The words come from the same copy the panels use.** `poolPhaseLabel` and `poolCauseLabel` are shared
+with the cockpit's fold rather than restated, for the reason that fold gives: two spellings of one
+closed vocabulary is how a fleet's page and its file come to disagree in the operator's language while
+agreeing in the data.
+
+**No setting.** It is derived output in a directory that is already the fleet's alone, it costs one file
+write on a publish that was happening anyway, and a fleet that published one and not the other would be
+a pool whose wiki is right for some fleets and stale for others.
 
 ## The claims arm
 
@@ -436,6 +472,7 @@ Every dimension is a closed vocabulary that already exists, and none of them is 
 | `byCheck`     | the check's own name                         | accounts, costUsd                       |
 | `unaccounted` | —                                            | return dispatches that filed no account |
 | `unmeasured`  | —                                            | runs that reported no usage at all      |
+| `byFault`     | `ErrorLogEntry['source']`                    | faults recorded (no cost)               |
 
 `RemedyCause` and `RemedyGuard` are resolved from the dispatch origin rather than claimed, with the
 copy for every value in one place (`src/remedies/remedies.ts`). Two fleets on two providers produce
@@ -512,6 +549,36 @@ visible until it is.
 year-over-year reading is not available. On the `git` transport the older rows do survive in commit
 history, and that is deliberately **not** part of the contract — a service has no such history, and a
 promise that rested on one substrate would be one the interface could not keep.
+
+### The faults section
+
+Four of the five sections above measure the **work**, and every one of them sums across fleets into the
+shared insights page. `byFault` measures the **harness**: what the fleet's own error log
+([18](18-observability.md)) recorded, keyed by `ErrorLogEntry['source']` — `cycle`, `provider`, `agent`,
+`server`, `boot` — and counted per UTC day like everything else here.
+
+**It goes into the file and no further.** Nothing mirrors it, nothing aggregates it, and nothing at any
+far end reads it back: `digestSections` in `src/store/pool.ts` names the five sections the mirror stores
+and this is deliberately not among them. A fault is this harness failing on this operator's machine —
+comparable to nothing on anybody else's, and answering no question a company page asks. What it is for
+is a person opening the fleet's own `digest.md` in the pool repository and seeing what has been going
+wrong, which is the one place the harness's faults are readable without a cockpit in front of you.
+
+So it is in the document rather than only in the markdown, and the reason is
+[the companion's](#the-human-readable-companion): `renderPoolMarkdown` is a pure function of the
+`PoolDocument` and holds no state of its own. A section the markdown drew from somewhere else would be
+a second source for one page, and the two would disagree the first time either moved.
+
+**It carries no cost, and that is not an omission.** A fault has no dollar figure anywhere in the
+harness, and deriving one here would be a new measurement invented for the pool rather than a move of
+what exists — which is the rule the whole digest arm is held to. The companion draws no cost column for
+it at all; a column of dashes is worse than no column.
+
+**What it counts is the fault log as it stands, and the file says so under the table.** `clearErrors`
+drops the whole table ([18](18-observability.md)) — it is a list an operator reads and clears, not a
+record anything decides on — so an operator who clears the log publishes a fleet that had no faults this
+quarter. Unstated, an empty table reads as a clean quarter, which is the one way this section can lie.
+Stated where a person reads it, it is a reading like every other number here.
 
 ## The clocks
 
@@ -645,6 +712,19 @@ names **person and target repo**, which is what makes two of one person's deploy
 in a pool. A fleet with no id configured while the pool is selected is a boot error, exactly as a
 project with no name is.
 
+**The config page asks for it in the same breath as the provider.** `fleetId` declares
+`requiredWhen: { path: 'integrations.pool', unless: 'fake' }`
+([02](02-configuration.md#a-key-another-key-requires)), so the row is drawn even while unset, is
+marked the moment the pool provider is staged as anything but `fake`, and the write is refused until
+it holds something. Without that the boot error is the *only* thing that says so, and it arrives as a
+400 on a save, over a key the page did not draw — an operator who has just turned the pool on being
+told their config is wrong, with nothing to fix it in.
+
+Beside the empty field it **offers** `userId@pool.project` — `adam@lubbdubb` — as a button and a
+placeholder. That is not the derivation this section rules out: nothing writes it, the offer is absent
+unless both parts resolve, and what lands in the file is what the operator accepted. It is the shape
+of the answer, spelled out, for a field whose whole job is to be an address nobody else writes to.
+
 | Key                          | Layer      | Default                                                             |
 | ---------------------------- | ---------- | ------------------------------------------------------------------- |
 | `integrations.pool`          | project    | `fake` — publishes nowhere, fetches nothing, runs no desk           |
@@ -731,6 +811,8 @@ on `:root` with an entry in `web/src/cockpit/tokens.ts`, and every reference on 
 - **Nothing deletes a local fact because a remote fleet withdrew it.**
 - **No reading acts.** The origin's counts, a withdrawal, a stale mirror and a fleet that has not
   published in a month are all drawn for the person who can act on them, and none of them moves a claim.
+- **Nothing reads another fleet's faults.** `byFault` is published and never mirrored, never summed and
+  never drawn on the shared insights page — see [the faults section](#the-faults-section).
 
 ## Persistence
 

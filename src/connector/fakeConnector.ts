@@ -5,6 +5,7 @@ import type {
   CiCheckRequeueInput,
   IssueCommentInput,
   IssueCreateInput,
+  IssueCloseInput,
   IssueLabelInput,
   PrBaseInput,
   PrBaseUpdateInput,
@@ -12,6 +13,7 @@ import type {
   PrLabelInput,
   PrMergeInput,
   PrReplyInput,
+  PrThreadResolveInput,
   PrTitleInput,
   SendResult,
   WorkItemLinkInput,
@@ -57,6 +59,14 @@ export class FakeConnector implements Connector, ActionSink {
     return this.composite.postPrReply(input);
   }
 
+  canResolvePrThread(): boolean {
+    return this.composite.canResolvePrThread();
+  }
+
+  resolvePrThread(input: PrThreadResolveInput): Promise<SendResult> {
+    return this.composite.resolvePrThread(input);
+  }
+
   mergePr(input: PrMergeInput): Promise<SendResult> {
     return this.composite.mergePr(input);
   }
@@ -67,6 +77,14 @@ export class FakeConnector implements Connector, ActionSink {
 
   setIssueLabel(input: IssueLabelInput): Promise<SendResult> {
     return this.composite.setIssueLabel(input);
+  }
+
+  canCloseIssue(): boolean {
+    return this.composite.canCloseIssue();
+  }
+
+  closeIssue(input: IssueCloseInput): Promise<SendResult> {
+    return this.composite.closeIssue(input);
   }
 
   canSetWorkItemState(): boolean {

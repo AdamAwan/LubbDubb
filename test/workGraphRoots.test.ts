@@ -182,7 +182,7 @@ function stored(over: Partial<WorkNode> & { ref: string }): WorkNode {
 }
 
 test('a requeued job is adopted by the issue whose work it redoes', () => {
-  // A requeued assay, plan or retro opens no pull request, so arm B can never
+  // A requeued appraisal, plan or retro opens no pull request, so arm B can never
   // reach it — it was parentless forever, and stage 3 offered to file a second
   // ticket for an issue that already exists.
   const out = foldWorkGraph(

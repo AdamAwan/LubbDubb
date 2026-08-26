@@ -130,12 +130,66 @@ deep link into the operator's own Claude Code now and dispatches nothing at all 
 left here is the distinction that was always load-bearing: whether there is an existing decomposition
 to plan _from_.
 
+A planner has **two** verdicts, and only one of them is a plan. The other is
+[`plan_not_needed`](#when-there-is-nothing-to-plan) — the goal is already met, so nothing is written to
+the plan graph at all. It is refused on the replan arm, so this rule's two templates are not two routes
+to it: only a cold planner may cast it.
+
 Whichever of the two templates it renders, `relatedWorkNote` is **appended** to it: the parent
 feature's description, the sibling stories with their states, and the orphan flag with its candidate
 features (see [06](06-issue-pickup.md#hierarchy)). Reading the related items is the planning step
 that stops a decomposition re-cutting scope a sibling story already holds — a planner that cannot see
 either side of the item it was handed will happily plan work someone else owns. Empty on a tracker
 with no hierarchy, so the GitHub prompt is unchanged.
+
+## When there is nothing to plan
+
+A planner reads the repository before it decides what the work is, and sometimes what it finds is that
+the work is done: somebody fixed it by hand, another goal's part covered it, or the ticket was filed
+against a version that predates the fix. **That is a verdict, and it has a tool of its own —
+`plan_not_needed`** ([11](11-mcp-tools.md#plan_not_needed)). It takes a one-line `summary` and a
+required `detail`, writes **no plan row at all**, and records the issue's delivery park
+([06](06-issue-pickup.md#the-delivery-park-delivered)) with `by: 'planner'`.
+
+It exists because the refusal above is right and still cannot say this. Every plan has at least one
+part, and work that is one pull request is a one-part plan — so a planner holding "there is nothing to
+build" has to encode it as *something*, and each way of doing that spends an agent to rediscover what
+this planner already knows:
+
+| What it does instead      | What it costs                                                                                                              |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Invents a part            | An agent, a branch and a worktree, to arrive at `conclude_part` with kind `determination`.                                  |
+| Writes a part that redoes it | The same, plus a pull request nobody wanted, against code that already does the thing.                                    |
+| Submits nothing           | Its attempts, and then the fail-open arm: `unplanned` puts rule `issue-pickup` on the issue, which is the first row again — with the planner's finding thrown away. |
+
+All three end with a human being asked to approve, or review, work that did not need to happen. The
+verdict is cast where it is known instead.
+
+**Why a delivery row rather than a fifth thing.** `issue_deliveries` already means exactly this —
+"what the issue asked for is present, schedule nothing further" — and `deliveryHold` already filters
+`eligibleIssues`, which is the list both rule `issue-plan` and rule `issue-pickup` draw from. So one
+row stops the planner being re-dispatched *and* stops pickup taking the issue instead, with no new
+gate anywhere. It is reversible by the operator and expires on world signal, which is the right
+lifetime for a claim about a goal nobody has worked: the moment the ticket moves or something links to
+it, the question is open again.
+
+**Two refusals, both at the fleet seam** (`AgentManager.recordGoalMet`), because both are store
+questions and both are silent if nobody asks them:
+
+- **A replan.** An issue that already has a plan row cannot be settled this way: the plan would go on
+  owning the issue — `planInFlight` reads `planning` as more work, so the goal would read delivered
+  *and* mid-decomposition — and any part already dispatched or in review would keep running underneath
+  it. A replanner that believes the goal is met amends the plan, or raises it: the operator asked for
+  this replan and it is theirs to end.
+- **A standing shortfall.** Writing a delivery clears one through the exclusion matrix
+  ([14](14-persistence.md#issue-verdicts-and-the-exclusion-matrix)), so without this refusal a planner
+  would erase an assessor's "the goal is not reached" — a verdict cast with the delivered state in
+  front of it — with nothing anywhere red.
+
+**The bar is _met_, not _unworkable_.** A goal that is half there is a plan for the other half, and a
+goal nobody can make sense of is `appraise_issue`'s `unclear`, which puts the ticket back in front of
+the person who wrote it. The `issue-plan` prompt says both, and says the tool takes evidence: a planner
+that cannot point at what already does the thing is not sure enough to say this.
 
 ## The plan document
 
@@ -577,6 +631,8 @@ the first writes (`src/store/store.ts`):
 | The executor         | Creates an `approve_change` escalation plus a `plan` proposal with ref `issue:<n>:plan`, and re-asks the same hold (every path that reaches the executor is covered, not just the one that checks first).                                          |
 | Accept               | `ProposalDesk.accept` → `ActionExecutor.runAuthorized` → `releasePlan`: the plan becomes `active`, audited under `human:<proposal id>` as `authorized by you`.                                                                                     |
 | Reject               | `ProposalDesk.reject` → `refusePlan`, carrying the operator's note.                                                                                                                                                                                |
+| Close the ticket     | `ProposalDesk.backOut(id, 'close')` → `backOutOfPlan` → `declinePlan`: comment, close, un-watch, conclude, abandon. Below.                                                                                                                          |
+| Hold the ticket      | `ProposalDesk.backOut(id, 'hold')` → the watch tag comes off and the plan is refused, so watching it again gets a new one. Below.                                                                                                                   |
 | Replan               | `POST /api/plans/:id/replan` withdraws a pending proposal (below).                                                                                                                                                                                 |
 
 **What the ask says** is one template, a quoted block, and two appended paragraphs.
@@ -601,6 +657,11 @@ so an operator override written when the split _was_ the body keeps working. Wha
 rejecting do is then **appended** by `planApprovalNote`, never interpolated: the template is
 operator-overridable and `loadPromptTemplates` rejects only _unknown_ placeholders, so a
 `{settlement}` token would be silently dropped by exactly the deployments that customised most.
+
+`planApprovalNote` names **four** answers, and two of them are not about the plan — see _Backing out
+of a plan_ below. Stating them is not decoration: before they existed the only "no" on the card was
+the one that re-plans the goal, so an operator who had decided the _ticket_ was wrong pressed it and
+the harness answered by re-deriving a plan for work nobody wanted.
 
 `planApprovalNote` is **one paragraph** now. It was two, and picking between them was the reason it
 was appended in the first place: a one-pull-request plan settled somewhere else entirely — approving
@@ -662,6 +723,79 @@ returns early on no parts, `planIsWedged` is false because nothing is `blocked`,
 `active` and idle for good. `upsertPlanParts` therefore un-retires (see Ingestion above), and
 `releasePlan` **refuses a plan with no live parts** as the backstop: any future route to that shape is
 a visible no on the approval card rather than a silent park.
+
+### Backing out of a plan
+
+Approve and Reject are the two answers to _is this the right plan_ — and both of them agree the work
+is worth doing. That left the card with no way to say the thing an operator most often concludes
+while reading a plan: **the ticket is the problem**. A rejection was the only "no" on offer, so it
+was the one that got pressed, and it sends the goal straight back to a planner — which re-derives a
+plan for work nobody wants and puts the same card up again, until the planner's attempt cap ends it.
+
+So there are two more settlements, and both are deliberately about the **ticket** rather than the
+plan. They live in `src/plans/planBackOut.ts` and are applied by `ProposalDesk.backOut`, which
+settles the proposal exactly as `reject` does — the one-way transition, the inbox item answered, the
+decision row under `human:<proposal id>` — and then does something else entirely with the goal.
+`refusePlan` is not reached at all.
+
+**`close` — this is not really an issue.** Four writes, in this order and for this reason:
+
+1. `declinePlan` — the plan goes **`abandoned`** with the operator's words appended to its reason.
+   `abandoned` rather than `complete` because rule `plan-part` schedules from neither and the work
+   graph reads both as terminal, but only one of them is honest about a plan whose parts were never
+   done. It compare-and-sets against `awaiting_approval` like the other two settlements, retires the
+   parts nothing was started for and withdraws their asks through the same `withdrawPartAsks`; parts
+   carrying a branch or a pull request are left exactly as they are, because work that has left the
+   harness is not this verdict's to withdraw (**End the run** is).
+2. The **conclusion** — `done`, `by: 'operator'`, carrying the note. This is the write that actually
+   stops the re-pickup, and it is done before anything that can fail on somebody else's network.
+3. The **watch tag** comes off, through the same `watchCascadeTargets` walk the cockpit's own toggle
+   uses, and both mirrors are patched (`patchWorldLabels`, `patchTicketLabels`) for the reason
+   [16](16-http-api.md#why-both-watch-routes-patch-the-baseline) gives. A closed ticket that kept the
+   tag would come back the day somebody reopens it.
+4. The **comment**, then the **close** — `IssueCloseCapable`, `state_reason: not_planned`. The
+   operator's words are a comment beside the close rather than anything smuggled into it: a close
+   reason is the provider's own two-word vocabulary, and the words are the whole point.
+
+Every step is best effort and **each one is reported in the audit line**. The function makes up to
+four writes across two systems, and a partial failure is the normal case: a tracker that refuses the
+close still took the comment. An operator told "closed" over a ticket that is still open has been
+lied to about the thing they were deciding, so the detail says which of the four happened and every
+failure also goes through `errors.record`.
+
+**Where the provider has no close, that is said rather than approximated.** GitHub closes an issue;
+Azure has a dozen workflow states and no generic close, and which of them means _we are not doing
+this_ belongs to the project's process template. So `canCloseIssue()` is false there, the back-out
+says the ticket was left open, and the goal is still concluded and un-watched — the fleet is stopped
+either way, and the card on the board stays a human's to move
+([15](15-integrations.md#the-capabilities)).
+
+**A close requires the comment.** `POST /api/proposals/:id/back-out` refuses `close` with no note,
+and `backOutCommentDraft` exists for the operator who would rather edit one than write one from
+nothing — it quotes the plan's own `diagnosis` and `approach`, because the ticket's readers have not
+seen the plan and a "not doing this" with no account of what was considered reads as nobody having
+looked. It is **served and never posted**: nothing goes on the tracker but what the operator sends
+back with the verdict.
+
+**`hold` — this needs more thought.** Two writes: the watch tag comes off, and the plan is
+**refused** — `refusePlan`, the same settlement Reject makes, so it goes to `planning` with the
+operator's words on its reason and its unstarted parts retired. Nothing is concluded and nothing is
+commented: a hold is not a verdict about the work, and the goal is not finished.
+
+The two halves are what make each other safe. A refusal alone would have rule `issue-plan` start a
+replan on the next pulse, which is the opposite of a hold; the tag being off is what stops it, since
+that rule dispatches for an **eligible** issue. So the refusal sits there costing nothing, and
+watching the ticket again is what starts a planner — and what comes back is a **new plan**, written
+in the light of why it was held.
+
+Parking the plan at `awaiting_approval` instead was the first shape of this and is the wrong one: a
+hold says the thinking is not finished, so re-proposing the *same* decomposition weeks later asks the
+operator to approve a plan written before whatever they were waiting on happened. The plan they get
+back should be one that knows about it.
+
+Neither verdict widens `ProposalStatus`. Both settle the row as `rejected`, because that is what
+happened to the *act* — the plan was not authorized — and what distinguishes them lives where it can
+be read: the decision detail, the plan's reason, and the conclusion.
 
 An operator who wants a _different_ plan without refusing this one can press Replan, on the same panel.
 

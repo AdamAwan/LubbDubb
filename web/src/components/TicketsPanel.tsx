@@ -12,7 +12,6 @@ import type {
   TicketWatchFilter,
 } from '../types.js';
 import { LIVE_WORK, statePick, widenedFor } from '../cockpit/place.js';
-import { watchBucket } from '../worldBuckets.js';
 import type { CockpitView } from '../view/viewModel.js';
 import { stateColour } from '../stateColour.js';
 import { AsyncButton } from './AsyncButton.js';
@@ -97,15 +96,17 @@ const ORDER_OPTIONS: ReadonlyArray<{ value: TicketOrder; label: string; title: s
  *
  * **The mirror is the list; the world is the overlay.** Rows come from the route,
  * which reads the local mirror and is fetched on open and per page rather than
- * polled. Everything that is a *live reading* — the pickup reasons, the assay, the
+ * polled. Everything that is a *live reading* — the pickup reasons, the appraisal, the
  * current labels — is read off the state snapshot the cockpit already has, for the
  * one reason that matters: those are the server's own sentences, and a second
  * derivation of them here would be a second opinion about a decision made
  * elsewhere.
  *
- * **Two controls, and no more.** The watch switch and the intake override, both
- * writing through the actions the backlog already used. A row is otherwise a
- * reading.
+ * **One control, and no more.** The watch switch, writing through the action the
+ * backlog already used. A row is otherwise a reading — including the lamp on a
+ * goal held at intake, whose override moved to the queue rail, where every other
+ * ask waiting on a person already is.
+ * → docs/spec/17-cockpit.md#intake-is-raised-on-the-rail-and-marked-in-the-list
  */
 export function TicketsPanel({ query, onQuery, view, actions, now }: TicketsPanelProps): JSX.Element {
   const [rows, setRows] = useState<TicketRow[]>([]);
@@ -195,7 +196,6 @@ export function TicketsPanel({ query, onQuery, view, actions, now }: TicketsPane
   // The world, by number — the overlay every live reading comes from.
   const worldIssues = view.state.world.issues;
   const live_ = useMemo(() => new Map(worldIssues.map((issue) => [issue.number, issue])), [worldIssues]);
-  const held = useMemo(() => intakeHeld(worldIssues, view.state.config), [worldIssues, view.state.config]);
 
   // Which state the tracking axis is standing widened for, if any — read back off
   // the facets this page already carries rather than remembered, because a
@@ -214,18 +214,10 @@ export function TicketsPanel({ query, onQuery, view, actions, now }: TicketsPane
         </span>
       </div>
 
-      {/* Intake is drawn *above* the list rather than as a filter on it: an unclear
-          assay is the one intake reading that stops dispatch, and among a page of
-          rows it reads as a detail rather than as the thing holding all the work. */}
-      {held.length > 0 && <IntakeCallout held={held} actions={actions} />}
-
       {/* Work nothing in the tracker accounts for, above the list of things it
           does. It is here because `File a work item` / `Ignore` is a triage
-          decision and this is the surface triage happens on — and *below* intake,
-          which is the louder of the two: an unclear assay stops dispatch, while an
-          unrecorded job is a debt that costs nothing until somebody outside asks
-          what the harness has been doing. It draws its own fetch and nothing at
-          all when there is nothing outstanding.
+          decision and this is the surface triage happens on. It draws its own
+          fetch and nothing at all when there is nothing outstanding.
           → docs/spec/17-cockpit.md#unrecorded-work */}
       <UnrecordedWork now={now} canFileTickets={view.state.config.canFileTickets} />
 
@@ -448,64 +440,6 @@ export function TicketsPanel({ query, onQuery, view, actions, now }: TicketsPane
         </RefLinksExtended>
       )}
     </div>
-  );
-}
-
-/**
- * The goals an `unclear` assay is holding, in the harness's own words.
- *
- * Read off the world rather than the mirror because it is a live reading: the
- * assay moves, and a copy of it in a record would be a verdict that outlived its
- * own evidence. An **unwatched** item is never intake, whatever a stale verdict
- * says — nothing assays a goal nobody opted in, so a verdict on one is left over
- * from before it was dropped, and the drop outranks it.
- */
-function intakeHeld(issues: readonly Issue[], config: { watchLabel: string }): Issue[] {
-  return issues.filter(
-    (issue) =>
-      issue.state === 'open' &&
-      issue.assay?.verdict === 'unclear' &&
-      watchBucket(issue.labels, config.watchLabel) === 'watched',
-  );
-}
-
-/** The intake call-out: what is held, why, and the one button that unblocks it. */
-function IntakeCallout({ held, actions }: { held: Issue[]; actions: CockpitActions }): JSX.Element {
-  return (
-    <section className="tickets-intake">
-      <div className="tickets-intake-head">
-        <i className="tickets-lamp" />
-        <b>
-          {held.length} goal{held.length === 1 ? ' is' : 's are'} held at intake
-        </b>
-        <span>— an unclear assay stops pickup, so nothing under them moves until you say otherwise</span>
-      </div>
-      {held.map((issue) => (
-        <div className="tickets-intake-row" key={issue.id}>
-          <button
-            type="button"
-            className="tickets-intake-name"
-            onClick={() => actions.selectGoal(`issue:${issue.number}`)}
-            title="Open this goal — its plan, its ticket and anything it is asking you"
-          >
-            <b>
-              #{issue.number} {issue.title}
-            </b>
-            {/* The assayer's own sentence, quoted whole: it is the only account of
-                why this goal is held, so a paraphrase would be the only account
-                there is, and wrong. */}
-            <span className="tickets-quote">Assay: unclear — “{issue.assay?.summary}”</span>
-          </button>
-          <AsyncButton
-            className="ghost"
-            onClick={() => actions.setIssueAssay(issue.number, 'workable')}
-            title="Work it anyway — the harness stops holding pickup and runs a cycle now"
-          >
-            Override → workable
-          </AsyncButton>
-        </div>
-      ))}
-    </section>
   );
 }
 
@@ -772,7 +706,7 @@ function TicketRowView({
   // what it would do next cycle, and a second reading of the gates here would be a
   // second opinion about a decision made elsewhere.
   const reasons = issue?.pickup.reasons ?? [];
-  const intake = issue?.assay?.verdict === 'unclear';
+  const intake = issue?.appraisal?.verdict === 'unclear';
   const frozen = row.tracking === 'frozen';
 
   return (

@@ -1,4 +1,5 @@
 import { tmpdir } from 'node:os';
+import { prRefStyle } from './prRef.js';
 import { join } from 'node:path';
 import { configFilePath, projectConfigFilePath, type Config } from './config.js';
 import { Store } from './store/store.js';
@@ -17,7 +18,7 @@ import { defaultPoolSize, WorktreeManager, type Worktrees } from './worktree/wor
 import { GitCliObserver, type GitObserver } from './git/gitObserver.js';
 import { fetchRemote } from './git/gitCli.js';
 import { PlanReconciler } from './plans/planReconciler.js';
-import { AssayDesk } from './intake/assayDesk.js';
+import { AppraisalDesk } from './intake/appraisalDesk.js';
 import { AreaPathDirectory } from './intake/areaPaths.js';
 import type { AreaPathTree } from './intake/placement.js';
 import { TicketSweep } from './tickets/sweep.js';
@@ -103,7 +104,7 @@ export interface System {
   permissions: PermissionDesk;
   /**
    * The project's area tree, cached. Read by the state snapshot to tell an
-   * unclassified work item from a classified one, and by the assay tool to offer
+   * unclassified work item from a classified one, and by the appraisal tool to offer
    * the nodes — both synchronously, which is the whole reason it is a directory
    * rather than a provider call.
    */
@@ -210,7 +211,7 @@ export interface System {
    */
   fileEvents: FileEventsSpool;
   /**
-   * Where images attached to a blueprint are written (issue #249). Exposed because
+   * Where images attached to a brief are written (issue #249). Exposed because
    * the launch route stores them and the cancel route removes them, and both need
    * the same root the agents are granted read access to.
    */
@@ -357,7 +358,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const errors = new ErrorLog(store, opts.errorMirror);
   const integrations = buildIntegrations(config.integrations, { store, config, now, errors });
   const connector = new CompositeConnector(integrations, now);
-  // The project's area tree, cached so the assay tool and the state snapshot can
+  // The project's area tree, cached so the appraisal tool and the state snapshot can
   // both read it without awaiting. Refreshed from the pulse under its own TTL, and
   // null until the first read lands — which is the same reading a tracker with no
   // classification tree gives, and the right one: nothing offered, nothing asked.
@@ -449,7 +450,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const streamFactory: SessionFactory = (spec) =>
     new StreamJsonSession(spec, opts.streamSpawner, reapTree, config.agentSilenceParkMs);
 
-  // Blueprint attachments (issue #249): one canonical file per image under the
+  // Brief attachments (issue #249): one canonical file per image under the
   // config'd root, outside every worktree. Every launch is granted read access to
   // that root, which is what makes the path in an agent's prompt openable.
   const attachments = new AttachmentFiles(config.attachmentRoot);
@@ -589,9 +590,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     argsRetentionDays: config.mcpArgsRetentionDays,
     configDir: defaultConfigDir(),
     socketPath: defaultSocketPath(),
-    // What the assayer is offered when it proposes a profile for a goal.
+    // What the appraiser is offered when it proposes a profile for a goal.
     profiles: orderedProfiles(config.agentModels),
-    // What the assayer is offered when it proposes where a goal belongs. A thunk
+    // What the appraiser is offered when it proposes where a goal belongs. A thunk
     // rather than a snapshot: the directory refreshes on the pulse, and a list
     // captured here would pin every agent to the tree as it stood at boot.
     areaPaths: (): AreaPathTree | null => areaPaths.current(),
@@ -609,6 +610,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
       // than on the next pulse — the fleet's own work is never briefly invisible
       // to the fleet.
       watchLabel,
+      // So the body guidance names the sigil this provider reads as "pull
+      // request" — `#12` is work item 12 on Azure, and a stacked part naming its
+      // base pull request that way links to an unrelated ticket.
+      prRefStyle: prRefStyle(config.integrations.sourceControl),
     }),
     // Lazy for the same reason: `link_ticket` files the item an agent wrote up
     // (issue #394), and the sink it files through is built below.
@@ -638,6 +643,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     argsRetentionDays: config.mcpArgsRetentionDays,
     claimMinutes: config.validation.desktopClaimMinutes,
     validationRoot: config.validationRoot,
+    // `goal_read` answers "has it reached hallway yet" off the operator's own list.
+    environments: config.environments,
+    prRefStyle: prRefStyle(config.integrations.sourceControl),
     // Lazily, for `proposals`' reason: the runner is built further down, and both
     // this channel and the cockpit's panel must start *the same* run.
     localRun: (): LocalRunner => localRun,
@@ -656,10 +664,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     command: config.claudeCommand,
     buildArgs: agentSetup.buildArgs,
     whitelistedApprovals: config.whitelistedApprovals,
-    // What a goal's work runs on today, so `recordAssay` can tell an agreeing
+    // What a goal's work runs on today, so `recordAppraisal` can tell an agreeing
     // proposal from a diverging one. Read off the world baseline rather than a
     // live provider call: it is the same snapshot `world_read` serves an agent,
-    // so the assayer and the harness are comparing against one reading. Absent
+    // so the appraiser and the harness are comparing against one reading. Absent
     // when either half of a pin is unconfigured, and then no proposal is stored.
     goalProfile:
       config.labelPrefix && config.agentModels
@@ -749,7 +757,13 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // own — which is all of them. It runs an accepted act through the executor, so
   // the outbound sink keeps a single caller and the human's authorization lands in
   // the audit log.
-  const proposals = new ProposalDesk(store, escalations, executor);
+  const proposals = new ProposalDesk(store, escalations, executor, {
+    // The same sink an accepted act runs through, so the back-out's comment and
+    // close are the one outbound seam rather than a second route to the tracker.
+    sink: opts.sink ?? connector,
+    config,
+    errors,
+  });
 
   // Dispatcher-level issue-pickup policy (gate + label-encoded priority), honoured
   // by whichever dispatcher is selected — provider-agnostic.
@@ -777,6 +791,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     config.ci,
     config.validation,
     config.validationRoot,
+    prRefStyle(config.integrations.sourceControl),
   );
   const dispatcher: Dispatcher = rules;
 
@@ -796,14 +811,15 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     sink: opts.sink ?? connector,
     planning: config.planning,
     defaultBranch: config.defaultBranch,
+    prRefStyle: prRefStyle(config.integrations.sourceControl),
     fetch: opts.gitObserver ? undefined : () => fetchRemote(config.repoRoot),
     errors,
   });
 
-  // The goal assay's outbound half: one living comment per refused goal, on the
+  // The goal appraisal's outbound half: one living comment per refused goal, on the
   // ticket. Beside the plan reconciler because it is the same act — mechanical
   // bookkeeping through the same seam, not an action the executor gates.
-  const assays = new AssayDesk({ store, sink: opts.sink ?? connector, errors });
+  const appraisals = new AppraisalDesk({ store, sink: opts.sink ?? connector, errors });
   // The naming convention's outbound half, and it asks whether the world *arrives*
   // filtered rather than who the operator is: both providers apply the author
   // filter at fetch time, and only while `ownWorkOnly` is on. With it off the
@@ -880,7 +896,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // a delivered goal whose ticket is still open owes a close. Store-only — it
   // files and settles a `human_tasks` row and touches no sink, because closing
   // the item is precisely the part the harness is not doing.
-  const closeOuts = new DeliveryCloseOutDesk(store, config.environments);
+  // The one thing it asks the outside world, and it asks it about the *row's
+  // wording*: whether the close the row is about can be taken from the cockpit.
+  const closeOutSink = opts.sink ?? connector;
+  const closeOuts = new DeliveryCloseOutDesk(store, config.environments, () => closeOutSink.canCloseIssue());
 
   // The other ask a delivered goal owes: the fixtures and accounts its validation
   // plan could not produce. Store-only on the close-out desk's terms, and gated on
@@ -978,7 +997,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     dispatcher,
     executor,
     plans,
-    assays,
+    appraisals,
     areaPaths,
     naming,
     closeOuts,

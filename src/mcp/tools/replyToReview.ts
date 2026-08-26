@@ -20,6 +20,13 @@ const MAX_REPLY_CHARS = 4000;
  * out, and an escalation if the send fails. Calling the sink from here would
  * bypass every one of those, and there would be nothing red.
  *
+ * `resolved` is the agent's verdict on the thread it answered, and it rides on the
+ * same act: the operator authorizing the reply authorizes closing the thread the
+ * reply is about, which is the pairing that makes it one question rather than
+ * two. It is the only way a thread gets resolved now that the reply goes out
+ * through the harness — an agent has no credential of its own to click with, and
+ * the prompt tells it not to reach for the operator's.
+ *
  * **The pull request comes from the caller's origin, never from an argument** —
  * the channel's one structural guarantee. An agent dispatched on one review
  * cannot answer another pull request's.
@@ -54,6 +61,16 @@ export const replyToReview: ToolFactory = ({ deps, agent, task, ok }) => ({
           'your prompt. Omit it only for a reply to the pull request itself rather than to a thread; ' +
           'an omitted id means nobody reading the thread sees your answer in it.',
       },
+      resolved: {
+        type: 'boolean',
+        description:
+          'True if this thread is now dealt with — you made the change the reviewer asked for, or ' +
+          'answered a question that needed no change — and the harness should mark it resolved. ' +
+          'False (the default) leaves it open for the reviewer, which is what you want where you are ' +
+          'defending an approach they may still disagree with, or where your answer raises something ' +
+          'for them to decide. You cannot resolve a thread yourself: the reply goes out as the ' +
+          'harness, so this flag is the only way one gets closed.',
+      },
     },
     required: ['body'],
   },
@@ -70,6 +87,10 @@ export const replyToReview: ToolFactory = ({ deps, agent, task, ok }) => ({
       );
     }
     const thread = typeof args.thread === 'string' && args.thread.trim() ? args.thread.trim() : null;
+    // Only meaningful with a thread to resolve: a reply on the pull request
+    // itself has none, and reporting `resolved: true` for one would tell the
+    // agent a thread was closed that never existed.
+    const resolve = args.resolved === true && thread !== null;
 
     const desk = deps.prReply;
     if (!desk) {
@@ -84,6 +105,7 @@ export const replyToReview: ToolFactory = ({ deps, agent, task, ok }) => ({
       prNumber: scope.prNumber,
       commentId: thread,
       draft: body,
+      resolve,
       reason: `agent reply on ${scope.originRef}${thread ? ` (thread ${thread})` : ''}`,
     });
     return ok({
@@ -92,6 +114,10 @@ export const replyToReview: ToolFactory = ({ deps, agent, task, ok }) => ({
       // which happened — one wording, not a second derivation of it here.
       handedOver: true,
       thread,
+      // What was asked for, not what happened: the resolution rides on the act,
+      // so it lands when the reply does — which on the stricter posture is after
+      // the operator accepts it. `note` is the executor's account of which.
+      resolveRequested: resolve,
       pullRequest: scope.prNumber,
       note: outcome.detail,
     });
