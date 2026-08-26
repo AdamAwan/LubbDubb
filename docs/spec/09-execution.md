@@ -1116,10 +1116,20 @@ death is asynchronous. Detaching in that window hands a live process's tree to t
 which wipes it `git clean -ffdx` — and on Windows is the `EBUSY`-forever wedge. So both arms are
 asked, and a held slot makes this **throw**: `BranchReapDesk` catches, records and continues **without**
 writing the `branch_reaps` row, so the reap is retried next pulse and the remote branch is not deleted
-either. One pulse held is the same trade the active-task guard already makes. The repo's own main worktree is exempt: detaching an
-operator's checkout to reap a branch would be a rude surprise, and `-D` failing loudly is the honest
-answer there. `-D` and not `-d` for the reason it always was — `merge_pr` squashes, so `-d`'s "is
-this merged" test says no for every branch this is called on.
+either. One pulse held is the same trade the active-task guard already makes.
+
+**The repo's own main worktree is exempt, and refused by name.** Detaching an operator's checkout to
+reap a branch would be a rude surprise, so the branch they are standing on is one the reap leaves
+alone. It stops there rather than falling through to `-D`, which was always going to fail on it: git's
+`cannot delete branch … used by worktree at …` names a path and no reason, and the desk records it
+once per pulse for the whole `closedPrWindowMs` window — so an operator who checked a merged branch
+out to read what the agent did got the same unactionable line for six hours. The refusal instead says
+which checkout is in the way, that the local ref *and* the remote copy both stay because of it, and
+that one `git switch` clears it — the same shape as the `ensure` refusal for the same checkout. The
+outcome is unchanged: a throw, no `branch_reaps` row, retried next pulse.
+
+`-D` and not `-d` for the reason it always was — `merge_pr` squashes, so `-d`'s "is this merged" test
+says no for every branch this is called on.
 
 `src/system.ts` listens for `agents.on('reaped')` and releases the slot when:
 
