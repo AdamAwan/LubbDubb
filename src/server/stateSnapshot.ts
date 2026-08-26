@@ -594,6 +594,9 @@ export function buildStateSnapshot(
       // that decides is the one the route asks. `setWorkItemState` throws when
       // nothing implements it, so there is no other way to *offer* the operation.
       canSetWorkItemState: connector.canSetWorkItemState(),
+      // The same question one act further on, and asked the same way: whether this
+      // deployment's tracker can be closed from here at all.
+      canCloseIssue: connector.canCloseIssue(),
       // Whether the tracker reports a hierarchy at all — the Features page's gate,
       // and read off the world rather than off the provider's name for the reason
       // `Issue.parent` has three values rather than two: an *absent* link is one no

@@ -51,6 +51,10 @@ function countingSink(fail = false): ActionSink & { merges: number[] } {
   return {
     merges,
     canCloseIssue: () => false,
+    canResolvePrThread: () => false,
+    resolvePrThread: (): never => {
+      throw new Error('resolvePrThread is not scripted in this test');
+    },
     closeIssue: (): never => {
       throw new Error('closeIssue is not scripted in this test');
     },

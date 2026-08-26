@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { buildApp } from '../src/server/app.js';
 import { closeOutPass } from '../src/delivery/closeOut.js';
 import { DeliveryCloseOutDesk } from '../src/delivery/closeOutDesk.js';
 import { FakeWorldStore } from '../src/integrations/fake/fakeWorld.js';
@@ -90,6 +91,9 @@ const pass = (over: Partial<Parameters<typeof closeOutPass>[0]> = {}) =>
     // has not configured one — an empty set would withhold every row instead.
     opened: null,
     validating: new Set(),
+    // The deployment whose tracker the harness can close, which is every real one —
+    // it changes only the wording of a filed row's detail.
+    canClose: true,
     ...over,
   });
 
@@ -494,4 +498,70 @@ test("through a real store, the standing row's warning follows the goal's checks
   store.recordValidationResult('issue:12', 'b', { state: 'passed', note: 'it works', by: 'operator' });
   desk.run(world);
   assert.doesNotMatch(store.getHumanTask(filed[0]!.id)!.detail ?? '', /Validation is not clear/);
+});
+
+// -- closing the ticket from the row ------------------------------------------
+
+test('the row states the way out the deployment actually has', () => {
+  const closable = pass({ issues: [issue(12)], deliveries: [delivery(12)], canClose: true });
+  assert.equal(closable.length, 1);
+  assert.match((closable[0] as { detail: string }).detail, /\*\*Close the ticket\*\* here does it/);
+
+  // A tracker the harness cannot write is told nothing about a button it will not
+  // be shown. The sentence it gets is the one that was there before there was one.
+  const manual = pass({ issues: [issue(12)], deliveries: [delivery(12)], canClose: false });
+  assert.doesNotMatch((manual[0] as { detail: string }).detail, /Close the ticket/);
+  assert.match((manual[0] as { detail: string }).detail, /Close it there/);
+});
+
+test('the close-out row closes its own ticket, and the close is an operator’s answer', async () => {
+  const system = build();
+  const world = new FakeWorldStore(system.store);
+  world.mutate((w) => {
+    w.issues.push(issue(12, { title: 'Ship the thing' }), issue(13));
+  });
+  system.store.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
+  await system.harness.runCycle('manual');
+  const filed = system.store.listHumanTasksOfKind('close_out')[0]!;
+
+  const { app } = await buildApp(system);
+  const closed = await app.inject({ method: 'POST', url: `/api/human-tasks/${filed.id}/close-ticket` });
+  assert.equal(closed.statusCode, 200);
+
+  // The tracker took it — which is the whole point of the button, and the half a
+  // route that only settled the row would have skipped.
+  assert.equal(system.store.getWorldBaseline()!.issues.find((i) => i.number === 12)!.state, 'closed');
+
+  const settled = system.store.getHumanTask(filed.id)!;
+  assert.equal(settled.status, 'done');
+  assert.match(settled.resolution ?? '', /Closed #12 in the tracker from the cockpit/);
+  // Not the harness's own settlement: a person pressed it, so the reopen arm must
+  // never hand this row back to them.
+  assert.equal(deskSettled(settled), false);
+
+  // And it is not asked for again — the sweep reads a settled row and stops.
+  await system.harness.runCycle('manual');
+  assert.equal(system.store.getHumanTask(filed.id)!.status, 'done');
+
+  // Twice is a 409 rather than a second close: the row is the thing being
+  // answered, and it has been.
+  const again = await app.inject({ method: 'POST', url: `/api/human-tasks/${filed.id}/close-ticket` });
+  assert.equal(again.statusCode, 409);
+  await app.close();
+});
+
+test('an ordinary ask has no ticket to close', async () => {
+  const system = build();
+  const { task: ask } = system.store.recordHumanTask({
+    title: 'Plug the cable in',
+    detail: null,
+    originRef: null,
+    kind: 'ask',
+    agentId: null,
+    taskId: null,
+  });
+  const { app } = await buildApp(system);
+  const refused = await app.inject({ method: 'POST', url: `/api/human-tasks/${ask.id}/close-ticket` });
+  assert.equal(refused.statusCode, 409);
+  await app.close();
 });

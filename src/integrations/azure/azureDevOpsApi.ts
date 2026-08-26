@@ -123,6 +123,11 @@ export interface AzureDevOpsApi {
     parentCommentId: number,
     content: string,
   ): Promise<AzCommentRef>;
+  /**
+   * Set a comment thread's status — `fixed` for the harness resolving a thread on
+   * an agent's say-so. Idempotent: a thread already in that status is a no-op.
+   */
+  setThreadStatus(pullRequestId: number, threadId: number, status: string): Promise<void>;
   /** Open a new top-level comment thread on a PR. */
   createThread(pullRequestId: number, content: string): Promise<AzCommentRef>;
   /** Complete (merge) a PR with the given strategy. `lastMergeSourceCommit` is required by Azure. */

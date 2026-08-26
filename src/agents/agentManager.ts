@@ -50,6 +50,7 @@ type FilingTargetResult =
 import { conclusionOrigin } from '../issueConclusion.js';
 import { assessmentOrigin, type AssessmentVerdict } from '../mcp/assessment.js';
 import { appraiserOrigin, type GoalAppraisalVerdictName } from '../mcp/goalAppraisal.js';
+import { plannerOrigin } from '../mcp/planNotNeeded.js';
 import { goalFingerprint } from '../intake/appraisal.js';
 import { padWriteTarget } from '../scratch/pad.js';
 import { retroSubmitOrigin } from '../retro/retro.js';
@@ -284,6 +285,8 @@ interface AgentManagerEvents {
   assessment: [{ agentId: string; taskId: string; issueOrigin: string; verdict: AssessmentVerdict }];
   /** The appraiser said whether its issue's goal can be worked from (already persisted against the issue origin). */
   appraisal: [{ agentId: string; taskId: string; issueOrigin: string; verdict: GoalAppraisalVerdictName }];
+  /** A planner found its issue's goal already met (already persisted as a delivery verdict). */
+  goalMet: [{ agentId: string; taskId: string; issueOrigin: string }];
   /** The agent closed its plan part without a pull request (already persisted on the part row). */
   partOutcome: [{ agentId: string; taskId: string; part: PlanPart }];
   /** The agent left a note on its issue's shared pad (already persisted, append-only). */
@@ -367,13 +370,14 @@ function retroClaim(claim: string): FactProposal {
  * prompts are auto-answered here; everything else surfaces as a `waiting` event
  * for the harness to escalate.
  *
- * The `implements AgentToolTarget` is load-bearing: it is what makes the eleven
- * tool-facing methods below a *checked* contract rather than eleven coincidences.
+ * The `implements AgentToolTarget` is load-bearing: it is what makes the
+ * tool-facing methods below a *checked* contract rather than a set of
+ * coincidences.
  * Satisfying it structurally meant a method could be renamed, or the interface
  * grown, with nothing failing — `withCaller`'s own argument, one level up. The
  * clause costs a `import type` and nothing else: it is erased at compile time, and
  * the runtime edge it would notionally create already runs this way round (this
- * file value-imports `assessmentOrigin`, `appraiserOrigin` and `partConclusionOrigin`
+ * file value-imports `assessmentOrigin`, `appraiserOrigin`, `plannerOrigin` and `partConclusionOrigin`
  * from `src/mcp/`, while `src/mcp/` reaches back only for types).
  */
 export class AgentManager extends EventEmitter implements AgentToolTarget {
@@ -617,8 +621,17 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       throw new Error(`resume spawn failed for agent ${agent.id}: ${(err as Error).message}`);
     }
 
-    if (wasWaiting) this.restoreWaiting(agent, task);
-    else this.deliverAfterBoot(agent.id, session, nudge ?? this.opts.resumeInput?.() ?? null);
+    if (wasWaiting) {
+      this.restoreWaiting(agent, task);
+    } else {
+      const carryOn = nudge ?? this.opts.resumeInput?.() ?? null;
+      // Echoed, unlike a fresh dispatch's prompt: this is a short sentence telling a
+      // conversation the operator has already been reading to carry on, and a
+      // transcript that resumed with the agent answering it unasked is the gap
+      // {@link noteSent} exists to close.
+      if (carryOn !== null) this.noteSent(agent.id, session, carryOn);
+      this.deliverAfterBoot(agent.id, session, carryOn);
+    }
 
     return true;
   }
@@ -667,6 +680,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       this.store.updateTask(task.id, { status: 'running' });
 
       if (session) {
+        this.noteSent(agentId, session, LIMIT_RESUME_MESSAGE);
         session.send(LIMIT_RESUME_MESSAGE);
         this.reflectStatus(agentId, task.id, 'running');
         return { ok: true };
@@ -818,10 +832,36 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     return settled;
   }
 
+  /**
+   * Write a message *sent to* an agent into its transcript, as the harness or the
+   * operator taking a turn in the conversation.
+   *
+   * **The stream runtime renders only what comes back**, so without this a message
+   * typed into an agent leaves no trace at all: the drawer sits unchanged until the
+   * agent happens to speak, and the cockpit deliberately does not refetch after an
+   * answer — so the operator's only evidence that the answer went anywhere is the
+   * agent's eventual reply to a question the pane never showed. The PTY runtime
+   * carries both halves in the session file it renders, and says so with
+   * {@link AgentSession.recordsSentMessages}; echoing there would double every
+   * message.
+   *
+   * The first message of a dispatch is deliberately *not* echoed: a task prompt is
+   * kilobytes, and the transcript is the agent's working record rather than a copy
+   * of its brief.
+   */
+  private noteSent(agentId: string, session: AgentSession, text: string): void {
+    if (session.recordsSentMessages) return;
+    const note = renderBlocks([{ type: HUMAN_BLOCK, text }], new Date().toISOString());
+    if (!note) return;
+    this.store.appendTranscript(agentId, note);
+    this.emit('output', { agentId, delta: note });
+  }
+
   /** Type text into a live agent (a human response or a follow-up prompt). */
   respond(agentId: string, text: string): boolean {
     const session = this.sessions.get(agentId);
     if (!session) return false;
+    this.noteSent(agentId, session, text);
     session.send(text);
     this.parked.delete(agentId); // the park is over; the next ask is a new one
     this.limited.delete(agentId); // ...including a limit park an operator typed straight past
@@ -1516,6 +1556,80 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
   }
 
   /**
+   * Record a planner's "there is nothing to build here — this goal is already met"
+   * (the `plan_not_needed` tool).
+   *
+   * Routed through the manager rather than straight to the store for
+   * {@link recordConclusion}'s reason: the event repaints the cockpit now rather
+   * than on the next pulse. Identity is structural — the issue is the credential's
+   * own planning origin, and {@link plannerOrigin} refuses every other kind of
+   * caller by name.
+   *
+   * **The two refusals below are here rather than in `validatePlanNotNeeded`**
+   * because both are store questions, and both are silent if they are not asked:
+   *
+   * - **An issue that already has a plan row** is a *replan*, and this verdict
+   *   cannot speak for it. The row would park pickup while the plan went on
+   *   owning the issue — `planInFlight` reads `planning` as more work, so the
+   *   cockpit would show a goal both delivered and mid-decomposition — and parts
+   *   already dispatched or in review would keep running underneath it. The
+   *   planner that believes the goal is met on a replan has somewhere honest to
+   *   say so, and it is the operator who asked for the replan.
+   * - **A standing shortfall** is an assessor saying, with the delivered state in
+   *   front of it, that this goal is *not* reached. Writing a delivery would clear
+   *   that row through the exclusion matrix — the assessor's verdict gone, with
+   *   nothing anywhere red — and it would be the harness overturning its own
+   *   better-informed judgement with its less-informed one.
+   */
+  recordGoalMet(
+    agentId: string,
+    summary: string,
+    detail: string,
+  ): { ok: true; issueOrigin: string } | { ok: false; error: string } {
+    return this.withCaller(agentId, ({ task }) => {
+      const origin = plannerOrigin(task.originRef);
+      if (!origin.ok) return { ok: false, error: origin.error };
+
+      const plan = this.store.getPlanByOrigin(origin.issueOrigin);
+      if (plan) {
+        return {
+          ok: false,
+          error:
+            `${origin.issueOrigin} already has a delivery plan, so this is a replan and plan_not_needed ` +
+            `cannot settle it: the plan would go on owning the issue, and any part already dispatched or ` +
+            `in review would go on running underneath a goal marked delivered. Submit the amended plan ` +
+            `with plan_submit — a part that turned out to be unnecessary is one you leave out, and one ` +
+            `already in flight is a part whose agent closes it with conclude_part. If you believe the ` +
+            `whole goal is already met, raise it: the operator asked for this replan and it is theirs to end.`,
+        };
+      }
+
+      const shortfall = this.store.getShortfall(origin.issueOrigin);
+      if (shortfall) {
+        return {
+          ok: false,
+          error:
+            `An assessment of ${origin.issueOrigin} standing right now says the goal is *not* reached — ` +
+            `"${shortfall.summary}" — and it was cast against the delivered state rather than against a ` +
+            `plan. Recording a delivery here would erase it. Read what it says is missing; if it is wrong, ` +
+            `raise that, and if it is right, plan the work it names.`,
+        };
+      }
+
+      this.store.recordDelivery({
+        originRef: origin.issueOrigin,
+        summary,
+        detail,
+        by: 'planner',
+        agentId,
+        taskId: task.id,
+      });
+      this.emit('goalMet', { agentId, taskId: task.id, issueOrigin: origin.issueOrigin });
+      return { ok: true, issueOrigin: origin.issueOrigin };
+    });
+  }
+
+  /**
    * Record an appraiser's verdict on the goal it was dispatched to judge.
    *
    * Routed through the manager rather than straight to the store for
@@ -2086,9 +2200,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     // A dead process cannot be asked anything — the stop is all there is, so park it.
     if (spent < budget && !this.exited.has(agentId)) {
       this.nudges.set(agentId, spent + 1);
-      const note = renderBlocks([{ type: HUMAN_BLOCK, text: STALL_NUDGE }], new Date().toISOString());
-      this.store.appendTranscript(agentId, note);
-      this.emit('output', { agentId, delta: note });
+      this.noteSent(agentId, session, STALL_NUDGE);
       debugLog('agent', `stall nudge agent=${agentId} attempt=${spent + 1}/${budget}`);
       try {
         session.send(STALL_NUDGE);

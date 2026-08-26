@@ -577,6 +577,36 @@ one way this can be wrong at scale.
 The same reading is what stops it filing noise. A GitHub issue a merged `Closes #12` took with it is
 never in the open set, so nothing is ever owed for it.
 
+**The row can also do the close itself.** The obligation is a close in the tracker, so the row that
+states it carries the button that takes it: **Close the ticket** posts
+`POST /api/human-tasks/:id/close-ticket` ([16](16-http-api.md)), which closes the item through the
+same outbound seam the plan back-out uses (`ActionSink.closeIssue`, reason `completed`) and settles
+the row with it. What it saves is the round trip — the operator was being asked to leave the cockpit,
+click once in a tracker, and come back to a row that would settle a pulse later.
+
+Three things about it are deliberate:
+
+- **It is the act, not a third verdict.** Done and Decline still say what they always said, and the
+  sweep above is still what settles a close taken anywhere else. This is the only one of the three
+  that changes the tracker.
+- **It settles the row itself rather than waiting for the sweep.** The sweep is idempotent against a
+  settled row, and leaving it to the next pulse would leave an obligation standing in front of the
+  operator who has just discharged it. The resolution is worded as the act — "Closed #12 in the
+  tracker from the cockpit" — and deliberately does **not** carry the `DESK_SETTLED` prefix: a person
+  pressed this, so it is an operator's answer, and the reopen arm must not treat it as the harness's
+  own.
+- **It is offered only where the tracker can take it.** `ActionSink.canCloseIssue()` is asked of the
+  connector — per pulse for the row's own wording, and once per snapshot for `config.canCloseIssue`,
+  which is what decides whether the cockpit draws the button ([17](17-cockpit.md)). Where it answers
+  false the row reads exactly as it did before the button existed: close it in the tracker, and this
+  settles itself. The route checks the same capability, because `closeIssue` throws where nothing
+  implements it and an operator would read that as the write failing rather than as the deployment
+  not having the operation.
+
+The note the validation flag costs is asked of this verb too, for the reason it is asked of Done: the
+flag is about the goal, not about which verb settles the row, and a button that closed the item in
+silence would be the way around the rule. → [20](20-validation.md)
+
 **Clearing the delivery retracts it.** An operator who deleted the row put the goal back into
 production, and an open obligation to close its ticket then points at work that is not finished. The
 task is settled `declined` with that as its note — declined rather than deleted, the settlement an

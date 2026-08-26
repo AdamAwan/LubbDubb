@@ -67,6 +67,15 @@ export interface AgentSession extends EventEmitter {
    */
   deliverInitial?(text: string): void;
   /**
+   * True when the runtime's own transcript already carries the messages *sent to*
+   * the agent, so the manager must not write them a second time. The PTY runtime
+   * sets it: it renders Claude Code's session file, which records both halves of
+   * the conversation (and, degraded to the screen, the TUI echoes what was typed).
+   * The stream runtime renders only what comes back, so its sent messages exist
+   * nowhere unless the manager echoes them — see `AgentManager.noteSent`.
+   */
+  readonly recordsSentMessages?: boolean;
+  /**
    * Write raw bytes to the agent with no added newline/framing (e.g. control chars like \x03).
    * Best-effort: transports without a TTY may no-op.
    */

@@ -150,6 +150,13 @@ export function replyToolNote(): string {
   return (
     '\n\nWhen you have a reply for a thread — a defence, an answer, or a note about what you changed — ' +
     'call `reply_to_review` with the reply and that thread’s id. One call per thread.\n\n' +
+    'Set `resolved: true` on that call when the thread is dealt with — you made the change the reviewer ' +
+    'asked for, or answered a question that needed nothing changed — and the harness marks the thread ' +
+    'resolved as it sends the reply. Leave it off where you are defending an approach the reviewer may ' +
+    'still disagree with, or where your answer leaves them something to decide: that thread is theirs ' +
+    'to close. **You cannot resolve a thread any other way** — the reply goes out as the harness, so a ' +
+    'thread you answer without this flag stays open in front of the reviewer, and the fleet comes back ' +
+    'to it.\n\n' +
     '**Do not post to a review thread yourself**: not with `gh`, not with `az`, not with the provider’s ' +
     'REST API, not from a shell of any kind, even if your credentials would let you. A reply the harness ' +
     'sends is signed as the harness and recorded against the pull request; one you post is unsigned, ' +

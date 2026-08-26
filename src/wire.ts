@@ -855,6 +855,17 @@ interface CockpitConfig {
    */
   canSetWorkItemState: boolean;
   /**
+   * Whether the provider can close a tracker item — the close-out row's **Close
+   * the ticket** button, and nothing else, depends on it.
+   *
+   * Asked of the connector for `canSetWorkItemState`'s reason, and shipped for the
+   * same one: `closeIssue` throws where no integration implements it, so a button
+   * drawn off the provider's *name* would be a control that fails on exactly the
+   * deployments nobody tested. False draws no button, and the row still reads the
+   * way it always did — close it in the tracker, and the sweep settles it.
+   */
+  canCloseIssue: boolean;
+  /**
    * Whether the tracker reports a hierarchy — a parent link resolved, either way,
    * on any item in the world. The Features page's gate, and the nav's: the tab is
    * appended where this is true and absent where it is not, the way the vivarium's

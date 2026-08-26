@@ -689,6 +689,8 @@ export class ActionExecutor {
     /** The review thread being answered, or null for a reply on the pull request itself. */
     commentId: string | null;
     draft: string;
+    /** The agent's verdict: this thread is dealt with, so resolve it once the reply lands. */
+    resolve: boolean;
     reason: string;
   }): Promise<{ outcome: DecisionOutcome; detail: string }> {
     const cycleId = `agent-reply:${input.agentId}`;
@@ -697,6 +699,7 @@ export class ActionExecutor {
       prNumber: input.prNumber,
       commentId: input.commentId,
       draft: input.draft,
+      resolve: input.resolve,
       reason: input.reason,
       rule: null,
       admission: null,
@@ -797,9 +800,10 @@ export class ActionExecutor {
         commentId: act.commentId,
         body: act.body,
       });
+      const resolution = await this.resolveAnswered(act);
       return audit(
         'executed',
-        `Sent the reply on PR #${act.prNumber} — authorized by ${by}${because} (${proposal.id}).${res.ref ? ` ref=${res.ref}` : ''}`,
+        `Sent the reply on PR #${act.prNumber} — authorized by ${by}${because} (${proposal.id}).${res.ref ? ` ref=${res.ref}` : ''}${resolution}`,
       );
     } catch (err) {
       const message = (err as Error).message;
@@ -826,6 +830,48 @@ export class ActionExecutor {
         'rejected',
         `Authorized ${act.kind === 'merge' ? `merge of PR #${act.prNumber}` : `reply on PR #${act.prNumber}`} failed (${message}); escalated so it isn't dropped: ${esc.id}.`,
       );
+    }
+  }
+
+  /**
+   * Mark the thread resolved, when the agent that wrote the reply said it had
+   * dealt with it — and report what happened as a clause on the reply's own audit
+   * line rather than as a second decision row. One act was authorized; this is
+   * the rest of it.
+   *
+   * **Its failure is swallowed on purpose, and this is the sharp edge.** A throw
+   * here would land in `runAuthorized`'s catch, which reads every failure as "the
+   * send failed": the reply — already posted, visible in the thread — would be
+   * escalated for the operator to send by hand and re-proposed once its settle
+   * window lapsed, so the reviewer gets the same reply twice because the harness
+   * could not close a thread. An unresolved thread is the safe direction: the
+   * rule dispatches for it again, which is visible and cheap.
+   *
+   * Nothing is attempted without a thread to resolve (a reply on the pull request
+   * itself has none) or where no integration can resolve one — the second is a
+   * shape rather than a fault, and it is said in the line so an operator reading
+   * it back is not left wondering.
+   */
+  private async resolveAnswered(act: {
+    prNumber: number;
+    commentId: string | null;
+    resolve: boolean;
+  }): Promise<string> {
+    if (!act.resolve || act.commentId === null) return '';
+    if (!this.deps.sink.canResolvePrThread()) return ' The thread was left open: this provider cannot resolve one.';
+    try {
+      const res = await this.deps.sink.resolvePrThread({ prNumber: act.prNumber, commentId: act.commentId });
+      return res.ok
+        ? ` Resolved thread ${act.commentId}.`
+        : ` PR #${act.prNumber} carries no thread ${act.commentId}; left it as it was.`;
+    } catch (err) {
+      const message = (err as Error).message;
+      this.deps.errors.record({
+        source: 'provider',
+        message: `Sent the reply on PR #${act.prNumber} but could not resolve thread ${act.commentId}: ${message}`,
+        detail: 'The thread stays open, so rule pr-review-comment dispatches for it again.',
+      });
+      return ` The reply went out; resolving thread ${act.commentId} failed (${message}), so it is still open.`;
     }
   }
 

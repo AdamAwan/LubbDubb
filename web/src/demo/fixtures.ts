@@ -322,6 +322,7 @@ export function buildDemoState(): DemoSeed {
       // The demo drags for real: a board that looks draggable and is not would teach
       // a visitor the wrong thing about the product.
       canSetWorkItemState: true,
+      canCloseIssue: true,
       // The demo's tracker is an Azure-shaped one — its items carry a type and hang
       // off features — so the Features tab is drawn. A demo that hid it would hide
       // the page on the only tracker shape that has one.
@@ -2405,8 +2406,9 @@ export function buildDemoState(): DemoSeed {
         detail:
           'The assessor marked **Document the two-watcher requirement for maintenance jobs** delivered — ' +
           '"PR #410 landed the deadlock note and the console warning with it."\n\n' +
-          'The item is still open in the tracker. Close it there and this settles itself on the ' +
-          'next pulse — or mark it done here, or decline it and say why.',
+          'The item is still open in the tracker. **Close the ticket** here does it and settles this ' +
+          'row with it — or close it in the tracker yourself and this settles itself on the next ' +
+          'pulse, or mark it done here, or decline it and say why.',
         originRef: 'issue:364',
         partId: null,
         kind: 'close_out',

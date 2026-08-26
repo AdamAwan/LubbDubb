@@ -23,7 +23,7 @@ is rejected and audited rather than executed.
 | `dispatch_desk_agent` | `title`, `prompt`, `reason`                 | `originRef`, `originTitle`, `originSummary`, `jobId`, `rule`                   |
 | `escalate_to_human`   | `escalationType`, `prompt`, `reason`        | `context`, `taskId`, `agentId`, `rule`                                         |
 | `respond_to_agent`    | `agentId`, `response`, `reason`             | `originRefs`, `rule`                                                           |
-| `reply_on_pr`         | `prNumber`, `draft`, `reason`               | `commentId`, `confidence` (0..1), `rule`                                       |
+| `reply_on_pr`         | `prNumber`, `draft`, `reason`               | `commentId`, `resolve` (default `false`), `confidence` (0..1), `rule`          |
 | `merge_pr`            | `prNumber`, `reason`                        | `method` (`merge`\|`squash`\|`rebase`, default `squash`), `confidence`, `rule` |
 | `propose_plan`        | `planId`, `originRef`, `prompt`, `reason`   | `rule`                                                                         |
 | `update_pr_branch`    | `prNumber`, `base`, `originRef`, `reason`   | `rule`                                                                         |
@@ -1192,6 +1192,11 @@ from any shell — because that is what an agent does otherwise: this prompt han
 the agent to prepare a reply, and a deployment's `agentAllowedTools` commonly reaches the tracker's
 CLI. A reply posted that way is unsigned, unrecorded by the harness and attributed to whoever is
 logged in on the machine, and nothing anywhere says it happened.
+
+It also teaches **`resolved: true`** — the flag on that call which is the only thing that closes a
+thread, since the reply goes out as the harness and the agent has no click of its own. And it says
+when *not* to set it: a defence of an approach the reviewer may still reject is their thread to
+close. Told only that the flag exists, an agent resolves the threads it is arguing with.
 → [09](09-execution.md#where-a-reply_on_pr-comes-from), [11](11-mcp-tools.md#reply_to_review)
 
 The evidence is fetched in the **executor**, at dispatch, not in the rule. The rule pipeline is

@@ -37,6 +37,10 @@ function recordingSink(): { sink: ActionSink; states: WorkItemStateInput[] } {
   const states: WorkItemStateInput[] = [];
   const sink: ActionSink = {
     canCloseIssue: () => false,
+    canResolvePrThread: () => false,
+    resolvePrThread: (): never => {
+      throw new Error('resolvePrThread is not scripted in this test');
+    },
     closeIssue: (): never => {
       throw new Error('closeIssue is not scripted in this test');
     },
@@ -114,6 +118,10 @@ test('set_work_item_state routes to the sink and is audited (no auto-send gate)'
 test('a failing transition is recorded as rejected, not escalated', async () => {
   const failingSink: ActionSink = {
     canCloseIssue: () => false,
+    canResolvePrThread: () => false,
+    resolvePrThread: (): never => {
+      throw new Error('resolvePrThread is not scripted in this test');
+    },
     closeIssue: (): never => {
       throw new Error('closeIssue is not scripted in this test');
     },

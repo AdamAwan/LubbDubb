@@ -1263,6 +1263,21 @@ class DemoServer {
     return this.settleHumanTask(id, 'declined', note);
   }
 
+  /**
+   * Close the ticket and settle the row (demo mirror of
+   * `POST /api/human-tasks/:id/close-ticket`). The demo world's issue is moved to
+   * `closed` as well as the row settled, because the whole point of the button is
+   * that the two happen together — a demo that settled the row and left the ticket
+   * open would be teaching the opposite of what the control does.
+   */
+  async closeHumanTaskTicket(id: string, note?: string): Promise<{ ok: true }> {
+    const task = (this.state.humanTasks ?? []).find((t) => t.id === id);
+    const number = task?.originRef?.startsWith('issue:') === true ? Number(task.originRef.slice('issue:'.length)) : NaN;
+    const issue = Number.isInteger(number) ? this.state.world.issues.find((i) => i.number === number) : undefined;
+    if (issue) issue.state = 'closed';
+    return this.settleHumanTask(id, 'done', note ?? `Closed #${number} in the tracker from the cockpit.`);
+  }
+
   /** Clear a settled one off the bench (POST /api/human-tasks/:id/dismiss). */
   async dismissHumanTask(id: string): Promise<{ ok: true }> {
     const task = (this.state.humanTasks ?? []).find((t) => t.id === id);
@@ -4286,6 +4301,7 @@ export const demoApi = {
   resolveContradiction: (id: string, ruling: ContradictionRuling) => getServer().resolveContradiction(id, ruling),
   completeHumanTask: (id: string, note?: string) => getServer().completeHumanTask(id, note),
   declineHumanTask: (id: string, note: string) => getServer().declineHumanTask(id, note),
+  closeHumanTaskTicket: (id: string, note?: string) => getServer().closeHumanTaskTicket(id, note),
   dismissHumanTask: (id: string) => getServer().dismissHumanTask(id),
   acceptProposal: (id: string, note?: string) => getServer().acceptProposal(id, note),
   rejectProposal: (id: string, note?: string) => getServer().rejectProposal(id, note),

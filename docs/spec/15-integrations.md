@@ -15,6 +15,8 @@ interface Connector {
 ```ts
 interface ActionSink {
   postPrReply(input): Promise<SendResult>;
+  canResolvePrThread(): boolean;
+  resolvePrThread(input): Promise<SendResult>;
   mergePr(input): Promise<SendResult>;
   setPrLabel(input): Promise<SendResult>;
   setIssueLabel(input): Promise<SendResult>;
@@ -44,11 +46,18 @@ providers share one `FakeWorldStore` so their world stays coherent.
 
 `src/integrations/integration.ts` defines each outbound capability separately, with a type guard:
 
-`PrReplyCapable`, `PrMergeCapable`, `PrLabelCapable`, `PrCreateCapable`, `PrTitleCapable`,
+`PrReplyCapable`, `PrThreadResolveCapable`, `PrMergeCapable`, `PrLabelCapable`, `PrCreateCapable`, `PrTitleCapable`,
 `PrBaseCapable`, `PrBaseUpdateCapable`, `BranchDeleteCapable`, `IssueLabelCapable`,
 `WorkItemStateCapable`, `WorkItemLinkCapable`, `IssueCommentCapable`, `IssueCreateCapable`,
 `IssueCloseCapable`,
 `CiEvidenceCapable`, `RefResolvable`, `TicketHistoryCapable`, and the fake-only `Injectable`.
+
+`PrThreadResolveCapable` marks a review thread resolved, and is separate from `PrReplyCapable`
+because the two are different provider operations — GitHub resolves through a GraphQL mutation and
+replies through REST, Azure patches the thread's status — and because a provider may gain one without
+the other. It is keyed on the **root comment id**, the same id a reply threads under and the same id
+`PrComment` carries, so nothing outside a provider handles a second identifier. `ok: false` means the
+pull request carries no such thread — a stale reading rather than a fault.
 
 `BranchDeleteCapable` deletes a branch outright — the reap after a pull request merges. Both
 providers implement it, and both report **already gone as success**: GitHub's "automatically delete
@@ -401,6 +410,12 @@ Behaviour worth knowing:
   Both arms, and a missing resolution read, fail toward a thread staying **open** — an agent
   dispatched for a comment already dealt with is visible and cheap, where a dropped review is neither.
 
+- **Resolving a thread is the one GraphQL _write_**, for the read's reason: `resolveReviewThread` is a
+  mutation taking the thread's node id, which no REST call returns. The node id never crosses the
+  seam — `resolveReviewThread(number, rootCommentId)` looks it up through the same paginated read the
+  snapshot uses, so a caller holds only the root comment id and a fixture knows one id fewer. A
+  thread already resolved returns without mutating.
+
 - Auth is `GITHUB_TOKEN` only; `github.owner`/`github.repo` are required. See [02](02-configuration.md).
 
 ## The `azure` provider
@@ -459,6 +474,11 @@ Behaviour worth knowing:
   leaving it waiting on a build nobody started. An evaluation that arrives without an id carries no
   `requeueRef` at all, which reads the same way.
   → [09](09-execution.md#requeue_ci_check--the-expired-build-without-an-agent)
+- **Resolving a thread is a PATCH on the thread with `status: 'fixed'`**, not a write on a comment:
+  Azure's resolution verdict lives on the thread, and `fixed` is one of the four statuses the resolved
+  arm of `buildUnresolvedComments` already reads — so a thread the harness resolves settles on the
+  next poll exactly as one a reviewer closed themselves. `commentId` carries the **thread** id here,
+  as it does for a reply.
 - **Merging is Azure "complete PR"**, which needs the head commit. The provider caches each PR's
   `lastMergeSourceCommit` from the last snapshot, so a `merge_pr` only works on a PR seen in a prior
   cycle.

@@ -557,6 +557,12 @@ const realApi = {
   completeHumanTask: (id: string, note?: string) =>
     post<{ ok: true }>(`/api/human-tasks/${id}/done`, note === undefined ? undefined : { note }),
   declineHumanTask: (id: string, note: string) => post<{ ok: true }>(`/api/human-tasks/${id}/decline`, { note }),
+  // Close the tracker item the close-out row names, and settle the row with it.
+  // The obligation is the close, so this is the act rather than a third verdict:
+  // the same `note` the flagged-validation rule asks of `done`, and the same
+  // absence-not-empty-string discipline.
+  closeHumanTaskTicket: (id: string, note?: string) =>
+    post<{ ok: true }>(`/api/human-tasks/${id}/close-ticket`, note === undefined ? undefined : { note }),
   // Off the bench. Settled rows only — it says nothing about the work, so it is
   // not a third verdict and settles nothing.
   dismissHumanTask: (id: string) => post<{ ok: true }>(`/api/human-tasks/${id}/dismiss`),

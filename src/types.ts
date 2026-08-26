@@ -1934,8 +1934,18 @@ export interface IssueRun {
   updatedAt: string;
 }
 
-/** Who decided an issue was delivered: the assessing agent, or the operator directly. */
-export type DeliveryAuthor = 'assessor' | 'operator';
+/**
+ * Who decided an issue was delivered: the assessing agent, the operator directly,
+ * or the **planner** that found the goal already met before anything was built.
+ *
+ * The third is the same statement made at the other end of the run. An assessor
+ * judges delivered work; a planner judges a goal nothing has started on, and the
+ * answer "this is already true of the repository" is one it reaches often enough
+ * that the alternative — a plan whose one part exists so that an agent can
+ * discover the same thing and conclude it — was work invented to fit the shape.
+ * → `src/mcp/planNotNeeded.ts`
+ */
+export type DeliveryAuthor = 'assessor' | 'planner' | 'operator';
 
 /**
  * One issue's standing `delivered` verdict — the harness's own park.
@@ -1960,10 +1970,10 @@ export interface IssueDelivery {
   originRef: string;
   /** One line: what was delivered. Required — a bare verdict is not reviewable. */
   summary: string;
-  /** The account behind the headline, as markdown. Null when the assessor added none. */
+  /** The account behind the headline, as markdown. Null when its author added none. */
   detail: string | null;
   by: DeliveryAuthor;
-  /** The assessing agent and its task, from the credential. Null for an operator verdict. */
+  /** The agent that cast it and its task, from the credential. Null for an operator verdict. */
   agentId: string | null;
   taskId: string | null;
   /** When the verdict was first cast — the instant world signal is measured against. */

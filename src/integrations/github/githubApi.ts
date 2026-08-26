@@ -50,6 +50,18 @@ export interface GitHubApi {
    * joined without a second notion of thread identity.
    */
   listPullReviewThreads(number: number): Promise<GhReviewThread[]>;
+  /**
+   * Mark a review thread resolved — the reviewer's own verdict, written by the
+   * harness on an agent's say-so.
+   *
+   * Keyed on the **root comment's** database id, the same id a reply is threaded
+   * under, because that is the only handle anything outside this file has: the
+   * GraphQL node id the mutation needs is resolved here, where the one GraphQL
+   * read already lives. Answers `false` when no thread on the pull request has
+   * that root — a stale reading rather than a fault. Idempotent: a thread already
+   * resolved answers `true` without a second mutation.
+   */
+  resolveReviewThread(number: number, rootCommentId: number): Promise<boolean>;
   /** Combined commit status for a head SHA (the legacy statuses API). */
   getCombinedStatus(sha: string): Promise<GhCombinedStatus>;
   /** Check-runs for a head SHA (the Checks API). */
