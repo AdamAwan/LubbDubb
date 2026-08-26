@@ -1049,6 +1049,7 @@ class DemoServer {
         supersedes: null,
         project: 'lubbdubb',
         keepLocal: false,
+        supersededBy: null,
         originRef,
         ruledAt: null,
         resolvesWhen: null,
@@ -1090,6 +1091,39 @@ class DemoServer {
       fact.updatedAt = fact.ruledAt;
       this.dirty();
     }
+    return { ok: true };
+  }
+
+  /**
+   * Folding a cluster — the demo mirror of `POST /api/knowledge/facts/:id/merge`,
+   * including the shape that makes a merge safe: the members' voices move onto the
+   * survivor and the members become `superseded` naming it, rather than being
+   * deleted or retired.
+   */
+  async mergeFacts(id: string, members: string[]): Promise<{ ok: true }> {
+    const survivor = this.state.knowledge.find((f) => f.id === id);
+    if (!survivor) return { ok: true };
+    const at = new Date().toISOString();
+    for (const memberId of members) {
+      const member = this.state.knowledge.find((f) => f.id === memberId);
+      if (!member || member.id === survivor.id) continue;
+      if (member.reach === 'rejected' || member.reach === 'superseded') continue;
+      if (member.scope !== survivor.scope) continue;
+      survivor.corroborations += member.corroborations;
+      member.reach = 'superseded';
+      member.supersededBy = survivor.id;
+      member.ruledAt = at;
+      member.updatedAt = at;
+    }
+    // The promotion is the ordinary one on the ordinary rule: the merge let the
+    // voices be counted, and the count is what carries a claim to lookup.
+    if (survivor.reach === 'proposal' && survivor.corroborations > 1) survivor.reach = 'lookup';
+    survivor.ruledAt = at;
+    survivor.updatedAt = at;
+    this.state.knowledgeSimilarities = this.state.knowledgeSimilarities.filter(
+      (pair) => !members.includes(pair.leftId) && !members.includes(pair.rightId),
+    );
+    this.dirty();
     return { ok: true };
   }
 
@@ -4121,6 +4155,7 @@ export const demoApi = {
   placePet: (id: string, placed: boolean) => getServer().placePet(id, placed),
   blendPet: (id: string) => getServer().blendPet(id),
   setFactReach: (id: string, reach: FactRuling) => getServer().setFactReach(id, reach),
+  mergeFacts: (id: string, members: string[]) => getServer().mergeFacts(id, members),
   exitFact: (id: string, exit: FactExit) => getServer().exitFact(id, exit),
   raiseFact: (claim: string, originRef: string | null) => getServer().raiseFact(claim, originRef),
   settleGraduation: (id: string, outcome: GraduationOutcome) => getServer().settleGraduation(id, outcome),

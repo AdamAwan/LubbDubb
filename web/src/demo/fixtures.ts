@@ -1818,6 +1818,7 @@ export function buildDemoState(): DemoSeed {
         supersedes: null,
         project: 'lubbdubb',
         keepLocal: false,
+        supersededBy: null,
         originRef: 'pr:412',
         ruledAt: null,
         resolvesWhen: null,
@@ -1853,6 +1854,7 @@ export function buildDemoState(): DemoSeed {
         supersedes: null,
         project: 'lubbdubb',
         keepLocal: false,
+        supersededBy: null,
         originRef: 'pr:404',
         ruledAt: null,
         resolvesWhen: { kind: 'ci-check-green', ref: 'pr:404', check: 'check (build)' },
@@ -1882,6 +1884,7 @@ export function buildDemoState(): DemoSeed {
         supersedes: null,
         project: 'lubbdubb',
         keepLocal: false,
+        supersededBy: null,
         originRef: 'issue:376',
         ruledAt: null,
         resolvesWhen: null,
@@ -1909,6 +1912,7 @@ export function buildDemoState(): DemoSeed {
         supersedes: null,
         project: 'lubbdubb',
         keepLocal: false,
+        supersededBy: null,
         originRef: 'issue:364',
         ruledAt: ago(60),
         resolvesWhen: null,
@@ -1948,6 +1952,7 @@ export function buildDemoState(): DemoSeed {
         supersedes: 'fact-injected',
         project: 'lubbdubb',
         keepLocal: false,
+        supersededBy: null,
         originRef: 'issue:390',
         ruledAt: null,
         resolvesWhen: null,
@@ -1975,6 +1980,7 @@ export function buildDemoState(): DemoSeed {
         supersedes: null,
         project: 'lubbdubb',
         keepLocal: false,
+        supersededBy: null,
         originRef: 'issue:341',
         ruledAt: ago(48),
         resolvesWhen: null,
@@ -2013,6 +2019,7 @@ export function buildDemoState(): DemoSeed {
         supersedes: null,
         project: 'lubbdubb',
         keepLocal: false,
+        supersededBy: null,
         originRef: 'pr:377',
         ruledAt: ago(24 * 51),
         resolvesWhen: null,
@@ -2045,6 +2052,7 @@ export function buildDemoState(): DemoSeed {
         supersedes: null,
         project: 'lubbdubb',
         keepLocal: false,
+        supersededBy: null,
         originRef: 'issue:390',
         ruledAt: ago(20),
         resolvesWhen: null,
@@ -2078,6 +2086,7 @@ export function buildDemoState(): DemoSeed {
         supersedes: null,
         project: 'lubbdubb',
         keepLocal: false,
+        supersededBy: null,
         originRef: 'issue:288',
         ruledAt: null,
         resolvesWhen: null,
@@ -2096,6 +2105,40 @@ export function buildDemoState(): DemoSeed {
         cold: true,
       },
       {
+        // The same wall, written down by a second agent in its own words — which
+        // `claimsMatch` answers no to, so this landed as a copy rather than as the
+        // corroboration that would have carried the first. The pair is what the
+        // cluster below suggests folding into one.
+        id: 'fact-cold-twin',
+        claim:
+          'Fixtures in the staging seed script are written before migrations run, so the column names in a ' +
+          'fresh database are the old ones.',
+        scope: 'fleet',
+        lifetime: 'standing',
+        expiresAt: null,
+        reach: 'proposal',
+        supersedes: null,
+        project: 'lubbdubb',
+        keepLocal: false,
+        supersededBy: null,
+        originRef: 'issue:401',
+        ruledAt: null,
+        resolvesWhen: null,
+        aboutRef: null,
+        where: 'scripts/seed.ts',
+        createdAt: ago(24 * 12),
+        updatedAt: ago(24 * 12),
+        corroborations: 1,
+        contradictions: 0,
+        contradictionRatio: 0,
+        openContradictions: 0,
+        asks: 0,
+        lastAskedAt: null,
+        scopeStale: false,
+        scopeLastMatchedAt: null,
+        cold: false,
+      },
+      {
         id: 'fact-proposal',
         claim: 'The ingest worker holds its Postgres connection open across retries, so a restart is what clears it.',
         scope: 'goal:issue:390',
@@ -2105,6 +2148,7 @@ export function buildDemoState(): DemoSeed {
         supersedes: null,
         project: 'lubbdubb',
         keepLocal: false,
+        supersededBy: null,
         originRef: 'issue:390',
         ruledAt: null,
         resolvesWhen: null,
@@ -2139,6 +2183,7 @@ export function buildDemoState(): DemoSeed {
         supersedes: null,
         project: 'lubbdubb',
         keepLocal: false,
+        supersededBy: null,
         originRef: 'issue:364',
         ruledAt: ago(8),
         resolvesWhen: null,
@@ -2172,6 +2217,7 @@ export function buildDemoState(): DemoSeed {
         supersedes: null,
         project: 'lubbdubb',
         keepLocal: false,
+        supersededBy: null,
         originRef: 'issue:341',
         ruledAt: ago(150),
         resolvesWhen: null,
@@ -2208,6 +2254,7 @@ export function buildDemoState(): DemoSeed {
         supersedes: null,
         project: 'lubbdubb',
         keepLocal: false,
+        supersededBy: null,
         originRef: 'issue:318',
         ruledAt: ago(90),
         resolvesWhen: null,
@@ -2235,6 +2282,7 @@ export function buildDemoState(): DemoSeed {
         supersedes: null,
         project: 'lubbdubb',
         keepLocal: false,
+        supersededBy: null,
         originRef: 'issue:355',
         ruledAt: ago(120),
         resolvesWhen: null,
@@ -2266,6 +2314,12 @@ export function buildDemoState(): DemoSeed {
     // merge turns on: one agent's report is exactly what every finding was, and
     // queueing work for one asserts nothing — the prompt tells the agent to check
     // the claim first.
+    // One suggested cluster: two agents on two goals hit one wall and wrote it down
+    // in their own words, so the strict matcher filed a copy instead of a voice.
+    // Nothing here has merged anything — the operator's click is what would.
+    knowledgeSimilarities: [
+      { id: 'kns-seed', leftId: 'fact-cold', rightId: 'fact-cold-twin', score: 0.72, createdAt: ago(1) },
+    ],
     knowledgeGraduations: [
       {
         id: 'kng-lookup',

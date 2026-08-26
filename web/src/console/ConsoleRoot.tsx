@@ -191,6 +191,7 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
           <KnowledgePanel
             facts={view.state.knowledge}
             graduations={view.state.knowledgeGraduations}
+            similarities={view.state.knowledgeSimilarities}
             delivery={view.state.knowledgeDelivery}
             cost={view.state.knowledgeCost}
             canFileTickets={view.state.config.canFileTickets}
@@ -225,6 +226,7 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
             onResolveContradiction={(id, ruling) => actions.resolveContradiction(id, ruling)}
             onViewFact={(id) => actions.viewFact(id)}
             onKeepLocal={(id, keepLocal) => actions.setFactKeepLocal(id, keepLocal)}
+            onMerge={(id, members) => actions.mergeFacts(id, members)}
           />
         </>
       );

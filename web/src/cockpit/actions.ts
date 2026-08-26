@@ -386,6 +386,17 @@ export interface CockpitActions {
    */
   setFactReach(id: string, reach: FactRuling): Promise<void>;
   /**
+   * Fold a suggested cluster into the claim the operator kept.
+   *
+   * **A ruling, and the only one a suggestion ever produces.** The pass writes
+   * pairs and the page draws a cluster; nothing merges itself, because a wrong
+   * merge hides one agent's report inside another's and a merge nobody approved is
+   * a wrong merge nobody can see. It rides `superseded` — the members are not
+   * deleted and not retired, since four phrasings of one wall are the evidence it
+   * was hit four times. → `docs/spec/27-knowledge.md#one-claim-written-two-ways`
+   */
+  mergeFacts(id: string, members: string[]): Promise<void>;
+  /**
    * Withhold one claim from the cross-fleet pool, or put it back.
    *
    * **Not a ruling**: it changes nothing about who this fleet tells, only about who

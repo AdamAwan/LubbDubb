@@ -438,6 +438,7 @@ test('a claim queued as a job carries its provenance into the job it becomes', (
       createdAt: TAKEN_AT,
       project: null,
       keepLocal: false,
+      supersededBy: null,
       updatedAt: TAKEN_AT,
     },
     [

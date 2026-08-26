@@ -22,6 +22,7 @@ import {
   type FactContradictionOutcome,
   type FactCounts,
   type FactAgreementOutcome,
+  type FactMergeOutcome,
   type FactProposalOutcome,
   type FactQuery,
 } from './knowledge.js';
@@ -104,6 +105,7 @@ import type {
   PoolMirroredClaim,
   PoolPublication,
   KnowledgeGraduation,
+  KnowledgeSimilarity,
   Remedy,
   RemedyInput,
   RemedyKind,
@@ -507,6 +509,15 @@ export class Store {
   }
   agreeWithFact(...args: Parameters<KnowledgeStore['agreeWithFact']>): FactAgreementOutcome {
     return this.knowledge.agreeWithFact(...args);
+  }
+  recordSimilarities(...args: Parameters<KnowledgeStore['recordSimilarities']>): void {
+    this.knowledge.recordSimilarities(...args);
+  }
+  listSimilarities(): KnowledgeSimilarity[] {
+    return this.knowledge.listSimilarities();
+  }
+  mergeFacts(...args: Parameters<KnowledgeStore['mergeFacts']>): FactMergeOutcome {
+    return this.knowledge.mergeFacts(...args);
   }
   getFact(id: string): KnowledgeFact | null {
     return this.knowledge.getFact(id);

@@ -520,6 +520,13 @@ const realApi = {
     authFetch(`/api/knowledge/facts/${encodeURIComponent(id)}`).then((r) => json<KnowledgeFactPayload>(r)),
   setFactReach: (id: string, reach: FactRuling) =>
     post<{ ok: true }>(`/api/knowledge/facts/${encodeURIComponent(id)}/reach`, { reach }),
+  // Folding a suggested cluster into the claim the operator kept. **One call**, for
+  // the reason answering a contradiction is one: moving the voices and superseding
+  // the members are two halves of one decision, and a pair of calls can half-land —
+  // a survivor carrying four voices beside four live phrasings of itself, or four
+  // superseded rows whose voices went nowhere.
+  mergeFacts: (id: string, members: string[]) =>
+    post<{ ok: true }>(`/api/knowledge/facts/${encodeURIComponent(id)}/merge`, { members }),
   // Answering a contradiction (#27 phase 5). **One call**, because adopting an
   // amendment is one act: promoting it and superseding the claim it replaces are
   // two halves of one decision, and a pair of calls can half-land — the sharper

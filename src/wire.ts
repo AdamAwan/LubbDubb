@@ -109,6 +109,7 @@ import type {
   KnowledgeCorroboration,
   KnowledgeFact,
   KnowledgeGraduation,
+  KnowledgeSimilarity,
   GraduationReading,
   LocalRun,
   Plan,
@@ -1152,6 +1153,17 @@ export interface CockpitState {
    */
   knowledgeGraduations: KnowledgeGraduationView[];
   /**
+   * Which proposals a machine thinks are one claim, as pairs — most alike first.
+   *
+   * **Suggestions, and the page draws them as clusters an operator merges with a
+   * click.** Nothing here has joined, promoted or barred anything: `claimsMatch` is
+   * strict and untouched, and this is `claimsSimilar`'s advisory answer. Shipped as
+   * rows for the reason every other count on that page is server-side — a
+   * similarity recomputed in the browser is free to disagree with the one an
+   * operator acted on. → [27](../docs/spec/27-knowledge.md#one-claim-written-two-ways)
+   */
+  knowledgeSimilarities: KnowledgeSimilarity[];
+  /**
    * Bugs the operator raised from a story row, oldest first — `filing` while the
    * desk agent writes one, `filed` with a ref once it exists.
    *
@@ -1709,6 +1721,7 @@ export type {
   KnowledgeCorroboration,
   KnowledgeFact,
   KnowledgeGraduation,
+  KnowledgeSimilarity,
   Plan,
   PlanEvidence,
   PlanNarrative,

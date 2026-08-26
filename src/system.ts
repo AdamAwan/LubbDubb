@@ -44,6 +44,7 @@ import { escalationTypeForAsk, recentOutputExcerpt } from './escalation/context.
 import { defaultConfigDir, defaultSocketPath, McpBridgeServer } from './mcp/server.js';
 import { McpDesktopServer } from './mcp/desktop.js';
 import { KNOWLEDGE_READ_LIMIT, renderKnowledgeBlock } from './knowledge/block.js';
+import { KnowledgeClusterDesk } from './knowledge/cluster.js';
 import { KnowledgeGraduationDesk } from './knowledge/graduationDesk.js';
 import { KnowledgeNoticeDesk } from './knowledge/noticeDesk.js';
 import { PrNamingDesk } from './prNamingDesk.js';
@@ -965,6 +966,13 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // pull request never takes its claim out of the fleet's prompts.
   const graduations = new KnowledgeGraduationDesk({ store, errors });
 
+  // Which proposals look like one claim written twice (issue #27). Always wired,
+  // like the two desks above: it writes suggestions nobody is bound by, on a clock
+  // of its own rather than every pulse, and a deployment without it is one where
+  // two agents who hit one wall in their own words each file a singleton nothing
+  // will ever carry.
+  const clusters = new KnowledgeClusterDesk({ store, errors });
+
   // The distance above `fleet` (issue #28): what this fleet has vouched for, carried
   // to the others, and a daily digest of what it spent. Wired **only when the pool
   // is selected** — unlike the two desks above, which are always on: with
@@ -1025,6 +1033,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     fleet: agents,
     notices,
     graduations,
+    clusters,
     pool,
     heartbeatIntervalMs: config.heartbeatIntervalMs,
     errors,

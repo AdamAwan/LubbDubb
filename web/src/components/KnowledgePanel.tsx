@@ -11,6 +11,7 @@ import type {
   KnowledgeDeliveryView,
   KnowledgeFactView,
   KnowledgeGraduationView,
+  KnowledgeSimilarity,
 } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
 import { ConfirmButton } from './ConfirmButton.js';
@@ -18,6 +19,7 @@ import { renderMarkdown } from './markdown.js';
 import { absDate, fmtTokens, fmtUsd, relTime, untilTime } from './util.js';
 import { Ref } from './refs.js';
 import {
+  clustersFrom,
   groupFor,
   inQueueFold,
   inShow,
@@ -100,6 +102,8 @@ export function KnowledgePanel({
   onResolveContradiction,
   onViewFact,
   onKeepLocal,
+  onMerge,
+  similarities,
 }: {
   facts: KnowledgeFactView[];
   /** Every attempt to put a claim in the repository, with the sweep's own reading of each. */
@@ -129,6 +133,14 @@ export function KnowledgePanel({
   onViewFact: (id: string | null) => void;
   /** Withhold one claim from the cross-fleet pool, or put it back. Never a ruling. */
   onKeepLocal: (id: string, keepLocal: boolean) => Promise<unknown> | unknown;
+  /** Fold a suggested cluster into the claim the operator kept. The only ruling a suggestion produces. */
+  onMerge: (id: string, members: string[]) => Promise<unknown> | unknown;
+  /**
+   * Which proposals a machine thinks are one claim, as pairs — the server's
+   * advisory answer, never recomputed here. A similarity taken in the browser is
+   * free to disagree with the one the operator acted on.
+   */
+  similarities: KnowledgeSimilarity[];
   /** False when no real tracker is configured — there is nowhere to file a claim into. */
   canFileTickets: boolean;
 }) {
@@ -172,6 +184,8 @@ export function KnowledgePanel({
     dropped,
     graduationOf,
     waiting,
+    similarities,
+    onMerge,
   };
   const bar = (
     <KnowledgeBar
@@ -405,7 +419,7 @@ function KnowledgeQueue({
             ) : inFold.length === 0 ? (
               <p className="empty">Nothing here.</p>
             ) : (
-              inFold.map((fact) => <FactCard key={fact.id} fact={fact} {...row} />)
+              <FactList facts={inFold} {...row} />
             )}
           </QueueFold>
         );
@@ -1033,6 +1047,9 @@ interface RowProps {
   dropped: Set<string>;
   /** Why each claim is waiting on a person, by fact id — `waitingOn`'s answer, taken once. */
   waiting: Map<string, string>;
+  /** The server's advisory pairs, so a section can draw its clusters. Never recomputed here. */
+  similarities: KnowledgeSimilarity[];
+  onMerge: (id: string, members: string[]) => Promise<unknown> | unknown;
 }
 
 /**
@@ -1078,13 +1095,83 @@ function KnowledgeSection({
           </span>
         )}
       </h3>
-      {open &&
-        (facts.length === 0 ? (
-          <p className="empty">Nothing here.</p>
-        ) : (
-          facts.map((fact) => <FactCard key={fact.id} fact={fact} {...row} />)
-        ))}
+      {open && (facts.length === 0 ? <p className="empty">Nothing here.</p> : <FactList facts={facts} {...row} />)}
     </section>
+  );
+}
+
+/**
+ * The claims under a heading, with the suggested clusters among them drawn
+ * together.
+ *
+ * A cluster is four phrasings of one wall, and reading them as four rows a page
+ * apart is exactly the thing the suggestion exists to end — so the members are
+ * drawn under one heading with the control that folds them. Everything else on the
+ * list is unchanged: a claim in no cluster is a card, as it always was.
+ */
+function FactList({ facts, ...row }: { facts: KnowledgeFactView[] } & RowProps): JSX.Element {
+  const clusters = clustersFrom(facts, row.similarities);
+  const clustered = new Set(clusters.flat().map((fact) => fact.id));
+  return (
+    <>
+      {clusters.map((members) => (
+        <ClusterCard key={members[0]!.id} members={members} {...row} />
+      ))}
+      {facts
+        .filter((fact) => !clustered.has(fact.id))
+        .map((fact) => (
+          <FactCard key={fact.id} fact={fact} {...row} />
+        ))}
+    </>
+  );
+}
+
+/**
+ * One suggested cluster: the members' own sentences, and a control.
+ *
+ * **Nothing here has happened.** The pass wrote a pair, this draws it, and the
+ * claims are exactly where they were — each still under its own reach, each still
+ * carrying its own voices. What the control does is what an operator decides, and
+ * it is a control rather than a rule because a wrong merge is worse than a
+ * duplicate: it hides one agent's report inside another's, and a merge nobody
+ * approved is a wrong merge nobody can see.
+ *
+ * **The operator picks the survivor**, which is why the control is on every member
+ * rather than one button on the cluster. A machine that chose would be choosing
+ * which agent's wording the fleet reads, on a reading it was explicitly not
+ * trusted to act on.
+ */
+function ClusterCard({ members, ...row }: { members: KnowledgeFactView[] } & RowProps): JSX.Element {
+  return (
+    <div className="kn-cluster">
+      <p
+        className="muted small"
+        title="A suggestion and nothing more: these claims look alike to a machine, which is not what decides whether they are one claim. Nothing has been joined, promoted or barred — the strict matcher that does those things is untouched. Keeping one folds the others' observers onto it and marks them superseded, which is the reach that already means a sharper claim stands in its place. They are not deleted and not retired: four phrasings of one wall are the evidence it was hit four times."
+      >
+        {members.length} claims that may be one claim, written {members.length} ways. Nothing has been merged — keep the
+        wording you want the fleet to read.
+      </p>
+      {members.map((fact) => (
+        <div key={fact.id} className="kn-cluster-member">
+          <FactCard fact={fact} {...row} />
+          <div className="kn-acts">
+            <span className="spacer" />
+            <AsyncButton
+              className="ghost"
+              onClick={() =>
+                row.onMerge(
+                  fact.id,
+                  members.filter((other) => other.id !== fact.id).map((other) => other.id),
+                )
+              }
+              title="Keep this wording and fold the rest into it. Their observers move onto this claim — so voices from different goals are counted once, by the same rule that carries any claim to lookup — and their rows become superseded naming this one. Nothing is deleted, and nothing is promoted by the merge itself"
+            >
+              Keep this one
+            </AsyncButton>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 

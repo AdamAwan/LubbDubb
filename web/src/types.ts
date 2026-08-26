@@ -65,6 +65,7 @@ export type {
   KnowledgeContradictionView,
   KnowledgeGraduation,
   KnowledgeGraduationView,
+  KnowledgeSimilarity,
   KnowledgeCorroboration,
   KnowledgeCost,
   KnowledgeDeliveryView,

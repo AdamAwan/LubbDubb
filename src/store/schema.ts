@@ -218,6 +218,7 @@ CREATE TABLE IF NOT EXISTS knowledge_facts (
   expires_at TEXT,                 -- when an expiring fact lapses; null for a standing one
   reach      TEXT NOT NULL,        -- proposal | lookup | injected | graduated | superseded | retired | rejected
   supersedes TEXT,                 -- the fact this amends; exempts it from that fact's rejection bar
+  superseded_by TEXT,              -- which claim stands in this one's place, once one does; null while none is
   origin_ref TEXT,                 -- the goal it was first observed on, or null for an operator's own
   ruled_at   TEXT,                 -- when an operator last moved it; null means nobody has ruled on it yet
   resolves_when TEXT,              -- JSON: what settles a notice before its clock; null = the clock is the whole of it
@@ -297,6 +298,31 @@ CREATE TABLE IF NOT EXISTS knowledge_asks (
   session_id TEXT,
   created_at TEXT NOT NULL
 );
+
+-- Which two claims a machine thinks are one claim: a pair, the score that matched
+-- them, and when the pass was taken (docs/spec/27-knowledge.md#one-claim-written-two-ways).
+--
+-- A **suggestion table**. Nothing here joins, promotes, merges or bars anything —
+-- proposeFact and the rejection bar go on asking claimsMatch, which is strict
+-- and untouched — and the operator's click on the cluster is what moves a claim. A
+-- wrong merge is worse than a duplicate because it hides one agent's report inside
+-- another's, so a merge nobody approved is a wrong merge nobody can see.
+--
+-- Rows rather than a read taken on the page, for the reason every other count that
+-- page draws is server-side: a similarity recomputed in the browser is free to
+-- disagree with the one an operator acted on. And because the pass is over the
+-- whole proposal set, which is the part of the store that grows.
+--
+-- The pair is stored in one order — the older id first — so one likeness is one
+-- row however the pass happened to walk the set.
+CREATE TABLE IF NOT EXISTS knowledge_similarities (
+  id         TEXT PRIMARY KEY,
+  left_id    TEXT NOT NULL,       -- the older of the two claims
+  right_id   TEXT NOT NULL,
+  score      REAL NOT NULL,       -- claimOverlap's answer, and a suggestion's whole weight
+  created_at TEXT NOT NULL        -- when the pass that saw it was taken
+);
+CREATE UNIQUE INDEX IF NOT EXISTS knowledge_similarities_pair ON knowledge_similarities (left_id, right_id);
 
 -- One attempt to put a claim somewhere other than in front of the fleet: the job
 -- an operator opened for it, which exit it took, and where it got to. Three exits,

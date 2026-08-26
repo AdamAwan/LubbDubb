@@ -1,4 +1,4 @@
-import type { KnowledgeFactView, KnowledgeGraduationView } from '../types.js';
+import type { KnowledgeFactView, KnowledgeGraduationView, KnowledgeSimilarity } from '../types.js';
 import type { Place } from './place.js';
 
 /**
@@ -384,4 +384,58 @@ export function inQueueFold(id: string, fact: KnowledgeFactView): boolean {
   if (id === 'cold') return fact.cold;
   if (id === 'settled') return inShow('settled', fact, null);
   return true;
+}
+
+/**
+ * The suggested clusters among the claims on screen — one entry per group of two
+ * or more, and nothing else.
+ *
+ * **A cluster is a suggestion the page draws, never a decision it has taken.** The
+ * pairs are the server's (`claimsSimilar`'s advisory answer, written to
+ * `knowledge_similarities`), and this only walks them: two claims joined by a pair,
+ * and anything joined to either, are drawn together so an operator can read four
+ * phrasings of one wall as four phrasings rather than as four rows a page apart.
+ * Nothing here merges anything — the merge is a click, and it is a click because a
+ * wrong merge hides one agent's report inside another's.
+ *
+ * Restricted to the claims actually on screen, so a narrowing that hides half a
+ * cluster does not draw a control offering to fold in a row the operator cannot
+ * see. → `docs/spec/27-knowledge.md#one-claim-written-two-ways`
+ */
+export function clustersFrom(
+  facts: readonly KnowledgeFactView[],
+  similarities: readonly KnowledgeSimilarity[],
+): KnowledgeFactView[][] {
+  const here = new Map(facts.map((fact) => [fact.id, fact]));
+  // Union-find, spelled as a parent map: a pair is an edge, and what an operator
+  // reads is the connected component. Anything less would draw the same claim
+  // under two clusters, each offering to fold it into the other.
+  const parent = new Map<string, string>(facts.map((fact) => [fact.id, fact.id]));
+  const find = (id: string): string => {
+    let at = id;
+    while (parent.get(at) !== at) at = parent.get(at)!;
+    return at;
+  };
+  for (const pair of similarities) {
+    if (!here.has(pair.leftId) || !here.has(pair.rightId)) continue;
+    const left = find(pair.leftId);
+    const right = find(pair.rightId);
+    if (left !== right) parent.set(right, left);
+  }
+  const groups = new Map<string, KnowledgeFactView[]>();
+  for (const fact of facts) {
+    const root = find(fact.id);
+    if (root === fact.id && !similarities.some((p) => p.leftId === fact.id || p.rightId === fact.id)) continue;
+    const group = groups.get(root) ?? [];
+    group.push(fact);
+    groups.set(root, group);
+  }
+  // Oldest first inside a cluster and by oldest member between them: the claim
+  // that has waited longest is the one an operator has to meet, here as in the
+  // queue.
+  const age = (fact: KnowledgeFactView): number => new Date(fact.createdAt).getTime();
+  return [...groups.values()]
+    .filter((group) => group.length > 1)
+    .map((group) => [...group].sort((a, b) => age(a) - age(b)))
+    .sort((a, b) => age(a[0]!) - age(b[0]!));
 }

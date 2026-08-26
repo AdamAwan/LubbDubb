@@ -231,6 +231,18 @@ export const raise: ToolFactory = ({ deps, agent, task, ok }) => {
         // Said in the response and not only in the description: an agent that
         // believes its claim is now in front of the fleet has been told something
         // untrue about what it just did, and will say it again, louder.
+        // Near neighbours the strict matcher did not join, with the one sentence
+        // that makes the answer actionable. **The claim is filed either way** — it
+        // is never held pending a reply, because a round trip is a claim that may
+        // not come back.
+        ...(outcome.nearby.length > 0 && {
+          nearMatches: outcome.nearby,
+          couldAgree:
+            'These claims already stand and look like yours, but not closely enough for the harness to ' +
+            'record your call as agreeing with one. If any of them is what you meant, call raise again ' +
+            'with agreeWith: "<id>" and your own observation — that is worth far more than a second copy. ' +
+            'Your claim is filed either way; nothing is waiting on you.',
+        }),
         note:
           outcome.outcome === 'filed'
             ? 'Raised. It reaches no other agent yet — a second goal seeing the same thing, or an ' +

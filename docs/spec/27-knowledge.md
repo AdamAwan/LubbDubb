@@ -345,9 +345,6 @@ operator reads to decide whether it should have.
 
 ### One claim, written two ways
 
-**Not yet built.** The matcher described here is additive: `claimsMatch` and everything above it is
-unchanged, and nothing below this heading exists yet.
-
 Agreement is what carries a claim out of one agent's head, and `claimsMatch` is what decides whether a
 call is agreement. It is prose containment — two keys equal, or one wholly inside the other over a
 twenty-four character floor — so it answers yes for a restatement that appends a qualifier and no for
@@ -372,15 +369,21 @@ that never lands. Two functions, one strict and one advisory, is what keeps a su
 enforcement — and _test/claims.test.ts_ holds `proposeFact` and the bar against the strict one, so a
 merge of the two fails rather than passes.
 
-**A similarity is a suggestion, and a merge is an operator's click.** The pass writes rows to
-`knowledge_similarities` — a pair, a score and when it was taken — and the [page](#in-the-cockpit)
-draws a cluster: one row, the members' own sentences under it, and a control. Nothing merges itself.
+**A similarity is a suggestion, and a merge is an operator's click.** `KnowledgeClusterDesk`
+(`src/knowledge/cluster.ts`) takes the pass on a clock of its own rather than every pulse — the
+comparison is every proposal against every other within its scope, the proposal set is the part of the
+store that grows, and nothing waits on a cluster. It writes rows to `knowledge_similarities` — a pair,
+a score and when it was taken — and the [page](#in-the-cockpit) draws a cluster: one row, the members'
+own sentences under it, and a control **on each member**, because the operator picks which wording the
+fleet reads and a machine that chose would be choosing that on a reading it was explicitly not trusted
+to act on. Nothing merges itself.
 `MIN_CONTAINMENT`'s argument is the whole reason, one step out: a wrong merge is worse than a duplicate
 because it hides one agent's report inside another's, and a merge nobody approved is a wrong merge
 nobody can see.
 
 **A merge rides `superseded`, and invents nothing.** The members' corroborations move onto the
-surviving claim and the members become `superseded` naming it — the reach that already means *a
+surviving claim and the members become `superseded` naming it — through `superseded_by`, the other end
+of `supersedes`, which an amendment fills from the sharper side and a merge has no way to — the reach that already means *a
 sharper claim stands in its place*, which is what a merge asserts. They are not deleted and not
 retired: four phrasings of one wall are the evidence it was hit four times, and an operator asking
 whether the survivor is worth injecting is asking exactly that. The scope is part of the match, as it

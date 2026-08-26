@@ -40,6 +40,7 @@ function fact(over: Partial<KnowledgeFactView> = {}): KnowledgeFactView {
     supersedes: null,
     project: null,
     keepLocal: false,
+    supersededBy: null,
     originRef: 'issue:1',
     ruledAt: null,
     resolvesWhen: null,

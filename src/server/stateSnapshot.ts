@@ -834,6 +834,10 @@ export function buildStateSnapshot(
     // verdict over the work graph, taken here rather than in the browser for the
     // reason every other count on this row is.
     knowledgeGraduations: graduations,
+    // Which proposals a machine thinks are one claim. A suggestion table read
+    // straight out — nothing here has joined, promoted or barred anything, and the
+    // page draws a cluster whose merge is the operator's click.
+    knowledgeSimilarities: store.listSimilarities(),
     // What that list actually sends, from the renderers that send it.
     knowledgeDelivery: delivery,
     // What sending it costs, over the window Insights opens on. The block's length

@@ -587,6 +587,7 @@ test('what may be sent on, by which exit, and the wording of each refusal', () =
     createdAt: '2026-08-01T00:00:00.000Z',
     project: null,
     keepLocal: false,
+    supersededBy: null,
     updatedAt: '2026-08-01T00:00:00.000Z',
   };
   assert.equal(exitableFact(base, 'docs').ok, true);
@@ -630,6 +631,7 @@ test('the note says what the landing costs the claim, whichever target it names'
     createdAt: '2026-08-01T00:00:00.000Z',
     project: null,
     keepLocal: false,
+    supersededBy: null,
     updatedAt: '2026-08-01T00:00:00.000Z',
   };
   const observations = Array.from({ length: 9 }, (_, i) => ({

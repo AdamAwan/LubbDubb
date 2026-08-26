@@ -447,6 +447,7 @@ test('a contradiction is validated on the amendment it demands, and the amendmen
     createdAt: now,
     project: null,
     keepLocal: false,
+    supersededBy: null,
     updatedAt: now,
   };
   const amended = amendmentProposal(standing, parsed.contradiction, now);
@@ -970,6 +971,8 @@ test('the page draws every reach, the rejected tail included', async () => {
           onResolveContradiction: () => undefined,
           onViewFact: () => undefined,
           onKeepLocal: () => undefined,
+          onMerge: () => undefined,
+          similarities: state.knowledgeSimilarities,
         }),
       }),
     );
