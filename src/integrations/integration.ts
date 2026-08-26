@@ -15,6 +15,7 @@ import type {
   PrLabelInput,
   PrMergeInput,
   PrReplyInput,
+  PrThreadResolveInput,
   PrTitleInput,
   SendResult,
   WorkItemAreaPathInput,
@@ -119,6 +120,24 @@ export interface PrReplyCapable {
 
 export function isPrReplyCapable(x: Integration): x is Integration & PrReplyCapable {
   return typeof (x as Partial<PrReplyCapable>).postPrReply === 'function';
+}
+
+/**
+ * An integration that can mark a review thread resolved.
+ *
+ * Separate from {@link PrReplyCapable} because the two are different provider
+ * operations — GitHub resolves a thread through GraphQL and replies through REST,
+ * Azure patches the thread's status — and because a provider may gain one without
+ * the other. The composite asks for it by capability, so a source-control
+ * provider that never learned to resolve refuses the act rather than silently
+ * dropping it.
+ */
+export interface PrThreadResolveCapable {
+  resolvePrThread(input: PrThreadResolveInput): Promise<SendResult>;
+}
+
+export function isPrThreadResolveCapable(x: Integration): x is Integration & PrThreadResolveCapable {
+  return typeof (x as Partial<PrThreadResolveCapable>).resolvePrThread === 'function';
 }
 
 /** An integration that can merge a pull request — the outbound side of PR monitoring. */

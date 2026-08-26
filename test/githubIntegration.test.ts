@@ -53,6 +53,7 @@ interface Script {
     | 'listOpenPulls'
     | 'listOpenIssues'
     | 'listPullReviewThreads'
+    | 'resolveReviewThread'
     | 'updatePullBranch'
     | 'getJobLog'
     | 'viewerLogin';
@@ -93,6 +94,8 @@ interface Recorded {
   /** PR numbers `updatePullBranch` was called for — the server-side base merge. */
   branchUpdates: number[];
   deletedBranches: string[];
+  /** Threads `resolveReviewThread` was called for — the resolution write. */
+  resolvedThreads: Array<{ number: number; rootCommentId: number }>;
 }
 
 function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
@@ -114,6 +117,7 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     baseSets: [],
     branchUpdates: [],
     deletedBranches: [],
+    resolvedThreads: [],
   };
   const api: GitHubApi = {
     async listCheckRunAnnotations(checkRunId) {
@@ -171,6 +175,11 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     async listPullReviewThreads(number) {
       if (script.throwOn === 'listPullReviewThreads') throw new Error('graphql unavailable');
       return script.reviewThreads?.[number] ?? [];
+    },
+    async resolveReviewThread(number, rootCommentId) {
+      if (script.throwOn === 'resolveReviewThread') throw new Error('graphql unavailable');
+      recorded.resolvedThreads.push({ number, rootCommentId });
+      return (script.reviewThreads?.[number] ?? []).some((t) => t.rootCommentId === rootCommentId);
     },
     async getCombinedStatus(sha) {
       return script.combinedStatus?.[sha] ?? { state: '', totalCount: 0 };
@@ -629,6 +638,26 @@ test('postPrReply posts a top-level comment when commentId is null', async () =>
   assert.equal(res.ok, true);
   assert.deepEqual(recorded.issueComments, [{ number: 7, body: 'ping' }]);
   assert.equal(recorded.reviewReplies.length, 0);
+  store.close();
+});
+
+test('resolvePrThread resolves the thread keyed on the root comment the reply threads under', async () => {
+  const { api, recorded } = fakeApi({ reviewThreads: { 7: [{ rootCommentId: 100, isResolved: false }] } });
+  const store = new Store(':memory:');
+  const sc = new GitHubSourceControlIntegration({ api });
+  const res = await sc.resolvePrThread({ prNumber: 7, commentId: '100' });
+  assert.equal(res.ok, true);
+  assert.deepEqual(recorded.resolvedThreads, [{ number: 7, rootCommentId: 100 }]);
+  store.close();
+});
+
+test('resolvePrThread reports a thread the pull request does not carry, rather than claiming one closed', async () => {
+  // A stale reading rather than a fault: the executor says so on the reply's own
+  // audit line and leaves the thread alone.
+  const { api } = fakeApi({ reviewThreads: { 7: [{ rootCommentId: 100, isResolved: false }] } });
+  const store = new Store(':memory:');
+  const sc = new GitHubSourceControlIntegration({ api });
+  assert.equal((await sc.resolvePrThread({ prNumber: 7, commentId: '999' })).ok, false);
   store.close();
 });
 

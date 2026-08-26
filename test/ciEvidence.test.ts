@@ -85,6 +85,9 @@ function ghApi(script: GhScript): GitHubApi {
     async listPullReviewThreads() {
       return [];
     },
+    async resolveReviewThread() {
+      return false;
+    },
     async getCombinedStatus() {
       return { state: '', totalCount: 0 };
     },
@@ -178,6 +181,7 @@ function azApi(script: AzScript): AzureDevOpsApi {
     async listPullThreads() {
       return [];
     },
+    async setThreadStatus() {},
     async listPolicyEvaluations() {
       return [evaluation];
     },

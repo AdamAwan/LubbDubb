@@ -7,6 +7,7 @@ import type {
   PrLabelInput,
   PrMergeInput,
   PrReplyInput,
+  PrThreadResolveInput,
   PrTitleInput,
   SendResult,
 } from '../../sink/actionSink.js';
@@ -23,6 +24,7 @@ import type {
   PrLabelCapable,
   PrMergeCapable,
   PrReplyCapable,
+  PrThreadResolveCapable,
   PrTitleCapable,
   RefResolvable,
   WorldSlice,
@@ -72,6 +74,7 @@ export class GitHubSourceControlIntegration
   implements
     Integration,
     PrReplyCapable,
+    PrThreadResolveCapable,
     PrMergeCapable,
     PrLabelCapable,
     PrCreateCapable,
@@ -201,6 +204,18 @@ export class GitHubSourceControlIntegration
         ? await api.createPullReviewReply(input.prNumber, Number(input.commentId), input.body)
         : await api.createIssueComment(input.prNumber, input.body);
     return { ok: true, ref: ref.url };
+  }
+
+  /**
+   * Mark a review thread resolved. The `commentId` is the thread's root comment —
+   * the same id `postPrReply` threads under and the same id
+   * {@link buildUnresolvedComments} keys a `PrComment` on — so the caller needs no
+   * second identifier, and `ok: false` means the pull request carries no such
+   * thread.
+   */
+  async resolvePrThread(input: PrThreadResolveInput): Promise<SendResult> {
+    const resolved = await this.opts.api.resolveReviewThread(input.prNumber, Number(input.commentId));
+    return { ok: resolved, ref: resolved ? input.commentId : undefined };
   }
 
   async mergePr(input: PrMergeInput): Promise<SendResult> {

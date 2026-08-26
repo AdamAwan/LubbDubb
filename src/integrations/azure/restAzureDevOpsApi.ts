@@ -738,6 +738,18 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     return { url: `${this.projectUrl}/_git/${encodeURIComponent(this.repository)}/pullrequest/${pullRequestId}` };
   }
 
+  /**
+   * Resolve (or otherwise re-status) a thread. A PATCH on the thread itself
+   * rather than on a comment: Azure's resolution verdict lives on the thread, and
+   * it is what `buildUnresolvedComments` reads back.
+   */
+  async setThreadStatus(pullRequestId: number, threadId: number, status: string): Promise<void> {
+    await this.request(this.withApiVersion(`${this.repoUrl}/pullRequests/${pullRequestId}/threads/${threadId}`), {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+  }
+
   async createThread(pullRequestId: number, content: string): Promise<AzCommentRef> {
     await this.request(this.withApiVersion(`${this.repoUrl}/pullRequests/${pullRequestId}/threads`), {
       method: 'POST',

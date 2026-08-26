@@ -312,6 +312,7 @@ function relationApi(
     listActivePullRequests: unused,
     listRecentlyClosedPullRequests: unused,
     listPullThreads: unused,
+    setThreadStatus: unused,
     listPolicyEvaluations: unused,
     listPullLabels: unused,
     listWorkItemUpdates: unused,

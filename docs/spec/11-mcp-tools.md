@@ -37,7 +37,7 @@ assembles them (see [How a tool is built](#how-a-tool-is-built)).
 | `validation_amend`   | Correct the validation plan for the goal this agent is working: add or amend checks, withdraw one with a reason, declare a resource. **Merge-only** — an omitted check is untouched. Open to every agent on the goal; refused to the planner, which has `plan_submit`. → [20](20-validation.md)                                                                                                                                                                                               |
 | `validation_report`  | Record the reading of the one validation check this agent was dispatched to run: `passed`, `failed`, or `handback` — could not run it, which records nothing and returns the check to the operator with the reason. Refused to every caller but that check's own agent, by name. → [20](20-validation.md#the-hand-over)                                                                                                                                                                       |
 | `knowledge_ask`      | Read what the fleet has learned, for this caller's own scopes or about a question. Answers only with claims two independent goals have seen or an operator has vouched for — never a bare proposal. → [27](27-knowledge.md)                                                                                                                                                                                                                                                                   |
-| `reply_to_review`    | Hand the harness your reply to a review thread, instead of posting it yourself. Raises the same `reply_on_pr` act a rule raises and sends nothing: the operator's authority, the harness's signature and the audit row all follow from that. Fenced to `pr:<n>:comments` origins. → [09](09-execution.md#where-a-reply_on_pr-comes-from)                                                                                                                                                       |
+| `reply_to_review`    | Hand the harness your reply to a review thread, instead of posting it yourself — and say with `resolved` whether the thread is now dealt with, which is the only thing that closes one. Raises the same `reply_on_pr` act a rule raises and sends nothing: the operator's authority, the harness's signature and the audit row all follow from that. Fenced to `pr:<n>:comments` origins. → [09](09-execution.md#where-a-reply_on_pr-comes-from)                                                                                                                                                       |
 | `request_permission` | Harness-internal (issue #130). Claude Code calls it via `--permission-prompt-tool` to route an un-allowlisted tool call to the operator. The one tool an agent never calls itself, and the one whose response is **bare** (no `_status`).                                                                                                                                                                                                                                                     |
 
 There is a **second, much shorter list** for the desktop channel below — six tools, none of them
@@ -582,8 +582,9 @@ asserts that rather than intending it.
 
 ### `reply_to_review`
 
-Hands the harness the reply an agent has written for a review thread. Arguments `{body, thread?}` —
-and, like every tool here, **nothing that names a pull request**: it comes from the caller's origin.
+Hands the harness the reply an agent has written for a review thread. Arguments
+`{body, thread?, resolved?}` — and, like every tool here, **nothing that names a pull request**: it
+comes from the caller's origin.
 
 - **It sends nothing.** The handler calls `ActionExecutor.proposeReply`, which raises the same
   `reply_on_pr` act a dispatch rule raises, and returns. Calling `ActionSink.postPrReply` from here
@@ -600,6 +601,18 @@ and, like every tool here, **nothing that names a pull request**: it comes from 
   rather than in a thread — said in the schema, since an unthreaded answer to a threaded question is
   one nobody reading the thread sees. The id is what `replyProposalRef` keys the hold on, so two
   agents on two threads of one review do not hold each other.
+- **`resolved` is how a thread gets closed, and it is the only way.** It rides on the same
+  `reply_on_pr` act, so the operator authorizing the reply authorizes closing the thread the reply is
+  about — one question, not two — and the executor resolves it through `ActionSink.resolvePrThread`
+  once the reply lands ([09](09-execution.md#resolving-the-thread-the-reply-answers)). Without it the
+  routing of replies through the harness left every thread the fleet dealt with open in front of the
+  reviewer: an agent has no credential of its own to click resolve with, and the prompt tells it not
+  to reach for the operator's. The schema says **when not to set it** as plainly as when to — a
+  defence of an approach the reviewer may still reject, or an answer that leaves them something to
+  decide, is their thread to close — because an agent told only that the flag exists resolves the
+  threads it is arguing with. Ignored with no `thread`: a reply on the pull request itself closes
+  nothing, and the call reports `resolveRequested: false` rather than letting the agent believe
+  otherwise.
 - **The reply comes back with the executor's own account of what happened** — proposed and waiting, or
   sent — rather than a second wording of it here. Either is a finished call: nothing is waiting on the
   agent afterwards.

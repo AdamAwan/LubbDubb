@@ -27,6 +27,10 @@ function sinkRecording(created: IssueCreateInput[], ref: string | null = 'issue:
     // A predicate rather than an act, so `unused` is the wrong shape: this test's
     // subject cannot reach it, and a throw would be a stub failing on a question.
     canCloseIssue: () => false,
+    canResolvePrThread: () => false,
+    resolvePrThread: (): never => {
+      throw new Error('resolvePrThread is not scripted in this test');
+    },
     closeIssue: (): never => {
       throw new Error('closeIssue is not scripted in this test');
     },
