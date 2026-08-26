@@ -804,8 +804,6 @@ tomorrow, and the rewrite that nobody was told about is a second thing to be wro
 
 ### Agreeing on purpose
 
-**Not yet built.** `agreeWith` is not an argument of `raise` yet.
-
 The most useful call an agent can make here is agreement, and today it can only be made by accident —
 by typing a sentence that happens to contain, or be contained by, one somebody else already typed. An
 agent that has read a claim in its own prompt, hit exactly that wall, and wants to say so has no way to

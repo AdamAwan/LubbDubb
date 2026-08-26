@@ -21,6 +21,7 @@ import {
   type ContradictionOutcome,
   type FactContradictionOutcome,
   type FactCounts,
+  type FactAgreementOutcome,
   type FactProposalOutcome,
   type FactQuery,
 } from './knowledge.js';
@@ -503,6 +504,9 @@ export class Store {
 
   proposeFact(...args: Parameters<KnowledgeStore['proposeFact']>): FactProposalOutcome {
     return this.knowledge.proposeFact(...args);
+  }
+  agreeWithFact(...args: Parameters<KnowledgeStore['agreeWithFact']>): FactAgreementOutcome {
+    return this.knowledge.agreeWithFact(...args);
   }
   getFact(id: string): KnowledgeFact | null {
     return this.knowledge.getFact(id);

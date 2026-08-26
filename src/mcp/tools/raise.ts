@@ -3,6 +3,7 @@ import {
   NOTICE_RULE,
   SCOPE_HELP,
   validateRaise,
+  validateRaisedAgreement,
   validateRaisedContradiction,
 } from '../../knowledge/knowledge.js';
 import { toolError } from '../protocol.js';
@@ -24,6 +25,7 @@ import type { ToolFactory } from './context.js';
  * a kind, a lifetime word or a destination:
  *
  * - `contradicts` present → the claim is an amendment, and the dispute is recorded
+ * - `agreeWith` present → the call is a corroboration of the claim it names
  * - `until` present → the claim is a notice, bounded by that clock
  * - otherwise → a standing claim, scoped `fleet` unless the agent says otherwise
  *
@@ -98,6 +100,15 @@ export const raise: ToolFactory = ({ deps, agent, task, ok }) => {
             'anything that will still be true next month — most claims. What you raise with a clock on ' +
             'it can reach every agent on agreement alone, which is safe only because it ends by itself.',
         },
+        agreeWith: {
+          type: 'string',
+          description:
+            'The id of a claim you were shown that you have now seen for yourself. Every claim in your ' +
+            'prompt and every answer from knowledge_ask carries one. Use it when what you saw is what the ' +
+            'claim already says — this is the most useful call you can make here, because two goals seeing ' +
+            "one thing is what carries a claim out of one agent's head. Your evidence is your own " +
+            'observation, not a restatement of theirs. Cannot be combined with contradicts.',
+        },
         contradicts: {
           type: 'string',
           description:
@@ -118,7 +129,37 @@ export const raise: ToolFactory = ({ deps, agent, task, ok }) => {
       required: ['claim', 'evidence'],
     },
     handler: (args) => {
-      const disputes = typeof (args as Record<string, unknown>).contradicts === 'string';
+      const fields = (args ?? {}) as Record<string, unknown>;
+      // Agreement first, because it is the one arm that files nothing: an agent
+      // that named a claim it agrees with has said what the matcher would
+      // otherwise have had to guess, and there is no proposal here to validate.
+      if (typeof fields.agreeWith === 'string' && fields.agreeWith.trim()) {
+        const parsed = validateRaisedAgreement(args);
+        if (!parsed.ok) return toolError(`Not raised: ${parsed.error}`);
+        const result = deps.agents.agreeWithFact(agent.id, parsed.agreement.factId, parsed.agreement.evidence);
+        if (!result.ok) return toolError(result.error);
+        const outcome = result.outcome;
+        if (outcome.outcome === 'unknown') {
+          return toolError(
+            `No claim has that id (${parsed.agreement.factId}). Agree with a claim you were actually shown — ` +
+              `every one in your prompt and every answer from knowledge_ask carries its id. If what you have is ` +
+              `a sentence rather than an id, raise it as its own claim and the harness will match it.`,
+          );
+        }
+        if (outcome.outcome === 'refused') return toolError(`Not raised: ${outcome.error}`);
+        const { fact, corroborations } = outcome;
+        return ok({
+          recorded: true,
+          agreedWith: { id: fact.id, claim: fact.claim, reach: fact.reach },
+          corroborations,
+          note:
+            `Recorded as agreeing, with your own observation beside it — ${corroborations} independent ` +
+            `${corroborations === 1 ? 'goal has' : 'goals have'} now seen it. Two *different* goals are what ` +
+            `carry a claim as far as lookup, so agreeing with something you raised yourself moves nothing. ` +
+            `Nothing else is needed from you.`,
+        });
+      }
+      const disputes = typeof fields.contradicts === 'string';
       // The routing, and the whole of it. Which arm this is was decided by whether
       // the agent named a claim it disputes — never by a word it had to pick.
       if (disputes) {

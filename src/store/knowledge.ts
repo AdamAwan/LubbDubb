@@ -277,6 +277,58 @@ export class KnowledgeStore {
   }
 
   /**
+   * Record that this agent saw what a claim already says — an agreement made **on
+   * purpose** rather than by accident (`raise` naming `agreeWith`).
+   *
+   * The most useful call an agent can make here is agreement, and until this it
+   * could only be made by typing a sentence that happened to contain, or be
+   * contained by, one somebody else had already typed. An agent that has read a
+   * claim in its own prompt, hit exactly that wall, and wants to say so had no way
+   * to say it.
+   *
+   * **The matcher is not consulted at all**, because there is nothing left for it
+   * to guess: the agent named the row. What is *not* skipped is the bar — a
+   * rejected claim is refused by name exactly as raising its words would be, since
+   * the bar is about the claim and never about the spelling of the call that
+   * reaches for it.
+   *
+   * **The gate is untouched.** An agreement is a corroboration from the caller's
+   * own goal, and two *different* goals are still what carries a claim to
+   * `lookup` — so an agent agreeing with its own earlier claim moves nothing.
+   * → `docs/spec/27-knowledge.md#agreeing-on-purpose`
+   */
+  agreeWithFact(id: string, observer: FactObservation): FactAgreementOutcome {
+    const fact = this.getFact(id);
+    if (!fact) return { outcome: 'unknown' };
+    if (fact.reach === 'rejected') {
+      return {
+        outcome: 'refused',
+        error:
+          `An operator has rejected that claim, so agreeing with it changes nothing: "${fact.claim}" (${fact.id}). ` +
+          `Rejected means it was judged not true. If what you saw genuinely differs from it, raise the sharper ` +
+          `version with contradicts: "${fact.id}" — an amendment is exempt from its parent's bar.`,
+      };
+    }
+    // The reaches a re-raise may not join either, and refused in the same words:
+    // a claim nobody is being told is not a claim a voice can carry anywhere, and
+    // an agent that believes it has agreed with one has been told something untrue
+    // about what it just did. Raising it afresh re-dates it, with its own evidence,
+    // which is the rule `retired` exists to state.
+    if (fact.reach === 'superseded' || fact.reach === 'retired') {
+      return {
+        outcome: 'refused',
+        error:
+          `That claim is ${fact.reach} and reaches nobody, so a voice on it carries nothing: "${fact.claim}" ` +
+          `(${fact.id}). If you saw it yourself, raise it as its own claim — that files a fresh row with your ` +
+          `evidence and today's date rather than resurrecting a judgement nobody has revisited.`,
+      };
+    }
+    this.recordCorroboration(fact.id, observer);
+    const corroborations = distinctCorroborators(this.listCorroborations(fact.id));
+    return { outcome: 'recorded', fact: this.promoteOnCorroboration(fact, corroborations), corroborations };
+  }
+
+  /**
    * The facts this fleet may publish to the cross-fleet pool.
    *
    * Four conditions, and each of the three refusals behind them is a decision
@@ -1165,6 +1217,18 @@ export class KnowledgeStore {
     return this.moveReach(fact.id, autoReach(fact), null) ?? fact;
   }
 }
+
+/**
+ * What an agreement did.
+ *
+ * `refused` carries its reason in the words the agent is given, for
+ * {@link FactContradictionOutcome}'s reason: an agent that believes it has carried
+ * a claim the fleet is not being told stops looking at it.
+ */
+export type FactAgreementOutcome =
+  | { outcome: 'recorded'; fact: KnowledgeFact; corroborations: number }
+  | { outcome: 'refused'; error: string }
+  | { outcome: 'unknown' };
 
 /** What a proposal did. `barred` carries the rejected claim that refused it, so the agent can amend it. */
 export type FactProposalOutcome =
