@@ -2413,6 +2413,133 @@ moment an operator has something to report, and a way to report it that is only 
 is healthy is missing exactly then. Both arms are asserted, since the offline one is the return a change
 to the bar forgets.
 
+## The feature board
+
+`web/src/components/FeatureBoard.tsx`, off `/api/features`, derived by `src/features/featureBoard.ts`.
+**Off by default and absent on most deployments** — see [the two gates](#the-two-gates) below.
+
+A fleet worked at the story level answers _is #583 done_ and never _how is the Environments work
+going_, and the second question is the one anybody outside the fleet actually asks. The board is that
+question: one card per container the mirror's items hang off, with the work beneath it folded.
+
+It is a **lens**, on the terms the work graph, `buildStacks` and `prAttentionStatus` are held to
+([05](05-dispatcher.md)): nothing under `src/dispatcher/` reads it, it decides nothing, and every
+reading on it is a quotation — the outcome word is `ticketOutcomes`', the money is `buildSpendGoals`',
+the watch bucket is [`src/watchLabels.ts`](../../src/watchLabels.ts)', which items are containers is
+`isContainerType`'s, and the environment fold is `rollUpReach`'s. It is fetched on open and never
+polled, for the tickets tab's reason: it reads the whole mirror, and the snapshot comes round every
+couple of seconds.
+
+### The two gates
+
+The board needs **both** the operator's `featureBoard` flag ([02](02-configuration.md)) and a provider
+that can place a work item. The second is not a permission check and not a guess at the provider's
+name: `canPlaceWorkItem` is asked of the connector exactly as `canCloseIssue` and `canSetWorkItemState`
+are, and it is the right predicate rather than a near one — placing a work item _is_ setting its
+parent, so a provider that can do it is exactly a provider with the container hierarchy this board
+rolls up. GitHub answers false by design ([15](15-integrations.md)).
+
+Without that second half the flag alone would draw a page where every item is its own orphan and the
+whole board is one grey card. So on a flat tracker the tab is **absent**, not empty.
+
+The conjunction is one predicate — `featureBoardOn` in `src/server/routes/features.ts` — read by two
+callers that must never disagree: the route's own refusal, and the `config.featureBoard` on
+`/api/state` that the nav draws its tab off. Two copies would drift into the cockpit's worst shape, a
+tab whose every fetch 404s. The refusal is a **404 and not a 403** for the same reason: neither gate is
+about permission, and a 403 would send whoever reported it looking for a token problem.
+
+### Six standings, because they are six different facts
+
+The bar over each card is segmented, and the four segments that are not `delivered` are the ones a
+reader acts on differently. The precedence is strict and every step of it is load-bearing:
+
+| Standing    | Is                                             | Beaten by                        |
+| ----------- | ---------------------------------------------- | -------------------------------- |
+| `unwatched` | no watch tag — **nothing has ever read it**    | nothing; it wins outright        |
+| `inFlight`  | a run the harness minted and has not finished  | `unwatched`                      |
+| `delivered` | `ticketOutcomes`' word                          | `unwatched`, `inFlight`          |
+| `fellShort` | worked, and the goal still not reached         | `unwatched`, `inFlight`          |
+| `settled`   | `concluded` or `abandoned`                     | `unwatched`, `inFlight`          |
+| `queued`    | watched, and none of the above                 | everything                       |
+
+**`unwatched` first, and it is the reading the whole board most has to get right.** An item carrying
+no watch tag has not been appraised, not been read and not been spent on — it is _unseen_, not late.
+Drawn as `queued` it would report a fleet working through a backlog it cannot see, and the card would
+say the opposite of the truth while looking entirely reasonable. It is drawn **hatched** rather than as
+a sixth colour, exactly as the tickets tab hatches "no feature": it is the absence of the fleet having
+looked, and a solid block reads as a fifth kind of progress.
+
+**`inFlight` above the outcome words**, because a re-picked goal carries the verdict of its _last_
+attempt while an agent works its next one. The board is a reading of now — and the verdict is not
+erased by it, only outranked: the row carries both.
+
+**`settled` is its own segment** rather than folded either way. Into `delivered` it overstates the
+Feature; into `queued` it understates it for ever.
+
+### Three buckets for a parent link, not two
+
+The mirror's `parent` is three-valued and stays three-valued all the way to the screen: a Feature, a
+resolved `null`, and an **unresolved** absence. The orphan card counts the second and the third is a
+line of its own under the board. Folding them would tell a reader the tracker says an item has no
+parent when the truth is that nobody could read the link — the same distinction the tickets tab draws
+by leaving unresolved rows [flush with no heading](#features-are-headings-not-rows).
+
+**The orphan card is the most valuable thing on the page and the most uncomfortable.** Work answering
+to no container is invisible at portfolio level by construction, and a board that quietly dropped it
+would report a fleet whose every hour rolls up somewhere. It carries its own spend for that reason:
+_this much was spent under no Feature_, which is also the sentence that says every roll-up above it
+understates its own.
+
+### What it deliberately does not draw
+
+**No verdict about a Feature.** There is no _at risk_, no _on track_ and no forecast date, and their
+absence is the point rather than an omission: each would be a policy no config file states and no
+module owns, and a card asserting one would be exactly the second opinion this surface is arranged to
+avoid. What it draws instead is one line naming what is waiting on a person — and that line is a
+**count of facts, phrased**: an appraisal the appraiser marked `unclear`, items that fell short, items
+nothing can see, a reach the probe could not read. Ordered hardest-first, and it stops at the first
+thing that bites, because a card that says four things says none of them.
+
+**No age judgement.** `lastLandingAt` is drawn as an age and nothing is said about whether it is too
+old. How stale is too stale is a policy nobody has stated.
+
+**No sizing or forecast.** Extrapolating the remaining work from recent spend is the one reading that
+would make the board feel finished, and it is the one it has no honest basis for.
+
+The ordering — features wanting a person first, then the ones carrying the most work — is an
+**ordering and not a verdict**, the same distinction the queue rail draws. It says which card to read
+first and nothing about whether a Feature is in trouble.
+
+### Reach folds with the same function, one tier up
+
+A Feature is to its goals what a goal is to its landings, so the per-environment fold is
+`rollUpReach` — the **same function**, exported from `src/environments/reach.ts` rather than copied
+([24](24-environments.md)). That is what keeps `unknown` from collapsing into `absent` one tier up,
+which is the whole reason the verdict is three-valued: an expired credential and work that genuinely
+has not shipped read identically on the glass, and only one of them is about deployment. A goal that
+is `partial` or `unknown` counts as **unresolved** here — half a goal in an environment is not a goal
+in it.
+
+Only goals `allGoalReach` produced a row for are counted, which is that module's decision and not a
+second one. A goal with nothing merged has been nowhere; counting it as `absent` would put every
+never-started story in the denominator and make a shipped Feature read as a third deployed, for good.
+
+### Where it sits
+
+In `components/` and not in `console/`, because it rides its own route and **nothing under `console/`
+imports `api.js`** — the tickets tab's arrangement exactly, asserted in `test/console.test.ts`. Its
+styles are in `web/src/styles.css` for the same reason, drawing `--cn-*` tokens all the same: the
+prefix boundary is by component family, [not by file](#tokens).
+
+The tab is inserted **beside Tickets** rather than appended, because the two are one backlog read at
+two altitudes and a reader moving between them should not cross Knowledge to do it. A goal is still
+opened, and still acted on, on its own page: the board links down and never grows a control of its
+own.
+
+Each card ships a bounded slice of its children, ordered so that what wants attention survives the
+cut — an arrival ordering would show twenty delivered stories and drop the one that fell short. What
+was cut is **said**, not silently trimmed: a list that simply stopped would read as the whole Feature.
+
 ## Settings
 
 A reading in the top bar opens a shared modal carrying **three tabs**, which is everything an operator

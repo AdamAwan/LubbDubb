@@ -3883,6 +3883,18 @@ export const demoApi = {
   getWorkRoots: () =>
     Promise.resolve({ roots: [] as WorkNodeView[], unrecorded: [] as UnrecordedWorkView[], refUrls: {} }),
   getWorkSubtree: (ref: string) => demoWorkSubtree(ref),
+  // The demo's tracker is flat — `config.featureBoard` is false in the fixture, so
+  // no tab reaches this and the empty board is never drawn. It exists to keep the
+  // two API shapes interchangeable, exactly as the empty work graph above does.
+  getFeatures: () =>
+    Promise.resolve({
+      features: [],
+      orphans: null,
+      unresolved: 0,
+      environments: [],
+      backfilling: false,
+      refUrls: {},
+    }),
   // The ticket mirror, authored for `getSpend`'s reason: the demo's world is built
   // fresh in the browser each load, so there is no swept history to page through
   // and a fixture is the only way the tab shows what it is for. The filtering,

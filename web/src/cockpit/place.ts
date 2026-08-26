@@ -178,7 +178,17 @@ export interface Place {
   ticketColumns: string[];
 }
 
-const TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'knowledge', 'insights', 'pets', 'config'];
+/**
+ * Every tab a `?tab=` may name — the parser's whole vocabulary, and wider than the
+ * nav on purpose: `config` and `pets` are reachable without being drawn there.
+ *
+ * `features` is listed for the same reason `pets` is: the address bar must
+ * round-trip it, or a link an operator saved to the board parses straight back to
+ * the overview with nothing saying so. Whether it can be *reached* is a separate
+ * question the console answers — see `ConsoleRoot`'s `tabBody`, which sends a
+ * stale `?tab=features` to the overview on a deployment with no board.
+ */
+const TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'knowledge', 'features', 'insights', 'pets', 'config'];
 const INSIGHTS_VIEWS: readonly InsightsView[] = ['economics', 'reliability', 'causes', 'trend', 'mix', 'mcp', 'pool'];
 /**
  * The windows the time bar offers, and what a bare Insights URL means.

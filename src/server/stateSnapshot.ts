@@ -47,6 +47,7 @@ import { DEFAULT_COOLDOWN } from '../dispatcher/dispatchCooldown.js';
 import { readRunway } from '../supply/runway.js';
 import { DISPATCH_RULES } from '../dispatcher/rules.js';
 import { trackerCoordinates } from '../mcp/findings.js';
+import { featureBoardOn } from './routes/features.js';
 import { rejectionSignalQuery } from '../proposals/proposals.js';
 import { graduationReading } from '../knowledge/graduation.js';
 import type { Store } from '../store/store.js';
@@ -597,6 +598,10 @@ export function buildStateSnapshot(
       // The same question one act further on, and asked the same way: whether this
       // deployment's tracker can be closed from here at all.
       canCloseIssue: connector.canCloseIssue(),
+      // The flag and the provider's hierarchy, folded by the one predicate the
+      // route refuses on — so the tab and the route can never disagree about
+      // whether this deployment has a board.
+      featureBoard: featureBoardOn(config, connector),
       // The nodes an item can be filed under, capped by the same rule the appraiser's
       // offer is capped by — one list, so the operator and the agent are choosing
       // between the same things.

@@ -909,6 +909,37 @@ Three readings are quoted rather than re-derived: cost from `buildSpendGoals`, t
 rule under `src/dispatcher/` reads the table behind it. → [17](17-cockpit.md#the-tickets-tab),
 [14](14-persistence.md#the-ticket-mirror)
 
+### `GET /api/features`
+
+The **feature board**: every container the mirror's items hang off, with the work beneath it folded.
+No parameters — the board is the whole of what the tracker's hierarchy holds, and the narrowing an
+operator wants is the tickets tab one click down. Rate-limited and fetched rather than polled, for
+`/api/tickets`' reason.
+
+**Gated twice, and a refusal is a `404`.** It exists only where the operator has set `featureBoard`
+([02](02-configuration.md)) _and_ the connector answers `canPlaceWorkItem` — a flat tracker has no
+hierarchy to roll up, so on GitHub the route is absent rather than empty. Neither gate is about
+permission, which is why the refusal is a 404 and not a 403: a 403 would say the operator may not see
+a page that is there, and send whoever reported it looking for a token problem. The predicate is
+`featureBoardOn`, exported from the route module and read by exactly two callers — this refusal, and
+the `config.featureBoard` on `/api/state` the nav draws its tab off. One predicate, because two would
+drift into a tab whose every fetch 404s.
+
+Returns `{ features, orphans, unresolved, environments, backfilling, refUrls }`. Each feature carries
+its identity and hue slot, a six-way `counts` of its children, a bounded slice of the child rows, its
+rolled-up `costUsd`, its per-environment `reach` and `lastLandingAt`. `orphans` is the same fold over
+the items the tracker says hang off nothing, and is `null` where there are none; `unresolved` counts
+the items whose parent link could not be read at all, which is **neither** of the other two — the same
+three-valued distinction `TicketRow.parent` keeps by being optional rather than nullable.
+
+Every reading on it is quoted rather than re-derived: the outcome word from `src/tickets/outcomes.ts`,
+cost from `buildSpendGoals`, the watch bucket from `src/watchLabels.ts`, which items are containers
+from `isContainerType`, and the environment fold from `rollUpReach` — the **same function** a goal's
+own landings are folded with, so `unknown` cannot collapse into `absent` one tier up. It ships **no
+verdict about a Feature**: no risk word, no forecast, no age judgement. It is a lens, and no rule under
+`src/dispatcher/` reads it. → [17](17-cockpit.md#the-feature-board),
+[24](24-environments.md#the-three-verdicts)
+
 ### `GET /api/retrospectives/:ref`
 
 One goal's write-up in full, by `issue:<n>` ref. Fetched when a reader opens it rather than shipped
