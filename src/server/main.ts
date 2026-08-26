@@ -134,16 +134,17 @@ async function main(): Promise<void> {
     stopProjectConfigWatch();
     // Interrupt (not kill) so the next boot offers this in-flight work for restore.
     system.agents.interruptAll();
-    // The local run is *stopped*, not interrupted, and that asymmetry is the point:
-    // an agent's work is worth restoring and a dev environment is not.
-    //
     // **The fast path, deliberately.** A stop is a session's turn now — the project's
     // own `stop` command, because a dev environment is not a process tree and no
     // signal reaches a container. Waiting for a turn here would hang the two paths
     // that must not hang: a Ctrl-C, and the upgrade handoff, which is a restart. So
-    // the session and its children are reaped and the row records that the
-    // instruction did not run, which is what makes a container that outlived the
-    // harness something the panel states on the next boot rather than a mystery.
+    // the session and its children are reaped without one.
+    //
+    // What happens to the *row* depends on whether the deployment can bring it back:
+    // with a `localRun.resumeInstruction` it is left live for `resumeInterrupted` to
+    // pick up on the next boot, and without one it is settled with a note saying the
+    // instruction did not run — which is what makes a container that outlived the
+    // harness something the panel states rather than a mystery.
     system.localRun.stopFast('the harness shut down');
     await system.mcp.close();
     await system.desktop.close();
@@ -195,6 +196,19 @@ async function main(): Promise<void> {
           `${c.originRef ? ` (${c.originRef})` : ''}`,
       );
   }
+
+  // The local run's half of the same question the recovery hold answers for agents,
+  // and the reason it is down here: this can spawn a session. An environment the last
+  // harness was holding is brought back where the deployment says how, and settled
+  // where it does not — either way the row stops claiming a process that is gone.
+  const interrupted = system.localRun.resumeInterrupted();
+  if (interrupted.outcome === 'resumed')
+    console.log(
+      `[lubbdubb] bringing the local run of ${interrupted.run.originRef} back up at ${interrupted.run.ref} — ` +
+        'watch the running-locally panel',
+    );
+  else if (interrupted.outcome === 'settled')
+    console.log(`[lubbdubb] the local run of ${interrupted.run.originRef} did not survive: ${interrupted.reason}`);
 
   system.harness.start();
   await system.harness.runCycle('boot');

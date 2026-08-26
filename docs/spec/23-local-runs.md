@@ -40,8 +40,9 @@ limit invented here — the same one the validation claim is built on
 ## The instruction is config, not a prompt
 
 `localRun.instruction` — free text, what the session bringing the environment up is told —
-`localRun.stopInstruction`, what the session taking it back down is told, and `localRun.url`, where the
-application lands. All three are **live fields**
+`localRun.stopInstruction`, what the session taking it back down is told, `localRun.resumeInstruction`,
+what a session bringing an interrupted one **back** is told, and `localRun.url`, where the
+application lands. All four are **live fields**
 ([02](02-configuration.md#liveness)): an edit on the Config page applies to the next start with no
 restart. They sit under **Features** there, beside the other policy objects, and `localRunRoot` under
 **Paths** — which is a thing `GROUPS` in `src/server/runningConfig.ts` has to be told: a declared key
@@ -199,17 +200,59 @@ stop's turn ends in a `done` like any other — which `up()` would read as "the 
 Dropping the id as the stop begins is the one switch that keeps the two apart; without it a stop
 writes `running` on its way out.
 
-**A restart settles every live row.** A row saying `running` after a restart describes a process this
-harness never spawned — the pid belongs to something dead, or to whatever has since been given that
-number. `endStaleLocalRuns` runs at boot and records how many it settled. The run also goes down with
-the harness rather than being interrupted like an agent's work: an agent's conversation is worth
-restoring and a dev environment is not, and left running it would be an orphan holding a port and the
-checkout with a row claiming it is live ([21](21-self-update.md#the-drain)).
+Shutdown takes the **fast path** deliberately — `stopFast`, which reaps and kills without a turn.
+Ctrl-C and the upgrade handoff are the two paths that must not hang, and an upgrade is a restart. The
+cost is a container that can outlive the harness, which is the whole subject of the next section.
 
-Shutdown takes the **fast path** deliberately — `stopFast`, which reaps, kills and settles without a
-turn. Ctrl-C and the upgrade handoff are the two paths that must not hang, and an upgrade is a restart.
-The cost is a container that can outlive the harness; the note is what makes that a thing the panel
-states on the next boot rather than a mystery.
+## Coming back after a restart
+
+A row saying `running` at boot is not a run. The pid in it belongs to a dead parent, or worse to
+whatever has since been given that number, so nothing may go on trusting it — and for three revisions
+what followed from that was a sweep: every live row settled, with a note saying the stop instruction had
+not run.
+
+The sweep was right about the row and wrong about the machine. `stopFast` reaps the session's subtree,
+which takes the dev server with it — and cannot touch a Docker container, which belongs to the daemon,
+or anything the start handed to a service. So what a restart actually leaves is **half an environment**:
+the containers up, the server gone, and a row in front of it saying `stopped`. An operator who closes
+the harness, or clicks Apply on a config change, is several minutes and a Start click from having their
+environment back, every time, for a reason that had nothing to do with them.
+
+`LocalRunner.resumeInterrupted` is the other half of the question the agents' recovery hold answers:
+
+- **It is a third instruction, not a re-run of the first.** A start is handed a machine with nothing of
+  this project up on it. A resume is handed one where the last session was reaped mid-flight, and the
+  honest thing to do with what survived is to **attach** to it rather than bring a second stack up beside
+  it. Only the project knows which of its pieces survive a reap, so `localRun.resumeInstruction` is the
+  operator's sentence to write too — a `continue` beside their `start` and `stop`. Blank
+  means the old behaviour exactly: the row settles, saying that nothing was configured to bring it back
+  and naming the field that would.
+- **`stopFast` leaves the row live when the deployment can bring it back**, and settles it when it
+  cannot. That is the only record that there is an environment to come back to: the note the settle used
+  to write was a sentence for a person, and nothing can act on prose. It also drops the run id before it
+  kills, because the wired `exit` handler settles a run whose session dies while it is meant to be up —
+  right everywhere except here, where the session dying _is_ the shutdown, and a `failed` written on the
+  way out is a row the next boot would refuse.
+- **A `stopping` row is settled, not resumed**, however the deployment is configured. A teardown in
+  flight is an operator who asked for this environment to go away; bringing it back answers the
+  opposite of the last thing they said.
+- **Nothing is prepared.** `ensurePreview` is a `reset --hard` and a `clean -fd`, and running it here
+  would pull the project out from under containers that are still up — the swap's stop-before-prepare
+  hazard pointed the other way. The checkout already stands at the run's own commit, since
+  `ensurePreview` is the only thing that ever touches `localRunRoot`. A checkout that has _gone_ is
+  checked for rather than discovered through the spawn: a bad `cwd` surfaces as an async spawn error
+  rather than a throw, so a resume would report success and then not have happened.
+- **It is the same run continued, not a second one.** The row's id and its `started_at` stand, so the
+  panel's clock keeps running from the original start and the money accumulates onto one run — the
+  resume session's usage lands the way a teardown session's does. The tail and the stage are dropped,
+  because they belonged to the session that printed them.
+- **Called from `main.ts`, below the shutdown handlers**, and not from `buildSystem`: it can spawn a
+  session, and everything that can is below that line
+  ([21](21-self-update.md#where-the-shutdown-handlers-are-registered)). The cost is that the row reads
+  live for the length of a boot, which is the truth of it — it is about to be.
+
+The turn ending means the environment is up again, exactly as it does on a start: the bring-up's
+handlers are wired, not a stop's.
 
 ## Saying what it is doing
 
@@ -429,9 +472,9 @@ Three details are about the minutes a start takes rather than the state it ends 
 `num_turns`) — all nullable, all declared in `LOCAL_RUN_COLUMNS`, because the table predates them.
 `local_run_cost_deltas` holds the dated deltas beside it. Which statuses count as **live** is declared once,
 in `LIVE`, and the SQL derives its `IN` clause from it — it used to be written out as
-`('starting', 'running')` in three statements with `LIVE` read by nobody, and adding a status to three
-of the four is silent in both directions: missed by `liveLocalRun` the store lets a second run begin
-beside a live one, and missed by `endStaleLocalRuns` a row stays live across every restart for ever.
+`('starting', 'running')` in separate statements with `LIVE` read by nobody, and missing a status is
+silent in both directions: missed by `liveLocalRun` the store lets a second run begin beside a live
+one, and missed by `beginLocalRun`'s supersede a stopped row is left claiming to be up for ever.
 `describeRun` in `src/mcp/desktopTools.ts` had a fifth copy and now calls `localRunIsLive`.
 A brand-new table needs no `ColumnMigrations`
 entry — but a table being new _once_ does not keep it exempt
@@ -445,7 +488,11 @@ config edit does not rewrite what a past run reported.
 says what it could not do and names the field; a stop that never finishes is killed at the bound and
 says it was not confirmed; a stop with no session left spawns one in the run's own checkout; a swap does
 not touch the checkout until the stop has settled; a `stopping` row is live and a restart settles it;
-the shutdown path runs no turn and records that it did not. Then: the default is the **tip** and the options are in plan order; a merged,
+the shutdown path runs no turn and records that it did not; a restart with nothing configured to bring a
+run back settles it and names the field that would; a restart with an instruction brings it back in the
+run's own checkout, prepares nothing, continues the same row and reads the turn ending as the
+environment up; a `stopping` row is settled even by a deployment that can resume; a run whose checkout
+has gone is not brought back; and nothing live is nothing to do. Then: the default is the **tip** and the options are in plan order; a merged,
 retired or concluded part is never the tip but stays on offer; an override runs an earlier part and one
 that is not the goal's is refused with the goal named; the refusal names the field that fixes it; a start prepares the checkout,
 writes the row and appends the rules; a merged goal runs from the integration branch; the turn ending
