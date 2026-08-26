@@ -12,21 +12,23 @@ import type { JSX, ReactNode } from 'react';
  * inconsistency is only visible with two of them side by side, which is how the
  * overview is always read.
  *
- * So a card no longer writes a row. It builds a {@link PanelRowModel} and hands it
- * here, which is what moves the rule out of everyone's memory and into the
- * typechecker: {@link PanelRowModel.refs} is a required field, so a card that
- * draws no way to the thing it names has to say so in the model, where it is
- * visible, rather than by omission at a call site.
+ * So a card no longer writes a row. It builds {@link PanelRowModel} values and
+ * hands them to {@link PanelRows}, which is what moves the rule out of everyone's
+ * memory and into the typechecker: {@link PanelRowModel.refs} is a required
+ * field, so a card that draws no way to the thing it names has to say so in the
+ * model, where it is visible, rather than by omission at a call site.
  *
  * **Two renderings, one model** ({@link PanelGrammar}). `facts` is the row as a
- * line of labelled quantities; `claim` is the row as a sentence with its evidence
- * ruled off underneath. They are drawn from the same value, so the choice between
- * them is one field on the place and not a rewrite of five cards — which is the
- * whole point of the model existing before the layout is settled.
+ * line of labelled quantities; `columns` is the card as a table whose headings
+ * are those same labels. They are drawn from the same value, so the choice
+ * between them is one field on the place and not a rewrite of five cards — which
+ * is the whole point of the model existing before the layout is settled.
  *
  * → docs/spec/17-cockpit.md#the-row-grammar
  */
 export interface PanelRowModel {
+  /** React's identity for the row, and the card's own natural id for it. */
+  key: string;
   /** The state lamp, where the row has a state. */
   lamp?: ReactNode;
   /** What the row is, in its own words. */
@@ -52,6 +54,10 @@ export interface PanelRowModel {
   /**
    * The row's quantities, each said with what it is. `41m` alone is an age or a
    * remaining time depending on the card it is on; `for 41m` is neither.
+   *
+   * The labels are load-bearing twice over: in the `columns` grammar they *are*
+   * the table's headings, so a card whose rows disagree about what to call one
+   * quantity draws two columns for it.
    */
   facts?: readonly RowFact[];
   /**
@@ -86,13 +92,16 @@ export interface PanelRowModel {
    * way for a card to restyle a row: what it names is a rule that exists.
    */
   className?: string;
-  /** The row's hover, for what neither band can say. */
+  /** The row's hover, for what neither grammar can say. */
   hint?: string;
 }
 
 /** One quantity, and what it is. */
 interface RowFact {
-  /** What the value *is*, drawn beside it: `for`, `cost`, `branch`, `queued`. */
+  /**
+   * What the value *is*: `for`, `cost`, `branch`, `queued`. Drawn beside the
+   * value in the `facts` grammar, and as the column heading in `columns`.
+   */
   label: string;
   value: ReactNode;
   /** Amber — this fact is the reason the row is not moving. */
@@ -100,16 +109,49 @@ interface RowFact {
 }
 
 /**
- * How a row is drawn. Two grammars over one model, chosen on the place so both
+ * How a card is drawn. Two grammars over one model, chosen on the place so both
  * are reachable from a link while the choice between them is open.
  *
- * - `facts` — the title, then its quantities as labelled pairs.
- * - `claim` — the title as a sentence, then a ruled evidence band under it.
+ * - `facts` — a list of rows; each row is its title and its labelled quantities.
+ * - `columns` — a table; those labels become headings, and the row is cells.
  */
-type PanelGrammar = 'facts' | 'claim';
+type PanelGrammar = 'facts' | 'columns';
 
-export function PanelRow({ row, grammar }: { row: PanelRowModel; grammar: PanelGrammar }): JSX.Element {
-  return grammar === 'claim' ? <ClaimRow row={row} /> : <FactsRow row={row} />;
+/**
+ * A card's rows, in whichever grammar the place asks for.
+ *
+ * The whole set rather than one row at a time, because `columns` cannot be drawn
+ * a row at a time: its headings are the union of what the rows carry, so the
+ * table has to see them together. Which is also the honest shape for `facts` —
+ * "these rows belong to this card" is what both grammars are about.
+ *
+ * `subject` names the title column, because nothing can derive it: *what the
+ * agent is on*, *title*, *dispatch* and *what happened* are the same slot on four
+ * cards and four different questions. `refsLabel` is the same argument one column
+ * further right, and is where the `columns` grammar earns its keep — a heading is
+ * a stronger answer to "where is the way there" than any convention.
+ */
+export function PanelRows({
+  rows,
+  grammar,
+  subject,
+  refsLabel,
+}: {
+  rows: readonly PanelRowModel[];
+  grammar: PanelGrammar;
+  subject: string;
+  refsLabel?: string;
+}): JSX.Element {
+  if (grammar === 'columns') {
+    return <ColumnsTable rows={rows} subject={subject} refsLabel={refsLabel ?? 'Refs'} />;
+  }
+  return (
+    <div className="cn-rows">
+      {rows.map((row) => (
+        <FactsRow key={row.key} row={row} />
+      ))}
+    </div>
+  );
 }
 
 /**
@@ -123,9 +165,9 @@ export function PanelRow({ row, grammar }: { row: PanelRowModel; grammar: PanelG
  */
 function FactsRow({ row }: { row: PanelRowModel }): JSX.Element {
   return (
-    <div className={rowClass(row)} title={row.hint}>
+    <div className={rowClass(row, 'cn-row')} title={row.hint}>
       {row.lamp}
-      <Subject row={row} facts />
+      <Subject row={row} />
       {row.why != null && row.why !== '' && <Why why={row.why} />}
       {row.reading}
       {row.chips}
@@ -136,45 +178,117 @@ function FactsRow({ row }: { row: PanelRowModel }): JSX.Element {
 }
 
 /**
- * The row as a sentence with its evidence under it.
+ * The card as a table: the facts' labels become headings, and a row is cells.
  *
- * The claim band carries the lamp, the words and the why marker; the evidence
- * band carries everything that is looked up rather than read, always in one order
- * — refs, facts, then the reading, the verdict and the control at its end. The
- * refs group drops its rule here and keeps its position: a hairline inside a band
- * that is already ruled off from the claim above it is two rules for one grouping.
+ * Nothing extra is declared to get here. The columns are the union of the labels
+ * the rows already carry, in the order they first appear, plus the fixed slots —
+ * so a card that says `branch` and `checks` in its facts gets those two headings,
+ * and a card that says `kind` and `when` gets those. That is what keeps this a
+ * second reading of one model rather than a second description of every card.
+ *
+ * A slot no row fills draws no column at all, which is this grammar's whole
+ * difference from a fixed row of slots: alignment here is *within* a card,
+ * guaranteed by the card's own headings, rather than across the page.
  */
-function ClaimRow({ row }: { row: PanelRowModel }): JSX.Element {
+function ColumnsTable({
+  rows,
+  subject,
+  refsLabel,
+}: {
+  rows: readonly PanelRowModel[];
+  subject: string;
+  refsLabel: string;
+}): JSX.Element {
+  const factLabels = factColumns(rows);
+  const has = {
+    lamp: rows.some((row) => row.lamp !== undefined),
+    why: rows.some((row) => row.why != null && row.why !== ''),
+    reading: rows.some((row) => row.reading !== undefined),
+    chips: rows.some((row) => row.chips !== undefined),
+    action: rows.some((row) => row.action !== undefined),
+    refs: rows.some((row) => row.refs !== null && row.refs !== undefined),
+  };
   return (
-    <div className={`${rowClass(row)} cn-claim-row`} title={row.hint}>
-      <span className="cn-claim">
-        {row.lamp}
-        {/* The facts belong to the evidence band here, so the subject draws the
-            words alone — the same model, read in the other order. */}
-        <Subject row={row} facts={false} />
-        {row.why != null && row.why !== '' && <Why why={row.why} />}
-      </span>
-      <span className="cn-evidence">
-        <span className="cn-refs cn-refs-flat">{row.refs}</span>
-        <Facts facts={row.facts} />
-        <span className="cn-ev-gap" />
-        {row.reading}
-        {row.chips}
-        {row.action}
-      </span>
+    <div className="cn-dscroll">
+      <table className="cn-dtable">
+        <thead>
+          <tr>
+            {has.lamp && <th className="cn-dlamp" />}
+            <th>{subject}</th>
+            {factLabels.map((label) => (
+              <th key={label}>{label}</th>
+            ))}
+            {/* The graphical reading, the verdict and the control head nothing: a
+                heading over a CI ladder or a watch toggle names the obvious, and
+                buys a column of ink for it. */}
+            {has.why && <th className="cn-dwhy">Why</th>}
+            {has.reading && <th />}
+            {has.chips && <th />}
+            {has.action && <th />}
+            {has.refs && <th className="cn-drefs">{refsLabel}</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => {
+            const byLabel = new Map((row.facts ?? []).map((fact) => [fact.label, fact]));
+            return (
+              <tr key={row.key} className={rowClass(row, 'cn-drow')} title={row.hint}>
+                {has.lamp && <td className="cn-dlamp">{row.lamp}</td>}
+                <td className="cn-dsubject">
+                  <Subject row={row} facts={false} />
+                </td>
+                {factLabels.map((label) => {
+                  const fact = byLabel.get(label);
+                  return (
+                    <td key={label} className={`cn-dfact ${fact?.alarm === true ? 'cn-alarm' : ''}`}>
+                      {/* A row that does not carry this quantity draws the cell
+                          empty rather than borrowing the one beside it. */}
+                      {fact === undefined ? '' : fact.value}
+                    </td>
+                  );
+                })}
+                {has.why && <td className="cn-dwhy">{row.why != null && row.why !== '' && <Why why={row.why} />}</td>}
+                {has.reading && <td>{row.reading}</td>}
+                {has.chips && <td>{row.chips}</td>}
+                {has.action && <td>{row.action}</td>}
+                {has.refs && <td className="cn-drefs">{row.refs}</td>}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
 
 /**
- * The name, and the facts under it on the grammar that puts them there.
+ * The card's fact columns: every label its rows use, in the order they first
+ * appear.
+ *
+ * First-seen rather than sorted, so the columns read in the order the card's own
+ * builder states them — and a fact only some rows carry (a cost on a stream
+ * agent, a `times` on a repeated signal) still gets a column, rather than being
+ * dropped for the rows that do have it.
+ */
+function factColumns(rows: readonly PanelRowModel[]): string[] {
+  const seen: string[] = [];
+  for (const row of rows) {
+    for (const fact of row.facts ?? []) {
+      if (!seen.includes(fact.label)) seen.push(fact.label);
+    }
+  }
+  return seen;
+}
+
+/**
+ * The name, and — in the `facts` grammar — the quantities under it.
  *
  * A `button` exactly when the row opens something, so a row that offers a way in
- * says so with the affordance rather than only on hover — and the refs stay
+ * says so with the affordance rather than only on hover, and the refs stay
  * outside it either way, which is the one rule a call site could otherwise get
  * wrong.
  */
-function Subject({ row, facts }: { row: PanelRowModel; facts: boolean }): JSX.Element {
+function Subject({ row, facts = true }: { row: PanelRowModel; facts?: boolean }): JSX.Element {
   const inner = (
     <>
       <b className="cn-name">{row.title}</b>
@@ -190,12 +304,7 @@ function Subject({ row, facts }: { row: PanelRowModel; facts: boolean }): JSX.El
   );
 }
 
-/**
- * The quantities, each with its own name.
- *
- * Drawn in the claim grammar too, in the evidence band, where the labels are what
- * stop the strip from being the same dot-separated soup one rule lower down.
- */
+/** The quantities, each with its own name — the `facts` grammar's whole sub-line. */
 function Facts({ facts }: { facts?: readonly RowFact[] }): JSX.Element | null {
   if (facts === undefined || facts.length === 0) return null;
   return (
@@ -234,8 +343,8 @@ function Why({ why }: { why: string }): JSX.Element {
   );
 }
 
-function rowClass(row: PanelRowModel): string {
-  return ['cn-row', row.spent === true ? 'cn-spent' : '', row.desk === true ? 'cn-desk' : '', row.className ?? '']
+function rowClass(row: PanelRowModel, base: string): string {
+  return [base, row.spent === true ? 'cn-spent' : '', row.desk === true ? 'cn-desk' : '', row.className ?? '']
     .filter((part) => part !== '')
     .join(' ');
 }

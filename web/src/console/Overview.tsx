@@ -1,14 +1,14 @@
 import { useState, type JSX } from 'react';
 import type { CockpitView, DeskRun } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
-import type { Agent, GoalArrival, Issue, QueueItem, SupplyState, WorldEvent } from '../types.js';
+import type { Agent, GoalArrival, Issue, OpenPullRequest, QueueItem, SupplyState, WorldEvent } from '../types.js';
 import { buildGoalPage, buildGoalTrack, furthestEnvironment, goalOfPr, type GoalTrack } from '../view/goalPage.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { elapsed, fmtUsd, relTime } from '../components/util.js';
 import { Ref, RefText, refLabel } from '../components/refs.js';
 import { CiLadder, CourtChip } from './GoalPage.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
-import { PanelRow, type PanelRowModel } from './PanelRow.js';
+import { PanelRows, type PanelRowModel } from './PanelRow.js';
 
 /**
  * What is shown when no goal is selected: five cards, rows rather than pictures.
@@ -54,17 +54,17 @@ function GrammarSwitch({ view, actions }: { view: CockpitView; actions: CockpitA
       <span>
         {view.panelGrammar === 'facts'
           ? 'Every row is its title and its quantities, each said with what it is.'
-          : 'Every row is a sentence, with the evidence for it ruled off underneath.'}
+          : 'Every card is a table: the quantities become headings, and a row is cells.'}
       </span>
       <span className="cn-gap" />
-      {(['facts', 'claim'] as const).map((grammar) => (
+      {(['facts', 'columns'] as const).map((grammar) => (
         <button
           key={grammar}
           type="button"
           className={`cn-pill ${view.panelGrammar === grammar ? 'cn-on' : ''}`}
           onClick={() => actions.setPanelGrammar(grammar)}
         >
-          {grammar === 'facts' ? 'Facts' : 'Claim'}
+          {grammar === 'facts' ? 'Facts' : 'Columns'}
         </button>
       ))}
     </div>
@@ -108,24 +108,21 @@ function Fleet({ view, actions }: { view: CockpitView; actions: CockpitActions }
           {ended.length} shift{ended.length === 1 ? '' : 's'} ended {showEnded ? '⌄' : '›'}
         </button>
       </h3>
-      <div className="cn-rows">
-        {view.live.length === 0 && desk.length === 0 && <p className="cn-empty">Nobody is out.</p>}
-        {view.live.map((agent) => (
-          <AgentRow key={agent.id} agent={agent} view={view} actions={actions} />
-        ))}
-        {/* Below the dispatched agents, because that is the order the harness
-            answers "what is happening" in: what it sent out, then what it did
-            not send. */}
-        {desk.map((run) => (
-          <DeskRow key={`${run.originRef}|${run.checkId}`} run={run} view={view} />
-        ))}
-        {showEnded &&
-          (ended.length === 0 ? (
-            <p className="cn-empty">No shift has ended.</p>
-          ) : (
-            ended.map((agent) => <AgentRow key={agent.id} agent={agent} view={view} actions={actions} />)
-          ))}
-      </div>
+      {view.live.length === 0 && desk.length === 0 && <p className="cn-empty">Nobody is out.</p>}
+      {showEnded && ended.length === 0 && <p className="cn-empty">No shift has ended.</p>}
+      <PanelRows
+        grammar={view.panelGrammar}
+        subject="Agent is on"
+        refsLabel="On"
+        rows={[
+          ...view.live.map((agent) => agentRow(agent, view, actions)),
+          // Below the dispatched agents, because that is the order the harness
+          // answers "what is happening" in: what it sent out, then what it did
+          // not send.
+          ...desk.map((run) => deskRow(run, view)),
+          ...(showEnded ? ended.map((agent) => agentRow(agent, view, actions)) : []),
+        ]}
+      />
       <RunwayBand view={view} />
     </section>
   );
@@ -265,7 +262,7 @@ const RUNWAY_LABEL: Record<SupplyState, string> = {
  * not already what the origin says. A ticketless pull request resolves to no goal
  * and draws none, which is the honest answer rather than an invented one.
  */
-function AgentRow({ agent, view, actions }: { agent: Agent; view: CockpitView; actions: CockpitActions }): JSX.Element {
+function agentRow(agent: Agent, view: CockpitView, actions: CockpitActions): PanelRowModel {
   const task = view.taskFor(agent);
   const origin = task?.originRef ?? null;
   const done = agent.endedAt !== null;
@@ -277,7 +274,8 @@ function AgentRow({ agent, view, actions }: { agent: Agent; view: CockpitView; a
       : agent.status === 'waiting'
         ? 'cn-wait'
         : 'cn-run';
-  const row: PanelRowModel = {
+  return {
+    key: agent.id,
     lamp: <i className={`cn-lamp ${lamp}`} />,
     title: task?.title ?? agent.id,
     open: () => actions.select(agent.id),
@@ -310,7 +308,6 @@ function AgentRow({ agent, view, actions }: { agent: Agent; view: CockpitView; a
     ) : undefined,
     spent: done,
   };
-  return <PanelRow row={row} grammar={view.panelGrammar} />;
 }
 
 /**
@@ -359,8 +356,9 @@ function OnWhat({ origin, view }: { origin: string | null; view: CockpitView }):
  * claim the server has already put through `claimIsLive`, so it goes at the same
  * instant the claim stops blocking `validate-check`.
  */
-function DeskRow({ run, view }: { run: DeskRun; view: CockpitView }): JSX.Element {
-  const row: PanelRowModel = {
+function deskRow(run: DeskRun, view: CockpitView): PanelRowModel {
+  return {
+    key: `${run.originRef}|${run.checkId}`,
     lamp: <i className="cn-lamp cn-desk-lamp" />,
     title: run.title,
     refs: <Ref to={run.originRef} />,
@@ -378,7 +376,6 @@ function DeskRow({ run, view }: { run: DeskRun; view: CockpitView }): JSX.Elemen
     chips: <i className="cn-chip cn-desk-chip">at a keyboard</i>,
     desk: true,
   };
-  return <PanelRow row={row} grammar={view.panelGrammar} />;
 }
 
 /**
@@ -410,24 +407,25 @@ function GoalsInFlight({ view, actions }: { view: CockpitView; actions: CockpitA
       <h3>
         Goals in flight <i className="cn-n">{goals.length}</i>
       </h3>
-      <div className="cn-rows">
-        {goals.length === 0 && <p className="cn-empty">No goal is in flight.</p>}
-        {goals.map((issue) => (
-          <GoalRow key={issue.number} issue={issue} view={view} actions={actions} />
-        ))}
-      </div>
+      {goals.length === 0 && <p className="cn-empty">No goal is in flight.</p>}
+      <PanelRows
+        grammar={view.panelGrammar}
+        subject="Goal"
+        rows={goals.map((issue) => goalRow(issue, view, actions))}
+      />
     </section>
   );
 }
 
-function GoalRow({ issue, view, actions }: { issue: Issue; view: CockpitView; actions: CockpitActions }): JSX.Element {
+function goalRow(issue: Issue, view: CockpitView, actions: CockpitActions): PanelRowModel {
   const ref = `issue:${issue.number}`;
   const page = buildGoalPage(view.state, ref, view.needsYou);
   const track = page === null ? null : buildGoalTrack(page.parts);
   const asks = view.needsYou.filter((n) => n.goalRef === ref).length;
   const furthest = furthestEnvironment(view.state, ref);
 
-  const row: PanelRowModel = {
+  return {
+    key: String(issue.number),
     title: `#${issue.number} ${issue.title}`,
     className: 'cn-goal-row',
     open: () => actions.selectGoal(ref),
@@ -460,7 +458,6 @@ function GoalRow({ issue, view, actions }: { issue: Issue; view: CockpitView; ac
       </>
     ),
   };
-  return <PanelRow row={row} grammar={view.panelGrammar} />;
 }
 
 /**
@@ -509,62 +506,68 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
         Pull requests <i className="cn-n">{open.length} open</i>
         {merged !== null && <span className="cn-more">{merged} merged</span>}
       </h3>
-      <div className="cn-rows">
-        {open.length === 0 && <p className="cn-empty">No pull request is open.</p>}
-        {open.map((pr) => {
-          // The server's verdict, not a second reading of the labels: `unwatched`
-          // is the first arm `prAttentionStatus` takes, so on an open PR it *is* the
-          // absent tag. Drawn as a spent row for the reason the backlog dims an
-          // unwatched goal — the chip alone leaves a row the harness will never
-          // touch sitting at the same weight as the ones it is working.
-          const unwatched = pr.attention.status === 'unwatched';
-          // The goal this PR is delivering, joined the server's own three ways
-          // rather than through the plan parts alone: a goal worked whole has no
-          // parts at all, which is most finished goals, and the rack drew no goal
-          // for any of them.
-          const goal = goalOfPr(view.state, pr.number);
-          const row: PanelRowModel = {
-            title: pr.title,
-            // The pull request's own number moves out of the title and into the
-            // refs slot, where every other card keeps what a row names: as a
-            // prefix it was a way somewhere that only this card put there.
-            refs: (
-              <>
-                <Ref to={`pr:${pr.number}`} />
-                {goal !== null && (
-                  <Ref to={goal} title={`Open the goal this pull request is delivering — ${refLabel(goal)}`} />
-                )}
-              </>
-            ),
-            facts: [{ label: 'branch', value: pr.branch }],
-            // Whose turn it is and why — the server's own sentence, which the card
-            // drew the verdict of and never the reasoning behind it.
-            why: pr.attention.reasons.join(' '),
-            reading: <CiLadder pr={pr} />,
-            chips: <CourtChip pr={pr} now={view.now} />,
-            action: (
-              <AsyncButton
-                className="ghost"
-                disabled={watchLabel === ''}
-                onClick={() => actions.setPrWatched(pr.number, unwatched)}
-                title={
-                  watchLabel === ''
-                    ? 'No watch label configured — the watch gate is off'
-                    : unwatched
-                      ? `Tag this PR "${watchLabel}" and let the harness work it`
-                      : `Take the "${watchLabel}" tag off so the harness leaves this PR alone`
-                }
-              >
-                {unwatched ? 'watch' : 'unwatch'}
-              </AsyncButton>
-            ),
-            spent: unwatched,
-          };
-          return <PanelRow key={pr.number} row={row} grammar={view.panelGrammar} />;
-        })}
-      </div>
+      {open.length === 0 && <p className="cn-empty">No pull request is open.</p>}
+      <PanelRows
+        grammar={view.panelGrammar}
+        subject="Pull request"
+        refsLabel="Goal"
+        rows={open.map((pr) => prRow(pr, view, actions, watchLabel))}
+      />
     </section>
   );
+}
+
+/**
+ * One open pull request: its checks, whose court it is in, and the toggle that
+ * takes it off the harness's books.
+ */
+function prRow(pr: OpenPullRequest, view: CockpitView, actions: CockpitActions, watchLabel: string): PanelRowModel {
+  // The server's verdict, not a second reading of the labels: `unwatched` is the
+  // first arm `prAttentionStatus` takes, so on an open PR it *is* the absent tag.
+  // Drawn as a spent row for the reason the backlog dims an unwatched goal — the
+  // chip alone leaves a row the harness will never touch sitting at the same
+  // weight as the ones it is working.
+  const unwatched = pr.attention.status === 'unwatched';
+  // The goal this PR is delivering, joined the server's own three ways rather
+  // than through the plan parts alone: a goal worked whole has no parts at all,
+  // which is most finished goals, and the rack drew no goal for any of them.
+  const goal = goalOfPr(view.state, pr.number);
+  return {
+    key: String(pr.number),
+    title: pr.title,
+    // The pull request's own number moves out of the title and into the refs
+    // slot, where every other card keeps what a row names: as a prefix it was a
+    // way somewhere that only this card put there.
+    refs: (
+      <>
+        <Ref to={`pr:${pr.number}`} />
+        {goal !== null && <Ref to={goal} title={`Open the goal this pull request is delivering — ${refLabel(goal)}`} />}
+      </>
+    ),
+    facts: [{ label: 'branch', value: pr.branch }],
+    // Whose turn it is and why — the server's own sentence, which the card drew
+    // the verdict of and never the reasoning behind it.
+    why: pr.attention.reasons.join(' '),
+    reading: <CiLadder pr={pr} />,
+    chips: <CourtChip pr={pr} now={view.now} />,
+    action: (
+      <AsyncButton
+        className="ghost"
+        disabled={watchLabel === ''}
+        onClick={() => actions.setPrWatched(pr.number, unwatched)}
+        title={
+          watchLabel === ''
+            ? 'No watch label configured — the watch gate is off'
+            : unwatched
+              ? `Tag this PR "${watchLabel}" and let the harness work it`
+              : `Take the "${watchLabel}" tag off so the harness leaves this PR alone`
+        }
+      >
+        {unwatched ? 'watch' : 'unwatch'}
+      </AsyncButton>
+    ),
+    spent: unwatched,
+  };
 }
 
 /**
@@ -582,12 +585,13 @@ function UpNext({ view, actions }: { view: CockpitView; actions: CockpitActions 
       <h3>
         Up next <i className="cn-n">{items.length} queued</i>
       </h3>
-      <div className="cn-rows">
-        {items.length === 0 && <p className="cn-empty">Nothing is queued.</p>}
-        {items.map((item) => (
-          <QueueRow key={`${item.origin}|${item.rule}`} item={item} view={view} actions={actions} />
-        ))}
-      </div>
+      {items.length === 0 && <p className="cn-empty">Nothing is queued.</p>}
+      <PanelRows
+        grammar={view.panelGrammar}
+        subject="Dispatch"
+        refsLabel="On"
+        rows={items.map((item) => queueRow(item, view, actions))}
+      />
     </section>
   );
 }
@@ -598,18 +602,11 @@ function UpNext({ view, actions }: { view: CockpitView; actions: CockpitActions 
  * provider unconditionally, and the reason it quotes carries `#n` mentions of its
  * own.
  */
-function QueueRow({
-  item,
-  view,
-  actions,
-}: {
-  item: QueueItem;
-  view: CockpitView;
-  actions: CockpitActions;
-}): JSX.Element {
+function queueRow(item: QueueItem, view: CockpitView, actions: CockpitActions): PanelRowModel {
   const config = view.state.config;
   const held = item.status !== 'dispatching';
-  const row: PanelRowModel = {
+  return {
+    key: `${item.origin}|${item.rule}`,
     title: item.title,
     refs: <Ref to={item.origin} />,
     facts: [
@@ -647,7 +644,6 @@ function QueueRow({
       />
     ),
   };
-  return <PanelRow row={row} grammar={view.panelGrammar} />;
 }
 
 /**
@@ -670,30 +666,28 @@ function WorldSignals({ view }: { view: CockpitView }): JSX.Element {
       <h3>
         World signals <i className="cn-n">{rows.length}</i>
       </h3>
-      <div className="cn-rows">
-        {rows.length === 0 && <p className="cn-empty">The world has not moved.</p>}
-        {rows.map((row) => (
-          <PanelRow
-            key={row.key}
-            grammar={view.panelGrammar}
-            row={{
-              title: <RefText text={row.summary} />,
-              // The goal behind the signal, beside the sentence rather than inside
-              // it. The summary's own `#412` already links out to the provider, so
-              // repeating the pull request here would be one ref twice — what a
-              // signal never offers is the way onto the goal page.
-              refs: <Ref to={goalBehind(view, row.ref)} />,
-              facts: [
-                { label: 'kind', value: row.kind },
-                { label: 'when', value: relTime(row.createdAt, view.now) },
-                // The count is a fact with a name now, rather than the same slot a
-                // fleet row puts a dollar figure in.
-                ...(row.count > 1 ? [{ label: 'times', value: `×${row.count}` }] : []),
-              ],
-            }}
-          />
-        ))}
-      </div>
+      {rows.length === 0 && <p className="cn-empty">The world has not moved.</p>}
+      <PanelRows
+        grammar={view.panelGrammar}
+        subject="What happened"
+        refsLabel="Goal"
+        rows={rows.map((row) => ({
+          key: row.key,
+          title: <RefText text={row.summary} />,
+          // The goal behind the signal, beside the sentence rather than inside
+          // it. The summary's own `#412` already links out to the provider, so
+          // repeating the pull request here would be one ref twice — what a
+          // signal never offers is the way onto the goal page.
+          refs: <Ref to={goalBehind(view, row.ref)} />,
+          facts: [
+            { label: 'kind', value: row.kind },
+            { label: 'when', value: relTime(row.createdAt, view.now) },
+            // The count is a fact with a name now, rather than the same slot a
+            // fleet row puts a dollar figure in.
+            ...(row.count > 1 ? [{ label: 'times', value: `×${row.count}` }] : []),
+          ],
+        }))}
+      />
     </section>
   );
 }

@@ -1404,16 +1404,29 @@ forgotten:
 
 The model has **two renderings**, because the layout was worth settling separately from the rule:
 
-| Grammar | The row is                   | Drawn as                                                                        |
-| ------- | ---------------------------- | ------------------------------------------------------------------------------- |
-| `facts` | its title and its quantities | one line: lamp, subject, why, reading, chips, action, refs                      |
-| `claim` | a sentence with its evidence | two bands: the claim, then a ruled strip of refs, facts, reading, chips, action |
+| Grammar   | The card is                   | Drawn as                                                                          |
+| --------- | ----------------------------- | --------------------------------------------------------------------------------- |
+| `facts`   | a list of rows                | one line each: lamp, subject, why, reading, chips, action, refs                    |
+| `columns` | a table with its own headings | a cell each; the fact labels **are** the headings, plus `Why` and the refs column |
 
-Which one is on `Place.panelGrammar`, `?grammar=claim`, so both are a link somebody can send while the
-choice between them is open — and a preview switch spans the top of the grid. **Both are temporary in
-that sense**: the switch and the losing grammar go together once one is chosen, and what stays is the
-model. `test/panelGrammar.test.ts` holds the two to the same cards and the same rows, and pins the
-prose-only rule on the marker.
+`columns` declares nothing extra. Its headings are the union of the `facts` labels its rows already
+carry, in first-seen order, so a card saying `branch` and `checks` gets those two columns and one
+saying `kind` and `when` gets those — which is what keeps it a second reading of one model rather than
+a second description of every card. What a card _does_ name is its subject column (`Agent is on`,
+`Goal`, `Pull request`, `Dispatch`, `What happened`) and its refs column (`On`, `Goal`), because
+nothing can derive either — and the named refs column is where this grammar earns its keep: a heading
+is a stronger answer to "where is the way there" than any convention. The graphical reading, the
+verdict and the control head nothing; a heading over a CI ladder names the obvious.
+
+Its cost is drawn rather than hidden: a seven-column card does not fit the overview's two-up width, so
+the card scrolls sideways. Alignment is _within_ a card, guaranteed by its own headings, and never
+across the page — which is the trade against a fixed row of slots.
+
+Which one is live is on `Place.panelGrammar`, `?grammar=columns`, so both are a link somebody can send
+while the choice between them is open — and a preview switch spans the top of the grid. **Both are
+temporary in that sense**: the switch and the losing grammar go together once one is chosen, and what
+stays is the model. `test/panelGrammar.test.ts` holds the two to the same cards and the same rows, and
+pins the prose-only rule on the marker.
 
 - **Goals in flight** carries the **furthest environment** holding a goal whole, where any is —
   last-declared in the operator's list, since that list is the order the work travels in. `partial`

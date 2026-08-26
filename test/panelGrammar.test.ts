@@ -19,7 +19,7 @@ const { Overview } = await import('../web/src/console/Overview.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
 const { goalIssue } = await import('../web/src/view/goalPage.js');
 
-function view(grammar: 'facts' | 'claim'): CockpitView {
+function view(grammar: 'facts' | 'columns'): CockpitView {
   const state = buildDemoState().state;
   return buildViewModel({
     state,
@@ -51,7 +51,7 @@ const actions = new Proxy({}, { get: () => () => undefined }) as CockpitActions;
  * card puts its rows in is `cn-rows`, so a bare `cn-row` counts the container as
  * a row and hands the first assertion a chunk with no refs slot in it.
  */
-const ROW = /class="cn-row[ "]/;
+const ROW = /class="cn-(?:row|drow)[ "]/g;
 
 /** The overview as the shell mounts it — references resolve against `RefLinks` or `<Ref>` throws. */
 const render = (v: CockpitView): string =>
@@ -72,14 +72,14 @@ const render = (v: CockpitView): string =>
  * rather than as a bug, on whichever grammar nobody was looking at.
  */
 test('both grammars draw the same cards and the same rows', () => {
-  const rows = (html: string): number => html.split(ROW).length - 1;
+  const rows = (html: string): number => (html.match(ROW) ?? []).length;
   const cards = (html: string): number => html.split('class="cn-card').length - 1;
 
   const facts = render(view('facts'));
-  const claim = render(view('claim'));
+  const columns = render(view('columns'));
 
-  assert.equal(cards(facts), cards(claim));
-  assert.equal(rows(facts), rows(claim));
+  assert.equal(cards(facts), cards(columns));
+  assert.equal(rows(facts), rows(columns));
   assert.ok(rows(facts) > 10, 'the fixtures carry rows on every card — this test is about them');
 });
 
@@ -91,13 +91,17 @@ test('both grammars draw the same cards and the same rows', () => {
  * it read exactly like the rows that did not.
  */
 test('every pull-request row carries a way to the pull request it names', () => {
-  for (const grammar of ['facts', 'claim'] as const) {
+  for (const grammar of ['facts', 'columns'] as const) {
     const html = render(view(grammar));
     const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('Up next'));
     const rows = rack.split(ROW).slice(1);
     assert.ok(rows.length > 0, `no pull-request rows rendered under ${grammar}`);
     for (const row of rows) {
-      const slot = row.slice(row.indexOf('cn-refs'));
+      // `cn-refs` in the list grammar, `cn-drefs` in the table: the slot has a
+      // different shape in each and the same job in both.
+      const at = Math.max(row.indexOf('cn-refs'), row.indexOf('cn-drefs'));
+      assert.ok(at > 0, `a pull-request row has no refs slot at all under ${grammar}`);
+      const slot = row.slice(at);
       // The number, not the token: `<Ref>` draws a reference the provider could
       // not resolve as plain text on purpose, and the demo's fake provider
       // resolves only some of them. What the row owes is the reference in the
@@ -117,7 +121,7 @@ test('every pull-request row carries a way to the pull request it names', () => 
  * can click and a keyboard user cannot reach at all.
  */
 test('the why marker holds prose, never a reference and never a control', () => {
-  for (const grammar of ['facts', 'claim'] as const) {
+  for (const grammar of ['facts', 'columns'] as const) {
     const html = render(view(grammar));
     const tips = html
       .split('class="cn-why-tip"')
@@ -134,8 +138,8 @@ test('the why marker holds prose, never a reference and never a control', () => 
 /** The grammar is a place, so both readings are a link somebody can send. */
 test('the row grammar round-trips through the query string', () => {
   assert.equal(placeQuery(NOWHERE), '', 'the default grammar is a bare URL');
-  assert.equal(placeQuery({ ...NOWHERE, panelGrammar: 'claim' }), '?grammar=claim');
-  assert.equal(readPlace('?grammar=claim').panelGrammar, 'claim');
+  assert.equal(placeQuery({ ...NOWHERE, panelGrammar: 'columns' }), '?grammar=columns');
+  assert.equal(readPlace('?grammar=columns').panelGrammar, 'columns');
   // An unknown value is the default rather than a blank overview — the same rule
   // every other parameter here follows.
   assert.equal(readPlace('?grammar=nonsense').panelGrammar, 'facts');

@@ -207,7 +207,7 @@ export interface Place {
    * It is temporary — it goes with the grammar that is not chosen.
    * → `docs/spec/17-cockpit.md#the-row-grammar`
    */
-  panelGrammar: 'facts' | 'claim';
+  panelGrammar: 'facts' | 'columns';
   /**
    * The board columns hidden from view — the **hidden** ones, not the shown ones.
    *
@@ -356,7 +356,7 @@ const TICKET_TRACKING: readonly TicketTrackingFilter[] = ['any', 'live', 'frozen
 const TICKET_GROUP = ['feature', 'flat'] as const;
 const TICKET_ORDER: readonly TicketOrder[] = ['added', 'changed', 'cost'];
 const TICKET_VIEW: readonly Place['ticketView'][] = ['table', 'card'];
-const PANEL_GRAMMAR: readonly Place['panelGrammar'][] = ['facts', 'claim'];
+const PANEL_GRAMMAR: readonly Place['panelGrammar'][] = ['facts', 'columns'];
 // Every member of `ConsolePanel` bar the ask, which carries its own parameter. A
 // panel missing from here is not merely unshareable: the place round-trips through
 // the query string, so an unlisted name is parsed straight back to null and the

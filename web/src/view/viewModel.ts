@@ -123,7 +123,7 @@ export interface CockpitView {
    * evidence under it. Carried through the view model rather than read from the
    * place in the card, so every surface reads one shape.
    */
-  panelGrammar: 'facts' | 'claim';
+  panelGrammar: 'facts' | 'columns';
 
   /** The agent whose drawer is open, if any. */
   selectedAgent: Agent | null;
@@ -328,7 +328,7 @@ interface ViewInputs {
   ticketView?: 'table' | 'card';
   ticketColumns?: string[];
   /** Optional for `collapsed`'s reason: the default is what a bare URL means. */
-  panelGrammar?: 'facts' | 'claim';
+  panelGrammar?: 'facts' | 'columns';
 }
 
 function groupByAgent<T extends { agentId: string }>(rows: readonly T[] | undefined): Map<string, T[]> {
