@@ -21,7 +21,7 @@ import { POOL_RETENTION_DAYS, utcDay } from './digestArm.js';
  * JSON is serialised from and holds no state of its own, so the two cannot drift.
  *
  * **The digest companion summarises rather than transcribes.** Ninety days across
- * five sections is some thousands of rows, and a table of them is a file nobody
+ * six sections is some thousands of rows, and a table of them is a file nobody
  * reads — which would defeat the one thing it is for. The trailing windows are the
  * read; `digest.json` remains the record, and the page says so.
  *
@@ -48,7 +48,7 @@ export function renderPoolMarkdown(document: PoolDocument): string {
 function heading(document: PoolDocument): string[] {
   const source = `${document.kind}.json`;
   return [
-    `# ${document.project} — ${document.kind === 'claims' ? 'what this fleet has vouched for' : 'daily spend digest'}`,
+    `# ${document.project} — ${document.kind === 'claims' ? 'what this fleet has vouched for' : 'daily digest'}`,
     '',
     // In the file rather than only in the spec: the person who finds this in a wiki
     // and edits it is the one who most needs telling that the next publish wins.
@@ -97,6 +97,13 @@ interface DigestSection {
   counts: string;
   /** False where every row's cost is null by construction — a column of dashes is worse than no column. */
   costed: boolean;
+  /**
+   * A line under the table, for a section whose numbers mean something narrower
+   * than their heading says. Said in the file rather than only in the spec: the
+   * person reading a table in a wiki is the one who has to know what it counts, and
+   * they are not the person who read the spec.
+   */
+  caveat?: string;
 }
 
 const SECTIONS: readonly DigestSection[] = [
@@ -140,6 +147,20 @@ const SECTIONS: readonly DigestSection[] = [
     counts: 'Runs',
     costed: false,
   },
+  {
+    rows: (d) => d.byFault,
+    title: 'What went wrong in the harness',
+    column: 'Source',
+    label: (key) => key,
+    counts: 'Faults',
+    // A fault has no cost figure anywhere in the harness, and a column of dashes is
+    // worse than no column.
+    costed: false,
+    caveat:
+      '_Counted from the fault log as it stands. Clearing it in the cockpit drops these rows from the next ' +
+      'publish, so a quiet quarter here may be a cleared one. Nothing sums this across fleets: a fault is ' +
+      'this harness on this machine._',
+  },
 ];
 
 function digestBody(document: PoolDigestDocument): string[] {
@@ -155,11 +176,10 @@ function digestBody(document: PoolDigestDocument): string[] {
   for (const section of SECTIONS) {
     lines.push(`## ${section.title}`, '');
     const rows = rollUp(section.rows(document), today);
-    if (rows.length === 0) {
-      lines.push('Nothing recorded in the last ninety days.', '');
-      continue;
-    }
-    lines.push(...table(section, rows), '');
+    lines.push(...(rows.length === 0 ? ['Nothing recorded in the last ninety days.'] : table(section, rows)), '');
+    // The caveat rides the empty section too, and that is the case it is most for:
+    // an empty faults table is exactly what a cleared log looks like.
+    if (section.caveat !== undefined) lines.push(section.caveat, '');
   }
   return lines;
 }

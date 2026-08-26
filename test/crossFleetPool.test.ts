@@ -425,7 +425,7 @@ test('the digest buckets by UTC day and marks the current one partial', () => {
     Object.keys(document)
       .filter((k) => Array.isArray((document as unknown as Record<string, unknown>)[k]))
       .sort(),
-    ['byCause', 'byCheck', 'byPhase', 'unaccounted', 'unmeasured'],
+    ['byCause', 'byCheck', 'byFault', 'byPhase', 'unaccounted', 'unmeasured'],
   );
   assert.equal(utcDay(NOW), '2026-08-24');
   assert.equal(POOL_RETENTION_DAYS, 90, 'a stated constant, never a config key');
@@ -444,6 +444,7 @@ test('the aggregator takes shares from summed counts and keeps a partial day out
     byCheck: [{ day: '2026-08-23', key: 'test (windows)', count: 3, costUsd: 9, partial: false }],
     unaccounted: [],
     unmeasured: [],
+    byFault: [{ day: '2026-08-23', key: 'provider', count: 5, costUsd: null, partial: false }],
   });
   const s = store();
   s.replacePoolFleetDigest(
@@ -471,6 +472,73 @@ test('the aggregator takes shares from summed counts and keeps a partial day out
   // And the reading that only exists inside one project.
   assert.equal(rollup.byCheck?.length, 1);
   assert.equal(foldPoolDigest(s.listPoolDigestRows(null), { project: null }).byCheck, null);
+});
+
+/**
+ * Faults ride the digest so the companion can draw them from the document it
+ * renders — and they go no further than this fleet's own file.
+ * → `docs/spec/28-cross-fleet-pool.md#the-faults-section`
+ */
+test('the digest counts faults by source per day, and carries no cost for one', () => {
+  const s = store();
+  s.recordError({ source: 'provider', message: 'github snapshot failed' });
+  s.recordError({ source: 'provider', message: 'github snapshot failed again' });
+  s.recordError({ source: 'agent', message: 'spawn failed' });
+
+  const document = buildDigestDocument(s, {
+    fleetId: 'alice@acme-api',
+    project: 'acme-api',
+    harnessVersion: '0.1.0',
+    now: NOW,
+  });
+
+  assert.deepEqual(
+    document.byFault.map((r) => [r.key, r.count, r.costUsd]),
+    [
+      ['agent', 1, null],
+      ['provider', 2, null],
+    ],
+  );
+  assert.ok(document.byFault.every((r) => r.day === utcDay(NOW) && r.partial));
+
+  // A clear takes them with it: the log is a list an operator clears, which is the
+  // caveat the companion prints under the table.
+  s.clearErrors();
+  assert.deepEqual(
+    buildDigestDocument(s, { fleetId: 'alice@acme-api', project: 'acme-api', harnessVersion: '0.1.0', now: NOW })
+      .byFault,
+    [],
+  );
+});
+
+/**
+ * The one omission in `digestSections`, asserted rather than trusted to a comment:
+ * a fault is this harness on this machine, comparable to nothing on anybody else's,
+ * so it is published for a person to read and never mirrored for a page to sum.
+ */
+test('a fleet’s faults are never mirrored, whatever its document carries', () => {
+  const s = store();
+  s.replacePoolFleetDigest('bob@acme-api', 'acme-api', {
+    pool: POOL_SCHEMA_VERSION,
+    kind: 'digest',
+    fleetId: 'bob@acme-api',
+    project: 'acme-api',
+    publishedAt: NOW,
+    harnessVersion: '0.1.0',
+    byPhase: [{ day: '2026-08-23', key: 'build', count: 1, costUsd: 1, partial: false }],
+    byCause: [],
+    byCheck: [],
+    unaccounted: [],
+    unmeasured: [],
+    byFault: [{ day: '2026-08-23', key: 'provider', count: 40, costUsd: null, partial: false }],
+  });
+
+  const mirrored = s.listPoolDigestRows('acme-api');
+  assert.ok(mirrored.length > 0, 'the rest of the document did land');
+  assert.deepEqual(
+    mirrored.filter((r) => r.key === 'provider'),
+    [],
+  );
 });
 
 // ---------------------------------------------------------------------------

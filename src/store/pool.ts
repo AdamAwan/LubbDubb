@@ -240,11 +240,18 @@ export interface PoolDigestMirrorRow {
 }
 
 /**
- * The document's five lists as `(section, rows)` pairs.
+ * The document's mirrored lists as `(section, rows)` pairs.
  *
- * One place rather than five `insert.run` blocks, so a section added to
- * {@link PoolDigestDocument} is a compile error here rather than a section the
- * mirror silently never stores.
+ * One place rather than five `insert.run` blocks, so a section the mirror should
+ * store is added here once rather than in five places one of which is forgotten.
+ *
+ * **`byFault` is deliberately absent, and this is the one omission worth stating.**
+ * Every section above sums across fleets into the shared insights page; a fault is
+ * this harness's own failure on this operator's machine, comparable to nothing on
+ * anybody else's and answering no question a company page asks. It is published so
+ * a person can read it in this fleet's own `digest.md` and it goes no further —
+ * mirroring it would put it in front of every other fleet as a number to sum.
+ * → `docs/spec/28-cross-fleet-pool.md#the-faults-section`
  */
 function digestSections(document: PoolDigestDocument): [PoolDigestSection, readonly PoolDigestRow[]][] {
   return [
