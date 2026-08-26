@@ -34,8 +34,14 @@ import { untriagedCount } from '../worldBuckets.js';
  * `pets` is absent when the snapshot ships no vivarium — the feature off, or on
  * and hidden — exactly as the rail's vivarium is: a tab that opens on a page
  * explaining a subsystem this cockpit does not draw is worse than no tab.
+ *
+ * `features` is absent for the same reason and on the same test: a tracker that
+ * reports no hierarchy has no tree to draw, and the tab would open on a page
+ * explaining a concept its provider does not have. It is listed here rather than
+ * appended, because where it *is* drawn it belongs beside the tickets it rolls up
+ * rather than at the end of the nav. → docs/spec/17-cockpit.md#the-features-page
  */
-const TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'knowledge', 'insights'];
+const TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'features', 'knowledge', 'insights'];
 
 /**
  * Where a bug in LubbDubb goes when the harness cannot file one itself — fixed, and
@@ -64,6 +70,7 @@ const NEW_ISSUE_URL = 'https://github.com/AdamAwan/LubbDubb/issues/new';
 export const TAB_LABEL: Record<ConsoleTab, string> = {
   overview: 'Overview',
   tickets: 'Tickets',
+  features: 'Features',
   knowledge: 'Knowledge',
   insights: 'Insights',
   pets: 'Pets',
@@ -95,10 +102,13 @@ function Nav({ view, actions }: { view: CockpitView; actions: CockpitActions }):
     actions.openTab(tab);
   };
 
-  // Appended rather than listed, so the nav is the same four tabs on a deployment
-  // drawing no vivarium and the fifth cannot be reached by a stale URL either
-  // — `tabBody` refuses it for the same reason.
-  const tabs = view.state.pets === null ? TABS : [...TABS, 'pets' as const];
+  const tabs = [
+    // Filtered rather than appended, because where the Features tab is drawn at all
+    // it belongs beside the tickets it rolls up. `tabBody` refuses a stale URL to
+    // either of the two conditional tabs, for the same reason the nav omits them.
+    ...TABS.filter((tab) => tab !== 'features' || view.state.config.tracksHierarchy),
+    ...(view.state.pets === null ? [] : ['pets' as const]),
+  ];
 
   return (
     <nav className="cn-nav">

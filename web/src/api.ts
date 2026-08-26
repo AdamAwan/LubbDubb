@@ -19,6 +19,7 @@ import type {
   ContradictionRuling,
   FactExit,
   FactRuling,
+  FeaturesPayload,
   GraduationOutcome,
   KnowledgeFactPayload,
   PetCatalogue,
@@ -176,6 +177,10 @@ const realApi = {
     const search = params.toString();
     return authFetch(`/api/tickets${search === '' ? '' : `?${search}`}`).then((r) => json<TicketsPayload>(r));
   },
+  // The Features page's tree: fetched when the page opens, never polled, and never
+  // paged — a tree cut off part-way down reports a branch as complete when the rest
+  // of it is on the next page, which is the one number that page exists to state.
+  getFeatures: () => authFetch('/api/features').then((r) => json<FeaturesPayload>(r)),
   // A goal's retrospective, fetched when the Manifest station is opened. The
   // snapshot carries only the summary, for the reason the work graph is not
   // polled: a document per issue on every poll pays for the feature in bandwidth.

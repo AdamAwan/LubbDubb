@@ -908,6 +908,52 @@ Three readings are quoted rather than re-derived: cost from `buildSpendGoals`, t
 rule under `src/dispatcher/` reads the table behind it. → [17](17-cockpit.md#the-tickets-tab),
 [14](14-persistence.md#the-ticket-mirror)
 
+### `GET /api/features`
+
+The tracker's **hierarchy**, as one tree, with what the fleet has made of each branch rolled up it —
+the Features page's whole payload (`src/features/featureTree.ts`). Rate-limited and fetched rather
+than polled, for `/api/tickets`' reason: it reads the mirror and the world baseline whole, and
+`/api/state` comes round every couple of seconds for every open cockpit.
+
+No parameters, and — alone among the list routes this size — **no cursor**. That is deliberate rather
+than an omission: a tree cut off part-way down reports a branch as complete when the rest of it is on
+the next page, and how much of a feature is finished is the one number the page exists to state. The
+cost is the one `/api/tickets` already pays, for the reason stated there.
+
+Returns `{ tracked, roots, orphans, totals, containerTypes, refUrls }`.
+
+**`tracked` is the page's gate, and it is a fact about the reading rather than about the provider's
+name.** `Issue.parent` has three values, and the distinction is the whole of it: _absent_ means no
+integration resolved a link, which is what a flat tracker produces for every row it ever returns.
+So GitHub Issues answer `false` here for as long as they carry no hierarchy, and a provider that
+grows one — GitHub's own sub-issues, resolved onto `parent` / `children` — turns the page on with
+nothing in the cockpit to change. The same fact rides on the snapshot as `config.tracksHierarchy`,
+because the nav has to decide whether to draw the tab before anything fetches this.
+
+`roots` are the containers with nothing above them; each node carries its `children` and a
+`progress` rollup over everything beneath it. **A container is never in its own rollup** — it is a
+statement of intent its children deliver, which is the same reading the pickup gate makes when it
+refuses to dispatch at one ([06](06-issue-pickup.md)), so counting it beside them would inflate every
+feature by an item nobody can work.
+
+The rollup has **five** buckets — `done`, `working`, `queued`, `waiting`, `outside` — and the fifth is
+the one it exists for. `outside` is an item the tracker hangs under the container that the assignment
+filter has never returned: another team's story, or one nobody assigned. Folded out, a feature whose
+eight stories include three on another board reads _5 of 5 done_, which is the number a delivery
+conversation turns on, wrong, with nothing on the screen saying so. Precedence is stated in
+`src/features/featureTree.ts` and matters at two points: **closed is done** whatever else is true of
+an item, and `outside` is read only after that, so a closed item nobody here owns still counts as
+delivered work.
+
+`orphans` are items the tracker says hang off nothing. Only a _resolved_ absence is there — an
+unreadable link is neither a feature nor "no feature", which is `src/issueRelations.ts`' rule and the
+one mistake this route must not make.
+
+Three readings are quoted rather than re-derived, the same three `/api/tickets` quotes and for the
+same reason: cost from `buildSpendGoals`, the outcome word from `src/tickets/outcomes.ts`, and the
+watch bucket from `src/watchLabels.ts`. It is a lens: no rule under `src/dispatcher/` reads it.
+→ [17](17-cockpit.md#the-features-page)
+
 ### `GET /api/retrospectives/:ref`
 
 One goal's write-up in full, by `issue:<n>` ref. Fetched when a reader opens it rather than shipped

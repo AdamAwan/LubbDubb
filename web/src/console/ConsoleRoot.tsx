@@ -10,6 +10,7 @@ import { Overview } from './Overview.js';
 import { Panel } from './Panel.js';
 import { RecoveryPanel } from '../components/RecoveryPanel.js';
 import { TicketsPanel } from '../components/TicketsPanel.js';
+import { FeaturesPage } from '../components/FeaturesPage.js';
 import { ConfigPage } from '../components/ConfigPage.js';
 import { RecordPanel } from '../components/RecordPanel.js';
 import { KnowledgePanel } from '../components/KnowledgePanel.js';
@@ -169,6 +170,12 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
           now={view.now}
         />
       );
+    case 'features':
+      // A deployment whose tracker is flat has no tab to reach this, but a stale URL
+      // still can — and the page says which fact it is answering rather than drawing
+      // an empty tree, which would read as one that failed to load. The gate is on
+      // the page rather than here, because it is the same sentence either way.
+      return <FeaturesPage view={view} actions={actions} />;
     case 'knowledge':
       // A destination since the nav gained it, and drawn here rather than in a
       // panel for the reason the tickets tab is not one either: ruling on the

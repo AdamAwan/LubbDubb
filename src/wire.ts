@@ -855,6 +855,20 @@ interface CockpitConfig {
    */
   canSetWorkItemState: boolean;
   /**
+   * Whether the tracker reports a hierarchy — a parent link resolved, either way,
+   * on any item in the world. The Features page's gate, and the nav's: the tab is
+   * appended where this is true and absent where it is not, the way the vivarium's
+   * is.
+   *
+   * A fact about the *reading* and not about the provider's name, for the reason
+   * {@link Issue.parent} has three values rather than two: an absent link is one
+   * nothing resolved, which is every row a flat tracker ever returns. So GitHub
+   * Issues answer false for as long as they carry no hierarchy, and a provider that
+   * grows one lights the page up on the sweep after it does — with nothing in the
+   * cockpit to change.
+   */
+  tracksHierarchy: boolean;
+  /**
    * The project's area nodes, as the harness last read them from the tracker —
    * what the cockpit offers when the operator answers a placement question with a
    * value of their own.
@@ -1483,6 +1497,111 @@ export interface TicketsPayload {
    * Reference → web URL, resolved off the connector rather than read from the
    * snapshot's map: `buildRefUrls` is built from the world, and most rows here
    * have long left it.
+   */
+  refUrls: Record<string, string>;
+}
+
+/**
+ * What the fleet has made of one branch of the tracker's hierarchy, rolled up it.
+ *
+ * Five buckets and not four, because the fifth is the one a rollup gets wrong
+ * silently: **outside** is an item the tracker hangs under this feature that the
+ * assignment filter has never returned. Left out, a feature whose eight stories
+ * include three another team owns reads "5 of 5 done" — the one number a delivery
+ * conversation turns on, wrong, with nothing on the screen saying so.
+ *
+ * The four the harness *can* see are ordered by how far along they are, which is
+ * the order the bar draws them in: done, working, queued, waiting.
+ * → `src/features/featureTree.ts`
+ */
+export interface FeatureProgress {
+  /** Closed in the tracker. Its own word, and it outranks every reading the harness has. */
+  done: number;
+  /** Open, and the fleet has been on it — money spent, or a verdict cast. */
+  working: number;
+  /** Open and watched, with nothing spent yet: opted in, waiting for a slot. */
+  queued: number;
+  /** Open, ours, and nobody has asked for it. */
+  waiting: number;
+  /** Open, and the assignment filter has never returned it — work we cannot see. */
+  outside: number;
+  /** Every leaf under the node. The four visible buckets plus `outside`. */
+  total: number;
+  /** Dollars under the whole subtree — `buildSpendGoals`' figures summed, never a second rollup. */
+  costUsd: number;
+}
+
+/**
+ * One item in the hierarchy, with everything hanging off it and its rollup.
+ *
+ * A node is a *container* by position as well as by type: whatever the process
+ * template calls it, an item something already hangs off is drawn as a heading.
+ * That is the same reading `candidateParents` makes, and for the same reason — a
+ * custom type nobody listed in `issueContainerTypes` is still where the work sits.
+ */
+export interface FeatureNode {
+  number: number;
+  title: string;
+  /** `Feature` / `User Story` / …, or null where nothing that named this item carried a type. */
+  issueType: string | null;
+  state: IssueState;
+  /** The provider's own word, or null where it has none. */
+  workItemState: string | null;
+  /** Drawn as a heading rather than a row: a container is never worked itself. */
+  container: boolean;
+  /**
+   * Where this node came from. `relation` is an item named only as somebody's
+   * parent or child — the tracker says it is there, and the assignment filter has
+   * never returned it, so its watch state and its cost are not facts we hold.
+   */
+  known: 'mirror' | 'relation';
+  /** Null on a `relation` node: nothing told us its labels, and `unwatched` would be a claim. */
+  watch: 'watched' | 'unwatched' | null;
+  /** The harness's own outcome word, as the tickets tab folds it. Null where it reached none. */
+  outcome: string | null;
+  /** Null rather than `0` where the fleet never ran on it — the two are different facts. */
+  costUsd: number | null;
+  /** The tracker's last-modified instant, where the mirror holds one. */
+  changedAt: string | null;
+  /** The mirror's reading, or null for a node the mirror does not hold. */
+  tracking: 'live' | 'frozen' | null;
+  /** The container's hue slot, so a branch draws in the colour the tickets tab gave it. */
+  slot: number | null;
+  /** How deep in the tree, so a flattened render can indent without walking. */
+  depth: number;
+  children: FeatureNode[];
+  /** The rollup over everything below, containers themselves excluded. */
+  progress: FeatureProgress;
+}
+
+/** The hierarchy as the Features page draws it. → `src/features/featureTree.ts` */
+export interface FeatureTree {
+  /**
+   * Whether the tracker reports hierarchy at all — answered from the data rather
+   * than from the provider's name, so a provider that grows one lights the page up
+   * on the sweep after it does. False is a flat tracker (GitHub Issues, the fake),
+   * and the page says so rather than drawing an empty tree.
+   */
+  tracked: boolean;
+  /** The containers with nowhere above them, in issue order. */
+  roots: FeatureNode[];
+  /**
+   * Items the tracker says hang off nothing. Only a *resolved* absence is here: an
+   * unreadable link is neither a feature nor "no feature".
+   * → `src/issueRelations.ts`
+   */
+  orphans: FeatureNode[];
+  /** Every root's rollup plus the orphans — the head's own numbers. */
+  totals: FeatureProgress;
+}
+
+/** `/api/features` — the tree, and the URLs to reach the tracker with. */
+export interface FeaturesPayload extends FeatureTree {
+  /** The operator's `issueContainerTypes`, so the page can name the policy it drew by. */
+  containerTypes: string[];
+  /**
+   * Reference → web URL, resolved off the connector for the same reason
+   * {@link TicketsPayload} does it: most of these items have long left the world.
    */
   refUrls: Record<string, string>;
 }

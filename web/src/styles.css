@@ -7897,3 +7897,336 @@ select:disabled {
 .pool-fleet-at {
   color: var(--cn-fg-dim);
 }
+
+/* ---------------------------------------------------------------------------
+   The Features page — the tracker's hierarchy with each branch's progress
+   rolled up it. Sibling of the tickets list rather than part of it: that one
+   answers "which items am I being asked about", this one "is the feature
+   getting done". → docs/spec/17-cockpit.md#the-features-page
+   --------------------------------------------------------------------------- */
+.feat-page {
+  /* Capped like the tickets tab, and for the same reason: a row let run to a
+     4K monitor's width puts the name and the reading at opposite ends of the
+     desk, and reading one against the other is the whole use of the page. */
+  max-width: 1400px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.feat-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r);
+  background: var(--cn-panel);
+}
+.feat-head h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+.feat-head p {
+  margin: 0;
+  font-size: 12px;
+}
+.feat-headline {
+  flex: 1 1 320px;
+  min-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.feat-block {
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r);
+  background: var(--cn-panel);
+  overflow: hidden;
+}
+/* A sub-feature is nested inside its parent's card rather than given one of its
+   own: the depth is the point, and two identical cards side by side would draw
+   an epic's children as its peers. */
+.feat-block.d1,
+.feat-block.d2,
+.feat-block.d3 {
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  background: none;
+}
+.feat-fhead {
+  display: grid;
+  grid-template-columns: 22px 10px minmax(180px, 1fr) minmax(120px, 320px) auto auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 13px;
+  background: var(--cn-panel-2);
+  border-bottom: 1px solid var(--cn-line-soft);
+}
+.feat-block.d1 > .feat-fhead,
+.feat-block.d2 > .feat-fhead,
+.feat-block.d3 > .feat-fhead {
+  background: none;
+}
+.feat-fold {
+  border: none;
+  background: none;
+  color: var(--cn-fg-dim);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0;
+}
+.feat-stripe {
+  width: 10px;
+  height: 16px;
+  border-radius: 3px;
+  /* No slot is the unassigned case: hatched rather than coloured, so a container
+     with no hue cannot be mistaken for one that has been given a colour. */
+  background: repeating-linear-gradient(
+    45deg,
+    var(--cn-line-hi),
+    var(--cn-line-hi) 2px,
+    var(--cn-line) 2px,
+    var(--cn-line) 4px
+  );
+}
+.feat-fname {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.feat-name-btn {
+  border: none;
+  background: none;
+  padding: 0;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  min-width: 0;
+}
+.feat-name-btn:hover b {
+  text-decoration: underline;
+}
+.feat-num {
+  color: var(--cn-fg-faint);
+  font-size: 11.5px;
+  font-style: normal;
+}
+.feat-type {
+  font-size: 10.5px;
+  font-style: normal;
+  color: var(--cn-fg-dim);
+  border: 1px solid var(--cn-line);
+  border-radius: 999px;
+  padding: 0 6px;
+}
+.feat-type.container {
+  color: var(--cn-violet);
+  border-color: color-mix(in srgb, var(--cn-violet) 45%, transparent);
+}
+.feat-type.bug {
+  color: var(--cn-red);
+  border-color: color-mix(in srgb, var(--cn-red) 45%, transparent);
+}
+.feat-outside {
+  font-size: 10.5px;
+  font-style: normal;
+  color: var(--cn-fg-faint);
+  border: 1px dashed var(--cn-line);
+  border-radius: 999px;
+  padding: 0 6px;
+}
+.feat-fcount,
+.feat-fcost,
+.feat-cost {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--cn-fg-dim);
+  white-space: nowrap;
+}
+.feat-fcost.none,
+.feat-cost.none {
+  color: var(--cn-fg-faint);
+}
+.feat-kids {
+  padding: 0 0 2px 22px;
+}
+.feat-empty {
+  margin: 0;
+  padding: 10px 13px;
+  font-size: 12px;
+}
+.feat-row {
+  display: grid;
+  grid-template-columns: 62px minmax(180px, 1fr) 92px minmax(80px, 140px) 74px auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 13px;
+  border-bottom: 1px solid var(--cn-line-soft);
+  min-width: 0;
+}
+.feat-row:last-child {
+  border-bottom: none;
+}
+/* Dimmed, never hidden: a finished story is what a feature's progress is made
+   of, and a list that dropped them would draw a feature as though the work had
+   never happened. */
+.feat-row.done .feat-name,
+.feat-row.outside .feat-name {
+  color: var(--cn-fg-dim);
+}
+.feat-id {
+  color: var(--cn-fg-faint);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+.feat-what {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.feat-name {
+  font-weight: 600;
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+.feat-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--cn-fg-faint);
+}
+.feat-watch,
+.feat-unknown {
+  font-size: 11.5px;
+  font-style: normal;
+  color: var(--cn-fg-dim);
+}
+.feat-orphans {
+  border: 1px dashed var(--cn-line);
+  border-radius: var(--cn-r);
+  background: var(--cn-panel);
+  padding: 12px 13px;
+}
+.feat-orphans h3 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.feat-orphans p {
+  margin: 0 0 8px;
+  font-size: 11.5px;
+}
+.feat-count {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--cn-fg-faint);
+}
+
+/* The rollup itself. Widths are percentages of the *whole* subtree, `outside`
+   included — folding out what the harness cannot see would draw a full bar over
+   a feature that is half somebody else's board. */
+.feat-bar {
+  display: flex;
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--cn-line-soft);
+}
+.feat-bar.empty {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--cn-line-soft),
+    var(--cn-line-soft) 3px,
+    var(--cn-line) 3px,
+    var(--cn-line) 6px
+  );
+}
+.feat-seg {
+  display: block;
+  height: 100%;
+}
+.feat-seg.done,
+.feat-dot.done {
+  background: var(--cn-green);
+}
+.feat-seg.working,
+.feat-dot.working {
+  background: var(--cn-accent);
+}
+.feat-seg.queued,
+.feat-dot.queued {
+  background: color-mix(in srgb, var(--cn-accent) 45%, var(--cn-line-soft));
+}
+.feat-seg.waiting,
+.feat-dot.waiting {
+  background: var(--cn-line);
+}
+/* Hatched rather than a sixth colour: these are the items the harness cannot
+   see, and a flat band would read as one more thing it has an opinion about. */
+.feat-seg.outside,
+.feat-dot.outside {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--cn-fg-faint),
+    var(--cn-fg-faint) 2px,
+    var(--cn-line-soft) 2px,
+    var(--cn-line-soft) 4px
+  );
+}
+.feat-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--cn-fg-dim);
+}
+.feat-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+}
+.feat-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  display: inline-block;
+}
+.feat-verdict,
+.feat-state {
+  font-style: normal;
+}
+
+@media (max-width: 900px) {
+  .feat-fhead {
+    grid-template-columns: 22px 10px 1fr auto;
+  }
+  /* The bar and the count drop below the name rather than off the page: the
+     reading is the reason the row exists. */
+  .feat-fbar {
+    grid-column: 3 / -1;
+  }
+  .feat-row {
+    grid-template-columns: 54px 1fr auto auto;
+  }
+  .feat-watch,
+  .feat-cost {
+    display: none;
+  }
+}

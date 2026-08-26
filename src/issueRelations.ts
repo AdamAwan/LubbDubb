@@ -62,8 +62,22 @@ function includesType(types: readonly string[], type: string): boolean {
  * what keeps every flat tracker behaving exactly as it did.
  */
 export function isContainerIssue(issue: Issue, containerTypes: readonly string[] | undefined): boolean {
-  if (issue.issueType === undefined) return false;
-  return includesType(containerTypes ?? DEFAULT_CONTAINER_TYPES, issue.issueType);
+  return isContainerType(issue.issueType, containerTypes);
+}
+
+/**
+ * The same question asked of a **type** rather than of an issue, for the readers
+ * that hold one and not the other.
+ *
+ * The Features page is that reader: it assembles its nodes from three sources —
+ * the mirror, the world and the relation summaries carried on an issue — and a
+ * relative is not an {@link Issue}. Casting one to satisfy the signature is how
+ * the two would come to disagree about a process template's own word, so the
+ * policy is stated once here and both arms call it.
+ */
+export function isContainerType(type: string | undefined, containerTypes: readonly string[] | undefined): boolean {
+  if (type === undefined) return false;
+  return includesType(containerTypes ?? DEFAULT_CONTAINER_TYPES, type);
 }
 
 /**

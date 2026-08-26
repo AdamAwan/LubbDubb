@@ -78,7 +78,7 @@ export type ConsolePanel =
  * rather than a number glanced at, and a panel drew over the rail the operator came
  * from. `readPlace` aliases `?panel=knowledge` onto the tab for `work`'s reason.
  */
-export type ConsoleTab = 'overview' | 'tickets' | 'knowledge' | 'insights' | 'pets' | 'config';
+export type ConsoleTab = 'overview' | 'tickets' | 'features' | 'knowledge' | 'insights' | 'pets' | 'config';
 
 /**
  * Which reading the Insights page is showing.

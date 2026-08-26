@@ -7,6 +7,9 @@
 // Kept side-effect-free at module scope: the real build imports this file but the
 // `VITE_DEMO` branch in api.ts is statically false there, so Rollup drops it.
 import type {
+  FeatureNode,
+  FeatureProgress,
+  FeaturesPayload,
   ConfigChange,
   SetupCheck,
   SetupPayload,
@@ -3859,6 +3862,159 @@ function demoSetupResolution(answers: { email: string; repoRoot: string }): Setu
   };
 }
 
+/**
+ * The demo's feature tree, folded from the same mirror the tickets list reads.
+ *
+ * Folded here rather than authored, and folded rather than imported: the real
+ * answer comes from `src/features/featureTree.ts`, which is server code the cockpit
+ * may not name (`test/wireContract.test.ts`), so the demo keeps its own reading —
+ * the shape `demoTickets` already is. The five buckets are the ones the wire type
+ * documents, in the order the bar draws them, so what a visitor reads here is what
+ * a deployment reads against a real board.
+ */
+function demoFeatures(): FeaturesPayload {
+  const { rows, features, epics, outside } = demoMirror();
+  const slotOf = (number: number) => features.findIndex((f) => f.number === number);
+
+  const zero = (): FeatureProgress => ({
+    done: 0,
+    working: 0,
+    queued: 0,
+    waiting: 0,
+    outside: 0,
+    total: 0,
+    costUsd: 0,
+  });
+  const fold = (into: FeatureProgress, from: FeatureProgress): FeatureProgress => ({
+    done: into.done + from.done,
+    working: into.working + from.working,
+    queued: into.queued + from.queued,
+    waiting: into.waiting + from.waiting,
+    outside: into.outside + from.outside,
+    total: into.total + from.total,
+    costUsd: Math.round((into.costUsd + from.costUsd) * 100) / 100,
+  });
+  /** One item's bucket, in the precedence the wire type states: closed first, unseen second. */
+  const one = (node: FeatureNode): FeatureProgress => {
+    const progress = zero();
+    const key =
+      node.state === 'closed'
+        ? 'done'
+        : node.known === 'relation'
+          ? 'outside'
+          : (node.costUsd ?? 0) > 0 || node.outcome !== null
+            ? 'working'
+            : node.watch === 'watched'
+              ? 'queued'
+              : 'waiting';
+    progress[key] = 1;
+    progress.total = 1;
+    progress.costUsd = node.costUsd ?? 0;
+    return progress;
+  };
+
+  const leaf = (row: TicketRow, depth: number): FeatureNode => ({
+    number: row.number,
+    title: row.title,
+    issueType: row.issueType,
+    state: row.state,
+    workItemState: row.workItemState,
+    container: false,
+    known: 'mirror',
+    watch: row.watch,
+    outcome: row.outcome,
+    costUsd: row.costUsd,
+    changedAt: row.changedAt,
+    tracking: row.tracking,
+    slot: row.featureSlot,
+    depth,
+    children: [],
+    progress: zero(),
+  });
+
+  const unseen = (item: (typeof outside)[number], depth: number): FeatureNode => ({
+    number: item.number,
+    title: item.title,
+    issueType: item.issueType,
+    state: item.state,
+    workItemState: item.state === 'closed' ? 'Closed' : 'Active',
+    container: false,
+    known: 'relation',
+    // Null and not `unwatched`: nothing told us this item's labels, and the absent
+    // reading is not the same as a negative one.
+    watch: null,
+    outcome: null,
+    costUsd: null,
+    changedAt: null,
+    tracking: null,
+    slot: slotOf(item.parent),
+    depth,
+    children: [],
+    progress: zero(),
+  });
+
+  const featureNode = (feature: { number: number; title: string }, depth: number): FeatureNode => {
+    const children = [
+      ...rows.filter((row) => row.parent?.number === feature.number).map((row) => leaf(row, depth + 1)),
+      ...outside.filter((item) => item.parent === feature.number).map((item) => unseen(item, depth + 1)),
+    ].sort((a, b) => a.number - b.number);
+    return {
+      number: feature.number,
+      title: feature.title,
+      issueType: 'Feature',
+      state: 'open',
+      workItemState: 'Active',
+      container: true,
+      known: 'relation',
+      watch: null,
+      outcome: null,
+      costUsd: null,
+      changedAt: null,
+      tracking: null,
+      slot: slotOf(feature.number),
+      depth,
+      children,
+      progress: children.map(one).reduce(fold, zero()),
+    };
+  };
+
+  const under = new Set(epics.flatMap((epic) => epic.over));
+  const roots: FeatureNode[] = [
+    ...epics.map((epic) => {
+      const children = epic.over.flatMap((number) => {
+        const feature = features.find((f) => f.number === number);
+        return feature === undefined ? [] : [featureNode(feature, 1)];
+      });
+      return {
+        number: epic.number,
+        title: epic.title,
+        issueType: 'Epic',
+        state: 'open' as const,
+        workItemState: 'Active',
+        container: true,
+        known: 'relation' as const,
+        watch: null,
+        outcome: null,
+        costUsd: null,
+        changedAt: null,
+        tracking: null,
+        slot: null,
+        depth: 0,
+        children,
+        // A container contributes its subtree and never itself: it is a statement of
+        // intent its children deliver, so counting it beside them would inflate every
+        // epic by one item nobody can work.
+        progress: children.map((child) => child.progress).reduce(fold, zero()),
+      };
+    }),
+    ...features.filter((f) => !under.has(f.number)).map((feature) => featureNode(feature, 0)),
+  ];
+
+  const orphans = rows.filter((row) => row.parent === null).map((row) => leaf(row, 0));
+  const totals = [...roots.map((root) => root.progress), ...orphans.map(one)].reduce(fold, zero());
+  return { tracked: true, roots, orphans, totals, containerTypes: ['Feature', 'Epic'], refUrls: {} };
+}
+
 export const demoApi = {
   getState: () => getServer().getState(),
   getTranscript: (agentId: string) => getServer().getTranscript(agentId),
@@ -3881,6 +4037,9 @@ export const demoApi = {
     order: string;
     cursor: string | null;
   }) => Promise.resolve(demoTickets(query)),
+  // The feature tree, folded from the same mirror the tickets list reads — so the
+  // two tabs cannot disagree about how far along one feature is.
+  getFeatures: () => Promise.resolve(demoFeatures()),
   // The demo's one written-up goal, so the Manifest station has something to open.
   // Everything else answers null, which is the same thing the real route says for a
   // goal nobody wrote up — silence, not an error.
@@ -4180,14 +4339,27 @@ export function connectDemoWs(onEvent: (ev: unknown) => void, onStatus?: (connec
  */
 const DEMO_STATE_MOVES = new Map<number, string>();
 
-function demoTickets(query: {
-  watch: string;
-  tracking: string;
-  state: string;
-  feature: string | null;
-  order: string;
-  cursor: string | null;
-}): TicketsPayload {
+/**
+ * The demo's whole mirror, and the board it hangs off — one fixture, read by the
+ * tickets list and by the feature tree.
+ *
+ * Shared rather than authored twice for the reason the real route quotes
+ * `buildSpendGoals` instead of re-rolling it: two fixtures of one board is two
+ * answers to "how far along is Payments", and a demo that disagreed with itself
+ * across two tabs would teach a visitor to trust neither.
+ */
+function demoMirror(): {
+  rows: TicketRow[];
+  features: { number: number; title: string }[];
+  /** The container above a container — the demo's one Epic, so the tree has a second level. */
+  epics: { number: number; title: string; over: number[] }[];
+  /**
+   * Items the tracker hangs under a feature that this fleet's assignment filter has
+   * never returned. Authored deliberately: they are the Features page's fifth
+   * segment, and a demo without them shows a bar that can only ever be honest.
+   */
+  outside: { number: number; title: string; parent: number; state: 'open' | 'closed'; issueType: string }[];
+} {
   const now = Date.now();
   const iso = (hoursAgo: number) => new Date(now - hoursAgo * 3_600_000).toISOString();
   // Three features and a hue apiece, so the legend, the grouping and the orphan
@@ -4240,7 +4412,42 @@ function demoTickets(query: {
     featureSlot: featureSlotOf(featureOf(seed.number)),
   }));
 
-  const all = [...worked, ...untouched].sort((a, b) => b.number - a.number);
+  return {
+    rows: [...worked, ...untouched].sort((a, b) => b.number - a.number),
+    features,
+    // One Epic over two of the three features, so the demo's tree is a tree rather
+    // than a list of headings — the level an operator on the Agile template actually
+    // plans at, and the one a single-level fixture would leave undrawn.
+    epics: [{ number: 890, title: 'Checkout people finish', over: [900, 901] }],
+    outside: [
+      {
+        number: 921,
+        title: 'Card vault rotation (platform team)',
+        parent: 900,
+        state: 'open',
+        issueType: 'User Story',
+      },
+      { number: 922, title: 'PSD2 step-up copy review', parent: 900, state: 'closed', issueType: 'Task' },
+      { number: 923, title: 'Welcome email templates (growth)', parent: 901, state: 'open', issueType: 'Task' },
+    ],
+  };
+}
+
+function demoTickets(query: {
+  watch: string;
+  tracking: string;
+  state: string;
+  feature: string | null;
+  order: string;
+  cursor: string | null;
+}): TicketsPayload {
+  const now = Date.now();
+  const iso = (hoursAgo: number) => new Date(now - hoursAgo * 3_600_000).toISOString();
+  const { rows: all, features } = demoMirror();
+  // The demo's stand-in for the store's least-used-first assignment: the position
+  // in the list, which for three features is the same answer.
+  const featureSlotOf = (feature: { number: number } | null) =>
+    feature === null ? null : features.findIndex((f) => f.number === feature.number);
   const matching = all.filter(
     (row) =>
       (query.tracking === 'any' || row.tracking === query.tracking) &&

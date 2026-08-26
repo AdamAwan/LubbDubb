@@ -395,7 +395,7 @@ once.
 
 | Parameter                            | Carries                                                                                                                                                                                                                  |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `tab`                                | `tickets` / `knowledge` / `insights`; the overview is the absent value. `backlog` and `work` are aliases for `tickets`, and `?panel=knowledge` for `knowledge`, so links to a deleted tab or a promoted panel still land |
+| `tab`                                | `tickets` / `features` / `knowledge` / `insights`; the overview is the absent value. `backlog` and `work` are aliases for `tickets`, and `?panel=knowledge` for `knowledge`, so links to a deleted tab or a promoted panel still land |
 | `goal`                               | the open goal page, as `issue:<n>`                                                                                                                                                                                       |
 | `panel`                              | `knowledge` / `faults` / `launch` / `build` / `record` / `localRun` / `setup` / `pets`                                                                                                                                   |
 | `ask`                                | the queue row a `{ ask }` panel is showing                                                                                                                                                                               |
@@ -2010,6 +2010,71 @@ No un-dismiss, no re-open, no verdict toggle. The two controls above are the who
 surface writes, and everything else on a row is a reading. The scroll offset is deliberately **not** on
 `Place` either, unlike every filter: a URL that restored an offset into a list that has since grown
 lands somewhere else entirely, so Back returns to the filter and the list re-reads its first page.
+
+## The features page
+
+Where [the tickets tab](#the-tickets-tab) is the list of what the harness has been _asked_ to do, this
+is the tree above it: the tracker's own hierarchy, features as headings, everything hanging under them,
+and how far along each branch is. It is drawn from `GET /api/features`
+([16](16-http-api.md#get-apifeatures)) and fetched when the page opens, never polled.
+
+**Why it is not a view on the tickets tab.** That tab already groups its rows under a feature heading,
+and the two questions look adjacent right up until you try to answer the second one on the first one's
+shape. A rollup spans levels the list flattens to one — an epic over its features over their stories;
+it counts items the assignment filter never returned, which are not rows the list has; and it cannot be
+paged, because a tree cut off at forty rows draws a branch as finished while the rest of it sits on the
+page nobody scrolled to. So the tickets tab stays the surface triage happens on, and this is the one an
+operator opens to ask whether the goal above the tickets is moving.
+
+### The tab is drawn where the tracker has a hierarchy
+
+`config.tracksHierarchy` on the snapshot, appended to the nav the way the vivarium's tab is: a tab that
+opens on a page explaining a concept the provider does not have is worse than no tab. The flag is a
+fact about the **reading** rather than about the provider's name — an `Issue.parent` that is absent is
+a link nothing resolved, which is every row a flat tracker ever returns
+([03](03-world-model.md)). GitHub Issues therefore answer false today, and the day a provider resolves
+their sub-issues onto `parent` / `children` the page fills in by itself with nothing here to change.
+Asking the connector instead would answer a different question: `canPlaceWorkItem` is about _writing_ a
+parent, and reporting one and setting one are separate capabilities.
+
+A stale or hand-typed `?tab=features` still lands, and says which fact it is answering rather than
+drawing an empty tree — a page that rendered nothing there reads as one that failed to load.
+
+### The bar, and the segment that is the point of it
+
+Each heading carries a rollup over everything beneath it, as one bar in five segments: `done`,
+`working`, `queued`, `waiting` and **`outside`**. The first four are the harness's own readings, in the
+order work moves through them. The fifth is why the bar is not four: `outside` is an item the tracker
+hangs under the feature that the assignment filter has never returned — another team's story, or one
+nobody assigned. Widths are percentages of the whole subtree with it included, because folding it out
+draws a full bar over a feature that is half somebody else's board, and _how much of this feature is
+done_ is exactly the number a delivery conversation turns on.
+
+Two points of precedence are worth stating because the obvious reading is wrong at both. **Closed is
+done**, whatever else is true of the item: an item closed while an agent was on it is finished work,
+not work in flight. And `outside` is read only after that, so an item nobody here owns that has since
+closed still counts as delivered rather than as unknown.
+
+A container is a heading and never a row, and is not in its own rollup — the same reading the pickup
+gate makes when it refuses to dispatch at one ([06](06-issue-pickup.md)). An epic over two features
+with eleven stories between them reads `5/11`, not `5/13`.
+
+**A node the harness has never held is drawn and not linked.** It carries `not in your list`, no watch
+word — null, because nothing told us its labels and `unwatched` would be a claim — and no goal page,
+since there is nothing behind one. The reference beside it is the whole way in, and it goes to the
+tracker.
+
+### Orphans, and the folds
+
+Items the tracker says hang off nothing get their own section under the tree rather than a heading
+beside the features, because the page's whole subject is what they are missing. Only a _resolved_
+absence is there: an unreadable link is neither a feature nor "no feature"
+(`src/issueRelations.ts`).
+
+Folds are the tickets tab's own `collapsed` field on `Place`, by issue number — one fact ("this feature
+is folded away"), so a second field for it would be two places disagreeing about one answer. Nothing on
+the page writes anything: every control is a way to somewhere else, and the one write a feature invites
+— watching it, which cascades to its children — already lives on the tickets row and the goal page.
 
 ## The top bar and the panels
 

@@ -594,6 +594,14 @@ export function buildStateSnapshot(
       // that decides is the one the route asks. `setWorkItemState` throws when
       // nothing implements it, so there is no other way to *offer* the operation.
       canSetWorkItemState: connector.canSetWorkItemState(),
+      // Whether the tracker reports a hierarchy at all — the Features page's gate,
+      // and read off the world rather than off the provider's name for the reason
+      // `Issue.parent` has three values rather than two: an *absent* link is one no
+      // integration resolved, which is what a flat tracker produces for every row it
+      // ever returns. Asking the connector instead would answer a different question
+      // — `canPlaceWorkItem` is about *writing* a parent, and a provider could
+      // report one it cannot set. → docs/spec/17-cockpit.md#the-features-page
+      tracksHierarchy: world.issues.some((issue) => issue.parent !== undefined),
       // The nodes an item can be filed under, capped by the same rule the assayer's
       // offer is capped by — one list, so the operator and the agent are choosing
       // between the same things.

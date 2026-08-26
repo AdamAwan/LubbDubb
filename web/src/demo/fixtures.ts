@@ -322,6 +322,10 @@ export function buildDemoState(): DemoSeed {
       // The demo drags for real: a board that looks draggable and is not would teach
       // a visitor the wrong thing about the product.
       canSetWorkItemState: true,
+      // The demo's tracker is an Azure-shaped one — its items carry a type and hang
+      // off features — so the Features tab is drawn. A demo that hid it would hide
+      // the page on the only tracker shape that has one.
+      tracksHierarchy: true,
       stateRules: { pickup: ['Ready', 'Active'], inProgress: 'Active', inReview: null, returnsTo: 'Ready' },
       // Cheapest first, as `rank` orders them — the demo's profile controls draw
       // this list in this order.

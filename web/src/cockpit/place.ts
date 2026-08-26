@@ -178,7 +178,7 @@ export interface Place {
   ticketColumns: string[];
 }
 
-const TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'knowledge', 'insights', 'pets', 'config'];
+const TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'features', 'knowledge', 'insights', 'pets', 'config'];
 const INSIGHTS_VIEWS: readonly InsightsView[] = ['economics', 'reliability', 'causes', 'trend', 'mix', 'mcp', 'pool'];
 /**
  * The windows the time bar offers, and what a bare Insights URL means.
