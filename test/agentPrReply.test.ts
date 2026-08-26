@@ -41,12 +41,25 @@ function testConfig(overrides: Record<string, unknown> = {}) {
 }
 
 /** What actually went out, so "nothing was sent" is observable. */
-function countingSink(): ActionSink & { replies: { prNumber: number; commentId: string | null; body: string }[] } {
+function countingSink(
+  script: { canResolve?: boolean; resolveThrows?: string; noSuchThread?: boolean } = {},
+): ActionSink & {
+  replies: { prNumber: number; commentId: string | null; body: string }[];
+  resolved: { prNumber: number; commentId: string }[];
+} {
   const replies: { prNumber: number; commentId: string | null; body: string }[] = [];
+  const resolved: { prNumber: number; commentId: string }[] = [];
   const ok = async () => ({ ok: true as const });
   return {
     replies,
+    resolved,
     canCloseIssue: () => false,
+    canResolvePrThread: () => script.canResolve !== false,
+    async resolvePrThread({ prNumber, commentId }) {
+      if (script.resolveThrows) throw new Error(script.resolveThrows);
+      resolved.push({ prNumber, commentId });
+      return { ok: script.noSuchThread !== true, ref: commentId };
+    },
     closeIssue: (): never => {
       throw new Error('closeIssue is not scripted in this test');
     },
@@ -245,4 +258,125 @@ test('the fence reads the pull request out of the origin', () => {
   // another agent is working.
   assert.equal(replyOrigin('pr:42:ci').ok, false);
   assert.equal(replyOrigin(null).ok, false);
+});
+
+test('resolved: true closes the thread as the reply goes out', async () => {
+  const sink = countingSink();
+  const system = build(sink);
+  const agent = reviewAgent(system);
+
+  const res = await callReply(system, agent, {
+    body: 'Fixed in the latest commit.',
+    thread: 'c-1',
+    resolved: true,
+  });
+  assert.equal(res.isError, false);
+  assert.equal(sink.replies.length, 1);
+  assert.deepEqual(
+    sink.resolved,
+    [{ prNumber: 42, commentId: 'c-1' }],
+    'the harness resolves what the agent says it dealt with',
+  );
+  // The agent is told what it asked for; whether it has *happened* is the
+  // executor's account, which rides in `note`.
+  assert.match(res.text, /"resolveRequested": true/);
+  const decision = system.store.listDecisions().find((d) => d.action.type === 'reply_on_pr');
+  assert.match(decision!.detail, /Resolved thread c-1/);
+  system.store.close();
+});
+
+test('without the flag the thread is left open for the reviewer', async () => {
+  const sink = countingSink();
+  const system = build(sink);
+  const agent = reviewAgent(system);
+
+  await callReply(system, agent, {
+    body: 'Keeping the current approach — the cache is keyed on the branch.',
+    thread: 'c-1',
+  });
+  assert.equal(sink.replies.length, 1);
+  assert.equal(sink.resolved.length, 0, 'a defence is the reviewer’s to accept, so the thread stays theirs to close');
+  system.store.close();
+});
+
+test('the resolution rides on the act, so it waits for the operator with the reply', async () => {
+  const sink = countingSink();
+  const system = build(sink, { sendPrRepliesWithoutApproval: false });
+  const agent = reviewAgent(system);
+
+  await callReply(system, agent, { body: 'Done — extracted the helper.', thread: 'c-1', resolved: true });
+  assert.equal(sink.resolved.length, 0, 'nothing is resolved before the reply it justifies is authorized');
+
+  const [proposal] = system.store.listProposals();
+  await system.proposals.accept(proposal!.id);
+  assert.equal(sink.replies.length, 1);
+  assert.deepEqual(
+    sink.resolved,
+    [{ prNumber: 42, commentId: 'c-1' }],
+    'one authority covers the reply and the thread it is about',
+  );
+  system.store.close();
+});
+
+test('resolved: true with no thread resolves nothing — there is no thread to close', async () => {
+  const sink = countingSink();
+  const system = build(sink);
+  const agent = reviewAgent(system);
+
+  const res = await callReply(system, agent, { body: 'Answered on the pull request itself.', resolved: true });
+  assert.equal(res.isError, false);
+  assert.equal(sink.resolved.length, 0);
+  assert.match(res.text, /"resolveRequested": false/, 'and the agent is not told a thread was closed');
+  system.store.close();
+});
+
+test('a failed resolve never costs the reply: it is not escalated and not re-proposed', async () => {
+  // The sharp edge. A throw read as "the send failed" would escalate a reply that
+  // is already in the thread, and re-propose it once the settle window lapsed —
+  // the reviewer reads the same answer twice because a thread would not close.
+  const sink = countingSink({ resolveThrows: 'graphql unavailable' });
+  const system = build(sink);
+  const agent = reviewAgent(system);
+
+  const res = await callReply(system, agent, { body: 'Fixed.', thread: 'c-1', resolved: true });
+  assert.equal(res.isError, false);
+  assert.equal(sink.replies.length, 1, 'the reply went out');
+  assert.equal(system.store.listOpenEscalations().length, 0, 'and nothing asks the operator to send it again');
+
+  const decision = system.store.listDecisions().find((d) => d.action.type === 'reply_on_pr');
+  assert.equal(decision!.outcome, 'executed');
+  assert.match(decision!.detail, /still open/, 'the line says the thread was left open');
+  const [proposal] = system.store.listProposals();
+  assert.equal(proposal!.status, 'accepted');
+  system.store.close();
+});
+
+test('a provider that cannot resolve says so rather than reporting a closed thread', async () => {
+  const sink = countingSink({ canResolve: false });
+  const system = build(sink);
+  const agent = reviewAgent(system);
+
+  await callReply(system, agent, { body: 'Fixed.', thread: 'c-1', resolved: true });
+  assert.equal(sink.replies.length, 1);
+  const decision = system.store.listDecisions().find((d) => d.action.type === 'reply_on_pr');
+  assert.match(decision!.detail, /cannot resolve one/);
+  system.store.close();
+});
+
+test('a thread the provider no longer carries is reported, not guessed at', async () => {
+  const sink = countingSink({ noSuchThread: true });
+  const system = build(sink);
+  const agent = reviewAgent(system);
+
+  await callReply(system, agent, { body: 'Fixed.', thread: 'c-9', resolved: true });
+  const decision = system.store.listDecisions().find((d) => d.action.type === 'reply_on_pr');
+  assert.match(decision!.detail, /carries no thread c-9/);
+  system.store.close();
+});
+
+test('the review prompt teaches the resolved flag, and when not to set it', () => {
+  const note = replyToolNote();
+  assert.match(note, /resolved: true/);
+  // Both halves: an agent told only to set it resolves the threads it is arguing with.
+  assert.match(note, /defending an approach/);
 });

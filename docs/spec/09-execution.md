@@ -292,11 +292,39 @@ the fields the effect is about to be handed rather than trusting a round trip th
 | Act           | Effect                                                                                                  |
 | ------------- | ------------------------------------------------------------------------------------------------------- |
 | `merge`       | `sink.mergePr({prNumber, method})`                                                                      |
-| `reply_draft` | `sink.postPrReply({prNumber, commentId, body})`                                                         |
+| `reply_draft` | `sink.postPrReply({prNumber, commentId, body})`, then `sink.resolvePrThread(…)` when the act says to |
 | `plan`        | `releasePlan(store, planId, originRef)` — publishes nothing; see [08](08-planning.md#the-approval-gate) |
 
 `plan` is checked **before** the PR number, or an approved decomposition audits as "names no PR
 number". A malformed payload is reported, never guessed at.
+
+### Resolving the thread the reply answers
+
+A `reply_on_pr` carries `resolve`, and it comes from the agent that wrote the reply
+(`reply_to_review`'s `resolved`, [11](11-mcp-tools.md#reply_to_review)). Where it is set and the act
+names a thread, `runAuthorized` resolves that thread through `ActionSink.resolvePrThread` immediately
+after the reply lands, and says which happened as a clause on the reply's **own** audit line: one act
+was authorized, and this is the rest of it. Absence — on a row written before the flag existed, or on
+a reply the agent left open — is "leave the thread as the reviewer left it".
+
+It rides on the reply act rather than being an act of its own because the reply is what the
+resolution claims to justify: the operator approving the answer approves closing the thread the
+answer is about, which is one question rather than two. A thread resolved with no reply in it is a
+thread a reviewer has to reconstruct from the diff.
+
+**A failed resolve is swallowed, and that is load-bearing.** A throw would land in `runAuthorized`'s
+catch, which reads every failure as "the send failed" — so a reply already posted and visible in the
+thread would be escalated for the operator to send by hand, and re-proposed once its settle window
+lapsed. The reviewer would read the same answer twice because the harness could not close a thread.
+An unresolved thread is the safe direction instead: it is recorded through `errors`, said in the
+decision line, and rule `pr-review-comment` dispatches for the thread again, which is visible and
+cheap. A provider that cannot resolve at all (`canResolvePrThread()` false) is a shape rather than a
+fault and is likewise stated in the line.
+
+**This is the only way a thread gets resolved.** An agent has no credential of its own to click with,
+and the prompt tells it not to reach for the operator's — so before the flag existed, routing replies
+through the harness meant threads the fleet genuinely dealt with stayed open in front of the
+reviewer, and the fleet came back to them.
 
 `authorityOf(proposal, pulseCycleId)` decides the whole decider → cycle id → wording chain at once,
 because the three are a chain and not three facts:

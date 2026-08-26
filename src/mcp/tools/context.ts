@@ -230,6 +230,7 @@ interface PrReplyDesk {
     prNumber: number;
     commentId: string | null;
     draft: string;
+    resolve: boolean;
     reason: string;
   }): Promise<{ outcome: DecisionOutcome; detail: string }>;
 }

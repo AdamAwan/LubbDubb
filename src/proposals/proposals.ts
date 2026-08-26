@@ -458,7 +458,7 @@ interface Authority {
  */
 type ProposedAct =
   | { kind: 'merge'; prNumber: number; method: 'merge' | 'squash' | 'rebase' }
-  | { kind: 'reply_draft'; prNumber: number; commentId: string | null; body: string }
+  | { kind: 'reply_draft'; prNumber: number; commentId: string | null; body: string; resolve: boolean }
   | { kind: 'plan'; planId: string; originRef: string }
   | {
       kind: 'shortfall';
@@ -535,6 +535,10 @@ export function readProposedAct(proposal: Proposal): { ok: true; act: ProposedAc
       prNumber,
       commentId: typeof commentId === 'string' ? commentId : null,
       body,
+      // Absent on every row written before the flag existed, and absence is
+      // "leave the thread as the reviewer left it" — the safe direction, and the
+      // behaviour those rows were proposed under.
+      resolve: action.resolve === true,
     },
   };
 }

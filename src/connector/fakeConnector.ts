@@ -13,6 +13,7 @@ import type {
   PrLabelInput,
   PrMergeInput,
   PrReplyInput,
+  PrThreadResolveInput,
   PrTitleInput,
   SendResult,
   WorkItemLinkInput,
@@ -56,6 +57,14 @@ export class FakeConnector implements Connector, ActionSink {
 
   postPrReply(input: PrReplyInput): Promise<SendResult> {
     return this.composite.postPrReply(input);
+  }
+
+  canResolvePrThread(): boolean {
+    return this.composite.canResolvePrThread();
+  }
+
+  resolvePrThread(input: PrThreadResolveInput): Promise<SendResult> {
+    return this.composite.resolvePrThread(input);
   }
 
   mergePr(input: PrMergeInput): Promise<SendResult> {
