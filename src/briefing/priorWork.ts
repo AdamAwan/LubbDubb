@@ -3,7 +3,7 @@ import { liveParts } from '../plans/parts.js';
 import type {
   GoalFile,
   GoalNeighbour,
-  IssueAssay,
+  IssueAppraisal,
   IssueConclusion,
   IssueDelivery,
   IssueShortfall,
@@ -17,7 +17,7 @@ import type {
  *
  * ## The gap
  *
- * Every stage of a goal is a fresh agent with no memory of the last. The assayer
+ * Every stage of a goal is a fresh agent with no memory of the last. The appraiser
  * read the ticket against the repository; the planner read the repository and
  * argued for a shape; a part agent hit a constraint and wrote it on the pad — and
  * the agent dispatched after them starts from a template holding a title, a body
@@ -41,7 +41,7 @@ import type {
  *   repository, and rule `issue-pickup`'s prompt is the issue title and body;
  * - **a part's `rationale` / `acceptance`** — declared by the planner, stored, and
  *   rendered nowhere at all;
- * - **the verdicts' prose** — an assay's summary, a conclusion's note, an
+ * - **the verdicts' prose** — an appraisal's summary, a conclusion's note, an
  *   assessment's finding either way;
  * - **the paths the goal has been edited in**, the one entry here that is not prose
  *   an agent wrote. It is the cheapest orientation there is — it turns a grep phase
@@ -149,7 +149,7 @@ export interface PriorWorkInput {
   /** The plan for this goal, whatever its verdict — a `single` plan has a write-up too. */
   plan: Plan | null;
   parts: PlanPart[];
-  assay: IssueAssay | null;
+  appraisal: IssueAppraisal | null;
   /**
    * Null when the outstanding-work note already carries it: `outstandingForOrigin`
    * owns an agent's `more_work` declaration on an exact origin match, and one fact
@@ -389,8 +389,8 @@ function neighboursSection(neighbours: GoalNeighbour[]): string {
 /** The prose behind the verdicts standing on this goal — never the verdicts as a gate reads them. */
 function verdictSection(input: PriorWorkInput): string {
   const lines: string[] = [];
-  if (input.assay) {
-    lines.push(`- **Assayed \`${input.assay.verdict}\`** by ${input.assay.by}: ${input.assay.summary}`);
+  if (input.appraisal) {
+    lines.push(`- **Appraised \`${input.appraisal.verdict}\`** by ${input.appraisal.by}: ${input.appraisal.summary}`);
   }
   if (input.conclusion) {
     lines.push(

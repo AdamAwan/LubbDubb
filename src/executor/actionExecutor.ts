@@ -1104,20 +1104,20 @@ export class ActionExecutor {
  */
 /**
  * The images attached to the goal being dispatched for — or null when there are
- * none, which is every dispatch that did not come from a blueprint carrying one.
+ * none, which is every dispatch that did not come from a brief carrying one.
  *
  * In the executor, and for the branch gate's reason: every dispatch passes
  * through here whatever composed it.
  *
- * **The lookup is by goal, not by exact origin** (issue #249). Once a blueprint
+ * **The lookup is by goal, not by exact origin** (issue #249). Once a brief
  * has been filed as a ticket its images are keyed `issue:<n>`, while the agents
- * that go on to work it are dispatched for `issue:<n>:plan`, `:assay`, `:assess`,
+ * that go on to work it are dispatched for `issue:<n>:plan`, `:appraisal`, `:assess`,
  * `:part:<slug>` and `:retro`. An exact match would put the screenshot in front of
  * the filing agent alone — the one agent that writes no code — so the whole point
  * of the ticket surviving would be lost. `padOriginFor` is the harness's own
  * spelling of "which goal is this origin inside", already used to decide who
  * shares a scratchpad, so the answer here and there cannot drift; an origin
- * outside any issue subtree (a `job:<id>` blueprint that dispatched directly)
+ * outside any issue subtree (a `job:<id>` brief that dispatched directly)
  * falls back to itself, which is an exact match.
  *
  * The scoping is deliberately unconditional within a goal: a part agent working
@@ -1163,7 +1163,7 @@ function knowledgeFor(
  *
  * **Scoped by `padOriginFor`**, the attachments' rule for the attachments' reason:
  * an instruction is about the *goal*, and the agents that go on to work it are
- * dispatched for `issue:<n>:plan`, `:assay`, `:assess` and `:part:<slug>`. An
+ * dispatched for `issue:<n>:plan`, `:appraisal`, `:assess` and `:part:<slug>`. An
  * exact match would put "change the button to primary" in front of nobody at all
  * on a decomposed goal — the one shape where it matters most. Everything outside
  * a goal's subtree (a PR concern, a job) resolves to null, which is
@@ -1201,7 +1201,7 @@ function outstandingForOrigin(originRef: string | null | undefined, store: Store
  * **Scoped by `padOriginFor`, not by a fresh predicate.** That is already the
  * harness's answer to "which goal is this agent working", written for the pad and
  * asked here for the same population: the `issue:<n>` root plus its `:plan`,
- * `:assay`, `:assess` and `:part:<slug>` arms. Everything else — a PR concern, a
+ * `:appraisal`, `:assess` and `:part:<slug>` arms. Everything else — a PR concern, a
  * job, a filing — resolves to null and is handed nothing, which is
  * `outstandingForOrigin`'s widening rule at the level of a whole goal: an agent
  * fixing CI on `pr:42` has no use for a planner's write-up about `issue:12` and
@@ -1236,7 +1236,7 @@ function priorWorkFor(originRef: string | null | undefined, store: Store, outsta
   const briefing = priorWorkBriefing({
     plan,
     parts: plan ? store.listPlanParts(plan.id) : [],
-    assay: store.getAssay(issueOriginRef),
+    appraisal: store.getAppraisal(issueOriginRef),
     conclusion: outstandingShown ? null : store.getIssueConclusion(issueOriginRef),
     delivery: store.getDelivery(issueOriginRef),
     shortfall: store.getShortfall(issueOriginRef),

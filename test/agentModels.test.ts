@@ -52,7 +52,7 @@ test('a rule mapped explicitly to the default profile resolves the same as falli
     effort: 'medium',
     source: 'rule',
   });
-  assert.deepEqual(resolveAgentProfile(models, 'issue-assay'), {
+  assert.deepEqual(resolveAgentProfile(models, 'issue-appraisal'), {
     name: 'standard',
     model: 'sonnet',
     effort: 'medium',

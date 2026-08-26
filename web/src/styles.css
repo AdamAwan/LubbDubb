@@ -497,7 +497,7 @@ select:disabled {
   flex: 1;
 }
 
-/* Launch-a-job panel, opened from the blueprint desk. */
+/* Launch-a-job panel, opened from the brief desk. */
 .launch {
   display: flex;
   flex-direction: column;
@@ -518,7 +518,7 @@ select:disabled {
   align-items: center;
   gap: 6px;
 }
-.launch-bp {
+.launch-mark {
   flex: none;
 }
 .launch-form {
@@ -531,7 +531,7 @@ select:disabled {
   width: 100%;
 }
 /* Attached images (issue #249): a strip of thumbnails between the prompt and the
-   controls, so what is going with the blueprint is visible without leaving the
+   controls, so what is going with the brief is visible without leaving the
    composer. The thumbnail is the operator's own bytes scaled by CSS — nothing
    re-encodes or resizes them anywhere in this feature. */
 .launch-attachments {
@@ -654,8 +654,8 @@ select:disabled {
 
 /* Recurrences. The panel reuses the composer's own rules — it is the same act with
    a `when` attached, and a second set of boxes that looked *almost* like the
-   blueprint composer would read as a different kind of thing. What is added here is
-   only what a schedule has and a blueprint does not: an expression, and a way to
+   brief composer would read as a different kind of thing. What is added here is
+   only what a schedule has and a brief does not: an expression, and a way to
    say the expression is off. */
 .sched {
   border-bottom: 1px solid var(--border);
@@ -701,8 +701,8 @@ select:disabled {
   opacity: 0.55;
 }
 
-/* The strip of images attached to a piece of work — a queued blueprint, or the
-   issue that blueprint became (issue #249). One rule set for both, because it is
+/* The strip of images attached to a piece of work — a queued brief, or the
+   issue that brief became (issue #249). One rule set for both, because it is
    one component drawn in two places and the operator is meant to recognise the
    same images across the tracker fork.
 
@@ -4840,7 +4840,7 @@ select:disabled {
   font-style: normal;
 }
 
-/* The mark on a row the assay is holding. The call-out above the list is gone —
+/* The mark on a row the appraisal is holding. The call-out above the list is gone —
    the hold is raised on the queue rail, where every other ask waiting on a person
    already is — so this is what is left of intake here: which rows are held, and
    nothing that decides for them. */

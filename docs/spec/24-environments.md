@@ -245,7 +245,7 @@ by hand while a goal is held still discharges a close-out filed before the gate 
 `ActionSink.upsertIssueComment`, mechanical bookkeeping in `setWorkItemState`'s sense and deliberately
 not auto-send gated: nothing is deciding _whether_ the work arrived.
 
-**One comment per arrival, not one living comment edited in place.** The assay's comment is a standing
+**One comment per arrival, not one living comment edited in place.** The appraisal's comment is a standing
 state and is edited ([06](06-issue-pickup.md)); this is a thing that happened at a time. Four short
 comments are the timeline a reader wants from "where did this get to", and an edited comment would
 silently rewrite the record of the last environment each time.

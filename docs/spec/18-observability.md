@@ -323,7 +323,7 @@ hold: **where did it go**. It is served by `GET /api/spend` ([16](16-http-api.md
 and drawn by the Insights page's Economics and Work mix tabs ([17](17-cockpit.md#economics)). Three
 splits of one pot of money, plus the coverage caveat:
 
-- **By phase** — `deliberation` (`:plan`, `:assay`), `build` (the pickup root and every `:part:`),
+- **By phase** — `deliberation` (`:plan`, `:appraisal`), `build` (the pickup root and every `:part:`),
   `ci` (`pr:<n>:ci`, `pr:<n>:ci-gate`), `landing` (every other `pr:*`), `evidence` (`:assess`,
   `:retro`), `local` (a local run), `job` (`job:*`) and `other`. A partition: they sum to the fleet
   total. The issue-subtree phases are `issueOriginRole`'s vocabulary rather than a second one, so **a

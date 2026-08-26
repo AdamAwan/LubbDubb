@@ -2,7 +2,7 @@ import { MCP_TOOL_NAMES, type McpToolName } from './names.js';
 import type { McpTool } from './protocol.js';
 import { retiredTools } from './retiredTools.js';
 import { buildToolContext, type McpIdentity, type McpToolDeps, type ToolFactory } from './tools/context.js';
-import { assayIssue } from './tools/assayIssue.js';
+import { appraiseIssue } from './tools/appraiseIssue.js';
 import { assessIssue } from './tools/assessIssue.js';
 import { concludePart } from './tools/concludePart.js';
 import { concludeWork } from './tools/concludeWork.js';
@@ -51,7 +51,7 @@ const TOOLS: Record<McpToolName, ToolFactory> = {
   conclude_work: concludeWork,
   assess_issue: assessIssue,
   conclude_part: concludePart,
-  assay_issue: assayIssue,
+  appraise_issue: appraiseIssue,
   scratch_append: scratchAppend,
   scratch_read: scratchRead,
   retro_submit: retroSubmit,

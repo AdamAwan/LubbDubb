@@ -188,7 +188,7 @@ tracker's hierarchy and never writes it, so nothing here links, re-parents or ed
 ### What the agents are told
 
 `relatedWorkNote(issue, containerTypes, candidates)` is **appended** to the rendered prompt of rules
-`issue-assay`, `issue-plan` (and its replan arm) and `issue-pickup` — never interpolated.
+`issue-appraisal`, `issue-plan` (and its replan arm) and `issue-pickup` — never interpolated.
 Appending is the rule every added instruction follows (see
 [05](05-dispatcher.md#prompt-templates)): templates are operator-overridable and `loadPromptTemplates`
 rejects only _unknown_ placeholders, so a `{related}` token would be dropped silently by exactly the
@@ -246,7 +246,7 @@ chip.
 | `cooldown`  | Attempted recently; waiting out the re-dispatch gap.                                 |
 | `escalated` | Attempt cap spent; parked on a human.                                                |
 | `delivered` | Assessed as delivered — parked until the world or the operator says otherwise.       |
-| `assay`     | Its goal is being checked, or was found unworkable — nothing is dispatched for it.   |
+| `appraisal`     | Its goal is being checked, or was found unworkable — nothing is dispatched for it.   |
 | `blocked`   | Eligible, but dispatch is paused or the cap is reached.                              |
 | `eligible`  | Would be picked up next cycle.                                                       |
 
@@ -267,7 +267,7 @@ never moves again on its own — `"plan complete — all N parts merged; close t
 `IssuePickupContext` carries the same inputs rule `issue-pickup` consults: the policy, `DEFAULT_COOLDOWN`, the
 world's `takenAt` as "now", tasks, the last 200 decisions, the **unfiltered** open PR list, the plan
 graph, the planning policy, the standing delivery verdicts with the world transitions that may have
-ended one, the standing goal assays with the same, the assay policy, the harness's runs at each goal
+ended one, the standing goal appraisals with the same, the appraisal policy, the harness's runs at each goal
 (so a closed ticket can be told from a closed run), and the current headroom / paused flag.
 
 The `delivered` arm is asked **after** `has_pr` and `active`, and that order is deliberate: a
@@ -275,12 +275,12 @@ delivered issue that somehow has an open PR is honestly `has_pr` — the PR rule
 with a live agent is honestly `active`. Saying "delivered" in either case would send the operator
 looking in the wrong place.
 
-The `assay` arm is asked **after** the intrinsic gates and **before** the plan funnel, which is
-exactly where rule `issue-assay` sits: an unwatched or state-parked issue is never assayed, so reporting an
-assay for one would promise something that cannot happen, while an assay that refused the goal is
+The `appraisal` arm is asked **after** the intrinsic gates and **before** the plan funnel, which is
+exactly where rule `issue-appraisal` sits: an unwatched or state-parked issue is never appraised, so reporting an
+appraisal for one would promise something that cannot happen, while an appraisal that refused the goal is
 the reason no planner and no pickup agent is coming. It covers both the standing hold (the
-assayer's own words, quoted) and the pending case — `awaiting a goal assay`, `a goal assay is
-running`, `goal assay on cooldown` — because an issue silently waiting a cycle for a verdict looks
+appraiser's own words, quoted) and the pending case — `awaiting a goal appraisal`, `a goal appraisal is
+running`, `goal appraisal on cooldown` — because an issue silently waiting a cycle for a verdict looks
 exactly like an idle fleet.
 
 ## Rule `issue-pickup` in full
@@ -289,7 +289,7 @@ An issue is picked up when:
 
 1. `issue.state === 'open'`, and
 2. `openPrForIssue(issue, allOpenPrs) === null`, and
-3. `isIssuePickupEligible(issue, policy).eligible`, and no standing `unclear` goal assay holds it
+3. `isIssuePickupEligible(issue, policy).eligible`, and no standing `unclear` goal appraisal holds it
    (see below), and
 4. its plan route resolves to `unplanned` — the funnel failed open on it, which is the only arm this rule works — and
 5. no active task holds `issue:<n>`, and
@@ -503,7 +503,7 @@ are cells of the declared matrix in
 [14](14-persistence.md#issue-verdicts-and-the-exclusion-matrix), where "clears nothing" is written
 out rather than being an absent `DELETE`.
 
-## The goal assay (`unclear`)
+## The goal appraisal (`unclear`)
 
 Every gate above asks about **policy**: the watch tag, the workflow state, the cooldown, the attempt
 cap, headroom, `resolvePlanRoute`. None of them asks whether the ticket says anything an agent could
@@ -512,25 +512,25 @@ decomposes the vagueness and an operator is asked to approve the decomposition o
 could answer — and the first signal that anything was wrong is an agent spending its attempt cap and escalating in a
 way that reads as its own failure.
 
-The goal assay (issue #158, `src/intake/assay.ts`, **unconditional**) is
-that missing gate. Rule `issue-assay` dispatches a code agent into a read-only checkout of the default
-branch ([09](09-execution.md#the-read-only-checkout)), leased under `assay/issue/<n>` (origin
-`issue:<n>:assay`), for a watched open issue nothing has been started for, and the agent casts a
-verdict with the `assay_issue` tool. The checkout is the default branch because the question is
+The goal appraisal (issue #158, `src/intake/appraisal.ts`, **unconditional**) is
+that missing gate. Rule `issue-appraisal` dispatches a code agent into a read-only checkout of the default
+branch ([09](09-execution.md#the-read-only-checkout)), leased under `appraisal/issue/<n>` (origin
+`issue:<n>:appraisal`), for a watched open issue nothing has been started for, and the agent casts a
+verdict with the `appraise_issue` tool. The checkout is the default branch because the question is
 whether the goal makes sense against the repository as it stands; it is read-only because answering
 that needs a repository and no branch, and a branch minted for it would never be reaped (#396). It is the mirror of the assessor: `hasPriorWork` is the
 discriminator for both, one taking each arm — nothing started means the goal is all there is to
 judge, something started means the question was answered by someone acting on it. "Started" means an
 origin that could have delivered something, which is the pickup root, a plan's parts, or an
-assessment — never the origins where the harness is merely deliberating (`:plan`, `:assay`). That
+assessment — never the origins where the harness is merely deliberating (`:plan`, `:appraisal`). That
 distinction lives in `issueOriginRole` (`src/issueOrigins.ts`); see
 [`05-dispatcher.md`](05-dispatcher.md) for what counting a planner's own task as work cost.
 
 | Verdict    | Effect                                                                                                                          |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `workable` | None on scheduling, unless its **profile proposal** diverges — see below. Stored so the assay is not asked again for this text. |
+| `workable` | None on scheduling, unless its **profile proposal** diverges — see below. Stored so the appraisal is not asked again for this text. |
 | `unclear`  | Holds the issue out of **both** rule `issue-plan` and rule `issue-pickup` while it stands.                                      |
-| _no row_   | Holds nothing. This is what a crashed, killed or capped assayer leaves behind.                                                  |
+| _no row_   | Holds nothing. This is what a crashed, killed or capped appraiser leaves behind.                                                  |
 
 ### Block or inform, and why blocking is safe
 
@@ -538,13 +538,13 @@ It blocks — informing is what the cockpit already does for every other verdict
 dispatch this exists to prevent happening anyway. Three things stop that becoming the most effective
 way to stop the harness working:
 
-- **Silence holds nothing.** Only an explicit `unclear` gates. An assayer that crashes or spends its
+- **Silence holds nothing.** Only an explicit `unclear` gates. An appraiser that crashes or spends its
   attempt cap writes no row and the issue falls through to ordinary pickup, with **no escalation** —
   the planner's fail-open and the assessor's, for their reason. This is also
   `undeclared`-vs-`more_work` again: the harness acts on what was said, never on silence.
 - **The hold expires on its own** (below).
-- **The operator can clear or override it** (`POST /api/issues/:number/assay`), from either cockpit:
-  a refused goal is raised **on the queue rail** as an `intake` row, which quotes the assayer's sentence
+- **The operator can clear or override it** (`POST /api/issues/:number/appraisal`), from either cockpit:
+  a refused goal is raised **on the queue rail** as an `intake` row, which quotes the appraiser's sentence
   whole and puts the override under it, and is marked with a lamp in the tickets list
   ([17](17-cockpit.md#intake-is-raised-on-the-rail-and-marked-in-the-list)). The rail rather than that
   list alone, because a hold nobody sees is a goal stopped for good, and the tickets tab is a page an
@@ -554,15 +554,15 @@ way to stop the harness working:
 
 ### What ends a hold
 
-`assayHold(assay, issue, ctx)` (pure) is asked in **two places off the one predicate** — rule `issue-pickup`'s
+`appraisalHold(appraisal, issue, ctx)` (pure) is asked in **two places off the one predicate** — rule `issue-pickup`'s
 eligibility filter and `issuePickupStatus` — so the chip can never promise what the next cycle
 refuses. Two arms, plus a clearer that is deliberately not an arm:
 
 1. **The goal text changed.** The row stores `goal_ref`, a NUL-joined fingerprint of the title and
    body the verdict was cast against (`goalFingerprint`), taken from the _task_ rather than re-read
-   from the world — so an edit made while the assayer was running is not silently swallowed. A
+   from the world — so an edit made while the appraiser was running is not silently swallowed. A
    different fingerprint means the verdict describes a ticket that no longer exists: the hold ends
-   and the issue is assayed again. This is #158's fourth requirement, and it could not be an event:
+   and the issue is appraised again. This is #158's fourth requirement, and it could not be an event:
    `worldDiff` emits nothing at all for an edit, and adding one would make the verdict depend on the
    harness having witnessed the moment — so a ticket rewritten while it was down would stay parked
    forever.
@@ -576,12 +576,12 @@ refuses. Two arms, plus a clearer that is deliberately not an arm:
 
 ### The second arm: an unanswered profile proposal (issue #342)
 
-The assayer also proposes which model profile the goal's work should run on, and a proposal that
+The appraiser also proposes which model profile the goal's work should run on, and a proposal that
 **differs from what is already standing** holds the funnel until a human answers it. Same predicate,
 same two call sites, and the same safety argument as above pointed at a second question:
 
 - **An absent proposal holds nothing**, exactly as silence does for the verdict — a crashed, killed or
-  capped assayer, an `unclear` verdict, or a deployment with no `agentModels` all leave the issue to
+  capped appraiser, an `unclear` verdict, or a deployment with no `agentModels` all leave the issue to
   the funnel it would have entered anyway.
 - **Agreement holds nothing and costs no click.** Whether the proposal diverges is decided once, where
   it is written and the tag and config are both in hand, and stored as `profile_answered_at` — so this
@@ -592,7 +592,7 @@ same two call sites, and the same safety argument as above pointed at a second q
   cleared) still end it, and so does the operator answering — one click on either side, through
   `POST /api/issues/:number/profile`, which writes the tag and settles the question in one act.
 
-The hold's string names the proposal — `the goal assay proposes running this on "deep"`. A refused goal
+The hold's string names the proposal — `the goal appraisal proposes running this on "deep"`. A refused goal
 is reported ahead of an unpriced one: there is no point pricing work that is not going to start.
 
 **Because it expires on nothing but the answer, it is also a row in the cockpit's queue rail**
@@ -601,19 +601,19 @@ alone. Every other hold clears itself on something — the world moves, a window
 resumed — and this one does not, so an operator who never opens that goal's page has a goal stopped
 for good with nothing anywhere saying so. The queue is what the harness has for "only you can end
 this".
-→ [02](02-configuration.md#the-gate-the-assayer-proposes-a-human-confirms)
+→ [02](02-configuration.md#the-gate-the-appraiser-proposes-a-human-confirms)
 
 ## Where the goal belongs: the placement proposals (issue #463)
 
-The assayer also says **where the goal belongs on the backlog** — the container work item it should
+The appraiser also says **where the goal belongs on the backlog** — the container work item it should
 hang off, and the area path that puts it on a team's board. Both can be missing on an item the fleet
 then works perfectly, and both fail the same silent way: the work is done, the pull request merges,
 and the ticket is invisible to whoever plans the backlog. Nothing checked either before this.
 
-**It is not a third arm of `assayHold`, and it holds nothing.** That is the whole difference from the
+**It is not a third arm of `appraisalHold`, and it holds nothing.** That is the whole difference from the
 profile proposal above, and it is a difference in kind rather than degree: a wrong profile spends real
 money irreversibly before anybody sees the result, so it must be settled first; a missing parent costs
-nothing at dispatch and is fixable at any point afterwards. So `assayHold` is untouched, and so is
+nothing at dispatch and is fixable at any point afterwards. So `appraisalHold` is untouched, and so is
 `goalFingerprint` — which fingerprints goal **text** on purpose, and a metadata edit is not a goal
 edit.
 
@@ -622,13 +622,13 @@ edit.
 A question is asked while three things hold, all read fresh on every snapshot
 (`placementAsks`, `src/intake/placement.ts`):
 
-1. the assayer proposed a value,
+1. the appraiser proposed a value,
 2. the operator has not answered it, and
 3. the **live** work item still lacks the field.
 
 Condition 3 is what ends it in the ordinary case. An operator who sets the parent by hand in the
 tracker makes the row disappear on the next world read — no timer, no world event to have missed, and
-nothing to remember. It is `assayHold`'s fingerprint arm pointed at a different fact, and a lookup
+nothing to remember. It is `appraisalHold`'s fingerprint arm pointed at a different fact, and a lookup
 against current state for the same reason.
 
 **An Azure work item is never *without* an area path.** An item nobody has classified sits on the
@@ -646,22 +646,22 @@ answer free by blocking, and this one does not.
 
 All three stamp the row, not only the third: the derived read is a pulse behind the write, and a
 question that came back for one refresh would read as a click that did not take. The stamp is scoped
-to the row's `goal_ref`, so a **re-assay against rewritten goal text asks again** — the ticket having
+to the row's `goal_ref`, so a **re-appraisal against rewritten goal text asks again** — the ticket having
 been rewritten is the one signal that the old answer may no longer be the right one.
 
-### What the assayer is offered, and what it may say
+### What the appraiser is offered, and what it may say
 
 The two fields are different in kind, and the tool treats them differently
-(`validateGoalAssay`):
+(`validateGoalAppraisal`):
 
 | Field       | How it is answered                                                                                                                                                                                                                             |
 | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `parent`    | A work item number, **free**. The open containers the harness can see are already appended to the assay prompt (`relatedWorkNote`, `candidateParents`), and they are a suggestion rather than a closed set — a board is narrowed by tag and assignee, so the right container is often not in it. A hallucinated id costs nothing: a human sees the number, linked, before anything is written. |
+| `parent`    | A work item number, **free**. The open containers the harness can see are already appended to the appraisal prompt (`relatedWorkNote`, `candidateParents`), and they are a suggestion rather than a closed set — a board is narrowed by tag and assignee, so the right container is often not in it. A hallucinated id costs nothing: a human sees the number, linked, before anything is written. |
 | `area_path` | **Only from the offered set.** A path has to match a node exactly, and a plausible near-miss — the right team spelled the wrong way, a node renamed last quarter — is refused by the provider and visibly wrong to nobody before then. The harness reads the project's tree and offers it; the answer is stored in the provider's own spelling, since that is the string the write has to carry. |
 
 Both are **optional**, unlike the profile. A profile is required because every dispatch runs on one,
 so an omission is indistinguishable from "the default is right"; most items already have a parent, the
-tool cannot see whether this one does, and an argument required of every assay would make a proposal
+tool cannot see whether this one does, and an argument required of every appraisal would make a proposal
 for an item that needs none the common case. Both are dropped on an `unclear` verdict, for the
 profile's reason: a goal nobody could start from has no work to file anywhere.
 
@@ -674,7 +674,7 @@ complete set.
 
 ### The write is the harness's
 
-The assayer proposes and does nothing else. Applying a proposal is a cockpit click →
+The appraiser proposes and does nothing else. Applying a proposal is a cockpit click →
 `POST /api/issues/:number/parent` or `/area-path` → `ActionSink` → the Azure adapter — the discipline
 `src/tickets/filing.ts` states, and for its reason: an instruction in a prompt is only as reliable as
 one model's memory of one line. There is no `az boards work-item update` anywhere, and no shell command
@@ -686,19 +686,19 @@ only Azure DevOps accepts, so the whole feature is absent on GitHub — the way 
 questions on the sink being **able** to make the write (`canPlaceWorkItem`), so a proposal nobody can
 act on is never drawn.
 
-**Tickets the harness files itself** — a blueprint, a deferred finding, unrecorded work, an
+**Tickets the harness files itself** — a brief, a deferred finding, unrecorded work, an
 operator-raised bug — are out of scope: for those the value belongs on `IssueCreateInput` at creation
 rather than proposed afterwards. When that lands it should call the same two sink methods, since Azure
 cannot create an item already parented (`createIssue` already does that two-write dance for
 `relatedTo`).
 
-**Goals already in flight are never asked.** The assay runs once per goal fingerprint and only on
+**Goals already in flight are never asked.** The appraisal runs once per goal fingerprint and only on
 issues with no prior work, and that trigger is deliberately not widened here: a sweep over goals that
 are already under way is a different rule with its own dispatch cost.
 
-The hold's string names **what happened and nothing else** — `the goal assay could not act on this
-goal`, or `you …` for an operator's own verdict. The assayer's words and the time it decided are not
-folded into it: this is one reason among several on a row that already carries the whole `IssueAssay`,
+The hold's string names **what happened and nothing else** — `the goal appraisal could not act on this
+goal`, or `you …` for an operator's own verdict. The appraiser's words and the time it decided are not
+folded into it: this is one reason among several on a row that already carries the whole `IssueAppraisal`,
 so a caller that wants the quote reads it there. Folding them in made the longest string the cockpit
 renders — a paragraph and a raw ISO timestamp inside a chip built to be scanned. The World panel puts
 the summary and a relative time in that chip's `title` instead.
@@ -710,7 +710,7 @@ answer has not changed, at the price of an agent each time.
 ### The comment on the ticket
 
 An `unclear` verdict is also asked as a question **on the item itself** — one living comment,
-written through `IssueCommentCapable.upsertIssueComment` and edited in place, by `AssayDesk` on the
+written through `IssueCommentCapable.upsertIssueComment` and edited in place, by `AppraisalDesk` on the
 pulse beside the plan reconciler (issue #158's third decision). Without it a blocking gate would
 refuse a ticket and tell only the cockpit, while the person who can end the hold in one edit is
 usually not looking at it.
@@ -720,60 +720,60 @@ it does not go through the proposal machinery at all, and what keeps that from
 being a licence to chatter is the one-comment rule. It is written only when the body changes, the
 comment ref is dropped when the ticket's text changes (a genuinely new question gets a new comment
 rather than overwriting the record of the old one), and a hold that has ended is **retracted** on the
-thread rather than left standing. It is the assay's only outbound act: nothing is closed, rejected,
+thread rather than left standing. It is the appraisal's only outbound act: nothing is closed, rejected,
 labelled or edited.
 
 Because it is the harness explaining, on somebody else's ticket, why it will not act, the operator
-must be able to read it without opening the tracker: `/api/state` ships it as `issue.assay.commentRef`
+must be able to read it without opening the tracker: `/api/state` ships it as `issue.appraisal.commentRef`
 — a canonical comment ref beside the verdict, resolved through `buildRefUrls` like every other link
 (see [15](15-integrations.md#comment-refs)). The cockpit draws it on the issue row **beside** the two
-assay overrides, never among them: those change the verdict, this only opens what was already said. A
+appraisal overrides, never among them: those change the verdict, this only opens what was already said. A
 verdict whose comment has not been written yet, and a provider that cannot build a URL, both draw
 nothing.
 
 ### The note it leaves on the pad (issue #353)
 
 Answering the question above means finding the code the ticket is about, and that orientation is the
-assayer's by-product, not its verdict: `assay_issue` takes a verdict, a summary and a profile
+appraiser's by-product, not its verdict: `appraise_issue` takes a verdict, a summary and a profile
 proposal, and the summary is written to justify `workable` or `unclear` rather than to be a map. So
 the prompt asks for **one scratchpad note beside the verdict** — where in the repository the goal
 lives, what was read to decide, and what shape the work looks like from there.
 
-Nothing was added to carry it. The assayer runs on origin `issue:<n>:assay`, `padOriginFor` already
+Nothing was added to carry it. The appraiser runs on origin `issue:<n>:appraisal`, `padOriginFor` already
 resolves that to the goal's pad, `scratch_append` is already granted on an issue subtree, and
 `priorWorkBriefing` already renders the pad to every later agent on the goal, capped, oldest-first
 and attributed ([09](09-execution.md#what-earlier-agents-worked-out-reaches-the-next-one)). The whole
-change is the wording of `issue-assay`, and it is deliberately bounded by it:
+change is the wording of `issue-appraisal`, and it is deliberately bounded by it:
 
 - **The note is asked for on `unclear` too**, and is worth more there. That hold ends when somebody
-  edits the ticket, and the agent dispatched next benefits from knowing what the assayer went looking
+  edits the ticket, and the agent dispatched next benefits from knowing what the appraiser went looking
   for and did not find — which is exactly what the refusal's summary does not say.
-- **It does not blur the "do not implement" line.** The assayer still writes no code, opens no pull
+- **It does not blur the "do not implement" line.** The appraiser still writes no code, opens no pull
   request and edits no ticket; the prompt says the note is an observation and not a head start, next
   to the sentence that refuses the rest.
 - **It is testimony, not instruction**, because that is how the briefing presents it — a reader is
-  told to check anything it relies on. The assay prompt claims no more authority for the note than
+  told to check anything it relies on. The appraisal prompt claims no more authority for the note than
   the framing it will be read under gives it.
 - **A paragraph, not a transcript.** `MAX_PAD_NOTE` is 4 000 and an over-long note is _trimmed_
   rather than refused (`src/scratch/pad.ts`), so a rambling note fails by silent truncation. The
   prompt asks for the size that fits.
 
-The assayer writes no files, so `agent_files` records nothing for it and the touched-file briefing
-renders nothing from an assay: the pad is the only channel out.
+The appraiser writes no files, so `agent_files` records nothing for it and the touched-file briefing
+renders nothing from an appraisal: the pad is the only channel out.
 
-Prompt templates are operator-overridable, so a deployment that has already overridden `issue-assay`
+Prompt templates are operator-overridable, so a deployment that has already overridden `issue-appraisal`
 keeps its own body and gets no note. That is the ordinary cost of an override and needs no mechanism
 — it is written down here so it is not mistaken for a bug.
 
 ### The watch gate
 
-The assay applies only to issues that already pass the watch gate — it never filters an untagged
+The appraisal applies only to issues that already pass the watch gate — it never filters an untagged
 tickets tab. So it does second-guess an explicit operator signal, and is argued for on that basis: the
-tag says _work this_, and the assay's answer is not _no_ but _with what?_. A question, asked once,
+tag says _work this_, and the appraisal's answer is not _no_ but _with what?_. A question, asked once,
 that the operator ends by editing the ticket, replying to it, or clearing the verdict.
 
 ### Cost
 
-With `planning`, `assessment` and `assay` all on, one issue can spend **three agents** before a line
+With `planning`, `assessment` and `appraisal` all on, one issue can spend **three agents** before a line
 of its work is written. All three are on by default and each is one switch away from off; the cost is named here rather
 than discovered.

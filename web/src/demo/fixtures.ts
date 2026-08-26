@@ -45,7 +45,7 @@ interface DemoSeed {
  */
 type IssueSeed = Omit<
   Issue,
-  | 'assay'
+  | 'appraisal'
   | 'conclusion'
   | 'delivery'
   | 'instructions'
@@ -64,9 +64,9 @@ function demoIssue(seed: IssueSeed): Issue {
     conclusion: { verdict: 'undeclared', by: null, note: '', at: null },
     shortfall: null,
     delivery: null,
-    assay: null,
+    appraisal: null,
     // Unpinned, which is what almost every goal is: a pin is the exception an
-    // operator or an assayer made, so the demo models it on the fixtures that are
+    // operator or an appraiser made, so the demo models it on the fixtures that are
     // about it rather than everywhere.
     modelPin: { profile: null, ignoredTags: [] },
     retrospective: null,
@@ -549,7 +549,7 @@ export function buildDemoState(): DemoSeed {
        *   done       #352   retained  #357   has_pr    #388, #376
        *   active     #332   ignored   #366   container #300
        *   unwatched  #371   planning  #390, #395       delivered #364
-       *   assay      #379   cooldown  #345   escalated #359
+       *   appraisal      #379   cooldown  #345   escalated #359
        *   blocked    #333, #368, #382  eligible  #341
        *
        * `blocked` outnumbers `eligible` on purpose: the cap is 3 and two agents
@@ -784,7 +784,7 @@ export function buildDemoState(): DemoSeed {
           pickup: { eligible: false, status: 'unwatched', reasons: ['no watch label "lubbdubb-watch"'] },
         }),
         // A watched ticket the harness has deliberately not started on: the goal
-        // assay could not work out what to do from the description, so pickup is
+        // appraisal could not work out what to do from the description, so pickup is
         // held and the row carries both overrides plus a way into the question the
         // harness asked on the thread. The one demo state where the harness has
         // spoken to somebody outside the cockpit.
@@ -798,16 +798,16 @@ export function buildDemoState(): DemoSeed {
           linkedPrNumber: null,
           pickup: {
             eligible: false,
-            status: 'assay',
-            reasons: ['the goal assay could not act on this goal'],
+            status: 'appraisal',
+            reasons: ['the goal appraisal could not act on this goal'],
           },
-          assay: {
+          appraisal: {
             verdict: 'unclear',
             summary:
               'Nothing here names which question came back wrong, or what the right sections would have been. ' +
               'Retrieval is keyword search, vector search and an RRF fold over both — which of the three is ' +
               'bringing back the wrong thing, and for which question?',
-            by: 'assayer',
+            by: 'appraiser',
             // An `unclear` verdict names no profile: a goal nobody could start
             // from has no work to size.
             proposedProfile: null,

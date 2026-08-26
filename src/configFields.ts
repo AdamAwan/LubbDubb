@@ -558,7 +558,7 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
   },
   { path: 'worktreeRoot', type: 'string', access: 'advanced', why: 'Root for the pool of worktree slot directories.' },
   { path: 'deskRoot', type: 'string', access: 'advanced', why: 'Scratch root for desk agents.' },
-  { path: 'attachmentRoot', type: 'string', access: 'advanced', why: 'Where blueprint attachments are written.' },
+  { path: 'attachmentRoot', type: 'string', access: 'advanced', why: 'Where brief attachments are written.' },
   { path: 'validationRoot', type: 'string', access: 'advanced', why: 'Where validation resources are written.' },
   {
     path: 'localRunRoot',

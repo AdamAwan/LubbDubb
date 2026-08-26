@@ -220,14 +220,14 @@ export function assessmentOrigin(
         `about your own work.`,
     };
   }
-  const assayer = /^issue:(\d+):assay$/.exec(ref);
-  if (assayer) {
+  const appraiser = /^issue:(\d+):appraisal$/.exec(ref);
+  if (appraiser) {
     return {
       ok: false,
       error:
-        `assess_issue says whether issue #${assayer[1]} was delivered, and you were dispatched to judge ` +
+        `assess_issue says whether issue #${appraiser[1]} was delivered, and you were dispatched to judge ` +
         `whether its goal can be worked from at all, before anything was started. Cast your verdict with ` +
-        `assay_issue instead.`,
+        `appraise_issue instead.`,
     };
   }
   return {

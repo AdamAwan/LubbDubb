@@ -1,5 +1,5 @@
 import { dispatchVerdict } from '../dispatchCooldown.js';
-import { assayBranch, assayOrigin, hasWorkStarted, isAssayed } from '../../intake/assay.js';
+import { appraisalBranch, appraisalOrigin, hasWorkStarted, isAppraised } from '../../intake/appraisal.js';
 import { issueOrigin } from '../../plans/planning.js';
 import { relatedWorkNote } from '../../issueRelations.js';
 import { readOnlyDispatch } from './readOnlyDispatch.js';
@@ -19,7 +19,7 @@ import type { RawAction, StageContext } from './context.js';
  * `issue-plan`'s own reason pointed one stage earlier: a planner *unblocks* work,
  * and decomposing a goal nobody could answer is the specific waste this exists to
  * stop — the operator would be asked to approve a decomposition of a question.
- * The suppression is `s.assaying`, written here and read by the two stages below
+ * The suppression is `s.appraising`, written here and read by the two stages below
  * (see {@link StageContext}).
  *
  * Fires only for an issue nothing has been started for. `hasWorkStarted` is the
@@ -30,34 +30,34 @@ import type { RawAction, StageContext } from './context.js';
  * past this gate — the funnel has read it — so a plan row skips it whatever its
  * status.
  */
-export function issueAssay(s: StageContext): void {
+export function issueAppraisal(s: StageContext): void {
   const { ctx } = s;
   for (const { issue } of s.eligibleIssues) {
     // Already judged, and judged against *this* text — an edited ticket
-    // fingerprints differently and is assayed again, which is the same
-    // comparison that ends a hold (see `assayHold`).
-    if (isAssayed(s.assays.get(issueOrigin(issue.number)) ?? null, issue)) continue;
+    // fingerprints differently and is appraised again, which is the same
+    // comparison that ends a hold (see `appraisalHold`).
+    if (isAppraised(s.appraisals.get(issueOrigin(issue.number)) ?? null, issue)) continue;
     if (hasWorkStarted(issue.number, ctx.tasks)) continue;
     if (s.plansByOrigin.has(issueOrigin(issue.number))) continue;
     const root = issueOrigin(issue.number);
     if ([...s.activeOrigins].some((o) => o === root || o.startsWith(`${root}:`))) continue;
 
-    const origin = assayOrigin(issue.number);
+    const origin = appraisalOrigin(issue.number);
     const verdict = dispatchVerdict(origin, s.now, ctx.recentDecisions, s.cooldown);
     // Fails open, exactly as the planner and the assessor do: a spent cap
     // returns the issue to the funnel it would have entered anyway, with no
-    // escalation. Without it, every assayer crash is a permanently parked
+    // escalation. Without it, every appraiser crash is a permanently parked
     // issue — which would make this gate the most effective way to stop the
     // harness working, the failure issue #158 names in its first decision.
     if (verdict.kind === 'escalate' || verdict.kind === 'hold') continue;
 
-    s.assaying.add(issue.number);
-    const branch = assayBranch(issue.number);
-    const title = `Assay issue #${issue.number}`;
+    s.appraising.add(issue.number);
+    const branch = appraisalBranch(issue.number);
+    const title = `Appraise issue #${issue.number}`;
     const reason = `Nothing has been started for issue #${issue.number}; check the goal can be worked from before dispatching against it.`;
     s.candidates.push({
       origin,
-      rule: 'issue-assay',
+      rule: 'issue-appraisal',
       title,
       kind: 'code',
       branch,
@@ -72,10 +72,10 @@ export function issueAssay(s: StageContext): void {
         title,
         // The relations decide half of what this rule is asking. A goal that
         // reads as vague on its own is often exactly right once its parent
-        // feature's description is in front of the assayer; an orphan is the
+        // feature's description is in front of the appraiser; an orphan is the
         // other way round, and is a finding rather than a fault of the text.
         prompt:
-          s.templates.render('issue-assay', {
+          s.templates.render('issue-appraisal', {
             number: issue.number,
             title: issue.title,
             body: issue.body,
@@ -83,11 +83,11 @@ export function issueAssay(s: StageContext): void {
           }) + relatedWorkNote(issue, s.pickup.containerTypes, s.parentCandidates),
         originRef: origin,
         // The exact text the verdict will be fingerprinted against — see
-        // `AgentManager.recordAssay`, which reads these two fields back off
+        // `AgentManager.recordAppraisal`, which reads these two fields back off
         // the task rather than re-reading the issue.
         originTitle: issue.title,
         originSummary: issue.body,
-        rule: 'issue-assay',
+        rule: 'issue-appraisal',
         reason,
       } satisfies RawAction,
     });

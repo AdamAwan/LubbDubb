@@ -80,8 +80,8 @@ test('no entry carries a position of its own', () => {
 // -- superseded: the hole the split exposed ----------------------------------
 
 // The planner rather than the pickup, and it cannot be otherwise: a pickup needs
-// a plan row saying `single`, and a plan row is what takes an issue past the assay.
-test('a planner the assay supersedes is queued with the reason, not dropped', async () => {
+// a plan row saying `single`, and a plan row is what takes an issue past the appraisal.
+test('a planner the appraisal supersedes is queued with the reason, not dropped', async () => {
   const d = new RuleDispatcher();
   const { upcoming } = await d.decide(ctx());
 

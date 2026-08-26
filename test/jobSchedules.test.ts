@@ -16,7 +16,7 @@ import type { ErrorRecorder } from '../src/errorLog.js';
 import type { Job, JobSchedule, Task } from '../src/types.js';
 
 /**
- * Recurring blueprints: a prompt queued on a clock.
+ * Recurring briefs: a prompt queued on a clock.
  *
  * The property every test below is really about is that a schedule adds a way for
  * work to *arrive* and no way for it to be *run*: what a firing produces is an

@@ -496,7 +496,7 @@ export interface CockpitActions {
   setPartProfile(planId: string, slug: string, profile: string | null): Promise<void>;
   setIssueConclusion(issueNumber: number, verdict: 'done' | 'more_work' | null): Promise<void>;
   /**
-   * Override the goal assay's verdict (#158). On the seam rather than in the
+   * Override the goal appraisal's verdict (#158). On the seam rather than in the
    * drawing code for the reason every mutation is: `console/` may not import
    * `api.js`, and an
    * `unclear` verdict is the one intake reading that *blocks* dispatch — so
@@ -504,9 +504,9 @@ export interface CockpitActions {
    *
    * `null` clears the row, which is a third option and not `workable`: the store
    * keeps one representation of "nobody has decided", and that is also what a
-   * crashed assayer leaves behind.
+   * crashed appraiser leaves behind.
    */
-  setIssueAssay(issueNumber: number, verdict: 'workable' | 'unclear' | null): Promise<void>;
+  setIssueAppraisal(issueNumber: number, verdict: 'workable' | 'unclear' | null): Promise<void>;
 
   /**
    * Tell the fleet what to do on a goal, in the operator's own words — "change the

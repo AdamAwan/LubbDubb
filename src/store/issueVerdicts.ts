@@ -1,9 +1,9 @@
 import type {
-  AssayAuthor,
+  AppraisalAuthor,
   ConclusionAuthor,
   DeliveryAuthor,
-  GoalAssayVerdict,
-  IssueAssay,
+  GoalAppraisalVerdict,
+  IssueAppraisal,
   IssueConclusion,
   IssueConclusionVerdict,
   IssueDelivery,
@@ -12,8 +12,19 @@ import type {
   ShortfallCause,
 } from '../types.js';
 import { VERDICT_EXCLUSIONS, VERDICT_TABLES, type VerdictKind } from './verdicts.js';
-import type { ColumnMigrations } from './migrate.js';
+import type { ColumnMigrations, TableRename } from './migrate.js';
 import type { StoreContext } from './context.js';
+
+/**
+ * The goal **assay** was renamed to the goal **appraisal**, and its table followed
+ * the word. Nothing about the rows changed, so this is the whole migration — but
+ * without it every verdict cast before the rename is stranded under a name no
+ * reader names any more, and `SCHEMA` would stand an empty `issue_appraisals` up
+ * beside it. Nothing would error: every held goal would simply come unheld, and
+ * every profile, parent and area-path question already answered would be asked
+ * again.
+ */
+export const ISSUE_VERDICT_RENAMES: readonly TableRename[] = [{ from: 'issue_assays', to: 'issue_appraisals' }];
 
 /**
  * Both assessment verdicts carry the assessor's account beside its headline, so
@@ -25,29 +36,29 @@ import type { StoreContext } from './context.js';
 export const ISSUE_VERDICT_COLUMNS: ColumnMigrations = {
   issue_deliveries: { detail: 'TEXT' },
   issue_shortfalls: { detail: 'TEXT' },
-  issue_assays: {
-    /** The profile the assayer proposed — see {@link IssueAssay.proposedProfile}. */
+  issue_appraisals: {
+    /** The profile the appraiser proposed — see {@link IssueAppraisal.proposedProfile}. */
     proposed_profile: 'TEXT',
     /**
-     * When the profile question was settled — see {@link IssueAssay.profileAnsweredAt}.
+     * When the profile question was settled — see {@link IssueAppraisal.profileAnsweredAt}.
      *
      * Null on every row written before this existed, which is the right reading
      * for them and costs nothing: those rows also have no `proposed_profile`, and
      * the gate needs both.
      */
     profile_answered_at: 'TEXT',
-    /** The container the assayer proposed — see {@link IssueAssay.proposedParent}. */
+    /** The container the appraiser proposed — see {@link IssueAppraisal.proposedParent}. */
     proposed_parent: 'INTEGER',
     /**
      * When the operator answered the parent question — see
-     * {@link IssueAssay.parentSettledAt}.
+     * {@link IssueAppraisal.parentSettledAt}.
      *
      * Null on every row written before this existed, which is the right reading:
      * those rows carry no proposal either, and the question is only asked where
      * both a proposal and a still-missing field are present.
      */
     parent_settled_at: 'TEXT',
-    /** The area path the assayer proposed — see {@link IssueAssay.proposedAreaPath}. */
+    /** The area path the appraiser proposed — see {@link IssueAppraisal.proposedAreaPath}. */
     proposed_area_path: 'TEXT',
     /** {@link parent_settled_at} for the area path, and null on old rows for its reason. */
     area_path_settled_at: 'TEXT',
@@ -58,7 +69,7 @@ export const ISSUE_VERDICT_COLUMNS: ColumnMigrations = {
  * The four tables holding a standing verdict about an issue: `issue_conclusions`
  * (the working agent says it is finished), `issue_deliveries` (the assessor says
  * the goal is reached), `issue_shortfalls` (the assessor says it is not) and
- * `issue_assays` (the assayer says the goal text can — or cannot — be worked from).
+ * `issue_appraisals` (the appraiser says the goal text can — or cannot — be worked from).
  *
  * **Together, because which of them may coexist is the interesting part.** Those
  * four writers used to sit hundreds of lines apart in one 2,500-line class, each
@@ -79,7 +90,7 @@ export class IssueVerdictStore {
    * keyed on `origin_ref`, plus a set of sibling rows to delete. It deliberately
    * does **not** compose the row — the four are not the same shape in the ways
    * that matter (a conclusion preserves `created_at` where the others preserve
-   * `decided_at`; a shortfall normalises `part_slug` against `cause`; an assay
+   * `decided_at`; a shortfall normalises `part_slug` against `cause`; an appraisal
    * keeps `comment_ref` only while the goal text is unchanged), so a version of
    * this that owned the row would be a `switch (kind)`: the same four half-rows,
    * moved. Each public writer keeps its own row-composition and the argument for
@@ -181,7 +192,7 @@ export class IssueVerdictStore {
    * and a hold read off `decided_at` judges the verdict standing now against a
    * transition that predates it: the event that expired the *previous* verdict
    * ends the next one before it is written, and no verdict on that issue can
-   * ever hold again. Same rule on `recordAssay` below.
+   * ever hold again. Same rule on `recordAppraisal` below.
    *
    * Which standing verdicts this clears — a conclusion and a shortfall, with the
    * argument for each — is declared in {@link VERDICT_EXCLUSIONS} and applied by
@@ -337,30 +348,30 @@ export class IssueVerdictStore {
     return this.ctx.db.prepare(`DELETE FROM issue_shortfalls WHERE origin_ref=?`).run(originRef).changes > 0;
   }
 
-  // -- Assays (can the goal text be worked from at all?) ---------------------
+  // -- Appraisals (can the goal text be worked from at all?) ---------------------
 
   /**
-   * Record whether an issue's goal text can be worked from — the assayer's
+   * Record whether an issue's goal text can be worked from — the appraiser's
    * verdict, or the operator's.
    *
    * `decided_at` is preserved across an overwrite for {@link recordDelivery}'s
-   * reason: it is the instant `assayHold` measures world signal against, and
-   * refreshing it on a re-assay would keep moving the goalposts a transition has
+   * reason: it is the instant `appraisalHold` measures world signal against, and
+   * refreshing it on a re-appraisal would keep moving the goalposts a transition has
    * to clear. `comment_ref` is preserved on absence, so the one living comment on
    * the ticket is edited rather than duplicated when a verdict is restated.
    *
    * This clears **nothing**, and {@link VERDICT_EXCLUSIONS} says so as an explicit
-   * empty row rather than as a missing `DELETE` — an assay answers a different
+   * empty row rather than as a missing `DELETE` — an appraisal answers a different
    * question from the other three (whether the goal could be started from, not
    * whether the work is finished), so an issue may honestly carry it alongside
    * any of them.
    */
-  recordAssay(input: {
+  recordAppraisal(input: {
     originRef: string;
-    verdict: GoalAssayVerdict;
+    verdict: GoalAppraisalVerdict;
     summary: string;
     goalRef: string;
-    by: AssayAuthor;
+    by: AppraisalAuthor;
     agentId?: string | null;
     taskId?: string | null;
     /** The profile proposed for this goal's work, or null when none was named. */
@@ -374,7 +385,7 @@ export class IssueVerdictStore {
     profileDiverges?: boolean;
     /**
      * The container this goal should hang off, and the classification node it
-     * should sit on, as the assayer proposed them — or null for either where it
+     * should sit on, as the appraiser proposed them — or null for either where it
      * named none.
      *
      * Stored exactly as given and **never gated here on whether the work item is
@@ -384,11 +395,11 @@ export class IssueVerdictStore {
      */
     proposedParent?: number | null;
     proposedAreaPath?: string | null;
-  }): IssueAssay {
+  }): IssueAppraisal {
     const ts = this.ctx.now();
-    const prev = this.getAssay(input.originRef);
+    const prev = this.getAppraisal(input.originRef);
     const proposedProfile = input.proposedProfile ?? null;
-    const row: IssueAssay = {
+    const row: IssueAppraisal = {
       originRef: input.originRef,
       verdict: input.verdict,
       summary: input.summary,
@@ -397,11 +408,11 @@ export class IssueVerdictStore {
       proposedProfile,
       // Settled on arrival unless it diverges: agreement is not a question, so it
       // must not cost a click. A proposal that *does* diverge is stored unanswered
-      // and `assayHold` holds the funnel on exactly this field being null.
+      // and `appraisalHold` holds the funnel on exactly this field being null.
       profileAnsweredAt: proposedProfile !== null && input.profileDiverges === true ? null : ts,
       proposedParent: input.proposedParent ?? null,
       proposedAreaPath: input.proposedAreaPath ?? null,
-      // A re-assay is a fresh proposal about a fresh reading of the ticket, so the
+      // A re-appraisal is a fresh proposal about a fresh reading of the ticket, so the
       // dismissal that answered the *previous* one does not carry over. That is
       // the whole of "a rewritten ticket is asked again" — there is no second
       // mechanism, and nothing here has to have witnessed the edit.
@@ -417,8 +428,8 @@ export class IssueVerdictStore {
       updatedAt: ts,
     };
     return this.recordVerdict(
-      'assay',
-      `INSERT INTO issue_assays (origin_ref, verdict, summary, goal_ref, by, proposed_profile, profile_answered_at, proposed_parent, parent_settled_at, proposed_area_path, area_path_settled_at, agent_id, task_id, comment_ref, decided_at, updated_at)
+      'appraisal',
+      `INSERT INTO issue_appraisals (origin_ref, verdict, summary, goal_ref, by, proposed_profile, profile_answered_at, proposed_parent, parent_settled_at, proposed_area_path, area_path_settled_at, agent_id, task_id, comment_ref, decided_at, updated_at)
        VALUES (@originRef, @verdict, @summary, @goalRef, @by, @proposedProfile, @profileAnsweredAt, @proposedParent, @parentSettledAt, @proposedAreaPath, @areaPathSettledAt, @agentId, @taskId, @commentRef, @decidedAt, @updatedAt)
        ON CONFLICT(origin_ref) DO UPDATE SET
          verdict=excluded.verdict, summary=excluded.summary, goal_ref=excluded.goal_ref,
@@ -433,28 +444,28 @@ export class IssueVerdictStore {
     );
   }
 
-  getAssay(originRef: string): IssueAssay | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM issue_assays WHERE origin_ref=?`).get(originRef) as
-      | IssueAssayRow
+  getAppraisal(originRef: string): IssueAppraisal | null {
+    const row = this.ctx.db.prepare(`SELECT * FROM issue_appraisals WHERE origin_ref=?`).get(originRef) as
+      | IssueAppraisalRow
       | undefined;
-    return row ? rowToAssay(row) : null;
+    return row ? rowToAppraisal(row) : null;
   }
 
   /**
-   * Every standing assay. **Unbounded on purpose**, as {@link listDeliveries} is: an
+   * Every standing appraisal. **Unbounded on purpose**, as {@link listDeliveries} is: an
    * `unclear` verdict that aged out of a window would let the harness dispatch
    * against a goal it has already found unworkable, and a `workable` one aging out
-   * would re-assay every issue on a clock. One row per assayed issue, and the
-   * event read it feeds is bounded by time and item (`assaySignalQuery`).
+   * would re-appraise every issue on a clock. One row per appraised issue, and the
+   * event read it feeds is bounded by time and item (`appraisalSignalQuery`).
    */
-  listAssays(): IssueAssay[] {
-    const rows = this.ctx.db.prepare(`SELECT * FROM issue_assays`).all() as IssueAssayRow[];
-    return rows.map(rowToAssay);
+  listAppraisals(): IssueAppraisal[] {
+    const rows = this.ctx.db.prepare(`SELECT * FROM issue_appraisals`).all() as IssueAppraisalRow[];
+    return rows.map(rowToAppraisal);
   }
 
   /**
    * Settle the profile question for this goal — the operator's one click, whether
-   * they took the assayer's proposal or kept their own.
+   * they took the appraiser's proposal or kept their own.
    *
    * Stamps the answer rather than storing what was chosen, because what was
    * chosen is the tag on the ticket and a second copy here would be free to drift
@@ -462,16 +473,16 @@ export class IssueVerdictStore {
    * from the proposal deliberately, and a gate that re-read the divergence would
    * ask the same question again for ever.
    *
-   * Scoped to the row the operator was looking at: a re-assay writes a new
+   * Scoped to the row the operator was looking at: a re-appraisal writes a new
    * `goal_ref` and its own unanswered proposal, so answering a superseded one
    * cannot release a question nobody has seen.
    */
-  answerAssayProfile(originRef: string, goalRef: string): boolean {
+  answerAppraisalProfile(originRef: string, goalRef: string): boolean {
     const ts = this.ctx.now();
     return (
       this.ctx.db
         .prepare(
-          `UPDATE issue_assays SET profile_answered_at=?, updated_at=? WHERE origin_ref=? AND goal_ref=? AND profile_answered_at IS NULL`,
+          `UPDATE issue_appraisals SET profile_answered_at=?, updated_at=? WHERE origin_ref=? AND goal_ref=? AND profile_answered_at IS NULL`,
         )
         .run(ts, ts, originRef, goalRef).changes > 0
     );
@@ -488,7 +499,7 @@ export class IssueVerdictStore {
    * take.
    *
    * Scoped to the row the operator was looking at, exactly as
-   * {@link answerAssayProfile} is: a re-assay writes a new `goal_ref` with its own
+   * {@link answerAppraisalProfile} is: a re-appraisal writes a new `goal_ref` with its own
    * proposals, and settling a superseded one must not silence a question nobody
    * has seen.
    *
@@ -497,32 +508,32 @@ export class IssueVerdictStore {
    * second copy of this is a second place for the goal-ref scoping to be got
    * wrong. The column is chosen from a closed union, never from a caller's string.
    */
-  settleAssayPlacement(originRef: string, goalRef: string, field: 'parent' | 'areaPath'): boolean {
+  settleAppraisalPlacement(originRef: string, goalRef: string, field: 'parent' | 'areaPath'): boolean {
     const column = field === 'parent' ? 'parent_settled_at' : 'area_path_settled_at';
     const ts = this.ctx.now();
     return (
       this.ctx.db
         .prepare(
-          `UPDATE issue_assays SET ${column}=?, updated_at=? WHERE origin_ref=? AND goal_ref=? AND ${column} IS NULL`,
+          `UPDATE issue_appraisals SET ${column}=?, updated_at=? WHERE origin_ref=? AND goal_ref=? AND ${column} IS NULL`,
         )
         .run(ts, ts, originRef, goalRef).changes > 0
     );
   }
 
   /** Remember the comment this verdict maintains on the ticket, so the next write edits it. */
-  setAssayComment(originRef: string, commentRef: string): void {
+  setAppraisalComment(originRef: string, commentRef: string): void {
     this.ctx.db
-      .prepare(`UPDATE issue_assays SET comment_ref=?, updated_at=? WHERE origin_ref=?`)
+      .prepare(`UPDATE issue_appraisals SET comment_ref=?, updated_at=? WHERE origin_ref=?`)
       .run(commentRef, this.ctx.now(), originRef);
   }
 
   /**
-   * Drop an issue's assay — the operator's "work it anyway", and the escape hatch
+   * Drop an issue's appraisal — the operator's "work it anyway", and the escape hatch
    * a blocking gate has to have. A delete rather than a stored third verdict, for
    * {@link clearIssueConclusion}'s reason.
    */
-  clearAssay(originRef: string): boolean {
-    return this.ctx.db.prepare(`DELETE FROM issue_assays WHERE origin_ref=?`).run(originRef).changes > 0;
+  clearAppraisal(originRef: string): boolean {
+    return this.ctx.db.prepare(`DELETE FROM issue_appraisals WHERE origin_ref=?`).run(originRef).changes > 0;
   }
 }
 
@@ -558,7 +569,7 @@ interface IssueShortfallRow {
   decided_at: string;
   updated_at: string;
 }
-interface IssueAssayRow {
+interface IssueAppraisalRow {
   origin_ref: string;
   verdict: string;
   summary: string;
@@ -619,13 +630,13 @@ function rowToShortfall(r: IssueShortfallRow): IssueShortfall {
     updatedAt: r.updated_at,
   };
 }
-function rowToAssay(r: IssueAssayRow): IssueAssay {
+function rowToAppraisal(r: IssueAppraisalRow): IssueAppraisal {
   return {
     originRef: r.origin_ref,
-    verdict: r.verdict as GoalAssayVerdict,
+    verdict: r.verdict as GoalAppraisalVerdict,
     summary: r.summary,
     goalRef: r.goal_ref,
-    by: r.by as AssayAuthor,
+    by: r.by as AppraisalAuthor,
     // `?? null` rather than trusted: a row written before the columns existed
     // reads `undefined`, which would reach the wire as a missing key — and, for
     // `profile_answered_at`, would make an old row look like an unanswered

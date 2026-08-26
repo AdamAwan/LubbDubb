@@ -2,7 +2,7 @@
  * The harness signing its own work.
  *
  * Every outbound write goes out under the *operator's* credential — their
- * `GITHUB_TOKEN`, their PAT — so a plan comment, an assay question or a review
+ * `GITHUB_TOKEN`, their PAT — so a plan comment, an appraisal question or a review
  * reply arrives on the thread wearing their avatar and their name, indistinguishable
  * from something they typed. That is a misattribution rather than a cosmetic
  * shortfall: a reviewer answers a machine's question believing a colleague asked
@@ -176,7 +176,7 @@ const ENDINGS = [
  * random number, and that is deliberate.
  *
  * Two of these surfaces are **edited in place**: the plan's status comment and the
- * assay question are one living comment re-rendered as things change. A random
+ * appraisal question are one living comment re-rendered as things change. A random
  * ending would move under every edit, filling the thread's revision history with
  * diffs whose only content is the joke — and inviting a reader to wonder what else
  * changed. Hashing the body gives the same spread across comments while holding

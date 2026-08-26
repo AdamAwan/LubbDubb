@@ -921,7 +921,7 @@ what a plan withdrew — a surface that filtered them would leave a reader unabl
 was dropped from one that was never written. They stay on the **sheet**: what an amendment dropped is
 a fact about that plan, while the goal's card lists what is still to be checked.
 
-The goal page also carries the verdict as a chip beside the assay and the conclusion, inside neither —
+The goal page also carries the verdict as a chip beside the appraisal and the conclusion, inside neither —
 and that chip is a button, because the checks are now on the same page and a verdict you can act on
 should not be the one reading that goes nowhere.
 

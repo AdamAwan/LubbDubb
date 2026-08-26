@@ -9,7 +9,7 @@ interface StoredAttachment extends PreparedAttachment {
 }
 
 /**
- * Where a blueprint's images live on disk (issue #249).
+ * Where a brief's images live on disk (issue #249).
  *
  * **One canonical file, outside every worktree.** The alternative — a copy into
  * each dispatched agent's cwd — was considered and rejected: it risks a
@@ -19,7 +19,7 @@ interface StoredAttachment extends PreparedAttachment {
  * the launch, is what makes the same image readable by all of them.
  *
  * **A directory per target ref, not per file.** The ref is what an attachment
- * belongs to — `job:<id>` for a blueprint that dispatches, `issue:<n>` for one
+ * belongs to — `job:<id>` for a brief that dispatches, `issue:<n>` for one
  * the harness files as a ticket instead (issue #394), which is what makes the
  * image the *goal's* rather than one agent's.
  */
@@ -50,9 +50,9 @@ export class AttachmentFiles {
   }
 
   /**
-   * Drop a target's files — a blueprint cancelled before it ran, which is the one
+   * Drop a target's files — a brief cancelled before it ran, which is the one
    * case nothing downstream can want them. `force` because the directory is absent
-   * for the overwhelmingly common blueprint that carried no image at all.
+   * for the overwhelmingly common brief that carried no image at all.
    */
   remove(targetRef: string): void {
     rmSync(this.dirFor(targetRef), { recursive: true, force: true });

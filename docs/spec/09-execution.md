@@ -393,7 +393,7 @@ no agent at all, so refusing a draft with _"too defensive — just fix the lint"
 
 ## What earlier agents worked out reaches the next one
 
-Every stage of a goal is a fresh agent with no memory of the last. The assayer read the ticket against
+Every stage of a goal is a fresh agent with no memory of the last. The appraiser read the ticket against
 the repository, the planner read the repository and argued for a shape, a part agent hit a constraint
 and wrote it on the pad — and the agent dispatched after them started from a template holding a title,
 a body and a branch name, paying again for what the one before it learned. The knowledge was not
@@ -409,7 +409,7 @@ prompt.
   `outOfScope`**, which reach the plan sheet and no agent — and on a one-part plan are the entire
   product of a code agent that read the whole repository, while rule `issue-pickup`'s prompt is the issue title and
   body; a part's **`rationale` / `acceptance`**, stored and rendered nowhere at all; the **prose
-  behind each standing verdict** (assay, conclusion, delivery, shortfall); **the paths the goal has
+  behind each standing verdict** (appraisal, conclusion, delivery, shortfall); **the paths the goal has
   been edited in**; and **the retrospectives of the goals that have been in those same paths**. It
   therefore omits
   `plan.reason` (rendered by `currentPlanSummary` to a replanner and as `{plan}` to a part agent) and a
@@ -461,7 +461,7 @@ prompt.
   different things and neither is widened into the other; what keeps that honest is that the section
   names the paths a neighbour **shares** and never claims this goal edited them.
 - **Scoped by `padOriginFor`, not a fresh predicate** — already the harness's answer to "which goal is
-  this agent working": the `issue:<n>` root plus its `:plan`, `:assay`, `:assess` and `:part:<slug>`
+  this agent working": the `issue:<n>` root plus its `:plan`, `:appraisal`, `:assess` and `:part:<slug>`
   arms. Everything else (a PR concern, a job, a filing) is handed nothing, which is the rejection note's
   widening rule at the level of a whole goal. The **retro origin is excluded** though `padOriginFor`
   accepts it: `retroBriefing` already hands it the pad and the whole dossier, both bounded on their own
@@ -512,7 +512,7 @@ dispatch prompt whenever the goal carries an instruction nobody has concluded ye
   `outstandingWorkNote` ([11](11-mcp-tools.md#conclude_work)). **Not settled at dispatch**: an agent
   that died before doing anything would take the operator's words with it, silently.
 - **Scoped by `padOriginFor`**, the attachments' rule for the attachments' reason — an instruction is
-  about the goal, and the agents that work it are dispatched for `:plan`, `:assay`, `:assess` and
+  about the goal, and the agents that work it are dispatched for `:plan`, `:appraisal`, `:assess` and
   `:part:<slug>`. An exact match would put _change the button to primary_ in front of nobody at all on
   a decomposed goal. The retro origin is deliberately **not** excluded the way the briefing excludes
   it: a retrospective that did not know what was asked for mid-run would write up a different run from
@@ -574,12 +574,12 @@ for, and the `check:` claims for the checks it answers → [27](27-knowledge.md#
 
 ## An operator's attachments reach the agent
 
-A blueprint launched from the cockpit may carry images (issue #249) — a screenshot of the panel to
+A brief launched from the cockpit may carry images (issue #249) — a screenshot of the panel to
 change, the broken screen, a before/after pair. They are written once under `attachmentRoot`
 (`src/jobs/attachmentFiles.ts`) and recorded in `job_attachments`, keyed on the ref they belong to —
-`job:<id>` for a blueprint that dispatches, and the `issue:<n>` it was filed as for one that becomes a
-ticket. See [14](14-persistence.md#blueprint-attachments) for the rows, and
-[16](16-http-api.md#launching-a-blueprint) for how they arrive.
+`job:<id>` for a brief that dispatches, and the `issue:<n>` it was filed as for one that becomes a
+ticket. See [14](14-persistence.md#brief-attachments) for the rows, and
+[16](16-http-api.md#launching-a-brief) for how they arrive.
 
 `recordDispatchTask` appends `attachmentsNote(...)` (`src/jobs/attachments.ts`, pure) to the dispatch
 prompt: one line per image giving its **absolute path**, the mime **sniffed from its bytes**, and the
@@ -592,10 +592,10 @@ operator's own filename as a label.
   [10](10-agent-runtimes.md#reading-outside-the-worktree).
 - **Scoped to the goal, not to the exact origin.** The lookup is `padOriginFor(originRef) ?? originRef`
   — the harness's own spelling of "which goal is this origin inside", already used to decide who shares
-  a scratchpad, so the two cannot drift. It has to be: a filed blueprint's images are keyed `issue:<n>`
-  while the agents that go on to work it are dispatched for `issue:<n>:assay`, `:plan`, `:part:<slug>`
+  a scratchpad, so the two cannot drift. It has to be: a filed brief's images are keyed `issue:<n>`
+  while the agents that go on to work it are dispatched for `issue:<n>:appraisal`, `:plan`, `:part:<slug>`
   and `:retro`. An exact match would put the screenshot in front of the filing agent alone, the one
-  agent that writes no code. An origin outside any issue subtree — a `job:<id>` blueprint that
+  agent that writes no code. An origin outside any issue subtree — a `job:<id>` brief that
   dispatched directly, because no tracker is configured — falls back to itself, which is an exact match.
   - Within a goal the append is **unconditional**: a part agent working something the screenshot has
     nothing to do with is still shown it. That is the trade the prior-work briefing already makes, and
@@ -812,14 +812,14 @@ else left to give ([below](#reclaiming-a-stranded-slot)).
 
 ### The read-only checkout
 
-Three dispatches need a repository and no branch: the goal assay ([06](06-issue-pickup.md)), the
+Three dispatches need a repository and no branch: the goal appraisal ([06](06-issue-pickup.md)), the
 assessment and a handed-over validation check ([20](20-validation.md)). Each is told in its prompt not
 to commit or push anything, and each is cut from the default branch for the reason it says out loud —
 the state it is asked about is _on_ it.
 
 Each used to mint a branch anyway, and **nothing ever reaped it**: `reapableBranches` deletes the
 branch of a **merged** pull request and refuses everything else, deliberately, so a ref that never
-gets a pull request is never merged and never deleted. One `assay/issue/<n>` per assay, one
+gets a pull request is never merged and never deleted. One `appraisal/issue/<n>` per appraisal, one
 `assess/issue/<n>` per assessment and one `validate/issue/<n>/<checkId>` per check, accumulating for
 the life of the deployment, with nothing anywhere reading as wrong (#396).
 
@@ -836,14 +836,14 @@ reads, and what `remove` is called with when the agent is reaped — and it neve
 - **It survives a restart too.** A detached slot has no ref for `pool.held` to be asked about, so the
   slot carries a **mark** — the key it holds and the ref it is a checkout of — in `<worktreeRoot>/.read-only/<slot>`.
   `holder` reads the key off it and asks `pool.held` the same question it asks about a branch. Without
-  it a restored assayer's tree would read as a spare and be cleaned and switched under the agent
+  it a restored appraiser's tree would read as a spare and be cleaned and switched under the agent
   sitting in it. The mark is beside the slots rather than inside one (where `clean -ffdx` would take
   it, in front of the agent) or in git's admin directory (which is git's, not the harness's); losing
   one degrades to a full wipe, the way losing a lease does.
 - **One ref, one warm tree.** Two read-only checkouts of the same ref are the same tree to whoever
   gets it, so a hand-over between them keeps the ignored files and takes only the last agent's
   scratch (`git clean -ffd`, not `-ffdx`) — and a free one is _preferred_ over minting a slot. That is
-  what stops a queue of assays and checks paying for a cold install each, which the pool could never
+  what stops a queue of appraisals and checks paying for a cold install each, which the pool could never
   give work that warms nothing of its own. The mark is the whole of the evidence: it is written only by
   a read-only hand-over and cleared by every other, so a tree the harness cannot vouch for is wiped.
 - **Reuse follows the ref, not the tree.** A key coming back to its own slot after the default branch

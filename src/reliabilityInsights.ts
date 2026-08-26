@@ -25,7 +25,7 @@ import {
  *
  * - **Run outcomes** — of the agents the harness has dispatched, how many ended
  *   `done`, and what the rest cost. Split by the *same phases* the spend panel
- *   uses, so "assayers always finish, part agents crash a third of the time" is a
+ *   uses, so "appraisers always finish, part agents crash a third of the time" is a
  *   sentence the two panels can be read into together.
  * - **CI health** — how often a pull request went red, how long it stayed red, and
  *   which ones did it repeatedly. The spend panel's `ci` phase already argues that

@@ -9,7 +9,7 @@ import {
   type RunwayPolicy,
 } from '../src/supply/runway.js';
 import { DEFAULT_COOLDOWN } from '../src/dispatcher/dispatchCooldown.js';
-import { goalFingerprint } from '../src/intake/assay.js';
+import { goalFingerprint } from '../src/intake/appraisal.js';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -22,7 +22,7 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { Store } from '../src/store/store.js';
 import { RunwayDesk } from '../src/supply/runwayDesk.js';
-import type { EscalationSpan, HumanTask, Issue, IssueAssay, IssueRun, Plan } from '../src/types.js';
+import type { EscalationSpan, HumanTask, Issue, IssueAppraisal, IssueRun, Plan } from '../src/types.js';
 
 /**
  * The runway lens.
@@ -123,11 +123,11 @@ function input(over: Partial<RunwayInput> = {}): RunwayInput {
 }
 
 /**
- * An assay proposing a profile on issue `n`, fingerprinted against the very
+ * An appraisal proposing a profile on issue `n`, fingerprinted against the very
  * ticket {@link issue} builds — because a stale `goalRef` *releases* the gate,
  * which is the half `humanHolds` used not to ask about.
  */
-function gate(n: number, over: Partial<IssueAssay> = {}): IssueAssay {
+function gate(n: number, over: Partial<IssueAppraisal> = {}): IssueAppraisal {
   const target = issue(n);
   return {
     originRef: `issue:${n}`,
@@ -137,7 +137,7 @@ function gate(n: number, over: Partial<IssueAssay> = {}): IssueAssay {
     decidedAt: at(10),
     profileAnsweredAt: null,
     ...over,
-  } as unknown as IssueAssay;
+  } as unknown as IssueAppraisal;
 }
 
 const START = Date.parse('2026-08-20T09:00:00.000Z');
@@ -328,10 +328,10 @@ test('the profile gate is a hold, and the runway row is never one', () => {
     input({
       policy: ONE_RUN,
       runs: one('issue:1', 100),
-      // The gate is read through `assayHold`, so the goal it stopped has to be in
-      // front of the lens and the assay has to still be about that ticket.
+      // The gate is read through `appraisalHold`, so the goal it stopped has to be in
+      // front of the lens and the appraisal has to still be about that ticket.
       issues: [issue(1)],
-      pickup: { ...input().pickup, assays: [gate(1, { profileAnsweredAt: at(70) })] },
+      pickup: { ...input().pickup, appraisals: [gate(1, { profileAnsweredAt: at(70) })] },
       // A `supply` row carries no origin and could not attach to a goal anyway —
       // asserted here because "the reading must not describe itself" is the rule,
       // not the accident.
@@ -521,7 +521,7 @@ test('the debt clause never counts the runway row itself', () => {
 
 test('an unanswered profile proposal is not a hold — the goal shipped, so it was not held', () => {
   // The failure this pins: `decided_at → null` clamps to the end of the run, so an
-  // assay nobody answered subtracts every minute of a goal that demonstrably
+  // appraisal nobody answered subtracts every minute of a goal that demonstrably
   // completed. A proposal nobody answers never ends, so the run is dropped from
   // the median for good and the runway dies on that deployment.
   const r = readRunway(
@@ -529,7 +529,7 @@ test('an unanswered profile proposal is not a hold — the goal shipped, so it w
       policy: ONE_RUN,
       runs: one('issue:1', 100),
       issues: [issue(1)],
-      pickup: { ...input().pickup, assays: [gate(1)] },
+      pickup: { ...input().pickup, appraisals: [gate(1)] },
     }),
   );
   assert.equal(r.medianHeldMinutes, 0);
@@ -537,9 +537,9 @@ test('an unanswered profile proposal is not a hold — the goal shipped, so it w
 });
 
 test('a rewritten ticket released the gate, and the bucket and the subtraction agree about that', () => {
-  // Two matchers for one claim is the shape: `assayHold` is what the queue bucket
+  // Two matchers for one claim is the shape: `appraisalHold` is what the queue bucket
   // asks, and it releases the hold the moment the ticket no longer fingerprints to
-  // what the assayer read. A subtraction that did not ask would erase the run of a
+  // what the appraiser read. A subtraction that did not ask would erase the run of a
   // goal the same reading counts as unheld.
   const stale = gate(1, { goalRef: 'notthetickettheyread', profileAnsweredAt: at(70) });
   const held = readRunway(
@@ -547,7 +547,7 @@ test('a rewritten ticket released the gate, and the bucket and the subtraction a
       policy: ONE_RUN,
       runs: one('issue:1', 100),
       issues: [issue(1)],
-      pickup: { ...input().pickup, assays: [gate(1, { profileAnsweredAt: at(70) })] },
+      pickup: { ...input().pickup, appraisals: [gate(1, { profileAnsweredAt: at(70) })] },
     }),
   );
   const released = readRunway(
@@ -555,7 +555,7 @@ test('a rewritten ticket released the gate, and the bucket and the subtraction a
       policy: ONE_RUN,
       runs: one('issue:1', 100),
       issues: [issue(1)],
-      pickup: { ...input().pickup, assays: [stale] },
+      pickup: { ...input().pickup, appraisals: [stale] },
     }),
   );
   assert.equal(held.medianHeldMinutes, 60);

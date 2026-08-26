@@ -5,7 +5,7 @@ import type { Config } from './config.js';
  *
  * ## The gap this closes
  *
- * Every non-bug filing arm — a deferred finding, unrecorded work, a blueprint —
+ * Every non-bug filing arm — a deferred finding, unrecorded work, a brief —
  * created an Azure DevOps `Task`, hardcoded into the coordinates. A Task is the
  * wrong altitude for all three: it is the unit a story is broken into *once
  * someone is working it*, so one filed from the cockpit arrives with no story
@@ -52,7 +52,7 @@ const DEFAULT_BUG_TYPE = 'Bug';
 
 /**
  * The type a *non-bug* filing is created as — a deferred finding, unrecorded work,
- * a blueprint — or null where the tracker has no such concept.
+ * a brief — or null where the tracker has no such concept.
  *
  * **The first configured type, not a choice among them.** `issueFilingTypes` was
  * written as a menu for a model to pick from, and with the harness filing directly

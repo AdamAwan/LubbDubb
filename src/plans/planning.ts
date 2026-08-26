@@ -69,7 +69,7 @@ export function planOriginIssue(originRef: string | null): number | null {
 
 /**
  * The issue behind *any* origin in the `issue:<n>` subtree — the pickup root, a
- * part, a planner, an assay, an assessment — or null for a ref naming something
+ * part, a planner, an appraisal, an assessment — or null for a ref naming something
  * else entirely.
  *
  * Deliberately not {@link planOriginIssue}, which answers a narrower question and

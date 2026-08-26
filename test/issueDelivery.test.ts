@@ -132,7 +132,7 @@ test('/api/state ships a standing delivery beside the conclusion and the pickup 
 
   const shippedIssue = () => buildStateSnapshot(system).world.issues.find((i) => i.number === 12)!;
 
-  // Nothing assessed: null, the same third reading `assay` ships.
+  // Nothing assessed: null, the same third reading `appraisal` ships.
   assert.equal(shippedIssue().delivery, null);
 
   system.store.recordDelivery({ originRef: 'issue:12', summary: 'every criterion is met', by: 'assessor' });

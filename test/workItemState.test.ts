@@ -10,7 +10,7 @@ import type { ActionSink, SendResult, WorkItemStateInput } from '../src/sink/act
 import type { DispatchResult } from '../src/dispatcher/dispatcher.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
-import { failAssayOpen, failPlanningOpen, planWithOnePart } from './support/plans.js';
+import { failAppraisalOpen, failPlanningOpen, planWithOnePart } from './support/plans.js';
 
 function testConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
@@ -264,17 +264,17 @@ test('in-progress: an item with a live work agent and no PR moves to the in-prog
   system.store.close();
 });
 
-test('in-progress: a deliberation agent — a planner or an assayer — moves nothing', async () => {
+test('in-progress: a deliberation agent — a planner or an appraiser — moves nothing', async () => {
   const system = walkSystem({ issuePickupStates: ['Ready'], issueInProgressState: 'Doing' });
-  // #21 is left to the assayer (the first gate); #22 is past it, so the planner
+  // #21 is left to the appraiser (the first gate); #22 is past it, so the planner
   // takes it. Neither is work on the goal.
   await trackedIssue(system, 21, 'Ready');
   await trackedIssue(system, 22, 'Ready');
-  failAssayOpen(system.store, 22);
+  failAppraisalOpen(system.store, 22);
 
   await system.harness.runCycle('manual');
   const origins = system.store.listTasks().map((t) => t.originRef);
-  assert.ok(origins.includes('issue:21:assay'), 'an assayer is on #21');
+  assert.ok(origins.includes('issue:21:appraisal'), 'an appraiser is on #21');
   assert.ok(origins.includes('issue:22:plan'), 'a planner is on #22');
 
   await system.harness.runCycle('manual');

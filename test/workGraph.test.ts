@@ -634,7 +634,7 @@ test('and nothing in the dispatcher reaches any part of the graph', () => {
 
 test('and nothing under web/ reaches the dispatcher or the graph', () => {
   // The third sibling, for the cockpit (#168). The Goal Floor draws two verdicts
-  // — a PR's CI classification and an issue's assay — that the browser cannot
+  // — a PR's CI classification and an issue's appraisal — that the browser cannot
   // compute without server code, and importing it is exactly the wrong way to
   // get them: a second glob matcher and a second first-match-wins ordering,
   // sitting nowhere near the rule they duplicate, failing silently the first time

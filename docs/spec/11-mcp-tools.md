@@ -26,7 +26,7 @@ assembles them (see [How a tool is built](#how-a-tool-is-built)).
 | `note_progress`      | Say in one line what the agent is working on right now.                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `link_ticket`        | File the tracker item for a filed finding or a bug an operator raised: the agent hands over the title and body, or names an existing item it duplicates.                                                                                                                                                                                                                                                                                                                                      |
 | `conclude_work`      | Say whether the **issue** the agent was dispatched for is finished. The only thing that concludes a ticket in the harness's view.                                                                                                                                                                                                                                                                                                                                                             |
-| `assay_issue`        | The gate in front of the work: say whether the issue an assayer was dispatched to judge has a goal that can be worked from. Fenced to `issue:<n>:assay` origins.                                                                                                                                                                                                                                                                                                                              |
+| `appraise_issue`        | The gate in front of the work: say whether the issue an appraiser was dispatched to judge has a goal that can be worked from. Fenced to `issue:<n>:appraisal` origins.                                                                                                                                                                                                                                                                                                                              |
 | `assess_issue`       | The second look: say whether the issue an assessor was dispatched to judge is actually delivered. Fenced to `issue:<n>:assess` origins.                                                                                                                                                                                                                                                                                                                                                       |
 | `conclude_part`      | Close **one plan part** that finished without a pull request — a report, or the determination that nothing needs building. Fenced to `issue:<n>:part:<slug>` origins.                                                                                                                                                                                                                                                                                                                         |
 | `scratch_append`     | Leave a note on the shared scratchpad for the issue this agent is working. Append-only, attributed from the credential. Refused outside an issue subtree.                                                                                                                                                                                                                                                                                                                                     |
@@ -312,7 +312,7 @@ the finding or the bug filing that job was created for`. A job is created for at
 It routes through `AgentManager.linkTicket`, which emits the `finding` event on the finding arm so the
 cockpit repaints on the link rather than on the next pulse.
 
-Two things it is **not** for any more. A **work item** for unrecorded work and a **blueprint's** ticket
+Two things it is **not** for any more. A **work item** for unrecorded work and a **brief's** ticket
 are filed by the harness on the operator's request, with no agent and no job in between — their bodies
 were already harness- or operator-composed text, so a desk agent was being spent on one API call. See
 [13](13-jobs-and-tickets.md#filing-a-ticket).
@@ -415,22 +415,22 @@ resolved from the credential.
 It routes through `AgentManager.recordAssessment` for the `assessment` event, so the cockpit
 repaints on the verdict rather than on the next pulse.
 
-### `assay_issue`
+### `appraise_issue`
 
-Arguments `{status: 'workable'|'unclear', summary, profile?}`. Rule `issue-assay`'s assayer casts its verdict here, with
+Arguments `{status: 'workable'|'unclear', summary, profile?}`. Rule `issue-appraisal`'s appraiser casts its verdict here, with
 identity structural as everywhere else — no issue argument, the origin resolved from the credential.
 
-- **`assayerOrigin` refuses every agent that is _doing_ the work**, and refuses the assessor too,
+- **`appraiserOrigin` refuses every agent that is _doing_ the work**, and refuses the assessor too,
   each by name and pointed at the tool that is theirs. An agent already at work has answered the
   question by starting, and an `unclear` from it would park an issue it is mid-way through — so the
   refusal tells it to **escalate** instead, which reaches a human who can actually answer.
-- **The verdict is stored for both outcomes.** `workable` gates nothing; it exists so the assay is
+- **The verdict is stored for both outcomes.** `workable` gates nothing; it exists so the appraisal is
   not asked again for the same text — the planner's reason for persisting a plan whatever its size.
 - **`unclear` is a question, not a rejection**, and the tool description and response both say so:
   nothing is closed, and the hold ends by itself when the ticket is edited or anything happens on it.
 - The verdict is fingerprinted against the title and body **the agent was dispatched with**, read off
   its task, so an edit made mid-run is not silently swallowed.
-- **`profile` is the assayer sizing the work** (issue #342), and the tool builds its `enum` and its
+- **`profile` is the appraiser sizing the work** (issue #342), and the tool builds its `enum` and its
   description from _this deployment's_ `agentModels.profiles` — so the agent proposes from the
   operator's own vocabulary rather than a difficulty scale that would then need mapping back. It is
   required with `workable` when any profile is configured, because an optional field is one most
@@ -438,9 +438,9 @@ identity structural as everywhere else — no issue argument, the origin resolve
   harness would then act on, at the default's price, having asked. It is dropped rather than refused
   with `unclear`: a goal nobody can start from has no work to size. A proposal that differs from what
   is already standing holds the funnel until a human answers, and the tool's own reply says so.
-  → [02](02-configuration.md#the-gate-the-assayer-proposes-a-human-confirms)
+  → [02](02-configuration.md#the-gate-the-appraiser-proposes-a-human-confirms)
 
-It routes through `AgentManager.recordAssay` for the `assay` event, so the cockpit repaints on the
+It routes through `AgentManager.recordAppraisal` for the `appraisal` event, so the cockpit repaints on the
 verdict rather than on the next pulse.
 
 ### `conclude_part`
@@ -489,7 +489,7 @@ Arguments `{summary, type?, scope?, body?}` — and **nothing that names work**.
   no plan" and opened its pull request by hand: on the default branch rather than the rung beneath
   it, un-stacked, unseeded and unlinked.
 - **Every other origin is refused by name**, and told which tool it actually wants — a PR-concern
-  agent already has a pull request; a planner, assayer, assessor or desk job writes no code. Refusing
+  agent already has a pull request; a planner, appraiser, assessor or desk job writes no code. Refusing
   beats silently scoping: an agent handed a target it did not ask for would open a PR for work it is
   not doing.
 - **The branch must already be pushed, and that is stated in three places.** Nothing in the harness
@@ -555,7 +555,7 @@ and, like every tool here, **nothing that names a pull request**: it comes from 
   → [09](09-execution.md#where-a-reply_on_pr-comes-from)
 - **Fenced to `pr:<n>:comments`** (`replyOrigin`, `src/dispatcher/reviewThreads.ts`) — the review
   dispatch. A CI agent is answering a red check, and a reply from it lands on a thread another agent
-  is working; a planner, assayer or desk job has no review at all. Every other origin is refused by
+  is working; a planner, appraiser or desk job has no review at all. Every other origin is refused by
   name and told what to do instead, because the thing being displaced is the agent doing it by hand.
 - **The `thread` is the id the prompt already handed it.** Omitted, the reply is on the pull request
   rather than in a thread — said in the schema, since an unthreaded answer to a threaded question is
@@ -660,7 +660,7 @@ Three things carry the split:
   reading.
 - **The origin fence is declared in the tool's own module.** Only `plan_submit` has one at this layer
   (`plannerIssue`, pure — it resolves nothing but the issue number). The others — `conclusionOrigin`,
-  `partConclusionOrigin`, `padOriginFor`, `retroSubmitOrigin`, `assessmentOrigin`, `assayerOrigin` —
+  `partConclusionOrigin`, `padOriginFor`, `retroSubmitOrigin`, `assessmentOrigin`, `appraiserOrigin` —
   are asked at the fleet seam because each _resolves_ something out of the store as it refuses (the
   part, the pad, the issue), so a copy in the tool layer would be a second answer to a question already
   answered next to the write it guards.
@@ -871,7 +871,7 @@ So every tool is named in one of two places, and which one is a decision, not a 
   an agent learns something rather than at a point somebody predicted.
 - **Its point of use** — the dispatch prompt or the instruction block for the work it belongs to — for
   a tool only one kind of agent ever calls: `conclude_work`, `conclude_part`, `assess_issue`,
-  `assay_issue`, `retro_submit`, `link_ticket`, the scratch pair, the validation pair. Keeping them out
+  `appraise_issue`, `retro_submit`, `link_ticket`, the scratch pair, the validation pair. Keeping them out
   of the addendum is what keeps it short enough to be read. `request_permission` is named in neither,
   because no agent calls it: Claude Code invokes it through `--permission-prompt-tool`.
 
@@ -977,9 +977,9 @@ nudge over a job that finished, and the operator an inbox item once the nudges a
 So each of those three appends `DONE_REMINDER` (`src/agents/agentProtocol.ts`, built from
 `DONE_SENTINEL` so there is never a second copy of the string) to its success note. It states the
 _condition_ — "when you have finished everything your task asked for" — rather than announcing the
-end, because the call is not itself the end: an assayer has a `scratch_append` note to leave after
-`assay_issue`, and wording that read as "you are finished now" would cut that short. For that reason
-`assay_issue` does not carry the reminder; the last thing its prompt asks for is the note, not the
+end, because the call is not itself the end: an appraiser has a `scratch_append` note to leave after
+`appraise_issue`, and wording that read as "you are finished now" would cut that short. For that reason
+`appraise_issue` does not carry the reminder; the last thing its prompt asks for is the note, not the
 verdict.
 
 The reminder does not make a tool call imply done. That asymmetry is `note_progress`'s, for the same

@@ -124,7 +124,7 @@ function dispatchAction(kind: TaskSummary['kind']): Decision['action']['type'] {
  */
 /**
  * The issue an origin in the `issue:<n>` subtree belongs to — a planner, a part, an
- * assay — or null for a ref naming anything else.
+ * appraisal — or null for a ref naming anything else.
  *
  * The server's `originIssueNumber`, restated rather than imported for the reason
  * `ownsPr` restates the branch convention: this is a *string shape*, not a verdict,
@@ -157,7 +157,7 @@ function injectedPr(pr: Omit<OpenPullRequest, 'attention' | 'ciVerdict'>): OpenP
 function injectedIssue(
   issue: Omit<
     Issue,
-    | 'assay'
+    | 'appraisal'
     | 'conclusion'
     | 'delivery'
     | 'instructions'
@@ -175,7 +175,7 @@ function injectedIssue(
     conclusion: { verdict: 'undeclared', by: null, note: '', at: null },
     shortfall: null,
     delivery: null,
-    assay: null,
+    appraisal: null,
     retrospective: null,
     scratchpad: null,
     instructions: [],
@@ -624,14 +624,14 @@ class DemoServer {
   }
 
   /**
-   * Override the goal assay — the demo mirror of the escape hatch a blocking gate
+   * Override the goal appraisal — the demo mirror of the escape hatch a blocking gate
    * has to have. `null` deletes the row rather than storing a third verdict, so
    * "nobody has decided" keeps one representation here too.
    */
-  async setIssueAssay(issueNumber: number, verdict: 'workable' | 'unclear' | null): Promise<{ ok: true }> {
+  async setIssueAppraisal(issueNumber: number, verdict: 'workable' | 'unclear' | null): Promise<{ ok: true }> {
     const issue = this.state.world.issues.find((i) => i.number === issueNumber);
     if (issue) {
-      issue.assay =
+      issue.appraisal =
         verdict === null
           ? null
           : {
@@ -639,7 +639,7 @@ class DemoServer {
               by: 'operator',
               commentRef: null,
               // An operator's own verdict proposes no profile: the pin is its own
-              // control, and a hand-set assay must not raise a question nobody asked.
+              // control, and a hand-set appraisal must not raise a question nobody asked.
               proposedProfile: null,
               awaitingProfileAnswer: false,
               // Nor any placement: the same argument. What the operator sets by
@@ -651,7 +651,7 @@ class DemoServer {
       this.addDecision(
         'no_op',
         'executed',
-        `issue #${issueNumber} → ${verdict ?? 'unassayed'}`,
+        `issue #${issueNumber} → ${verdict ?? 'unappraised'}`,
         undefined,
         undefined,
         undefined,
@@ -719,14 +719,14 @@ class DemoServer {
    * write, and of the answer it doubles as.
    *
    * The tag write and the settling are one act here as they are on the route: an
-   * operator who picks a profile has answered the assayer's proposal, whether
+   * operator who picks a profile has answered the appraiser's proposal, whether
    * they took it or kept their own.
    */
   async setIssueProfile(issueNumber: number, profile: string | null): Promise<{ ok: true }> {
     const issue = this.state.world.issues.find((i) => i.number === issueNumber);
     if (issue) {
       issue.modelPin = { profile, ignoredTags: [] };
-      if (issue.assay) issue.assay = { ...issue.assay, awaitingProfileAnswer: false };
+      if (issue.appraisal) issue.appraisal = { ...issue.appraisal, awaitingProfileAnswer: false };
       this.dirty();
     }
     return { ok: true };
@@ -736,7 +736,7 @@ class DemoServer {
    * Settle a goal's placement — the demo mirror of the tracker write and of the
    * question it ends.
    *
-   * The row is dropped from `assay.placement` rather than flagged answered,
+   * The row is dropped from `appraisal.placement` rather than flagged answered,
    * because that is what the real snapshot does: the question is *derived* from
    * the live work item, so once the field is set — or the operator has said it
    * wants none — there is nothing left to derive it from. `parent` is written onto
@@ -771,8 +771,8 @@ class DemoServer {
 
   private settlePlacement(issueNumber: number, field: 'parent' | 'areaPath'): void {
     const issue = this.state.world.issues.find((i) => i.number === issueNumber);
-    if (!issue?.assay) return;
-    issue.assay = { ...issue.assay, placement: issue.assay.placement.filter((p) => p.field !== field) };
+    if (!issue?.appraisal) return;
+    issue.appraisal = { ...issue.appraisal, placement: issue.appraisal.placement.filter((p) => p.field !== field) };
     this.dirty();
   }
 
@@ -2312,7 +2312,7 @@ const demoCache = (costUsd: number) => ({
 });
 
 const PHASE_COPY: Record<SpendPhase, { label: string; blurb: string }> = {
-  deliberation: { label: 'Deliberation', blurb: 'Planning and assaying — deciding what the work is' },
+  deliberation: { label: 'Deliberation', blurb: 'Planning and appraising — deciding what the work is' },
   build: { label: 'Build', blurb: 'The pickup and every part — where a branch is cut and a PR is written' },
   ci: { label: 'CI', blurb: 'Answering a pull request’s failing or blocked checks — what a red pipeline costs' },
   landing: { label: 'Landing', blurb: 'The rest of getting a pull request in — review comments, retargets, the merge' },
@@ -2903,7 +2903,7 @@ function buildDemoMcp(): McpInsights {
     tool('conclude_work', 'point-of-use', 47, 0, 41, 74, 19),
     tool('assess_issue', 'point-of-use', 39, 0, 26, 118, 9),
     tool('link_ticket', 'point-of-use', 31, 2, 310, 190, 7),
-    tool('assay_issue', 'point-of-use', 27, 0, 24, 205, 6),
+    tool('appraise_issue', 'point-of-use', 27, 0, 24, 205, 6),
     tool('retro_submit', 'point-of-use', 19, 0, 18, 300, 5),
     tool('escalate', 'addendum', 14, 1, 15, 470, 0),
     // Called and refused every time — a schema nobody can satisfy, which is the
@@ -4243,8 +4243,8 @@ export const demoApi = {
     getServer().setPartProfile(planId, slug, profile),
   setIssueConclusion: (issueNumber: number, verdict: 'done' | 'more_work' | null) =>
     getServer().setIssueConclusion(issueNumber, verdict),
-  setIssueAssay: (issueNumber: number, verdict: 'workable' | 'unclear' | null) =>
-    getServer().setIssueAssay(issueNumber, verdict),
+  setIssueAppraisal: (issueNumber: number, verdict: 'workable' | 'unclear' | null) =>
+    getServer().setIssueAppraisal(issueNumber, verdict),
   addInstruction: (issueNumber: number, text: string) => getServer().addInstruction(issueNumber, text),
   overruleShortfall: (issueNumber: number, text: string) => getServer().overruleShortfall(issueNumber, text),
   releaseEnvironmentGate: (issueNumber: number, released: boolean, note?: string) =>

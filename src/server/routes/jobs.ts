@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { trackerCoordinates } from '../../mcp/findings.js';
-import { blueprintTicketFields } from '../../blueprintTicket.js';
+import { briefTicketFields } from '../../briefTicket.js';
 import { watchLabelFor } from '../../watchLabels.js';
 import { ATTACHMENT_BODY_LIMIT, AttachmentsField, prepareAttachments } from '../../jobs/attachments.js';
 import { deriveJobTitle } from '../../jobs.js';
@@ -47,12 +47,12 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const { prompt, kind, branch } = body;
       const providedTitle = body.title ?? null;
       // Before anything is created: a refused attachment must leave no queued job,
-      // because a blueprint that says "make it look like this" without the "this"
-      // is worse than no blueprint at all.
+      // because a brief that says "make it look like this" without the "this"
+      // is worse than no brief at all.
       const prepared = prepareAttachments(body.attachments);
       if (!prepared.ok) return reply.code(400).send({ error: prepared.error });
       // Store the images against the ref the work now lives under — `job:<id>` for a
-      // blueprint that dispatches, `issue:<n>` for one the harness filed as a ticket
+      // brief that dispatches, `issue:<n>` for one the harness filed as a ticket
       // instead. Written under the final ref rather than moved onto it later (issue
       // #394 removed the re-key with the filing agent that needed it), so an image
       // is the goal's from the moment it lands.
@@ -75,13 +75,13 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         );
       };
 
-      // A code blueprint enters the workflow through the *same* door as a ticket
+      // A code brief enters the workflow through the *same* door as a ticket
       // (issue #198): when a tracker is configured, it is not dispatched onto a
       // branch but filed as a **watched ticket**, so it flows through the planning
-      // funnel (assay → plan → parts → work) exactly like a picked-up issue rather
+      // funnel (appraisal → plan → parts → work) exactly like a picked-up issue rather
       // than being coded straight off this prompt. The whole transform is here, at
       // route time — rule `manual-job` is untouched, which keeps a clean recursion
-      // boundary: only operator-injected code blueprints via this route become
+      // boundary: only operator-injected code briefs via this route become
       // tickets, and nothing is dispatched for the filing itself.
       //
       // The harness files it rather than a desk agent (issue #394), and this arm is
@@ -92,14 +92,14 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       // already the operator's own words verbatim, so nothing was being delegated
       // but a title.
       //
-      // Fallbacks are today's behaviour: a *desk* blueprint dispatches directly, and
-      // a code blueprint with no tracker (`fake`/unconfigured) has nowhere to file,
+      // Fallbacks are today's behaviour: a *desk* brief dispatches directly, and
+      // a code brief with no tracker (`fake`/unconfigured) has nowhere to file,
       // so it too dispatches directly.
       const tracker = kind === 'code' ? trackerCoordinates(system.config) : null;
       if (tracker) {
         const watchLabel = watchLabelFor(config.labelPrefix);
-        const derived = blueprintTicketFields(prompt);
-        const ticketBody = system.prompts.render('blueprint-ticket-body', derived.vars);
+        const derived = briefTicketFields(prompt);
+        const ticketBody = system.prompts.render('brief-ticket-body', derived.vars);
         let ticketRef: string;
         try {
           ticketRef = await system.filing({
@@ -113,7 +113,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         } catch (err) {
           system.errors.record({
             source: 'provider',
-            message: `filing a blueprint as a ticket failed: ${(err as Error).message}`,
+            message: `filing a brief as a ticket failed: ${(err as Error).message}`,
           });
           return reply.code(502).send({ error: `the tracker refused the ticket: ${(err as Error).message}` });
         }
@@ -156,8 +156,8 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const title = providedTitle ?? deriveJobTitle(prompt);
       const job = store.createJob({ title, prompt, kind, branch });
       // A job whose images failed to land is cancelled rather than left queued
-      // without them: a blueprint that says "make it look like this" without the
-      // "this" is worse than no blueprint at all.
+      // without them: a brief that says "make it look like this" without the
+      // "this" is worse than no brief at all.
       try {
         attach(`job:${job.id}`);
       } catch (err) {
@@ -244,7 +244,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     checked({ params: IdParams }, async ({ params, reply }) => {
       const job = store.cancelJob(params.id);
       if (!job) return reply.code(409).send({ error: 'job not found or no longer queued' });
-      // The one deletion in the attachment story: a blueprint dropped before it
+      // The one deletion in the attachment story: a brief dropped before it
       // ran is the only target nothing downstream can want the images for. Rows
       // first, files second, for the ordering reason the launch states.
       store.deleteAttachments(`job:${job.id}`);

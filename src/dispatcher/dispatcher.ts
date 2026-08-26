@@ -4,7 +4,7 @@ import type {
   Escalation,
   GoalPriority,
   IssueConclusion,
-  IssueAssay,
+  IssueAppraisal,
   IssueDelivery,
   IssueShortfall,
   Job,
@@ -122,7 +122,7 @@ export interface DispatchContext {
   priorityOverrides?: PriorityOverride[];
   /**
    * The goals the operator marked a priority. Every origin under a flagged goal —
-   * its pickup, its plan, its parts, its assay, its assessor, its validation checks
+   * its pickup, its plan, its parts, its appraisal, its assessor, its validation checks
    * and the pull requests its branches opened — ranks ahead of the natural order and
    * ahead of a `priorityOverrides` drag, behind rule `manual-job` only.
    *
@@ -178,13 +178,13 @@ export interface DispatchContext {
    */
   shortfalls?: IssueShortfall[];
   /**
-   * Standing goal-assay verdicts, keyed on the same `issue:<n>` origin — whether an
+   * Standing goal-appraisal verdicts, keyed on the same `issue:<n>` origin — whether an
    * issue's text can be worked from at all (issue #158). An `unclear` verdict gates
    * the funnel in front of the issue: rules `issue-plan` and `issue-pickup` skip it while the verdict
-   * stands. Absent/empty means nothing has been assayed, which holds nothing — the
-   * fail-open that makes the gate safe (see `src/intake/assay.ts`).
+   * stands. Absent/empty means nothing has been appraised, which holds nothing — the
+   * fail-open that makes the gate safe (see `src/intake/appraisal.ts`).
    */
-  assays?: IssueAssay[];
+  appraisals?: IssueAppraisal[];
   /**
    * The issues that already have a retrospective — **origins only, never the
    * writing**. Rule `issue-retro` needs to know whether to dispatch one and that is the whole
@@ -198,9 +198,9 @@ export interface DispatchContext {
    * World transitions on the issues carrying a standing `unclear` verdict, since
    * the oldest of them. One of the two things that ends such a hold (the other is
    * the ticket's own text changing, which needs no read). Narrowed by
-   * `assaySignalQuery`, so it is empty until an issue is actually refused.
+   * `appraisalSignalQuery`, so it is empty until an issue is actually refused.
    */
-  assaySignals?: WorldEvent[];
+  appraisalSignals?: WorldEvent[];
   /** How many more agents may be started this cycle (concurrency headroom). */
   agentHeadroom: number;
   /** Recent audit decisions, so a persistent PR signal isn't re-notified to an agent every cycle. */

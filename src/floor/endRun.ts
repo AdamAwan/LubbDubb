@@ -34,7 +34,7 @@ const LIVE: Agent['status'][] = ['starting', 'running', 'waiting'];
  * asks first rather than a card being cleared away.
  *
  * **Scoped exactly as the goal page scopes it** — the `issue:<n>` subtree, so a
- * planner, a part and an assay all go, and a `pr:` agent does not. The page's own
+ * planner, a part and an appraisal all go, and a `pr:` agent does not. The page's own
  * agent count reads the same subtree, which is what lets the confirmation state a
  * number the operator can already see on the header.
  *

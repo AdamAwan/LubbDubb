@@ -27,11 +27,11 @@ export interface Worktrees {
   /**
    * Path to a **read-only** checkout of `of`, leased under `key` (issue #396).
    *
-   * For the dispatches that need a repository and no branch — the assay, the
+   * For the dispatches that need a repository and no branch — the appraisal, the
    * assessment, a validation check — each of which is told in its prompt not to
    * commit or push anything, and each of which used to mint a branch cut from the
    * default one. That branch never got a pull request, so it was never merged, so
-   * `reapableBranches` never deleted it: one ref per assay, per assessment and per
+   * `reapableBranches` never deleted it: one ref per appraisal, per assessment and per
    * check, accumulating for the life of the deployment.
    *
    * So nothing is minted at all. The slot is checked out **detached** at the commit
@@ -82,7 +82,7 @@ export interface Worktrees {
  * A bounded pool of git worktree directories, leased to branches on demand.
  *
  * **Why a pool and not a directory per branch.** Every goal mints branches — the
- * assay, the pickup, one per plan part — and the old manager created a directory
+ * appraisal, the pickup, one per plan part — and the old manager created a directory
  * per branch and deleted it when the work ended. So a branch that came back — a CI
  * failure to chase, a review comment to answer, a part picked up again — landed in
  * a tree with nothing installed and paid to install it before it could run one
@@ -266,7 +266,7 @@ export class WorktreeManager implements Worktrees {
    * 2. (Read-only only) a free slot that is already a read-only checkout of the
    *    same ref. Handing it over costs nothing and burns nothing — every read-only
    *    checkout of one ref is the same tree to whoever gets it — so it beats both
-   *    a spare and a fresh slot, and it is what stops a fleet of assays and
+   *    a spare and a fresh slot, and it is what stops a fleet of appraisals and
    *    validation checks paying for a cold install each.
    * 3. A **spare** slot — free, and on a detached HEAD nothing marks or a branch
    *    whose ref is gone, so it holds nothing anybody can come back for.
@@ -540,7 +540,7 @@ export class WorktreeManager implements Worktrees {
    * branch checked out in it, or the key its mark names.
    *
    * **The mark is why a read-only slot survives a restart.** A detached checkout
-   * has no ref for `pool.held` to be asked about, so without it a restored assayer's
+   * has no ref for `pool.held` to be asked about, so without it a restored appraiser's
    * tree would read as a spare and be cleaned and switched under the agent still
    * sitting in it — the exact damage the lease exists to refuse, and silent.
    */
@@ -693,7 +693,7 @@ export class WorktreeManager implements Worktrees {
    * exists because the previous occupant's output answers a different source, and
    * here it answers the same one — the default branch as the harness resolves it —
    * so `-ffd` takes the last agent's scratch and leaves the build state standing.
-   * That is what stops a queue of assays and validation checks paying for a cold
+   * That is what stops a queue of appraisals and validation checks paying for a cold
    * install each, which the pool could never give work that warms nothing of its
    * own. The mark is the whole of the evidence: it is written only by a read-only
    * hand-over and cleared by every other, so a tree the harness cannot vouch for is

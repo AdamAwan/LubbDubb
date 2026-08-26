@@ -278,7 +278,7 @@ root. Two mechanisms replace that, on an "authorise the routine, ask about the r
 Every launch also carries `permissions.additionalDirectories: [attachmentRoot]`, in the same
 `--settings` fragment as the allow-list and for the same reason it is not on `--allowedTools`.
 
-It exists because a blueprint's attachments (issue #249) are stored **once**, outside every worktree —
+It exists because a brief's attachments (issue #249) are stored **once**, outside every worktree —
 see [09](09-execution.md#an-operators-attachments-reach-the-agent) — so the absolute path the prompt
 names is one the agent could not otherwise open. It is a **standing grant for the life of the launch**
 and it is not per-goal: an agent working an unrelated issue can read another goal's attachments. That
