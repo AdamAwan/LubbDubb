@@ -323,6 +323,33 @@ test('a goal row wears its pickup verdict in words, not as an enum', () => {
   }
 });
 
+/**
+ * A goal wears the live treatment while an agent is on it, the rack's way.
+ *
+ * Off the dispatch's **origin**, which is the half that is easy to get wrong: an
+ * agent's origin is a pull request as often as the goal itself, so a reading that
+ * only understood `issue:<n>` would say nothing is happening on every goal whose
+ * work has reached a pull request — which is most of the ones being worked, and
+ * looks exactly like a quiet fleet.
+ */
+test('a goal row says so while an agent is on it', () => {
+  const state = buildDemoState().state;
+  const card = (html: string): string => html.slice(html.indexOf('Goals in flight'), html.indexOf('Pull requests'));
+
+  const html = render(view('facts'));
+  const rows = card(html).split(ROW).slice(1);
+  const staffed = rows.filter((row) => row.includes('cn-onit'));
+  assert.ok(staffed.length > 0, 'the fixtures must put an agent on a goal whose origin is a pull request');
+  for (const row of staffed) assert.match(row, /cn-live/, 'a goal says an agent is on it and does not wear it');
+
+  // And it comes back: a marker that outlived its agent is a goal that looks
+  // staffed forever, which is the one row nobody re-checks.
+  const quiet = render(
+    view('facts', { agents: state.agents.map((a) => ({ ...a, endedAt: a.endedAt ?? new Date().toISOString() })) }),
+  );
+  assert.ok(!card(quiet).includes('cn-onit'), 'a finished agent still holds a goal');
+});
+
 /** The grammar is a place, so both readings are a link somebody can send. */
 test('the row grammar round-trips through the query string', () => {
   assert.equal(placeQuery(NOWHERE), '', 'the default grammar is a bare URL');

@@ -488,6 +488,7 @@ function goalRow(issue: Issue, view: CockpitView, actions: CockpitActions): Pane
   const page = buildGoalPage(view.state, ref, view.needsYou);
   const track = page === null ? null : buildGoalTrack(page.parts);
   const asks = view.needsYou.filter((n) => n.goalRef === ref).length;
+  const onIt = view.agentOnGoal.get(ref);
   const furthest = furthestEnvironment(view.state, ref);
 
   return {
@@ -519,10 +520,10 @@ function goalRow(issue: Issue, view: CockpitView, actions: CockpitActions): Pane
     // actionable first, and until now on no overview surface at all.
     why: issue.pickup.reasons.join(' '),
     reading: track !== null ? <Track track={track} /> : undefined,
-    // An agent on one of this goal's parts, read off the parts rather than off the
-    // track: `now` counts `in_review` too, and a pull request sitting open is not
-    // somebody's hands on the work.
-    live: page !== null && page.parts.some((part) => part.agentLive),
+    // Somebody's hands on this goal as you read it, off the dispatch's own origin
+    // rather than off the track: `now` counts `in_review` too, and a pull request
+    // sitting open is nobody working.
+    live: onIt !== undefined,
     chips: (
       <>
         {/* Where the work actually got to, on the row rather than a page deeper.
@@ -530,6 +531,11 @@ function goalRow(issue: Issue, view: CockpitView, actions: CockpitActions): Pane
             has no furthest anything, and a chip claiming one would be the boolean
             rollup the reach fold exists to refuse. */}
         {furthest !== null && <i className="cn-chip cn-ok">{furthest}</i>}
+        {/* Beside the environment rather than in place of the track: on a pull
+            request the marker supersedes the checks, because those are a verdict on
+            a commit being replaced. A goal's track is how far the plan got, which
+            an agent working does not make untrue. */}
+        {onIt !== undefined && <AgentOnIt agentId={onIt.id} note={onIt.note} actions={actions} />}
       </>
     ),
   };

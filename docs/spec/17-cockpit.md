@@ -1592,6 +1592,15 @@ pins the prose-only rule on the marker.
   agent is on one of its parts — read off the parts' `agentLive`, not off the track, because the
   track's moving segment counts `in_review` too and an open pull request is not somebody's hands on
   the work.
+  **A goal wears the live treatment while an agent is on it**, the same edge, tint and sweep the rack
+  draws, and the same `AgentOnIt` chip — beside its environment rather than in place of its track: on a
+  pull request the marker supersedes the checks, because those are a verdict on a commit being
+  replaced, and a goal's track is how far the plan got, which an agent working does not make untrue.
+  Resolved off the dispatch's **origin** (`agentOnGoal`, through `goalOfOrigin`), not off a branch and
+  not off the parts: an agent's origin is a pull request as often as the goal itself, so a reading that
+  only understood `issue:<n>` would say nothing is happening on every goal whose work has reached a
+  pull request — most of the ones being worked, and indistinguishable from a quiet fleet.
+  → `test/panelGrammar.test.ts`
   The track's four colours carry their key in the **hover**: a legend would cost more room than the
   bar, and four tones with nothing to read them against is a reading only somebody who has read the
   source can take.

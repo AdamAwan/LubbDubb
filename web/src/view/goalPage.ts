@@ -164,6 +164,29 @@ export function goalOfPr(state: AppState, prNumber: number): string | null {
   return pr ? branchGoal(pr.branch) : null;
 }
 
+/**
+ * The goal a dispatch was raised against, as `issue:<n>` — the origin ref read
+ * through whichever of the two shapes it wears.
+ *
+ * A dispatch names a goal directly (`issue:390`, and the part refs built on it) or
+ * names a pull request (`pr:412`), and only the first is a goal ref already. Both
+ * mean "somebody is working this goal", so a surface that reads only the first
+ * shape says nothing is happening on every goal whose work has reached a pull
+ * request — which is most of the ones being worked.
+ *
+ * Null when the origin is a ticketless pull request, which is a real answer for
+ * the same reason it is in {@link goalOfPr}.
+ *
+ * @public shared with buildViewModel's agentOnGoal
+ */
+export function goalOfOrigin(state: AppState, originRef: string | null): string | null {
+  if (originRef === null) return null;
+  const issue = /^issue:(\d+)/.exec(originRef);
+  if (issue) return `issue:${issue[1]}`;
+  const pr = /^pr:(\d+)$/.exec(originRef);
+  return pr ? goalOfPr(state, Number(pr[1])) : null;
+}
+
 const GROUP_OF: Record<PlanPart['status'], PartGroup | null> = {
   merged: 'merged',
   concluded: 'merged',

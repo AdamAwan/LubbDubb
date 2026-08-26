@@ -16,7 +16,7 @@ import type {
 } from '../types.js';
 import { buildNeedsYou } from './needsYou.js';
 import type { AppliedFix, NeedRow } from './needsYou.js';
-import { buildGoalPage } from './goalPage.js';
+import { buildGoalPage, goalOfOrigin } from './goalPage.js';
 import type { GoalPageView } from './goalPage.js';
 import type { ConfigTab, ConsolePanel, ConsoleTab, InsightsView } from '../cockpit/actions.js';
 
@@ -190,6 +190,16 @@ export interface CockpitView {
    * pull request that looks staffed forever.
    */
   agentOnBranch: ReadonlyMap<string, Agent>;
+  /**
+   * goal ref → the live agent working it, for the surfaces that draw a *goal*.
+   *
+   * A second map rather than a lookup through {@link CockpitView.agentOnBranch},
+   * because a branch is not how a goal finds its agent: the dispatch names an
+   * origin, and the origin is as often a pull request as the goal itself. Resolved
+   * through {@link goalOfOrigin} for that reason, and live only, for
+   * `agentOnBranch`'s.
+   */
+  agentOnGoal: ReadonlyMap<string, Agent>;
 
   /** Which plan's modal is open, or null when none is. */
   viewingPlan: string | null;
@@ -434,6 +444,14 @@ export function buildViewModel(input: ViewInputs): CockpitView {
         if (agent.endedAt !== null) return [];
         const branch = state.tasks.find((t) => t.id === agent.taskId)?.branch ?? null;
         return branch === null ? [] : ([[branch, agent]] as [string, Agent][]);
+      }),
+    ),
+    agentOnGoal: new Map(
+      state.agents.flatMap((agent) => {
+        if (agent.endedAt !== null) return [];
+        const origin = state.tasks.find((t) => t.id === agent.taskId)?.originRef ?? null;
+        const goal = goalOfOrigin(state, origin);
+        return goal === null ? [] : ([[goal, agent]] as [string, Agent][]);
       }),
     ),
     viewingPlan: input.viewingPlan,

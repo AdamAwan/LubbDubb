@@ -1589,7 +1589,12 @@ a.cn-tgl {
      the longest state the fleet card has ("at a keyboard"). */
   --cn-w-state: 104px;
   --cn-w-read: 104px;
-  --cn-w-chips: 132px;
+  /* Two chips, and measured against the two widest: a goal in an environment with
+     an agent on it wears both, and at 132px they overran the slot by 7 — which,
+     the slot being `overflow: visible`, spilled onto the control beside it rather
+     than clipping. Neither fixture pairs them; a goal whose next part is running
+     while an earlier one is in staging does. */
+  --cn-w-chips: 148px;
   --cn-w-act: 124px;
   --cn-w-refs: 108px;
   /* The subject's floor, and the only one of these that is a minimum rather than a
