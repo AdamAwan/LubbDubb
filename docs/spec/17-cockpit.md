@@ -1305,6 +1305,15 @@ comes to wear two tones nobody chose. `CourtChip` stays here: the rack draws the
 word in its state column, which is where every card on the overview puts its state, and this page has
 no such column. `waitedFor` is shared for the chip's reason — the rack draws the same age as a fact.
 
+**A live agent on the branch replaces the ladder, on the overview's rack.** Not beside it —
+it supersedes it: the checks are a reading of a commit the agent is in the middle of replacing, so a
+green dot next to a working agent is the least true thing the row can say. The marker is a way into
+that agent's transcript, and it is drawn from `agentOnBranch` — the two-hop join from an agent's
+`taskId` to its task's branch, derived once in the view model because a card doing it itself is a card
+that will do it slightly differently. **Live agents only**: a finished agent's branch is history, and a
+marker that outlived it would be a pull request that looks staffed forever, which is the one row
+nobody re-checks. The moment the agent ends, the checks come back. → `test/panelGrammar.test.ts`
+
 **A failing check's dot is red.** It was `--cn-inert` — the grey the token block calls _deliberately
 not a verdict_ — on the reasoning that a red check the harness is already dispatching on is not your
 move. But at 6px that is the empty track, so the most actionable reading on the row was drawn as the

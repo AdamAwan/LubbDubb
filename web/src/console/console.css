@@ -2892,3 +2892,47 @@ button.cn-grow {
 .cn-spent .cn-eye {
   opacity: 1;
 }
+
+/* An agent on the branch, in the slot the checks would be in. Green, the fleet
+   lamp's own colour for a running agent, so the reading is the same one the Fleet
+   card gives — and it pulses because that is the difference it is drawn to make:
+   the checks beside it are static history, and this is happening now. */
+.cn-onit {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--cn-green-ink);
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.cn-onit:hover,
+.cn-onit:focus-visible {
+  text-decoration: underline;
+}
+.cn-onit-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cn-green);
+  animation: cn-onit-pulse 2s ease-in-out infinite;
+}
+@keyframes cn-onit-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--cn-green) 40%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--cn-green) 0%, transparent);
+  }
+}
+/* Motion is a signal here, not decoration — but a signal nobody asked for is a
+   thing to be able to turn off, and the dot still says what it says standing still. */
+@media (prefers-reduced-motion: reduce) {
+  .cn-onit-dot {
+    animation: none;
+  }
+}

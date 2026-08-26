@@ -252,6 +252,49 @@ test('a pull-request row wears the court the server put it in', () => {
   }
 });
 
+/**
+ * A live agent on the branch replaces the checks, and only while it is live.
+ *
+ * It *supersedes* rather than sits beside: the ladder is a reading of a commit
+ * the agent is in the middle of replacing, so a green dot next to a working agent
+ * is the least true thing the row can say. Which is also why this has to come
+ * back — a marker that outlived its agent would be a pull request that looks
+ * staffed forever, and a row saying "agent on it" is the one row nobody checks.
+ */
+test('a pull-request row draws the agent on its branch instead of its checks', () => {
+  const state = buildDemoState().state;
+  const live = state.agents.filter((a) => a.endedAt === null);
+  const branches = new Set(
+    live.map((a) => state.tasks.find((t) => t.id === a.taskId)?.branch).filter((b) => b != null),
+  );
+  const staffed = state.world.pullRequests.filter((pr) => branches.has(pr.branch));
+  assert.ok(staffed.length > 0, 'the fixtures must put an agent on an open pull request’s branch');
+
+  // Scoped to the rack: a goal row's title is `#376 <the PR's own title>`, so a
+  // page-wide search for a pull request's title finds the goal card first.
+  const rowFor = (html: string, title: string): string => {
+    const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('Up next'));
+    const found = rack.split(ROW).find((chunk) => chunk.includes(title));
+    assert.ok(found, `no row drew "${title}"`);
+    return found.slice(0, found.indexOf('cn-refs'));
+  };
+
+  const html = render(view('facts'));
+  for (const pr of staffed) {
+    const row = rowFor(html, pr.title);
+    assert.match(row, /cn-onit/, `#${pr.number} has an agent on its branch and does not say so`);
+    assert.ok(!row.includes('cn-cd'), `#${pr.number} draws its checks beside a live agent`);
+  }
+
+  // Every agent ended: the checks are the truest reading again, and the marker
+  // is gone from every row.
+  const quiet = render(
+    view('facts', { agents: state.agents.map((a) => ({ ...a, endedAt: a.endedAt ?? new Date().toISOString() })) }),
+  );
+  assert.ok(!quiet.includes('cn-onit'), 'a finished agent still holds a pull request');
+  for (const pr of staffed) assert.match(rowFor(quiet, pr.title), /cn-cd/, `#${pr.number} lost its checks`);
+});
+
 /** The grammar is a place, so both readings are a link somebody can send. */
 test('the row grammar round-trips through the query string', () => {
   assert.equal(placeQuery(NOWHERE), '', 'the default grammar is a bare URL');

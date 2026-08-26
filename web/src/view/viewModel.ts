@@ -179,6 +179,17 @@ export interface CockpitView {
 
   /** The task an agent is working, or null if the row has outlived it. */
   taskFor(agent: Agent): TaskSummary | null;
+  /**
+   * branch → the live agent working it, for the surfaces that draw a *branch* and
+   * want to say somebody is on it.
+   *
+   * Derived here rather than at the call site because the join is two hops — an
+   * agent carries a `taskId` and a task carries the branch — and a card doing it
+   * itself is a card that will do it slightly differently. Live only: a finished
+   * agent's branch is history, and drawn as "an agent is on this" it would be a
+   * pull request that looks staffed forever.
+   */
+  agentOnBranch: ReadonlyMap<string, Agent>;
 
   /** Which plan's modal is open, or null when none is. */
   viewingPlan: string | null;
@@ -418,6 +429,13 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     tailByAgent: input.tails,
 
     taskFor: (agent) => state.tasks.find((t) => t.id === agent.taskId) ?? null,
+    agentOnBranch: new Map(
+      state.agents.flatMap((agent) => {
+        if (agent.endedAt !== null) return [];
+        const branch = state.tasks.find((t) => t.id === agent.taskId)?.branch ?? null;
+        return branch === null ? [] : ([[branch, agent]] as [string, Agent][]);
+      }),
+    ),
     viewingPlan: input.viewingPlan,
     viewingRetro: input.viewingRetro,
     hatching: input.hatching,

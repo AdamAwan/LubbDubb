@@ -595,6 +595,7 @@ function prRow(pr: OpenPullRequest, view: CockpitView, actions: CockpitActions, 
   // than through the plan parts alone: a goal worked whole has no parts at all,
   // which is most finished goals, and the rack drew no goal for any of them.
   const goal = goalOfPr(view.state, pr.number);
+  const onIt = view.agentOnBranch.get(pr.branch);
   return {
     key: String(pr.number),
     title: pr.title,
@@ -616,7 +617,11 @@ function prRow(pr: OpenPullRequest, view: CockpitView, actions: CockpitActions, 
     whyLabel: pr.attention.status,
     whyTone: COURT_TONE[pr.attention.status] ?? 'quiet',
     why: pr.attention.reasons.join(' '),
-    reading: <CiLadder pr={pr} />,
+    // What is happening to this pull request *now* beats what its checks last
+    // said: an agent on the branch is about to change them, so the ladder is a
+    // reading of a commit that is being replaced. Only while one is actually on
+    // it — every other row keeps its checks.
+    reading: onIt === undefined ? <CiLadder pr={pr} /> : <OnIt agent={onIt} actions={actions} />,
     toggle: (
       <AsyncButton
         className="cn-eye"
@@ -635,6 +640,33 @@ function prRow(pr: OpenPullRequest, view: CockpitView, actions: CockpitActions, 
     ),
     spent: unwatched,
   };
+}
+
+/**
+ * An agent is on this branch right now, in the slot the checks would be in.
+ *
+ * It replaces the ladder rather than sitting beside it because it *supersedes*
+ * it: the checks on the row are a reading of a commit an agent is in the middle
+ * of replacing, and a green dot beside a live agent is the least true thing the
+ * row can say. The moment the agent ends, the checks come back.
+ *
+ * A button, because the fleet card is one click away and the row's own click is
+ * already spent on the pull request. Not a `<Ref>` — an agent's drawer is a place
+ * in the cockpit rather than a reference, which is the same way the goal page
+ * opens one.
+ */
+function OnIt({ agent, actions }: { agent: Agent; actions: CockpitActions }): JSX.Element {
+  return (
+    <button
+      type="button"
+      className="cn-onit"
+      onClick={() => actions.select(agent.id)}
+      title={agent.note ?? 'An agent is working this branch — open its transcript'}
+    >
+      <i className="cn-onit-dot" />
+      agent on it
+    </button>
+  );
 }
 
 /**
