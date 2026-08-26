@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ValidationCheck, ValidationCheckState, ValidationResourceView } from '../types.js';
-import { desktopDeepLink } from '../cockpit/desktopLink.js';
+import { checkPrompt } from '../cockpit/desktopLink.js';
+import { DesktopLink } from './DesktopLink.js';
 import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 import { renderMarkdown } from './markdown.js';
 
@@ -319,8 +320,7 @@ function CheckBlock({
   const [verb, setVerb] = useState<Verb | null>(null);
   const [note, setNote] = useState('');
   const send = useAsyncAction();
-  const promptText = desktopPrompt(issueNumber, check.letter);
-  const desktopHref = desktopDeepLink(desktopFolder, promptText);
+  const promptText = checkPrompt(issueNumber, check.letter);
 
   const submit = (): void => {
     const text = note.trim();
@@ -486,17 +486,18 @@ function CheckBlock({
                       own Claude Code. So this hands the check *over* — the deep
                       link opens that client on this repository with the command
                       already typed, which is a destination and therefore an
-                      anchor. The command stays in the title, because a link that
-                      silently did nothing and a command nobody can read are the
-                      same dead end — and only the machine running this browser
-                      has a client to answer it. */}
-                  <a
+                      anchor. `DesktopLink` keeps the command in the title,
+                      because a link that silently did nothing and a command
+                      nobody can read are the same dead end — and only the machine
+                      running this browser has a client to answer it. */}
+                  <DesktopLink
                     className={`btn ${buttonClass}`}
-                    href={desktopHref}
-                    title={`Opens your own Claude Code with "${promptText}" ready to send, so this check runs at the keyboard — with the browser and the logins the fleet has not — and reports the reading back here.`}
+                    folder={desktopFolder}
+                    prompt={promptText}
+                    explain="so this check runs at the keyboard — with the browser and the logins the fleet has not — and reports the reading back here."
                   >
                     Run it in Claude Code
-                  </a>
+                  </DesktopLink>
                 </>
               ) : (
                 // One way back from every settled state, and it takes no note for a
@@ -596,21 +597,6 @@ function AmendBand({ check, refUrls }: { check: ValidationCheck; refUrls: Record
       )}
     </div>
   );
-}
-
-/**
- * What an operator pastes into their own Claude Code to run one check there —
- * `/lubbdubb 249:A`, the `/lubbdubb` skill's own argument form.
- *
- * **The goal's number and the check's stored letter, never a row's position.**
- * That pair is what the skill resolves the check by, and a letter derived from
- * where a row currently sits would address a different check after the next
- * amendment — the failure the stored letter exists to prevent, one layer up.
- *
- * @public the copy control, and the test that pins the address form
- */
-export function desktopPrompt(issueNumber: number, letter: string): string {
-  return `/lubbdubb ${issueNumber}:${letter}`;
 }
 
 /** The chip's tone. `deferred` is deliberately not `ok`: it is a check still owed. */
