@@ -209,7 +209,7 @@ function checkProfile(
 }
 
 /**
- * Resolve a task's origin into the issue it may appraisal — or say why it may not.
+ * Resolve a task's origin into the issue it may appraise — or say why it may not.
  *
  * **Only an appraiser's own origin qualifies**, which is `assessmentOrigin`'s
  * discipline applied at the other end of the run: there, an agent that did the work

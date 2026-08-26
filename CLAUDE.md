@@ -83,6 +83,14 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
   existed — and invisible is the whole failure: nothing errors. A brand-new table needs no entry,
   but a table being new **once** does not keep it exempt.
   → [14](docs/spec/14-persistence.md#migrations)
+- **A table that is _renamed_ needs a `TableRename` entry, and it runs before the schema.** `SCHEMA`
+  creates tables by name, so on every database from before the rename `CREATE TABLE IF NOT EXISTS`
+  stands an empty table up under the new name beside the full one under the old — and nothing errors,
+  nothing is red, and every row that predates the rename is simply invisible. `renameTables` is
+  therefore the first thing `Store`'s constructor does; move it below the schema pass and it becomes a
+  permanent no-op on exactly the databases that needed it. No `runOnce` id: the old name is what says
+  the rename is due.
+  → [14](docs/spec/14-persistence.md#renaming-a-table)
 - **A column whose _null means something_ needs a backfill as well as an `ALTER TABLE`, gated on
   `ensureColumns`' report of what it added.** `pets.opened_at` null spells "still an egg", so the
   column alone turns every existing vivarium back into a crate of shells on the boot the operator

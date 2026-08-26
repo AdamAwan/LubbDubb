@@ -53,7 +53,7 @@ export function issueAppraisal(s: StageContext): void {
 
     s.appraising.add(issue.number);
     const branch = appraisalBranch(issue.number);
-    const title = `Appraisal issue #${issue.number}`;
+    const title = `Appraise issue #${issue.number}`;
     const reason = `Nothing has been started for issue #${issue.number}; check the goal can be worked from before dispatching against it.`;
     s.candidates.push({
       origin,

@@ -465,7 +465,7 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
  * Two arms, in the order rule `issue-appraisal` resolves them. A **standing** `unclear` verdict
  * first — asked through the same pure `appraisalHold` the dispatcher asks, so the chip
  * cannot say "parked" for an issue the next cycle dispatches, nor the reverse.
- * Then the **pending** case: an issue rule `issue-appraisal` would appraisal, or is appraising now.
+ * Then the **pending** case: an issue rule `issue-appraisal` would appraise, or is appraising now.
  * Reporting that matters as much as the hold — an issue silently waiting a cycle
  * for a verdict looks exactly like an idle fleet, which is the invisibility
  * `capped` and `unapproved` were added to `QueueItem` to fix.

@@ -227,7 +227,7 @@ test('the executor is the one place the shape is chosen', async () => {
       {
         type: 'dispatch_code_agent',
         ...readOnlyDispatch('appraisal/issue/12', 'main'),
-        title: 'Appraisal issue #12',
+        title: 'Appraise issue #12',
         prompt: 'read it',
         originRef: 'issue:12:appraisal',
         reason: 'r',

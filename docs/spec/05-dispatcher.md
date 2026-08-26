@@ -85,7 +85,7 @@ unconditional.
 | `work-item-in-progress`    | Advance to in-progress state         | `workItemInProgress` | A work item in a pickup state has a live **work** agent on it, no open PR and no plan.                                                                                                    |
 | `work-item-in-review`      | Back off to review state             | `workItemStates`     | A work item in a pickup state has an open PR (or is decomposed).                                                                                                                          |
 | `work-item-back-to-pickup` | Return from review state             | `workItemStates`     | A still-open work item parked in the review state has no open PR and an explicit `more_work` conclusion.                                                                                  |
-| `issue-appraisal`              | Issue goal needs checking            | `appraisal`              | A watched open issue nothing has been started for has no verdict on its goal text.                                                                                                        |
+| `issue-appraisal`          | Issue goal needs checking            | `appraisal`          | A watched open issue nothing has been started for has no verdict on its goal text.                                                                                                        |
 | `issue-plan`               | Issue needs a plan                   | `planning`           | A watched open issue has no plan yet — or an operator asked for a replan.                                                                                                                 |
 | `issue-assess`             | Issue may be finished                | `assessment`         | A watched issue — open, **or a retained run** — has had work, has nothing in flight and no open PR.                                                                                       |
 | `issue-shortfall`          | Assessment says the goal was missed  | —                    | An assessment recorded that a watched open issue was worked and its goal is still not reached. Claims no headroom.                                                                        |
@@ -1125,7 +1125,7 @@ Ids: `issue-plan`, `issue-replan`, `discuss-plan` (retired), `plan-part`, `plan-
 `issue-retro`, `validation-check`, `local-run`, `pr-ci-fix`, `pr-base-update-behind`, `pr-base-update-conflict`,
 `pr-review-comment`, `pr-concern-escalation`, `pr-title`, `finding-ticket`, `raise-bug`,
 `work-item-ticket-body`, `brief-ticket-body`, and the retired `work-item-ticket`,
-`blueprint-ticket` and `blueprint-ticket-body`. The filing ids are route-driven rather than dispatcher-driven — they are here
+`blueprint-ticket`, `blueprint-ticket-body` and `issue-assay`. The filing ids are route-driven rather than dispatcher-driven — they are here
 because _how a ticket should be worded_ is the operator's opinion, which is what the book exists to
 make overridable. `local-run` is here for the same reason and reaches nothing the dispatcher does:
 _how this project starts on a developer's machine_ is the operator's opinion too, and the tool that
@@ -1138,9 +1138,10 @@ rather than an instruction to an agent.
 
 **Retired ids stay in the book.** `work-item-ticket` and `blueprint-ticket` are no longer rendered —
 [#394](13-jobs-and-tickets.md#filing-a-ticket) replaced the desk agents they were sent to. Neither is
-`blueprint-ticket-body`, which is `brief-ticket-body` under the name the cockpit's _brief_ carried
-before it was renamed: an id follows its word, and the one it left behind stays loadable so a
-deployment holding an override for it still boots. Nor is `local-run`, whose instruction moved to the `localRun.instruction` config field so an
+`blueprint-ticket-body`, nor `issue-assay`: those are `brief-ticket-body` and `issue-appraisal` under
+the names the cockpit's _brief_ and the goal _appraisal_ carried before they were renamed. An id
+follows its word, and the one it leaves behind stays loadable so a deployment holding an override for
+it still boots. Nor is `local-run`, whose instruction moved to the `localRun.instruction` config field so an
 operator could edit it in the cockpit without a restart ([23](23-local-runs.md#the-instruction-is-config-not-a-prompt)). But
 deleting them would make `loadPromptTemplates` throw on a deployment that had overridden one, which is
 a harness that will not boot over a file it no longer reads. They carry `retired: true` instead, which

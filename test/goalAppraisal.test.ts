@@ -263,7 +263,7 @@ test('a cooling appraiser still suppresses pickup for that cycle, and stays visi
       action: {
         type: 'dispatch_code_agent',
         branch: 'appraisal/issue/12',
-        title: 'Appraisal issue #12',
+        title: 'Appraise issue #12',
         prompt: 'x',
         originRef: 'issue:12:appraisal',
         reason: 'appraising',
@@ -513,7 +513,7 @@ test('a verdict cast against text the ticket no longer has holds nothing', async
   system.store.close?.();
 });
 
-test('an agent doing the work cannot appraisal it, and is pointed at what it can do', async () => {
+test('an agent doing the work cannot appraise it, and is pointed at what it can do', async () => {
   const system = build();
   for (const origin of ['issue:12', 'issue:12:plan', 'issue:12:part:schema']) {
     const agent = spawnAgent(system, origin);

@@ -60,8 +60,8 @@ export function spentAppraisalAttempts(issueNumber: number, at = '2026-07-25T00:
     action: {
       type: 'dispatch_code_agent' as const,
       branch: `appraisal/issue/${issueNumber}`,
-      title: `Appraisal issue #${issueNumber}`,
-      prompt: 'appraisal it',
+      title: `Appraise issue #${issueNumber}`,
+      prompt: 'appraise it',
       originRef: origin,
       rule: 'issue-appraisal',
       reason: `Issue #${issueNumber} needs a goal check.`,

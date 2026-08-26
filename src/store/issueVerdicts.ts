@@ -455,7 +455,7 @@ export class IssueVerdictStore {
    * Every standing appraisal. **Unbounded on purpose**, as {@link listDeliveries} is: an
    * `unclear` verdict that aged out of a window would let the harness dispatch
    * against a goal it has already found unworkable, and a `workable` one aging out
-   * would re-appraisal every issue on a clock. One row per appraised issue, and the
+   * would re-appraise every issue on a clock. One row per appraised issue, and the
    * event read it feeds is bounded by time and item (`appraisalSignalQuery`).
    */
   listAppraisals(): IssueAppraisal[] {

@@ -1999,7 +1999,7 @@ export type AppraisalAuthor = 'appraiser' | 'operator';
  * The distinguishing field is {@link goalRef}: an appraisal judges a *text*, not a
  * state of the world, so the verdict is bound to the exact text it judged. Change
  * the title or the body and the verdict no longer describes the ticket in front of
- * you, which is what makes "re-appraisal when it is edited" a lookup rather than an
+ * you, which is what makes "re-appraise when it is edited" a lookup rather than an
  * event the harness has to have witnessed.
  */
 export interface IssueAppraisal {
