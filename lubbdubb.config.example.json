@@ -147,7 +147,7 @@
   "// issueContainerTypes": "Provider-native item types that HOLD work rather than being work — an Azure DevOps Feature or Epic. One of these is never picked up, planned or assayed: its children are the work, and an agent put on the container would implement a decomposition that already exists beside it in the tracker. Meaningful only for providers that report an item type (Azure); GitHub issues carry none. Set [] to turn the gate off. Default ['Feature', 'Epic'], matched case-insensitively.",
   "issueContainerTypes": ["Feature", "Epic"],
 
-  "// issueFilingTypes": "The work item types the harness may CREATE when you file a finding, a blueprint or unrecorded work. The filing agent picks one and is told it may create nothing else. The names are passed to the provider verbatim, so they must match your process template exactly — a Scrum project files ['Product Backlog Item', 'Bug']. Unlike issueContainerTypes there is no 'off': [] falls back to the default, because a work item is created AS something. Default ['User Story', 'Bug'].",
+  "// issueFilingTypes": "The work item types the harness may CREATE when you file a finding, a brief or unrecorded work. The filing agent picks one and is told it may create nothing else. The names are passed to the provider verbatim, so they must match your process template exactly — a Scrum project files ['Product Backlog Item', 'Bug']. Unlike issueContainerTypes there is no 'off': [] falls back to the default, because a work item is created AS something. Default ['User Story', 'Bug'].",
   "issueFilingTypes": ["User Story", "Bug"],
 
   "// ===== FEATURES =====": "The funnels and watches, and what each one costs you.",
@@ -234,7 +234,7 @@
   "// deskRoot": "Root under which desk (no-code) scratch dirs are created — one per task id. Relative resolves against repoRoot. Default '.lubbdubb/desk'.",
   "deskRoot": ".lubbdubb/desk",
 
-  "// attachmentRoot": "Where images attached to a blueprint are written. The absolute path is load-bearing twice: it is what an agent's prompt names, and what the launch grants read access to. Relative resolves against repoRoot. Default '.lubbdubb/attachments'.",
+  "// attachmentRoot": "Where images attached to a brief are written. The absolute path is load-bearing twice: it is what an agent's prompt names, and what the launch grants read access to. Relative resolves against repoRoot. Default '.lubbdubb/attachments'.",
   "attachmentRoot": ".lubbdubb/attachments",
 
   "// validationRoot": "Where validation resources are written, for the same two reasons as attachmentRoot. Relative resolves against repoRoot. Default '.lubbdubb/validation'.",

@@ -639,7 +639,7 @@ export interface Job {
 }
 
 /**
- * A recurring blueprint: a prompt the operator wants run on a cron schedule, and
+ * A recurring brief: a prompt the operator wants run on a cron schedule, and
  * how far through that recurrence the harness has got.
  *
  * It is **intent, not work**. What a firing produces is an ordinary {@link Job},
@@ -683,7 +683,7 @@ export interface JobSchedule {
 }
 
 /**
- * An image an operator attached to a blueprint, as it arrives on the wire
+ * An image an operator attached to a brief, as it arrives on the wire
  * (issue #249). `data` is base64 of the raw file — no data-URL prefix.
  *
  * There is deliberately **no `mime` field**: a client-declared type is
@@ -702,12 +702,12 @@ export interface JobAttachmentInput {
  * An attachment as stored: the file on disk, plus what an agent is told about it.
  *
  * Keyed on `targetRef` rather than on a job id, because the thing an attachment
- * belongs to outlives the row it arrived with — a code blueprint becomes a desk
+ * belongs to outlives the row it arrived with — a code brief becomes a desk
  * filing job and then a ticket, and the image has to follow.
  */
 export interface JobAttachment {
   id: string;
-  /** What it is attached to: `job:<id>` while the blueprint is one. */
+  /** What it is attached to: `job:<id>` while the brief is one. */
   targetRef: string;
   /** Position in the operator's list, 0-based — also the file's stem on disk. */
   index: number;

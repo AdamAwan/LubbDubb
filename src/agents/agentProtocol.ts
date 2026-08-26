@@ -302,7 +302,7 @@ interface ClaudeArgsOptions {
   /**
    * Directories outside the agent's cwd it may read (`permissions.additionalDirectories`
    * in the same `--settings` fragment as {@link allowedTools}). One entry today:
-   * the attachment root (issue #249), where a blueprint's images live — outside
+   * the attachment root (issue #249), where a brief's images live — outside
    * every worktree, so without this grant the path in the agent's prompt is one it
    * cannot open.
    *

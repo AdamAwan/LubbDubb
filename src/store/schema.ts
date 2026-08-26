@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   updated_at TEXT NOT NULL
 );
 
--- Recurring blueprints: the prompt an operator wants queued on a cron schedule.
+-- Recurring briefs: the prompt an operator wants queued on a cron schedule.
 --
 -- Intent, not work. A firing writes an ordinary jobs row, so everything
 -- downstream of the queue is unchanged — this table only ever says what to queue
@@ -55,17 +55,17 @@ CREATE TABLE IF NOT EXISTS job_schedules (
   updated_at    TEXT NOT NULL
 );
 
--- Images an operator attached to a blueprint (issue #249). The bytes live on disk
+-- Images an operator attached to a brief (issue #249). The bytes live on disk
 -- under attachmentRoot; this row is the record of what they are and where.
 --
 -- Keyed on target_ref, not on a job id, because what an attachment belongs to
--- outlives the row it arrived with: a code blueprint becomes a desk *filing* job
+-- outlives the row it arrived with: a code brief becomes a desk *filing* job
 -- and then a ticket, and the image has to follow the goal rather than the job.
--- While it is a blueprint the ref is job:<id>.
+-- While it is a brief the ref is job:<id>.
 --
 -- Nothing ages these out. Attachments live as long as what they are attached to,
 -- so a plan written days later — and the retrospective after it — can still refer
--- back to the screenshot the goal started as. The one deletion is a blueprint
+-- back to the screenshot the goal started as. The one deletion is a brief
 -- cancelled before it filed, which nothing downstream can want.
 CREATE TABLE IF NOT EXISTS job_attachments (
   id         TEXT PRIMARY KEY,

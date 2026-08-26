@@ -47,6 +47,7 @@ type PromptId =
   | 'blueprint-ticket'
   | 'work-item-ticket-body'
   | 'blueprint-ticket-body'
+  | 'brief-ticket-body'
   | 'pr-title';
 
 interface TemplateDef {
@@ -61,8 +62,9 @@ interface TemplateDef {
    */
   readonly doc: string;
   /**
-   * Set on an id the harness no longer renders (issue #394 filed two of the four
-   * ticket arms directly, so their prompts have no agent left to send them to).
+   * Set on an id the harness no longer renders — because the work it prompted for
+   * moved (issue #394 filed two of the four ticket arms directly, so their prompts
+   * have no agent left to send them to), or because the id was renamed under it.
    *
    * The id stays in the book rather than being deleted, because `loadPromptTemplates`
    * **throws** on a file naming no known id: removing one would turn an operator's
@@ -610,11 +612,11 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'not to file because a suitable item already exists, call link_ticket with that item\u2019s ref.',
     retired: true,
     doc:
-      '**Retired in #394 — no longer rendered.** A blueprint\u2019s ticket is now filed by the harness ' +
+      '**Retired in #394 — no longer rendered.** A brief\u2019s ticket is now filed by the harness ' +
       'directly, because its body is the operator\u2019s own request verbatim and its correctness rested ' +
       'entirely on the agent remembering to add the watch label: without it the item is created, the ' +
       'filing shows as complete, and nothing is ever dispatched for it. Word the item through ' +
-      '`blueprint-ticket-body` instead. An override left here still loads — it is simply not sent.',
+      '`brief-ticket-body` instead. An override left here still loads — it is simply not sent.',
   },
   'work-item-ticket': {
     placeholders: ['ref', 'workTitle', 'produced', 'tracker'],
@@ -665,15 +667,29 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
   'blueprint-ticket-body': {
     placeholders: ['request'],
     template:
-      'An operator asked for this work from the cockpit, as a blueprint. It is filed as a ticket ' +
+      'An operator asked for this work from the cockpit, as a brief. It is filed as a ticket ' +
+      'rather than coded straight off, so it flows through the same planning funnel as any other ' +
+      'issue.\n\nThe request, verbatim:\n\n{request}',
+    retired: true,
+    doc:
+      '**Retired \u2014 renamed to `brief-ticket-body`.** What the cockpit calls a *brief* was called a ' +
+      '*blueprint* until the rename; the id followed the word. The old id stays loadable so a ' +
+      'deployment carrying a `blueprint-ticket-body.md` override still boots, but it is no longer ' +
+      'rendered \u2014 move the wording to `brief-ticket-body`. Placeholders: {request}.',
+  },
+  'brief-ticket-body': {
+    placeholders: ['request'],
+    template:
+      'An operator asked for this work from the cockpit, as a brief. It is filed as a ticket ' +
       'rather than coded straight off, so it flows through the same planning funnel as any other ' +
       'issue.\n\nThe request, verbatim:\n\n{request}',
     doc:
-      'The **body** of the ticket the harness files when an operator injects a code blueprint and a ' +
+      'The **body** of the ticket the harness files when an operator injects a code brief and a ' +
       'tracker is configured (issue #198). Not a prompt: it is written straight into the tracker, so ' +
       'an override is house style for how such a ticket reads. The harness adds the watch label ' +
       'itself, which is what makes the funnel pick the ticket up. Replaces the retired ' +
-      '`blueprint-ticket` (#394). Placeholders: {request}.',
+      '`blueprint-ticket` (#394), and the `blueprint-ticket-body` this was called before the rename. ' +
+      'Placeholders: {request}.',
   },
 };
 

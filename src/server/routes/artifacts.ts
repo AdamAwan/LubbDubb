@@ -7,7 +7,7 @@ import type { RouteContext } from './context.js';
 
 /**
  * Serving a local file the cockpit may look at — one an agent flagged, or one an
- * operator attached to a blueprint — and the capability that authorizes it.
+ * operator attached to a brief — and the capability that authorizes it.
  *
  * The two routes share a shape because they share a problem: both are reached by
  * the browser *without* the cockpit's bearer token (a navigation for the first, an
@@ -70,7 +70,7 @@ export function register(app: FastifyInstance, { system, artifactKey }: RouteCon
     }),
   );
 
-  // Serve an image the operator attached to a blueprint (issue #249), addressed by
+  // Serve an image the operator attached to a brief (issue #249), addressed by
   // its attachment id. Outside `/api` for the artifact route's reason and one more:
   // this is loaded as an `<img src>`, a subresource fetch the browser makes on its
   // own, which can no more carry the cockpit's `Authorization` header than a

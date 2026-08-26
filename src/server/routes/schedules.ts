@@ -7,7 +7,7 @@ import { checked, IdParams, optionalText } from '../validation.js';
 import type { RouteContext } from './context.js';
 
 /**
- * Recurring blueprints: writing one, editing it, running it by hand, and ending it.
+ * Recurring briefs: writing one, editing it, running it by hand, and ending it.
  *
  * **Nothing here dispatches.** A schedule's only power is to write the same `jobs`
  * row `POST /api/jobs` writes, which rule `manual-job` then drains under the cap
@@ -15,7 +15,7 @@ import type { RouteContext } from './context.js';
  * letting a clock queue work: a recurrence adds a way for work to *arrive*, and no
  * way for it to be run that did not already exist.
  *
- * **A code recurrence is not filed as a ticket**, unlike a code blueprint from the
+ * **A code recurrence is not filed as a ticket**, unlike a code brief from the
  * launch route (issue #198). The convergence that route implements is for a
  * one-off intention entering the funnel; a recurrence is a standing one, and filing
  * a fresh ticket every Monday would fill the tracker with copies of one sentence

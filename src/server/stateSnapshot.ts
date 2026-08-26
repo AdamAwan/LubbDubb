@@ -770,9 +770,9 @@ export function buildStateSnapshot(
     // from this map rather than string-building a URL, the same way it looks refs
     // up in refUrls — an http(s) flag is absent here and linked directly.
     artifactUrls: artifactUrls(flags, opts?.artifactSigner),
-    // The images an operator attached to a blueprint (issue #249), every ref in
+    // The images an operator attached to a brief (issue #249), every ref in
     // one list. The cockpit filters it by `targetRef` — `job:<id>` under a queued
-    // blueprint, `issue:<n>` under the ticket that blueprint became — which is the
+    // brief, `issue:<n>` under the ticket that brief became — which is the
     // whole visible half of the re-key: the operator watches the screenshot move
     // from the queue onto the goal rather than disappearing at the fork.
     attachments,

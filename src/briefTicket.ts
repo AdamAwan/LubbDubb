@@ -1,10 +1,10 @@
 /**
- * Turning an injected code **blueprint** into a ticket the planning funnel picks
+ * Turning an injected code **brief** into a ticket the planning funnel picks
  * up (issue #198).
  *
  * ## The gap this closes
  *
- * An operator-launched code job (a "blueprint" from the cockpit's New blueprint
+ * An operator-launched code job (a "brief" from the cockpit's New brief
  * panel) used to be dispatched straight onto a branch by rule `manual-job`, on the raw
  * prompt — skipping the whole funnel a *picked-up* ticket goes through: the goal
  * assay, the planning agent, the plan's parts. The workflow's two entry points
@@ -12,10 +12,10 @@
  * *find-or-create a ticket, then the funnel*, and the prompt arm was never wired
  * to that convergence.
  *
- * So a code blueprint, when a tracker is configured, is filed as a **watched
+ * So a code brief, when a tracker is configured, is filed as a **watched
  * ticket** instead of dispatched, and the funnel takes over with no new dispatcher
  * wiring, because the funnel already keys on watched issues. The one thing a
- * finding-filed ticket does not need and a blueprint does: the issue must carry the
+ * finding-filed ticket does not need and a brief does: the issue must carry the
  * effective `-watch` label, or the watch gate never picks it up.
  *
  * That label is why this arm no longer spends a desk agent (issue #394). An agent
@@ -27,14 +27,14 @@
  * title.
  *
  * The wording an operator has opinions about still lives in a template
- * (`blueprint-ticket-body`), so this module is only the pure fields the route
+ * (`brief-ticket-body`), so this module is only the pure fields the route
  * renders it with — testable without a server.
  */
 
 const MAX_TITLE = 80;
 
 /**
- * The title and body vars for the ticket a blueprint becomes.
+ * The title and body vars for the ticket a brief becomes.
  *
  * `request` is the operator's prompt, carried verbatim: it *is* the ticket's body,
  * which is why nothing was ever being delegated here but a title. The title is
@@ -47,7 +47,7 @@ const MAX_TITLE = 80;
  * `` label would be a bug. The harness passes the label to the create now, so both
  * readings are a `labels` array and neither is a sentence.
  */
-export function blueprintTicketFields(request: string): { title: string; vars: Record<string, string> } {
+export function briefTicketFields(request: string): { title: string; vars: Record<string, string> } {
   const firstLine =
     request
       .split('\n')

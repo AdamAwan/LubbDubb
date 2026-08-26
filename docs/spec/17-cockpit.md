@@ -2127,7 +2127,7 @@ Three rules hold them:
   on two goals already agreed on. A count of what is already vouched for would tick up on their own
   click and never come down, and one that included a single agent's unseconded note would never come
   down either. The number did not change when the page became a destination — only where it is drawn.
-- **Launch counts the queue, not the history.** A launched blueprint that has been dispatched is an
+- **Launch counts the queue, not the history.** A launched brief that has been dispatched is an
   agent in the Fleet, and counting it here would have the reading climb as work starts rather than as
   it waits.
 
@@ -2361,13 +2361,13 @@ filename and a × that removes it before launch.
 - **The browser's mime is not sent.** It drives the local preview only; the server decides the type
   from the bytes, so a field it ignores would read as one it honours.
 
-`AttachmentStrip` draws what was attached to a queued blueprint (`job:<id>`). The URL comes from
+`AttachmentStrip` draws what was attached to a queued brief (`job:<id>`). The URL comes from
 `attachmentUrls`, never string-built, because it carries a short-lived capability that the cockpit's
 bearer token structurally cannot substitute for — an `<img>` load sends no `Authorization` header
 ([16](16-http-api.md#get-attachmentsid)). Clicking opens the image at its own size in a new tab,
 `rel="noreferrer"` so the capability does not ride out in a referrer.
 
-`SchedulePanel` puts a blueprint on a clock: a cron expression, a prompt, code/desk, and every
+`SchedulePanel` puts a brief on a clock: a cron expression, a prompt, code/desk, and every
 recurrence with its next run, its last run, and pause / run now / delete.
 
 - **The expression is typed, and four common ones are buttons.** Reading `0 9 * * 1-5` and writing it

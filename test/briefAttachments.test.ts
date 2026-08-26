@@ -17,7 +17,7 @@ import {
 } from '../src/jobs/attachments.js';
 
 /**
- * Issue #249: an operator's screenshot reaches the agent that runs the blueprint.
+ * Issue #249: an operator's screenshot reaches the agent that runs the brief.
  *
  * The interesting seams are the bounds (decided on decoded bytes, never on what
  * the client said), the disk (one canonical file, named from the *sniffed* format
@@ -138,7 +138,7 @@ test('a refused attachment queues no job', async () => {
   assert.equal(res.statusCode, 400);
   assert.match(res.json().error, /x\.pdf is not one of the accepted image formats/);
   assert.equal(system.store.listJobs().length, 0, 'nothing was queued');
-  // A blueprint that says "like this" without the "this" is worse than none, so
+  // A brief that says "like this" without the "this" is worse than none, so
   // the refusal is the whole outcome — no directory, no row, no job.
   assert.equal(existsSync(system.config.attachmentRoot) ? readdirSync(system.config.attachmentRoot).length : 0, 0);
 
@@ -159,7 +159,7 @@ test('a refused attachment queues no job', async () => {
   system.store.close();
 });
 
-test('a dispatched blueprint is told where to read its attachment', async () => {
+test('a dispatched brief is told where to read its attachment', async () => {
   const system = buildTestSystem();
   const { app } = await buildApp(system);
 
@@ -192,7 +192,7 @@ test('a dispatched blueprint is told where to read its attachment', async () => 
   system.store.close();
 });
 
-test('cancelling a blueprint forgets its attachments', async () => {
+test('cancelling a brief forgets its attachments', async () => {
   const system = buildTestSystem();
   const { app } = await buildApp(system);
 
@@ -209,7 +209,7 @@ test('cancelling a blueprint forgets its attachments', async () => {
 
   const cancelled = await app.inject({ method: 'POST', url: `/api/jobs/${job.id}/cancel` });
   assert.equal(cancelled.statusCode, 200);
-  // The one deletion in the story: nothing downstream can want a blueprint that
+  // The one deletion in the story: nothing downstream can want a brief that
   // never ran. Rows first, then the files.
   assert.deepEqual(system.store.listAttachments(`job:${job.id}`), []);
   assert.equal(existsSync(path), false);

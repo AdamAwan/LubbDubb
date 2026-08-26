@@ -686,7 +686,7 @@ only Azure DevOps accepts, so the whole feature is absent on GitHub — the way 
 questions on the sink being **able** to make the write (`canPlaceWorkItem`), so a proposal nobody can
 act on is never drawn.
 
-**Tickets the harness files itself** — a blueprint, a deferred finding, unrecorded work, an
+**Tickets the harness files itself** — a brief, a deferred finding, unrecorded work, an
 operator-raised bug — are out of scope: for those the value belongs on `IssueCreateInput` at creation
 rather than proposed afterwards. When that lands it should call the same two sink methods, since Azure
 cannot create an item already parented (`createIssue` already does that two-write dance for

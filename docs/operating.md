@@ -43,7 +43,7 @@ Two ways to start one, converging on the same path:
 
 - **Write the ticket** in GitHub or Azure DevOps, tag it watched, and it enters the funnel on the next
   pulse.
-- **Type it into Launch** in the cockpit. With a tracker configured, a code blueprint is _filed as a
+- **Type it into Launch** in the cockpit. With a tracker configured, a code brief is _filed as a
   watched ticket_ and enters the same funnel — it is not coded straight off your prompt. That is
   deliberate: work started from a sentence you typed is then as recoverable, reviewable and reportable
   as work started from the tracker.

@@ -263,7 +263,7 @@ export interface Config {
   issueContainerTypes: string[];
   /**
    * The work item types the harness **files** at, when an operator files a
-   * finding, a blueprint or unrecorded work from the cockpit. The **first** entry
+   * finding, a brief or unrecorded work from the cockpit. The **first** entry
    * is the one it creates; the rest document what the project files at.
    *
    * It used to be a menu a filing agent picked from. Since #394 the harness files
@@ -681,7 +681,7 @@ export interface Config {
   /** Root under which desk (no-code) scratch dirs are created. */
   deskRoot: string;
   /**
-   * Root under which images attached to a blueprint are stored (issue #249).
+   * Root under which images attached to a brief are stored (issue #249).
    * Deliberately **outside every worktree**, so a screenshot can never be
    * committed onto a branch, and canonical rather than copied per dispatch — one
    * file is what lets the planner, each part agent and the retrospective read the

@@ -27,7 +27,7 @@ export function jobBranch(job: Job): string | null {
  * characters with an ellipsis.
  *
  * Here rather than in the launch route because two surfaces derive one now — a
- * blueprint (`POST /api/jobs`) and a recurrence (`POST /api/schedules`) — and the
+ * brief (`POST /api/jobs`) and a recurrence (`POST /api/schedules`) — and the
  * title is what the operator reads in the queue, the fleet card and the decision
  * log alike. Two copies would drift in the one place a drift is visible: the same
  * prompt showing up under two different names depending on which door it came

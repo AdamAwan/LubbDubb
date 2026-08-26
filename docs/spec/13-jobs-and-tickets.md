@@ -52,9 +52,9 @@ Desk jobs skip the check entirely: rule `manual-job` ignores a desk job's branch
 The route creates the job, broadcasts `world:changed`, and kicks a cycle so a job dispatches
 immediately when there is headroom.
 
-### Blueprints become tickets — `POST /api/jobs`, the code arm
+### Briefs become tickets — `POST /api/jobs`, the code arm
 
-A code job injected from the cockpit is a **blueprint**, and it enters the workflow through the same
+A code job injected from the cockpit is a **brief**, and it enters the workflow through the same
 door as a ticket rather than being dispatched straight onto a branch (issue #198). When a tracker is
 configured (`trackerCoordinates(config) !== null`), the route does not queue a code job on the raw
 prompt; it files a **watched ticket** so the work flows through the whole planning funnel — the goal
@@ -71,11 +71,11 @@ then the funnel_; this is the prompt arm wired to that convergence.
   acts on every open issue), so there is nothing to tag and nothing is written.
 - **The body was never being delegated.** It is the operator's own request, verbatim — the only
   judgement a desk agent added was a title, and the request's first line is that. The wording stays
-  overridable through the `blueprint-ticket-body` template, whose pure fields come from
-  `blueprintTicketFields(request)` (`src/blueprintTicket.ts`); `body.title` on the launch still wins
+  overridable through the `brief-ticket-body` template, whose pure fields come from
+  `briefTicketFields(request)` (`src/briefTicket.ts`); `body.title` on the launch still wins
   over the derived one.
 - **The whole transform is at route time; rule `manual-job` is untouched.** That is a clean recursion
-  boundary: only an operator-injected code blueprint via this route becomes a ticket, and there is no
+  boundary: only an operator-injected code brief via this route becomes a ticket, and there is no
   second job for the transform to reach again.
 - **No filing row.** One existed only so `link_ticket` could resolve the created issue back from the
   filing agent's credential, and there is no filing agent. The route answers `{ok, ticketRef}`, and the
@@ -87,12 +87,12 @@ then the funnel_; this is the prompt arm wired to that convergence.
   recorded, not raised: the ticket is what the operator asked for, and losing a screenshot's onward
   visibility is the smaller failure.
 
-**Fallbacks are today's behaviour.** A **desk** blueprint (a direct answer, a report) is dispatched as
-asked. A code blueprint with **no tracker** (`fake`/unconfigured) has nowhere to file, so it too
+**Fallbacks are today's behaviour.** A **desk** brief (a direct answer, a report) is dispatched as
+asked. A code brief with **no tracker** (`fake`/unconfigured) has nowhere to file, so it too
 dispatches directly — and the branch-collision 409 above applies only on this arm, since a filed
-blueprint's branch is meaningless (the funnel works `issue/<n>` branches later).
+brief's branch is meaningless (the funnel works `issue/<n>` branches later).
 
-Tests: `test/blueprintTicket.test.ts`, `test/attachmentsSurviveTicket.test.ts`.
+Tests: `test/briefTicket.test.ts`, `test/attachmentsSurviveTicket.test.ts`.
 
 ### Dispatch — rule `manual-job`
 
@@ -282,8 +282,8 @@ slot behind it — so a week of pause is one job waiting, not two thousand.
   sentence they did not write being read by an agent they cannot see. What connects the two is
   recorded instead: the schedule keeps `lastJobId`, and the job's own `job:<id>` origin is what
   everything downstream is keyed on.
-- **No ticket, unlike a code blueprint from `POST /api/jobs`.** That route's convergence
-  ([above](#blueprints-become-tickets--post-apijobs-the-code-arm)) is for a one-off intention
+- **No ticket, unlike a code brief from `POST /api/jobs`.** That route's convergence
+  ([above](#briefs-become-tickets--post-apijobs-the-code-arm)) is for a one-off intention
   entering the funnel. A recurrence is a standing one, and filing a fresh ticket every Monday would
   fill the tracker with copies of one sentence for the assay and the planner to judge identically
   each time. A firing is dispatched as the job it is.
@@ -321,7 +321,7 @@ Tests: `test/jobSchedules.test.ts`.
 ## Filing a ticket
 
 Four cockpit clicks file a tracker item: a deferred **claim**
-([27](27-knowledge.md#sending-a-claim-on)), unrecorded **work**, a **blueprint**, and a **bug** an
+([27](27-knowledge.md#sending-a-claim-on)), unrecorded **work**, a **brief**, and a **bug** an
 operator raised. All four go through `ActionSink.createIssue` ([15](15-integrations.md)), and none of
 them asks a model to run a `gh` / `az` command any more (issue #394).
 
@@ -335,15 +335,15 @@ them asks a model to run a `gh` / `az` command any more (issue #394).
   (`src/ticketAssignment.ts`) reads `userId` ([02](02-configuration.md#userid)); `filingType` /
   `bugFilingType` (`src/ticketTypes.ts`) read `issueFilingTypes` and `issueBugType`
   ([02](02-configuration.md#what-type-a-filed-item-is)). Each of those was a sentence in a prompt, and
-  a sentence is only as reliable as a model's memory of it: a blueprint's ticket without its watch
+  a sentence is only as reliable as a model's memory of it: a brief's ticket without its watch
   label is never dispatched for, an Azure bug without its relation cannot be traced back to its story,
   and a create with no `--type` is refused outright, taking the ticket with it. `ticketFiler`
   (`src/tickets/filing.ts`) resolves all four per call, so all four arms file identically.
 - **The wording stays operator-overridable**, because how a ticket reads _is_ house style. Two arms
-  render a ticket **body** from the template book — `work-item-ticket-body`, `blueprint-ticket-body` —
+  render a ticket **body** from the template book — `work-item-ticket-body`, `brief-ticket-body` —
   and two keep an agent to write one. Nothing about the change moves that judgement into the harness.
 - **Two arms keep a desk agent, and two do not.** Where the whole body is already harness- or
-  operator-composed text (unrecorded work, a blueprint), a desk agent was spending a slot on one API
+  operator-composed text (unrecorded work, a brief), a desk agent was spending a slot on one API
   call. Where the body is a judgement — verifying a claim against the repository, writing up a symptom
   an operator observed — the agent stays, narrowed to composing the title and body and handing both to
   `link_ticket` ([11](11-mcp-tools.md)).

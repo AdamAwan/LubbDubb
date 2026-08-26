@@ -441,7 +441,7 @@ export class Store {
     this.jobs.deleteAttachments(targetRef);
   }
 
-  // -- Job schedules (recurring blueprints) ---------------------------------
+  // -- Job schedules (recurring briefs) ---------------------------------
 
   createJobSchedule(input: Parameters<JobScheduleStore['createJobSchedule']>[0]): JobSchedule {
     return this.schedules.createJobSchedule(input);

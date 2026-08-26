@@ -211,7 +211,7 @@ export interface System {
    */
   fileEvents: FileEventsSpool;
   /**
-   * Where images attached to a blueprint are written (issue #249). Exposed because
+   * Where images attached to a brief are written (issue #249). Exposed because
    * the launch route stores them and the cancel route removes them, and both need
    * the same root the agents are granted read access to.
    */
@@ -450,7 +450,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const streamFactory: SessionFactory = (spec) =>
     new StreamJsonSession(spec, opts.streamSpawner, reapTree, config.agentSilenceParkMs);
 
-  // Blueprint attachments (issue #249): one canonical file per image under the
+  // Brief attachments (issue #249): one canonical file per image under the
   // config'd root, outside every worktree. Every launch is granted read access to
   // that root, which is what makes the path in an agent's prompt openable.
   const attachments = new AttachmentFiles(config.attachmentRoot);

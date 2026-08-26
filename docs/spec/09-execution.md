@@ -574,12 +574,12 @@ for, and the `check:` claims for the checks it answers → [27](27-knowledge.md#
 
 ## An operator's attachments reach the agent
 
-A blueprint launched from the cockpit may carry images (issue #249) — a screenshot of the panel to
+A brief launched from the cockpit may carry images (issue #249) — a screenshot of the panel to
 change, the broken screen, a before/after pair. They are written once under `attachmentRoot`
 (`src/jobs/attachmentFiles.ts`) and recorded in `job_attachments`, keyed on the ref they belong to —
-`job:<id>` for a blueprint that dispatches, and the `issue:<n>` it was filed as for one that becomes a
-ticket. See [14](14-persistence.md#blueprint-attachments) for the rows, and
-[16](16-http-api.md#launching-a-blueprint) for how they arrive.
+`job:<id>` for a brief that dispatches, and the `issue:<n>` it was filed as for one that becomes a
+ticket. See [14](14-persistence.md#brief-attachments) for the rows, and
+[16](16-http-api.md#launching-a-brief) for how they arrive.
 
 `recordDispatchTask` appends `attachmentsNote(...)` (`src/jobs/attachments.ts`, pure) to the dispatch
 prompt: one line per image giving its **absolute path**, the mime **sniffed from its bytes**, and the
@@ -592,10 +592,10 @@ operator's own filename as a label.
   [10](10-agent-runtimes.md#reading-outside-the-worktree).
 - **Scoped to the goal, not to the exact origin.** The lookup is `padOriginFor(originRef) ?? originRef`
   — the harness's own spelling of "which goal is this origin inside", already used to decide who shares
-  a scratchpad, so the two cannot drift. It has to be: a filed blueprint's images are keyed `issue:<n>`
+  a scratchpad, so the two cannot drift. It has to be: a filed brief's images are keyed `issue:<n>`
   while the agents that go on to work it are dispatched for `issue:<n>:assay`, `:plan`, `:part:<slug>`
   and `:retro`. An exact match would put the screenshot in front of the filing agent alone, the one
-  agent that writes no code. An origin outside any issue subtree — a `job:<id>` blueprint that
+  agent that writes no code. An origin outside any issue subtree — a `job:<id>` brief that
   dispatched directly, because no tracker is configured — falls back to itself, which is an exact match.
   - Within a goal the append is **unconditional**: a part agent working something the screenshot has
     nothing to do with is still shown it. That is the trade the prior-work briefing already makes, and

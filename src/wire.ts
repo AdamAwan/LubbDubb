@@ -1046,7 +1046,7 @@ export interface CockpitState {
   /** Operator-launched jobs, newest first — the queue and its recent history. */
   jobs: Job[];
   /**
-   * Recurring blueprints, oldest first — every one the operator has written,
+   * Recurring briefs, oldest first — every one the operator has written,
    * enabled or not. What a firing produces is an ordinary entry in {@link jobs},
    * so the queue above is where a recurrence becomes visible as work.
    */
@@ -1083,8 +1083,8 @@ export interface CockpitState {
    */
   artifactUrls: Record<string, string>;
   /**
-   * Images an operator attached to a blueprint (issue #249), every ref in one
-   * list. The cockpit filters by `targetRef`: `job:<id>` while the blueprint is
+   * Images an operator attached to a brief (issue #249), every ref in one
+   * list. The cockpit filters by `targetRef`: `job:<id>` while the brief is
    * queued, `issue:<n>` once it has been filed as a ticket.
    *
    * The domain type, `path` and all — the same absolute-paths-are-shipped stance

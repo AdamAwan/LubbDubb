@@ -14,9 +14,9 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
  * Issue #249, second half: an operator's screenshot survives the ticket-filing
  * fork.
  *
- * A code blueprint with a tracker configured is **not** dispatched — it is filed
+ * A code brief with a tracker configured is **not** dispatched — it is filed
  * as a watched ticket and the planning funnel takes over (issue #198). Left keyed
- * on the blueprint, the images would be visible to exactly one agent: whoever
+ * on the brief, the images would be visible to exactly one agent: whoever
  * writes the code for a job that no longer exists.
  *
  * Since #394 the harness files the ticket itself, on the request, so it knows the
@@ -61,8 +61,8 @@ function build(): System {
   return system;
 }
 
-/** Launch a code blueprint carrying `images`, and return the ticket it was filed as. */
-async function fileBlueprint(system: System, images: { name: string; data: Buffer }[]): Promise<string> {
+/** Launch a code brief carrying `images`, and return the ticket it was filed as. */
+async function fileBrief(system: System, images: { name: string; data: Buffer }[]): Promise<string> {
   const { app } = await buildApp(system);
   const res = await app.inject({
     method: 'POST',
@@ -78,14 +78,14 @@ async function fileBlueprint(system: System, images: { name: string; data: Buffe
   return (res.json() as { ticketRef: string }).ticketRef;
 }
 
-test('a blueprint’s images are written under the ticket it was filed as', async () => {
+test('a brief’s images are written under the ticket it was filed as', async () => {
   const system = build();
-  const ticketRef = await fileBlueprint(system, [
+  const ticketRef = await fileBrief(system, [
     { name: 'panel.png', data: PNG },
     { name: 'after.gif', data: GIF },
   ]);
 
-  // Under the goal from the first write. Nothing is keyed on the blueprint and
+  // Under the goal from the first write. Nothing is keyed on the brief and
   // then moved — the harness files the ticket itself, so the issue number is known
   // before any byte is written, and there is no window in which the image belongs
   // to something that is about to stop existing.
@@ -108,11 +108,11 @@ test('a blueprint’s images are written under the ticket it was filed as', asyn
   system.store.close();
 });
 
-test('two blueprints keep their own images, under their own tickets', async () => {
+test('two briefs keep their own images, under their own tickets', async () => {
   const system = build();
-  const first = await fileBlueprint(system, [{ name: 'one.png', data: PNG }]);
-  const second = await fileBlueprint(system, [{ name: 'two.gif', data: GIF }]);
-  assert.notEqual(first, second, 'each blueprint files its own ticket');
+  const first = await fileBrief(system, [{ name: 'one.png', data: PNG }]);
+  const second = await fileBrief(system, [{ name: 'two.gif', data: GIF }]);
+  assert.notEqual(first, second, 'each brief files its own ticket');
 
   const a = system.store.listAttachments(first);
   const b = system.store.listAttachments(second);
@@ -135,11 +135,11 @@ test('two blueprints keep their own images, under their own tickets', async () =
 
 test('every agent dispatched for the goal is handed the images, and only that goal’s', async () => {
   const system = build();
-  const ticketRef = await fileBlueprint(system, [{ name: 'panel.png', data: PNG }]);
+  const ticketRef = await fileBrief(system, [{ name: 'panel.png', data: PNG }]);
   const attachment = system.store.listAttachments(ticketRef)[0]!;
 
   // A second, unrelated goal beside it — the images must not follow *that* one
-  // anywhere. The blueprint's own ticket is already in the world: the harness
+  // anywhere. The brief's own ticket is already in the world: the harness
   // filed it, so it is a real issue on the fake provider from that moment.
   system.connector.inject({ kind: 'new_issue', number: 315, title: 'Something else entirely', body: 'No image.' });
   // Twice: the cap is shared and the first cycle spends its headroom on whichever
@@ -176,11 +176,11 @@ test('every agent dispatched for the goal is handed the images, and only that go
 
 test('the cockpit is shipped the images and a URL that serves them', async () => {
   const system = build();
-  const ticketRef = await fileBlueprint(system, [{ name: 'panel.png', data: PNG }]);
+  const ticketRef = await fileBrief(system, [{ name: 'panel.png', data: PNG }]);
   const { app } = await buildApp(system);
 
   // The strip hangs off the issue, which is where the operator now finds the goal —
-  // there is no queued blueprint to hang it off, because nothing was queued.
+  // there is no queued brief to hang it off, because nothing was queued.
   const state = buildStateSnapshot(system);
   const attachment = state.attachments[0]!;
   assert.equal(attachment.targetRef, ticketRef);

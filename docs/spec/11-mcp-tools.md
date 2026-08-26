@@ -312,7 +312,7 @@ the finding or the bug filing that job was created for`. A job is created for at
 It routes through `AgentManager.linkTicket`, which emits the `finding` event on the finding arm so the
 cockpit repaints on the link rather than on the next pulse.
 
-Two things it is **not** for any more. A **work item** for unrecorded work and a **blueprint's** ticket
+Two things it is **not** for any more. A **work item** for unrecorded work and a **brief's** ticket
 are filed by the harness on the operator's request, with no agent and no job in between — their bodies
 were already harness- or operator-composed text, so a desk agent was being spent on one API call. See
 [13](13-jobs-and-tickets.md#filing-a-ticket).

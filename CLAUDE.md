@@ -149,7 +149,7 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
   type, the labels, the assignee and the bug/story relation are arguments to
   `ActionSink.createIssue`, resolved by `ticketFiler` (`src/tickets/filing.ts`). Told to an agent
   instead, each is only as reliable as its memory of one line — and every failure is silent: a
-  blueprint's ticket without the watch label is created, linked, shown complete in the cockpit, and
+  brief's ticket without the watch label is created, linked, shown complete in the cockpit, and
   **never dispatched for**; an Azure bug without its relation is a bug nobody can trace back.
   → [13](docs/spec/13-jobs-and-tickets.md#filing-a-ticket), [15](docs/spec/15-integrations.md)
 

@@ -1104,12 +1104,12 @@ export class ActionExecutor {
  */
 /**
  * The images attached to the goal being dispatched for — or null when there are
- * none, which is every dispatch that did not come from a blueprint carrying one.
+ * none, which is every dispatch that did not come from a brief carrying one.
  *
  * In the executor, and for the branch gate's reason: every dispatch passes
  * through here whatever composed it.
  *
- * **The lookup is by goal, not by exact origin** (issue #249). Once a blueprint
+ * **The lookup is by goal, not by exact origin** (issue #249). Once a brief
  * has been filed as a ticket its images are keyed `issue:<n>`, while the agents
  * that go on to work it are dispatched for `issue:<n>:plan`, `:assay`, `:assess`,
  * `:part:<slug>` and `:retro`. An exact match would put the screenshot in front of
@@ -1117,7 +1117,7 @@ export class ActionExecutor {
  * of the ticket surviving would be lost. `padOriginFor` is the harness's own
  * spelling of "which goal is this origin inside", already used to decide who
  * shares a scratchpad, so the answer here and there cannot drift; an origin
- * outside any issue subtree (a `job:<id>` blueprint that dispatched directly)
+ * outside any issue subtree (a `job:<id>` brief that dispatched directly)
  * falls back to itself, which is an exact match.
  *
  * The scoping is deliberately unconditional within a goal: a part agent working
