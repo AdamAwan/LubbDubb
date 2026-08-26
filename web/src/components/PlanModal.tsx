@@ -13,7 +13,8 @@ import type {
   ValidationCheck,
 } from '../types.js';
 import { api } from '../api.js';
-import { desktopDeepLink, discussPrompt } from '../cockpit/desktopLink.js';
+import { discussPrompt } from '../cockpit/desktopLink.js';
+import { DesktopLink } from './DesktopLink.js';
 import { AsyncButton } from './AsyncButton.js';
 import { renderMarkdown } from './markdown.js';
 import { PlanMap } from './PlanMap.js';
@@ -151,7 +152,12 @@ export function PlanModal({
   // *by* that number, so there is no conversation to link to — and a control that
   // opened a session which could not find what it was sent for is worse than no
   // control.
-  const discussHref = issueNumber === null ? null : desktopDeepLink(desktopFolder, discussPrompt(issueNumber));
+  // The two Discuss controls below are the same control in two places, so the
+  // sentence is written once here and handed to both. It used to be written twice
+  // and said neither time what command the session would arrive with — the deep
+  // link's standing rule, which `DesktopLink` now keeps rather than each site.
+  const discuss =
+    'so the plan is talked through with a session that can amend it — nothing is scheduled, and nothing changes until it does.';
 
   const jump = (key: string): void => {
     setView('plan');
@@ -485,14 +491,15 @@ export function PlanModal({
                 >
                   Hold — stop watching
                 </AsyncButton>
-                {discussHref !== null && (
-                  <a
+                {issueNumber !== null && (
+                  <DesktopLink
                     className="btn ghost"
-                    href={discussHref}
-                    title="Talk it through in your own Claude Code, which can amend the plan — nothing is scheduled, and nothing changes until it does"
+                    folder={desktopFolder}
+                    prompt={discussPrompt(issueNumber)}
+                    explain={discuss}
                   >
                     Discuss…
-                  </a>
+                  </DesktopLink>
                 )}
                 <AsyncButton
                   className="primary"
@@ -516,14 +523,15 @@ export function PlanModal({
             {/* `plan_amend` refuses outside `awaiting_approval` (amending a released
                 plan reopens an approval gate it has already been through), so the
                 control must not offer what the tool refuses. */}
-            {plan.status === 'awaiting_approval' && !decidable && discussHref !== null && (
-              <a
+            {plan.status === 'awaiting_approval' && !decidable && issueNumber !== null && (
+              <DesktopLink
                 className="btn ghost"
-                href={discussHref}
-                title="Talk it through in your own Claude Code, which can amend the plan — nothing is scheduled, and nothing changes until it does"
+                folder={desktopFolder}
+                prompt={discussPrompt(issueNumber)}
+                explain={discuss}
               >
                 Discuss…
-              </a>
+              </DesktopLink>
             )}
             <AsyncButton
               className="ghost"

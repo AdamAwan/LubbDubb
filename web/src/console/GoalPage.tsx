@@ -22,8 +22,9 @@ import { EndRunModal } from '../components/EndRunModal.js';
 import { renderRichText } from '../components/richText.js';
 import { issueTypeTone } from '../issueGroups.js';
 import { fmtUsd, relTime } from '../components/util.js';
-import { Ref } from '../components/refs.js';
-import { askPrompt, desktopDeepLink, localRunPrompt } from '../cockpit/desktopLink.js';
+import { Ref, TicketLink } from '../components/refs.js';
+import { askPrompt, localRunPrompt } from '../cockpit/desktopLink.js';
+import { DesktopLink } from '../components/DesktopLink.js';
 import { ValidationSection } from '../components/ValidationSection.js';
 import { watchBucket } from '../worldBuckets.js';
 import { stateColour } from '../stateColour.js';
@@ -279,7 +280,7 @@ function Header({
   actions: CockpitActions;
 }): JSX.Element {
   const { issue } = page;
-  const { config, refUrls } = view.state;
+  const { config } = view.state;
   const [raisingBug, setRaisingBug] = useState(false);
   const watched = watchBucket(issue.labels, config.watchLabel);
   const finished = issue.conclusion.verdict === 'done';
@@ -301,22 +302,6 @@ function Header({
   // What ending the run kills, in the same subtree the header's agent count reads
   // — so the confirmation states a number the operator can already see above it.
   const live = page.agents.filter((a) => LIVE_AGENT.has(a.status)).length;
-  // Three ways to the tracker, in the order of how much each can be trusted.
-  //
-  // The item's own `url` is the provider's, and authoritative. `issue:<n>` is next
-  // because it is **unambiguous**: `stateSnapshot` keys it for every world issue
-  // *and* every retained run, and nothing else ever writes it. `#<n>` is last
-  // because it is shared — `buildRefUrls` walks the pull requests before the
-  // issues and the first writer wins, so on a tracker where issue 412 and PR 412
-  // both exist, `#412` is the pull request's address and this control was quietly
-  // opening the wrong thing.
-  //
-  // Trying only `#<n>`, as this did, is also why the control disappeared on a
-  // **retained run**: `#<n>` is built from `world.issues`, and a run the harness
-  // kept after the ticket left the world is by definition not in that list. So the
-  // goals whose ticket is hardest to find by hand were the ones offering no way to
-  // it.
-  const url = issue.url ?? refUrls[`issue:${issue.number}`] ?? refUrls[`#${issue.number}`];
   // Keyed on the run existing and not having been ended, never on anything the
   // page itself is showing: the button is how a run is abandoned, so it has to be
   // reachable for exactly as long as the harness still holds one.
@@ -403,42 +388,28 @@ function Header({
             read joined to a repository read by hand. An anchor rather than a
             button, as the other two deep links are: a deep link is a destination.
             First in the row because it is the read, and everything after it acts.
-            The command is in the title as well as the href for `desktopPrompt`'s
-            reason — the link reaches only the machine this browser is on, and a
-            client that is not installed answers nothing at all, so an operator
-            reading the cockpit from another desk is left with the line to type. */}
-          <a
+            Drawn through `DesktopLink`, which is what puts the command in the
+            title as well as the href — the standing rule for every one of these,
+            and the one this row would otherwise have to remember. */}
+          <DesktopLink
             className="cn-tgl"
-            href={desktopDeepLink(config.desktopFolder, askPrompt(issue.number))}
-            title={`Opens your own Claude Code with "${askPrompt(issue.number).trim()}" ready for your question, answered from what the harness actually recorded about this goal — the plan, the pull requests, what was escalated, what it cost, and where the work has reached.`}
+            folder={config.desktopFolder}
+            prompt={askPrompt(issue.number)}
+            ready="ready for your question"
+            explain="answered from what the harness actually recorded about this goal — the plan, the pull requests, what was escalated, what it cost, and where the work has reached."
           >
             Ask ↗
-          </a>
+          </DesktopLink>
           {/* The tracker, beside the other control that only reads. It used to sit
               between "Raise a bug" and "End the run…", which put a destination in
               the middle of the two controls that write.
 
-              **Always drawn, and inert rather than absent when there is nowhere to
-              go.** A control that comes and goes is a row whose shape depends on
-              what the provider happened to resolve, which is the opposite of what
-              the three groups are for — and "the ticket is not reachable from here"
-              is a fact about this goal worth stating, where a missing button says
-              nothing at all and reads as the cockpit having forgotten. It is a
-              `<span>`, not an `<a>` with no `href`: a link that leads nowhere is
-              the dead end refs exist to prevent, so this stops being a link. */}
-          {url !== undefined ? (
-            <a className="cn-tgl" href={url} target="_blank" rel="noopener noreferrer">
-              Open ticket ↗
-            </a>
-          ) : (
-            <span
-              className="cn-tgl"
-              aria-disabled="true"
-              title="No address for this ticket: the tracker did not give the item one, and the harness could not resolve it from the goal’s ref either. Nothing to open."
-            >
-              Open ticket ↗
-            </span>
-          )}
+              Which of the three keys resolves it, and the inert `<span>` drawn
+              when none of them does, are `TicketLink`'s business rather than this
+              page's — both are judgements about how a ref resolves. */}
+          <TicketLink className="cn-tgl" number={issue.number} url={issue.url}>
+            Open ticket ↗
+          </TicketLink>
         </span>
         <i className="cn-ghsep" />
         <span className="cn-ghgrp">
@@ -673,13 +644,14 @@ function Validation({
             that sentence rather than as part of it. Drawn unconditionally: the
             `local-run` prompt always has a body, so there is nothing to check
             first and no configuration state to fall out of step with. */}
-        <a
+        <DesktopLink
           className="cn-linkish"
-          href={desktopDeepLink(desktopFolder, localRunPrompt(issue.number))}
-          title={`Opens your own Claude Code with "${localRunPrompt(issue.number)}" ready to send, so this goal’s work is running on the machine in front of you — then it offers you the checks.`}
+          folder={desktopFolder}
+          prompt={localRunPrompt(issue.number)}
+          explain="so this goal’s work is running on the machine in front of you — then it offers you the checks."
         >
           run it locally ↗
-        </a>
+        </DesktopLink>
       </h3>
       <div className="cn-vin">
         <ValidationSection

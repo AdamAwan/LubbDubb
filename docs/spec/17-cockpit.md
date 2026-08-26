@@ -3760,6 +3760,30 @@ where the decision to leave something running is made. Absent rather than `$0.00
 measured, the convention every spend surface keeps. The goal page's Spend card names the count in a row
 of its own for the same reason: the row above it says "Agents".
 
+## Opening the operator's own Claude Code
+
+Four controls hand work to the operator's own Claude Code rather than to the fleet: the goal header's
+**Ask ↗** and **run it locally ↗**, the validation card's **Run it in Claude Code**, and the plan
+sheet's **Discuss…**. They are all `<DesktopLink>` (`web/src/components/DesktopLink.tsx`), over the
+scheme and the four prompt builders in `web/src/cockpit/desktopLink.ts`.
+
+**They are anchors, never buttons.** A deep link is a destination. `className` stays the caller's,
+because the four live in rows with different tones; what is shared is the address and the sentence.
+
+**The command is in the title as well as the `href`, and the component is what puts it there.** The
+link fires only on the machine the browser is on, and a client that is not installed answers *nothing
+at all* — no error, no tab, no window. So an operator reading the cockpit from another desk is left
+with the line to type, and the title is the only place to put it. This was a rule each site was
+trusted to remember, and two of the five had already forgotten: the plan sheet's two **Discuss…**
+anchors said what the session would do and never what command it would arrive with. So the title is
+now **assembled** — `Opens your own Claude Code with "<command>" <ready>, <explain>` — and a call site
+supplies only the half that is its own. `test/validationDesktopPrompt.test.ts` pins the composition,
+and pins that no other `.tsx` builds one of these links.
+
+**`ready` is why the clause is a prop and not a constant.** Three of the four commands are complete
+and send as they land; **Ask** is deliberately not, and fills the composer with `/lubbdubb ask 284 `
+so the cursor sits after the number. A title promising a send that never comes is worse than none.
+
 ## Links
 
 A surface that _names_ another thing and gives no way there is the cockpit's most repeated bug. It kept
@@ -3791,6 +3815,15 @@ sites pass a value they are already holding rather than re-deriving a number.
 signal, an agent's note. Deliberately **not** routed through `<Ref>`: a bare `#412` in a sentence does
 not say whether it is a goal or a pull request, and guessing would link onto whichever of the two
 shares the number. The tracker's page answers either.
+
+`<TicketLink number={…} url={…} />` is the fourth, and the destination `<Ref>` deliberately does not
+offer: a ref onto a goal the world carries opens its **page**, so the goal header's `Open ticket ↗`
+needs a control of its own. Three keys are tried, in the order of how much each can be trusted — the
+item's own `url`, then `issue:<n>`, then `#<n>` — and where it lives is the point. Both the ordering
+and the inert `<span>` drawn when none of them resolves are judgements about *how a ref resolves*,
+which is this module's job; written into the page instead, the next surface that wants a ticket writes
+its own third ordering, and `#<n>` first is the one that opens a pull request on a tracker where issue
+412 and PR 412 both exist.
 
 `refLabel(ref)` is the third, and **the only place a ref becomes text** (`#212` from any of its forms).
 It was written three times over, and the fourth surface that wrote it printed the label with no link on

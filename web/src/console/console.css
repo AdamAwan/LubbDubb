@@ -1385,11 +1385,12 @@
   border-color: var(--cn-line-hi);
   color: var(--cn-fg);
 }
-/* The one `.cn-tgl` that is an anchor. `Ask ↗` opens the operator's own Claude
-   Code, and a deep link is a destination rather than a button — so it is an `<a>`
-   wearing the row's tone. These three properties are only what the element brings
-   and the class never had to say, because until now nothing wearing it was a link;
-   no colour is stated here, so it stays on the toggle's tokens in both themes. */
+/* The `.cn-tgl`s that are anchors: `Ask ↗` (a deep link into the operator's own
+   Claude Code) and `Open ticket ↗` (the provider's page). Both are destinations
+   rather than buttons, so both are `<a>`s wearing the row's tone. These three
+   properties are only what the element brings and the class never had to say,
+   because nothing wearing it was a link when it was written; no colour is stated
+   here, so it stays on the toggle's tokens in both themes. */
 a.cn-tgl {
   display: inline-flex;
   align-items: center;
