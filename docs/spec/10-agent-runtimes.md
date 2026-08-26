@@ -316,6 +316,15 @@ stray message into a working agent.
 Each turn is judged on **its own** text: the text is taken and cleared before the queued-turn check,
 so a sentinel printed in the interrupted turn cannot be read again at the end of the queued one.
 
+**`@@LUBBDUBB_DONE@@` is the exception, and it is decided _above_ the queued-turn check.** Skipping the
+interrupted turn is right for a question, because the message queued behind it is usually the answer
+and re-parking would ask again — but nothing anyone types makes "I finished" untrue. Honoured only
+when the queue happened to be empty, a done is one lost to a race: the agent announces it, the harness
+hears nothing, and the session it should have torn down sits holding a worktree lease, on the glass
+indistinguishable from an agent that stopped without saying why. `send` therefore does **not** clear
+`turnText` either; every `result` clears it, so it never spans two turns anyway, and the only thing
+the earlier clear did was erase a sentinel already printed into the turn the message was landing in.
+
 A path that never calls `send` (a resume delivering no first message) leaves the count at zero and is
 judged exactly as before.
 
@@ -518,11 +527,24 @@ the two exclusions).
 The raw event stream is never dumped. Each message's content blocks go through the pure `renderBlocks`
 (`src/agents/streamTranscript.ts`):
 
-- assistant text passes through with sentinels stripped;
+- assistant text passes through with sentinels stripped — and a `done` or a `waiting` leaves a
+  **marker** where its token was (`✓ announced done`, `⏸ asked for a person · <reason>`);
 - a `tool_use` becomes a labelled line with a one-line input summary (capped at 140 chars);
 - a `tool_result` (which arrives as a `user` event) is sanitised — ANSI and control characters removed
   — and truncated to `MAX_RESULT_LINES` (200) with a `+N more lines` marker;
 - a `human` block renders injected/human messages.
+
+**A stripped sentinel leaves a marker, because a strip that leaves nothing is a record that says
+nothing.** The token is removed so the protocol never leaks into the reading, and for a long time that
+meant a turn announcing `done` and a turn that simply stopped were byte-identical on the glass. That is
+not cosmetic: an operator who cannot see the announcement asks the agent whether it forgot to finish,
+and the agent — which can consult only its own memory of the turn — answers that it did not and prints
+the token again, which is stripped again. Neither party can reach the one thing that would settle it.
+The marker is written from the **same bytes with the same helpers** the runtime judges the turn with,
+so it can neither claim a sentinel the runtime did not see nor stay silent about one it did. A `flag`
+gets none: it carries no status meaning and already surfaces as its own artifact. A `human` block gets
+none either, whatever it quotes — `STALL_NUDGE` names both sentinels at the agent verbatim, and marking
+that would put an "announced done" in the transcript for the harness asking whether there was one.
 
 **Every labelled line is stamped** with a dim local `[HH:MM:SS]`: a tool call and a sent message
 carry it in front of the label, a result carries it _after_ the label and before the count. That

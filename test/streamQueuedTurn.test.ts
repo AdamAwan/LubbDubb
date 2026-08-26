@@ -142,3 +142,35 @@ test('the turn behind a queued message is still judged on its own text', () => {
   assert.deepEqual(stalls, ['Hmm.'], "and the stop is judged on turn 2's own text");
   assert.equal(session.status, 'waiting');
 });
+
+/**
+ * The queued-turn rule above skips a turn's *question*, and that is right: the
+ * message queued behind it is usually the answer, so re-parking on it would ask
+ * again. A **done** is not that. Nothing anyone types afterwards makes "I finished"
+ * untrue, and a done honoured only when the queue happened to be empty is one lost
+ * to a race — the agent announces it, the harness hears nothing, and the session it
+ * should have torn down sits holding a worktree lease, looking exactly like an
+ * agent that stopped without saying why.
+ */
+test('a done printed before a message landed mid-turn is still a finish', () => {
+  const child = new FakeChild();
+  const session = new StreamJsonSession(
+    { command: 'claude', args: [], cwd: '/tmp', env: {} },
+    () => child as StreamChild,
+  );
+  const stalls: string[] = [];
+  session.on('stalled', (lastWords: string) => stalls.push(lastWords));
+  session.start();
+
+  session.send('go');
+  child.emitLine({
+    type: 'assistant',
+    message: { content: [{ type: 'text', text: 'Pushed, CI green. @@LUBBDUBB_DONE@@' }] },
+  });
+  // An operator reads the transcript and types into the turn that just announced it.
+  session.send("did you forget to tell LubbDubb you're done?");
+  child.emitLine({ type: 'result', subtype: 'success' });
+
+  assert.equal(session.status, 'done', 'the announcement survives the message that raced it');
+  assert.deepEqual(stalls, [], 'and it is never read as an unannounced stop');
+});

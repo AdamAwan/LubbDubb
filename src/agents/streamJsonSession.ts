@@ -159,7 +159,11 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
     const msg = { type: 'user', message: { role: 'user', content: text } };
     this.child.stdin.write(JSON.stringify(msg) + '\n');
     this.pendingTurns += 1;
-    this.turnText = '';
+    // Deliberately *not* clearing `turnText`. Every `result` clears it, so it never
+    // spans two turns anyway — and the only thing clearing it here ever did was
+    // erase a sentinel the agent had already printed in the turn this message is
+    // landing in the middle of. A done printed before an answer, a nudge or an
+    // operator's aside arrived is still a done; see the `result` handler.
     if (this._status === 'waiting') this.setStatus('running');
     // Explicitly, rather than leaving it to the transition above: a message typed
     // into an agent that never stopped being `running` is still a fresh start for
@@ -275,16 +279,25 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
       const turnText = this.turnText;
       this.turnText = '';
       if (this.pendingTurns > 0) this.pendingTurns -= 1;
+      // Done is decided *above* the queued-turn check, and it is the only sentinel
+      // that is. A queued message makes a question moot — it is usually the answer —
+      // but nothing anyone types makes "I finished" untrue, so a done read only when
+      // the queue happened to be empty is a done lost to a race: the agent announced
+      // it, the harness heard nothing, and the session it should have torn down sat
+      // holding a worktree, indistinguishable from one that stopped without saying
+      // why. Both `finish` and the transitions below are idempotent.
+      if (turnText.includes(DONE_SENTINEL)) {
+        this.finish('done');
+        return;
+      }
       // Only the turn that leaves nothing queued is the session coming to rest; a
       // message sent into the turn this ends is one `claude` runs next, and reading
       // this as an unannounced stop is a park on an agent still working (see
       // {@link pendingTurns}). Judged on the text of the turn that ended, so a
       // sentinel is never carried into the queued one.
       if (this.pendingTurns > 0) return;
-      // End of a turn: decide done vs waiting from the sentinels the agent printed.
-      if (turnText.includes(DONE_SENTINEL)) {
-        this.finish('done');
-      } else if (this.limit) {
+      // End of a turn: decide waiting vs an unannounced stop from what it printed.
+      if (this.limit) {
         // Ordered after the done sentinel deliberately: an agent that finished the
         // work and *then* hit the limit is finished, and parking it would resurrect
         // a settled ending.
