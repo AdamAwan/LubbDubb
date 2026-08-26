@@ -76,6 +76,26 @@ export interface PanelRowModel {
    * there is in {@link refs}, where every other row keeps one.
    */
   why?: string | null;
+  /**
+   * The word the marker wears, where the row's state has one.
+   *
+   * With it the marker stops being a `?` an operator has to hover to learn
+   * anything at all: `question`, `limit`, `stalled` say what is going on at a
+   * glance, and the sentence behind them says the rest. Without it the marker is
+   * the bare `?` — the right shape for a card whose rows have no single word for
+   * their state, where the label would be the same one on every row.
+   *
+   * A label with no {@link why} is a chip that states a fact and has nothing more
+   * to add, which is allowed: `at a keyboard` on a desk run needs the sentence,
+   * a plain state may not.
+   */
+  whyLabel?: string;
+  /**
+   * How the label reads: `ask` is your move (red), `hold` is the harness stopped
+   * (amber), `quiet` is neither. The tones are the chip vocabulary the cockpit
+   * already uses, not a third one.
+   */
+  whyTone?: 'ask' | 'hold' | 'quiet';
   /** The row's one graphical reading: a segment track, a CI ladder. */
   reading?: ReactNode;
   /** Verdicts, in the order the card ranks them. */
@@ -130,6 +150,8 @@ type PanelGrammar = 'facts' | 'columns';
 interface SlotsUsed {
   lamp: boolean;
   why: boolean;
+  /** Any row wearing a word, which is what the column has to be wide enough for. */
+  whyLabel: boolean;
   reading: boolean;
   chips: boolean;
   action: boolean;
@@ -137,10 +159,11 @@ interface SlotsUsed {
 }
 
 function slotsUsed(rows: readonly PanelRowModel[]): SlotsUsed {
-  const asks = (row: PanelRowModel): boolean => row.why != null && row.why !== '';
+  const asks = (row: PanelRowModel): boolean => (row.why != null && row.why !== '') || row.whyLabel !== undefined;
   return {
     lamp: rows.some((row) => row.lamp !== undefined),
     why: rows.some(asks),
+    whyLabel: rows.some((row) => row.whyLabel !== undefined),
     reading: rows.some((row) => row.reading !== undefined),
     chips: rows.some((row) => row.chips !== undefined),
     action: rows.some((row) => row.action !== undefined),
@@ -160,7 +183,8 @@ function gridTemplate(has: SlotsUsed): string {
   return [
     has.lamp ? 'var(--cn-w-lamp)' : '',
     'minmax(0, 1fr)',
-    has.why ? 'var(--cn-w-why)' : '',
+    // A column of words needs the width of a word; a column of markers does not.
+    has.why ? (has.whyLabel ? 'var(--cn-w-state)' : 'var(--cn-w-why)') : '',
     has.reading ? 'var(--cn-w-read)' : '',
     has.chips ? 'var(--cn-w-chips)' : '',
     has.action ? 'var(--cn-w-act)' : '',
@@ -229,12 +253,15 @@ export function PanelRows({
  * against this row said nothing.
  */
 function FactsRow({ row, has, columns }: { row: PanelRowModel; has: SlotsUsed; columns: string }): JSX.Element {
-  const asks = row.why != null && row.why !== '';
   return (
     <div className={rowClass(row, 'cn-row cn-frow')} style={{ gridTemplateColumns: columns }} title={row.hint}>
       {has.lamp && <span className="cn-slot">{row.lamp}</span>}
       <Subject row={row} />
-      {has.why && <span className="cn-slot cn-slot-why">{asks && <Why why={row.why as string} />}</span>}
+      {has.why && (
+        <span className={`cn-slot ${row.whyLabel === undefined ? 'cn-slot-why' : ''}`}>
+          <Why row={row} />
+        </span>
+      )}
       {has.reading && <span className="cn-slot">{row.reading}</span>}
       {has.chips && <span className="cn-slot">{row.chips}</span>}
       {has.action && <span className="cn-slot">{row.action}</span>}
@@ -281,7 +308,7 @@ function ColumnsTable({
             {/* The graphical reading, the verdict and the control head nothing: a
                 heading over a CI ladder or a watch toggle names the obvious, and
                 buys a column of ink for it. */}
-            {has.why && <th className="cn-dwhy">Why</th>}
+            {has.why && <th className={has.whyLabel ? undefined : 'cn-dwhy'}>{has.whyLabel ? 'State' : 'Why'}</th>}
             {has.reading && <th />}
             {has.chips && <th />}
             {has.action && <th />}
@@ -307,7 +334,11 @@ function ColumnsTable({
                     </td>
                   );
                 })}
-                {has.why && <td className="cn-dwhy">{row.why != null && row.why !== '' && <Why why={row.why} />}</td>}
+                {has.why && (
+                  <td className={has.whyLabel ? undefined : 'cn-dwhy'}>
+                    <Why row={row} />
+                  </td>
+                )}
                 {has.reading && <td>{row.reading}</td>}
                 {has.chips && <td>{row.chips}</td>}
                 {has.action && <td>{row.action}</td>}
@@ -380,25 +411,42 @@ function Facts({ facts }: { facts?: readonly RowFact[] }): JSX.Element | null {
 }
 
 /**
- * The marker, and the sentence it holds.
+ * What is going on with this row, and the sentence behind it.
  *
- * A `button` rather than a hover target: a reason only a pointer can reach is a
- * reason half the operators do not have, so it takes focus and the bubble opens on
- * `:focus-visible` as well as `:hover`. `aria-label` names what it is for, because
- * `?` alone reads as help rather than as *why this row*.
+ * Wears the row's own word where it has one and a bare `?` where it does not. The
+ * word is the point: a `?` says only *there is something to know here*, so a
+ * column of them tells an operator scanning the card nothing until they hover
+ * every row — while `question` / `limit` / `stalled` answers the question the
+ * card is for, and the hover is then for the detail rather than for the fact.
  *
- * The bubble is a sibling of the button rather than its child, since a tooltip
- * inside a control is read out as part of the control's own name.
+ * A `button` rather than a hover target either way: a reason only a pointer can
+ * reach is a reason half the operators do not have, so it takes focus and the
+ * bubble opens on `:focus-visible` as well as `:hover`. The bubble is a sibling of
+ * the button rather than its child, since a tooltip inside a control is read out
+ * as part of the control's own name.
  */
-function Why({ why }: { why: string }): JSX.Element {
+function Why({ row }: { row: PanelRowModel }): JSX.Element | null {
+  const why = row.why != null && row.why !== '' ? row.why : null;
+  const label = row.whyLabel;
+  if (why === null && label === undefined) return null;
+  const tone = label === undefined ? '' : ` cn-why-chip cn-t-${row.whyTone ?? 'quiet'}`;
   return (
     <span className="cn-why">
-      <button type="button" className="cn-why-mark" aria-label="Why this row is here">
-        ?
+      <button
+        type="button"
+        className={`cn-why-mark${tone}`}
+        aria-label={label === undefined ? 'Why this row is here' : `${label} — what this means`}
+        // A label with nothing behind it is a statement, not a control: it stays a
+        // button so the keyboard reaches it the same way, and simply has no bubble.
+        aria-disabled={why === null ? true : undefined}
+      >
+        {label ?? '?'}
       </button>
-      <span className="cn-why-tip" role="tooltip">
-        {why}
-      </span>
+      {why !== null && (
+        <span className="cn-why-tip" role="tooltip">
+          {why}
+        </span>
+      )}
     </span>
   );
 }

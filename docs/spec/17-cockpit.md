@@ -1392,7 +1392,8 @@ forgotten:
   `when 12m ago`, `times ×3`. `41m` alone is an age on one card and a remaining time on another, and
   the label is the whole of what says which. The count that used to share the cost's slot is a fact
   with a name now.
-- **`why` is the row's one long sentence, and it is not on the glass.** A queue item's `reason`, a
+- **`why` is the row's one long sentence, and it is not on the glass**, and **`whyLabel` is the word
+  it wears where the row's state has one.** A queue item's `reason`, a
   goal's `pickup.reasons`, a pull request's `attention.reasons` — held behind a `?` marker and given
   up on hover or focus. On the glass it made Up next the one card whose rows were three lines tall and
   whose shape every other card was an exception to; behind the marker it is one hover away, and the
@@ -1402,11 +1403,28 @@ forgotten:
   `button`, so it answers to the keyboard; a reason only a pointer can reach is a reason half the
   operators do not have.
 
+  A bare `?` says only _there is something to know here_, so a column of them tells an operator
+  scanning a card nothing until they hover every row. Where a card has a word for what is going on —
+  the Fleet card does — the marker wears it and the sentence is the detail behind it. The word is
+  drawn as the cockpit's own chip, in the tone the state deserves: `ask` red, `hold` amber, `quiet`
+  neither. The column widens to `--cn-w-state` on a card that uses words, and the `columns` grammar
+  heads it **State** rather than **Why**.
+
+  **The Fleet card's four states are ranked, not merged**, because they are read from four different
+  facts and an agent can be in more than one: an open escalation naming the agent (`question`, and it
+  outranks everything — it is your move), the limit park (`limit`), the stall park (`stalled`), and a
+  plain `waiting` (`blocked`). A running agent wears none, which is the point of the column: on a fleet
+  of five the two words in it are the two rows worth looking at. Behind the ended-shifts disclosure a
+  row names how it ended where that is not `done` — `failed`, `crashed`, `killed`, `stopped`. The desk
+  run wears `at a keyboard` here rather than a chip of its own, in its violet: the hollow lamp, the
+  dashed edge and this word are one signal, and it is the same question the column answers on every
+  other row. → `test/panelGrammar.test.ts`
+
 The model has **two renderings**, because the layout was worth settling separately from the rule:
 
 | Grammar   | The card is                   | Drawn as                                                                          |
 | --------- | ----------------------------- | --------------------------------------------------------------------------------- |
-| `facts`   | a list of rows                | one line each on a fixed rail: lamp, subject, why, reading, chips, action, refs    |
+| `facts`   | a list of rows                | one line each on a fixed rail: lamp, subject, why, reading, chips, action, refs   |
 | `columns` | a table with its own headings | a cell each; the fact labels **are** the headings, plus `Why` and the refs column |
 
 Both put the same slots in the same order, and both hold a slot open on every row of a card where any

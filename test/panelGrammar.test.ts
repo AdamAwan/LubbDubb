@@ -19,8 +19,17 @@ const { Overview } = await import('../web/src/console/Overview.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
 const { goalIssue } = await import('../web/src/view/goalPage.js');
 
-function view(grammar: 'facts' | 'columns'): CockpitView {
-  const state = buildDemoState().state;
+/**
+ * The view model over the demo world, or over a doctored one.
+ *
+ * Doctoring goes in here rather than onto the finished view, because the readings
+ * the fleet row's state is drawn from — `limitParked`, `escalationByAgent`,
+ * `stallExpiryByAgent` — are *derived* by `buildViewModel`. A test that replaced
+ * `view.state` alone would leave every one of them answering about the world it
+ * was built from, and its assertions would be about nothing.
+ */
+function view(grammar: 'facts' | 'columns', over: Partial<CockpitView['state']> = {}): CockpitView {
+  const state = { ...buildDemoState().state, ...over };
   return buildViewModel({
     state,
     now: Date.now(),
@@ -169,6 +178,48 @@ test('every row of a card sits on that card’s own grid', () => {
     checked += 1;
   }
   assert.ok(checked >= 4, `only ${checked} cards drew rows — this test is about the ones that do`);
+});
+
+/**
+ * The fleet row's state, as a word rather than a marker to hover.
+ *
+ * Ranked, not merged: the four come from four different facts — an escalation
+ * naming the agent, the limit park, the stall park and a plain wait — and an
+ * agent can be in more than one at once. A row can wear one word, so which one it
+ * is has to be decided somewhere, and this is the decision.
+ */
+test('a fleet row wears the state it is in, and the strongest one it is in', () => {
+  const base = buildDemoState().state;
+  const live = base.agents.filter((a) => a.endedAt === null);
+  const waiting = live.find((a) => a.status === 'waiting');
+  assert.ok(live[0] && waiting, 'the fixtures must carry a live agent and a waiting one');
+
+  const chips = (over: Partial<CockpitView['state']>): string[] => {
+    const html = render(view('facts', over));
+    const fleet = html.slice(html.indexOf('Fleet'), html.indexOf('Goals in flight'));
+    return [...fleet.matchAll(/cn-why-chip cn-t-(\w+)"[^>]*>([^<]+)</g)].map((m) => `${m[2]}:${m[1]}`);
+  };
+
+  // The world as it ships: every live agent has an open escalation, which is the
+  // top of the ranking and is your move whatever else is true of the row.
+  assert.ok(chips({}).includes('question:ask'), 'an agent with an open escalation asks you something');
+
+  const noAsks = { escalations: [] };
+  assert.ok(chips({ ...noAsks, parkedOnLimit: [live[0].id] }).includes('limit:hold'), 'a limit park says so');
+  assert.ok(
+    chips({
+      ...noAsks,
+      stallParks: [{ agentId: live[0].id, expiresAt: new Date(Date.now() + 9e5).toISOString() }],
+    }).includes('stalled:hold'),
+    'a stall park says so',
+  );
+  assert.ok(chips(noAsks).includes('blocked:hold'), 'a plain wait says so');
+
+  // The ranking itself: the waiting agent is *also* parked on the limit, and the
+  // row wears the park. Both are true; only one is what to do about it.
+  const ranked = chips({ ...noAsks, parkedOnLimit: [waiting.id] });
+  assert.ok(ranked.includes('limit:hold'), `the park outranks the wait — got ${ranked.join(', ')}`);
+  assert.ok(!ranked.includes('blocked:hold'), 'and the row wears one word, not both');
 });
 
 /** The grammar is a place, so both readings are a link somebody can send. */

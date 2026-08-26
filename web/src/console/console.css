@@ -1582,6 +1582,9 @@ a.cn-tgl {
      holds: two chips, a five-segment track, a profile picker, two refs. */
   --cn-w-lamp: 8px;
   --cn-w-why: 16px;
+  /* The same column when its rows wear a word instead of a marker: wide enough for
+     the longest state the fleet card has ("at a keyboard"). */
+  --cn-w-state: 104px;
   --cn-w-read: 104px;
   --cn-w-chips: 132px;
   --cn-w-act: 124px;
@@ -2652,6 +2655,47 @@ button.cn-grow {
   border-color: var(--cn-accent);
   color: var(--cn-accent);
   outline: none;
+}
+/* The marker wearing a word. Shaped as the cockpit's own chip rather than as a
+   third thing — it is a verdict about the row, which is what a chip is — and it
+   keeps the marker's hover, so the sentence is one reach away from the word. */
+.cn-why-chip {
+  width: auto;
+  height: auto;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font: 600 10.5px/1 var(--cn-mono);
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+.cn-why-chip.cn-t-ask {
+  background: var(--cn-red-fill);
+  border-color: var(--cn-red-line);
+  color: var(--cn-red-ink);
+}
+.cn-why-chip.cn-t-hold {
+  background: var(--cn-amber-fill);
+  border-color: var(--cn-amber-line);
+  color: var(--cn-amber-ink);
+}
+.cn-why-chip.cn-t-quiet {
+  border-color: var(--cn-line);
+  color: var(--cn-fg-dim);
+}
+/* A desk run keeps its violet wherever it is drawn: the hollow lamp, the dashed
+   edge and this word are one signal — nothing dispatched this row — and a state
+   chip in the neutral grey would be the only part of it that stopped saying so. */
+.cn-desk .cn-why-chip {
+  background: var(--cn-violet-fill);
+  border-color: var(--cn-violet-line);
+  color: var(--cn-violet);
+}
+/* Hover states are the tone's own, so a word does not turn accent-orange mid-read
+   and read as a fifth state. */
+.cn-why-chip:hover,
+.cn-why-chip:focus-visible {
+  border-color: var(--cn-line-hi);
+  color: var(--cn-fg);
 }
 /* Two edges rather than a width: the bubble is the width of the row it explains,
    so it cannot leave the card whatever the marker's position in the row. */

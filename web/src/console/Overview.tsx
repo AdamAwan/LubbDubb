@@ -291,9 +291,9 @@ function agentRow(agent: Agent, view: CockpitView, actions: CockpitActions): Pan
       { label: 'for', value: elapsed(agent.startedAt, agent.endedAt, view.now) },
       ...(agent.costUsd !== null ? [{ label: 'cost', value: fmtUsd(agent.costUsd) }] : []),
     ],
-    // What the harness said about the wait, which is longer than a fact and is
-    // only asked for on the rows that are not moving.
-    why: agent.status === 'waiting' || limited ? agent.waitingReason : null,
+    // What is going on with this row, as a word, with the harness's own sentence
+    // behind it.
+    ...agentState(agent, view),
     // The way out of the park, where the park is shown — beside the name rather
     // than inside it, since the row's own click opens the transcript.
     action: limited ? (
@@ -309,6 +309,66 @@ function agentRow(agent: Agent, view: CockpitView, actions: CockpitActions): Pan
     spent: done,
   };
 }
+
+/**
+ * Why a fleet row is not moving, as one word and the sentence behind it.
+ *
+ * The four states are the harness's own and are read from four different facts,
+ * because they are four different things — an escalation naming the agent, the
+ * limit park, the stall park, and a plain wait. They are ranked rather than
+ * merged: an agent that is asking you something and also parked is your move
+ * first, and a row can only wear one word.
+ *
+ * A running agent wears none. That is the point of the column: on a fleet of five
+ * the two words in it are the two rows worth looking at, where five `?` markers
+ * were five rows to hover.
+ */
+function agentState(agent: Agent, view: CockpitView): Pick<PanelRowModel, 'why' | 'whyLabel' | 'whyTone'> {
+  const escalation = view.escalationByAgent.get(agent.id);
+  if (escalation !== undefined) {
+    // The ask itself, not a summary of it: the rail carries the same sentence, and
+    // two surfaces wording one question differently is the drift the refs rule
+    // exists to stop one layer down.
+    return { whyLabel: 'question', whyTone: 'ask', why: escalation.prompt };
+  }
+  if (view.limitParked.has(agent.id)) {
+    return {
+      whyLabel: 'limit',
+      whyTone: 'hold',
+      why:
+        (agent.waitingReason ?? 'The account’s usage limit is spent.') +
+        ' It takes a fleet slot until it is resumed or ended.',
+    };
+  }
+  const stallExpiry = view.stallExpiryByAgent.get(agent.id);
+  if (stallExpiry !== undefined) {
+    return {
+      whyLabel: 'stalled',
+      whyTone: 'hold',
+      why:
+        'It stopped without saying so. The harness records it done by itself ' +
+        `${relTime(stallExpiry, view.now)} unless it speaks again.`,
+    };
+  }
+  if (agent.status === 'waiting') {
+    return { whyLabel: 'blocked', whyTone: 'hold', why: agent.waitingReason };
+  }
+  // How a shift ended, on the rows behind the disclosure. `done` is the ordinary
+  // ending and wears nothing — a word on every ended row would say only that the
+  // row has ended, which the list it is in already says.
+  if (ENDED_BADLY[agent.status] !== undefined) {
+    return { whyLabel: ENDED_BADLY[agent.status], whyTone: 'quiet', why: agent.waitingReason };
+  }
+  return {};
+}
+
+/** The endings worth a word, in the harness's own vocabulary. */
+const ENDED_BADLY: Partial<Record<Agent['status'], string>> = {
+  failed: 'failed',
+  crashed: 'crashed',
+  killed: 'killed',
+  interrupted: 'stopped',
+};
 
 /**
  * What a dispatch was aimed at, as ways there: the origin itself, and the goal
@@ -367,13 +427,16 @@ function deskRow(run: DeskRun, view: CockpitView): PanelRowModel {
       { label: 'who', value: run.label },
       { label: 'for', value: elapsed(run.claimedAt, null, view.now) },
     ],
-    // The two things a glance cannot carry, and they are a sentence rather than a
-    // row's worth of hover: this was not dispatched, and it ends on its own.
+    // The desk run's own state, in the same column the agents wear theirs: this is
+    // what is going on with the row, and it is not a dispatch. The two things a
+    // glance cannot carry are behind it — that it takes no slot, and that it ends
+    // on its own.
+    whyLabel: 'at a keyboard',
+    whyTone: 'quiet',
     why:
       `Nobody dispatched this: ${run.label} claimed check ${run.letter} of ${refLabel(run.originRef)} ` +
       `${relTime(run.claimedAt, view.now)}, at their own keyboard. It takes no fleet slot, and it ends ` +
       'when the reading lands, when the session closes, or when the claim ages out.',
-    chips: <i className="cn-chip cn-desk-chip">at a keyboard</i>,
     desk: true,
   };
 }
