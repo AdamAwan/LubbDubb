@@ -4840,7 +4840,7 @@ select:disabled {
   font-style: normal;
 }
 
-/* The mark on a row the assay is holding. The call-out above the list is gone —
+/* The mark on a row the appraisal is holding. The call-out above the list is gone —
    the hold is raised on the queue rail, where every other ask waiting on a person
    already is — so this is what is left of intake here: which rows are held, and
    nothing that decides for them. */

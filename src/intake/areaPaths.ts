@@ -21,7 +21,7 @@ const DEFAULT_TTL_MS = 60 * 60 * 1000;
  *
  * ## Why it is cached at all
  *
- * Two callers need it and neither can await: `assay_issue` builds its argument
+ * Two callers need it and neither can await: `appraise_issue` builds its argument
  * schema when an agent's tool set is composed, and the state snapshot decides
  * whether a work item is still unclassified while composing a response. Both want
  * a list that changes at the speed a team reorganises its board — so paying an
@@ -31,7 +31,7 @@ const DEFAULT_TTL_MS = 60 * 60 * 1000;
  *
  * A read that fails leaves the **last good tree standing** rather than emptying
  * it, and records the failure. Emptying instead would be the silent direction
- * twice over: the assayer would stop being offered any area (its argument
+ * twice over: the appraiser would stop being offered any area (its argument
  * disappears from the schema, which reads as "this deployment has no areas"), and
  * every item would read as classified, since `isPlacementMissing` cannot compare
  * against a root it does not have. Neither is red, and both look exactly like the

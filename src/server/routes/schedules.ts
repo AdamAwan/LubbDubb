@@ -19,7 +19,7 @@ import type { RouteContext } from './context.js';
  * launch route (issue #198). The convergence that route implements is for a
  * one-off intention entering the funnel; a recurrence is a standing one, and filing
  * a fresh ticket every Monday would fill the tracker with copies of one sentence
- * for the assay and the planner to judge identically each time. So a firing is
+ * for the appraisal and the planner to judge identically each time. So a firing is
  * dispatched as the job it is, on the `job/<id>` branch of that firing.
  */
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {

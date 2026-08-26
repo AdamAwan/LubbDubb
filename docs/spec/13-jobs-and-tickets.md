@@ -58,7 +58,7 @@ A code job injected from the cockpit is a **brief**, and it enters the workflow 
 door as a ticket rather than being dispatched straight onto a branch (issue #198). When a tracker is
 configured (`trackerCoordinates(config) !== null`), the route does not queue a code job on the raw
 prompt; it files a **watched ticket** so the work flows through the whole planning funnel — the goal
-assay, the planning agent, the plan's parts — exactly like a picked-up issue. The workflow's two entry
+appraisal, the planning agent, the plan's parts — exactly like a picked-up issue. The workflow's two entry
 points ("start with a prompt", "start with a ticket") are drawn converging on _find-or-create a ticket,
 then the funnel_; this is the prompt arm wired to that convergence.
 
@@ -285,7 +285,7 @@ slot behind it — so a week of pause is one job waiting, not two thousand.
 - **No ticket, unlike a code brief from `POST /api/jobs`.** That route's convergence
   ([above](#briefs-become-tickets--post-apijobs-the-code-arm)) is for a one-off intention
   entering the funnel. A recurrence is a standing one, and filing a fresh ticket every Monday would
-  fill the tracker with copies of one sentence for the assay and the planner to judge identically
+  fill the tracker with copies of one sentence for the appraisal and the planner to judge identically
   each time. A firing is dispatched as the job it is.
 
 ### The four routes

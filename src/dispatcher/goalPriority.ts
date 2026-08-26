@@ -28,7 +28,7 @@ interface GoalWorld {
  * Two families reach it:
  *
  * - **The `issue:<n>` subtree**, through `issueOriginRole` — the pickup root, the
- *   plan's parts, the planner, the assay, the assessor, the retrospective and the
+ *   plan's parts, the planner, the appraisal, the assessor, the retrospective and the
  *   validation checks. Asked through that function rather than by `startsWith` for
  *   its own reason: a bare prefix test matches `issue:19:plan` for goal 1.
  * - **The pull requests the goal's work opened**, whose origins (`pr:<m>:ci`,

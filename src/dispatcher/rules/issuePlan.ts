@@ -19,13 +19,13 @@ export function issuePlan(s: StageContext): void {
   for (const { issue } of s.eligibleIssues) {
     const route = s.routes.get(issue.number);
     if (route?.route !== 'planning') continue;
-    // `issue-assay` is deciding whether this goal can be worked from at all.
-    // Planning it in the same cycle is the exact waste the assay exists to
+    // `issue-appraisal` is deciding whether this goal can be worked from at all.
+    // Planning it in the same cycle is the exact waste the appraisal exists to
     // prevent — and would put the decomposition of an unanswerable question in
     // front of an operator. Queued as `superseded` rather than skipped: a
     // planner that silently never appeared was the same invisibility `capped`
     // was named to fix.
-    const supersededBy = s.assaying.has(issue.number) ? ('issue-assay' as const) : null;
+    const supersededBy = s.appraising.has(issue.number) ? ('issue-appraisal' as const) : null;
     const origin = planOrigin(issue.number);
     if (s.activeOrigins.has(origin)) continue; // a planner is already on it
     const branch = planBranch(issue.number);

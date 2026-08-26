@@ -194,7 +194,7 @@ export interface AzureDevOpsApi {
    * The one read on this seam that is about the *project* rather than about an
    * item, and it is here because there is nowhere else the harness could learn
    * it — an area path is a node in a tree only the provider holds, and the world
-   * snapshot carries items, not schema. It is what lets the assayer be **offered**
+   * snapshot carries items, not schema. It is what lets the appraiser be **offered**
    * the areas rather than free-typing one, which is the difference between a
    * choice and an invented node that does not exist.
    *

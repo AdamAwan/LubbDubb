@@ -59,7 +59,7 @@ async function callTool(system: System, agent: Agent, name: string, args: Record
 test('padOriginFor maps every origin in an issue subtree to the issue', () => {
   assert.equal(padOriginFor('issue:12'), 'issue:12');
   assert.equal(padOriginFor('issue:12:plan'), 'issue:12');
-  assert.equal(padOriginFor('issue:12:assay'), 'issue:12');
+  assert.equal(padOriginFor('issue:12:appraisal'), 'issue:12');
   assert.equal(padOriginFor('issue:12:assess'), 'issue:12');
   assert.equal(padOriginFor('issue:12:retro'), 'issue:12');
   assert.equal(padOriginFor('issue:12:part:schema'), 'issue:12');

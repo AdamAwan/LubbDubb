@@ -12,7 +12,7 @@ import type { ToolFactory } from './context.js';
  *
  * This is the one fence the tool layer owns. The others — `conclusionOrigin`,
  * `partConclusionOrigin`, `padOriginFor`, `retroSubmitOrigin`, `assessmentOrigin`,
- * `assayerOrigin` — are asked at the fleet seam because each *resolves* something
+ * `appraiserOrigin` — are asked at the fleet seam because each *resolves* something
  * out of the store as it refuses (the part, the pad, the issue), so a copy here
  * would be a second answer to a question already answered next to the write it
  * guards. This one resolves nothing but the issue number, which is pure.

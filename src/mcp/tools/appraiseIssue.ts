@@ -1,9 +1,9 @@
-import { GOAL_ASSAY_VERDICT_HELP, GOAL_ASSAY_VERDICTS, validateGoalAssay } from '../goalAssay.js';
+import { GOAL_APPRAISAL_VERDICT_HELP, GOAL_APPRAISAL_VERDICTS, validateGoalAppraisal } from '../goalAppraisal.js';
 import { truncateAreaPaths } from '../../intake/placement.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
-export const assayIssue: ToolFactory = ({ deps, agent, ok }) => {
+export const appraiseIssue: ToolFactory = ({ deps, agent, ok }) => {
   // The deployment's own profiles, cheapest first. Empty when no `agentModels` is
   // configured, and then the argument is neither offered nor required — there is
   // nothing to choose between, and a tool that asked anyway would be asking the
@@ -18,7 +18,7 @@ export const assayIssue: ToolFactory = ({ deps, agent, ok }) => {
   const areas = tree === null ? { paths: [], omitted: 0 } : truncateAreaPaths(tree);
   return {
     description:
-      'Say whether the ISSUE you were dispatched to assay can be worked from at all. You are standing in ' +
+      'Say whether the ISSUE you were dispatched to appraise can be worked from at all. You are standing in ' +
       'front of the work, not doing it: nothing has been dispatched for this issue yet, and your verdict ' +
       'decides whether anything is. Read the ticket against the repository you are in. Say "workable" ' +
       'if there is an identifiable goal an agent could start on — the bar is *actionable*, not *good*, ' +
@@ -54,8 +54,8 @@ export const assayIssue: ToolFactory = ({ deps, agent, ok }) => {
       properties: {
         status: {
           type: 'string',
-          enum: [...GOAL_ASSAY_VERDICTS],
-          description: GOAL_ASSAY_VERDICTS.map((v) => `${v}: ${GOAL_ASSAY_VERDICT_HELP[v]}`).join('. '),
+          enum: [...GOAL_APPRAISAL_VERDICTS],
+          description: GOAL_APPRAISAL_VERDICTS.map((v) => `${v}: ${GOAL_APPRAISAL_VERDICT_HELP[v]}`).join('. '),
         },
         summary: {
           type: 'string',
@@ -102,18 +102,18 @@ export const assayIssue: ToolFactory = ({ deps, agent, ok }) => {
       required: ['status', 'summary'],
     },
     handler: (args) => {
-      const parsed = validateGoalAssay(args, names, areas.paths);
-      if (!parsed.ok) return toolError(`Assay rejected: ${parsed.error}`);
+      const parsed = validateGoalAppraisal(args, names, areas.paths);
+      if (!parsed.ok) return toolError(`Appraisal rejected: ${parsed.error}`);
       // Structural identity, and here it decides whether there is anything to
-      // assay at all: an agent already doing the work is refused rather than
+      // appraisal at all: an agent already doing the work is refused rather than
       // scoped down, because it would be parking an issue it is mid-way through.
-      const result = deps.agents.recordAssay(agent.id, parsed.verdict, parsed.summary, parsed.profile, {
+      const result = deps.agents.recordAppraisal(agent.id, parsed.verdict, parsed.summary, parsed.profile, {
         parent: parsed.parent,
         areaPath: parsed.areaPath,
       });
       if (!result.ok) return toolError(result.error);
       return ok({
-        assayed: true,
+        appraised: true,
         issue: result.issueOrigin,
         status: result.verdict,
         profile: parsed.profile,
@@ -122,7 +122,7 @@ export const assayIssue: ToolFactory = ({ deps, agent, ok }) => {
         note:
           parsed.verdict === 'workable'
             ? 'Recorded. The issue proceeds exactly as it would have — this verdict schedules nothing ' +
-              'itself, it only stops the assay being asked again for this version of the ticket.' +
+              'itself, it only stops the appraisal being asked again for this version of the ticket.' +
               (parsed.parent !== null || parsed.areaPath !== null
                 ? ' Your placement suggestions are held for a human to confirm. They hold nothing up and ' +
                   'they disappear on their own if the item turns out to already have one, so there is ' +

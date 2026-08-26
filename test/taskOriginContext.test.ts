@@ -68,7 +68,7 @@ function testConfig() {
     worktreeRoot: join(dir, 'wt'),
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
-    // The funnel in front of pickup would spawn an assayer/planner first; this
+    // The funnel in front of pickup would spawn an appraiser/planner first; this
     // test is about what rule `issue-pickup` puts on the task row.
   });
 }

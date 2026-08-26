@@ -74,7 +74,7 @@ import type {
   Agent,
   AgentFile,
   AgentFlag,
-  AssayAuthor,
+  AppraisalAuthor,
   BugFiling,
   CiStatus,
   ConclusionAuthor,
@@ -85,7 +85,7 @@ import type {
   Escalation,
   FactReach,
   GoalArrival,
-  GoalAssayVerdict,
+  GoalAppraisalVerdict,
   GoalEnvironmentReach,
   HumanTask,
   IssueConclusionVerdict,
@@ -210,15 +210,15 @@ export interface Issue extends WorldIssue {
   } | null;
   /**
    * The intake verdict (#158). Null is a third reading, not a synonym for
-   * `workable`: a goal nothing has assayed has no drill on its floor at all.
+   * `workable`: a goal nothing has appraised has no drill on its floor at all.
    */
-  assay: {
-    verdict: GoalAssayVerdict;
+  appraisal: {
+    verdict: GoalAppraisalVerdict;
     summary: string;
-    by: AssayAuthor;
+    by: AppraisalAuthor;
     decidedAt: string;
     /**
-     * The standing comment the assay desk keeps on the ticket, as a canonical
+     * The standing comment the appraisal desk keeps on the ticket, as a canonical
      * ref to look up in {@link CockpitState.refUrls} (#171) — null when no
      * comment was written, and absent from `refUrls` when the provider builds no
      * URLs. Both draw nothing: a caption with no link would assert a comment
@@ -226,7 +226,7 @@ export interface Issue extends WorldIssue {
      */
     commentRef: string | null;
     /**
-     * The model profile the assayer proposed for this goal's work (#342), and
+     * The model profile the appraiser proposed for this goal's work (#342), and
      * whether it is still waiting on an answer. Null profile = it named none,
      * which is every `unclear` verdict and every deployment with no profiles.
      *
@@ -237,8 +237,8 @@ export interface Issue extends WorldIssue {
     proposedProfile: string | null;
     awaitingProfileAnswer: boolean;
     /**
-     * Where the assayer says this goal belongs on the backlog, for the questions
-     * that are **still open** — the assayer proposed a value, the operator has
+     * Where the appraiser says this goal belongs on the backlog, for the questions
+     * that are **still open** — the appraiser proposed a value, the operator has
      * not said it does not apply, and the live work item still lacks the field.
      * Empty is the ordinary case, and covers a flat tracker entirely.
      *
@@ -306,7 +306,7 @@ export interface Issue extends WorldIssue {
   validation: ValidationVerdict | null;
   /**
    * What this goal has cost so far, over every agent under it — its planner, its
-   * assay, its parts, and the agents its pull requests pulled in (`rollUpIssueSpend`).
+   * appraisal, its parts, and the agents its pull requests pulled in (`rollUpIssueSpend`).
    *
    * **Null is "nothing was ever measured", not zero.** PTY agents report no usage
    * at all, so a goal worked entirely in that mode has no spend row; drawing it as
@@ -859,7 +859,7 @@ interface CockpitConfig {
    * what the cockpit offers when the operator answers a placement question with a
    * value of their own.
    *
-   * Shipped rather than left to the browser to guess, for the reason the assayer
+   * Shipped rather than left to the browser to guess, for the reason the appraiser
    * is offered them rather than free-typing one: an area path has to match a node
    * exactly, and a plausible near-miss is refused by the provider and visibly
    * wrong to nobody until then. Empty for a tracker with no such tree, and then

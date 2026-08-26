@@ -1972,40 +1972,40 @@ export interface IssueDelivery {
 }
 
 /**
- * What a goal assay may conclude about an issue's text (issue #158).
+ * What a goal appraisal may conclude about an issue's text (issue #158).
  *
  * `workable` is stored as much as `unclear` is, for the reason the planner
- * persists a `single` verdict: without a row for the affirmative the assayer
+ * persists a `single` verdict: without a row for the affirmative the appraiser
  * re-runs on the same issue every cycle. Only `unclear` holds anything.
  *
- * There is deliberately no third "not assayed" member — that is the absence of a
- * row, which is what makes a crashed assayer fail open (see `src/intake/assay.ts`).
+ * There is deliberately no third "not appraised" member — that is the absence of a
+ * row, which is what makes a crashed appraiser fail open (see `src/intake/appraisal.ts`).
  */
-export type GoalAssayVerdict = 'workable' | 'unclear';
+export type GoalAppraisalVerdict = 'workable' | 'unclear';
 
-/** Who judged an issue's goal text: the assaying agent, or the operator directly. */
-export type AssayAuthor = 'assayer' | 'operator';
+/** Who judged an issue's goal text: the appraising agent, or the operator directly. */
+export type AppraisalAuthor = 'appraiser' | 'operator';
 
 /**
- * One issue's standing goal assay — the answer to "is this ticket workable", cast
+ * One issue's standing goal appraisal — the answer to "is this ticket workable", cast
  * *before* anything is dispatched against it.
  *
  * Sibling of {@link IssueDelivery} and split from it for the reason that one is
  * split from {@link IssueConclusion}: the two verdicts are about opposite ends of
- * the same issue. A delivery says the work is *finished*; an assay says the goal
+ * the same issue. A delivery says the work is *finished*; an appraisal says the goal
  * could not be *started* from. They can be true at different times about one
  * issue, so they are two rows, and neither clears the other.
  *
- * The distinguishing field is {@link goalRef}: an assay judges a *text*, not a
+ * The distinguishing field is {@link goalRef}: an appraisal judges a *text*, not a
  * state of the world, so the verdict is bound to the exact text it judged. Change
  * the title or the body and the verdict no longer describes the ticket in front of
- * you, which is what makes "re-assay when it is edited" a lookup rather than an
+ * you, which is what makes "re-appraisal when it is edited" a lookup rather than an
  * event the harness has to have witnessed.
  */
-export interface IssueAssay {
+export interface IssueAppraisal {
   /** The issue, as `issue:<n>` — the same origin every gate keys on. */
   originRef: string;
-  verdict: GoalAssayVerdict;
+  verdict: GoalAppraisalVerdict;
   /** What is missing, or why the goal is actionable. Required: a bare verdict is not reviewable. */
   summary: string;
   /**
@@ -2014,11 +2014,11 @@ export interface IssueAssay {
    * fingerprints differently — no timer, and no world event to have missed.
    */
   goalRef: string;
-  by: AssayAuthor;
+  by: AppraisalAuthor;
   /**
-   * The model profile the assayer proposed for this goal's work (issue #342), or
+   * The model profile the appraiser proposed for this goal's work (issue #342), or
    * null when it named none — which is every `unclear` verdict, every deployment
-   * with no `agentModels`, and any assayer that simply did not answer.
+   * with no `agentModels`, and any appraiser that simply did not answer.
    *
    * Kept whatever the operator then decides, so the pair (this, the tag on the
    * ticket) is what says a human intervened. Nothing reads it as the pin: the
@@ -2030,14 +2030,14 @@ export interface IssueAssay {
    * moment the proposal was written if there was nothing to ask.
    *
    * Null is the whole of the gate: a proposal with no answer holds the funnel
-   * (see `assayHold`). Stamped at write time when the assayer agreed with what
+   * (see `appraisalHold`). Stamped at write time when the appraiser agreed with what
    * was already standing, so agreement costs no click and raises no question.
    */
   profileAnsweredAt: string | null;
   /**
-   * The container work item the assayer proposed this goal should hang off, or
+   * The container work item the appraiser proposed this goal should hang off, or
    * null when it named none — every `unclear` verdict, every flat tracker, and any
-   * assayer that had nothing to suggest.
+   * appraiser that had nothing to suggest.
    *
    * A number rather than a resolved item: what the tracker holds is the id, and a
    * title cached here would be free to drift from the one on the board. The
@@ -2063,16 +2063,16 @@ export interface IssueAssay {
    * write and a row that reappeared for one refresh would read as a click that
    * did not take.
    *
-   * Scoped to this row, so a re-assay against rewritten goal text asks again: the
+   * Scoped to this row, so a re-appraisal against rewritten goal text asks again: the
    * ticket having been rewritten is the one signal that the old answer may no
    * longer be the right one.
    */
   parentSettledAt: string | null;
-  /** The area path the assayer proposed, from the candidates the harness offered it. */
+  /** The area path the appraiser proposed, from the candidates the harness offered it. */
   proposedAreaPath: string | null;
   /** {@link parentSettledAt} for the area path — the same three answers, the same scope. */
   areaPathSettledAt: string | null;
-  /** The assaying agent and its task, from the credential. Null for an operator verdict. */
+  /** The appraising agent and its task, from the credential. Null for an operator verdict. */
   agentId: string | null;
   taskId: string | null;
   /** The provider's id for the one comment this verdict maintains on the ticket, once written. */
@@ -2892,7 +2892,7 @@ export interface UsageEvent {
  *
  * The unit is the **issue**, because that is the unit the operator budgets in and
  * the one thing the tracker names. Everything downstream of it — the planner, the
- * assay, each part, and the pull requests those parts opened — is spend on that
+ * appraisal, each part, and the pull requests those parts opened — is spend on that
  * goal, so it rolls up rather than being counted as work of its own.
  *
  * A running figure, never a final one: `costUsd` is summed from the cumulative

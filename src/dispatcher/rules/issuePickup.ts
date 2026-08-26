@@ -19,15 +19,15 @@ export function issuePickup(s: StageContext): void {
     // live attempt; the active-task de-dup handles it.
     if (s.activeOrigins.has(origin)) continue;
     // `issue-assess` is asking whether this issue is already finished and
-    // `issue-assay` whether its goal can be worked from at all. Picking it up in
+    // `issue-appraisal` whether its goal can be worked from at all. Picking it up in
     // the same cycle would put a second agent on it to redo work the first is
-    // still judging, or answer the assay's question by ignoring it. Both sets are
+    // still judging, or answer the appraisal's question by ignoring it. Both sets are
     // built by those two stages, which the pipeline runs first, so no two rules
     // can hold different opinions about which issues are in them.
     const supersededBy = s.assessing.has(issue.number)
       ? ('issue-assess' as const)
-      : s.assaying.has(issue.number)
-        ? ('issue-assay' as const)
+      : s.appraising.has(issue.number)
+        ? ('issue-appraisal' as const)
         : null;
     const branch = issueBranch(issue.number);
     const reason = `Open issue #${issue.number} has no open PR and no agent is on it.`;
@@ -59,7 +59,7 @@ export function issuePickup(s: StageContext): void {
     // Queued as held rather than skipped, and *not* routed through `consider`:
     // the cooldown has no bearing on a pickup that is not going out this cycle
     // for a different reason entirely, and escalating an attempt cap over a
-    // suppressed dispatch would blame the pickup for the assay's turn.
+    // suppressed dispatch would blame the pickup for the appraisal's turn.
     if (supersededBy) {
       s.candidates.push({ ...candidate, held: 'superseded', reason: supersededReason(supersededBy, reason) });
       continue;

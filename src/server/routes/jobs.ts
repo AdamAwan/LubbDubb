@@ -78,7 +78,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       // A code brief enters the workflow through the *same* door as a ticket
       // (issue #198): when a tracker is configured, it is not dispatched onto a
       // branch but filed as a **watched ticket**, so it flows through the planning
-      // funnel (assay → plan → parts → work) exactly like a picked-up issue rather
+      // funnel (appraisal → plan → parts → work) exactly like a picked-up issue rather
       // than being coded straight off this prompt. The whole transform is here, at
       // route time — rule `manual-job` is untouched, which keeps a clean recursion
       // boundary: only operator-injected code briefs via this route become

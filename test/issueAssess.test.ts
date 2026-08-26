@@ -182,7 +182,7 @@ test('prior work is an origin that could have delivered something, and nothing e
   assert.equal(hasPriorWork(12, [task({ originRef: 'issue:12:assess' })]), true, 'downstream evidence work happened');
   // The harness deliberating about an issue is not work having been done on it.
   assert.equal(hasPriorWork(12, [task({ originRef: 'issue:12:plan' })]), false);
-  assert.equal(hasPriorWork(12, [task({ originRef: 'issue:12:assay' })]), false);
+  assert.equal(hasPriorWork(12, [task({ originRef: 'issue:12:appraisal' })]), false);
   assert.equal(hasPriorWork(12, [task({ originRef: 'issue:120' })]), false, 'a prefix match must not span numbers');
   assert.equal(hasPriorWork(12, [task({ originRef: 'pr:40:ci' })]), false);
   assert.equal(hasPriorWork(12, [task({ originRef: null })]), false);
@@ -203,7 +203,7 @@ test('every origin the harness dispatches under an issue is classified deliberat
         'issue:12:retro',
         'issue:12:validate:merged-branch-gone',
         'issue:12:plan',
-        'issue:12:assay',
+        'issue:12:appraisal',
         'issue:12:something-added-later',
         'issue:120',
         'pr:40:ci',
@@ -220,7 +220,7 @@ test('every origin the harness dispatches under an issue is classified deliberat
       // was done and finished.
       'issue:12:validate:merged-branch-gone': 'evidence',
       'issue:12:plan': 'deliberation',
-      'issue:12:assay': 'deliberation',
+      'issue:12:appraisal': 'deliberation',
       'issue:12:something-added-later': 'unrecognised',
       'issue:120': null,
       'pr:40:ci': null,

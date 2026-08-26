@@ -3,7 +3,7 @@ import type { System } from '../system.js';
 import type { Config } from '../config.js';
 import type {
   Issue,
-  IssueAssay,
+  IssueAppraisal,
   IssueDelivery,
   IssueInstruction,
   KnowledgeFact,
@@ -63,7 +63,7 @@ import { defaultWindow } from '../insightsWindow.js';
 import { acceptanceCriteria, bySlug, partDepth, planIssueNumber } from '../plans/parts.js';
 import { planScopeDrift } from '../plans/scopeDrift.js';
 import { deliveryHold, deliverySignalQuery } from '../delivery/delivery.js';
-import { assaySignalQuery } from '../intake/assay.js';
+import { appraisalSignalQuery } from '../intake/appraisal.js';
 import { classifyCiFailures } from '../ci/ciPolicy.js';
 import { validationVerdict } from '../validation/verdict.js';
 import { localRunIsLive } from '../store/localRuns.js';
@@ -303,11 +303,11 @@ export function buildStateSnapshot(
     if (held) held.push(instruction);
     else instructionsByOrigin.set(instruction.originRef, [instruction]);
   }
-  const assays = store.listAssays();
-  const assayWindow = assaySignalQuery(assays);
+  const appraisals = store.listAppraisals();
+  const appraisalWindow = appraisalSignalQuery(appraisals);
   // Keyed the same way the conclusion and shortfall maps below are, so the
   // per-issue verdict beside them reads off one lookup.
-  const assaysByOrigin = new Map(assays.map((a) => [a.originRef, a]));
+  const appraisalsByOrigin = new Map(appraisals.map((a) => [a.originRef, a]));
   // The same inputs rule `issue-pickup` of the dispatcher consults, so the per-issue verdict
   // below predicts what actually happens next cycle. The decision window (200)
   // and the headroom arithmetic mirror `Harness.runCycle`.
@@ -329,10 +329,10 @@ export function buildStateSnapshot(
     deliveries,
     deliverySignals: deliveryWindow ? store.listWorldEventsSince(deliveryWindow.since, deliveryWindow.refs) : [],
     // The content gate in front of the funnel, read exactly as `Harness.runCycle`
-    // reads it, so the chip reports an issue *awaiting* an assay rather than
+    // reads it, so the chip reports an issue *awaiting* an appraisal rather than
     // calling it eligible for a pickup that has not happened yet.
-    assays,
-    assaySignals: assayWindow ? store.listWorldEventsSince(assayWindow.since, assayWindow.refs) : [],
+    appraisals,
+    appraisalSignals: appraisalWindow ? store.listWorldEventsSince(appraisalWindow.since, appraisalWindow.refs) : [],
     // So a closed ticket whose run still lives reads `retained` rather than
     // `done` — the same rows the retained list below is built from (issue #234).
     runs: issueRuns,
@@ -403,12 +403,12 @@ export function buildStateSnapshot(
       ...humanTasks.map((t) => t.originRef),
       ...proposals.map((p) => p.ref),
       // The comments the harness maintains on a ticket without being asked — the
-      // plan's status comment and the assay's refusal (#171). Read off the values
-      // actually shipped (and off the same `issueCommentRef` for the assay), so a
+      // plan's status comment and the appraisal's refusal (#171). Read off the values
+      // actually shipped (and off the same `issueCommentRef` for the appraisal), so a
       // ref the cockpit holds is always the ref this map was keyed by. A provider
       // that resolves neither leaves them absent, and the cockpit draws nothing.
       ...wirePlans.map((p) => p.statusCommentRef),
-      ...assays.map((a) => issueCommentRef(a.originRef, a.commentRef)),
+      ...appraisals.map((a) => issueCommentRef(a.originRef, a.commentRef)),
       // Each Activity-feed / Signals entry's structured ref, so the feed can link
       // it — the summaries embed `#n` (covered by the item lists), but the ref
       // itself (`pr:42`, `issue:13`) is only keyed here.
@@ -485,7 +485,7 @@ export function buildStateSnapshot(
       // while it still stands (`standingDelivery`).
       delivery: standingDelivery(deliveriesByOrigin.get(origin), issue, pickupCtx),
       // The intake verdict, beside the other two and inside `pickup` for none.
-      assay: assayVerdictOf(assaysByOrigin.get(origin), issue, placementCtx),
+      appraisal: appraisalVerdictOf(appraisalsByOrigin.get(origin), issue, placementCtx),
       // What this goal's work is pinned to, read off its own labels through the
       // same pure function the dispatcher resolves the pin with — so the chip and
       // the dispatch can never disagree about which profile is standing.
@@ -594,7 +594,7 @@ export function buildStateSnapshot(
       // that decides is the one the route asks. `setWorkItemState` throws when
       // nothing implements it, so there is no other way to *offer* the operation.
       canSetWorkItemState: connector.canSetWorkItemState(),
-      // The nodes an item can be filed under, capped by the same rule the assayer's
+      // The nodes an item can be filed under, capped by the same rule the appraiser's
       // offer is capped by — one list, so the operator and the agent are choosing
       // between the same things.
       areaPaths: placementCtx.areaTree === null ? [] : truncateAreaPaths(placementCtx.areaTree).paths,
@@ -977,35 +977,35 @@ function padReading(pad: ScratchPadSummary | undefined) {
 }
 
 /**
- * The reviewable half of a stored assay, or null when nobody has judged the goal.
+ * The reviewable half of a stored appraisal, or null when nobody has judged the goal.
  *
  * Null and `workable` are not the same reading and neither is `unclear`, which is
- * the whole point of the field: a goal nothing has assayed draws no drill at all,
+ * the whole point of the field: a goal nothing has appraised draws no drill at all,
  * while a refused one draws a drill that is stopped and says why. Collapsing the
  * two would put #158's verdict back where it was — legible only as prose inside
  * `pickup.reasons`.
  *
- * `commentRef` is the one thing here the assay says to somebody *else*: the
+ * `commentRef` is the one thing here the appraisal says to somebody *else*: the
  * standing comment the desk keeps on the ticket, as a canonical ref (#171). It is
  * the sharper half of that issue — the harness explaining on another person's
  * ticket why it will not act — and until now the operator could only find it by
  * opening the tracker and reading the thread. `goalRef` is still deliberately not
  * shipped: it is a fingerprint the hold is measured against, not a reading.
  */
-function assayVerdictOf(assay: IssueAssay | undefined, issue: Issue, placement: PlacementContext) {
-  if (!assay) return null;
-  const { verdict, summary, by, decidedAt, proposedProfile } = assay;
+function appraisalVerdictOf(appraisal: IssueAppraisal | undefined, issue: Issue, placement: PlacementContext) {
+  if (!appraisal) return null;
+  const { verdict, summary, by, decidedAt, proposedProfile } = appraisal;
   return {
     verdict,
     summary,
     by,
     decidedAt,
-    commentRef: issueCommentRef(assay.originRef, assay.commentRef),
+    commentRef: issueCommentRef(appraisal.originRef, appraisal.commentRef),
     proposedProfile,
     // Both fields, because the gate is exactly their conjunction: a proposal that
-    // was settled on arrival (the assayer agreed) is still worth showing, and it
+    // was settled on arrival (the appraiser agreed) is still worth showing, and it
     // is holding nothing.
-    awaitingProfileAnswer: proposedProfile !== null && assay.profileAnsweredAt === null,
+    awaitingProfileAnswer: proposedProfile !== null && appraisal.profileAnsweredAt === null,
     // The placement questions still open on this goal — derived here, every time,
     // against the **live** work item. Nothing about them is stored except the
     // operator's "does not apply", which is what makes setting the field by hand
@@ -1016,7 +1016,7 @@ function assayVerdictOf(assay: IssueAssay | undefined, issue: Issue, placement: 
     // buttons, all of which 400. In practice the gate never bites — only a
     // provider that tracks hierarchy can report an orphan in the first place — and
     // it is here so that stays true by construction rather than by coincidence.
-    placement: placement.canPlace ? placementAsks(assay, issue, placement.areaTree, assay.goalRef) : [],
+    placement: placement.canPlace ? placementAsks(appraisal, issue, placement.areaTree, appraisal.goalRef) : [],
   };
 }
 

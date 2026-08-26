@@ -17,7 +17,7 @@ import { rankByPriorityOverride } from './priorityOverride.js';
 import { expeditedOrigins } from './goalPriority.js';
 import { deliveryHold } from '../delivery/delivery.js';
 import { candidateParents } from '../issueRelations.js';
-import { assayHold } from '../intake/assay.js';
+import { appraisalHold } from '../intake/appraisal.js';
 import { resolveModelTag } from '../modelLabels.js';
 import { pinnedProfileFor } from '../profilePin.js';
 import { resolveAgentProfile } from '../agents/modelPolicy.js';
@@ -38,7 +38,7 @@ import { prCiFailing } from './rules/prCiFailing.js';
 import { workItemInReview } from './rules/workItemInReview.js';
 import { workItemBackToPickup } from './rules/workItemBackToPickup.js';
 import { workItemInProgress } from './rules/workItemInProgress.js';
-import { issueAssay } from './rules/issueAssay.js';
+import { issueAppraisal } from './rules/issueAppraisal.js';
 import { issuePlan } from './rules/issuePlan.js';
 import { issueAssess } from './rules/issueAssess.js';
 import { issueShortfall } from './rules/issueShortfall.js';
@@ -73,7 +73,7 @@ const STAGES: Partial<Record<StageRuleId, (s: StageContext) => void>> = {
   'work-item-in-progress': workItemInProgress,
   'work-item-in-review': workItemInReview,
   'work-item-back-to-pickup': workItemBackToPickup,
-  'issue-assay': issueAssay,
+  'issue-appraisal': issueAppraisal,
   'issue-plan': issuePlan,
   'issue-assess': issueAssess,
   'issue-shortfall': issueShortfall,
@@ -145,7 +145,7 @@ export class RuleDispatcher implements Dispatcher {
    * `prRefStyle` is how the configured provider links a pull request in prose;
    * omitted means `#`, which is right everywhere but Azure DevOps.
    *
-   * The assay, the assessor and the retrospective take no policy at all: they are
+   * The appraisal, the assessor and the retrospective take no policy at all: they are
    * unconditional, and the only thing that ever holds one is the state of the issue
    * in front of it.
    */
@@ -372,15 +372,16 @@ export class RuleDispatcher implements Dispatcher {
         signals: ctx.deliverySignals,
       }) !== null;
 
-    // Standing goal assays, on the same origin again (issue #158). Where a delivery
+    // Standing goal appraisals, on the same origin again (issue #158). Where a delivery
     // verdict parks an issue that is *finished*, this parks one that could never be
     // started: only an explicit `unclear` holds, and a missing verdict holds nothing,
-    // which is what makes an assayer that crashed or spent its cap fail the issue
-    // open to ordinary pickup. Asked through the same pure `assayHold` the cockpit
+    // which is what makes an appraiser that crashed or spent its cap fail the issue
+    // open to ordinary pickup. Asked through the same pure `appraisalHold` the cockpit
     // chip asks, so the two can never disagree about an issue.
-    const assays = new Map((ctx.assays ?? []).map((a) => [a.originRef, a]));
-    const assayParked = (issue: Issue): boolean =>
-      assayHold(assays.get(issueOrigin(issue.number)) ?? null, issue, { signals: ctx.assaySignals }) !== null;
+    const appraisals = new Map((ctx.appraisals ?? []).map((a) => [a.originRef, a]));
+    const appraisalParked = (issue: Issue): boolean =>
+      appraisalHold(appraisals.get(issueOrigin(issue.number)) ?? null, issue, { signals: ctx.appraisalSignals }) !==
+      null;
 
     // The runs in the issue list that the tracker has forgotten (issue #234).
     // Read by the rules that must not act on one — which is all of them but
@@ -409,9 +410,9 @@ export class RuleDispatcher implements Dispatcher {
           openPrForIssue(i, openPrs) === null &&
           !deliveryParked(i) &&
           // The content gate, in front of both the planner and pickup: an issue
-          // whose goal the assay could not work from is not eligible for either,
+          // whose goal the appraisal could not work from is not eligible for either,
           // which is what stops a decomposition of a question nobody could answer.
-          !assayParked(i) &&
+          !appraisalParked(i) &&
           isIssuePickupEligible(i, this.pickup).eligible,
       )
       .map((issue) => ({ issue, weight: issuePriority(issue.labels, this.pickup) }))
@@ -482,7 +483,7 @@ export class RuleDispatcher implements Dispatcher {
       // `shortfallRecordedNote`'s no-cause arm promises this exact behaviour ("it
       // comes back round for pickup with your summary").
       shortfallsByOrigin: new Map((ctx.shortfalls ?? []).map((sf) => [sf.originRef, sf])),
-      assays,
+      appraisals,
       retained,
       liveIssue: (issueNumber: number) =>
         retained.has(issueNumber) ? null : (ctx.world.issues.find((i) => i.number === issueNumber) ?? null),
@@ -502,7 +503,7 @@ export class RuleDispatcher implements Dispatcher {
         return plan;
       },
       deliveryParked,
-      assayParked,
+      appraisalParked,
       // The pins, resolved from the operator's overrides, the world's own tags and
       // the plans' own parts. Every lookup is total and all of them answer null
       // when this deployment has no `agentModels` — see `pinnedProfileFor`.
@@ -536,9 +537,9 @@ export class RuleDispatcher implements Dispatcher {
       parentCandidates: candidateParents(ctx.world.issues, this.pickup.containerTypes),
       routes,
       validationChecks,
-      // Written by `issue-assay` / `issue-assess`, read by the stages the pipeline
+      // Written by `issue-appraisal` / `issue-assess`, read by the stages the pipeline
       // runs after them. See {@link StageContext} — the ordering is load-bearing.
-      assaying: new Set<number>(),
+      appraising: new Set<number>(),
       assessing: new Set<number>(),
       consider,
       pickup: this.pickup,

@@ -20,7 +20,7 @@ function bare(): PriorWorkInput {
   return {
     plan: null,
     parts: [],
-    assay: null,
+    appraisal: null,
     conclusion: null,
     delivery: null,
     shortfall: null,
@@ -166,12 +166,12 @@ test('a part agent is not told about the parts, because siblingContext already t
 test('the prose behind each standing verdict is carried, with who cast it', () => {
   const text = priorWorkBriefing({
     ...bare(),
-    assay: {
+    appraisal: {
       originRef: 'issue:12',
       verdict: 'workable',
       summary: 'the goal names a concrete table',
       goalRef: 'fingerprint',
-      by: 'assayer',
+      by: 'appraiser',
       proposedProfile: null,
       profileAnsweredAt: null,
       proposedParent: null,

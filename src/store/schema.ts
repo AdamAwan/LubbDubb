@@ -474,25 +474,25 @@ CREATE TABLE IF NOT EXISTS issue_shortfalls (
   updated_at TEXT NOT NULL
 );
 
--- Whether an issue's goal text can be acted on at all — the goal assay's verdict,
+-- Whether an issue's goal text can be acted on at all — the goal appraisal's verdict,
 -- cast before anything is dispatched against it (issue #158). Written for BOTH
--- outcomes, or the assayer re-runs on the same issue every cycle; only 'unclear'
+-- outcomes, or the appraiser re-runs on the same issue every cycle; only 'unclear'
 -- holds pickup.
 --
--- goal_ref fingerprints the text that was judged. An assay is a verdict about a
+-- goal_ref fingerprints the text that was judged. An appraisal is a verdict about a
 -- *text*, so it stops standing the moment the text differs — which is how a ticket
--- edited after a failed assay is re-assayed without the harness having to have
--- witnessed the edit. A missing row is 'not assayed', which holds nothing: that is
--- what makes a crashed or capped assayer fail open to ordinary pickup.
-CREATE TABLE IF NOT EXISTS issue_assays (
+-- edited after a failed appraisal is re-appraised without the harness having to have
+-- witnessed the edit. A missing row is 'not appraised', which holds nothing: that is
+-- what makes a crashed or capped appraiser fail open to ordinary pickup.
+CREATE TABLE IF NOT EXISTS issue_appraisals (
   origin_ref  TEXT PRIMARY KEY,     -- "issue:12"
   verdict     TEXT NOT NULL,        -- workable | unclear
   summary     TEXT NOT NULL,
   goal_ref    TEXT NOT NULL,        -- fingerprint of the title+body judged
-  by          TEXT NOT NULL,        -- assayer | operator
-  proposed_profile    TEXT,         -- the model profile the assayer proposed for this goal's work
+  by          TEXT NOT NULL,        -- appraiser | operator
+  proposed_profile    TEXT,         -- the model profile the appraiser proposed for this goal's work
   profile_answered_at TEXT,         -- null while that proposal is waiting on a human (the gate)
-  -- Where the goal belongs on the backlog, proposed by the same assayer. Neither
+  -- Where the goal belongs on the backlog, proposed by the same appraiser. Neither
   -- holds anything: whether the question still stands is derived from the live work
   -- item, and only the operator's "does not apply" is stored.
   proposed_parent       INTEGER,    -- the container work item it should hang off

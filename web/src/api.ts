@@ -341,14 +341,14 @@ const realApi = {
   setGoalPriority: (issueNumber: number, priority: boolean) =>
     post<{ ok: true; priority: boolean }>(`/api/issues/${issueNumber}/priority`, { priority }),
   // Pin this goal's work to a model profile, or clear the pin (#342). The same
-  // call answers a standing proposal from the assayer, whichever way it went —
+  // call answers a standing proposal from the appraiser, whichever way it went —
   // the route settles the question on any write, which is what makes "keep mine"
   // a decision rather than a refusal to answer.
   setIssueProfile: (issueNumber: number, profile: string | null) =>
     post<{ ok: true }>(`/api/issues/${issueNumber}/profile`, { profile: profile ?? '' }),
   // Settle where this goal belongs on the backlog — the container it hangs off,
   // and the area node that puts it on a board. `null` is the third answer, "this
-  // goal wants no such thing"; the other two are the assay's proposal and a value
+  // goal wants no such thing"; the other two are the appraisal's proposal and a value
   // the operator picked instead, and the route cannot tell them apart because it
   // does not need to. The write is the harness's either way.
   setIssueParent: (issueNumber: number, parent: number | null) =>
@@ -391,8 +391,8 @@ const realApi = {
   // The operator's override of the intake verdict (#158). `unclear` is the one
   // reading that blocks dispatch, so this is the escape hatch that gate has to
   // have; `null` clears it, which is a delete and not a synonym for `workable`.
-  setIssueAssay: (issueNumber: number, verdict: 'workable' | 'unclear' | null) =>
-    post<{ ok: true }>(`/api/issues/${issueNumber}/assay`, { verdict }),
+  setIssueAppraisal: (issueNumber: number, verdict: 'workable' | 'unclear' | null) =>
+    post<{ ok: true }>(`/api/issues/${issueNumber}/appraisal`, { verdict }),
   // Raise a bug against a story: the operator ran it and it does not do what they
   // expect. Unlike its neighbours this files into the *tracker* rather than writing
   // the harness's own record, and it leaves the story's verdict where it found it —

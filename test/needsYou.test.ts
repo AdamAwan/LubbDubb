@@ -100,14 +100,14 @@ function orphan(over: Partial<OrphanedWork> = {}): OrphanedWork {
 /**
  * A snapshot with the four lists this suite varies replaced, and nothing cast.
  *
- * The fixtures' own assay verdicts go with them. A goal the demo assay refused
+ * The fixtures' own appraisal verdicts go with them. A goal the demo appraisal refused
  * raises an `intake` row off `world.issues` alone, so a suite asserting exact row
  * lists would otherwise be asserting the fixture backlog as well as its own — the
- * three tests whose subject *is* an assay put one back on the goal they name.
+ * three tests whose subject *is* an appraisal put one back on the goal they name.
  */
 function stateWith(over: Partial<AppState>): AppState {
   const base = buildDemoState();
-  const world = { ...base.world, issues: base.world.issues.map((i) => ({ ...i, assay: null })) };
+  const world = { ...base.world, issues: base.world.issues.map((i) => ({ ...i, appraisal: null })) };
   return { ...base, world, ...over };
 }
 
@@ -346,10 +346,10 @@ test('an unanswered profile proposal is a row, and an answered one is not', () =
           i.number === goal.number
             ? {
                 ...i,
-                assay: {
+                appraisal: {
                   verdict: 'workable' as const,
                   summary: 'Three subsystems and an auth guard between them.',
-                  by: 'assayer' as const,
+                  by: 'appraiser' as const,
                   decidedAt: '2026-01-01T00:00:00.000Z',
                   commentRef: null,
                   proposedProfile: 'deep',
@@ -357,7 +357,7 @@ test('an unanswered profile proposal is a row, and an answered one is not', () =
                   placement: [],
                 },
               }
-            : { ...i, assay: null },
+            : { ...i, appraisal: null },
         ),
       },
     });
@@ -371,23 +371,23 @@ test('an unanswered profile proposal is a row, and an answered one is not', () =
   );
   assert.equal(rows[0]?.opens, 'goal');
   assert.equal(rows[0]?.holding, 0, 'the gate stops the goal before there is a plan to hold parts');
-  assert.equal(rows[0]?.agentId, null, 'the assayer that proposed it is gone, not parked');
+  assert.equal(rows[0]?.agentId, null, 'the appraiser that proposed it is gone, not parked');
   assert.ok(rows[0]?.title.includes('deep'), 'the row names the profile it is asking about');
 
   assert.deepEqual(buildNeedsYou(proposed({ awaiting: false })), [], 'a settled proposal asks nothing');
 });
 
 /**
- * The goal assay's refusal (#158), which was raised on the tickets tab and nowhere
+ * The goal appraisal's refusal (#158), which was raised on the tickets tab and nowhere
  * else until it was raised here too.
  *
  * `yours` on the profile gate's terms — a whole goal's dispatch is held and no
  * agent is sitting in it — and holding nothing, because the hold stops the goal
  * before there is a plan to hold parts. The watch tag is the filter that matters:
- * nothing assays a goal nobody opted in, so a verdict on an unwatched item is left
+ * nothing appraises a goal nobody opted in, so a verdict on an unwatched item is left
  * over from before it was dropped.
  */
-test('a goal the assay refused is a row, and an unwatched or workable one is not', () => {
+test('a goal the appraisal refused is a row, and an unwatched or workable one is not', () => {
   const base = buildDemoState();
   const goal = base.world.issues[0]!;
   const watchLabel = base.config.watchLabel;
@@ -409,10 +409,10 @@ test('a goal the assay refused is a row, and an unwatched or workable one is not
                 labels: over.watched
                   ? [...new Set([...i.labels, watchLabel])]
                   : i.labels.filter((l) => l !== watchLabel),
-                assay: {
+                appraisal: {
                   verdict: over.verdict,
                   summary: 'The ticket names two systems and does not say which one is wrong.',
-                  by: 'assayer' as const,
+                  by: 'appraiser' as const,
                   decidedAt: '2026-02-02T00:00:00.000Z',
                   commentRef: null,
                   proposedProfile: null,
@@ -420,7 +420,7 @@ test('a goal the assay refused is a row, and an unwatched or workable one is not
                   placement: [],
                 },
               }
-            : { ...i, assay: null },
+            : { ...i, appraisal: null },
         ),
       },
     });
@@ -433,7 +433,7 @@ test('a goal the assay refused is a row, and an unwatched or workable one is not
   assert.equal(rows[0]?.id, `intake:issue:${goal.number}`, 'the ask panel resolves this row by its id');
   assert.equal(rows[0]?.opens, 'goal');
   assert.equal(rows[0]?.holding, 0, 'the hold stops the goal before there is a plan to hold parts');
-  assert.equal(rows[0]?.agentId, null, 'the assayer that cast the verdict is gone, not parked');
+  assert.equal(rows[0]?.agentId, null, 'the appraiser that cast the verdict is gone, not parked');
   assert.equal(rows[0]?.raisedAt, '2026-02-02T00:00:00.000Z', 'the verdict is what was raised');
 
   assert.deepEqual(buildNeedsYou(held({ verdict: 'workable', watched: true })), [], 'a workable goal holds nothing');
@@ -471,10 +471,10 @@ test('each open placement question is its own row, and a settled one is gone', (
           i.number === goal.number
             ? {
                 ...i,
-                assay: {
+                appraisal: {
                   verdict: 'workable' as const,
                   summary: 'Reconcile the statement totals.',
-                  by: 'assayer' as const,
+                  by: 'appraiser' as const,
                   decidedAt: '2026-01-01T00:00:00.000Z',
                   commentRef: null,
                   proposedProfile: null,
@@ -482,7 +482,7 @@ test('each open placement question is its own row, and a settled one is gone', (
                   placement,
                 },
               }
-            : { ...i, assay: null },
+            : { ...i, appraisal: null },
         ),
       },
     });

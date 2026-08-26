@@ -69,7 +69,7 @@ export function goalRecord(store: Store, issueOriginRef: string): RetroDossierIn
     agentCount: agents.length,
     delivery: store.getDelivery(issueOriginRef),
     shortfall: store.getShortfall(issueOriginRef),
-    assay: store.getAssay(issueOriginRef),
+    appraisal: store.getAppraisal(issueOriginRef),
     conclusion: store.getIssueConclusion(issueOriginRef),
     // Null rather than 0 when nothing was reported: PTY mode reports no usage at
     // all, and a confident "$0.00" is the one reading that would be a lie.

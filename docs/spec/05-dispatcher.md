@@ -52,7 +52,7 @@ that fired and why that rule exists.
 **A rule has no number.** It has a name and a position in `DISPATCH_PIPELINE`, and the position is
 never rendered — the cockpit shows the id and the name. Numbers were hand-written on each entry and
 rotted exactly as a second copy of an ordering always does: by the time they were removed,
-`issue-assay` was numbered after `issue-plan` and evaluated before it, two entries both claimed `3b`,
+`issue-appraisal` was numbered after `issue-plan` and evaluated before it, two entries both claimed `3b`,
 and three claimed positions that were not positions (`1–2b`, `1–4`). Order lives in one array, and
 `concernUrgency` reads that array rather than restating a slice of it.
 
@@ -85,7 +85,7 @@ unconditional.
 | `work-item-in-progress`    | Advance to in-progress state         | `workItemInProgress` | A work item in a pickup state has a live **work** agent on it, no open PR and no plan.                                                                                                    |
 | `work-item-in-review`      | Back off to review state             | `workItemStates`     | A work item in a pickup state has an open PR (or is decomposed).                                                                                                                          |
 | `work-item-back-to-pickup` | Return from review state             | `workItemStates`     | A still-open work item parked in the review state has no open PR and an explicit `more_work` conclusion.                                                                                  |
-| `issue-assay`              | Issue goal needs checking            | `assay`              | A watched open issue nothing has been started for has no verdict on its goal text.                                                                                                        |
+| `issue-appraisal`              | Issue goal needs checking            | `appraisal`              | A watched open issue nothing has been started for has no verdict on its goal text.                                                                                                        |
 | `issue-plan`               | Issue needs a plan                   | `planning`           | A watched open issue has no plan yet — or an operator asked for a replan.                                                                                                                 |
 | `issue-assess`             | Issue may be finished                | `assessment`         | A watched issue — open, **or a retained run** — has had work, has nothing in flight and no open PR.                                                                                       |
 | `issue-shortfall`          | Assessment says the goal was missed  | —                    | An assessment recorded that a watched open issue was worked and its goal is still not reached. Claims no headroom.                                                                        |
@@ -213,7 +213,7 @@ reading every other rule.
 handle on the dispatcher — a stage that could reach the class could reach anything on it, which would
 relocate the coupling rather than remove it. Everything on it is derived once, before the first stage
 runs: a projection of the world, an append-only collector (`raw`, `candidates`), or a predicate
-several rules must answer identically (`partsPlanFor`, `deliveryParked`, `assayParked`, `consider`).
+several rules must answer identically (`partsPlanFor`, `deliveryParked`, `appraisalParked`, `consider`).
 Deriving one of those twice is exactly how two rules come to disagree about an issue.
 
 **`activeOrigins` counts work a requeue is redoing.** It is the origins of every active task, plus
@@ -234,7 +234,7 @@ retained issue. None of them leans on the stub's `closed` state: it would refuse
 and coincidence is what a later change removes with nothing failing.
 
 **Two fields are written by one stage and read by later ones, and that ordering is load-bearing.**
-`assaying` and `assessing` are outputs of `issue-assay` and `issue-assess` and inputs to the stages
+`appraising` and `assessing` are outputs of `issue-appraisal` and `issue-assess` and inputs to the stages
 after them (`issue-plan` reads the first; `issue-pickup` reads both) — the whole mechanism behind
 `superseded`. It works because `DISPATCH_PIPELINE` runs the writers first; moving either rule below
 its readers would not fail to compile, it would silently stop suppressing and put two agents on one
@@ -374,8 +374,8 @@ is no second list to keep in step with it. What each stage contributes:
    is read off **every** concern on the PR rather than off the one that won — the flag is set by a CI
    check, which is not the top concern on a PR that also has an open review, and reading it from the
    winner would make the operator's escalation conditional on nobody having commented.
-3. **Goal assays** (`issue-assay`) — asking whether a goal can be worked from comes before deciding
-   _how_ to work it, so an assay ranks ahead of the planner and **supersedes both** the planner and
+3. **Goal appraisals** (`issue-appraisal`) — asking whether a goal can be worked from comes before deciding
+   _how_ to work it, so an appraisal ranks ahead of the planner and **supersedes both** the planner and
    the pickup for that issue this cycle.
 4. **Planners** (`issue-plan`) — a planner unblocks work, so it wins a slot before the work it
    unblocks.
@@ -479,7 +479,7 @@ rank), reaches the dispatcher as `DispatchContext.goalPriorities`, and is expand
 covers by the pure `expeditedOrigins` (`src/dispatcher/goalPriority.ts`). Two families reach it:
 
 - **The `issue:<n>` subtree**, through `issueOriginRole` — the pickup root, the parts, the planner,
-  the assay, the assessor, the retrospective and the validation checks. Asked through that function
+  the appraisal, the assessor, the retrospective and the validation checks. Asked through that function
   rather than by `startsWith` for its own reason: a bare prefix test matches `issue:19:plan` for
   goal 1.
 - **The pull requests the goal's work opened**, whose origins name the PR and never the goal.
@@ -490,7 +490,7 @@ covers by the pure `expeditedOrigins` (`src/dispatcher/goalPriority.ts`). Two fa
 
 `rankByPriorityOverride` gives it **the tier above the drag and below `manual-job`**, and within the
 tier the candidates keep their natural order — which is the pipeline's own answer about what that
-goal needs first (assay before planner, planner before parts, a review before a red build). A second
+goal needs first (appraisal before planner, planner before parts, a review before a red build). A second
 opinion about the order _within_ a goal is not what the operator asked for and would be a worse one.
 
 **A flag outranks a drag** because the two have different lifetimes: a drag is pruned when its origin
@@ -498,7 +498,7 @@ stops being ranked, while a flag stands until the operator clears it, so honouri
 flagged goal would work for one pulse and be silently lost on the next.
 
 **It orders and does nothing else** — the same contract the override keeps. A cooldown, the part cap,
-an unapproved plan, a superseding rule, an absent watch tag or the assay's hold holds a flagged goal's work
+an unapproved plan, a superseding rule, an absent watch tag or the appraisal's hold holds a flagged goal's work
 exactly where it holds anything else's, and the flag never raises `maxConcurrentPartsPerIssue`. The
 queue rows a flagged goal contributes carry `expedited`, which is the only reason the panel can say
 why they are where they are.
@@ -625,7 +625,7 @@ item or on a retained run.
   `issueInProgressState`.
 
 "Live work task" is `issueOriginRole(number, task.originRef) === 'work'` over the active tasks — the
-pickup root `issue:<n>` and a plan part, and nothing else. An assay, a planner, an assessor or a retro
+pickup root `issue:<n>` and a plan part, and nothing else. An appraisal, a planner, an assessor or a retro
 leaves the item where it is: those are deliberation about the goal, not work on it.
 
 It fires off an **observed task**, not off the dispatch that started one, and that is the design
@@ -678,30 +678,30 @@ roll-up and a `complete` one to `done`, which is exactly what the old explicit `
 gave it — the item stays in the review state for the whole life of its plan rather than bouncing back
 to "Ready" in every gap between parts.
 
-## `issue-assay` — the goal assay
+## `issue-appraisal` — the goal appraisal
 
-Rule `issue-assay` is **unconditional** and puts an assaying agent in front of the whole funnel. Every other
+Rule `issue-appraisal` is **unconditional** and puts an appraising agent in front of the whole funnel. Every other
 gate an issue passes asks whether the harness is _allowed_ to act; this is the only one that asks
 whether the ticket says anything to act on. Full argument, the verdict's lifetime and what ends a
 hold are in [06](06-issue-pickup.md); the dispatcher's half is:
 
 - A **code** agent — the judgement needs the repository — in a **read-only checkout** of
-  `defaultBranch` ([09](09-execution.md#the-read-only-checkout)), leased under `assay/issue/<n>`,
-  origin `issue:<n>:assay`. The name is its own namespace for `plan/issue/<n>`'s hard reason — git
-  cannot put `refs/heads/issue/12/assay` beside `refs/heads/issue/12` — but since #396 it is a lease
-  key rather than a ref: the assayer reads the repository and writes nothing, so nothing is minted
+  `defaultBranch` ([09](09-execution.md#the-read-only-checkout)), leased under `appraisal/issue/<n>`,
+  origin `issue:<n>:appraisal`. The name is its own namespace for `plan/issue/<n>`'s hard reason — git
+  cannot put `refs/heads/issue/12/appraisal` beside `refs/heads/issue/12` — but since #396 it is a lease
+  key rather than a ref: the appraiser reads the repository and writes nothing, so nothing is minted
   and nothing is left for a reap that only ever collects merged branches.
 - Driven off `eligibleIssues` (unlike rules `issue-assess` and `plan-part`), because an issue the state gate or the watch
-  gate excludes is not going to be worked and so has nothing to assay.
+  gate excludes is not going to be worked and so has nothing to appraise.
 - Fires only when nothing has been started: no verdict against the issue's _current_ text, no prior
-  work (`hasWorkStarted`, now exactly `hasPriorWork` — it began as that predicate with the assay's
-  own tasks filtered out, or a crashed assayer would retire its own retry, and `issueOriginRole` now
+  work (`hasWorkStarted`, now exactly `hasPriorWork` — it began as that predicate with the appraisal's
+  own tasks filtered out, or a crashed appraiser would retire its own retry, and `issueOriginRole` now
   makes that exclusion for every deliberation origin), no plan row, and nothing live on `issue:N` or
   any `issue:N:*`.
 - **Suppresses rule `issue-plan` and rule `issue-pickup` for that issue this cycle**, from a set built once, so the three
   rules cannot hold different opinions about which issues are in it.
 - **Fails open**: a spent attempt cap returns the issue to the funnel with no escalation, exactly as
-  the planner and the assessor do, because narrowing pickup without that would make the assay the
+  the planner and the assessor do, because narrowing pickup without that would make the appraisal the
   most effective way to stop the harness working.
 
 `dispatchReason` and the prompt carry the issue's title and body, and the dispatch's `originTitle` /
@@ -710,8 +710,8 @@ verdict with the fingerprint of an empty goal.
 
 The prompt also carries `relatedWorkNote` — the item's parent, siblings, children, and for an orphan
 the open containers it might belong to — **appended**, never interpolated, for
-[the prompt templates' reason](#prompt-templates). That block is what the assayer's `parent` proposal
-picks from (issue #463): the assay's verdict now carries where the goal belongs on the backlog as well
+[the prompt templates' reason](#prompt-templates). That block is what the appraiser's `parent` proposal
+picks from (issue #463): the appraisal's verdict now carries where the goal belongs on the backlog as well
 as whether it can be worked from, and neither placement holds anything.
 → [06](06-issue-pickup.md#where-the-goal-belongs-the-placement-proposals-issue-463)
 
@@ -763,7 +763,7 @@ this cycle is **suppressed** from rule `issue-pickup`, or two agents land on it 
 **Which origins count is decided in one place**, `issueOriginRole` (`src/issueOrigins.ts`), because
 the `issue:N:*` subtree holds two materially different things. The pickup root and a plan's parts are
 the **work**; `issue:N:assess` is not work but only ever happens downstream of some, so it counts as
-**evidence**; `issue:N:plan` and `issue:N:assay` are the harness **deliberating**, and a task on one
+**evidence**; `issue:N:plan` and `issue:N:appraisal` are the harness **deliberating**, and a task on one
 of those says the issue has been thought about, never that anything was built. Matching the whole
 subtree was a real defect: the planner's own task made every issue that reached pickup look worked, so
 it was assessed instead of picked up, the assessor honestly reported nothing delivered, rule `issue-shortfall`
@@ -906,7 +906,7 @@ dropped by exactly the overrides that customised most:
    came next.
 2. **The dossier** (`retroDossier`, `src/retro/dossier.ts`), the record only the harness kept — the
    plan and its parts with their outcomes, the pull requests open and closed, the decisions with the
-   rule ids that fired, escalations and how they were answered, proposals, the assay, the delivery,
+   rule ids that fired, escalations and how they were answered, proposals, the appraisal, the delivery,
    any shortfall, the conclusion, the claims raised while working it, agents spawned and reported
    spend. It **reads rows the
    pulse already wrote and derives no verdicts**: a fold that computed one would be a second opinion
@@ -1121,7 +1121,7 @@ dispatcher emits, each under a stable `PromptId`, each with a built-in default, 
 list, and a doc string.
 
 Ids: `issue-plan`, `issue-replan`, `discuss-plan` (retired), `plan-part`, `plan-approval`, `issue-shortfall`,
-`plan-part-escalation`, `issue-pickup`, `issue-pickup-escalation`, `issue-assess`, `issue-assay`,
+`plan-part-escalation`, `issue-pickup`, `issue-pickup-escalation`, `issue-assess`, `issue-appraisal`,
 `issue-retro`, `validation-check`, `local-run`, `pr-ci-fix`, `pr-base-update-behind`, `pr-base-update-conflict`,
 `pr-review-comment`, `pr-concern-escalation`, `pr-title`, `finding-ticket`, `raise-bug`,
 `work-item-ticket-body`, `brief-ticket-body`, and the retired `work-item-ticket`,

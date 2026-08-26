@@ -303,7 +303,7 @@ export function useCockpit(): CockpitStatus {
       setIssueAreaPath: (n, areaPath) => then(api.setIssueAreaPath(n, areaPath)),
       setPartProfile: (planId, slug, profile) => then(api.setPartProfile(planId, slug, profile)),
       setIssueConclusion: (n, verdict) => then(api.setIssueConclusion(n, verdict)),
-      setIssueAssay: (n, verdict) => then(api.setIssueAssay(n, verdict)),
+      setIssueAppraisal: (n, verdict) => then(api.setIssueAppraisal(n, verdict)),
       addInstruction: (n, text) => then(api.addInstruction(n, text)),
       withdrawInstruction: (n, id) => then(api.withdrawInstruction(n, id)),
       raiseBug: (n, summary, title) => then(api.raiseBug(n, summary, title)),

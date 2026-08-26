@@ -3,7 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { SCHEMA } from './schema.js';
 import { systemClock, type Clock, type StoreContext } from './context.js';
-import { ensureColumns, rebuildTables, runOnce } from './migrate.js';
+import { ensureColumns, rebuildTables, renameTables, runOnce } from './migrate.js';
 import { PoolStore, type PoolDigestMirrorRow } from './pool.js';
 import { backfillTaskDispatchKind, TaskStore, TASK_COLUMNS } from './tasks.js';
 import { JobStore, JOB_COLUMNS } from './jobs.js';
@@ -29,7 +29,7 @@ import { McpCallStore } from './mcpCalls.js';
 import { HumanTaskStore, HUMAN_TASK_COLUMNS } from './humanTasks.js';
 import { absorbSinglePlanStatus, backfillWholePlanParts, PlanStore, PLAN_COLUMNS } from './plans.js';
 import { ValidationStore, VALIDATION_COLUMNS, VALIDATION_REBUILDS } from './validation.js';
-import { IssueVerdictStore, ISSUE_VERDICT_COLUMNS } from './issueVerdicts.js';
+import { IssueVerdictStore, ISSUE_VERDICT_COLUMNS, ISSUE_VERDICT_RENAMES } from './issueVerdicts.js';
 import { ScratchStore } from './scratch.js';
 import { UpgradeStore } from './upgrades.js';
 import { openPetsFromBeforeEggs, PetStore, PET_COLUMNS } from './pets.js';
@@ -72,7 +72,7 @@ import type {
   EnvironmentReading,
   GoalArrival,
   GoalLanding,
-  IssueAssay,
+  IssueAppraisal,
   ErrorLogEntry,
   ErrorLogInput,
   Escalation,
@@ -221,6 +221,10 @@ export class Store {
     this.db = new Database(dbPath);
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
+    // Before the schema, because `CREATE TABLE IF NOT EXISTS` would otherwise stand
+    // an empty table up under the new name beside the full one under the old, and
+    // leave every row that predates the rename invisible with nothing red.
+    renameTables(this.db, ISSUE_VERDICT_RENAMES);
     // Before the schema, and around it: a table whose *key* changed is renamed
     // out of the way so `SCHEMA`'s own definition creates the new shape, then its
     // rows are copied across resolving the old key into the new one. All in one
@@ -837,7 +841,7 @@ export class Store {
     return this.validation.recordValidationResult(planId, checkId, input);
   }
 
-  // -- Issue verdicts (conclusion / delivery / shortfall / assay) ------------
+  // -- Issue verdicts (conclusion / delivery / shortfall / appraisal) ------------
 
   recordIssueConclusion(input: Parameters<IssueVerdictStore['recordIssueConclusion']>[0]): IssueConclusion {
     return this.verdicts.recordIssueConclusion(input);
@@ -894,26 +898,26 @@ export class Store {
   clearShortfall(originRef: string): boolean {
     return this.verdicts.clearShortfall(originRef);
   }
-  recordAssay(input: Parameters<IssueVerdictStore['recordAssay']>[0]): IssueAssay {
-    return this.verdicts.recordAssay(input);
+  recordAppraisal(input: Parameters<IssueVerdictStore['recordAppraisal']>[0]): IssueAppraisal {
+    return this.verdicts.recordAppraisal(input);
   }
-  getAssay(originRef: string): IssueAssay | null {
-    return this.verdicts.getAssay(originRef);
+  getAppraisal(originRef: string): IssueAppraisal | null {
+    return this.verdicts.getAppraisal(originRef);
   }
-  listAssays(): IssueAssay[] {
-    return this.verdicts.listAssays();
+  listAppraisals(): IssueAppraisal[] {
+    return this.verdicts.listAppraisals();
   }
-  answerAssayProfile(originRef: string, goalRef: string): boolean {
-    return this.verdicts.answerAssayProfile(originRef, goalRef);
+  answerAppraisalProfile(originRef: string, goalRef: string): boolean {
+    return this.verdicts.answerAppraisalProfile(originRef, goalRef);
   }
-  settleAssayPlacement(originRef: string, goalRef: string, field: 'parent' | 'areaPath'): boolean {
-    return this.verdicts.settleAssayPlacement(originRef, goalRef, field);
+  settleAppraisalPlacement(originRef: string, goalRef: string, field: 'parent' | 'areaPath'): boolean {
+    return this.verdicts.settleAppraisalPlacement(originRef, goalRef, field);
   }
-  setAssayComment(originRef: string, commentRef: string): void {
-    this.verdicts.setAssayComment(originRef, commentRef);
+  setAppraisalComment(originRef: string, commentRef: string): void {
+    this.verdicts.setAppraisalComment(originRef, commentRef);
   }
-  clearAssay(originRef: string): boolean {
-    return this.verdicts.clearAssay(originRef);
+  clearAppraisal(originRef: string): boolean {
+    return this.verdicts.clearAppraisal(originRef);
   }
 
   // -- Scratch pads and retrospectives (a goal's written record) ------------

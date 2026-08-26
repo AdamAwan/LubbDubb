@@ -1385,9 +1385,9 @@ test('in-progress: a plan part counts as work on the goal', async () => {
   assert.ok(actions.some((a) => a.type === 'set_work_item_state'));
 });
 
-test('in-progress: an assay, a planner or an assessor is not work on the goal', async () => {
+test('in-progress: an appraisal, a planner or an assessor is not work on the goal', async () => {
   const d = new RuleDispatcher({ pickupStates: ['Ready'], inProgressState: 'Doing' });
-  for (const origin of ['issue:30:assay', 'issue:30:plan', 'issue:30:assess', 'issue:30:retro']) {
+  for (const origin of ['issue:30:appraisal', 'issue:30:plan', 'issue:30:assess', 'issue:30:retro']) {
     const { actions } = await d.decide(ctx(tracked(30, 'Ready'), { tasks: [runningTask('t1', origin)] }));
     assert.ok(!actions.some((a) => a.type === 'set_work_item_state'), `${origin} moved the item`);
   }

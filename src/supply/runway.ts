@@ -1,7 +1,7 @@
 import { DESK_SETTLED, deskSettled } from '../benchSettlement.js';
 import type { EscalationSpan, HumanTask, Issue, IssueRun } from '../types.js';
 import { issuePickupStatus, issueWatchGateReason, type IssuePickupContext } from '../dispatcher/issuePickup.js';
-import { assayHold } from '../intake/assay.js';
+import { appraisalHold } from '../intake/appraisal.js';
 import { liveParts } from '../plans/parts.js';
 
 /**
@@ -47,7 +47,7 @@ import { liveParts } from '../plans/parts.js';
  *
  * So each completed run's calendar span has its **human holds** subtracted:
  * `close_out` and `validate` bench rows, an `ask` that *is* a plan part, the
- * assay's profile gate, a standing delivery, and an escalation nobody answered.
+ * appraisal's profile gate, a standing delivery, and an escalation nobody answered.
  * What is left is how long the goal occupied the fleet, which is what the drain
  * is a drain of.
  *
@@ -177,7 +177,7 @@ export function validateRunwayPolicy(policy: RunwayPolicy): void {
 interface LatentSupply {
   /** Plans written and awaiting an approval. */
   plans: number;
-  /** Goals held by the assay's profile question (issue #342). */
+  /** Goals held by the appraisal's profile question (issue #342). */
   profiles: number;
   /** Goals whose attempt cap is spent, parked on a person. */
   escalated: number;
@@ -256,7 +256,7 @@ export interface RunwayInput {
   issues: readonly Issue[];
   /**
    * The gate's own context — and the *only* copy of the plans, the parts and the
-   * assay verdicts. They are read back out of it below rather than passed
+   * appraisal verdicts. They are read back out of it below rather than passed
    * alongside, for the reason above one level up: a caller free to hand the lens
    * a different plan list from the one the verdicts were taken in is a caller
    * free to report a goal as queued and as awaiting approval in one breath.
@@ -313,10 +313,10 @@ const QUEUED = new Set(['eligible', 'blocked', 'cooldown']);
 /**
  * Statuses that mean a person is the next mover.
  *
- * `assay` is **not** in here and cannot be: the status covers two opposite
- * situations — an issue the fleet is about to assay, which is ordinary unstarted
- * supply, and one an assayer refused or priced and left standing, which is parked
- * on a person. They are separated below by asking `assayHold`, the same function
+ * `appraisal` is **not** in here and cannot be: the status covers two opposite
+ * situations — an issue the fleet is about to appraise, which is ordinary unstarted
+ * supply, and one an appraiser refused or priced and left standing, which is parked
+ * on a person. They are separated below by asking `appraisalHold`, the same function
  * the gate itself asks. Read as held, every freshly tagged issue on the
  * deployment would count as work nobody can do and the fleet would look starved
  * the moment somebody filled the queue.
@@ -339,7 +339,7 @@ export function readRunway(input: RunwayInput): RunwayReading {
   let held = 0;
   let escalated = 0;
 
-  const assays = input.pickup.assays ?? [];
+  const appraisals = input.pickup.appraisals ?? [];
   const plans = input.pickup.plans ?? [];
   const planParts = input.pickup.planParts ?? [];
 
@@ -347,11 +347,11 @@ export function readRunway(input: RunwayInput): RunwayReading {
     const { status } = issuePickupStatus(issue, input.pickup);
     if (INFLIGHT.has(status)) inflight += 1;
     else if (QUEUED.has(status)) queued += 1;
-    else if (status === 'assay') {
+    else if (status === 'appraisal') {
       // The split the status alone cannot make. A null hold is the pending arm —
       // the fleet has not got to it yet, which is what a queue *is*.
-      const hold = assayHold(assays.find((a) => a.originRef === `issue:${issue.number}`) ?? null, issue, {
-        signals: input.pickup.assaySignals ?? [],
+      const hold = appraisalHold(appraisals.find((a) => a.originRef === `issue:${issue.number}`) ?? null, issue, {
+        signals: input.pickup.appraisalSignals ?? [],
       });
       if (hold === null) queued += 1;
       else held += 1;
@@ -388,10 +388,10 @@ export function readRunway(input: RunwayInput): RunwayReading {
 
   const latent: LatentSupply = {
     plans: plans.filter((p) => p.status === 'awaiting_approval').length,
-    // The one hold the harness raises with no row of its own: an assay that
+    // The one hold the harness raises with no row of its own: an appraisal that
     // proposed a profile and has not been answered stops the goal before there is
     // a plan to hold anything. Same predicate the queue rail reads it by.
-    profiles: assays.filter((a) => a.proposedProfile !== null && a.profileAnsweredAt === null).length,
+    profiles: appraisals.filter((a) => a.proposedProfile !== null && a.profileAnsweredAt === null).length,
     escalated,
     parts: plans
       .filter((p) => p.status === 'awaiting_approval')
@@ -584,13 +584,13 @@ function humanHolds(input: RunwayInput): Map<string, Hold[]> {
   };
 
   for (const t of input.humanTasks) if (benchRowHolds(t)) add(t.originRef, t.createdAt, t.resolvedAt);
-  // The assay's profile gate — the one hold the harness raises with no row of its
+  // The appraisal's profile gate — the one hold the harness raises with no row of its
   // own, and the only one whose predicate lives in another module. Asked through
-  // `assayHold`, the same pure function the pickup gate and the queue bucket ask,
+  // `appraisalHold`, the same pure function the pickup gate and the queue bucket ask,
   // because two matchers for one claim is how the bucket ends up calling a goal
   // unheld in the same reading that erases its run as held.
   const issuesByRef = new Map(input.issues.map((i) => [`issue:${i.number}`, i]));
-  for (const a of input.pickup.assays ?? []) {
+  for (const a of input.pickup.appraisals ?? []) {
     // **The span is closed or it is nothing.** An unanswered proposal has no end,
     // and read to the end of the run it subtracts every minute a goal that
     // demonstrably *shipped* spent shipping — the completion being the evidence it
@@ -602,10 +602,12 @@ function humanHolds(input: RunwayInput): Map<string, Hold[]> {
     if (!issue) continue;
     // Asked as of the hold's *start*, which is the only moment there is a hold to
     // ask about: with the answer in, the gate arm is released by construction and
-    // `assayHold` would say so about every closed span alike. What it still rules
+    // `appraisalHold` would say so about every closed span alike. What it still rules
     // on is the release the re-implementation missed — a ticket rewritten since
-    // the assay was never held by it.
-    if (assayHold({ ...a, profileAnsweredAt: null }, issue, { signals: input.pickup.assaySignals ?? [] }) === null)
+    // the appraisal was never held by it.
+    if (
+      appraisalHold({ ...a, profileAnsweredAt: null }, issue, { signals: input.pickup.appraisalSignals ?? [] }) === null
+    )
       continue;
     add(a.originRef, a.decidedAt, a.profileAnsweredAt);
   }

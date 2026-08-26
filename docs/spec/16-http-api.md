@@ -24,7 +24,7 @@ is about.
 | `routes/control.ts`     | `/api/pulse`, `/api/errors/clear`, `/api/control`, `/api/prs/:number/watch`                                                                                               |
 | `routes/escalations.ts` | The whole "Needs you" inbox: escalations, proposals, recovery                                                                                                             |
 | `routes/humanTasks.ts`  | Work only a person can do: filing one, and the two ways it settles                                                                                                        |
-| `routes/issues.ts`      | Watch, priority, conclusion, assay, delivered, shortfall, dismiss-run                                                                                                     |
+| `routes/issues.ts`      | Watch, priority, conclusion, appraisal, delivered, shortfall, dismiss-run                                                                                                     |
 | `routes/jobs.ts`        | `/api/jobs`, `/api/jobs/:id/cancel`, `/api/upnext/order`, `/api/upnext/profile`                                                                                           |
 | `routes/knowledge.ts`   | The whole claim store: writing one down, its observations and disputes, how far an operator says it carries, the three ways it leaves, and the answers to a contradiction |
 | `routes/plans.ts`       | Plan history, replan, acceptance ticks, part model pins                                                                                                                   |
@@ -433,7 +433,7 @@ ticket carries at most one answer — and it is the only reason this is a tracke
 store one: a pin is visible where a human already looks, which is what makes "does it expire?" a
 question with no mechanism behind it ([02](02-configuration.md#pinning-one-goal-to-a-profile)).
 
-The same call **answers a standing profile proposal from the assayer**, whichever way the operator
+The same call **answers a standing profile proposal from the appraiser**, whichever way the operator
 went. That is what makes "keep mine" a decision rather than a refusal to answer: the tag goes on
 deliberately disagreeing with the proposal, and a gate that re-read the disagreement would ask the
 same question for ever. What is recorded is that the question was answered, never what it was answered
@@ -448,13 +448,13 @@ failure, which is recorded on the error log. Returns `{ok: true, profile, answer
 
 Bodies `{parent?: number}` and `{areaPath?: string}`. Settle one of a goal's two **placement**
 questions — which container it hangs off, and which area node puts it on a team's board. Each takes
-the three answers the assay's proposal has: the value proposed, a different value the operator picked,
+the three answers the appraisal's proposal has: the value proposed, a different value the operator picked,
 or **absent**, which is "this goal wants no such thing". The route does not distinguish the first two,
 because nothing downstream does.
 
 The write goes through `ActionSink` (`setWorkItemParent` / `setWorkItemAreaPath`) — the harness's own,
 never an agent's and never a shell command in a prompt ([13](13-jobs-and-tickets.md#filing-a-ticket)).
-It is then recorded on the assay row (`parent_settled_at` / `area_path_settled_at`), scoped to the
+It is then recorded on the appraisal row (`parent_settled_at` / `area_path_settled_at`), scoped to the
 `goal_ref` the operator was looking at so a superseded proposal cannot be settled. The stamp is
 written on **all three** answers and not only the dismissal: whether the question still stands is
 otherwise derived from the live work item, and that read is a pulse behind this write.
@@ -472,7 +472,7 @@ the provider name) and on a provider failure, which is recorded on the error log
 ### `POST /api/issues/:number/priority`
 
 Body `{priority: boolean}`. Marks this goal a priority, or clears the mark: every origin under it —
-its pickup, its plan, its parts, its assay, its assessor, its validation checks and the pull requests
+its pickup, its plan, its parts, its appraisal, its assessor, its validation checks and the pull requests
 its branches opened — is ranked ahead of the natural cross-rule order and ahead of an
 `/api/upnext/order` drag, behind rule `manual-job` only
 ([05](05-dispatcher.md#marking-a-goal-a-priority)).
@@ -661,12 +661,12 @@ the next heartbeat.
 Unlike the delivery it gates nothing, so recording one never parks an issue; see
 [06](06-issue-pickup.md#the-shortfall--the-same-verdicts-other-polarity).
 
-### `POST /api/issues/:number/assay`
+### `POST /api/issues/:number/appraisal`
 
-Body `{verdict: 'workable'|'unclear'|null, summary?: string}`. The operator's arm of the goal assay,
-and the escape hatch a blocking gate has to have: `workable` releases an issue the assayer refused,
+Body `{verdict: 'workable'|'unclear'|null, summary?: string}`. The operator's arm of the goal appraisal,
+and the escape hatch a blocking gate has to have: `workable` releases an issue the appraiser refused,
 `unclear` parks one without waiting for an agent to agree, and `null` **clears** the row — a delete,
-so "not assayed" has exactly one representation (which is also what a crashed assayer leaves, i.e.
+so "not appraised" has exactly one representation (which is also what a crashed appraiser leaves, i.e.
 the fail-open). An operator verdict is fingerprinted against the issue as the last world snapshot saw
 it, so it expires on the next edit exactly as an agent's does; an issue absent from that snapshot is
 a 404 rather than a guess, since a verdict fingerprinted against an empty goal would be a silent
@@ -686,7 +686,7 @@ them ran the feature.
 - **`summary` is required**, where every other body on this surface takes an optional one. Elsewhere
   the operator has the row in front of them and a default says who decided; here their report _is_ the
   feature, so an empty one asks for nothing. Trimmed, capped at 4000 characters, **400** outside that.
-- **Refusals in order:** **404** when the issue is absent from the last world snapshot (the `assay`
+- **Refusals in order:** **404** when the issue is absent from the last world snapshot (the `appraisal`
   route's check, for its reason), then **409** when no tracker is configured to file into, then the
   body's 400. The cockpit hides the button off the same `canFileTickets` flag, so a 409 means a direct
   call.
@@ -823,7 +823,7 @@ issue its own PR names; **C** — a job is adopted by the origin it stands in fo
 `issue:41` while `issue:41:part:api` — itself a node — lands on itself.
 
 Arm C is what makes the list honest. Arms A and B can only adopt a job that produced a pull request,
-and a requeued assay, plan, retro or review-comment job opens none — so every one of them was
+and a requeued appraisal, plan, retro or review-comment job opens none — so every one of them was
 parentless forever and the call-out offered to file a second tracker item for work an existing one
 already named. Not a stale row that ages out: the condition is permanent until acted on, which is how
 the list came to be mostly `Requeued: Plan issue #35699` and read as noise.
@@ -898,7 +898,7 @@ them, an empty list mid-backfill being indistinguishable from an empty tracker. 
 page's own rows, resolved through the connector's `resolveRefUrl` rather than read off the snapshot —
 that map is built from the world, and most rows here left it long ago.
 
-Note what it does **not** ship: the pickup reasons and the assay. Those are live readings the cockpit
+Note what it does **not** ship: the pickup reasons and the appraisal. Those are live readings the cockpit
 already holds on `/api/state`, and a second copy of them here would be a second answer to a question
 the dispatcher has already answered.
 
@@ -1866,7 +1866,7 @@ read **once** and shared, so two parts of the UI cannot disagree.
 | `config`                        | `heartbeatIntervalMs`, `maxConcurrentAgents`, `watchLabel`, `containerTypes`, `canFileTickets`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `control`                       | The **live** cap and pause state. The cockpit reads these, not the frozen `config` block.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `worldObservedAt`               | When `world` was observed — the baseline's `takenAt`. **Null** before the first cycle, when `world` is empty.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `world`                         | The snapshot, with `health`, `attention` and `ciVerdict` per open PR and `pickup`, `conclusion`, `shortfall`, `assay`, `completion` and `spend` per issue.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `world`                         | The snapshot, with `health`, `attention` and `ciVerdict` per open PR and `pickup`, `conclusion`, `shortfall`, `appraisal`, `completion` and `spend` per issue.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `retainedRuns`                  | Runs whose issue the world has forgotten (#203, #234), rebuilt from their stored snapshots by the same `retainedRunIssues` the dispatcher unions into its issue list, through the same per-issue enrichment a live one takes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `plans`, `planParts`            | The plan graph — the same rows the per-issue chip reads, with `statusCommentRef` as a canonical ref.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `tasks`                         | Every task, **without prompts** — `TaskSummary`, not `Task`. See _Bulk text_ below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
@@ -1946,16 +1946,16 @@ Eight consistency points:
   silently: the cockpit would say _repair_ while the harness held. `test/ciPolicy.test.ts` asserts the
   shipped value against the function itself rather than against a transcribed literal, so a second
   expectation written out by hand cannot become a second implementation.
-- **The assay verdict sits beside `conclusion` and `shortfall`, not inside `pickup`** — pickup answers
-  "would an agent start next cycle", the assay answers "is there anything here to start on" (see
+- **The appraisal verdict sits beside `conclusion` and `shortfall`, not inside `pickup`** — pickup answers
+  "would an agent start next cycle", the appraisal answers "is there anything here to start on" (see
   [06](06-issue-pickup.md)). `{verdict, summary, by, decidedAt}`, or **null**, and null is a third
   reading rather than a synonym for `workable`: `pickup.reasons[0]` already carries the refusal text,
   but "refused" and "awaiting a verdict" differ _only_ in that prose, and telling them apart by reading
   a string written for a human is what `signalPolarity` refuses to do. `goalRef` is deliberately not
   shipped — it is the fingerprint the hold is measured against, not a reading. `commentRef` rides
-  beside the verdict: the standing comment the assay desk keeps on the ticket, as a canonical ref.
+  beside the verdict: the standing comment the appraisal desk keeps on the ticket, as a canonical ref.
 - **A comment the harness maintains ships as a ref, never as the provider's id** (#171). Both records
-  that keep one — `plan.statusCommentRef` and `issue.assay.commentRef` — are stored as a provider
+  that keep one — `plan.statusCommentRef` and `issue.appraisal.commentRef` — are stored as a provider
   comment id and translated on the way out by `issueCommentRef` into `issue:<n>:comment:<id>` (see
   [15](15-integrations.md#comment-refs)). The store is untouched; the id is what `upsertIssueComment`
   round-trips, and it is exactly what must not reach a resolver, which reads a bare number as an issue

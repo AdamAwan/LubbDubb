@@ -111,7 +111,7 @@ export const PHASE_ORDER: readonly SpendPhase[] = [
  * stays there.
  */
 const PHASE_COPY: Record<SpendPhase, { label: string; blurb: string }> = {
-  deliberation: { label: 'Deliberation', blurb: 'Planning and assaying — deciding what the work is' },
+  deliberation: { label: 'Deliberation', blurb: 'Planning and appraising — deciding what the work is' },
   build: { label: 'Build', blurb: 'The pickup and every part — where a branch is cut and a PR is written' },
   ci: { label: 'CI', blurb: 'Answering a pull request’s failing or blocked checks — what a red pipeline costs' },
   landing: { label: 'Landing', blurb: 'The rest of getting a pull request in — review comments, retargets, the merge' },

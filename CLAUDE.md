@@ -98,7 +98,7 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
 - **A pooled corroboration is upserted on `(fact_id, fleet_id)`; `PoolDesk` never lands its own fleet's
   document.** Either appends a voice every pulse and looks like the pool working. → [28](docs/spec/28-cross-fleet-pool.md)
 - **A new issue-verdict writer goes through `IssueVerdictStore.recordVerdict`, never a hand-rolled `DELETE`.**
-  Which of `issue_conclusions` / `issue_deliveries` / `issue_shortfalls` / `issue_assays` may coexist is
+  Which of `issue_conclusions` / `issue_deliveries` / `issue_shortfalls` / `issue_appraisals` may coexist is
   declared once in `src/store/verdicts.ts`; a writer that clears its siblings itself compiles, passes, and
   silently reintroduces the pairwise drift the matrix replaced.
   → [14](docs/spec/14-persistence.md#issue-verdicts-and-the-exclusion-matrix)
@@ -160,8 +160,8 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
   is two things: a `DISPATCH_PIPELINE` entry in the position it should run, and a module under
   `src/dispatcher/rules/` registered in `STAGES` under that id. There are no rule numbers, and one
   must not come back. → [05](docs/spec/05-dispatcher.md#the-rule-book)
-- **Pipeline order is load-bearing state, not just priority.** `issue-assay` and `issue-assess`
-  write `assaying` / `assessing` on the `StageContext` for later stages to read. Moving either
+- **Pipeline order is load-bearing state, not just priority.** `issue-appraisal` and `issue-assess`
+  write `appraising` / `assessing` on the `StageContext` for later stages to read. Moving either
   below its readers compiles fine and silently puts two agents on one issue.
 - **Lenses must stay out of `src/dispatcher/`.** The work graph (`src/graph/`), `buildStacks`,
   `prAttentionStatus`, `knowledge` and `overlaps` are all read-only views for the cockpit; a rule

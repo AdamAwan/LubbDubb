@@ -153,7 +153,7 @@ test('every agent dispatched for the goal is handed the images, and only that go
     .map((t) => system.store.getTask(t.id)!);
   assert.ok(mine.length > 0, 'the funnel picked the goal up');
   for (const task of mine) {
-    // The funnel dispatches for `issue:<n>:assay`, `:plan`, `:part:<slug>` — never
+    // The funnel dispatches for `issue:<n>:appraisal`, `:plan`, `:part:<slug>` — never
     // for `issue:<n>` exactly until the parts are gone. An exact-origin lookup
     // would therefore hand the screenshot to nobody, which is the bug this scoping
     // is the fix for.

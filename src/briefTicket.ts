@@ -7,7 +7,7 @@
  * An operator-launched code job (a "brief" from the cockpit's New brief
  * panel) used to be dispatched straight onto a branch by rule `manual-job`, on the raw
  * prompt — skipping the whole funnel a *picked-up* ticket goes through: the goal
- * assay, the planning agent, the plan's parts. The workflow's two entry points
+ * appraisal, the planning agent, the plan's parts. The workflow's two entry points
  * ("start with a prompt", "start with a ticket") are drawn converging on
  * *find-or-create a ticket, then the funnel*, and the prompt arm was never wired
  * to that convergence.

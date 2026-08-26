@@ -253,7 +253,7 @@ export interface Config {
   /**
    * Provider-native item types that *hold* work rather than being work — Azure
    * DevOps Features and Epics. An item of one of these types is never picked up,
-   * planned or assayed: its children are the work, and an agent put on the
+   * planned or appraised: its children are the work, and an agent put on the
    * container would implement a decomposition that already exists beside it in the
    * tracker. Meaningful only for providers that report an item type (Azure);
    * GitHub issues carry none and are unaffected. Defaults to
@@ -1128,8 +1128,8 @@ const RETIRED_KEYS: Readonly<Record<string, string>> = {
   'validation.desktopSkill': 'the /lubbdubb skill is always installed and refreshed when the desktop channel starts',
   assessment: 'the assessor is always on — a goal with work behind it and nothing in flight is always assessed',
   'assessment.enabled': 'the assessor is always on',
-  assay: 'the goal assay is always on — every fresh goal is assayed before anything is dispatched against it',
-  'assay.enabled': 'the goal assay is always on',
+  appraisal: 'the goal appraisal is always on — every fresh goal is appraised before anything is dispatched against it',
+  'appraisal.enabled': 'the goal appraisal is always on',
   retrospective: 'the retrospective is always on — every delivered goal is written up',
   'retrospective.enabled': 'the retrospective is always on',
   mcp: 'the agent tool channel and its permission backstop are always on',

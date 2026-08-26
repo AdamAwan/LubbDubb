@@ -6,7 +6,7 @@
  * **work**: the pickup root `issue:<n>` and a plan's parts `issue:<n>:part:<slug>`
  * are where a branch is cut, a PR is written, a goal is delivered. The rest are the
  * harness **deliberating** about the issue — the planner asking what shape the work
- * is, the assayer asking whether the goal can be worked from at all. A deliberation
+ * is, the appraiser asking whether the goal can be worked from at all. A deliberation
  * agent leaves a task row behind exactly as a working one does, and nothing about
  * the ref shape says which it was.
  *
@@ -19,7 +19,7 @@
  *
  * So the deliberation origins are enumerated here rather than each predicate
  * carrying its own exclusion. `hasWorkStarted` already made this exclusion for the
- * assay's own origin, one special case at a time; this is that argument generalised,
+ * appraisal's own origin, one special case at a time; this is that argument generalised,
  * and the one place a new origin has to be classified.
  */
 
@@ -38,7 +38,7 @@ type IssueOriginRole = 'work' | 'evidence' | 'deliberation' | 'unrecognised';
  * A task on one of these says the issue has been thought about, never that anything
  * was built.
  */
-const DELIBERATION_SUFFIXES = ['plan', 'assay'];
+const DELIBERATION_SUFFIXES = ['plan', 'appraisal'];
 
 /** The origins that are the work itself, as suffix prefixes under `issue:<n>:`. */
 const WORK_SUFFIX_PREFIXES = ['part:'];

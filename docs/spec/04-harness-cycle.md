@@ -74,7 +74,7 @@ flowchart TD
         LIMIT --> STALL["settle the stall parks whose countdown has run out —<br/>an unanswered stop is recorded done, and its slot goes back to the fleet"]
         STALL --> TIDY["tidy the inbox — dismiss the questions whose agent has died,<br/>immediately above the read that ships them"]
         TIDY --> READ["read the fleet and the store<br/>tasks, agents, escalations, queued jobs, plans and parts,<br/>verdicts, proposals, overrides, the last 200 decisions"]
-        READ --> ANN["announce the assay's question on the ticket · record issue runs"]
+        READ --> ANN["announce the appraisal's question on the ticket · record issue runs"]
         ANN --> HR["compute headroom — paused ? 0 : cap - live agents,<br/>both read by reference"]
         HR --> SPLIT["split the world for dispatch<br/>hide unwatched PRs · add the runs the tracker forgot"]
         SPLIT --> DEC["dispatcher.decide(ctx)"]

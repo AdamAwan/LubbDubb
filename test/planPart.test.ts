@@ -32,7 +32,7 @@ import { renderPlanComment } from '../src/plans/planComment.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { Decision, Issue, Plan, PlanPart, PullRequest, WorldSnapshot } from '../src/types.js';
 import { gitRepo } from './support/gitRepo.js';
-import { pastTheFunnel, spentAssayAttempts } from './support/plans.js';
+import { pastTheFunnel, spentAppraisalAttempts } from './support/plans.js';
 
 const enabled = { ...DEFAULT_PLANNING, enabled: true };
 
@@ -115,10 +115,10 @@ function context(issues: Issue[], extra: Partial<DispatchContext> = {}): Dispatc
     queuedJobs: [],
     agentHeadroom: 5,
     ...extra,
-    // Every issue in the world is past the goal assay: it is unconditional and
+    // Every issue in the world is past the goal appraisal: it is unconditional and
     // ranks in front of everything here, so without this the ranking assertions
-    // would all lead with an assay.
-    recentDecisions: [...issues.flatMap((i) => spentAssayAttempts(i.number)), ...(extra.recentDecisions ?? [])],
+    // would all lead with an appraisal.
+    recentDecisions: [...issues.flatMap((i) => spentAppraisalAttempts(i.number)), ...(extra.recentDecisions ?? [])],
   };
 }
 

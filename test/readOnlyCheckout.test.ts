@@ -20,11 +20,11 @@ import { pastTheFunnel } from './support/plans.js';
  * The **read-only checkout** (issue #396): what the three dispatches that only read
  * the repository take a worktree slot as.
  *
- * `issue-assay`, `issue-assess` and `validate-check` each dispatch a code agent that
+ * `issue-appraisal`, `issue-assess` and `validate-check` each dispatch a code agent that
  * is told in its prompt not to commit or push anything, and each used to mint a
  * branch cut from the default one to do it in. That branch never got a pull request,
  * so `reapableBranches` — which only ever deletes the branch of a **merged** one —
- * never collected it: one ref per assay, per assessment and per check, for the life
+ * never collected it: one ref per appraisal, per assessment and per check, for the life
  * of the deployment, with nothing anywhere reading as wrong.
  *
  * Two properties are asserted in both directions here, because both fail silently:
@@ -68,7 +68,7 @@ function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
   };
 }
 
-/** A finished pickup — what tells the assessor apart from the assay. */
+/** A finished pickup — what tells the assessor apart from the appraisal. */
 function priorWork(): Task {
   return {
     id: 't1',
@@ -165,8 +165,8 @@ function dispatchFor(
 }
 
 test('all three read-only rules ask for the same shape, and none keeps a private arrangement', async () => {
-  // The assay: nothing has been started, so the goal is all there is to judge.
-  const assay = await new RuleDispatcher().decide(ctx());
+  // The appraisal: nothing has been started, so the goal is all there is to judge.
+  const appraisal = await new RuleDispatcher().decide(ctx());
   // The assessor: work has been done and nothing is in flight.
   const assess = await new RuleDispatcher().decide(
     ctx({ tasks: [priorWork()], plans: [], recentDecisions: pastTheFunnel(12) }),
@@ -177,7 +177,7 @@ test('all three read-only rules ask for the same shape, and none keeps a private
   );
 
   for (const [origin, actions] of [
-    ['issue:12:assay', assay.actions],
+    ['issue:12:appraisal', appraisal.actions],
     ['issue:12:assess', assess.actions],
     ['issue:12:validate:csv-opens', validate.actions],
   ] as const) {
@@ -191,8 +191,8 @@ test('a rule that writes code is untouched — the default is the writable shape
   // Not an assertion about a rule but about the schema's default: a dispatch that
   // says nothing about its checkout gets the branch it always had, so nothing that
   // commits can lose its branch by omission.
-  assert.deepEqual(readOnlyDispatch('assay/issue/12', 'main'), {
-    branch: 'assay/issue/12',
+  assert.deepEqual(readOnlyDispatch('appraisal/issue/12', 'main'), {
+    branch: 'appraisal/issue/12',
     base: 'main',
     readOnly: true,
   });
@@ -226,10 +226,10 @@ test('the executor is the one place the shape is chosen', async () => {
     planWith([
       {
         type: 'dispatch_code_agent',
-        ...readOnlyDispatch('assay/issue/12', 'main'),
-        title: 'Assay issue #12',
+        ...readOnlyDispatch('appraisal/issue/12', 'main'),
+        title: 'Appraisal issue #12',
         prompt: 'read it',
-        originRef: 'issue:12:assay',
+        originRef: 'issue:12:appraisal',
         reason: 'r',
       },
       {
@@ -244,7 +244,7 @@ test('the executor is the one place the shape is chosen', async () => {
   );
 
   assert.deepEqual(worktrees.ensured, [
-    { branch: 'assay/issue/12', base: 'main', readOnly: true },
+    { branch: 'appraisal/issue/12', base: 'main', readOnly: true },
     // The writable dispatch is unchanged: a branch, based on the configured
     // integration branch the executor fills in.
     { branch: 'issue/13', base: 'main' },
@@ -288,7 +288,7 @@ test('a read-only checkout is the default branch, detached, and leaves no ref be
   const repo = gitRepo('lubbdubb-readonly-repo-');
   const wt = manager(repo);
 
-  const dir = await wt.ensureReadOnly('assay/issue/396', 'main');
+  const dir = await wt.ensureReadOnly('appraisal/issue/396', 'main');
 
   assert.equal(git(dir, ['rev-parse', 'HEAD']), git(repo, ['rev-parse', 'main']), 'the state the question is about');
   assert.equal(git(dir, ['rev-parse', '--abbrev-ref', 'HEAD']), 'HEAD', 'detached: there is no branch to leave');
@@ -296,7 +296,7 @@ test('a read-only checkout is the default branch, detached, and leaves no ref be
 
   // Releasing is the same release a branch gets, and it deletes nothing — least of
   // all a ref, since there was never one.
-  await wt.remove('assay/issue/396');
+  await wt.remove('appraisal/issue/396');
   assert.deepEqual(branches(repo), ['main']);
   assert.ok(existsSync(dir), 'the directory stays standing for the next occupant');
 });
@@ -305,17 +305,17 @@ test('two read-only agents are never handed one directory', async () => {
   const repo = gitRepo('lubbdubb-readonly-repo-');
   const wt = manager(repo);
 
-  const a = await wt.ensureReadOnly('assay/issue/1', 'main');
+  const a = await wt.ensureReadOnly('appraisal/issue/1', 'main');
   const b = await wt.ensureReadOnly('validate/issue/1/csv-opens', 'main');
   assert.notEqual(a, b, 'sharing a checkout is what the lease exists to refuse, ref or no ref');
 
   // And with nowhere to put the second one, the dispatch is *rejected* rather than
   // quietly landing in the first one's tree.
   const oneSlot = manager(gitRepo('lubbdubb-readonly-repo-'), 1);
-  await oneSlot.ensureReadOnly('assay/issue/1', 'main');
+  await oneSlot.ensureReadOnly('appraisal/issue/1', 'main');
   await assert.rejects(
-    () => oneSlot.ensureReadOnly('assay/issue/2', 'main'),
-    /No free worktree slot for read-only checkout assay\/issue\/2 of main/,
+    () => oneSlot.ensureReadOnly('appraisal/issue/2', 'main'),
+    /No free worktree slot for read-only checkout appraisal\/issue\/2 of main/,
   );
 });
 
@@ -343,10 +343,10 @@ test('a read-only slot is warm for the next read-only checkout of the same ref',
   const repo = warmableRepo();
   const wt = manager(repo);
 
-  const first = await wt.ensureReadOnly('assay/issue/1', 'main');
-  install(first, 'from the assay');
+  const first = await wt.ensureReadOnly('appraisal/issue/1', 'main');
+  install(first, 'from the appraisal');
   writeFileSync(join(first, 'scratch.txt'), 'the last agent left this');
-  await wt.remove('assay/issue/1');
+  await wt.remove('appraisal/issue/1');
 
   // Preferred over a fresh slot, not merely tolerated: the pool is nowhere near its
   // bound here, and minting one would buy a cold install for nothing. Every
@@ -361,9 +361,9 @@ test("a branch handed a read-only slot is wiped — it is another source's outpu
   const repo = warmableRepo();
   const wt = manager(repo, 1);
 
-  const readOnly = await wt.ensureReadOnly('assay/issue/1', 'main');
-  install(readOnly, 'from the assay');
-  await wt.remove('assay/issue/1');
+  const readOnly = await wt.ensureReadOnly('appraisal/issue/1', 'main');
+  install(readOnly, 'from the appraisal');
+  await wt.remove('appraisal/issue/1');
 
   const working = await wt.ensure('issue/1', 'main');
   assert.equal(working, readOnly, 'the pool is one slot, so this is a hand-over');
@@ -394,6 +394,6 @@ test('a read-only checkout follows the ref rather than handing back a stale tree
 test('a ref that resolves to nothing is refused rather than silently becoming HEAD', async () => {
   const repo = gitRepo('lubbdubb-readonly-repo-');
   const wt = manager(repo);
-  await assert.rejects(() => wt.ensureReadOnly('assay/issue/1', 'no-such-branch'), /resolves to no commit/);
+  await assert.rejects(() => wt.ensureReadOnly('appraisal/issue/1', 'no-such-branch'), /resolves to no commit/);
   assert.deepEqual(branches(repo), ['main'], 'and nothing was minted on the way to failing');
 });

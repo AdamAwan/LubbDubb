@@ -54,7 +54,7 @@ export function resolveOpenPr(originRef: string | null, ctx: OpenPrContext): Ope
   return {
     error:
       `open_pr is for the agent doing an issue's work — origin "${originRef}" is not that. ` +
-      'A PR-concern agent already has a pull request; a planner, assayer, assessor or desk job writes no code. ' +
+      'A PR-concern agent already has a pull request; a planner, appraiser, assessor or desk job writes no code. ' +
       'If you genuinely need a pull request here, open it yourself with the branch named in your prompt.',
   };
 }
