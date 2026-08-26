@@ -9,6 +9,7 @@ import { Ref, RefText, refLabel } from '../components/refs.js';
 import { CiLadder, waitedFor } from './GoalPage.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
 import { PanelRows, type PanelRowModel } from './PanelRow.js';
+import { AgentOnIt } from '../components/AgentOnIt.js';
 
 /**
  * What is shown when no goal is selected: five cards, rows rather than pictures.
@@ -620,8 +621,10 @@ function prRow(pr: OpenPullRequest, view: CockpitView, actions: CockpitActions, 
     // What is happening to this pull request *now* beats what its checks last
     // said: an agent on the branch is about to change them, so the ladder is a
     // reading of a commit that is being replaced. Only while one is actually on
-    // it — every other row keeps its checks.
-    reading: onIt === undefined ? <CiLadder pr={pr} /> : <OnIt agent={onIt} actions={actions} />,
+    // it — every other row keeps its checks. The chip is `AgentOnIt`, the same one
+    // a plan part draws, because it is the same sentence.
+    reading:
+      onIt === undefined ? <CiLadder pr={pr} /> : <AgentOnIt agentId={onIt.id} note={onIt.note} actions={actions} />,
     toggle: (
       <AsyncButton
         className="cn-eye"
@@ -643,33 +646,6 @@ function prRow(pr: OpenPullRequest, view: CockpitView, actions: CockpitActions, 
     // the marker above is where to *go*, this is what is *happening*.
     live: onIt !== undefined,
   };
-}
-
-/**
- * An agent is on this branch right now, in the slot the checks would be in.
- *
- * It replaces the ladder rather than sitting beside it because it *supersedes*
- * it: the checks on the row are a reading of a commit an agent is in the middle
- * of replacing, and a green dot beside a live agent is the least true thing the
- * row can say. The moment the agent ends, the checks come back.
- *
- * A button, because the fleet card is one click away and the row's own click is
- * already spent on the pull request. Not a `<Ref>` — an agent's drawer is a place
- * in the cockpit rather than a reference, which is the same way the goal page
- * opens one.
- */
-function OnIt({ agent, actions }: { agent: Agent; actions: CockpitActions }): JSX.Element {
-  return (
-    <button
-      type="button"
-      className="cn-onit"
-      onClick={() => actions.select(agent.id)}
-      title={agent.note ?? 'An agent is working this branch — open its transcript'}
-    >
-      <i className="cn-onit-dot" />
-      agent on it
-    </button>
-  );
 }
 
 /**

@@ -909,6 +909,7 @@ test('a held part quotes the reconciler’s own reason rather than inventing one
       part: { ...first.part, status: 'blocked', blockedReason: 'waits on staging credentials' },
       group: 'held',
       agentId: null,
+      agentLive: false,
     },
   ];
 

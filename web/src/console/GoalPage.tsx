@@ -30,6 +30,7 @@ import { watchBucket } from '../worldBuckets.js';
 import { stateColour } from '../stateColour.js';
 import { WorkRecord } from '../components/WorkRecord.js';
 import { NeedsBand } from './NeedsBand.js';
+import { AgentOnIt } from '../components/AgentOnIt.js';
 
 /**
  * Where each of the track's stages jumps to. Anchors, not refs — one element on
@@ -779,6 +780,7 @@ function PlanWaves({
                 part={p.part}
                 group={p.group}
                 agentId={p.agentId}
+                agentLive={p.agentLive}
                 pr={p.part.prNumber === null ? null : (prs.get(p.part.prNumber) ?? null)}
                 now={view.now}
                 actions={actions}
@@ -795,6 +797,7 @@ function PlanWaves({
                 part={part}
                 group="retired"
                 agentId={null}
+                agentLive={false}
                 pr={null}
                 now={view.now}
                 actions={actions}
@@ -822,6 +825,7 @@ function Part({
   part,
   group,
   agentId,
+  agentLive,
   pr,
   now,
   actions,
@@ -830,6 +834,7 @@ function Part({
   /** The four the page groups by, plus the one that is drawn beside them and counted in none of them. */
   group: PartGroup | 'retired';
   agentId: string | null;
+  agentLive: boolean;
   /** The pull request this part's number names, when the page holds it. */
   pr: PartPr | null;
   now: number;
@@ -870,17 +875,24 @@ function Part({
             <Ref to={`pr:${part.prNumber}`} label={`PR #${part.prNumber}`} />
           </>
         )}
+        {/* A live agent gets the chip the whole cockpit says this with; a
+            finished one keeps the plain way in, because what it offers is the
+            record of what happened here and not a claim that anything still is. */}
         {agentId !== null && (
           <>
             {' · '}
-            <button
-              type="button"
-              className="cn-openagent"
-              title="Open the agent working this part — its transcript, what it has cost, and its controls"
-              onClick={() => actions.select(agentId)}
-            >
-              open the agent ↗
-            </button>
+            {agentLive ? (
+              <AgentOnIt agentId={agentId} actions={actions} />
+            ) : (
+              <button
+                type="button"
+                className="cn-openagent"
+                title="Open the agent that worked this part — its transcript, what it cost, and its controls"
+                onClick={() => actions.select(agentId)}
+              >
+                open the agent ↗
+              </button>
+            )}
           </>
         )}
       </span>

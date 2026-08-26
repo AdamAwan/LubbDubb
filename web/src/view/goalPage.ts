@@ -25,8 +25,16 @@ export type PartGroup = 'merged' | 'now' | 'held' | 'waiting';
 export interface GoalPartView {
   part: PlanPart;
   group: PartGroup;
-  /** The agent on this part right now, when there is one. */
+  /** The agent that worked this part, live or finished, when there is one. */
   agentId: string | null;
+  /**
+   * And whether it is still going. Separate from {@link GoalPartView.agentId}
+   * because the two answer different questions and the card draws both: a
+   * finished agent is still the way to what happened here, and only a live one is
+   * a claim that something is happening now. Folded into one field, a merged part
+   * would pulse.
+   */
+  agentLive: boolean;
 }
 
 /** The overview's five-segment reading of a goal. */
@@ -206,7 +214,7 @@ export function buildGoalPage(state: AppState, ref: string, needs: readonly Need
       const agent = state.agents.find(
         (a) => state.tasks.find((t) => t.id === a.taskId)?.originRef === `${ref}:part:${part.slug}`,
       );
-      return [{ part, group, agentId: agent?.id ?? null }];
+      return [{ part, group, agentId: agent?.id ?? null, agentLive: agent !== undefined && agent.endedAt === null }];
     })
     .sort((a, b) => a.part.seq - b.part.seq);
 

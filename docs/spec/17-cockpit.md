@@ -1314,6 +1314,15 @@ room; a 6px mark in the fifth column is not. The two are one signal with two job
 is *happening*, the marker is where to *go* — and the motion is what a `prefers-reduced-motion` reader
 gives up, never the edge or the marker.
 
+The chip itself is **`web/src/components/AgentOnIt.tsx`, shared**, because it is one fact and the
+cockpit had been saying it two ways: the rack in the slot its checks would be in, and a plan part as
+`open the agent ↗` inside its dependency line — two wordings, two weights and two hovers for one
+sentence, which is how a reader learns to treat one of them as furniture. A part draws it while its
+agent is live and keeps the plain way in once that agent has finished, which is why `GoalPartView`
+carries `agentLive` beside `agentId`: a finished agent is still the way to what happened there, and
+only a live one is a claim that something is happening now. Folded into one field, a merged part would
+pulse. → `test/goalPage.test.ts`
+
 **A live agent on the branch replaces the ladder, on the overview's rack.** Not beside it —
 it supersedes it: the checks are a reading of a commit the agent is in the middle of replacing, so a
 green dot next to a working agent is the least true thing the row can say. The marker is a way into
