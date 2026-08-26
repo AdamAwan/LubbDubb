@@ -13,6 +13,7 @@ import type {
 // each call site: the server declares each one as its return type, so a renamed
 // or re-nested key is a compile error here instead of an empty panel.
 import type {
+  AgentTranscript,
   CiPolicyPayload,
   FilingTargetProbe,
   IssueFiled,
@@ -145,8 +146,12 @@ function post<T>(url: string, body?: unknown): Promise<T> {
 
 const realApi = {
   getState: () => authFetch('/api/state').then((r) => json<AppState>(r)),
-  getTranscript: (agentId: string) =>
-    authFetch(`/api/agents/${agentId}/transcript`).then((r) => json<{ transcript: string }>(r)),
+  // Ranged: `from` is what the caller already holds, so the drawer's five-second
+  // poll ships the tail rather than the whole record each time (issue #639).
+  getTranscript: (agentId: string, from = 0) =>
+    authFetch(`/api/agents/${agentId}/transcript${from > 0 ? `?from=${from}` : ''}`).then((r) =>
+      json<AgentTranscript>(r),
+    ),
   // The work graph is fetched, never polled: `/api/state` comes round every couple
   // of seconds and the graph only ever grows, so the roots are read once on mount
   // and a subtree when one is opened.

@@ -1,7 +1,21 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { checked, IdParams } from '../validation.js';
+import type { AgentTranscript } from '../../wire.js';
 import type { RouteContext } from './context.js';
+
+/**
+ * How much of a transcript the caller already holds. Absent means "all of it",
+ * which is what the first read of a drawer asks for; the polls after it name what
+ * they have so a quiet run costs an empty string rather than the whole record.
+ */
+const TranscriptQuery = z.object({
+  from: z.coerce
+    .number({ invalid_type_error: 'from must be a number of characters' })
+    .int('from must be a whole number of characters')
+    .min(0, 'from must not be negative')
+    .default(0),
+});
 
 /** The fleet: one agent's transcript, and the five things an operator can say to one. */
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
@@ -9,11 +23,17 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
 
   app.get(
     '/api/agents/:id/transcript',
-    checked({ params: IdParams }, async ({ params, reply }) => {
+    checked({ params: IdParams, query: TranscriptQuery }, async ({ params, query, reply }) => {
       const { id } = params;
       const agent = store.getAgent(id);
       if (!agent) return reply.code(404).send({ error: 'agent not found' });
-      return { agentId: id, transcript: store.getTranscript(id) };
+      const full = store.getTranscript(id);
+      // Clamped rather than refused: a transcript only grows, so an offset past
+      // the end is a client that read at the same moment a flush landed, not a
+      // bad request — and it wants to be told the end, not given a 400.
+      const from = Math.min(query.from, full.length);
+      const payload: AgentTranscript = { agentId: id, from, total: full.length, transcript: full.slice(from) };
+      return payload;
     }),
   );
 

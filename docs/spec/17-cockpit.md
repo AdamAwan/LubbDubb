@@ -3362,6 +3362,33 @@ The drawer subscribes to full output on open and unsubscribes on close or switch
 `AgentDrawer` opens over the page for one agent, asked for by `actions.select(id)` from wherever an
 agent is drawn — the Fleet card, a goal page's **On this goal** rows, the escalation card's own way in.
 
+**The transcript is polled every five seconds while the run is live, and the poll is the load-bearing
+half of how the pane moves** (issue #639). The socket delivers an agent's output the moment it
+happens, but only what it produced _since this drawer subscribed_ — so what arrives there is a suffix
+of a stream whose earlier part came from `GET /api/agents/:id/transcript`, with no marker joining the
+two. The drawer's rule was therefore "prefer the socket buffer once it is longer than the fetched
+seed", which is the safe reading of that and also meant a run opened mid-flight showed a **frozen
+pane**: the socket had to deliver more bytes than the entire transcript before it before anything
+moved, which on a long run is never. Watching an agent work was the one thing the drawer is for, and
+it was the thing it could not do.
+
+So the seed is re-read on a five-second timer, and the route is
+[ranged](16-http-api.md#get-apiagentsidtranscript) — each poll names what the drawer already holds and
+is answered with the tail, so a quiet run costs an empty string rather than the whole record. The
+socket buffer is still preferred where it is **safe**, which is exactly when the transcript was empty
+when the drawer opened: the socket then carries the stream from its first byte, the two strings are the
+same, and the pane moves at the speed of the agent rather than the timer. Anywhere else it is ignored
+— appending a suffix to a prefix across an unknown gap would draw output that never existed.
+
+Two things about the timer are deliberate:
+
+- **It stops when the run does.** A finished transcript never grows again, so a closed-out agent left
+  open on the glass is not a request every five seconds. A first read that has not landed yet is
+  retried regardless of status, so a drawer opened on a slow response still fills.
+- **A status change does not restart it.** `running ⇄ waiting` is every question an agent asks, and
+  keying the seed effect on liveness would drop the buffer and reseed the pane on each one — every
+  expanded tool call folding shut mid-read. Liveness is read through a ref inside the tick instead.
+
 **The transcript pane is HTML, not a terminal.** What reaches the cockpit is already legible text in
 every mode (`renderBlocks` output, or settled PTY session-file text), never raw TUI bytes, so it renders
 into a scrollable `<div>` with `white-space: pre-wrap; overflow-wrap: anywhere`:

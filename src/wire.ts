@@ -1268,6 +1268,32 @@ export interface GoalReachView {
   released: EnvironmentGateRelease | null;
 }
 
+/**
+ * One agent's transcript, or the tail of it — `GET /api/agents/:id/transcript`.
+ *
+ * **Ranged, because the drawer polls it.** The socket carries an agent's output
+ * the moment it happens, but only for what it produced *since the drawer opened*
+ * — so a run already deep into its transcript has nothing on the wire that can be
+ * appended to the copy the cockpit fetched, and the pane sat frozen at its seed
+ * for as long as it was watched (issue #639). The fix is the drawer re-reading
+ * this every few seconds, and re-reading it whole would ship the entire
+ * transcript per poll — megabytes on a long run, per open drawer.
+ *
+ * `from` is the caller's count of the characters it already holds, echoed back
+ * **clamped to `total`** so a client that asks past the end learns where the end
+ * is rather than guessing. `transcript` is the slice from there on, so a poll on
+ * a quiet run costs an empty string.
+ */
+export interface AgentTranscript {
+  agentId: string;
+  /** Where {@link transcript} starts — the requested offset, clamped to {@link total}. */
+  from: number;
+  /** The whole transcript's length in characters, whatever slice was asked for. */
+  total: number;
+  /** Everything from {@link from} to the end. */
+  transcript: string;
+}
+
 export interface WorkRootsPayload {
   roots: WorkNode[];
   unrecorded: UnrecordedWork[];

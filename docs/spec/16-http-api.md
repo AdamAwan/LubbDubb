@@ -242,7 +242,19 @@ refetches → each fan-out fails → recording the error broadcasts another `dir
 
 ### `GET /api/agents/:id/transcript`
 
-`{ agentId, transcript }`. 404 when the agent is unknown.
+`{ agentId, from, total, transcript }`. 404 when the agent is unknown.
+
+**Ranged, because the drawer polls it.** `?from=<characters>` is what the caller already holds;
+`transcript` is the slice from there to the end, and `total` is the whole record's length. `from` is
+echoed back **clamped to `total`** rather than refused — a transcript only grows, so an offset past
+the end is a client that read across a flush, not a bad request, and it wants to be told where the
+end is. A bare call (no `from`) answers with the lot, which is what the first read of a drawer asks
+for.
+
+The range exists because the agent drawer re-reads this every five seconds while the run is live
+([17](17-cockpit.md#the-agent-drawer)): the socket carries only what an agent produced since the
+drawer subscribed, so the fetch is the only complete copy, and re-fetching it whole per poll would
+ship megabytes of unchanged text per open drawer. A poll on a quiet run costs an empty string.
 
 ### `GET /artifacts/:id`
 
