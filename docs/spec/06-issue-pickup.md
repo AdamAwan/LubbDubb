@@ -391,8 +391,8 @@ in, so there is no bounce-back to suppress.
 The consequence above is exactly what this closes. `delivered` is the harness's **own** park, for
 the providers that have no tracker park — rule `work-item-in-review`'s review-state hold, generalised off the tracker
 onto a row the harness owns. It is written by rule `issue-assess`'s agent (see
-[the dispatcher spec](05-dispatcher.md)) or by the operator, and unlike a conclusion **it gates
-pickup**.
+[the dispatcher spec](05-dispatcher.md)), by rule `issue-plan`'s planner through `plan_not_needed`, or
+by the operator, and unlike a conclusion **it gates pickup**.
 
 It is deliberately weaker than the tracker's `closed` and it is reversible:
 
@@ -402,6 +402,33 @@ It is deliberately weaker than the tracker's `closed` and it is reversible:
 
 The gap between them is days of testing and sign-off, and that gap is the whole reason the state
 exists.
+
+### The three authors
+
+`DeliveryAuthor` is `assessor | planner | operator`, and the three are the same statement made from
+three positions rather than three kinds of row.
+
+The **assessor** is the one the table was built for: it judges delivered work, against a checkout of
+the delivered state and the harness's own record of what was done. The **operator** is the escape
+hatch, as everywhere. The **planner** is the odd one, and it is the one worth stating: it judges a goal
+that nothing has started on, and the answer "this is already true of the repository" is one it reaches
+often enough that the alternative was work invented to fit a shape — a plan whose one part exists so
+that an agent can be dispatched to discover the same thing and conclude it.
+→ [11](11-mcp-tools.md#plan_not_needed), [08](08-planning.md#when-there-is-nothing-to-plan)
+
+The author is not decoration. `deliveryHold`'s reason string and the close-out card both name it, from
+one `Record<DeliveryAuthor, …>` in `src/delivery/delivery.ts` rather than a ternary per site — a
+fourth author does not compile until it has been given words, where a fallback would have called it
+"the assessor" and misattributed the verdict quietly. What the author does **not** change is the
+park: the row gates pickup, expires and clears identically whoever wrote it, because it is one claim
+about one issue.
+
+A planner's verdict is refused where it would contradict something better informed — a replan in
+flight, or a standing shortfall — and those two refusals live at the tool's own seam
+([11](11-mcp-tools.md#plan_not_needed)). What follows it is the ordinary tail of a delivered goal:
+rule `issue-retro` writes the run up, and that is wanted rather than tolerated, because "the goal was
+already met, and here is what we found" is exactly the account an operator wants on the Manifest of a
+goal the fleet never worked.
 
 ### What ends it
 

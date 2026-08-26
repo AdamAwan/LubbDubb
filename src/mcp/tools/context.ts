@@ -74,6 +74,15 @@ export interface AgentToolTarget {
     cause: ShortfallCause | null,
     part: string | null,
   ): { ok: true; issueOrigin: string; verdict: AssessmentVerdict } | { ok: false; error: string };
+  /**
+   * The planner's "there is nothing to build here". Takes no issue argument for
+   * the reason none of these do: the issue is the credential's own.
+   */
+  recordGoalMet(
+    agentId: string,
+    summary: string,
+    detail: string,
+  ): { ok: true; issueOrigin: string } | { ok: false; error: string };
   recordAppraisal(
     agentId: string,
     verdict: GoalAppraisalVerdictName,

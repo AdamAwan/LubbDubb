@@ -1,4 +1,4 @@
-import type { Issue, IssueDelivery, WorldEvent } from '../types.js';
+import type { DeliveryAuthor, Issue, IssueDelivery, WorldEvent } from '../types.js';
 
 /**
  * Whether a standing `delivered` verdict still holds an issue out of pickup.
@@ -88,6 +88,22 @@ function deliveryWorldRef(originRef: string): string | null {
 }
 
 /**
+ * How each author is named to the operator, in the middle of a sentence.
+ *
+ * One record rather than a ternary per site, and a `Record<DeliveryAuthor, …>`
+ * rather than a lookup with a fallback: the two sites that say this — the hold
+ * reason here and the close-out card in `src/delivery/closeOut.ts` — read the
+ * same row, and a fourth author does not compile until it has been given words.
+ * A fallback would have named it "the assessor" instead, which is the quiet
+ * misattribution this shape exists to make impossible.
+ */
+export const DELIVERY_AUTHOR: Record<DeliveryAuthor, string> = {
+  operator: 'you',
+  assessor: 'the assessor',
+  planner: 'the planner',
+};
+
+/**
  * Why this issue is held out of pickup by a standing delivery verdict, or null
  * when it is free. The string is operator-facing — it is what the cockpit chip
  * and the dispatcher's skip reason both render.
@@ -106,8 +122,10 @@ export function deliveryHold(
 
   if (expiringSignal(delivery, ctx.signals ?? [])) return null;
 
-  const by = delivery.by === 'operator' ? 'you' : 'the assessor';
-  return `${by} marked it delivered${delivery.summary ? ` — "${delivery.summary}"` : ''} (${delivery.decidedAt})`;
+  return (
+    `${DELIVERY_AUTHOR[delivery.by]} marked it delivered` +
+    `${delivery.summary ? ` — "${delivery.summary}"` : ''} (${delivery.decidedAt})`
+  );
 }
 
 /**

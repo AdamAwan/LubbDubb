@@ -20,6 +20,7 @@ assembles them (see [How a tool is built](#how-a-tool-is-built)).
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `raise`              | The one door for anything an agent learns. Says what is true and what it saw; the harness works out where the claim goes and an operator settles what it is for. No kind, no lifetime word, no destination. → [27](27-knowledge.md#the-intake-asks-nothing-an-agent-cannot-answer)                                                                                                                                                                                                            |
 | `plan_submit`        | Submit a decomposition verdict. Replaces writing `.lubbdubb/plan.json`.                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `plan_not_needed`    | The planner's other verdict: this goal is already met, so no plan is written at all. Records the delivery park, writes no plan row. Fenced to `issue:<n>:plan` origins, and refused on a replan. → [08](08-planning.md#when-there-is-nothing-to-plan)                                                                                                                                                                                                                                          |
 | `escalate`           | Ask the human a question and park. The typed form of the WAITING sentinel.                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `world_read`         | Read the harness's own view of a PR or issue.                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `request_human_task` | Ask for work only a person can do. Files a durable work item, parks nobody, dispatches nobody.                                                                                                                                                                                                                                                                                                                                                                                                |
@@ -80,6 +81,44 @@ tells a planner to submit one landed with no checks, and an absent block is a le
 (`ingestPlanDocument` reads absence as "leave the existing checks alone") that nothing reports.
 `validation` is passed through **undefined-preserving** for that reason: an empty block is a planner
 withdrawing every check, which is not what silence means. → [20](20-validation.md#the-document-block)
+
+### `plan_not_needed`
+
+Arguments `{summary, detail}`. The planner's **other** verdict: what this issue asks for is already
+in the repository, so there is no plan to write. Same fence as `plan_submit` — `plannerOrigin`
+(`src/mcp/planNotNeeded.ts`) resolves the caller's `issue:<n>:plan` origin and refuses every other
+agent **by name**, pointing each at the verdict that is its own: `conclude_work` for the agent
+delivering the issue, `conclude_part` for a part agent, `assess_issue` for an assessor,
+`appraise_issue` for an appraiser.
+
+- **It exists because `PlanDocumentSchema` requires a part, and that refusal is right.** Work that is
+  one pull request is a one-part plan ([08](08-planning.md#a-plan-is-a-list-of-parts)); what the
+  schema cannot express is *no work at all*. Without this tool a planner that reads the repository and
+  finds the goal already met has three moves, and each of them spends an agent to rediscover what it
+  already knows — an invented part, a part that redoes the work, or silence until the attempt cap
+  fails the issue open to `issue-pickup`. → [08](08-planning.md#when-there-is-nothing-to-plan)
+- **It records a delivery, not a plan.** `issue_deliveries` already means "what the issue asked for is
+  present; schedule nothing further", and `deliveryHold` already gates `eligibleIssues` — which is
+  both rules the planner would otherwise be re-dispatched by. `by` is `planner`, a third author beside
+  the assessor and the operator ([06](06-issue-pickup.md#the-delivery-verdict)), so the cockpit and the
+  close-out card can say who decided it. Nothing is written to the plan graph, and a goal parked this
+  way shows no decomposition at all.
+- **`detail` is required, where an assessment's is optional.** An assessor corroborates work the
+  harness watched happen and its headline is read against that record; a planner is contradicting a
+  ticket with no run behind it, so the evidence *is* the verdict. A bare "already done" is not
+  reviewable by the operator who has to decide whether to believe it, and the refusal says so. The
+  `summary` rules are `assess_issue`'s, refusal for a newline included, so an operator learns one
+  shape.
+- **Two refusals are plan-aware and live at the fleet seam** (`AgentManager.recordGoalMet`), for
+  `assess_issue`'s reason — a rejection the agent never hears costs a whole agent to discover.
+  A **replan** is refused: the plan row would go on owning the issue while the delivery parked pickup,
+  and any part already dispatched would keep running underneath a goal marked delivered. A **standing
+  shortfall** is refused because writing a delivery clears it through the exclusion matrix
+  ([14](14-persistence.md#issue-verdicts-and-the-exclusion-matrix)) — the harness overturning its own
+  better-informed judgement with its less-informed one, silently.
+
+It routes through `AgentManager.recordGoalMet` for the `goalMet` event, so the cockpit repaints on the
+verdict rather than on the next pulse.
 
 ### `escalate`
 
@@ -871,7 +910,9 @@ So every tool is named in one of two places, and which one is a decision, not a 
   an agent learns something rather than at a point somebody predicted.
 - **Its point of use** — the dispatch prompt or the instruction block for the work it belongs to — for
   a tool only one kind of agent ever calls: `conclude_work`, `conclude_part`, `assess_issue`,
-  `appraise_issue`, `retro_submit`, `link_ticket`, the scratch pair, the validation pair. Keeping them out
+  `appraise_issue`, `plan_not_needed`, `retro_submit`, `link_ticket`, the scratch pair, the validation
+  pair. `plan_not_needed` sits here rather than beside `plan_submit` in the addendum because only a
+  planner can cast it, and the addendum is read by every agent there is. Keeping them out
   of the addendum is what keeps it short enough to be read. `request_permission` is named in neither,
   because no agent calls it: Claude Code invokes it through `--permission-prompt-tool`.
 
@@ -966,7 +1007,7 @@ a `finish()` the model forgets to call is silence, and silence is indistinguisha
 ### The finish reminder on a terminal tool
 
 Having no tool for done has one cost, and it lands on the tools that _are_ the whole of a dispatch:
-`assess_issue`, `conclude_work` and `conclude_part`. Their success responses read as the end of the
+`assess_issue`, `conclude_work`, `conclude_part` and `plan_not_needed`. Their success responses read as the end of the
 job — "Recorded. The harness will schedule nothing further for this issue" — while the sentinel was
 stated once, in the system prompt, thousands of tokens earlier. An agent that records its verdict,
 narrates it and stops has therefore done everything its prompt asked and still ends its turn with no
@@ -974,7 +1015,7 @@ sentinel in it, which
 [10](10-agent-runtimes.md#the-unannounced-stop) can only read as a stop — which costs the fleet a
 nudge over a job that finished, and the operator an inbox item once the nudges are spent.
 
-So each of those three appends `DONE_REMINDER` (`src/agents/agentProtocol.ts`, built from
+So each of those four appends `DONE_REMINDER` (`src/agents/agentProtocol.ts`, built from
 `DONE_SENTINEL` so there is never a second copy of the string) to its success note. It states the
 _condition_ — "when you have finished everything your task asked for" — rather than announcing the
 end, because the call is not itself the end: an appraiser has a `scratch_append` note to leave after

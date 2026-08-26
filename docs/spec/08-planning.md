@@ -130,12 +130,66 @@ deep link into the operator's own Claude Code now and dispatches nothing at all 
 left here is the distinction that was always load-bearing: whether there is an existing decomposition
 to plan _from_.
 
+A planner has **two** verdicts, and only one of them is a plan. The other is
+[`plan_not_needed`](#when-there-is-nothing-to-plan) — the goal is already met, so nothing is written to
+the plan graph at all. It is refused on the replan arm, so this rule's two templates are not two routes
+to it: only a cold planner may cast it.
+
 Whichever of the two templates it renders, `relatedWorkNote` is **appended** to it: the parent
 feature's description, the sibling stories with their states, and the orphan flag with its candidate
 features (see [06](06-issue-pickup.md#hierarchy)). Reading the related items is the planning step
 that stops a decomposition re-cutting scope a sibling story already holds — a planner that cannot see
 either side of the item it was handed will happily plan work someone else owns. Empty on a tracker
 with no hierarchy, so the GitHub prompt is unchanged.
+
+## When there is nothing to plan
+
+A planner reads the repository before it decides what the work is, and sometimes what it finds is that
+the work is done: somebody fixed it by hand, another goal's part covered it, or the ticket was filed
+against a version that predates the fix. **That is a verdict, and it has a tool of its own —
+`plan_not_needed`** ([11](11-mcp-tools.md#plan_not_needed)). It takes a one-line `summary` and a
+required `detail`, writes **no plan row at all**, and records the issue's delivery park
+([06](06-issue-pickup.md#the-delivery-park-delivered)) with `by: 'planner'`.
+
+It exists because the refusal above is right and still cannot say this. Every plan has at least one
+part, and work that is one pull request is a one-part plan — so a planner holding "there is nothing to
+build" has to encode it as *something*, and each way of doing that spends an agent to rediscover what
+this planner already knows:
+
+| What it does instead      | What it costs                                                                                                              |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Invents a part            | An agent, a branch and a worktree, to arrive at `conclude_part` with kind `determination`.                                  |
+| Writes a part that redoes it | The same, plus a pull request nobody wanted, against code that already does the thing.                                    |
+| Submits nothing           | Its attempts, and then the fail-open arm: `unplanned` puts rule `issue-pickup` on the issue, which is the first row again — with the planner's finding thrown away. |
+
+All three end with a human being asked to approve, or review, work that did not need to happen. The
+verdict is cast where it is known instead.
+
+**Why a delivery row rather than a fifth thing.** `issue_deliveries` already means exactly this —
+"what the issue asked for is present, schedule nothing further" — and `deliveryHold` already filters
+`eligibleIssues`, which is the list both rule `issue-plan` and rule `issue-pickup` draw from. So one
+row stops the planner being re-dispatched *and* stops pickup taking the issue instead, with no new
+gate anywhere. It is reversible by the operator and expires on world signal, which is the right
+lifetime for a claim about a goal nobody has worked: the moment the ticket moves or something links to
+it, the question is open again.
+
+**Two refusals, both at the fleet seam** (`AgentManager.recordGoalMet`), because both are store
+questions and both are silent if nobody asks them:
+
+- **A replan.** An issue that already has a plan row cannot be settled this way: the plan would go on
+  owning the issue — `planInFlight` reads `planning` as more work, so the goal would read delivered
+  *and* mid-decomposition — and any part already dispatched or in review would keep running underneath
+  it. A replanner that believes the goal is met amends the plan, or raises it: the operator asked for
+  this replan and it is theirs to end.
+- **A standing shortfall.** Writing a delivery clears one through the exclusion matrix
+  ([14](14-persistence.md#issue-verdicts-and-the-exclusion-matrix)), so without this refusal a planner
+  would erase an assessor's "the goal is not reached" — a verdict cast with the delivered state in
+  front of it — with nothing anywhere red.
+
+**The bar is _met_, not _unworkable_.** A goal that is half there is a plan for the other half, and a
+goal nobody can make sense of is `appraise_issue`'s `unclear`, which puts the ticket back in front of
+the person who wrote it. The `issue-plan` prompt says both, and says the tool takes evidence: a planner
+that cannot point at what already does the thing is not sure enough to say this.
 
 ## The plan document
 
