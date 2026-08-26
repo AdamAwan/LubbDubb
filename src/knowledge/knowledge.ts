@@ -1,4 +1,5 @@
 import { claimKey } from '../claims.js';
+import { stripOwnFrame, type FramedClaim } from './frame.js';
 import type { FactLifetime, FactResolution, FactScope, KnowledgeFact } from '../types.js';
 
 /**
@@ -298,16 +299,30 @@ function parseAboutRef(raw: string): string | null {
 export function validateRaise(
   raw: unknown,
   goalRef: string | null,
-): { ok: true; proposal: FactProposal } | { ok: false; error: string } {
+): { ok: true; proposal: FactProposal; framing: FramedClaim } | { ok: false; error: string } {
   const args = (raw ?? {}) as Record<string, unknown>;
   const until = args.until;
   if (until !== undefined && until !== null && typeof until !== 'number') {
     return { ok: false, error: 'until must be a number of hours: how long you expect what you saw to still be true' };
   }
   const expiring = typeof until === 'number';
-  return validateFactProposal(
+  // The caller's own task, out of the claim and into the evidence where the task
+  // context has always belonged. Mechanical and never a refusal: the harness
+  // removes a ref it can prove redundant because it holds it, and the agent's own
+  // sentence is kept verbatim — a refusal an agent cannot satisfy is a claim lost,
+  // and a lost claim is the one outcome this store cannot recover from.
+  // → `docs/spec/27-knowledge.md#the-frame-is-not-the-claim`
+  const framing = typeof args.claim === 'string' ? stripOwnFrame(args.claim, goalRef) : { claim: '', removed: null };
+  const parsed = validateFactProposal(
     {
       ...args,
+      ...(framing.removed !== null && { claim: framing.claim }),
+      // The same rule from the other end: `aboutRef` is never `originRef`. A claim
+      // filed as being *about* the goal it was raised on is naming the one thing
+      // the store does not need told, and it would carry the ref back into the row
+      // the strip above just took it out of.
+      ...(typeof args.ref === 'string' && goalRef !== null && sameRef(args.ref, goalRef) && { ref: undefined }),
+      evidence: framedEvidence(args, framing),
       scope: typeof args.scope === 'string' && args.scope.trim() ? args.scope : 'fleet',
       lifetime: expiring ? 'expiring' : 'standing',
       // Named `until` at the boundary and `expiresInHours` underneath, because the
@@ -318,6 +333,37 @@ export function validateRaise(
     },
     goalRef,
   );
+  return parsed.ok ? { ...parsed, framing } : parsed;
+}
+
+/**
+ * Whether two refs name one world item, kind and number, whatever suffix a
+ * dispatch origin carries — `pr:512:ci` and `pr:512` are one pull request.
+ */
+function sameRef(a: string, b: string): boolean {
+  const key = (raw: string): string | null => {
+    const match = /^(issue|pr):(\d+)/.exec(raw.trim().toLowerCase());
+    return match === null ? null : `${match[1]}:${match[2]}`;
+  };
+  const left = key(a);
+  return left !== null && left === key(b);
+}
+
+/**
+ * The evidence with the agent's own sentence in front of it, verbatim, when the
+ * strip changed anything.
+ *
+ * Verbatim rather than summarised, and first rather than appended: what the agent
+ * wrote is the record of what it actually filed, and an operator reading the
+ * provenance to decide whether the fleet should be told this is reading the
+ * observation as it was made. Nothing is added when nothing was removed — an
+ * evidence field that quietly gained a copy of the claim on every call would be a
+ * second copy of the claim, on every row.
+ */
+function framedEvidence(args: Record<string, unknown>, framing: FramedClaim): unknown {
+  if (framing.removed === null) return args.evidence;
+  const evidence = typeof args.evidence === 'string' ? args.evidence.trim() : '';
+  return `As raised: ${String(args.claim).trim()}${evidence ? `\n\n${evidence}` : ''}`;
 }
 
 /**

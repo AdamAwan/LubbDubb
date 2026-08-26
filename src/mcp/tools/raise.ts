@@ -64,7 +64,9 @@ export const raise: ToolFactory = ({ deps, agent, task, ok }) => {
           description:
             'What is true, in the words you would want to read it in — a line or two. State the thing, ' +
             'not what to do about it: "knip runs every rule at error, so an unimported export fails ' +
-            'check" is something the next agent can weigh against the code in front of it. ' +
+            'check" is something the next agent can weigh against the code in front of it. Write it for ' +
+            'whoever reads it next month rather than for whoever is reading your own task: the harness ' +
+            'knows your goal from your credential, and takes any mention of it back out into the evidence. ' +
             NOTICE_RULE,
         },
         evidence: {
@@ -169,6 +171,22 @@ export const raise: ToolFactory = ({ deps, agent, task, ok }) => {
         recorded: true,
         fact: { id: fact.id, scope: fact.scope, lifetime: fact.lifetime, reach: fact.reach },
         corroborations,
+        // Said, never done quietly. An agent told nothing files the same shape
+        // tomorrow, and a rewrite nobody was told about is a second thing to be
+        // wrong about silently — so the result carries the claim as stored and why
+        // it differs from what was sent.
+        ...(parsed.framing.removed !== null && {
+          reframed: {
+            removed: parsed.framing.removed,
+            claim: fact.claim,
+            why:
+              `Your own task (${parsed.framing.removed}) was taken out of the claim and your original wording ` +
+              `kept verbatim as the first line of the evidence. The harness resolves your goal from your ` +
+              `credential, so a claim naming it is naming the one thing this store does not need told — and ` +
+              `the ref is part of what the matcher compares, so nobody else's wording could ever have agreed ` +
+              `with it. Nothing else was changed.`,
+          },
+        }),
         // Said in the response and not only in the description: an agent that
         // believes its claim is now in front of the fleet has been told something
         // untrue about what it just did, and will say it again, louder.

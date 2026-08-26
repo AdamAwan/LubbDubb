@@ -766,8 +766,6 @@ may read it, so there is no one dispatch prompt that could name them.
 
 ### The frame is not the claim
 
-**Not yet built.** `raise` behaves as described above; nothing under this heading exists yet.
-
 An agent hits a flaky check while working `pr:512` and writes down what it saw: _"test X is flaky and
 nothing to do with PR 512."_ Every word of it is true, and it is the wrong sentence — because it was
 written to whoever is reading PR 512, and PR 512 is the one place this claim will never be needed
@@ -790,6 +788,13 @@ redundant, because it holds it. Nothing here judges whether prose is "about the 
 claim's wording, or rewrites a sentence it merely dislikes — that is a classifier, it would be wrong in
 a way no test could see, and the agent would have no way to tell that what it filed is not what it
 said.
+
+`stripOwnFrame` in `src/knowledge/frame.ts` is the whole of it, and its one rule beyond removing the ref
+is held to a closed list of function words: a fragment the ref leaves behind — *"and nothing to do
+with"* — is dropped only where every word in it is on that list, so a tail carrying any word that
+asserts something stays exactly where the agent put it, dangling or not. Every word added to that list
+is a word the harness may delete from somebody's sentence, which is why it is short and why
+`test/knowledgeFrame.test.ts` asserts a real clause survives.
 
 **And it is not a refusal.** A refusal an agent cannot satisfy is a claim lost, and a lost claim is the
 one outcome this store cannot recover from: filing has never been what puts a sentence in front of the
