@@ -621,8 +621,17 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       throw new Error(`resume spawn failed for agent ${agent.id}: ${(err as Error).message}`);
     }
 
-    if (wasWaiting) this.restoreWaiting(agent, task);
-    else this.deliverAfterBoot(agent.id, session, nudge ?? this.opts.resumeInput?.() ?? null);
+    if (wasWaiting) {
+      this.restoreWaiting(agent, task);
+    } else {
+      const carryOn = nudge ?? this.opts.resumeInput?.() ?? null;
+      // Echoed, unlike a fresh dispatch's prompt: this is a short sentence telling a
+      // conversation the operator has already been reading to carry on, and a
+      // transcript that resumed with the agent answering it unasked is the gap
+      // {@link noteSent} exists to close.
+      if (carryOn !== null) this.noteSent(agent.id, session, carryOn);
+      this.deliverAfterBoot(agent.id, session, carryOn);
+    }
 
     return true;
   }
@@ -671,6 +680,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       this.store.updateTask(task.id, { status: 'running' });
 
       if (session) {
+        this.noteSent(agentId, session, LIMIT_RESUME_MESSAGE);
         session.send(LIMIT_RESUME_MESSAGE);
         this.reflectStatus(agentId, task.id, 'running');
         return { ok: true };
@@ -822,10 +832,36 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     return settled;
   }
 
+  /**
+   * Write a message *sent to* an agent into its transcript, as the harness or the
+   * operator taking a turn in the conversation.
+   *
+   * **The stream runtime renders only what comes back**, so without this a message
+   * typed into an agent leaves no trace at all: the drawer sits unchanged until the
+   * agent happens to speak, and the cockpit deliberately does not refetch after an
+   * answer — so the operator's only evidence that the answer went anywhere is the
+   * agent's eventual reply to a question the pane never showed. The PTY runtime
+   * carries both halves in the session file it renders, and says so with
+   * {@link AgentSession.recordsSentMessages}; echoing there would double every
+   * message.
+   *
+   * The first message of a dispatch is deliberately *not* echoed: a task prompt is
+   * kilobytes, and the transcript is the agent's working record rather than a copy
+   * of its brief.
+   */
+  private noteSent(agentId: string, session: AgentSession, text: string): void {
+    if (session.recordsSentMessages) return;
+    const note = renderBlocks([{ type: HUMAN_BLOCK, text }], new Date().toISOString());
+    if (!note) return;
+    this.store.appendTranscript(agentId, note);
+    this.emit('output', { agentId, delta: note });
+  }
+
   /** Type text into a live agent (a human response or a follow-up prompt). */
   respond(agentId: string, text: string): boolean {
     const session = this.sessions.get(agentId);
     if (!session) return false;
+    this.noteSent(agentId, session, text);
     session.send(text);
     this.parked.delete(agentId); // the park is over; the next ask is a new one
     this.limited.delete(agentId); // ...including a limit park an operator typed straight past
@@ -2164,9 +2200,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     // A dead process cannot be asked anything — the stop is all there is, so park it.
     if (spent < budget && !this.exited.has(agentId)) {
       this.nudges.set(agentId, spent + 1);
-      const note = renderBlocks([{ type: HUMAN_BLOCK, text: STALL_NUDGE }], new Date().toISOString());
-      this.store.appendTranscript(agentId, note);
-      this.emit('output', { agentId, delta: note });
+      this.noteSent(agentId, session, STALL_NUDGE);
       debugLog('agent', `stall nudge agent=${agentId} attempt=${spent + 1}/${budget}`);
       try {
         session.send(STALL_NUDGE);

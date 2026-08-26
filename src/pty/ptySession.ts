@@ -267,6 +267,13 @@ export class PtySession extends EventEmitter implements AgentSession {
       : null;
   }
 
+  /**
+   * The session file this runtime renders already holds every message sent to the
+   * agent, and the degraded screen fallback echoes what was typed — so the manager
+   * must not echo them again or each one would appear twice.
+   */
+  readonly recordsSentMessages = true;
+
   get status(): PtySessionStatus {
     return this._status;
   }
