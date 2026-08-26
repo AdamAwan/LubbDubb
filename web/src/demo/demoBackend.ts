@@ -7,6 +7,7 @@
 // Kept side-effect-free at module scope: the real build imports this file but the
 // `VITE_DEMO` branch in api.ts is statically false there, so Rollup drops it.
 import type {
+  AgentTranscript,
   ConfigChange,
   SetupCheck,
   SetupPayload,
@@ -300,8 +301,10 @@ class DemoServer {
     return structuredClone(this.state);
   }
 
-  async getTranscript(agentId: string): Promise<{ transcript: string }> {
-    return { transcript: this.transcripts.get(agentId) ?? '' };
+  async getTranscript(agentId: string, from = 0): Promise<AgentTranscript> {
+    const full = this.transcripts.get(agentId) ?? '';
+    const at = Math.min(from, full.length);
+    return { agentId, from: at, total: full.length, transcript: full.slice(at) };
   }
 
   async pulse(): Promise<{ ok: true }> {
@@ -3876,7 +3879,7 @@ function demoSetupResolution(answers: { email: string; repoRoot: string }): Setu
 
 export const demoApi = {
   getState: () => getServer().getState(),
-  getTranscript: (agentId: string) => getServer().getTranscript(agentId),
+  getTranscript: (agentId: string, from = 0) => getServer().getTranscript(agentId, from),
   // The demo's world is built fresh in the browser each load, so nothing has ever
   // been recorded for it — an empty graph is the honest answer, and these exist to
   // keep the two API shapes interchangeable.

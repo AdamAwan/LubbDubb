@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Agent, AgentFile, AgentFlag, TaskSummary } from '../types.js';
 import { api } from '../api.js';
 import { statusDot, linkify, agentUsageLine } from './util.js';
@@ -10,10 +10,33 @@ import { FilesList } from './FilesList.js';
 import { TranscriptPane } from './TranscriptPane.js';
 
 /**
+ * How often the drawer re-reads the persisted transcript while the run is live.
+ * Short enough that a watched pane visibly moves, long enough that it is not a
+ * request per second per open drawer.
+ */
+const TRANSCRIPT_POLL_MS = 5_000;
+
+/**
  * The drill-down: the transcript for one agent, rendered in the shared
  * {@link TranscriptPane}, plus a box to type a response straight into its session.
- * Seeds from the persisted transcript, then appends live deltas streamed over the
- * socket.
+ *
+ * **It polls the transcript as well as listening on the socket, and the poll is
+ * the load-bearing half** (issue #639). The socket only carries output an agent
+ * produced *since this drawer subscribed*, so what arrives on it is a suffix of a
+ * stream whose earlier part came from the fetch — and there is no marker joining
+ * the two. The old rule ("prefer the live buffer once it is longer than the seed")
+ * was the safe reading of that, and it meant a run opened mid-flight showed a
+ * frozen pane until the socket had delivered more bytes than the *entire*
+ * transcript before it: for a long run, never. So the seed is re-read every
+ * {@link TRANSCRIPT_POLL_MS} — ranged, from what is already held, so a quiet run
+ * costs an empty response.
+ *
+ * The live buffer is still preferred where it is safe, which is exactly when the
+ * transcript was **empty on open**: the socket then carries the stream from its
+ * first byte, the two are the same string, and the pane moves at the speed of the
+ * agent rather than the poll. Anywhere else it is ignored, because appending a
+ * suffix to a prefix with an unknown gap between them would draw output that
+ * never existed.
  */
 export function AgentDrawer({
   agent,
@@ -50,28 +73,74 @@ export function AgentDrawer({
   onResume: () => Promise<unknown> | unknown;
 }) {
   const [seed, setSeed] = useState('');
+  // Whether the socket buffer is the whole stream — true only while this agent's
+  // transcript was still empty when the drawer opened. Set from the first read.
+  const [liveIsWhole, setLiveIsWhole] = useState(true);
   const [text, setText] = useState('');
   const send = useAsyncAction();
+  // How much of the transcript `seed` holds, so each poll asks for the tail. A ref
+  // rather than derived from `seed.length` because the poll must not re-subscribe.
+  const held = useRef(0);
+  // Read in the interval rather than keyed on: a status flip (running ⇄ waiting is
+  // every question an agent asks) must not restart the seed and reseed the pane.
+  const liveRef = useRef(false);
+
+  const isLive = agent.status === 'running' || agent.status === 'waiting' || agent.status === 'starting';
+  useEffect(() => {
+    liveRef.current = isLive;
+  }, [isLive]);
 
   useEffect(() => {
     let active = true;
-    api
-      .getTranscript(agent.id)
-      .then((r) => active && setSeed(r.transcript))
-      .catch(() => {});
+    let seeded = false;
+    held.current = 0;
+    setSeed('');
+    setLiveIsWhole(true);
+    // One read at a time: a response slower than the interval would otherwise be
+    // overlapped by a second read asking from the same offset, and both would
+    // append the same tail.
+    let reading = false;
+    const read = (): void => {
+      if (reading) return;
+      reading = true;
+      void api
+        .getTranscript(agent.id, held.current)
+        .then((r) => {
+          if (!active) return;
+          if (!seeded) {
+            seeded = true;
+            setLiveIsWhole(r.total === 0);
+          }
+          held.current = r.total;
+          // `from` is the server's clamp of what we asked for: equal to what we
+          // hold is the append, anything less means the record is shorter than we
+          // thought and the whole slice replaces it.
+          if (r.transcript || r.from === 0) setSeed((prev) => (r.from === 0 ? r.transcript : prev + r.transcript));
+        })
+        .catch(() => {})
+        .finally(() => {
+          reading = false;
+        });
+    };
+    read();
+    // A finished run's transcript never grows again, so the poll stops with it —
+    // but a first read that has not landed yet is always retried, whatever the
+    // status says.
+    const timer = setInterval(() => {
+      if (liveRef.current || !seeded) read();
+    }, TRANSCRIPT_POLL_MS);
     return () => {
       active = false;
+      clearInterval(timer);
     };
   }, [agent.id]);
 
-  // Same output value as before: prefer the live stream once it overtakes the seed.
-  const output = live !== undefined && live.length > seed.length ? live : seed;
+  const output = liveIsWhole && live !== undefined && live.length > seed.length ? live : seed;
 
   // A limit park takes the reply box away rather than leaving one that cannot send:
   // the process is usually gone with the limit, so typing here would reach nothing —
   // and there is no question on the other end of it to answer.
   const canRespond = !limitParked && (agent.status === 'waiting' || agent.status === 'running');
-  const isLive = agent.status === 'running' || agent.status === 'waiting' || agent.status === 'starting';
 
   return (
     <div className="drawer-backdrop" onClick={onClose}>
