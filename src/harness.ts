@@ -752,6 +752,7 @@ export class Harness extends EventEmitter {
         // second read here would be a second opinion about what has been
         // reviewed.
         prReviews: store.listPrReviews(),
+        prReviewRoutes: store.listPrReviewRoutes(),
         // The goal tags and the profiles they may name, so a dispatch on a pinned
         // issue is priced by the pin rather than by its rule.
         modelPins: this.deps.modelPins,

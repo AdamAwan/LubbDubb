@@ -40,6 +40,7 @@ type PromptId =
   | 'pr-ci-gate'
   | 'pr-base-update-behind'
   | 'pr-base-update-conflict'
+  | 'pr-review-triage'
   | 'pr-review'
   | 'pr-review-comment'
   | 'pr-concern-escalation'
@@ -516,6 +517,21 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
     template:
       'PR #{number} ("{title}") has merge conflicts with its base branch {base}. Merge {base} into {branch}, resolve the conflicts, and push. If you cannot resolve them cleanly, escalate for a human.',
     doc: 'Sent to a code agent when a PR conflicts with its base branch. Placeholders: {number} {title} {branch} {base}.',
+  },
+  'pr-review-triage': {
+    placeholders: ['number', 'title', 'branch', 'base', 'modes'],
+    template:
+      'Decide how PR #{number} ("{title}") should be reviewed — branch {branch}, targeting {base}. This ' +
+      'project reviews in these modes: {modes}.\n\n' +
+      'You are not reviewing the change. You are choosing what kind of read it needs, and an agent is ' +
+      'dispatched on your answer with a different brief and a different model depending on what you say. ' +
+      'You have the shape of the change rather than its contents — its title, its branch, its target, and ' +
+      'whatever the tracker says about the goal behind it. Ask `world_read` for the pull request and its ' +
+      'issue if you need more than you were given.\n\n' +
+      'Answer with `review_route`. Where what this project says below does not settle it, choose the more ' +
+      'thorough mode: over-reading a small change costs minutes, and under-reading a dangerous one costs ' +
+      'the defect nobody caught.',
+    doc: "Sent to a desk agent to choose which review mode a pull request gets (rule pr-review-triage), on a project that declares more than one in `review.modes`. It sees no code: a routing decision that needed the diff would cost what the review costs. The project's routing charter (review.routingCharterFile) is appended after this text rather than interpolated, so an override cannot silently drop it. {modes} is the comma-joined list of declared mode names. Placeholders: {number} {title} {branch} {base} {modes}.",
   },
   'pr-review': {
     placeholders: ['number', 'title', 'branch', 'base'],

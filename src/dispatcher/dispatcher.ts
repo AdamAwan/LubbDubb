@@ -14,6 +14,7 @@ import type {
   ProfileOverride,
   Proposal,
   PrReview,
+  PrReviewRoute,
   PullRequest,
   Remedy,
   TaskSummary,
@@ -87,6 +88,13 @@ export interface DispatchContext {
    * has to as well.
    */
   prReviews?: PrReview[];
+  /**
+   * How the triage decided each pull request should be read
+   * (`Store.listPrReviewRoutes`). Absent means nothing was wired, and every
+   * review then runs the fail-open default mode — which is the safe direction,
+   * and the same one a triage that never answered produces.
+   */
+  prReviewRoutes?: PrReviewRoute[];
   /** Current fleet: running / waiting / recently-finished tasks and their agents. */
   tasks: TaskSummary[];
   agents: Agent[];

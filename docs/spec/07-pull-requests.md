@@ -774,40 +774,109 @@ branch itself. Two things follow, and both are the point: the reviewer cannot co
 an agent that fixes its own findings then reviews its own fix — and it does not hold the branch lease,
 so the CI fix behind it is not queued behind the review.
 
+### Choosing how to review
+
+**A project may declare more than one way of reviewing** — `review.modes`, keyed by whatever names its
+team uses. Two or more, and rule `pr-review-triage` runs first and picks one. Fewer, and there is no
+triage at all: a decision with one option is not a decision, so nothing is spent making it. That is the
+whole switch — there is no separate flag, because a flag could disagree with the modes and one of them
+would be ignored with nothing to say which.
+
+**The choice is a model's, not a threshold's.** "Under three files" is a proxy for risk, and the things
+that actually make a diff worth a careful read — it touches auth, it is the first change in a
+subsystem, the ticket calls it a spike — are not counted, they are judged. So `review.routingCharterFile`
+is the project's prose about _how to choose_, and a desk agent reads it.
+
+**Metadata, not the diff.** The triage is a desk agent: no worktree, no pool slot, no repository read.
+It gets the title, the branch, the base and what the tracker says, and may ask `world_read` for more. A
+routing decision that needed the diff would cost what the review costs, and then there would be nothing
+left to route for.
+
+**Its verdict is a name, through `review_route`.** Three things act on it before the reviewer reads a
+line — the prompt, the charter appended to it, and the profile it runs on — so an agent that merely
+_said_ which mode it would use would leave all three on the default, silently, and the Decision log
+unable to say which mode ran. A name the project has not declared is refused rather than honoured.
+
+**It fails open.** A triage that crashes, is killed or spends its attempt cap leaves no route, and
+`pr-review` then runs `review.defaultMode` rather than parking — the rule the appraiser, the planner and
+the assessor all follow, because a gate that can quietly stop the fleet is worse than one that
+occasionally reads a diff more carefully than it needed to. So the default should name the **thorough**
+mode; null takes the first declared, which is why a project declares that one first. A `defaultMode`
+naming a mode that does not exist is refused **at load**: it is only ever reached on a day something
+else has already gone wrong, so a typo in it looks correct for as long as the harness is working.
+
+The review waits one pulse for the route — and only while one is still coming. `pr-review` reads the
+same attempt ledger the triage does, so a routing that has given up resolves to the default on that
+pulse rather than holding the pull request for ever.
+
+**Its own origin**, `pr:<n>:review-triage`, for the reason `pr-ci-gate` has one: a routing that cannot
+be got through must not spend the budget the review was never given, and a failure has to name which of
+the two it was about.
+
+**Its own stage, above the PR concerns**, rather than an eighth concern among them. That pass exists
+because at most one _branch_ agent works a branch, and the triage takes no branch — folding it in would
+have it compete for a lease it never takes. Above, so the concern group stays contiguous
+([05](05-dispatcher.md)).
+
+**The routes live in their own table.** `pr_reviews` existing is what satisfies the merge gate, so a row
+written early to carry a route would report a pull request as reviewed by the step that only decided how
+to review it.
+
 ### What a project may say about it
 
 Every field of `review` is written to be set by the **project** rather than by each operator, because
-what a team looks for in a diff belongs beside the code it is about. `lubbdubb.project.json` carries
-any key ([02](02-configuration.md#the-project-layer)), so all four are committed once and shared.
+what a team looks for in a diff belongs beside the code it is about. `lubbdubb.project.json` carries any
+key ([02](02-configuration.md#the-project-layer)), so all of it is committed once and shared.
 
-| Key                  | Default  | What it decides                                                                                                 |
-| -------------------- | -------- | --------------------------------------------------------------------------------------------------------------- |
-| `review.enabled`     | `false`  | Whether the review runs at all. It switches rule `pr-review` in and out of the pipeline.                        |
-| `review.blocking`    | `true`   | Whether an unreviewed pull request is held out of the merge gate. Off records the verdict and gates nothing.    |
-| `review.publish`     | `'none'` | Whether the reviewer is told to post its findings on the pull request, through `reply_to_review` and only that. |
-| `review.charterFile` | `null`   | A file in the repository saying what this project asks its reviewers to look at.                                |
+| Key                         | Default  | What it decides                                                                                                 |
+| --------------------------- | -------- | --------------------------------------------------------------------------------------------------------------- |
+| `review.enabled`            | `false`  | Whether the review runs at all. It switches both rules in and out of the pipeline.                              |
+| `review.blocking`           | `true`   | Whether an unreviewed pull request is held out of the merge gate. Off records the verdict and gates nothing.    |
+| `review.publish`            | `'none'` | Whether the reviewer is told to post its findings on the pull request, through `reply_to_review` and only that. |
+| `review.modes`              | `{}`     | The ways this project reviews: `charterFile` and `profile` each. Two or more switches the triage on.            |
+| `review.defaultMode`        | `null`   | The mode a review falls back to when nothing routed it. Null takes the first declared.                          |
+| `review.routingCharterFile` | `null`   | The prose that decides between the modes, read by the triage.                                                   |
 
-Off by default because this is the one rule that spends an agent on **every** pull request. A
-deployment that took the defaults and found its bill changed by a build it had not asked anything of
-would be right to call that a fault.
+```json
+{
+  "review": {
+    "enabled": true,
+    "routingCharterFile": "docs/review/routing.md",
+    "defaultMode": "deep",
+    "modes": {
+      "deep": { "charterFile": "docs/review/deep.md", "profile": "heavy" },
+      "quick": { "charterFile": "docs/review/quick.md", "profile": "light" }
+    }
+  }
+}
+```
+
+Off by default because this is the one rule that spends an agent on **every** pull request. A deployment
+that took the defaults and found its bill changed by a build it had not asked anything of would be right
+to call that a fault. The triage adds a second, cheaper agent — which is worth it only when the modes
+genuinely differ in what they cost, so a mode wants a `profile` as well as a charter.
+
+A mode's `profile` is the project's standing opinion about what a kind of change is worth reading for.
+An operator's own pin on the origin still wins over it ([05](05-dispatcher.md)): a person overruling the
+project for one pull request is the narrower statement.
 
 `review.publish: 'comment'` adds a line to the prompt telling the agent to post through
-`reply_to_review`, which raises an act the executor authorises and signs
-([09](09-execution.md)) — the same route a rule-drafted reply takes. It is deliberately not a free
-channel: what the comment _says_ is the project's, through the prompt and the charter; where it goes
-is the harness's. A published finding then arrives as an unhandled thread, which rule
-`pr-review-comment` already answers — so the fix loop for a fleet finding is the mature path the fleet
-already has, and not a second one.
+`reply_to_review`, which raises an act the executor authorises and signs ([09](09-execution.md)) — the
+same route a rule-drafted reply takes. It is deliberately not a free channel: what the comment _says_ is
+the project's, through the prompt and the charter; where it goes is the harness's. A published finding
+then arrives as an unhandled thread, which rule `pr-review-comment` already answers — so the fix loop for
+a fleet finding is the mature path the fleet already has, and not a second one.
 
-### The charter
+### The charters
 
-`review.charterFile` names a file in the repository, resolved against `repoRoot`, and its text is
-**appended** to the rendered `pr-review` prompt under a heading that says whose words they are — never
-interpolated, for the reason every addition to a prompt is appended: an operator's override that never
-learned about a `{charter}` placeholder would drop every word of it silently, on exactly the
-deployments that customised most ([05](05-dispatcher.md#prompt-templates)).
+There are two kinds, and the symmetry is the point: `routingCharterFile` says **how to choose**, and each
+mode's `charterFile` says **what that mode looks for**. Both are files in the repository, resolved
+against `repoRoot`, and both are **appended** to the rendered prompt under a heading that says whose
+words they are — never interpolated, for the reason every addition to a prompt is appended: an operator's
+override that never learned about a `{charter}` placeholder would drop every word of it silently, on
+exactly the deployments that customised most ([05](05-dispatcher.md#prompt-templates)).
 
-It exists because the obvious place for a team's checklist cannot hold one. Prompt overrides live in
+They exist because the obvious place for a team's checklist cannot hold one. Prompt overrides live in
 `promptTemplatesDir`, which defaults into `.lubbdubb/` — the directory a team gitignores — so what a
 project wants its reviewers to look at had no committed home at all.
 
@@ -816,7 +885,7 @@ Two properties, both deliberate:
 - **Read from the working tree at `repoRoot`, never from the branch under review.** The project config
   layer is read the same way and for the same reason: a pull request that could edit the file it is
   reviewed against is a gate that reviews whatever it is told to.
-- **Read once at boot**, like the template book it sits beside. An edited charter takes effect on the
+- **Read once at boot**, like the template book they sit beside. An edited charter takes effect on the
   next restart, not the next pulse. A path that names nothing is recorded on the error log rather than
   swallowed — a team whose charter is not in front of an agent has no other way to find out.
 

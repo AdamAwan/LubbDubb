@@ -6,6 +6,7 @@ import type { PromptTemplates } from '../promptTemplates.js';
 import type { RuleHeld } from '../admission.js';
 import type { CiPolicy } from '../../ci/ciPolicy.js';
 import type { PrReviewPolicy } from '../../review/policy.js';
+import type { PrReviewCharters } from '../../review/prReview.js';
 import type { PlanningPolicy } from '../../plans/planning.js';
 import type {
   Issue,
@@ -15,6 +16,7 @@ import type {
   IssueShortfall,
   Plan,
   PrReview,
+  PrReviewRoute,
   PullRequest,
   TaskSummary,
   ValidationCheck,
@@ -193,13 +195,12 @@ export interface StageContext {
    */
   review: PrReviewPolicy;
   /**
-   * What this project asks a reviewer to look at (`review.charterFile`), read
-   * once at boot for `promptTemplatesDir`'s reason, or null where the project
-   * names no file. Text rather than a path: nothing in a rule reads the
-   * filesystem, exactly as {@link StageContext.validationRoot} is only ever
-   * phrased.
+   * The project's review charters — how to choose a mode, and what each mode
+   * looks for — read once at boot for `promptTemplatesDir`'s reason. Text rather
+   * than paths: nothing in a rule reads the filesystem, exactly as
+   * {@link StageContext.validationRoot} is only ever phrased.
    */
-  reviewCharter: string | null;
+  reviewCharters: PrReviewCharters;
   /**
    * The fleet reviews already recorded, keyed by pull request. The rule reads it
    * to know a pull request has been reviewed, and the merge gate reads it to know
@@ -207,6 +208,13 @@ export interface StageContext {
    * about what has been read.
    */
   prReviews: ReadonlyMap<number, PrReview>;
+  /**
+   * How the triage decided each pull request should be read, keyed by pull
+   * request. Absent for one nothing has routed — which `pr-review` reads as the
+   * fail-open default rather than as a reason to wait, and `pr-review-triage`
+   * reads as work to do.
+   */
+  prReviewRoutes: ReadonlyMap<number, PrReviewRoute>;
   /** The base a PR is assumed to target when the provider doesn't report one. */
   defaultBranch: string;
   /**

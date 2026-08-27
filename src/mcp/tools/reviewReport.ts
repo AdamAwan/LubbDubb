@@ -50,7 +50,7 @@ export const reviewReport: ToolFactory = ({ deps, agent, task, ok }) => ({
     required: ['verdict', 'summary'],
   },
   handler: (args) => {
-    const prNumber = reviewTargetPr(task.originRef);
+    const prNumber = reviewTargetPr(task.originRef, 'review');
     if (prNumber === null) {
       return toolError(
         'review_report is for an agent dispatched to review a pull request, and this run was dispatched for ' +

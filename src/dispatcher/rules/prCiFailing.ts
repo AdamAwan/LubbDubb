@@ -26,11 +26,15 @@ import { priorCiRemediesNote, priorReviewRemediesNote } from '../../remedies/pri
 import { remedyAskNote } from '../../remedies/remedies.js';
 import {
   charterNote,
+  modeCharterHeading,
   needsFleetReview,
   publishNote,
+  resolvedReviewMode,
   reviewBranch,
   reviewOrigin,
   reviewSatisfied,
+  reviewTriageOrigin,
+  routesBetweenModes,
 } from '../../review/prReview.js';
 import { readOnlyDispatch } from './readOnlyDispatch.js';
 import { isActive, type RawAction, type StageContext } from './context.js';
@@ -101,7 +105,19 @@ export function prCiFailing(s: StageContext): void {
     // unhandled threads open (the diff is about to be rewritten) and comes back
     // once they are handled.
     const review = s.prReviews.get(pr.number) ?? null;
-    if (needsFleetReview(pr, review, s.review)) {
+    const route = s.prReviewRoutes.get(pr.number) ?? null;
+    // How the triage said to read it, or — where it never answered, or where the
+    // project declares no modes — the fail-open default. Resolved here rather
+    // than by the prompt, because the mode decides the profile too and a dispatch
+    // is priced before it runs.
+    const mode = resolvedReviewMode(route, s.review);
+    // A routing still to come is a review still to come: dispatching now would
+    // spend the deep profile on a pull request the triage was about to route to
+    // the cheap one, which is the whole saving gone. It is a wait rather than a
+    // hold — `pr-review-triage` fails open, so the absence resolves either way,
+    // on the pulse after it answers or on the pulse it gives up.
+    const routing = route === null && routesBetweenModes(s.review) && !triageSpent(s, pr.number);
+    if (needsFleetReview(pr, review, s.review) && !routing) {
       const origin = reviewOrigin(pr.number);
       const branch = reviewBranch(pr.number);
       concerns.push({
@@ -112,7 +128,12 @@ export function prCiFailing(s: StageContext): void {
         // what it found. A reviewer that could push would be fixing its own
         // findings and then reviewing the fix.
         dispatch: readOnlyDispatch(branch, pr.branch),
-        title: `Review PR #${pr.number}`,
+        // The mode's profile, and only where the project named one. An operator's
+        // own pin on this origin still wins: `pinFor` is applied where a candidate
+        // becomes an action, so a person overruling the project for one pull
+        // request is unaffected by this.
+        profile: (mode === null ? null : (s.review.modes[mode]?.profile ?? null)) ?? undefined,
+        title: mode === null ? `Review PR #${pr.number}` : `Review PR #${pr.number} (${mode})`,
         // Appended, never interpolated: the charter is the half a project writes,
         // and an operator override that never learned about it would drop every
         // word of it silently.
@@ -124,8 +145,10 @@ export function prCiFailing(s: StageContext): void {
             base: pr.baseBranch ?? s.defaultBranch,
           }) +
           publishNote(s.review.publish) +
-          charterNote(s.reviewCharter),
-        dispatchReason: `PR #${pr.number} has not been reviewed by the fleet and no agent is on it.`,
+          charterNote(mode === null ? null : (s.reviewCharters.modes[mode] ?? null), modeCharterHeading(mode)),
+        dispatchReason:
+          `PR #${pr.number} has not been reviewed by the fleet and no agent is on it` +
+          (mode === null ? '.' : ` (${mode}${route === null ? ', by default' : ''}).`),
         note: `PR #${pr.number} has not been reviewed yet — read the diff and report what you find.`,
         originTitle: pr.title,
         originSummary: `PR #${pr.number} on branch ${pr.branch} · awaiting the fleet's review`,
@@ -546,6 +569,7 @@ export function prCiFailing(s: StageContext): void {
           // The pull request's branch for every concern that fixes something, and
           // a read-only checkout of it for the one that only reads.
           ...(top.dispatch ?? { branch: pr.branch }),
+          ...(top.profile === undefined ? {} : { profile: top.profile }),
           title: top.title,
           prompt: top.prompt,
           originRef: top.origin,
@@ -651,6 +675,14 @@ interface PrConcern {
    * leaves the lease — and the branch's next CI fix — alone.
    */
   dispatch?: { branch: string; base: string; readOnly: true };
+  /**
+   * The model profile this concern's dispatch is priced on, where the concern
+   * itself knows one — rule `pr-review` does, because the mode the triage chose
+   * is a statement about how much reading the change is worth. Absent leaves the
+   * dispatch to resolve on its rule, which is what every other concern does. An
+   * operator's pin on the origin still overrides it (`pinFor`).
+   */
+  profile?: string;
   title: string;
   prompt: string;
   dispatchReason: string;
@@ -735,4 +767,20 @@ function resolveBranchAgent(ctx: DispatchContext, branch: string): BranchAgent {
   const agent = task.agentId ? ctx.agents.find((a) => a.id === task.agentId) : undefined;
   if (agent && agent.status === 'running') return { kind: 'running', agent };
   return { kind: 'busy' }; // queued / starting / waiting — hold new notes.
+}
+
+/**
+ * Has the triage given up on this pull request?
+ *
+ * The read that makes rule `pr-review`'s wait finite. `pr-review-triage` fails
+ * open silently, so the only way to tell "a route is coming" from "no route is
+ * ever coming" is to ask the same ledger the triage asks — which is exactly what
+ * `dispatchVerdict` answers, and why it is asked here rather than a second
+ * counter being kept. Anything but a spent budget means the route is still on its
+ * way, including a cooldown: the wait is one pulse, and dispatching the wrong
+ * mode to avoid it costs the whole saving.
+ */
+function triageSpent(s: StageContext, prNumber: number): boolean {
+  const verdict = dispatchVerdict(reviewTriageOrigin(prNumber), s.now, s.ctx.recentDecisions, s.cooldown);
+  return verdict.kind === 'escalate' || verdict.kind === 'hold';
 }

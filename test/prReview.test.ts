@@ -7,9 +7,16 @@ import { loadConfig } from '../src/config.js';
 import { buildSystem } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { charterNote, needsFleetReview, reviewSatisfied } from '../src/review/prReview.js';
+import {
+  charterNote,
+  defaultReviewMode,
+  needsFleetReview,
+  resolvedReviewMode,
+  reviewSatisfied,
+  routesBetweenModes,
+} from '../src/review/prReview.js';
 import { DEFAULT_PR_REVIEW } from '../src/review/policy.js';
-import type { PrReview, PullRequest } from '../src/types.js';
+import type { PrReview, PrReviewRoute, PullRequest } from '../src/types.js';
 import { findTask } from './support/tasks.js';
 
 /**
@@ -139,7 +146,7 @@ test('it stands down while a human reviewer has unhandled threads open', async (
 test("the project's charter reaches the reviewer's prompt, from the checkout", async () => {
   const repoRoot = mkdtempSync(join(tmpdir(), 'lubbdubb-repo-'));
   writeFileSync(join(repoRoot, 'review-charter.md'), 'Every colour is a token. Never a hex.');
-  const { system } = build({ enabled: true, charterFile: 'review-charter.md' }, repoRoot);
+  const { system } = build({ enabled: true, modes: { deep: { charterFile: 'review-charter.md' } } }, repoRoot);
   system.connector.inject({ kind: 'new_pr', number: 11, title: 'A change', branch: 'feature-11' });
   await system.harness.runCycle('manual');
 
@@ -149,7 +156,7 @@ test("the project's charter reaches the reviewer's prompt, from the checkout", a
   assert.match(prompt, /Every colour is a token\. Never a hex\./);
   // Appended under a heading that says whose words they are, so a reviewer can
   // weigh them against what it is actually reading.
-  assert.match(prompt, /What this project asks its reviewers to look at/);
+  assert.match(prompt, /What this project asks a "deep" review to look at/);
   system.store.close();
 });
 
@@ -175,6 +182,138 @@ test('the predicates are one reading: unknown is never clear, and off gates noth
   assert.equal(reviewSatisfied(null, { ...on, blocking: false }), true, 'record-only gates nothing');
   assert.equal(reviewSatisfied(null, DEFAULT_PR_REVIEW), true, 'off is the build without the feature');
 
-  assert.equal(charterNote(null), '');
-  assert.equal(charterNote('   '), '', 'an empty file is no charter, not an empty heading');
+  assert.equal(charterNote(null, 'Heading'), '');
+  assert.equal(charterNote('   ', 'Heading'), '', 'an empty file is no charter, not an empty heading');
+});
+
+test('with two modes declared, the triage runs first and the review waits for it', async () => {
+  const { system } = build({
+    enabled: true,
+    modes: { deep: { charterFile: null, profile: null }, quick: { charterFile: null, profile: null } },
+  });
+  system.connector.inject({ kind: 'new_pr', number: 12, title: 'A change', branch: 'feature-12' });
+  await system.harness.runCycle('manual');
+
+  const triage = findTask(system.store, (t) => t.originRef === 'pr:12:review-triage');
+  assert.ok(triage, 'the routing is decided before anything reads the diff');
+  assert.equal(triage!.rule, 'pr-review-triage');
+  assert.equal(triage!.branch, null, 'a desk agent: no worktree, no pool slot, no repository read');
+  assert.equal(
+    findTask(system.store, (t) => t.originRef === 'pr:12:review'),
+    undefined,
+    'dispatching now would price the review on a mode nothing has chosen yet',
+  );
+
+  system.store.recordPrReviewRoute({ prNumber: 12, mode: 'quick', reason: 'A copy change.', agentId: null });
+  await system.harness.runCycle('manual');
+
+  const review = findTask(system.store, (t) => t.originRef === 'pr:12:review');
+  assert.ok(review);
+  assert.match(review!.title, /\(quick\)$/, 'the row says which mode ran, so a misroute is visible');
+  system.store.close();
+});
+
+test('one declared mode is not a decision: no triage, and the review runs it', async () => {
+  const { system } = build({ enabled: true, modes: { deep: { charterFile: null, profile: null } } });
+  system.connector.inject({ kind: 'new_pr', number: 13, title: 'A change', branch: 'feature-13' });
+  await system.harness.runCycle('manual');
+
+  assert.equal(
+    findTask(system.store, (t) => t.originRef === 'pr:13:review-triage'),
+    undefined,
+  );
+  const review = findTask(system.store, (t) => t.originRef === 'pr:13:review');
+  assert.ok(review, 'nothing is spent choosing between one thing');
+  assert.match(review!.title, /\(deep\)$/);
+  system.store.close();
+});
+
+test('the mode carries its profile onto the dispatch', async () => {
+  const { system } = build({
+    enabled: true,
+    modes: { deep: { charterFile: null, profile: 'heavy' }, quick: { charterFile: null, profile: 'light' } },
+  });
+  system.connector.inject({ kind: 'new_pr', number: 14, title: 'A change', branch: 'feature-14' });
+  system.store.recordPrReviewRoute({ prNumber: 14, mode: 'quick', reason: 'A copy change.', agentId: null });
+  await system.harness.runCycle('manual');
+
+  const review = findTask(system.store, (t) => t.originRef === 'pr:14:review');
+  assert.ok(review);
+  const dispatched = system.store
+    .listDecisions()
+    .find((d) => d.action.type === 'dispatch_code_agent' && d.action.originRef === 'pr:14:review');
+  assert.equal(
+    (dispatched?.action as { profile?: string } | undefined)?.profile,
+    'light',
+    'the routing decision is about money as well as attention',
+  );
+  system.store.close();
+});
+
+test('routing predicates: one mode is no choice, and an unknown route reads as the default', () => {
+  const modes = {
+    deep: { charterFile: null, profile: null },
+    quick: { charterFile: null, profile: null },
+  };
+  const one = { ...DEFAULT_PR_REVIEW, enabled: true, modes: { deep: modes.deep } };
+  const two = { ...DEFAULT_PR_REVIEW, enabled: true, modes };
+  const route = (mode: string): PrReviewRoute => ({
+    prNumber: 1,
+    mode,
+    reason: 'because',
+    agentId: null,
+    decidedAt: '2026-01-01T00:00:00.000Z',
+  });
+
+  assert.equal(routesBetweenModes(one), false, 'a decision with one option is not a decision');
+  assert.equal(routesBetweenModes(two), true);
+  assert.equal(routesBetweenModes(DEFAULT_PR_REVIEW), false);
+
+  // Fail open onto the thorough mode: null default takes the first declared, which
+  // is why the spec tells a project to declare that one first.
+  assert.equal(defaultReviewMode(two), 'deep');
+  assert.equal(defaultReviewMode({ ...two, defaultMode: 'quick' }), 'quick');
+  assert.equal(defaultReviewMode(DEFAULT_PR_REVIEW), null, 'no modes is no mode, not an invented one');
+
+  assert.equal(resolvedReviewMode(route('quick'), two), 'quick');
+  assert.equal(resolvedReviewMode(null, two), 'deep', 'a triage that never answered still gets a review');
+  assert.equal(
+    resolvedReviewMode(route('gone'), two),
+    'deep',
+    'a mode the project has removed has no charter or profile behind it, so it is not honoured',
+  );
+});
+
+test('a triage that spent its attempts fails open: the review runs the default mode', async () => {
+  const { system } = build({
+    enabled: true,
+    defaultMode: 'deep',
+    modes: { quick: { charterFile: null, profile: null }, deep: { charterFile: null, profile: null } },
+  });
+  system.connector.inject({ kind: 'new_pr', number: 15, title: 'A change', branch: 'feature-15' });
+  // The attempt ledger the rule and the lens both read: three executed dispatches
+  // on the triage origin that never produced a route. Written directly because the
+  // point under test is what the *review* does once the routing has given up, and
+  // the cap is the only way it ever does.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    system.store.recordDecision({
+      cycleId: `spent-${attempt}`,
+      action: {
+        type: 'dispatch_desk_agent',
+        originRef: 'pr:15:review-triage',
+        title: 'Choose how to review PR #15',
+        reason: 'spent',
+      },
+      outcome: 'executed',
+      detail: 'spent',
+    });
+  }
+  await system.harness.runCycle('manual');
+
+  const review = findTask(system.store, (t) => t.originRef === 'pr:15:review');
+  assert.ok(review, 'a routing that never answered must not park the pull request');
+  // Onto the thorough mode, not the cheap one: over-reading a small change costs
+  // minutes, under-reading a dangerous one costs the defect nobody caught.
+  assert.match(review!.title, /\(deep\)$/);
+  system.store.close();
 });

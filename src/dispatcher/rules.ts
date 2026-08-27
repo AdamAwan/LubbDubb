@@ -103,6 +103,14 @@ const RULES = [
   // ---- PR concerns. Four of these collect concerns for one branch; the ------
   // order they appear in here *is* the urgency order the fold reads.
   {
+    id: 'pr-review-triage',
+    kind: 'rule',
+    name: 'Choose how to review a pull request',
+    description:
+      "A watched pull request the fleet has not reviewed, on a project that declares more than one way of reviewing, gets one desk agent to say which. The choice is a model's rather than a threshold's, because what makes a diff worth a careful read — it touches auth, it is the first change in a subsystem, the ticket calls it a spike — is judged rather than counted; it reads the project's routing charter and the shape of the change, never the diff, so routing costs a fraction of what reviewing does. Its verdict is a mode name, which decides the reviewer's prompt, charter and model profile before any of them is resolved. It runs above the PR concerns rather than among them because it takes no branch. Fails open and silent: no route means `pr-review` runs the default mode, so a triage that never answers costs a more careful read and never a pull request nobody reads. Inert where the project declares fewer than two modes — a decision with one option is not a decision.",
+    enabled: (c) => c.review,
+  },
+  {
     id: 'pr-review',
     kind: 'rule',
     name: 'Pull request not yet reviewed',

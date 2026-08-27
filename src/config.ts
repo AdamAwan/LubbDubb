@@ -1282,6 +1282,35 @@ function validatePool(merged: Config): void {
 }
 
 /**
+ * The review's one refusal: a `defaultMode` naming a mode that does not exist.
+ *
+ * Refused at load rather than resolved at dispatch, because the failure it
+ * prevents is invisible where it happens. `defaultMode` is the **fail-open**
+ * target — the mode a review runs in when the triage crashed or spent its cap —
+ * so a name with nothing behind it is only reached on the day something else has
+ * already gone wrong, and then it silently falls back to whichever mode the
+ * project happened to declare first. A typo in it is therefore a setting that
+ * looks correct for as long as the harness is working.
+ *
+ * Only that. An empty `modes` is a project that has not adopted routing, which is
+ * every deployment by default; one mode is a project with a single way of
+ * reviewing, and both are legal.
+ * → `docs/spec/07-pull-requests.md#choosing-how-to-review`
+ */
+function validateReview(merged: Config): void {
+  const named = merged.review.defaultMode;
+  if (named === null) return;
+  const modes = Object.keys(merged.review.modes);
+  if (!modes.includes(named)) {
+    throw new Error(
+      `Refusing to start: review.defaultMode is "${named}", which is not one of review.modes ` +
+        `(${modes.join(', ') || 'none declared'}). It names the mode a review falls back to when the triage ` +
+        `cannot answer, so a name with nothing behind it is only reached on the day something else went wrong.`,
+    );
+  }
+}
+
+/**
  * The nested policy blocks, which merge field by field where everything else
  * replaces.
  *
@@ -1597,6 +1626,7 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   // no fleet id would have two engineers writing one address, which is the single
   // thing "one writer per namespace" cannot survive.
   validatePool(merged);
+  validateReview(merged);
 
   // Agents run in a worktree/scratch cwd, so any relative script path in
   // claudeArgs (e.g. the demo mock-agent) must be made absolute up front or the

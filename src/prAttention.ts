@@ -59,9 +59,27 @@ import {
 } from './prHealth.js';
 import { mergeProposalRef, proposalHold } from './proposals/proposals.js';
 import { DEFAULT_PR_REVIEW, type PrReviewPolicy } from './review/policy.js';
-import { needsFleetReview, reviewOrigin, reviewPendingLabel, reviewSatisfied } from './review/prReview.js';
+import {
+  needsFleetReview,
+  resolvedReviewMode,
+  reviewOrigin,
+  reviewPendingLabel,
+  reviewSatisfied,
+  reviewTriageOrigin,
+  routesBetweenModes,
+  triagePendingLabel,
+} from './review/prReview.js';
 import { isActiveTask } from './tasks.js';
-import type { Decision, PrReview, Proposal, PullRequest, TaskSummary, ViewerAssignment, WorldEvent } from './types.js';
+import type {
+  Decision,
+  PrReview,
+  PrReviewRoute,
+  Proposal,
+  PullRequest,
+  TaskSummary,
+  ViewerAssignment,
+  WorldEvent,
+} from './types.js';
 
 /**
  * Whose court the PR is in. Seven arms, and each names a *different party* rather
@@ -167,6 +185,8 @@ export interface PrAttentionContext {
    */
   review?: PrReviewPolicy;
   prReviews?: ReadonlyMap<number, PrReview>;
+  /** How the triage routed each pull request; absent reads as the fail-open default. */
+  prReviewRoutes?: ReadonlyMap<number, PrReviewRoute>;
 }
 
 /**
@@ -513,7 +533,19 @@ function prConcerns(pr: PullRequest, ctx: PrAttentionContext, ci: CiReading): Pr
   // operator an agent is coming and the two disagreeing is the drift this whole
   // file exists to avoid.
   if (needsFleetReview(pr, fleetReview(pr, ctx), reviewPolicy(ctx))) {
-    concerns.push({ rule: 'pr-review', origin: reviewOrigin(pr.number), label: reviewPendingLabel() });
+    // Which of the two is coming — the routing or the review — read the way the
+    // rules read it, so the row names the origin whose attempt cap the operator
+    // would actually find if they went looking.
+    const route = ctx.prReviewRoutes?.get(pr.number) ?? null;
+    if (route === null && routesBetweenModes(reviewPolicy(ctx))) {
+      concerns.push({ rule: 'pr-review-triage', origin: reviewTriageOrigin(pr.number), label: triagePendingLabel() });
+    } else {
+      concerns.push({
+        rule: 'pr-review',
+        origin: reviewOrigin(pr.number),
+        label: reviewPendingLabel(resolvedReviewMode(route, reviewPolicy(ctx))),
+      });
+    }
   }
   // **One** concern for the whole review, on the origin rule `pr-review-comment`
   // dispatches under — never one per thread. The per-thread ref is what notify

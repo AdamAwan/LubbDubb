@@ -44,6 +44,7 @@ export const MCP_TOOL_NAMES = [
   'validation_amend',
   'validation_report',
   'review_report',
+  'review_route',
   'report_remedy',
   'raise',
   'knowledge_ask',
@@ -128,6 +129,8 @@ export const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use'> = {
   // Named by `pr-review`, the one prompt whose agent can cast it — and the only
   // way a fleet review is recorded at all, which is why the prompt says so twice.
   review_report: 'point-of-use',
+  // Named by `pr-review-triage`, the one prompt whose agent can cast it.
+  review_route: 'point-of-use',
   validation_amend: 'point-of-use',
   report_remedy: 'point-of-use',
   // The one tool an agent is never told about: Claude Code calls it through

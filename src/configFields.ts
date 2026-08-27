@@ -503,10 +503,22 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'Whether the reviewer posts what it found on the pull request, or keeps it to the harness.',
   },
   {
-    path: 'review.charterFile',
+    path: 'review.modes',
+    type: 'json',
+    access: 'plain',
+    why: 'The ways this project reviews — a charter and a profile each. Two or more switches the triage on.',
+  },
+  {
+    path: 'review.defaultMode',
     type: 'string',
     access: 'plain',
-    why: 'A file in the repository saying what this project wants looked at, appended to the reviewer’s prompt.',
+    why: 'The mode a review falls back to when the triage could not answer. Name the thorough one.',
+  },
+  {
+    path: 'review.routingCharterFile',
+    type: 'string',
+    access: 'plain',
+    why: 'A file in the repository saying how to choose between the modes, read by the triage agent.',
   },
   {
     path: 'localRun.instruction',

@@ -47,6 +47,7 @@ import { PrWatchSeedStore } from './prWatchSeeds.js';
 import { WorkItemLinkStore } from './workItemLinks.js';
 import { ReviewWaitStore } from './reviewWaits.js';
 import { PrReviewStore } from './prReviews.js';
+import { PrReviewRouteStore } from './prReviewRoutes.js';
 import { DecisionStore, DECISION_COLUMNS } from './decisions.js';
 import { WorldStore, type WorldLabelPatch } from './world.js';
 import { ErrorStore } from './errors.js';
@@ -149,6 +150,8 @@ import type {
   ValidationCheckState,
   PrReview,
   PrReviewInput,
+  PrReviewRoute,
+  PrReviewRouteInput,
   ValidationResource,
   WorkNode,
   WorkNodeObservation,
@@ -207,6 +210,7 @@ export class Store {
   private readonly workItemLinks: WorkItemLinkStore;
   private readonly reviewWaitStore: ReviewWaitStore;
   private readonly prReviews: PrReviewStore;
+  private readonly prReviewRoutes: PrReviewRouteStore;
   private readonly decisions: DecisionStore;
   private readonly world: WorldStore;
   private readonly errors: ErrorStore;
@@ -365,6 +369,7 @@ export class Store {
     this.workItemLinks = new WorkItemLinkStore(ctx);
     this.reviewWaitStore = new ReviewWaitStore(ctx);
     this.prReviews = new PrReviewStore(ctx);
+    this.prReviewRoutes = new PrReviewRouteStore(ctx);
     this.decisions = new DecisionStore(ctx);
     this.world = new WorldStore(ctx);
     this.errors = new ErrorStore(ctx);
@@ -1260,6 +1265,12 @@ export class Store {
   }
   listPrReviews(): PrReview[] {
     return this.prReviews.listPrReviews();
+  }
+  recordPrReviewRoute(input: PrReviewRouteInput): PrReviewRoute {
+    return this.prReviewRoutes.recordPrReviewRoute(input);
+  }
+  listPrReviewRoutes(): PrReviewRoute[] {
+    return this.prReviewRoutes.listPrReviewRoutes();
   }
 
   // -- Decisions (audit) ---------------------------------------------------

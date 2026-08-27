@@ -67,7 +67,8 @@ import { RecoveryDesk } from './agents/recoveryDesk.js';
 import { ActionExecutor } from './executor/actionExecutor.js';
 import { RuleDispatcher } from './dispatcher/ruleDispatcher.js';
 import { loadPromptTemplates, type PromptTemplates } from './dispatcher/promptTemplates.js';
-import { loadReviewCharter } from './review/charter.js';
+import { loadReviewCharters } from './review/charter.js';
+import { reviewModeNames } from './review/prReview.js';
 import type { Dispatcher } from './dispatcher/dispatcher.js';
 import { openPrForIssue, type IssuePickupPolicy } from './dispatcher/issuePickup.js';
 import { watchLabelFor } from './watchLabels.js';
@@ -596,6 +597,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     socketPath: defaultSocketPath(),
     // What the appraiser is offered when it proposes a profile for a goal.
     profiles: orderedProfiles(config.agentModels),
+    // And what a triage agent is offered when it routes a pull request: the
+    // project's own review modes, in the order it declared them.
+    reviewModes: reviewModeNames(config.review),
     // What the appraiser is offered when it proposes where a goal belongs. A thunk
     // rather than a snapshot: the directory refreshes on the pulse, and a list
     // captured here would pin every agent to the tree as it stood at boot.
@@ -636,12 +640,13 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // both of which must work whether or not a cycle is running.
   const prompts = loadPromptTemplates(config.promptTemplatesDir);
 
-  // The project's review charter, on the same terms as the template book above:
-  // read once, from the checkout rather than from any branch, and absent where
-  // the project names no file. A path that names nothing is recorded rather than
-  // swallowed — a team whose charter is not being read has no other way to find
-  // out.
-  const reviewCharter = loadReviewCharter(config.repoRoot, config.review.charterFile, (error, path) =>
+  // The project's review charters — the one that says how to choose a mode, and
+  // one per mode saying what it looks for. On the same terms as the template book
+  // above: read once, from the checkout rather than from any branch, and absent
+  // where the project names no file. A path that names nothing is recorded rather
+  // than swallowed — a team whose charter is not being read has no other way to
+  // find out.
+  const reviewCharters = loadReviewCharters(config.repoRoot, config.review, (error, path) =>
     errors.record({
       source: 'boot',
       message: `Review charter "${path}" could not be read; the reviewer runs without it.`,
@@ -833,7 +838,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     config.validationRoot,
     prRefStyle(config.integrations.sourceControl),
     config.review,
-    reviewCharter,
+    reviewCharters,
   );
   const dispatcher: Dispatcher = rules;
 

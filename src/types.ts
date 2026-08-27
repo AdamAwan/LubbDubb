@@ -327,6 +327,29 @@ export interface PrReview {
   reviewedAt: string;
 }
 
+/**
+ * How the harness decided to read a pull request — the triage's verdict, naming
+ * one of the modes the project declared.
+ *
+ * Its own row rather than a column on {@link PrReview}, and that separation is
+ * load-bearing: the merge gate is satisfied by a `pr_reviews` row *existing*, so
+ * a row written early to hold a route would report a pull request as reviewed by
+ * the step that only decided how to review it.
+ * → `docs/spec/07-pull-requests.md#choosing-how-to-review`
+ */
+export interface PrReviewRoute {
+  prNumber: number;
+  /** The mode's key in `review.modes`, as the triage agent named it. */
+  mode: string;
+  /** Why, in the triage's own words — the whole of what an operator reads later. */
+  reason: string;
+  agentId: string | null;
+  decidedAt: string;
+}
+
+/** A route as the tool hands it over; the store stamps the rest. */
+export type PrReviewRouteInput = Omit<PrReviewRoute, 'decidedAt'>;
+
 /** A review as the tool hands it over; the store stamps the rest. */
 export type PrReviewInput = Omit<PrReview, 'reviewedAt'>;
 

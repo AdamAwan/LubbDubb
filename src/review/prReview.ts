@@ -1,26 +1,37 @@
-import type { PullRequest, PrReview } from '../types.js';
+import type { PrReview, PrReviewRoute, PullRequest } from '../types.js';
 import type { PrReviewPolicy } from './policy.js';
 
 /**
  * The fleet's own read of a pull request, before a person is asked for theirs.
  *
- * Pure over the world and the recorded verdicts — the rule
- * (`src/dispatcher/rules/prCiFailing.ts`), the lens (`src/prAttention.ts`) and
- * the merge gate all ask *these* functions rather than each restating the
- * predicate, which is the arrangement the concern order already has and for the
- * same reason: two readings of one question drift silently, and the only symptom
- * is a row that explains a dispatch that did not happen.
+ * Pure over the world, the policy and the recorded rows — the two rules
+ * (`src/dispatcher/rules/`), the lens (`src/prAttention.ts`) and the merge gate
+ * all ask *these* functions rather than each restating the predicate, which is
+ * the arrangement the concern order already has and for the same reason: two
+ * readings of one question drift silently, and the only symptom is a row that
+ * explains a dispatch that did not happen.
  * → `docs/spec/07-pull-requests.md#the-fleet-review`
  */
 
 /**
- * The dispatch origin. Its own, not `pr:<n>:ci` or the comment origin, so the
- * review carries its own cooldown and its own attempt budget: a review that
- * cannot be got through must not spend the budget a red build needs, and an
+ * The review's dispatch origin. Its own, not `pr:<n>:ci` or the comment origin,
+ * so the review carries its own cooldown and its own attempt budget: a review
+ * that cannot be got through must not spend the budget a red build needs, and an
  * escalation raised at the cap has to name which of the two it was about.
  */
 export function reviewOrigin(prNumber: number): string {
   return `pr:${prNumber}:review`;
+}
+
+/**
+ * Triage's origin, separate from the review's for the reason `pr-ci-gate` is
+ * separate from `pr-ci-ci`: they are two problems, and one budget across both
+ * would let a routing that cannot be got through cap the review that was never
+ * attempted — and would leave the failure naming whichever of the two the log
+ * happened to quote.
+ */
+export function reviewTriageOrigin(prNumber: number): string {
+  return `pr:${prNumber}:review-triage`;
 }
 
 /**
@@ -33,6 +44,65 @@ export function reviewOrigin(prNumber: number): string {
  */
 export function reviewBranch(prNumber: number): string {
   return `review/pr-${prNumber}`;
+}
+
+/**
+ * The pull request a `review_report` or `review_route` call is about, read from
+ * the caller's own dispatch origin and never from an argument — the tool
+ * channel's one structural guarantee ([11](docs/spec/11-mcp-tools.md)). Null for
+ * any other origin, which is how an agent that was not dispatched for this
+ * refuses rather than writing about a pull request it was never sent at.
+ */
+export function reviewTargetPr(originRef: string | null, suffix: 'review' | 'review-triage'): number | null {
+  if (originRef === null) return null;
+  const match = new RegExp(`^pr:(\\d+):${suffix}$`).exec(originRef);
+  return match ? Number(match[1]) : null;
+}
+
+/** The modes this project declared, in declaration order. */
+export function reviewModeNames(policy: PrReviewPolicy): string[] {
+  return Object.keys(policy.modes);
+}
+
+/**
+ * Is there a routing decision to make at all?
+ *
+ * **One mode is not a choice**, so the triage is switched on by there being two,
+ * rather than by a flag of its own — a flag could disagree with the modes, and
+ * one of the two would then be ignored with nothing to say which.
+ */
+export function routesBetweenModes(policy: PrReviewPolicy): boolean {
+  return reviewModeNames(policy).length > 1;
+}
+
+/**
+ * The mode a review runs in when nothing chose one.
+ *
+ * This is the fail-open target, and everything about it points the same way: a
+ * triage that crashed, was killed or spent its cap must cost a more careful read
+ * than the pull request needed, never a pull request nobody reads. Null policy
+ * default takes the first declared mode, which is why the spec tells a project to
+ * declare its thorough mode first.
+ */
+export function defaultReviewMode(policy: PrReviewPolicy): string | null {
+  const names = reviewModeNames(policy);
+  if (names.length === 0) return null;
+  const named = policy.defaultMode;
+  return named !== null && names.includes(named) ? named : (names[0] ?? null);
+}
+
+/**
+ * The mode this pull request's review runs in: what triage chose, or the fail-open
+ * default. Null on a project that declared no modes at all, which is the review
+ * running on its rule's own profile with no charter.
+ */
+export function resolvedReviewMode(route: PrReviewRoute | null, policy: PrReviewPolicy): string | null {
+  const names = reviewModeNames(policy);
+  // A route naming a mode the project has since removed is not honoured: the
+  // charter and the profile behind that name are gone, so the honest answer is
+  // the same one a triage failure gets.
+  if (route !== null && names.includes(route.mode)) return route.mode;
+  return defaultReviewMode(policy);
 }
 
 /**
@@ -81,21 +151,13 @@ export function reviewSatisfied(review: PrReview | null, policy: PrReviewPolicy)
 }
 
 /** How the wait reads on a pull request's row while the review is still to come. */
-export function reviewPendingLabel(): string {
-  return 'not yet reviewed by the fleet';
+export function reviewPendingLabel(mode: string | null): string {
+  return mode === null ? 'not yet reviewed by the fleet' : `not yet reviewed by the fleet (${mode})`;
 }
 
-/**
- * The pull request a `review_report` call is about, read from the caller's own
- * dispatch origin and never from an argument — the tool channel's one structural
- * guarantee ([11](docs/spec/11-mcp-tools.md)). Null for any other origin, which
- * is how an agent that was not dispatched to review is refused rather than
- * allowed to write a verdict for a pull request it was never sent at.
- */
-export function reviewTargetPr(originRef: string | null): number | null {
-  if (originRef === null) return null;
-  const match = /^pr:(\d+):review$/.exec(originRef);
-  return match ? Number(match[1]) : null;
+/** And while the harness is still deciding how to read it. */
+export function triagePendingLabel(): string {
+  return 'deciding how thoroughly to review it';
 }
 
 /**
@@ -126,16 +188,37 @@ export function publishNote(publish: PrReviewPolicy['publish']): string {
 }
 
 /**
- * The project's own checklist, appended verbatim under a heading that says whose
- * words they are.
+ * The project's own words, appended verbatim under a heading that says whose they
+ * are — a mode's charter for the reviewer, the routing charter for the triage.
  *
- * Attributed rather than folded into the prompt's voice: a reviewer that cannot
+ * Attributed rather than folded into the prompt's voice: an agent that cannot
  * tell the harness's instructions from its team's cannot weigh them against what
  * it is actually reading, and a charter that contradicts the repository is itself
  * worth reporting.
  */
-export function charterNote(charter: string | null): string {
+export function charterNote(charter: string | null, heading: string): string {
   const text = charter?.trim() ?? '';
   if (text === '') return '';
-  return `\n\n## What this project asks its reviewers to look at\n\nThis is committed in the repository by the team that works here. Read it as their standing instruction, and say so if what you find contradicts it.\n\n${text}\n`;
+  return `\n\n## ${heading}\n\nThis is committed in the repository by the team that works here. Read it as their standing instruction, and say so if what you find contradicts it.\n\n${text}\n`;
+}
+
+/** The heading a mode's charter is appended under, naming the mode it belongs to. */
+export function modeCharterHeading(mode: string | null): string {
+  return mode === null
+    ? 'What this project asks its reviewers to look at'
+    : `What this project asks a "${mode}" review to look at`;
+}
+
+/**
+ * The charters as the dispatcher holds them: text, never paths.
+ *
+ * Nothing in a rule reads the filesystem, exactly as `validationRoot` is only
+ * ever phrased — so the files are read once at boot (`src/review/charter.ts`) and
+ * what reaches a stage is what they said.
+ */
+export interface PrReviewCharters {
+  /** How to choose a mode, for the triage. Null where the project names no file. */
+  routing: string | null;
+  /** What each mode looks for, keyed as `review.modes` is. */
+  modes: Record<string, string | null>;
 }

@@ -41,6 +41,12 @@ interface McpBridgeServerOptions {
    */
   profiles?: { name: string; description: string }[];
   /**
+   * The project's review modes, in declaration order, for `review_route` to offer
+   * a triage agent. Absent/empty = a project that declared none, and then no
+   * triage is ever dispatched and nothing calls the tool.
+   */
+  reviewModes?: string[];
+  /**
    * The project's area tree, for `appraise_issue` to offer an appraiser when it says
    * where a goal belongs. A thunk for {@link agents}' reason — the directory
    * behind it refreshes on the pulse. Absent/null = no tree the harness could
@@ -289,6 +295,7 @@ export class McpBridgeServer {
         store: this.opts.store,
         agents: this.opts.agents(),
         profiles: this.opts.profiles,
+        reviewModes: this.opts.reviewModes,
         areaPaths: this.opts.areaPaths,
         permissions: this.opts.permissions?.(),
         openPr: this.opts.openPr?.(),
