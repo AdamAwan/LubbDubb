@@ -8,6 +8,7 @@ import { unrecordedLandings } from './landings.js';
 import type { EnvironmentConfig } from './policy.js';
 import type { EnvironmentProber } from './prober.js';
 import { allGoalReach } from './reach.js';
+import type { WatchDesk } from './watchDesk.js';
 
 interface EnvironmentDeskDeps {
   store: Store;
@@ -20,6 +21,17 @@ interface EnvironmentDeskDeps {
   sink: ActionSink;
   /** How long a landing rests before its environment is asked where it is again. */
   probeIntervalMs: number;
+  /**
+   * The post-deploy watch's own pass, or undefined where nothing has one.
+   *
+   * Held here rather than run beside this desk in the composition root, because
+   * **where it runs is the invariant**: a window opens on an arrival the pass above
+   * records, so above that pass it reads arrivals that have not been written yet
+   * and the whole feature is one pulse late forever, with nothing red. Making the
+   * order a line in this file is what stops a reordering elsewhere being silent.
+   * → `docs/spec/29-post-deploy-watch.md#the-window`
+   */
+  watch?: WatchDesk;
   errors?: ErrorRecorder;
   /** Injectable clock, so a test decides what "due" means rather than waiting. */
   now?: () => number;
@@ -41,9 +53,10 @@ interface EnvironmentDeskDeps {
 const MAX_LANDINGS_PER_PULSE = 200;
 
 /**
- * Four passes on the pulse: attribute the merges nothing has attributed yet, ask
- * each environment where it is, record the goals that have just arrived, and say
- * so on their tickets.
+ * Five passes on the pulse: attribute the merges nothing has attributed yet, ask
+ * each environment where it is, record the goals that have just arrived, say so on
+ * their tickets, and — last, because it reads what the third pass wrote — open,
+ * read and settle the post-deploy watch.
  *
  * A desk beside {@link BranchReapDesk} rather than a dispatcher rule, for the
  * reason everything in `src/environments/` sits outside `src/dispatcher/`: it
@@ -78,6 +91,9 @@ export class EnvironmentDesk {
     for (const environment of this.deps.environments) await this.probe(environment);
     this.recordArrivals();
     await this.announce();
+    // Below the arrival pass, and that is the invariant rather than a preference:
+    // a window opens on an arrival the pass above writes.
+    await this.deps.watch?.run();
   }
 
   /**

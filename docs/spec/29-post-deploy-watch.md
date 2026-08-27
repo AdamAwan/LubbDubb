@@ -1,13 +1,15 @@
 # 29 — The post-deploy watch
 
-**Partly built.** [The declaration](#the-declaration), [the dry run](#the-dry-run),
-[asking the environment](#asking-the-environment) and [configuring an
-environment](#configuring-an-environment) describe running code, and their paths are backticked.
-Everything from [the window](#the-window) onwards — opening, readings, verdicts, measures and
-baselines, what a finding does, and every cockpit surface but the plan sheet's — is **not built**:
-its paths stay italic, and the marker comes off section by section in the change that makes each
-true, not later and not in one sweep at the end. [26](26-setup.md) states the same discipline for
-its own unbuilt half. `docs/plans/29-post-deploy-watch.md` tracks which stage owns what.
+**Partly built.** [The declaration](#the-declaration), [the dry run](#the-dry-run), [asking the
+environment](#asking-the-environment), [the window](#the-window), [the verdict](#the-verdict) and
+[configuring an environment](#configuring-an-environment) describe running code, and their paths are
+backticked. What is left is **not built**: [measures and baselines](#the-baseline-and-why-a-measure-is-not-trusted-without-one)
+and the working agent's [`watch_declare`](#the-working-agent-at-conclude-time), [what a finding
+does](#what-a-finding-does) — the bench row, the bug, `holds` and `extend` — and the Needs-you rail
+that carries them. Their paths stay italic, and the marker comes off section by section in the change
+that makes each true, not later and not in one sweep at the end. [26](26-setup.md) states the same
+discipline for its own unbuilt half. `docs/plans/29-post-deploy-watch.md` tracks which stage owns
+what.
 
 `src/environments/` records where a goal's landed work has got to ([24](24-environments.md)). It
 stops one question short of the one asked next: **is the thing behaving now that it is there.** A
@@ -278,6 +280,16 @@ and the dry run is the backstop that means none of them has to be complete:
 
 ## The window
 
+Four files, split so the halves that decide things are pure. `src/environments/watchDesk.ts` is the
+pass — a fifth on `EnvironmentDesk` and **below** its arrival pass, since a window opens on an
+arrival the pass above records; `src/environments/watchWindow.ts` is the arithmetic of which arrivals
+open one, which windows are due a reading and which have run out of time;
+`src/environments/watchVerdict.ts` is the fold below; and `src/store/watches.ts` owns the two tables.
+
+The order inside the pass is load-bearing too: open, then settle, then read. Settling before the
+readings is what stops a window that ran out between two pulses collecting one more reading past its
+own end.
+
 ### Opening
 
 A watch opens on an **arrival** — one goal's whole work confirmed in one environment
@@ -289,9 +301,16 @@ It opens **per environment**, so a goal travelling `testUk` → `liveUk` → `li
 times, separately, with separate readings. That is not redundancy: the acceptance environment is
 usually where presence is zero and the production one is where the answer is.
 
-`for` is declared on the watch and defaults to 48 hours. A goal whose subject is a scheduled job
-needs a window long enough to contain several runs, which is a judgement its author makes and the
-operator can overrule.
+`for` is spelled `forMs`, declared on the **environment's** `watch`, and defaults to 48 hours
+(`watchWindow.ts`). A goal whose subject is a scheduled job needs a window long enough to contain
+several runs — and that judgement is made once per environment rather than once per goal, because
+what it is really about is the release cadence and the traffic pattern of the deployment, which the
+operator knows and a planner drafting a document does not. A per-goal `for` on the plan document was
+considered and left out for that reason: it would be a second place to answer the same question,
+answered worse, by the party with less of the information. The operator's file is the one answer.
+
+The window is sized from the **arrival**, not from the pulse that noticed it, so a probe pass that
+ran long does not extend a watch by the length of its own delay.
 
 ### Only for an arrival the harness watched
 
@@ -301,8 +320,19 @@ a month, would otherwise open a watch on **every goal that ever arrived** — hu
 pulse, hundreds of bench rows, against work that shipped in March.
 
 So a watch opens only for an arrival confirmed within two probe intervals of now, and every arrival
-is **stamped** as considered either way. The stamp is what makes the next arrival the first one
-watched, rather than the whole history arriving at once.
+is **stamped** as considered either way — `goal_arrivals.watched_at`, beside `announced_at` and for
+its reason. The stamp is what makes the next arrival the first one watched, rather than the whole
+history arriving at once.
+
+The stamp is spent only where the feature is on. An arrival on a deployment where no environment
+declares a `watch` is left unstamped, because stamping it would burn the one guard that makes turning
+the feature on next month safe.
+
+Three things have to be true to open a window, and each is a different kind of no: the environment
+declares an `observe`; the goal declares at least one check; and the confirming reading is fresh. A
+goal that declares its first check *after* it arrived somewhere is therefore not watched there, which
+is the honest reading rather than a gap — the declaration is what the operator approved, and
+approving it after the deploy is approving it for the next one.
 
 ### Closing
 
@@ -311,8 +341,16 @@ goal page as the permanent account of what production said about this work. A se
 re-opened by a later reading, for the reason a confirmed landing is never re-asked — this is a record
 of what happened after a deploy, not a monitor.
 
-An operator may **extend** an open or just-settled watch, which is the honest answer for a window
-that closed before the weekly job ran.
+**Not built:** an operator may **extend** an open or just-settled watch, which is the honest answer
+for a window that closed before the weekly job ran.
+
+A settled window is never pruned either, which is the other half of the same rule: its readings are
+the evidence behind a verdict that is now permanent, and a retention rule that dropped them would
+leave the verdict standing with nothing behind it. What bounds them is `for` over `watchIntervalMs`
+— 96 rows per check per environment on the defaults — so the table grows with the fleet's work
+rather than with time. The one case a reading is deleted is a check an amendment stopped declaring,
+which takes its readings with it in the same transaction: neither a verdict nor its evidence is left
+behind, because a reading of a check no document declares is a number with no rule.
 
 ## The verdict
 
@@ -339,7 +377,7 @@ would hide the half that is good news — which is the half the ticket was about
 
 ## What a finding does
 
-Three outlets, and no fourth. `src/environments/` is a lens: nothing under `src/dispatcher/` may
+**Not built**, apart from the goal page. Three outlets, and no fourth. `src/environments/` is a lens: nothing under `src/dispatcher/` may
 import it, which is asserted structurally, so a watch **cannot** spend an agent even by accident.
 
 - **A `human_tasks` row** on the goal, naming the check, what it expected and what it read
@@ -371,7 +409,7 @@ it is off.
 
 ### A reading is never a `WorldEvent`
 
-The activity feed is the obvious place to put a regression, and `deliveryHold` expires a standing
+Built, and the reason it had to be. The activity feed is the obvious place to put a regression, and `deliveryHold` expires a standing
 delivery verdict on **any** world event matching the goal's issue ref
 ([03](03-world-model.md)) — so a watch reading written as one would un-park the goal it just reported
 on and hand the finished fix straight back to the fleet to do again. Nothing errors, and the
@@ -459,8 +497,8 @@ can write it; nothing in `src/mcp/` touches config.
 
 ## In the cockpit
 
-→ [17](17-cockpit.md). Four surfaces and one changed reading. **Only the plan sheet is built**; the
-three below it and the strip's fold are italic for that reason.
+→ [17](17-cockpit.md). Four surfaces and one changed reading. The plan sheet, the goal page's card
+and the strip's fold are built; **the Needs-you rail is not**, and is italic for that reason.
 
 **The plan sheet** draws the watch beside the validation checks, each check with its query, its
 expectation, and the dry-run readings under it (`web/src/components/WatchDigest.tsx`). Read-only, for
@@ -471,23 +509,35 @@ clean reading. An amendment from an agent draws as a pending change
 with accept and decline, because approving the plan is what authorises the query.
 
 **The goal page's Environments card** grows a watch block **inside** each environment's row —
-indented, on the well, with a tinted left edge. Inside the row and not beside it, because a watch
-belongs to an arrival: drawn as a sibling, the two surfaces would be free to disagree about which
-environment a reading came from, which is the disagreement the strip's fold exists to prevent one
-layer up.
+indented, on the well, with a tinted left edge (`web/src/console/GoalPage.tsx`,
+`web/src/console/console.css`). Inside the row and not beside it, because a watch belongs to an
+arrival: drawn as a sibling, the two surfaces would be free to disagree about which environment a
+reading came from, which is the disagreement the strip's fold exists to prevent one layer up.
 
-Each check draws as a line of **expected, before, now**. The before is what makes the card worth
-looking at — a p95 of 310ms means nothing alone and everything beside the 8,400ms it replaced — and
-it is available precisely because the baseline was taken at declaration.
+The block says how long the window has left, or when it settled, and then draws **every check** —
+whether or not anything is wrong, and with no roll-up to a word. A check nothing has read yet says
+so, in those words, for the plan sheet's reason: not yet put to an environment is not a clean
+reading.
 
-**An `unknown` says why in words**, on the row, and never in the vocabulary of a clean one.
+_Once measures land_, each check draws as a line of **expected, before, now**. The before is what
+makes the card worth looking at — a p95 of 310ms means nothing alone and everything beside the
+8,400ms it replaced — and it is available precisely because the baseline was taken at declaration.
 
-**The Needs-you rail** carries one row for a settled-regressed watch, with the reading in it and the
-bug-filing control beside it.
+**An `unknown` says why in words**, on the row, and never in the vocabulary of a clean one. Every
+colour on the block is a `--cn-*` token: a literal would be a surface that stays dark when somebody
+switches to Light, and nothing in `npm run check` reads the stylesheets but
+`test/cockpitTheme.test.ts`.
 
-**The track strip's Environments stage** gains the watch's reading — `liveUk · watch clean` — folded
-off the card below it rather than computed a second time, which is the strip's existing rule
-([17](17-cockpit.md)).
+_**The Needs-you rail**_ carries one row for a settled-regressed watch, with the reading in it and
+the bug-filing control beside it.
+
+**The track strip's Environments stage** gains the watch's reading — `reached liveUk · watch clean` —
+folded off the card below it rather than computed a second time, which is the strip's existing rule
+([17](17-cockpit.md), `web/src/view/goalPage.ts`). This is the one place a watch is reduced to a
+word, and the reduction is one-directional: `regressed` is answered first, then anything not `clean`
+reads *watch not read*, and only a window whose every check came back clean says so. A row with space
+for one reading must never fold an unread environment into an all-clear — the card underneath still
+draws every check.
 
 With no environment declaring a `watch`, none of this renders: not an empty card, not a row of
 question marks. A goal that declared no checks renders nothing either, because null is not clean.
@@ -516,39 +566,51 @@ question marks. A goal that declared no checks renders nothing either, because n
 | Table            | One row per                   | Written                                                                    |
 | ---------------- | ----------------------------- | -------------------------------------------------------------------------- |
 | `goal_watches`   | `(goal_ref, check_id)`        | `OR REPLACE` on the declaration; the merge key is the slug                 |
-| _watch_windows_  | `(goal_ref, environment)`     | `OR IGNORE` — an arrival opens one window, and re-arriving is not a second |
-| _watch_readings_ | `(window, check_id, read_at)` | append-only, pruned with its window                                        |
+| `watch_windows`  | `(goal_ref, environment)`     | `OR IGNORE` — an arrival opens one window, and re-arriving is not a second |
+| `watch_readings` | `(window, check_id, read_at)` | append-only, and pruned only with the check an amendment dropped           |
 
 `goal_watches` also carries the dry run — the environment it was put to, when, what the check's own
 query and its `presence` query each answered, and the row count. On the check rather than in a
 readings table because it is a reading of the _declaration_, taken before any window exists, and it
 is cleared by a re-declaration for the same reason.
 
-The last two are not built. All three are new tables, so none needs a `ColumnMigrations` entry — and a table being new **once**
+All three are new tables, so none needs a `ColumnMigrations` entry — and a table being new **once**
 does not keep it exempt from the next column added to it
-([14](14-persistence.md#migrations)).
+([14](14-persistence.md#migrations)). The window pass proves the point one table over:
+`goal_arrivals.watched_at` is a column on an **existing** table, and it carries the
+`ColumnMigrations` entry the rule requires, declared in `src/store/environments.ts` and registered in
+`src/store/store.ts`. It needs no backfill, and that is a property of the freshness guard rather than
+an oversight: null there means *not considered yet*, and an arrival considered for the first time
+opens a window only if its confirming reading is fresh — so a database full of nulls is walked once,
+stamped, and opens nothing for work that shipped in March.
 
 `watch_windows.settled_at` null means **still watching**, which is a null that means something: a
 column added to it later, without the gated backfill, would reopen every settled window on the boot
 an operator takes the build ([14](14-persistence.md#when-a-null-means-something)).
 
-`watch_readings` is the one table here that grows with time rather than with the fleet's work, and it
-is bounded by pruning with its window rather than by a cap on rows: a window's readings are the
-evidence behind its verdict, and a retention rule that dropped them would leave the verdict standing
-with nothing behind it.
+`watch_readings` is bounded by `for` rather than by a retention rule: a window's readings are the
+evidence behind its verdict, and a rule that dropped them would leave the verdict standing with
+nothing behind it. At 30-minute intervals over 48 hours that is 96 rows per check per environment,
+which grows with the fleet's work and not with time. → [Closing](#closing)
 
 ## Tests
 
 At the `buildSystem` seam with `FakeEnvironmentObserver` injected beside `FakeEnvironmentProber`
-([19](19-development.md)), plus unit tests on the pure fold. The ones that earn their place are the
-silences:
+([19](19-development.md)), plus unit tests on the pure halves — `test/watchResult.test.ts`,
+`test/watchDryRun.test.ts`, `test/watchVerdict.test.ts`, `test/watchWindow.test.ts` and
+`test/watchDesk.test.ts`. The ones that earn their place are the silences:
 
 - a signal with zero rows and **zero presence** is `unknown`, not `clean`;
 - an observation that fails, times out, or answers without the id echo is `unknown`, not `clean`;
 - a measure answering with two rows is `unknown`, not the first row;
 - a watch does **not** open for an arrival older than two probe intervals, and the arrival is stamped
   anyway;
+- presence answering zero reads `unknown` in the goal page's own words, end to end — the case that
+  reads as success;
 - a settled watch is not re-opened by a later reading;
 - a goal with no declared checks reads null, and draws nothing;
+- a watch opens **per environment**, so a goal travelling `testUk` → `liveUk` is watched twice with
+  separate readings;
+- the per-pulse cap defers rather than drops, oldest window first;
 - nothing under `src/dispatcher/` imports the module, asserted structurally with the existing lens
   assertions.

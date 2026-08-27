@@ -126,6 +126,8 @@ import type {
   ShortfallCause,
   StackLanding,
   GoalWatch,
+  WatchReading,
+  WatchWindow,
   PoolFleetReading,
   PoolMirroredClaim,
   StallPark,
@@ -1105,6 +1107,16 @@ export interface CockpitState {
    */
   environmentReach: GoalReachView[];
   /**
+   * Every open or settled post-deploy watch, one entry per `(goal, environment)`.
+   *
+   * Empty whenever no environment declares a `watch`, which is what the cockpit
+   * reads to draw no watch surface at all — not an empty card, not a row of
+   * question marks. A goal that declared no checks has no entry here either, for
+   * the same reason: null is not clean.
+   * → `docs/spec/29-post-deploy-watch.md#in-the-cockpit`
+   */
+  goalWatchWindows: GoalWatchView[];
+  /**
    * The goals whose whole work has arrived somewhere, newest first — the
    * environments half of the Activity feed, capped like every other feed on this
    * surface.
@@ -1379,6 +1391,42 @@ export interface GoalReachView {
   gateHold: string | null;
   /** The operator's "this one is not waiting on an environment", when they have said so. */
   released: EnvironmentGateRelease | null;
+}
+
+/**
+ * One goal's post-deploy watch in one environment: the window an arrival opened,
+ * and what each declared check last said inside it.
+ *
+ * Beside {@link GoalReachView} and keyed the same way, because it is the layer
+ * above the same question — reach says the work is *there*, this says what the
+ * running system has done since. Shipped as its own list rather than folded into
+ * the reach row so the two cannot disagree about which environment a reading came
+ * from: the card draws this inside the reach row it names.
+ *
+ * **Not a {@link WorldEvent}, deliberately**, for the reason {@link GoalArrival}
+ * is not: `deliveryHold` expires a standing delivery verdict on any world event
+ * matching the goal's issue ref, so a reading written as one would un-park the
+ * goal it just reported on. → `docs/spec/29-post-deploy-watch.md#a-reading-is-never-a-worldevent`
+ */
+export interface GoalWatchView extends WatchWindow {
+  /** Every check the goal declared, in document order — drawn whether or not anything is wrong. */
+  checks: GoalWatchCheckView[];
+}
+
+/** One declared check as the goal page draws it: what it asked for, and what it last read. */
+export interface GoalWatchCheckView {
+  /** The author's own slug, and the merge key its declaration is folded on. */
+  checkId: string;
+  title: string;
+  /** The count the check declared it must not exceed. */
+  tolerate: number;
+  /**
+   * The newest reading, or **null while the window has not been read yet**.
+   *
+   * Null is a third fact and not a synonym for clean, exactly as a check nothing
+   * has put to an environment is not a check that passed.
+   */
+  reading: WatchReading | null;
 }
 
 /**
@@ -2176,7 +2224,10 @@ export type {
   ValidationResourceKind,
   ValidationVerdict,
   ViewerAssignment,
+  WatchCheckVerdict,
+  WatchReading,
   WatchReadingVerdict,
+  WatchWindow,
   WorkNode,
   WorldEvent,
   WorldEventKind,

@@ -1378,6 +1378,72 @@
 .cn-criteria li {
   margin-bottom: 5px;
 }
+
+/* The post-deploy watch, drawn *inside* an environment's row on the goal page: an
+   indented block on the well with a tinted left edge, because a watch belongs to
+   an arrival and a block drawn beside the row would be free to disagree about
+   which environment a reading came from.
+
+   The environment's divider moves to the wrapper, since the row is no longer the
+   last child of the list — left on the row it would draw between a row and its own
+   watch instead of between two environments.
+
+   Every colour here is a token. A literal would be a surface that stays dark when
+   somebody switches to Light, and nothing in `npm run check` reads this sheet but
+   `test/cockpitTheme.test.ts`. */
+.cn-env {
+  border-bottom: 1px solid var(--cn-line-soft);
+}
+.cn-env:last-child {
+  border-bottom: 0;
+}
+.cn-env > .cn-row {
+  border-bottom: 0;
+}
+.cn-watch {
+  background: var(--cn-panel-2);
+  border-left: 2px solid var(--cn-blue-line);
+  margin: 0 13px 10px 26px;
+  border-radius: var(--cn-r-sm);
+  padding: 7px 10px;
+}
+.cn-watch-head {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+  margin-bottom: 5px;
+}
+.cn-watch-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+  border-top: 1px solid var(--cn-line-soft);
+  min-width: 0;
+}
+.cn-watch-row:first-of-type {
+  border-top: 0;
+}
+/* A rail per reading. `unknown` takes the amber a still-owed row takes rather than
+   a neutral one, deliberately: an environment nobody could read is work, not an
+   all-clear, and it is the reading that most looks like success. */
+.cn-watch-row.clean {
+  border-left: 2px solid var(--cn-green-line);
+}
+.cn-watch-row.regressed,
+.cn-watch-row.unknown {
+  border-left: 2px solid var(--cn-amber-line);
+}
+.cn-watch-row.unread {
+  border-left: 2px solid var(--cn-inert);
+}
+.cn-watch-row > .cn-grow {
+  min-width: 0;
+  flex: 1;
+  padding-left: 8px;
+}
 .cn-grpname {
   display: flex;
   align-items: center;

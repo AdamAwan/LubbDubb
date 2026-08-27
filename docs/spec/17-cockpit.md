@@ -1092,6 +1092,12 @@ Three rules make it safe to put at the top of the page.
   answers `unknown` in its own words, before it would ever say "not shipped".
 - **The Shipped stage is absent when no environment is configured**, exactly as the card is. A stage of
   question marks on a deployment that never set one up is a feature announcing itself as broken.
+- **It carries the post-deploy watch's reading folded off the card** — `reached liveUk · watch clean`
+  — rather than computing a second verdict, which is the first rule applied to the newest card. This
+  is the one place a watch is reduced to a word, and the reduction is one-directional: `regressed`
+  first, then anything not `clean` reads _watch not read_, and only a window whose every check came
+  back clean says so. A row with space for one reading must never fold an unread environment into an
+  all-clear. → [29](29-post-deploy-watch.md#in-the-cockpit)
 
 Each stage takes its hue from a `cn-t-*` tone alias, so it invents no colour and owes no new token —
 green settled, blue moving, amber held or failed, grey not reached.
@@ -1517,6 +1523,22 @@ deploy takes, and a rail carrying all of them would bury the asks somebody can a
 takes a required note through a modal, on `InstructionModal`'s reason: it is prose the operator has to
 compose, and every other control on this page is a verdict.
 → [24](24-environments.md#what-an-arrival-means)
+
+**The post-deploy watch is drawn inside the environment's own row**, indented on the well behind a
+tinted left edge — the layer above reach, saying what the running system has done since the work
+arrived ([29](29-post-deploy-watch.md#in-the-cockpit)). Inside the row and not beside it, because a
+watch belongs to an arrival: drawn as a sibling, the two surfaces would be free to disagree about
+which environment a reading came from. The block says how long the window has left, or when it
+settled, and then draws **every check** — because a goal whose one signal passed and whose other
+regressed is a fix that worked and a thing that is still broken, and one word for the pair would hide
+the half the ticket was about.
+
+Three readings, and the third is the one that matters: `clean`, `regressed`, and `unknown` for a watch
+that could not **read** the environment at all. `unknown` says why in words, on the row, and never in
+the vocabulary of a clean one — it takes the same tone as an unknown reach verdict, for the same
+reason. A check nothing has read yet says so as well, in the plan sheet's own words: not yet put to an
+environment is not a clean reading. Nothing renders where nothing is watched — not an empty block, not
+a row of question marks — because null is a third fact and not a synonym for clean.
 
 ### What the goal page deliberately does not draw
 

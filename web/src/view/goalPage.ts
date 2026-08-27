@@ -11,6 +11,7 @@ import type {
   PullRequest,
   EnvironmentGateRelease,
   GoalEnvironmentReach,
+  GoalWatchView,
   ValidationCheck,
   ValidationResourceView,
 } from '../types.js';
@@ -127,6 +128,16 @@ export interface GoalPageView {
   gateHold: string | null;
   /** The operator's standing "this one is not waiting on an environment". */
   gateRelease: EnvironmentGateRelease | null;
+  /**
+   * The post-deploy watch, one entry per environment this goal's work arrived in.
+   *
+   * **Empty means nothing is being watched**, and the page draws no watch surface
+   * at all — not an empty block, not a row of question marks. A goal that declared
+   * no checks, and a deployment where no environment declares a `watch`, both read
+   * as this, because null is a third fact rather than a synonym for clean.
+   * → `docs/spec/29-post-deploy-watch.md#in-the-cockpit`
+   */
+  watches: GoalWatchView[];
 }
 
 /**
@@ -386,6 +397,7 @@ export function buildGoalPage(
     environments: reach?.environments ?? [],
     gateHold: reach?.gateHold ?? null,
     gateRelease: reach?.released ?? null,
+    watches: (state.goalWatchWindows ?? []).filter((w) => w.goalRef === ref),
   };
 }
 
@@ -541,10 +553,11 @@ function environmentStage(page: GoalPageView): GoalStage {
   const furthest = reached[reached.length - 1];
   const done = (reached.length / envs.length) * 100;
   if (furthest !== undefined) {
+    const watch = watchFold(page, furthest.environment);
     return {
       ...base,
-      reading: `reached ${furthest.environment}`,
-      tone: reached.length === envs.length ? 'green' : 'blue',
+      reading: `reached ${furthest.environment}${watch === null ? '' : ` · ${watch.said}`}`,
+      tone: watch?.said === 'watch regressed' ? 'amber' : reached.length === envs.length ? 'green' : 'blue',
       done,
     };
   }
@@ -554,6 +567,30 @@ function environmentStage(page: GoalPageView): GoalStage {
   }
   if (envs.some((e) => e.status === 'unknown')) return { ...base, reading: 'not known', tone: 'grey', done: null };
   return { ...base, reading: 'not shipped', tone: 'grey', done };
+}
+
+/**
+ * What the watch on one environment says, in the three words the card below draws
+ * it in — or **null where nothing is being watched there**.
+ *
+ * Folded off the page's own `watches` rather than computed a second time, which is
+ * the strip's existing rule: a stage that re-derived a verdict would be free to
+ * disagree with the card it points at.
+ *
+ * This is the one place a watch is reduced to a word, and the reduction is
+ * one-directional on purpose. `unknown` is answered before `clean` — a check
+ * nobody could read is never folded into an all-clear, on the row that has space
+ * for one reading — and the card underneath still draws every check, because a
+ * goal whose signal passed and whose measure failed is a fix that worked and a
+ * proc that is still slow.
+ */
+function watchFold(page: GoalPageView, environment: string): { said: string } | null {
+  const window = page.watches.find((w) => w.environment === environment);
+  if (window === undefined || window.checks.length === 0) return null;
+  const verdicts = window.checks.map((c) => c.reading?.verdict ?? null);
+  if (verdicts.includes('regressed')) return { said: 'watch regressed' };
+  if (verdicts.some((v) => v !== 'clean')) return { said: 'watch not read' };
+  return { said: 'watch clean' };
 }
 
 /**

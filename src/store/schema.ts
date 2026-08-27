@@ -793,6 +793,42 @@ CREATE TABLE IF NOT EXISTS goal_watches (
   PRIMARY KEY (goal_ref, check_id)
 );
 
+-- One goal's whole work confirmed in one environment, and the period the harness
+-- spends asking that environment what happened next (see WatchStore). Opened on an
+-- arrival and never on a merge: between the two sit a release train and an approval
+-- gate, so a window opened at merge would spend itself asking about code that is
+-- not running yet. OR IGNORE on the write -- a goal that arrives again has not
+-- opened a second window.
+--
+-- settled_at NULL means *still watching*, which is a null that means something: a
+-- column added to this table later without a backfill gated on ensureColumns'
+-- report would reopen every settled window on the boot an operator takes the build.
+CREATE TABLE IF NOT EXISTS watch_windows (
+  goal_ref    TEXT NOT NULL,        -- issue:<n>
+  environment TEXT NOT NULL,
+  opened_at   TEXT NOT NULL,        -- the arrival that opened it
+  settles_at  TEXT NOT NULL,        -- opened_at + the environment's forMs
+  settled_at  TEXT,                 -- NULL while it is still watching
+  PRIMARY KEY (goal_ref, environment)
+);
+
+-- What one check answered on one reading, in one window (see WatchStore).
+-- Append-only, so the card draws the newest and the window keeps the account of
+-- what production said. Its own table rather than a WorldEvent, deliberately:
+-- deliveryHold expires a standing delivery verdict on *any* world event matching
+-- the goal's issue ref, so a reading written as one would un-park the goal it just
+-- reported on and hand finished work back to the fleet.
+CREATE TABLE IF NOT EXISTS watch_readings (
+  goal_ref    TEXT NOT NULL,        -- issue:<n>
+  environment TEXT NOT NULL,
+  check_id    TEXT NOT NULL,        -- the author's own slug, and the declaration's merge key
+  read_at     TEXT NOT NULL,
+  verdict     TEXT NOT NULL,        -- 'clean' | 'regressed' | 'unknown'
+  rows_read   INTEGER,              -- NULL when the observation did not answer
+  detail      TEXT,                 -- why, in words, for anything but a clean one
+  PRIMARY KEY (goal_ref, environment, check_id, read_at)
+);
+
 -- Goals the operator has said are not waiting on an environment: a docs change, a
 -- config change, work whose deployment nothing here can see. Lifts every gate on
 -- that goal, and is cleared by deleting the row so "not released" has one shape.

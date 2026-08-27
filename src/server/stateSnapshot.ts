@@ -12,12 +12,14 @@ import type {
   Retrospective,
   ScratchPadSummary,
   TaskSummary,
+  WatchReading,
   WorldSnapshot,
 } from '../types.js';
 import type { StateSection } from '../wire.js';
 import type {
   CockpitState,
   GoalReachView,
+  GoalWatchView,
   KnowledgeGraduationView,
   KnowledgeDeliveryView,
   LocalRunRefFacts,
@@ -817,6 +819,7 @@ export function buildStateSections(
     | 'retainedRuns'
     | 'stacks'
     | 'environmentReach'
+    | 'goalWatchWindows'
     | 'environmentArrivals'
     | 'stackLandings'
   > => ({
@@ -867,6 +870,7 @@ export function buildStateSections(
     // environment configured, which the cockpit draws as no row rather than as a
     // row of unknowns.
     environmentReach: buildEnvironmentReach(store, config.environments),
+    goalWatchWindows: buildGoalWatchWindows(store, config.environments),
     // Off the same table the comments are posted from, capped like every other
     // feed here. Empty with nothing configured, so the cockpit's signals list is
     // untouched on a deployment that never set an environment up.
@@ -1417,6 +1421,42 @@ function buildEnvironmentReach(store: System['store'], environments: Environment
     ...goal,
     gateHold: holds.get(goal.goalRef) ?? null,
     released: released.get(goal.goalRef) ?? null,
+  }));
+}
+
+/**
+ * Every post-deploy watch, one entry per `(goal, environment)` an arrival opened.
+ *
+ * Empty when no environment declares a `watch`, so the cockpit draws no watch
+ * surface at all rather than an empty one — the same off-by-default arrangement
+ * `environments` itself has, and the same reason: null is a third fact and not a
+ * synonym for clean.
+ *
+ * Every declared check is carried whether or not anything is wrong, and **nothing
+ * is rolled up to a word**: a goal whose one signal passed and whose other
+ * regressed is a fix that worked and a thing that is still broken, and one verdict
+ * for the pair would hide the half the ticket was about.
+ * → `docs/spec/29-post-deploy-watch.md#the-verdict`
+ */
+function buildGoalWatchWindows(store: System['store'], environments: EnvironmentConfig[]): GoalWatchView[] {
+  if (!environments.some((e) => e.watch !== undefined)) return [];
+  const windows = store.listWatchWindows();
+  if (windows.length === 0) return [];
+  // The newest reading per `(window, check)`. The readings are oldest-first, so
+  // the last one to land on a key is the one the card draws.
+  const newest = new Map<string, WatchReading>();
+  for (const r of store.listWatchReadings()) newest.set(`${r.goalRef} ${r.environment} ${r.checkId}`, r);
+  const checks = store.listGoalWatches();
+  return windows.map((window) => ({
+    ...window,
+    checks: checks
+      .filter((c) => c.originRef === window.goalRef)
+      .map((c) => ({
+        checkId: c.id,
+        title: c.title,
+        tolerate: c.tolerate,
+        reading: newest.get(`${window.goalRef} ${window.environment} ${c.id}`) ?? null,
+      })),
   }));
 }
 

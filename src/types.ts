@@ -3826,6 +3826,17 @@ export interface GoalArrival {
    * history on the boot after. → `docs/spec/24-environments.md#announcing-an-arrival`
    */
   announcedAt: string | null;
+  /**
+   * When the watch pass considered this arrival, or null while it has not.
+   *
+   * {@link announcedAt}'s stamp, for {@link announcedAt}'s reason and one more.
+   * Stamped whether or not a window was opened, so the first pulse after the watch
+   * ships — or after an operator adds a `watch` to an environment that has been
+   * probing for a month — walks the history *once* and silently, rather than
+   * opening a window on every goal that ever arrived.
+   * → `docs/spec/29-post-deploy-watch.md#only-for-an-arrival-the-harness-watched`
+   */
+  watchedAt: string | null;
 }
 
 /**
@@ -3881,6 +3892,64 @@ export interface GoalWatch extends GoalWatchInput {
   dryRunRows: number | null;
   /** What an operator is told, in words — the refusal for a `zero` or an `unknown`. */
   dryRunDetail: string | null;
+}
+
+/**
+ * What one open watch is: a goal's whole work confirmed in one environment, and
+ * the period the harness spends asking that environment what happened next.
+ *
+ * One row per `(goalRef, environment)`, opened on an arrival and never on a
+ * merge — between the two sit a release train and an approval gate, and a window
+ * opened at merge would spend itself asking about code that is not running yet.
+ * → `docs/spec/29-post-deploy-watch.md#opening`
+ */
+export interface WatchWindow {
+  /** The goal, `issue:<n>`. */
+  goalRef: string;
+  /** The environment's name as the operator configured it. */
+  environment: string;
+  /** When the arrival opened it. */
+  openedAt: string;
+  /** When it is due to settle — `openedAt` plus the environment's `forMs`. */
+  settlesAt: string;
+  /**
+   * When it settled, or **null while it is still watching**.
+   *
+   * A null that means something, which is the whole of why a column added to this
+   * table later needs a backfill gated on `ensureColumns`' report: without one,
+   * every settled window reopens on the boot an operator takes the build.
+   * → `docs/spec/14-persistence.md#when-a-null-means-something`
+   */
+  settledAt: string | null;
+}
+
+/**
+ * What one check's reading said, per environment, folded to the three verdicts.
+ *
+ * - `clean` — within what was declared, **with presence answering**.
+ * - `regressed` — outside what was declared.
+ * - `unknown` — the observation failed, or presence is silent.
+ *
+ * **`unknown` never folds to `clean`.** An expired credential, a missing binary,
+ * a job that never ran and a genuinely quiet release all fail identically, and
+ * only the last is about the work — read as clean they are indistinguishable on
+ * the glass. `GoalReachStatus`' rule one layer up, and the same rule because it is
+ * the same mistake. → `docs/spec/29-post-deploy-watch.md#the-verdict`
+ */
+export type WatchCheckVerdict = 'clean' | 'regressed' | 'unknown';
+
+/** One reading of one check, in one window. Append-only; the newest is what the card draws. */
+export interface WatchReading {
+  goalRef: string;
+  environment: string;
+  /** The check's own slug, and the key it is folded against its declaration by. */
+  checkId: string;
+  readAt: string;
+  verdict: WatchCheckVerdict;
+  /** How many rows the check's own query matched, or null when the observation did not answer. */
+  rows: number | null;
+  /** Why, in words — set for every verdict but `clean`, because the cockpit says it in words. */
+  detail: string | null;
 }
 
 /**

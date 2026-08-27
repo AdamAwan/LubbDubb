@@ -356,10 +356,17 @@ forever.
 `src/environments/environmentDesk.ts`, run from the pulse beside the other bookkeeping and not in the
 dispatcher — it staffs nothing, decides no dispatch, and no rule reads what it writes.
 
-Four passes: attribute the merges nothing has attributed yet, ask each environment where it is,
-record the goals that have just arrived, and say so on their tickets.
+Five passes: attribute the merges nothing has attributed yet, ask each environment where it is,
+record the goals that have just arrived, say so on their tickets, and run the post-deploy watch's own
+window pass ([29](29-post-deploy-watch.md#the-window)).
 
-The attribution pass runs unconditionally; the other three return immediately with no environments
+The fifth is **held here rather than run beside this desk**, and its position is the invariant rather
+than a preference: a watch window opens on an arrival the third pass records, so above that pass it
+would read arrivals that have not been written yet and the whole feature would be one pulse late
+forever, with nothing red. Making the order a line in this file is what stops a reordering elsewhere
+being silent.
+
+The attribution pass runs unconditionally; the other four return immediately with no environments
 configured. That split is not tidiness: a merge SHA is only on offer while its pull request is inside
 `closedPrWindowMs`, so a deployment that configures its first environment next month still wants this
 month's landings on record when it does.

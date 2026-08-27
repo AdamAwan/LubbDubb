@@ -42,7 +42,7 @@ import { TranscriptStore } from './transcripts.js';
 import { EscalationStore } from './escalations.js';
 import { StackLandingStore } from './landings.js';
 import { BranchReapStore } from './branchReaps.js';
-import { dropPartialGoalArrivals, EnvironmentStore, repairPartRefGoals } from './environments.js';
+import { dropPartialGoalArrivals, ENVIRONMENT_COLUMNS, EnvironmentStore, repairPartRefGoals } from './environments.js';
 import { LocalRunStore, LOCAL_RUN_COLUMNS } from './localRuns.js';
 import { WatchStore } from './watches.js';
 import { PrWatchSeedStore } from './prWatchSeeds.js';
@@ -143,7 +143,10 @@ import type {
   StackLanding,
   StackLandingStatus,
   Task,
+  WatchCheckVerdict,
+  WatchReading,
   WatchReadingVerdict,
+  WatchWindow,
   TrackerItem,
   UpgradeIntent,
   TaskSummary,
@@ -270,6 +273,7 @@ export class Store {
       PET_COLUMNS,
       LOCAL_RUN_COLUMNS,
       KNOWLEDGE_COLUMNS,
+      ENVIRONMENT_COLUMNS,
     ]) {
       addedColumns.push(...ensureColumns(this.db, columns));
     }
@@ -1218,6 +1222,9 @@ export class Store {
   markArrivalAnnounced(goalRef: string, environment: string): void {
     this.environments.markArrivalAnnounced(goalRef, environment);
   }
+  markArrivalWatched(goalRef: string, environment: string): void {
+    this.environments.markArrivalWatched(goalRef, environment);
+  }
   releaseEnvironmentGate(goalRef: string, note: string): EnvironmentGateRelease {
     return this.environments.releaseEnvironmentGate(goalRef, note);
   }
@@ -1247,6 +1254,28 @@ export class Store {
   }
   listGoalWatches(): GoalWatch[] {
     return this.watches.listGoalWatches();
+  }
+  openWatchWindow(input: { goalRef: string; environment: string; openedAt: string; settlesAt: string }): void {
+    this.watches.openWatchWindow(input);
+  }
+  settleWatchWindow(goalRef: string, environment: string): void {
+    this.watches.settleWatchWindow(goalRef, environment);
+  }
+  listWatchWindows(): WatchWindow[] {
+    return this.watches.listWatchWindows();
+  }
+  recordWatchReading(input: {
+    goalRef: string;
+    environment: string;
+    checkId: string;
+    verdict: WatchCheckVerdict;
+    rows: number | null;
+    detail: string | null;
+  }): void {
+    this.watches.recordWatchReading(input);
+  }
+  listWatchReadings(): WatchReading[] {
+    return this.watches.listWatchReadings();
   }
 
   // -- The local run (the machine's one dev environment) --------------------
