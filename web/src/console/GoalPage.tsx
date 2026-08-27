@@ -2,6 +2,7 @@ import { useState, type JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { GoalPageView, GoalStage, GoalStageAt, PartGroup } from '../view/goalPage.js';
+import type { NeedRow } from '../view/needsYou.js';
 import { buildGoalStrip } from '../view/goalPage.js';
 import type {
   Agent,
@@ -30,6 +31,7 @@ import { watchBucket } from '../worldBuckets.js';
 import { stateColour } from '../stateColour.js';
 import { WorkRecord } from '../components/WorkRecord.js';
 import { NeedsBand } from './NeedsBand.js';
+import { OrphanBand } from './OrphanBand.js';
 import { AgentOnIt } from '../components/AgentOnIt.js';
 
 /**
@@ -108,8 +110,9 @@ export function GoalPage({
   return (
     <div className="cn-goal">
       <Header page={page} view={view} actions={actions} />
+      <OrphanBand issue={page.issue} view={view} actions={actions} />
       <TrackStrip page={page} />
-      {page.needs.map((row) => (
+      {parentAskElsewhere(page).map((row) => (
         <NeedsBand key={row.id} row={row} view={view} actions={actions} />
       ))}
       <PlanWaves page={page} view={view} actions={actions} />
@@ -134,6 +137,23 @@ export function GoalPage({
       <Reference page={page} view={view} actions={actions} />
     </div>
   );
+}
+
+/**
+ * This goal's asks, less the parent question — which the page now states above,
+ * louder, and with the same three answers under it.
+ *
+ * Filtered here rather than dropped from {@link buildNeedsYou}, because the row is
+ * not redundant everywhere: the rail still carries it, and the ask panel still
+ * answers it for an operator working down the queue rather than down a page. What
+ * would be wrong is only this page drawing both — one question, twice, with two
+ * sets of buttons that write the same field.
+ *
+ * The area-path half of `placement` is untouched. It is a different question with
+ * a different answer, and the band above says nothing about it.
+ */
+function parentAskElsewhere(page: GoalPageView): NeedRow[] {
+  return page.needs.filter((row) => !row.id.startsWith('placement:parent:'));
 }
 
 /**

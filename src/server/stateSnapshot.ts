@@ -1297,6 +1297,11 @@ function appraisalVerdictOf(appraisal: IssueAppraisal | undefined, issue: Issue,
     // provider that tracks hierarchy can report an orphan in the first place — and
     // it is here so that stays true by construction rather than by coincidence.
     placement: placement.canPlace ? placementAsks(appraisal, issue, placement.areaTree, appraisal.goalRef) : [],
+    // Carried whole, and deliberately *not* gated on `canPlace` the way the asks
+    // above are: this is a stamp of something the operator did, not a question
+    // being put to them, and a deployment that has since lost the ability to
+    // write a placement has not un-answered it.
+    parentSettledAt: appraisal.parentSettledAt,
   };
 }
 

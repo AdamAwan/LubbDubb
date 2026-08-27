@@ -8,6 +8,7 @@ import { AsyncButton } from '../components/AsyncButton.js';
 import { EscalationCard } from '../components/EscalationCard.js';
 import { HumanTaskActions } from '../components/HumanTaskActions.js';
 import { renderMarkdown } from '../components/markdown.js';
+import { ParentPicker } from '../components/ParentPicker.js';
 import { Ref } from '../components/refs.js';
 import { goalIssue } from '../view/goalPage.js';
 import { refusedDispatchFor } from '../view/needsYou.js';
@@ -387,15 +388,14 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
  * The parent question: take the appraisal's container, pick another, or say this goal
  * wants none.
  *
- * The proposed container is drawn as a `<Ref>` **beside** the button and never
- * inside it, which is the rule and here also the point: verifying the suggestion
- * has to be as cheap as accepting it, or the three buttons collapse into one
- * rubber stamp. The row draws the title where the harness can see it, so the
- * common case needs no click at all to judge.
+ * The prose is this band's; the three answers are {@link ParentPicker}'s, shared
+ * with the goal page's orphan warning — the same write to the same field, put in
+ * two places, and one implementation of it.
  *
- * "Choose another" is a select over the containers in the world — the same set
- * `issueContainerTypes` names for every other gate — rather than a free number
- * box: an id typed by hand is the one answer here nobody can check.
+ * The proposed container is drawn as a `<Ref>` **beside** the buttons and never
+ * inside one, which is the rule and here also the point: verifying the suggestion
+ * has to be as cheap as accepting it. The row draws the title where the harness
+ * can see it, so the common case needs no click at all to judge.
  */
 function ParentAsk({
   issue,
@@ -408,13 +408,8 @@ function ParentAsk({
   view: CockpitView;
   actions: CockpitActions;
 }): JSX.Element | null {
-  const [chosen, setChosen] = useState<string>('');
   if (proposed === null) return null;
   const container = view.state.world.issues.find((i) => i.number === proposed);
-  const types = view.state.config.containerTypes.map((t) => t.toLowerCase());
-  const options = view.state.world.issues
-    .filter((i) => i.number !== issue.number && i.issueType && types.includes(i.issueType.toLowerCase()))
-    .sort((a, b) => a.number - b.number);
   return (
     <>
       <p>
@@ -428,47 +423,7 @@ function ParentAsk({
         Nothing is held up by this: the work is dispatched, done and merged either way. What is missing is the item’s
         place on the backlog — unparented, it rolls up to nothing and whoever plans the work cannot see it.
       </p>
-      <div className="cn-acts">
-        <AsyncButton
-          className="cn-btn cn-primary"
-          onClick={() => actions.setIssueParent(issue.number, proposed)}
-          title={`Hang this goal off #${proposed}`}
-        >
-          Use #{proposed}
-        </AsyncButton>
-        {options.length > 0 && (
-          <>
-            <select
-              className="cn-in"
-              value={chosen}
-              aria-label="A different parent"
-              onChange={(e) => setChosen(e.currentTarget.value)}
-            >
-              <option value="">Choose another…</option>
-              {options.map((o) => (
-                <option key={o.number} value={String(o.number)}>
-                  #{o.number} — {o.title}
-                </option>
-              ))}
-            </select>
-            <AsyncButton
-              className="cn-btn"
-              disabled={chosen === ''}
-              onClick={() => actions.setIssueParent(issue.number, Number(chosen))}
-              title="Hang this goal off the container you picked"
-            >
-              Use that one
-            </AsyncButton>
-          </>
-        )}
-        <AsyncButton
-          className="cn-btn"
-          onClick={() => actions.setIssueParent(issue.number, null)}
-          title="This goal belongs under nothing — stop asking"
-        >
-          Not applicable
-        </AsyncButton>
-      </div>
+      <ParentPicker issue={issue} proposed={proposed} view={view} actions={actions} />
     </>
   );
 }

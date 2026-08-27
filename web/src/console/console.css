@@ -1005,6 +1005,62 @@
   background: none;
 }
 
+/* The orphan warning — a goal hanging off no Feature, said above every card on
+   its page. → docs/spec/17-cockpit.md#a-goal-with-no-parent-feature
+
+   Amber and not a tone class, deliberately: the tone families are the *needs-you*
+   palette, and wearing `cn-t-amber` here would say this is an ask the rail is
+   holding, which it is not — the band draws on a fact about the work item and on
+   no queued row at all. The left rule is the weight the four properties alone
+   could not carry at the top of a page that is already all bordered cards. */
+.cn-orphan {
+  border: 1px solid var(--cn-amber-line-hi);
+  border-left: 3px solid var(--cn-amber);
+  background: var(--cn-amber-bg);
+  border-radius: var(--cn-r);
+  padding: 13px 15px;
+}
+.cn-orphan-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 7px;
+}
+.cn-orphan-mark {
+  color: var(--cn-amber);
+  font-size: 14px;
+  line-height: 1;
+}
+.cn-orphan-title {
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--cn-amber-ink-hi);
+}
+.cn-orphan p {
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--cn-amber-ink);
+}
+/* Answered — "this goal wants none". Grey rather than gone: the item is still an
+   orphan and the board still cannot roll it up, but it has stopped being an ask
+   and an amber band over a decision somebody made is how a warning gets ignored. */
+.cn-orphan.cn-orphan-quiet {
+  border-color: var(--cn-line-hi);
+  border-left-color: var(--cn-fg-faint);
+  background: var(--cn-panel);
+}
+.cn-orphan-quiet .cn-orphan-title {
+  font-weight: 500;
+  color: var(--cn-fg-dim);
+}
+.cn-orphan-quiet .cn-orphan-mark {
+  color: var(--cn-fg-faint);
+}
+.cn-orphan-quiet p {
+  color: var(--cn-fg-faint);
+}
+
 /* Same four tone properties as the rail row, and that is the whole of why a band
    and the row that opened it read as one ask. No weight split here: see
    `NeedsBand`. */
@@ -1574,6 +1630,14 @@ a.cn-tgl {
   padding: 2px 6px;
   border-radius: 99px;
 }
+/* A count that is not just how many rows there are. Drawn in the header's own
+   pill shape rather than as a chip, because it is a second reading of the same
+   list and not a verdict on anything: what changes is the hue. */
+.cn-card > h3 .cn-n.cn-alarm {
+  color: var(--cn-amber-ink-hi);
+  background: var(--cn-amber-fill);
+  border-color: var(--cn-amber-line-hi);
+}
 .cn-card > h3 .cn-more {
   margin-left: auto;
   font-size: 11px;
@@ -1824,6 +1888,11 @@ button.cn-grow {
   border-color: var(--cn-blue-line);
   color: var(--cn-blue-ink);
 }
+.cn-chip.cn-orphan-chip {
+  background: var(--cn-amber-fill);
+  border-color: var(--cn-amber-line-hi);
+  color: var(--cn-amber-ink-hi);
+}
 .cn-chip.cn-stall {
   background: var(--cn-amber-fill);
   border-color: var(--cn-amber-line);
@@ -1862,6 +1931,16 @@ button.cn-grow {
   background: var(--cn-blue-fill);
   border-color: var(--cn-blue-line);
   color: var(--cn-blue-ink);
+}
+
+/* A goal in flight that hangs off no Feature. The chip beside it is the word; this
+   is what makes the row one an eye stops at while scanning past the others, which
+   a chip at the far end of a full-width card cannot do on its own. Faint on
+   purpose — it marks rows, it does not shout over the lamp or the `asking you`
+   count, which are about whether anything is wrong *now*. */
+.cn-row.cn-row-orphan {
+  background: var(--cn-amber-bg);
+  border-radius: var(--cn-r-sm);
 }
 
 /* goal progress */

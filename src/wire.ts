@@ -252,6 +252,22 @@ export interface Issue extends WorldIssue {
      * root node that says what "unclassified" means.
      */
     placement: PlacementAsk[];
+    /**
+     * When the operator answered the parent question — accepting the proposal,
+     * supplying a container of their own, or saying this goal wants none.
+     *
+     * Shipped where {@link placement} is derived, and it is the one half of the
+     * pair that could not be: `placement` says a question is *open*, and an
+     * orphan with none open is either a goal nobody proposed anything for or one
+     * whose answer was "it wants none". The cockpit draws those two differently
+     * — the second is a decision somebody made — and the stamp is the only thing
+     * that tells them apart.
+     *
+     * Scoped to this appraisal row, so a re-appraisal against rewritten goal text
+     * arrives null and the question reads as open again. That is the same reading
+     * `parentSettledAt` has server-side, carried rather than reinterpreted.
+     */
+    parentSettledAt: string | null;
   } | null;
   /**
    * The profile this goal's work is pinned to (#342) — the tag on its ticket —

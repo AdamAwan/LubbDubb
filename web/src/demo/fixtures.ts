@@ -844,6 +844,7 @@ export function buildDemoState(): DemoSeed {
             proposedProfile: null,
             awaitingProfileAnswer: false,
             placement: [],
+            parentSettledAt: null,
             decidedAt: ago(52),
             commentRef: 'issue:379:comment:8402',
           },
