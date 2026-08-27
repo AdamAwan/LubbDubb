@@ -506,8 +506,7 @@ Behaviour worth knowing:
   `azCliAccessToken` is the one place `az` is invoked — by `resolveAzureAuth`'s CLI arm, and by
   Setup's credential probe, which must ask exactly what the auth path asks
   ([26](26-setup.md#the-credential-check-asks-both-routes)). `isSignInHtml` detects a sign-in-HTML response,
-  which is retried; transient-retry notices are surfaced in the Errors panel so an occasional failure
-  is visible even when the retry recovers.
+  which is retried; only a request that spends *every* attempt reaches the Errors panel.
 
 ## Reference links
 
@@ -594,14 +593,22 @@ because a reader of one is not looking at the other.
 
 ## Rate limits
 
-Both real providers retry a request the service itself said to retry, with the same budget
-(`MAX_RETRIES`, 3 extra attempts) and the same diagnostic sink — a `log` callback wired to the error
-log in production, silent in tests. A retry that succeeds still records a notice, because a limit the
-fleet is absorbing is the early warning that its read has outgrown its heartbeat.
+Both real providers retry a request the service itself said to retry, through the same diagnostic
+sink — a `log` callback wired to the error log in production, silent in tests. What each writes to it
+differs, because the two are absorbing different things.
 
 - **Azure DevOps** retries 429 and 5xx, and the sign-in-HTML response an `az`-CLI token produces
-  while it propagates, forcing a token refresh between attempts.
-- **GitHub** carries `@octokit/plugin-retry` and `@octokit/plugin-throttling`, which cover 5xx and
+  while it propagates, forcing a token refresh between attempts. **A retry that recovers records
+  nothing.** The `az`-CLI token is cached on a fixed window rather than a checked expiry, so a blip
+  as one generation turns over is ordinary, self-healing and roughly hourly — and the notice for it
+  was the whole of Azure's own message, which says the credential was rejected and to run `az login`.
+  An operator reading that in the Errors panel is being told an outage that did not happen, on a
+  schedule. Only exhaustion is a fault: the entry names the attempts spent and carries the final
+  cause, and it is written where the throw is raised, since a caller that degrades to its last good
+  reading swallows it ([15](15-integrations.md#reading-less-before-retrying-harder)).
+- **GitHub** records a notice on every rate-limited attempt, recovered or not, because a limit the
+  fleet is absorbing is the early warning that its read has outgrown its heartbeat — a standing
+  condition, not a blip. It carries `@octokit/plugin-retry` and `@octokit/plugin-throttling`, which cover 5xx and
   network failures, the primary hourly rate limit, and the **secondary** (abuse) limit. The secondary
   one is what this fleet actually provokes: it is triggered by burst concurrency rather than an
   hourly budget, and the world read fans out per open pull request and per open issue on every pulse,
