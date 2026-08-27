@@ -2634,11 +2634,18 @@ rolls up. GitHub answers false by design ([15](15-integrations.md)).
 Without that second half the flag alone would draw a page where every item is its own orphan and the
 whole board is one grey card. So on a flat tracker the tab is **absent**, not empty.
 
-The conjunction is one predicate — `featureBoardOn` in `src/server/routes/features.ts` — read by two
-callers that must never disagree: the route's own refusal, and the `config.featureBoard` on
-`/api/state` that the nav draws its tab off. Two copies would drift into the cockpit's worst shape, a
-tab whose every fetch 404s. The refusal is a **404 and not a 403** for the same reason: neither gate is
-about permission, and a 403 would send whoever reported it looking for a token problem.
+The conjunction is one predicate — `featureBoardOn` in `src/features/featureBoard.ts` — read by four
+callers that must never disagree: the route's own refusal, the `config.featureBoard` on `/api/state`
+that the nav draws its tab off, the dossier a summariser is handed, and the digest its submission is
+stamped with. Two copies would drift into the cockpit's worst shape, a tab whose every fetch 404s. The
+refusal is a **404 and not a 403** for the same reason: neither gate is about permission, and a 403
+would send whoever reported it looking for a token problem.
+
+**The flag switches on an agent as well as a surface.** Rule `feature-summary`
+([05](05-dispatcher.md)) spends one desk agent per Feature whose work has moved, and both halves of
+this gate hold it: a deployment with the flag off, or a tracker with no hierarchy, summarises nothing
+and does not read the mirror to find out whether anything moved. That is worth stating where the flag
+is described, because "draw a tab" is not what an operator expects to start a fleet.
 
 ### Six standings, because they are six different facts
 
