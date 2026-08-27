@@ -35,6 +35,7 @@ it on does.
 | `operating.md`      | The operator's guide: what changes about the job, and the five decisions that stay yours.      |
 | `operating.html`    | The same guide as a page to skim — open it in a browser. Kept in step with `operating.md`.     |
 | `prompt-templates/` | Ready-to-copy samples of the rule dispatcher's built-in prompt bodies, one file per prompt id. |
+| `plans/`            | Build plans for specs still marked unbuilt. Each is deleted by the change that finishes it.     |
 
 `spec/` holds the specification and nothing else. Dated design documents — the proposals that
 preceded a feature, recording the options weighed at the time — are **not** kept here: they age out
@@ -104,6 +105,7 @@ deliberately left unchecked, and why, is in
 | [26](spec/26-setup.md)               | Configuration health       | The checks that catch a silently-misconfigured harness, the fixes they carry, and the sheet that points it at a project |
 | [27](spec/27-knowledge.md)           | Knowledge                  | The one claim store: scope, reach, corroboration, delivery, and the three ways a claim leaves                           |
 | [28](spec/28-cross-fleet-pool.md)     | The cross-fleet pool       | The distance above `fleet`: one namespace per fleet, what a claim carries across, and the shared digest                 |
+| [29](spec/29-post-deploy-watch.md)   | The post-deploy watch      | Whether shipped work behaves: the declaration, the dry run, the window, and the three verdicts                          |
 
 ## Conventions used throughout
 
