@@ -138,6 +138,13 @@ export class GitHubSourceControlIntegration
             labels: p.labels,
             url: p.url,
           };
+          // The login is the only name GitHub puts on the list payload, and it is
+          // the name a reviewer is asked by — enough for a row to say who asked.
+          if (p.authorLogin !== '') pr.author = p.authorLogin;
+          // Only ever `true`: a reviewer who has not answered and one GitHub
+          // reports no review from are the same silence, and `false` would assert
+          // a verdict nobody gave.
+          if (viewerApproved(reviews, viewer)) pr.viewerApproved = true;
           // Resolved against `viewer` — the identity the token actually is — and
           // never against `prAuthor`, which is a *filter* and is unset the moment a
           // project turns `ownWorkOnly` off. Read the other way round, turning the
@@ -483,6 +490,28 @@ export function listCiChecks(checkRuns: GhCheckRun[], status: GhCombinedStatus):
 }
 
 /** Approved iff at least one reviewer's latest review is APPROVED and none is CHANGES_REQUESTED. */
+/**
+ * Whether **this** operator's own latest review is an approval.
+ *
+ * Their review, never {@link computeApproved}'s fold: a pull request somebody
+ * else approved is still waiting on the review this operator was asked for, and
+ * reading the aggregate here would clear their row on a colleague's answer.
+ *
+ * Latest-per-reviewer, on the same three states that move a stance — a later
+ * `CHANGES_REQUESTED` or `DISMISSED` takes an earlier approval back, and a
+ * `COMMENTED` leaves it standing.
+ */
+function viewerApproved(reviews: GhReview[], viewer: string): boolean {
+  if (viewer === '') return false;
+  let latest: GhReview | undefined;
+  for (const review of reviews) {
+    if (review.reviewerLogin !== viewer) continue;
+    if (review.state !== 'APPROVED' && review.state !== 'CHANGES_REQUESTED' && review.state !== 'DISMISSED') continue;
+    if (!latest || (review.submittedAt ?? '') >= (latest.submittedAt ?? '')) latest = review;
+  }
+  return latest?.state === 'APPROVED';
+}
+
 export function computeApproved(reviews: GhReview[]): boolean {
   const latest = new Map<string, GhReview>();
   for (const review of reviews) {

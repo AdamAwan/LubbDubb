@@ -584,14 +584,40 @@ Both would be the same ask twice, which is how a queue teaches an operator to sk
 
 Keyed on that field and never on the assignment itself, for the reason `dispatch` keys on an outcome
 rather than a sentence: a surface matching the leading reason's wording would file every future
-rewording of it as "not assigned". It carries **no age** — a provider payload says who a pull request
-is assigned to and never since when, and stamping the snapshot's "now" would draw a fresh age on every
-poll, a row that has been theirs all week reading as one that arrived a moment ago.
+rewording of it as "not assigned".
+
+**Its age is how long the pull request has been waiting on _them_** — `reviewWaitingSince`, the
+review-wait watermark the pulse folds, which the verdict carries on an assigned court for exactly this
+([07](07-pull-requests.md#how-long-it-has-been-waiting-on-a-reviewer)). It is deliberately **not** when
+the assignment was made: no provider payload says that, and stamping the snapshot's "now" for it would
+draw a fresh age on every poll, a row that has been theirs all week reading as one that arrived a
+moment ago. A pull request whose clock is not running — red CI, an unhandled comment, a staffed branch,
+or one the harness has not yet observed a pulse of — draws no age, and sorts to the top of its group,
+which is where an ask whose age is unknown belongs.
+
+**The row says who asked, and what they asked about.** Its line is the verdict's leading reason —
+which names the person ([07](07-pull-requests.md#a-pull-request-a-person-put-on-you)) — followed by the
+pull request's own title: `Priya Raman marked you as a reviewer on “Retry the sweep on a 429”`. The
+arm's own reason is deliberately dropped here and nowhere else: `waiting on review` is this very row
+said back to the operator, and `not tagged … — the harness is leaving it alone` explains the _fleet's_
+silence rather than their obligation. Both still stand on the pull request row, where the question
+being answered is what the harness makes of the PR. Which kind of reviewer they are rides on the
+metadata line instead (`Required reviewer` / `Optional reviewer`), read off `assignedToYou` — a real
+distinction, and a clause every row would carry and no two rows would differ by.
+
+**And it carries the way to the pull request.** It is the one ask whose subject lives outside the
+cockpit entirely — there is no PR page here — so a row that merely _named_ the pull request left the
+operator to go and find it in the provider, which is the surface this queue exists to replace. The
+`<Ref>` sits **beside** the row body, never inside it: one click may not have two destinations, so the
+body stays the control that opens the ask and the reference is its own target — the same shape a config
+row's fix strip takes ([links](#links)).
 
 **It has no control either, and for `dispatch`'s reason turned around**: there is no verdict to record
 and no act to authorise, because the harness has no part in this one. The band says what the pull
 request is, why nothing is coming, and offers the `<Ref>` to it — which is the whole of what the row
-owes. It stops being drawn the moment somebody takes the assignment off again.
+owes. It stops being drawn the moment somebody takes the assignment off again — or the moment the
+operator approves the pull request, which is the same thing said by the provider
+([07](07-pull-requests.md#when-the-assignment-ends)).
 
 **Two groups, split on who is stopped.** `blocking` means an agent is parked and cannot proceed;
 `yours` means the obligation is the operator's and nothing inside the fleet is waiting. A profile gate

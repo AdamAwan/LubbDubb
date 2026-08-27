@@ -280,6 +280,7 @@ function pull(over: Partial<AzPull> = {}): AzPull {
     baseBranch: 'main',
     lastMergeSourceCommit: 'abc123',
     authorUniqueName: 'alice@acme.com',
+    authorDisplayName: 'Alice Nkemelu',
     url: 'u',
     isDraft: false,
     mergeStatus: 'succeeded',
@@ -963,6 +964,58 @@ test('a PR that names you as a reviewer is kept by the owner filter and reported
   assert.equal(prs.find((p) => p.number === 7)?.viewerAssignment, undefined);
   assert.equal(prs.find((p) => p.number === 8)?.viewerAssignment, 'reviewer-required');
   assert.equal(prs.find((p) => p.number === 9)?.viewerAssignment, 'reviewer-optional');
+});
+
+test('an assignment carries who asked, and your own vote is what ends it', async () => {
+  const me = 'alice@acme.com';
+  const asked = (over: Partial<AzPull>) =>
+    pull({
+      pullRequestId: 8,
+      authorUniqueName: 'bob@acme.com',
+      authorDisplayName: 'Bob Ferreira',
+      reviewers: [{ uniqueName: me, vote: 0, isRequired: true, isContainer: false }],
+      ...over,
+    });
+  const snap = async (p: AzPull) => {
+    const { api } = fakeApi({ viewer: me, pulls: [p] });
+    const prs = (await new AzureDevOpsSourceControlIntegration({ api }).snapshot()).pullRequests!;
+    return prs[0]!;
+  };
+
+  const open = await snap(asked({}));
+  // The name a person goes by, which is what a row saying somebody asked you for
+  // a review has to print.
+  assert.equal(open.author, 'Bob Ferreira');
+  assert.equal(open.viewerApproved, undefined);
+
+  // Azure's two approving votes, and only your own entry.
+  assert.equal(
+    (await snap(asked({ reviewers: [{ uniqueName: me, vote: 10, isRequired: true, isContainer: false }] })))
+      .viewerApproved,
+    true,
+  );
+  assert.equal(
+    (await snap(asked({ reviewers: [{ uniqueName: me, vote: 5, isRequired: true, isContainer: false }] })))
+      .viewerApproved,
+    true,
+  );
+  const theirs = await snap(
+    asked({
+      reviewers: [
+        { uniqueName: me, vote: 0, isRequired: true, isContainer: false },
+        { uniqueName: 'carol@acme.com', vote: 10, isRequired: false, isContainer: false },
+      ],
+    }),
+  );
+  // A colleague's approval is not an answer to the review *you* were asked for —
+  // the fold says the PR is approved and the row stays yours.
+  assert.equal(theirs.approved, true);
+  assert.equal(theirs.viewerApproved, undefined);
+
+  // No display name is not "no author": the UPN is what is left, and a provider
+  // reporting neither leaves the field off rather than printing an empty name.
+  assert.equal((await snap(asked({ authorDisplayName: '' }))).author, 'bob@acme.com');
+  assert.equal((await snap(asked({ authorDisplayName: '', authorUniqueName: '' }))).author, undefined);
 });
 
 test('a first-read failure rejects rather than serving an empty world', async () => {

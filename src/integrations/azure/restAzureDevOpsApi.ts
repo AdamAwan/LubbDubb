@@ -142,7 +142,7 @@ interface RawPull {
   isDraft?: boolean;
   mergeStatus?: string;
   lastMergeSourceCommit?: { commitId?: string };
-  createdBy?: { uniqueName?: string };
+  createdBy?: { uniqueName?: string; displayName?: string };
   reviewers?: Array<{ vote?: number; uniqueName?: string; isRequired?: boolean; isContainer?: boolean }>;
 }
 
@@ -477,6 +477,7 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
       baseBranch: stripRef(p.targetRefName),
       lastMergeSourceCommit: p.lastMergeSourceCommit?.commitId ?? '',
       authorUniqueName: p.createdBy?.uniqueName ?? '',
+      authorDisplayName: p.createdBy?.displayName ?? '',
       url: `${this.projectUrl}/_git/${encodeURIComponent(this.repository)}/pullrequest/${p.pullRequestId}`,
       isDraft: p.isDraft ?? false,
       mergeStatus: p.mergeStatus ?? 'notSet',

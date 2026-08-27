@@ -609,6 +609,20 @@
 .cn-qbody:hover .cn-qtitle {
   color: var(--cn-tone-ink);
 }
+/* ---------- an assigned row's reference ----------
+   The pull request a person put on you is the one ask whose subject is outside
+   the cockpit, so the card carries the way there — beside the body, never inside
+   it, because one click may not have two destinations. A third column rather than
+   a strip beneath: the reference is what the row is *about*, so it reads on the
+   same line as the row rather than as an action taken on it. */
+.cn-q.cn-qref {
+  grid-template-columns: 3px 1fr auto;
+}
+.cn-q.cn-qref .cn-refs {
+  align-self: stretch;
+  min-width: 0;
+  padding-right: 12px;
+}
 .cn-fix {
   display: flex;
   align-items: center;

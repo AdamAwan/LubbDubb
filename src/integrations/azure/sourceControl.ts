@@ -161,12 +161,22 @@ export class AzureDevOpsSourceControlIntegration
             labels,
             url: p.url,
           };
+          // The name a person goes by, with the UPN behind it: Azure leaves
+          // `displayName` empty on some identities, and an assignment row that
+          // named nobody is the wording this field exists to fix. Neither means
+          // the sentence simply drops the name.
+          const author = p.authorDisplayName || p.authorUniqueName;
+          if (author !== '') pr.author = author;
           // Against `viewer` — who the credential *is* — and never against
           // `prAuthor`, which is a filter and is unset the moment a project turns
           // `ownWorkOnly` off. Read the other way round, turning the filter off
           // would take the assignment with it.
           const assignment = viewerAssignment(p.reviewers, viewer);
           if (assignment !== undefined) pr.viewerAssignment = assignment;
+          // Only ever `true`: an operator who has not voted, and one Azure lists
+          // no entry for at all, are the same silence, and writing `false` for it
+          // would assert a verdict nobody gave.
+          if (viewerApproved(p.reviewers, viewer)) pr.viewerApproved = true;
           // Only assert (not-)mergeable when Azure reports a concrete state; leave
           // it unknown while it is still computing ('queued'/'notSet'), mirroring
           // GitHub's tri-state `mergeable`.
@@ -613,6 +623,21 @@ function viewerAssignment(reviewers: readonly AzReviewer[], viewer: string): Vie
   const mine = reviewers.find((r) => !r.isContainer && sameIdentity(r.uniqueName, viewer));
   if (mine === undefined) return undefined;
   return mine.isRequired ? 'reviewer-required' : 'reviewer-optional';
+}
+
+/**
+ * Whether **this** operator's own vote on the pull request is an approving one —
+ * Azure's 10 (approved) or 5 (approved with suggestions), the same two
+ * {@link computeApproved} counts, asked of one reviewer instead of all of them.
+ *
+ * Their vote, never the fold: a pull request somebody else approved is still
+ * waiting on the review this operator was asked for, and reading the aggregate
+ * here would clear their row on a colleague's answer.
+ */
+function viewerApproved(reviewers: readonly AzReviewer[], viewer: string): boolean {
+  if (viewer === '') return false;
+  const mine = reviewers.find((r) => !r.isContainer && sameIdentity(r.uniqueName, viewer));
+  return mine !== undefined && mine.vote >= 5;
 }
 
 /** Two Azure identities, compared as the directory means them: UPNs, case-insensitively. */

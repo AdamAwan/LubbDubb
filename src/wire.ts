@@ -2144,6 +2144,7 @@ export type {
   ValidationResource,
   ValidationResourceKind,
   ValidationVerdict,
+  ViewerAssignment,
   WorkNode,
   WorldEvent,
   WorldEventKind,

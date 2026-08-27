@@ -431,6 +431,48 @@ test('a PR somebody assigned to you is kept by the owner filter and reported as 
   assert.equal(slice.pullRequests!.find((p) => p.number === 8)?.viewerAssignment, 'assignee');
 });
 
+test('an assignment carries who asked, and your own review is what ends it', async () => {
+  const me = 'lubbdubb-bot';
+  const snap = async (reviews: GhReview[]) => {
+    const { api } = fakeApi({
+      viewer: me,
+      pulls: [pull({ number: 8, authorLogin: 'carol', assigneeLogins: [me] })],
+      detail: { 8: { mergeable: true, mergeableState: 'clean', merged: false } },
+      reviews: { 8: reviews },
+    });
+    return (await new GitHubSourceControlIntegration({ api }).snapshot()).pullRequests![0]!;
+  };
+
+  const open = await snap([]);
+  // The login is the only name GitHub puts on the list payload, and it is the
+  // name a reviewer is asked by.
+  assert.equal(open.author, 'carol');
+  assert.equal(open.viewerApproved, undefined);
+
+  assert.equal(
+    (await snap([{ reviewerLogin: me, state: 'APPROVED', submittedAt: '2026-01-01T00:00:00Z' }])).viewerApproved,
+    true,
+  );
+
+  // A colleague's approval is not an answer to the review *you* were asked for.
+  const theirs = await snap([{ reviewerLogin: 'dave', state: 'APPROVED', submittedAt: '2026-01-01T00:00:00Z' }]);
+  assert.equal(theirs.approved, true);
+  assert.equal(theirs.viewerApproved, undefined);
+
+  // Latest-per-reviewer: a later verdict takes an earlier one back, and a
+  // `COMMENTED` in between moves nothing.
+  const takenBack = await snap([
+    { reviewerLogin: me, state: 'APPROVED', submittedAt: '2026-01-01T00:00:00Z' },
+    { reviewerLogin: me, state: 'CHANGES_REQUESTED', submittedAt: '2026-01-02T00:00:00Z' },
+  ]);
+  assert.equal(takenBack.viewerApproved, undefined);
+  const stillApproved = await snap([
+    { reviewerLogin: me, state: 'APPROVED', submittedAt: '2026-01-01T00:00:00Z' },
+    { reviewerLogin: me, state: 'COMMENTED', submittedAt: '2026-01-02T00:00:00Z' },
+  ]);
+  assert.equal(stillApproved.viewerApproved, true);
+});
+
 test("someone else's assignee is not yours", async () => {
   const { api } = fakeApi({
     viewer: 'lubbdubb-bot',

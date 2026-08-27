@@ -425,6 +425,13 @@ and under a team review rule it is one the operator's whole org shares. The same
 `prAuthor` filter, since a pull request that never enters the world cannot report anything
 ([02](02-configuration.md#ownworkonly)).
 
+**Who opened it** is `user.login` off the same list payload, and **whether the viewer has already
+approved** is their own latest review in `listPullReviews` — the read the snapshot already makes for
+`computeApproved`, asked of one reviewer rather than all of them. Latest-per-reviewer, on the same
+three states that move a stance, so a later `CHANGES_REQUESTED` takes an earlier approval back. Both
+are for the assignment row alone ([07](07-pull-requests.md#a-pull-request-a-person-put-on-you)), and
+neither costs a request.
+
 ## The `azure` provider
 
 Azure DevOps Repos + Boards, the same shape: all HTTP behind the narrow `AzureDevOpsApi` seam,
@@ -447,6 +454,13 @@ Behaviour worth knowing:
   the match fails twice over, and the flag is checked anyway rather than relying on that. The
   comparison is case-insensitive, because a UPN is. The same match widens the `prAuthor` filter
   ([02](02-configuration.md#ownworkonly)).
+- **Who opened it, and whether you have answered.** `createdBy.displayName` (the UPN behind it, and
+  nothing where Azure reports neither) becomes `PullRequest.author`; the viewer's own vote of 10 or 5
+  in the same reviewer list becomes `viewerApproved`. **Their vote, never `computeApproved`'s fold** —
+  a pull request a colleague approved is still waiting on the review this operator was asked for, and
+  reading the aggregate would clear their row on somebody else's answer. Both are read for the
+  assignment row alone ([07](07-pull-requests.md#a-pull-request-a-person-put-on-you)), off the payload
+  the filter already reads.
 - **CI status comes from branch-policy _evaluations_, not the PR `statuses` endpoint.** That endpoint
   returns every status ever posted across _all_ iterations, so a stale `failed` from a superseded push
   poisons the PR forever — the false-"failing" bug. `aggregatePolicyCiStatus` reads

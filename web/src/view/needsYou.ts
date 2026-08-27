@@ -8,6 +8,8 @@ import type {
   SetupCheck,
   SetupPayload,
   SetupVerdict,
+  OpenPullRequest,
+  ViewerAssignment,
 } from '../types.js';
 import { goalIssue, goalOfPr } from './goalPage.js';
 import { watchBucket } from '../worldBuckets.js';
@@ -130,11 +132,19 @@ function assignedPrRows(state: AppState): NeedRow[] {
       id: `assigned:pr:${pr.number}`,
       kind: 'assigned',
       group: 'yours',
-      // The reasons in order, which is the verdict's own promise: the assignment
-      // leads on every arm that sets this field, and what follows it is why
-      // nothing else is coming — `waiting on review`, `stacked on PR #7`, or the
-      // watch tag being absent.
-      title: askLine(oneLine(`PR #${pr.number} — ${pr.attention?.reasons.join('; ') ?? ''}`), goalRef, state),
+      // What a person asked, and what they asked it about. The verdict's leading
+      // reason names them (`Priya Raman marked you as a reviewer`) and the pull
+      // request's own title says what it is — which together are the whole of
+      // what an operator needs to decide whether to open it.
+      //
+      // The arm's own reason is deliberately **not** carried here. `waiting on
+      // review` is this very row said back to you, and `not tagged … — the
+      // harness is leaving it alone` explains the *fleet's* silence, not your
+      // obligation; both still stand on the pull request row, where the question
+      // being asked is what the harness makes of the PR rather than what a
+      // colleague wants from you.
+      title: askLine(assignedLine(pr), goalRef, state),
+      ...(REVIEWER_NOTE[assignment] === undefined ? {} : { note: REVIEWER_NOTE[assignment] }),
       goalRef,
       originRef: `pr:${pr.number}`,
       opens: opensAt(goalRef, state),
@@ -143,15 +153,50 @@ function assignedPrRows(state: AppState): NeedRow[] {
       agentId: null,
       agentLabel: null,
       holding: 0,
-      // There is no instant to quote. A provider payload says who a pull request
-      // is assigned to and never when it became so, and stamping the snapshot's
-      // "now" would draw a fresh age on every poll — a row that has been yours all
-      // week reading as one that arrived a moment ago. An empty string draws no
-      // age, which is the honest rendering of a span nothing observed.
-      raisedAt: '',
+      // How long it has been waiting on *you* — the review-wait watermark the
+      // pulse folds (`awaitingReview`), which the verdict carries on an assigned
+      // court for exactly this. It is not when the assignment was made: no
+      // provider payload says that, and stamping the snapshot's "now" for it would
+      // draw a fresh age on every poll, a row that has been yours all week reading
+      // as one that arrived a moment ago.
+      //
+      // Empty where the clock is not running — red CI, an unhandled comment, a
+      // staffed branch, or a harness that has not yet observed a pulse of this
+      // pull request — and an empty string draws no age, which is the honest
+      // rendering of a span nothing observed. It also sorts such a row to the top
+      // of its group, which is where an ask whose age is unknown belongs.
+      raisedAt: pr.attention?.reviewWaitingSince ?? '',
     });
   }
   return rows;
+}
+
+/**
+ * Which kind of reviewer, for the metadata line. An `assignee` has no note: "this
+ * is yours to drive" is already what the sentence says, and a chip repeating it
+ * would be the row's only line of pure decoration.
+ */
+const REVIEWER_NOTE: Partial<Record<ViewerAssignment, string>> = {
+  'reviewer-required': 'Required reviewer',
+  'reviewer-optional': 'Optional reviewer',
+};
+
+/**
+ * The row's sentence: what a person asked, then the pull request they asked it
+ * about, in that order — the order an operator reads it in, since the name is
+ * what makes the row an obligation and the title is what makes it judgeable.
+ *
+ * The lead is the verdict's own first reason rather than a second copy of the
+ * wording, and it is capitalised here because every other row on this rail opens
+ * with a capital and a reason is written as a clause. A pull request the world
+ * carries with no title is a shape no provider produces, but it costs one
+ * conditional to draw honestly instead of `on “”`.
+ */
+function assignedLine(pr: OpenPullRequest): string {
+  const lead = pr.attention?.reasons[0] ?? '';
+  const sentence = lead === '' ? `PR #${pr.number} is yours` : `${lead[0]?.toUpperCase() ?? ''}${lead.slice(1)}`;
+  const title = pr.title.trim();
+  return oneLine(title === '' ? sentence : `${sentence} on “${title}”`);
 }
 
 /**
@@ -212,6 +257,17 @@ export interface NeedRow {
    * rail then says so in words rather than falling back to the id.
    */
   agentLabel: string | null;
+  /**
+   * A short qualifier for the row's metadata line — what the row's *sentence*
+   * deliberately leaves out because it would read as boilerplate in it.
+   *
+   * The one user is which kind of reviewer an assigned pull request made you
+   * (`Required reviewer` / `Optional reviewer`), which is a real distinction and
+   * a bad clause: every row would carry it and no two rows would differ by it.
+   * Read off `attention.assignedToYou` — the *field*, never the wording — so a
+   * rephrased reason cannot silently change what the row claims.
+   */
+  note?: string;
   /** Live plan parts this ask is holding. Zero when it genuinely holds nothing. */
   holding: number;
   raisedAt: string;

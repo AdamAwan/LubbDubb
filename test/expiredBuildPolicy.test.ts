@@ -102,6 +102,7 @@ function pull(over: Partial<AzPull> = {}): AzPull {
     baseBranch: 'Development',
     lastMergeSourceCommit: 'abc123',
     authorUniqueName: 'bot@example.com',
+    authorDisplayName: '',
     url: 'https://dev.azure.com/o/p/_git/r/pullrequest/31702',
     isDraft: false,
     mergeStatus: 'succeeded',
