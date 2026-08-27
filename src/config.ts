@@ -314,6 +314,13 @@ export interface Config {
    * inferred from its name, exactly as `canCloseIssue` and `canSetWorkItemState`
    * are: with `featureBoard: true` and a provider that cannot place a work item,
    * the tab is **absent** rather than empty.
+   *
+   * **It switches on an agent as well as a surface**, which is the one thing an
+   * operator reading "draw a tab" would not expect: rule `feature-summary` spends
+   * one desk agent per Feature whose work has moved, to write where that Feature
+   * has got to ([05](docs/spec/05-dispatcher.md)). Both halves of the gate above
+   * hold it too — a deployment with the flag off summarises nothing, and does not
+   * even read the mirror to find out whether anything moved.
    * → `docs/spec/17-cockpit.md#the-feature-board`
    */
   featureBoard: boolean;
