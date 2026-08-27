@@ -7,7 +7,7 @@ Four durable records answer four different questions, plus one live tail and one
 | Decision log  | What did the harness decide, and why? | `decisions`                       | Decision log |
 | Activity feed | What did the _world_ do?              | `world_events`                    | Activity     |
 | Error log     | What failed?                          | `error_events`                    | Errors       |
-| Usage         | What did it cost?                     | `usage_events` + the `agents` row | — not built  |
+| Usage         | What did it cost?                     | `usage_events` + the `agents` row | Usage chip   |
 
 Cost is asked two ways off that one record: **when** it was spent (the rolling account windows) and
 **what it was spent on** (per goal). The second is derived rather than stored — see
@@ -147,12 +147,14 @@ Two sources that must not be conflated, both off the stream transport.
 self-computed), and `rateLimits` is `Store.readRateLimits()` — the freshest reading any agent has
 reported, or `null`.
 
-**No cockpit surface draws either of them.** The wire has carried `usage.windows` and
-`usage.rateLimits` since #60 and nothing under `web/src/` reads them — only the demo fixture, which
-fabricates values for the published demo. This document listed a "Usage chip" for long enough that the
-absence read as an oversight rather than a statement, so it is stated here: the reading is real and
-`GET /api/state` is how you get it. A reader that draws it should prefer the real limits and fall back
-to cost, and must render `capturedAt` — see below.
+**The Usage chip on the top bar draws them**, and it is the only reader either has
+([17](17-cockpit.md#the-usage-chip)). It draws **both** windows as percentages — either one parks the
+fleet, and a chip carrying the five-hour alone reads fine on the morning a weekly allowance runs out —
+in a fixed order, with the one nearer its limit lettered at full strength. It falls back to the
+five-hour cost only where `rateLimits` is null altogether, which is the rule the shape of the reading
+forces: that is API-key auth, an older CLI and a fleet that has not run yet, and a chip that went blank
+there would leave the operator's spot on the bar empty in the deployments least able to spare it. And it
+renders `capturedAt` — see below.
 
 **The limits reading is turn-bound and the cost windows are not.** A reading arrives only when an
 agent takes a turn, so an idle fleet's `capturedAt` ages while the account's real window keeps moving.

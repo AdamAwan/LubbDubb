@@ -33,6 +33,7 @@ const { ThemeSettings } = await import('../web/src/components/ThemeSettings.js')
 const { ColourField } = await import('../web/src/components/ColourField.js');
 const { ConfigValues } = await import('../web/src/components/ConfigValues.js');
 const { RaiseIssueModal, composeGate, canFile } = await import('../web/src/components/RaiseIssueModal.js');
+const { usageReading } = await import('../web/src/console/TopBar.js');
 
 function view(over: Partial<CockpitView> = {}): CockpitView {
   const state = buildDemoState().state;
@@ -126,6 +127,91 @@ test('console.css reaches no form control through .cn', () => {
     m[1]!.trim(),
   );
   assert.deepEqual(offenders, [], 'a descendant element rule restyles the components the console embeds');
+});
+
+/**
+ * The Usage chip (docs/spec/17-cockpit.md#the-usage-chip). Four things about it are
+ * load-bearing and not one of them shows in a screenshot of the resting state.
+ *
+ * **Both windows are drawn, in a fixed order.** Either one parks the fleet, so a chip
+ * carrying only the five-hour reads fine on the morning a weekly allowance runs out —
+ * and a chip that reordered itself by which is worse would move the number an
+ * operator glances at without reading.
+ *
+ * **The binding window is marked and the tone follows it**, or the chip is two
+ * numbers and a shrug: the comparison is the work it exists to have already done.
+ *
+ * **A window nothing reported is an em dash**, because each is independently nullable
+ * and `0%` would claim a fresh allowance nobody measured.
+ *
+ * **The fallback is the whole of what the chip does on API-key auth** and on a fleet
+ * that has not taken a turn — `rateLimits` is null far more often than not, and a chip
+ * that went blank there is a hole in the bar where the reading was.
+ */
+test('the usage chip carries both windows, and marks the one that binds', () => {
+  const now = Date.parse('2026-01-01T12:00:00Z');
+  const at = (msAgo: number) => new Date(now - msAgo).toISOString();
+  const limits = (five: number | null, seven: number | null, msAgo = 60_000) => ({
+    windows: { fiveHourCostUsd: 1.15, sevenDayCostUsd: 12.4 },
+    rateLimits: {
+      fiveHour: five === null ? null : { usedPercentage: five, resetsAt: null },
+      sevenDay: seven === null ? null : { usedPercentage: seven, resetsAt: null },
+      capturedAt: at(msAgo),
+    },
+    unattributedCostUsd: 0,
+  });
+
+  // The weekly is the one about to stop the fleet; the five-hour has room. A chip
+  // reading only the five-hour would call this fine.
+  const weekly = usageReading(limits(31, 93), now);
+  assert.deepEqual(
+    weekly.slots.map((s) => `${s.label} ${s.value}${s.binds ? '*' : ''}`),
+    ['5h 31%', '7d 93%*'],
+    'the slots must stay five-hour then weekly, with the window nearer its limit marked',
+  );
+  assert.equal(weekly.tone, 'spent', 'the tone reads the window that binds, not the first one');
+  assert.equal(weekly.age, null, 'a minute-old reading is current — the age is the stale caveat, not a timestamp');
+
+  // The other direction, and the resting state: same order, the other slot marked.
+  const fiveHour = usageReading(limits(62, 30), now);
+  assert.deepEqual(
+    fiveHour.slots.map((s) => `${s.label} ${s.value}${s.binds ? '*' : ''}`),
+    ['5h 62%*', '7d 30%'],
+  );
+  assert.equal(fiveHour.tone, 'plain');
+
+  // An unreported window never binds, whatever the reported one says.
+  const half = usageReading(limits(68, null), now);
+  assert.deepEqual(
+    half.slots.map((s) => `${s.label} ${s.value}${s.binds ? '*' : ''}`),
+    ['5h 68%*', '7d —'],
+    'a window nothing reported is an em dash, and cannot be the one nearer its limit',
+  );
+
+  const stale = usageReading(limits(62, 30, 3_600_000), now);
+  assert.equal(stale.age, '1h ago', 'an hour-old reading is drawn without saying it is an hour old');
+
+  const noLimits = usageReading(
+    { windows: { fiveHourCostUsd: 1.15, sevenDayCostUsd: 12.4 }, rateLimits: null, unattributedCostUsd: 0 },
+    now,
+  );
+  assert.deepEqual(noLimits.slots, [], 'there is no pair to draw when nothing reported a window');
+  assert.equal(noLimits.cost, '$1.15', 'no fallback to cost — the chip is blank on every API-key deployment');
+  assert.equal(noLimits.tone, 'plain');
+
+  const nothing = usageReading(
+    { windows: { fiveHourCostUsd: 0, sevenDayCostUsd: 0 }, rateLimits: null, unattributedCostUsd: 0 },
+    now,
+  );
+  assert.equal(nothing.tone, 'quiet', 'nothing spent is a muted reading, never a missing one');
+});
+
+/** And it is on the bar, both windows and all — the demo fixture reports 62% / 30%. */
+test('the usage chip is on the top bar', () => {
+  const html = render(view());
+  assert.ok(/<span>Usage<\/span>/.test(html), 'the top bar draws no usage reading');
+  assert.ok(html.includes('cn-usage-win'), 'the chip drew no window slots');
+  assert.ok(html.includes('cn-binds'), 'neither window is marked as the one nearer its limit');
 });
 
 test('a dropped socket draws no gauge, no rail and no situation area', () => {
