@@ -844,7 +844,7 @@ Order on the page, top to bottom:
 5. **Two columns**, from 1200px. The live reading and what is still owed on the left — **pull
    requests for this goal**, open and closed, with the court chip and the CI ladder, then
    **environments** ([Environments](#environments)). On the right, **On this goal** (who is working
-   it now), **What you've asked for**, **The tail** and **Spend**. Below 1200 the two stacks are one
+   it now, [below](#who-is-on-the-goal)), **What you've asked for**, **The tail** and **Spend**. Below 1200 the two stacks are one
    column.
 6. **The reference footer** — the two surfaces that ask nothing of the reader, each folded away
    behind its own name: **the ticket as it stood at pickup**, drawn through `renderRichText` because
@@ -887,7 +887,8 @@ end.
    Every chip quotes a reading the server already made; nothing here is a second opinion. The
    validation chip is the one that is a **button**: the checks are on this page, so the reading has
    somewhere to go, and a verdict you can act on should not be the only chip that does nothing. After
-   the verdicts, one plain run of the measurements — when the run started, the agent count, what it
+   the verdicts, one plain run of the measurements — when the run started, the agent count (the same
+   one **On this goal** carries, pull-request dispatches included, [below](#who-is-on-the-goal)), what it
    has cost — a step fainter, which is the difference between a reading you scan and a judgement you
    read. A `null` spend draws no reading at all, because nothing was ever measured and `$0.00` would
    report a goal that cost nothing ([18](18-observability.md#per-goal-spend)).
@@ -1005,8 +1006,13 @@ over there says it is not one of the others.
   the wrong way — the rule is against friction nobody's decision asked for, and this is a decision.
   The modal **states the counts** rather than summarising them: "2 running agents killed mid-turn" is
   a sentence an operator can check against the header they are looking at, and "stops work in flight"
-  is one they cannot. The live count is read over the same `issue:<n>` subtree the header's agent
-  count uses, so the two agree by construction. The flagged-plan note is one more requirement _inside_
+  is one they cannot. The live count is read over the `issue:<n>` subtree alone, which is the exact
+  scope `clearGoalWork` sweeps — a `pr:` dispatch is not in it. Since the page counts a pull
+  request's agents as the goal's ([below](#who-is-on-the-goal)), the header's number and this one can
+  differ, so the modal **says so**: a line naming the agents on the goal's pull requests that keep
+  running, and where to stop them. Silently killing fewer agents than the operator just read is the
+  failure the stated counts exist to prevent, and quietly widening the sweep to match would end runs
+  the route was never asked to end. The flagged-plan note is one more requirement _inside_
   the modal — [below](#saying-the-sentence-a-refusal-asks-for).
 
 ### The track
@@ -1249,6 +1255,14 @@ carry a word and no dots — and `merged` under the **Merged** heading is the he
 survives that cut is the pair that says something the board cannot: a merged pull request on a part
 grouped anywhere else, and a pull request closed without merging.
 
+**A part's agent is found through its pull request as well as through its own ref.** A part is
+dispatched at `issue:<n>:part:<slug>`, and everything that happens to it after it opens a pull
+request — the CI fix, the review round, the retarget — is dispatched at `pr:<n>`. Read off the part's
+own origin alone the row drew no agent at all on exactly the parts that were moving, which is the
+same blindness `agentOnGoal` is resolved through `goalOfOrigin` to avoid one tier up. Both origins
+are read, and the **live** one wins where there are two: what is happening now outranks the record of
+what happened, and the snapshot's newest-first order settles it when neither is live.
+
 **The agent on a part is a door, not an id.** The row used to end ` · agent_ab4sc`, which named
 nothing — agent ids are minted and an agent has no name — while the one thing an operator wanted from
 it, that run's transcript, its cost and its controls, sat on a surface the row did not lead to. It is
@@ -1359,6 +1373,32 @@ summary), the write-up, closing the ticket, and the notepad. Each states its own
 that nothing has run — "not reached yet" is a fact about the goal worth seeing, not an empty section.
 The write-up and the notepad carry a way in, each keyed on the document **existing** and on nothing the
 page is doing.
+
+### Who is on the goal
+
+**On this goal** lists the agents this goal has had, live ones lamped and finished ones plain, each a
+way into its drawer.
+
+**A pull request is for a goal, so an agent on one is on the goal.** A dispatch names the goal's own
+subtree (`issue:390`, `issue:390:part:writes`, `issue:390:retro`) or it names a pull request
+(`pr:412`) — and a card that read only the first said _no agent is on this goal_ while somebody was
+fixing its build, restarting its review round or retargeting its branch. That is most of the time a
+goal has anybody on it, and it is the one question this card exists to answer. Which pull requests are
+the goal's is `goalOfPr`'s three-way match, the same one the pull-request card is drawn with, so a
+second reading cannot put an agent on a goal the card below it says the PR does not belong to.
+
+**The row names that pull request**, as a `<Ref>` beside the name rather than as text: a row that says
+an agent is on something and does not say where is the dead end [Links](#links) exists to stop. It sits
+**beside** the name and never inside it — the row's own click opens the transcript, and one click
+cannot have two destinations — which is why the row is a `div` carrying a `cn-grow` button, the shape
+the fleet card and the backlog row already use.
+
+**The header's agent count is this list's length**, pull-request dispatches included, because it is the
+same question asked in fewer words. What ending the run kills is _not_ read from it — that is the
+`issue:<n>` subtree alone, and the modal states the difference
+([the header's controls](#the-headers-controls)).
+
+→ `test/goalPage.test.ts`
 
 ### Environments
 
