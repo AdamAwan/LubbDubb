@@ -100,6 +100,7 @@ export type {
   PoolFleetReading,
   OpenPullRequest,
   OrphanedWork,
+  ViewerAssignment,
   AcceptanceCriterion,
   Plan,
   PlanDiff,

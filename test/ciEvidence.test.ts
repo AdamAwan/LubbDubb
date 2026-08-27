@@ -158,6 +158,7 @@ function azApi(script: AzScript): AzureDevOpsApi {
     baseBranch: 'main',
     lastMergeSourceCommit: 'abc123',
     authorUniqueName: 'bot@acme.com',
+    authorDisplayName: '',
     url: 'https://dev.azure.com/o/p/_git/r/pullrequest/42',
     isDraft: false,
     mergeStatus: 'succeeded',

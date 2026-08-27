@@ -4,7 +4,7 @@ import type { CockpitActions } from '../cockpit/actions.js';
 import type { AppliedFix, NeedGroup, NeedKind, NeedRow } from '../view/needsYou.js';
 import type { SetupCheck, SetupFix } from '../types.js';
 import { relTime } from '../components/util.js';
-import { refLabel } from '../components/refs.js';
+import { Ref, refLabel } from '../components/refs.js';
 
 /** One word per kind, shared with the goal page so a row and the band it opens name the ask the same. */
 export const KIND_LABEL: Record<NeedKind, string> = {
@@ -271,30 +271,38 @@ function Row({
     .filter((c) => c !== '')
     .join(' ');
   const goal = subjectBeside(row);
+  // The row's own contents, split out from the card so the two shapes below can
+  // share them: a plain row is one button, and a row carrying a reference is a
+  // container whose *body* is the button.
+  const body = (
+    <>
+      <div className="cn-qkind">
+        <i className="cn-tag">
+          {/* Hidden from the reading order on purpose: the word beside it is
+                the label, and a screen reader announcing "black diamond bench"
+                is worse than one announcing "bench". */}
+          <span className="cn-sym" aria-hidden="true">
+            {KIND_SYMBOL[row.kind]}
+          </span>
+          {KIND_LABEL[row.kind]}
+        </i>
+        {row.raisedAt !== '' && <i className="cn-qage">{relTime(row.raisedAt, now)}</i>}
+      </div>
+      <p className="cn-qtitle">{row.title}</p>
+      <div className="cn-qmeta">
+        {row.note !== undefined && <span>{row.note}</span>}
+        {row.note !== undefined && (row.agentId !== null || goal !== null) && <span>·</span>}
+        {row.agentId !== null && <span>{row.agentLabel ?? UNNAMED_RUN}</span>}
+        {row.agentId !== null && goal !== null && <span>·</span>}
+        {goal !== null && <span>{goal}</span>}
+        {row.holding > 0 && <span className="cn-hold">{holdingLabel(row.holding)}</span>}
+      </div>
+    </>
+  );
   const inner = (
     <>
       <i className="cn-stripe" />
-      <div className="cn-qin">
-        <div className="cn-qkind">
-          <i className="cn-tag">
-            {/* Hidden from the reading order on purpose: the word beside it is
-                the label, and a screen reader announcing "black diamond bench"
-                is worse than one announcing "bench". */}
-            <span className="cn-sym" aria-hidden="true">
-              {KIND_SYMBOL[row.kind]}
-            </span>
-            {KIND_LABEL[row.kind]}
-          </i>
-          {row.raisedAt !== '' && <i className="cn-qage">{relTime(row.raisedAt, now)}</i>}
-        </div>
-        <p className="cn-qtitle">{row.title}</p>
-        <div className="cn-qmeta">
-          {row.agentId !== null && <span>{row.agentLabel ?? UNNAMED_RUN}</span>}
-          {row.agentId !== null && goal !== null && <span>·</span>}
-          {goal !== null && <span>{goal}</span>}
-          {row.holding > 0 && <span className="cn-hold">{holdingLabel(row.holding)}</span>}
-        </div>
-      </div>
+      <div className="cn-qin">{body}</div>
     </>
   );
 
@@ -344,6 +352,29 @@ function Row({
   const ref = row.goalRef;
   const open =
     row.opens === 'goal' && ref !== null ? () => actions.selectGoal(ref) : () => actions.openPanel({ ask: row.id });
+
+  // A pull request a person put on you is the one ask whose subject lives outside
+  // the cockpit entirely — there is no PR page here, so a row that only *named*
+  // the pull request left the operator to go and find it in the provider, which
+  // is the surface this queue exists to replace. So the card carries the way
+  // there, and it sits **beside** the body rather than in it: one click cannot
+  // have two destinations, so the body stays the control that opens the ask and
+  // the reference is its own target. Same shape as a config row's fix strip.
+  const prRef = row.kind === 'assigned' ? row.originRef : null;
+  if (prRef !== null) {
+    return (
+      <div className={`${cls} cn-qref`}>
+        <i className="cn-stripe" />
+        <button type="button" className="cn-qbody" onClick={open} aria-current={current ? 'true' : undefined}>
+          <div className="cn-qin">{body}</div>
+        </button>
+        <span className="cn-refs">
+          <Ref to={prRef} label={`PR ${refLabel(prRef)}`} />
+        </span>
+      </div>
+    );
+  }
+
   return (
     <button type="button" className={cls} onClick={open} aria-current={current ? 'true' : undefined}>
       {inner}

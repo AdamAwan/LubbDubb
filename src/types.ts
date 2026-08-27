@@ -236,6 +236,38 @@ export interface PullRequest {
    * → `docs/spec/07-pull-requests.md#a-pull-request-a-person-put-on-you`
    */
   viewerAssignment?: ViewerAssignment;
+  /**
+   * Who opened the pull request, as the provider names them **to a person** —
+   * Azure's `displayName`, GitHub's login.
+   *
+   * It is here for one surface: the row that says a colleague asked you for a
+   * review. "You are an optional reviewer" is a fact about a form field; who
+   * asked is what makes it an obligation the operator can act on, and a queue of
+   * rows nobody signed is a queue that reads as the harness talking to itself.
+   * Nothing dispatches on it — like {@link viewerAssignment}, it rides on the
+   * payload the snapshot already reads, so it costs no request.
+   *
+   * **Absent means the provider does not report it**, and every surface must
+   * still read without it: the sentence drops the name rather than inventing one.
+   * → `docs/spec/07-pull-requests.md#a-pull-request-a-person-put-on-you`
+   */
+  author?: string;
+  /**
+   * That **you personally** have already given this pull request an approving
+   * verdict — your own vote in the reviewer list, never the fold in
+   * {@link approved}, which is any reviewer's.
+   *
+   * The one thing that ends an assignment. A review request is a question, and a
+   * question you have answered is not still yours: without this the row a
+   * colleague raised stands on the rail until the pull request merges, which
+   * teaches an operator that answering the rail changes nothing on it.
+   *
+   * **Absent means the provider did not say**, which is never read as a verdict:
+   * silence leaves the row exactly where it was. A provider that cannot resolve
+   * it costs the operator the clearing and nothing else.
+   * → `docs/spec/07-pull-requests.md#when-the-assignment-ends`
+   */
+  viewerApproved?: boolean;
   url?: string;
 }
 

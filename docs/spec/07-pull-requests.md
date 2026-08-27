@@ -522,6 +522,37 @@ answered:
 ([17](17-cockpit.md#the-queue-rail--needs-you)) — a field rather than the leading reason's wording, so
 rephrasing a sentence cannot silently empty the queue.
 
+**The clause names the person who asked**, because that is the whole of what makes it an obligation
+rather than a form field. `PullRequest.author` ([03](03-world-model.md#pullrequest)) is read for it and
+for nothing else, and it rides on the payload the snapshot already fetches, so it costs no request:
+
+| `viewerAssignment`  | With an author                                    | With none reported                  |
+| ------------------- | ------------------------------------------------- | ----------------------------------- |
+| `reviewer-optional` | `Priya Raman marked you as a reviewer`            | `you have been marked as a reviewer` |
+| `reviewer-required` | `Priya Raman marked you as a reviewer`            | `you have been marked as a reviewer` |
+| `assignee`          | `Priya Raman assigned this pull request to you`   | `assigned to you`                    |
+
+**Which kind of reviewer is deliberately not in the sentence.** It is `assignedToYou`, and a surface
+that wants to say it reads the field — the queue rail draws it as `Required reviewer` /
+`Optional reviewer` on the row's metadata line ([17](17-cockpit.md#the-queue-rail--needs-you)). Saying
+it in the clause as well would put a real distinction in a string that any rewording can silently
+drop, which is the same reason the queue does not key on the wording either.
+
+### When the assignment ends
+
+A review request is a question, and a question the operator has already answered is not still theirs.
+`PullRequest.viewerApproved` — **their own** approving vote, never the `approved` fold, which is any
+reviewer's — demotes the assignment from _the court_ to _a reason_, exactly as an agent on the branch
+does: the clause survives as `… — you have approved it` so the row still says how the pull request came
+to be theirs, and `assignedToYou` stays unset, which is what takes it off the rail.
+
+Without it the row a colleague raised stands until the pull request merges, which teaches an operator
+that answering the rail changes nothing on it — the one lesson a queue must never teach.
+
+**Absent is never a verdict.** A provider that does not resolve a vote leaves the row exactly where it
+was; it costs the operator the clearing and nothing else. Both providers resolve it from the reviewer
+list the assignment itself came from ([15](15-integrations.md)), so neither pays a request for it.
+
 **`waiting on review` is the arm this changes most**, and deliberately. It stays `elsewhere` on a pull
 request the operator merely opened, because on a team the reviewer is somebody else and a queue of
 other people's obligations is what makes an inbox stop being read

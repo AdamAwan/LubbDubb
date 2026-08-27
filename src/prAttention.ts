@@ -157,7 +157,16 @@ export function prAttentionStatus(pr: PullRequest, ctx: PrAttentionContext): PrA
   const verdict = court(pr, ctx);
   const assigned = pr.viewerAssignment;
   if (assigned === undefined || verdict.status === 'done') return verdict;
-  const note = assignmentReason(assigned);
+  const note = assignmentReason(pr, assigned);
+  // You have answered. A review request is a question, and a question you have
+  // already given a verdict on is not still yours — so the assignment drops from
+  // *the court* to *a reason*, exactly as it does on a pull request an agent is
+  // already working. The clause survives so the row still says how it came to be
+  // yours; `assignedToYou` stays unset, which is what takes it off the rail.
+  // Absent (a provider that does not resolve a vote) is never read as a verdict.
+  if (pr.viewerApproved === true) {
+    return { ...verdict, reasons: [...verdict.reasons, `${note} — you have approved it`] };
+  }
   // The three arms where **nothing in the harness is coming**: no rule will fire,
   // no proposal is waiting and no agent is on it. There the assignment is not
   // colour on somebody else's verdict — it is the whole answer to whose turn it
@@ -174,10 +183,24 @@ export function prAttentionStatus(pr: PullRequest, ctx: PrAttentionContext): PrA
   return { ...verdict, reasons: [...verdict.reasons, note] };
 }
 
-/** How an assignment reads on the row — one clause, in the provider's own terms. */
-function assignmentReason(assignment: ViewerAssignment): string {
-  if (assignment === 'assignee') return 'assigned to you';
-  return assignment === 'reviewer-required' ? 'you are a required reviewer' : 'you are an optional reviewer';
+/**
+ * How an assignment reads on the row — one clause naming **the person who asked**,
+ * because that is the whole of what makes it an obligation rather than a form
+ * field. The old wording ("you are an optional reviewer") described the operator's
+ * row in a list somewhere; this one describes something a colleague did.
+ *
+ * **Which kind of reviewer is not in the sentence.** It is `assignedToYou`, a
+ * field, and a surface that wants to say it reads that — the same reason the queue
+ * keys on the field rather than matching the wording. Saying it twice would put
+ * the distinction in a string that any rewording can silently drop.
+ *
+ * An author the provider did not report drops out of the sentence rather than
+ * being invented: every arm below still reads without a name.
+ */
+function assignmentReason(pr: PullRequest, assignment: ViewerAssignment): string {
+  const who = pr.author?.trim() ?? '';
+  if (assignment === 'assignee') return who === '' ? 'assigned to you' : `${who} assigned this pull request to you`;
+  return who === '' ? 'you have been marked as a reviewer' : `${who} marked you as a reviewer`;
 }
 
 /**

@@ -250,6 +250,13 @@ export interface AzPull {
   lastMergeSourceCommit: string;
   /** createdBy.uniqueName of the PR author. */
   authorUniqueName: string;
+  /**
+   * `createdBy.displayName` — the author as a person is *named*, which is what a
+   * row saying somebody asked you for a review has to print. Empty when Azure
+   * reports the identity without one; the UPN is the fallback, and a surface with
+   * neither says nothing rather than a descriptor.
+   */
+  authorDisplayName: string;
   /** Web URL to the PR. */
   url: string;
   /** True while the PR is still a draft. */
