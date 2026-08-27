@@ -7,6 +7,7 @@ import type { ErrorRecorder } from '../errorLog.js';
 import { recentOutputExcerpt } from '../escalation/context.js';
 import type { WhitelistRule } from '../config.js';
 import type {
+  AccountRateLimits,
   Agent,
   AgentAsk,
   AgentFlag,
@@ -2137,6 +2138,12 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       this.store.recordAgentUsage(agentId, usage);
       this.emit('usage', { agentId, taskId: task.id, usage });
     });
+
+    // The account's usage windows, which every live agent reports the same values
+    // for. Landed straight in the store rather than re-emitted: there is one
+    // account, so this is not news *about this agent*, and the store's own
+    // freshest-wins guard is what keeps interleaved reports in order.
+    session.on('limits', (limits: AccountRateLimits) => this.store.recordRateLimits(limits));
 
     // An artifact/link the agent surfaced: persist (deduped by ref) and re-emit
     // the stored flag so the server can stream it to the cockpit.

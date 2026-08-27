@@ -1294,12 +1294,50 @@ Two mode-specific sources. They are not interchangeable.
   tokens folded into input, and the read/write split kept apart beside it —
   [18](18-observability.md#the-cached-share-is-stored-not-inferred)) **and** the cost _delta_ as a
   timestamped `usage_events` row, so rolling 5h/7d cost windows are a plain `SUM` over the window.
-- **PTY mode** — reports no per-turn usage. Instead it captures the **account rate limits**: the
-  Pro/Max `rate_limits` in the status-line payload, which is the one programmatic surface for them.
-  `buildClaudeArgs({statusLine: true})` wires a `--settings` status command that atomically dumps each
-  payload to `$LUBBDUBB_STATUS_FILE` (per session id, under the OS tmpdir), and
-  `StatusFileRateLimits.readLatest()` feeds the freshest one into the snapshot's `usage.rateLimits`.
-  Parsing is pure (`parseStatusLinePayload`, `src/agents/statusLine.ts`).
+- **PTY mode** — reports no per-turn usage. It captures the account usage windows instead, from the
+  status-line payload: `buildClaudeArgs({statusLine: true})` wires a `--settings` status command that
+  atomically dumps each payload to `$LUBBDUBB_STATUS_FILE` (per session id, under the OS tmpdir), and
+  `StatusFileRateLimits.readLatest()` reads the freshest one back. Parsing is pure
+  (`parseStatusLinePayload`, `src/agents/statusLine.ts`).
 
-`usage.rateLimits` is null when absent, and the cockpit chip then falls back to the cost windows.
+The **account usage windows** are no longer a PTY-only surface, though — see below. `usage.rateLimits`
+is null when nothing has reported any, and the cockpit chip then falls back to the cost windows.
 Tests: `test/usage.test.ts`.
+
+### The account usage windows, headless
+
+The subscriber 5h/weekly windows were reachable only through Claude Code's `statusLine` hook, which
+never renders without a TUI. A later `claude` carries the same figures on the `rate_limit_event` it
+already emits on the stream transport, as an unnamed-in-the-published-schema `unifiedWindows`:
+
+```
+{"type":"rate_limit_event","rate_limit_info":{
+  "status":"allowed","resetsAt":1787875800,"rateLimitType":"five_hour",
+  "unifiedWindows":{"five_hour":{"utilization":0.23,"resetsAt":1787875800},
+                    "seven_day":{"utilization":0.19,"resetsAt":1788332400}}}}
+```
+
+`utilization` is a fraction — the status line's `used_percentage` over 100 — and is scaled on the way
+in, so `AccountRateLimits` and everything drawing it are unchanged. `StreamJsonSession` emits it as
+`limits`(`AccountRateLimits`); `AgentManager` lands it in `account_rate_limits`, one row for the whole
+fleet ([14](14-persistence.md)), because every live agent reports the same account.
+
+Three things this must keep straight:
+
+- **Observation is not a park.** `rate_limit_event` fires on ordinary turns well inside the limits, so
+  the reading arm runs constantly. It is a second pure function (`rateLimitReading`) beside
+  `rateLimitPark` rather than a branch inside it, so nothing about parking is ever downstream of it —
+  and the two answer different questions off one event.
+- **Freshest wins, by `capturedAt` and not by arrival.** Several agents report interleaved; a reading
+  queued behind a slow turn can land after a newer one, and last-write-wins would walk the chip
+  backwards to a number nothing marks as wrong. The store's upsert carries that guard.
+- **`unifiedWindows` is newer than the pinned schema and undeclared in the published one.** It is read
+  defensively: an older CLI, or API-key auth, yields `null` and the chip degrades to the self-computed
+  cost window — which is what every non-PTY deployment had before this.
+
+The reading is **turn-bound**: it arrives only when an agent takes a turn, so an idle fleet's ages
+while the real window keeps moving (the operator's own Claude Code spends from the same account).
+`capturedAt` is what says so, and the honest rendering is stale-and-optimistic rather than a probe
+turn — which would spend real tokens to learn a number nobody is currently changing.
+
+Tests: `test/rateLimitReading.test.ts`.

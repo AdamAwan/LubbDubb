@@ -136,14 +136,21 @@ Two mode-specific sources that must not be conflated.
   recorded by `Store.recordAgentUsage`: the cumulative values onto the `agents` row (cache tokens
   folded into input, **and** kept apart beside it — see below), and the cost **delta** as a
   timestamped `usage_events` row.
-- **PTY mode** — reports no per-turn usage. It instead captures the account rate limits from the
-  status-line payload (`StatusFileRateLimits`), which is the one programmatic surface for the Pro/Max
-  5h and weekly windows.
+- **PTY mode** — reports no per-turn usage. It captures the account usage windows from the
+  status-line payload (`StatusFileRateLimits`) instead.
+
+The **account usage windows** are not mode-specific, though: every stream agent's `rate_limit_event`
+carries them, and they land in `account_rate_limits` as one row for the fleet
+([10](10-agent-runtimes.md#the-account-usage-windows-headless)).
 
 `buildUsage` in the snapshot therefore ships both: `windows.fiveHourCostUsd` and
 `windows.sevenDayCostUsd` are `Store.sumUsageCostSince` (available in every mode, because it is
-self-computed), and `rateLimits` is the freshest status-line reading or `null`. The cockpit chip
-prefers the real limits and falls back to cost.
+self-computed), and `rateLimits` is `Store.readRateLimits()` — the freshest reading any agent has
+reported, or `null`. The cockpit chip prefers the real limits and falls back to cost.
+
+**The limits reading is turn-bound and the cost windows are not.** A reading arrives only when an
+agent takes a turn, so an idle fleet's `capturedAt` ages while the account's real window keeps moving.
+That is a staleness to render, not to hide behind a freshening probe.
 
 ### Two tables of deltas, added in one place
 

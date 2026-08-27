@@ -32,6 +32,7 @@ unchanged, so no call site anywhere knows.
 | `graph.ts`            | `work_nodes`, `work_item_filings`, `work_item_ignores`                          |
 | `bugFilings.ts`       | `issue_bug_filings`                                                             |
 | `floor.ts`            | `floor_completions`                                                             |
+| `rateLimits.ts`       | `account_rate_limits`                                                           |
 
 Four properties, all asserted structurally in `test/storeModules.test.ts` rather than intended:
 

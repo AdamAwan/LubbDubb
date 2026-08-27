@@ -5,7 +5,7 @@ import { DONE_SENTINEL, extractFlags, extractWaitingReason, stripSentinels } fro
 import { resolveExecutable } from './resolveCommand.js';
 import type { ProcessReaper } from './processTree.js';
 import { assistantText, renderBlocks, type ContentBlock } from './streamTranscript.js';
-import type { AgentUsage } from '../types.js';
+import type { AccountRateLimits, AgentUsage, RateLimitWindow } from '../types.js';
 import { debugLog } from '../debug.js';
 
 /**
@@ -299,6 +299,11 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
     }
 
     if (ev.type === 'rate_limit_event') {
+      // Two reads of one event, and the order says which may act: the windows are
+      // observation only (see {@link rateLimitReading}) and are surfaced first so
+      // that nothing about parking is ever downstream of them.
+      const reading = rateLimitReading(ev.rate_limit_info, new Date().toISOString());
+      if (reading) this.emit('limits', reading);
       // Latest reading wins, including the one that says the limit cleared: a
       // five-hour window can reset mid-run, and a stale rejection would then park
       // an agent that is allowed to work.
@@ -467,6 +472,10 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
  * Kept as `string` rather than re-declared unions: this is someone else's wire
  * format and a narrower type here would turn a value the CLI adds tomorrow into
  * a parse that quietly reads as "not exhausted".
+ *
+ * `unifiedWindows` is the one field here the published schema does not name — a
+ * later CLI ships it, and it is what makes the account's usage windows readable
+ * headless at all. It is typed and read as the unknown it is; see below.
  */
 interface RateLimitInfo {
   status?: string;
@@ -474,6 +483,19 @@ interface RateLimitInfo {
   rateLimitType?: string;
   overageStatus?: string;
   isUsingOverage?: boolean;
+  /**
+   * Every window's *current* utilisation, keyed by the same names `rateLimitType`
+   * uses — `{five_hour: {utilization: 0.23, resetsAt: 1787875800}, seven_day: …}`.
+   *
+   * Newer than the schema the rest of this interface is declared from, and absent
+   * from the CLI's published one, so it is read defensively and its absence is not
+   * an error: an older `claude`, or API-key auth, simply carries no windows and the
+   * cockpit degrades to the self-computed rolling cost window it already has.
+   *
+   * `utilization` is a fraction, not a percentage — the status line's
+   * `used_percentage` divided by 100.
+   */
+  unifiedWindows?: Record<string, { utilization?: unknown; resetsAt?: unknown } | undefined>;
 }
 
 /** An account limit that is spent, as the harness carries it. */
@@ -504,6 +526,39 @@ function rateLimitPark(info: RateLimitInfo | undefined): RateLimitPark | null {
     // Whole seconds since the epoch, per the CLI's schema.
     resetsAt: typeof info.resetsAt === 'number' ? new Date(info.resetsAt * 1000).toISOString() : null,
     overage,
+  };
+}
+
+/**
+ * Read the account's usage windows off a `rate_limit_event`, or null when it
+ * names none.
+ *
+ * Deliberately **separate from {@link rateLimitPark}** rather than folded into
+ * it, because the two answer different questions off one event and only one of
+ * them may act: a park stops an agent, and `rate_limit_event` now fires on
+ * ordinary turns well inside the limits. Observation must therefore stay free of
+ * any effect on parking — which it is, structurally, by being a second pure
+ * function the caller runs beside the first.
+ */
+function rateLimitReading(info: RateLimitInfo | undefined, capturedAt: string): AccountRateLimits | null {
+  const windows = info?.unifiedWindows;
+  if (!windows || typeof windows !== 'object') return null;
+  const fiveHour = readWindow(windows.five_hour);
+  const sevenDay = readWindow(windows.seven_day);
+  if (!fiveHour && !sevenDay) return null;
+  return { fiveHour, sevenDay, capturedAt };
+}
+
+/** One window, or null when the CLI carried no usable utilisation for it. */
+function readWindow(w: { utilization?: unknown; resetsAt?: unknown } | undefined): RateLimitWindow | null {
+  if (!w || typeof w.utilization !== 'number' || !Number.isFinite(w.utilization)) return null;
+  return {
+    // A fraction on the wire, a percentage everywhere above it — the shape the
+    // cockpit chip has always drawn, so nothing downstream changes.
+    usedPercentage: w.utilization * 100,
+    // Whole seconds since the epoch, as everywhere else in this payload.
+    resetsAt:
+      typeof w.resetsAt === 'number' && Number.isFinite(w.resetsAt) ? new Date(w.resetsAt * 1000).toISOString() : null,
   };
 }
 

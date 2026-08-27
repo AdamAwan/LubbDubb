@@ -46,9 +46,18 @@ import type { EventEmitter } from 'node:events';
  * account's usage limit is spent: a fourth ending, neither a question nor a
  * failure, which parks the agent until an operator resumes it. The PTY runtime
  * never emits it — the same exhaustion there arrives as screen text, and a park
- * off a scraped sentence is a park an ordinary line of prose can forge. A legible PTY session (agentMode 'pty') may also emit
- * 'transcript'(text): a full replacement of all prior output after an in-place
- * TUI rewrite.
+ * off a scraped sentence is a park an ordinary line of prose can forge.
+ *
+ * The stream runtime alone emits 'limits'(AccountRateLimits) — the account's 5h /
+ * weekly usage windows, read off the *same* `rate_limit_event` the park is. It is
+ * a separate event rather than a field on 'limited' because the two are not the
+ * same occasion: the windows arrive on every ordinary turn, well inside the
+ * limits, and 'limited' is the once that ends a run. A runtime that never emits
+ * it leaves the cockpit on its self-computed rolling cost window, which is a
+ * degradation and not a fault.
+ *
+ * A legible PTY session (agentMode 'pty') may also emit 'transcript'(text): a full
+ * replacement of all prior output after an in-place TUI rewrite.
  */
 export type AgentSessionStatus = 'starting' | 'running' | 'waiting' | 'done' | 'killed' | 'failed';
 
