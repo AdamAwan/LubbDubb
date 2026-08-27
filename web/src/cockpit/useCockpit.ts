@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, connectWs, isDemo, UnauthorizedError } from '../api.js';
 import type { WsClient } from '../api.js';
-import type { AppState, SetupPayload, StateSection } from '../types.js';
+import type { AppState, GoalAgentsPayload, SetupPayload, StateSection } from '../types.js';
 import type { AppliedFix } from '../view/needsYou.js';
 import { useNow } from '../hooks.js';
 import { buildViewModel, type CockpitView } from '../view/viewModel.js';
 import { useNavigation } from './useNavigation.js';
 import type { CockpitActions } from './actions.js';
 import { fireNotifications, loadNotifyPrefs, notifiableChanges, notifySnapshot } from './notify.js';
+import { goalPrNumbers } from '../view/goalPage.js';
 
 /**
  * How long a refetch waits so a burst of live signals collapses into one request.
@@ -216,6 +217,46 @@ export function useCockpit(): CockpitStatus {
     fireNotifications(notifiableChanges(notified.current, next), loadNotifyPrefs());
     notified.current = next;
   }, [state, setup]);
+
+  /**
+   * The open goal's whole run history, fetched when its page opens.
+   *
+   * On its own route rather than off `/api/state`, and here rather than in the
+   * page, for the transcript's and the files list's reason: the snapshot carries
+   * the fleet's live agents and a bounded tail of ended ones, because the all-time
+   * list grew for the life of the deployment and was re-serialised on every
+   * signal. One goal at a time is what the surface actually draws.
+   *
+   * Re-read when the goal's pull requests change and not on the state poll: the
+   * page merges this with the snapshot's own agents, so a run dispatched since the
+   * fetch is already drawn — what only this can add is history, and history does
+   * not move.
+   */
+  const [goalAgents, setGoalAgents] = useState<GoalAgentsPayload | null>(null);
+  const goalRef = place.goal;
+  // A string, so the effect below compares by value: `goalPrNumbers` builds a new
+  // array on every render and an array in the dependency list would refetch on
+  // every poll.
+  const goalPrs = state !== null && goalRef !== null ? goalPrNumbers(state, goalRef).join(',') : '';
+  useEffect(() => {
+    if (goalRef === null) {
+      setGoalAgents(null);
+      return;
+    }
+    let live = true;
+    void api
+      .getGoalAgents(goalRef, goalPrs === '' ? [] : goalPrs.split(',').map(Number))
+      .then((payload) => {
+        if (live) setGoalAgents(payload);
+      })
+      // Drawn as nothing, recorded nowhere, for the setup reading's reason: the
+      // page still has the snapshot's own agents, so a failed history read is a
+      // shorter list rather than a broken page.
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [goalRef, goalPrs]);
 
   // Subscribe to full output only while a drawer is open; unsubscribe on close/switch.
   useEffect(() => {
@@ -460,6 +501,7 @@ export function useCockpit(): CockpitStatus {
       insightsWindow: place.insightsWindow,
       poolProject: place.poolProject,
       selectedGoal: place.goal,
+      goalAgents,
       consolePanel: place.panel,
       tab: place.tab,
       collapsed: place.collapsed,

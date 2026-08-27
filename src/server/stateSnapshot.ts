@@ -29,6 +29,7 @@ import type {
   ValidationResourceView,
 } from '../wire.js';
 import { buildRefUrls, decisionSubjectRef, issueCommentRef } from './refUrls.js';
+import { fleetHistory } from './fleetHistory.js';
 import { placementAsks, truncateAreaPaths, type AreaPathTree } from '../intake/placement.js';
 import { buildStacks } from '../stacks/stack.js';
 import { landedCount, landingFor, landingReadiness } from '../stacks/landing.js';
@@ -189,6 +190,13 @@ export function buildStateSections(
   // sum over exactly these rows, so a second read could ship a card whose total
   // disagreed with the agents printed beside it.
   const agents = store.listAgents();
+  // The slice of those two lists the snapshot ships. A thunk, so a request for
+  // another section pays nothing for it, and taken from the shared reads above
+  // rather than from a second query — the roll-ups below are still answers about
+  // the *whole* fleet, and a bound applied at the read would have quietly turned
+  // the Yield gauge and every goal's spend into readings about the last two
+  // hundred runs.
+  const history = once(() => fleetHistory(agents, tasks));
   const control = runtimeControl.snapshot();
   // Hoisted (not inlined into the returned object) because the artifact-URL map
   // below is derived from the same list.
@@ -923,15 +931,19 @@ export function buildStateSections(
    * The agents, what they were dispatched to do, and what that has cost.
    *
    * The section almost every live signal invalidates — an agent's usage report, its
-   * progress note, a status flip, a file it wrote. `tasks` and `agents` are the bulk
-   * of what is left on the wire after the files list came off
-   * ([16](../../docs/spec/16-http-api.md#bulk-text)), so this is the section to trim
-   * next, not the one to split further.
+   * progress note, a status flip, a file it wrote. `tasks` and `agents` were the
+   * bulk of what was left on the wire after the files list came off, and they were
+   * the last two collections here with no cap on them: all-time reads over tables
+   * nothing deletes from, rebuilt and re-serialised on every one of those signals.
+   * They are bounded now — see {@link fleetHistory}, and
+   * [16](../../docs/spec/16-http-api.md#bulk-collections) for why the answer was a
+   * bound rather than a tenth section.
    */
   const fleetSection = (): Pick<
     CockpitState,
     | 'tasks'
     | 'agents'
+    | 'endedAgents'
     | 'parkedOnLimit'
     | 'stallParks'
     | 'flags'
@@ -942,8 +954,14 @@ export function buildStateSections(
     | 'usage'
     | 'runOutcomes'
   > => ({
-    tasks,
-    agents,
+    // Every live agent, the tail of ended ones, and the tasks those were
+    // dispatched on. `ended` is the whole count either way, so the console's
+    // "N shifts ended" says how many there have been rather than how many
+    // travelled — a header that counted the tail would report 200 forever on a
+    // deployment that had run twenty thousand.
+    tasks: history().tasks,
+    agents: history().agents,
+    endedAgents: history().ended,
     // Which of those rows are parked on a spent account limit rather than on a
     // question. Asked of the fleet, not derived from the rows: both parks are
     // `waiting` with a reason, and a cockpit that told them apart by reading the

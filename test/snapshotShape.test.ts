@@ -50,6 +50,10 @@ test('the snapshot ships tasks without their prompts', () => {
     branch: 'issue/1',
     originRef: 'issue:1',
   });
+  // The snapshot's task list is the tasks of the agents it ships, so a task with
+  // nobody on it is not on the wire at all — which is a different assertion from
+  // this one, and the one below would pass vacuously without an agent here.
+  system.store.createAgent({ taskId: task.id, cwd: '/tmp', pid: null });
 
   const snapshot = buildStateSnapshot(system);
   const shipped = snapshot.tasks.find((t) => t.id === task.id);

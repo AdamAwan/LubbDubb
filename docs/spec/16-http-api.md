@@ -277,6 +277,28 @@ list about one agent. Moving it here took the snapshot to 1.35 MB and its build 
 ~130 ms. It is the same trade as the transcript, made for the same reason — see
 [_Bulk text_](#bulk-text).
 
+### `GET /api/issues/:number/agents`
+
+`{ ref, agents, tasks }` — every agent that has worked this goal, newest first, with the tasks they
+were dispatched on. `?prs=42,57` names the goal's pull requests; omitted, only the goal's own subtree
+is matched.
+
+**Fetched when a goal page opens.** The snapshot carries the fleet's live agents and a bounded tail of
+ended ones ([_Bulk collections_](#bulk-collections)), and this is the one surface that draws a goal's
+whole run history — the same trade as the transcript and the files list, for the same reason.
+
+Three things it deliberately does not do. It does not **resolve the goal's pull requests**: that is the
+cockpit's three-way match (`ownsPr`), and a second copy here would be free to disagree with the pull
+requests drawn beside the agents it selected — so the caller names them, and an agent dispatched at an
+unnamed pull request is not this goal's as far as this read is concerned. It does not **404** for a goal
+the world has dropped: a run whose ticket closed still has a page and still has a history, which is the
+case this card most exists for. And it does not **replace** the snapshot's agents on the page — the two
+are merged, since the fetch is blind to anything dispatched after it landed.
+
+The subtree match is `origin_ref = ? OR origin_ref LIKE ? ESCAPE` in `Store.listGoalTasks`, so
+`issue:70` is not pulled onto `issue:7`'s page by a prefix — the failure a `startsWith` would produce
+silently, on the goals whose numbers happen to share digits.
+
 ### `GET /artifacts/:id`
 
 Serves a local artifact an agent flagged, **addressed by flag id**. Rate-limited to 120/minute.
@@ -1965,10 +1987,11 @@ read **once** and shared, so two parts of the UI cannot disagree.
 | `world`                         | The snapshot, with `health`, `attention` and `ciVerdict` per open PR and `pickup`, `conclusion`, `shortfall`, `appraisal`, `completion` and `spend` per issue.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `retainedRuns`                  | Runs whose issue the world has forgotten (#203, #234), rebuilt from their stored snapshots by the same `retainedRunIssues` the dispatcher unions into its issue list, through the same per-issue enrichment a live one takes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `plans`, `planParts`            | The plan graph — the same rows the per-issue chip reads, with `statusCommentRef` as a canonical ref.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `tasks`                         | Every task, **without prompts** — `TaskSummary`, not `Task`. See _Bulk text_ below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `tasks`                         | The tasks the shipped `agents` were dispatched on, **without prompts** — `TaskSummary`, not `Task`, and not the all-time list. See _Bulk text_ and _Bulk collections_ below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `jobs`                          | Operator jobs, newest first.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `schedules`                     | Recurring briefs, oldest first — **every** one, paused included, since this is the only surface anywhere that says a paused one exists. What a firing produces is an ordinary entry in `jobs`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `agents`                        | Every agent row, including usage and the progress note.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `agents`                        | Every **live** agent and the last `ENDED_AGENT_TAIL` to have ended, newest first, including usage and the progress note. A goal's older runs are `GET /api/issues/:number/agents`. See _Bulk collections_ below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `endedAgents`                   | How many agents have ended in all, tail or no tail — what the fleet card's "N shifts ended" counts, so the heading cannot settle at the cap and stay there.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `flags`                         | Every artifact chip, grouped by the cockpit onto agents.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `attachments`, `attachmentUrls` | Images an operator attached to a brief (#249), every ref in one list, plus the capability-carrying URL to load each one's bytes. The cockpit filters by `targetRef`: `job:<id>` while queued, `issue:<n>` once filed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `overlaps`                      | Paths two concurrently-live code agents wrote — read server-side over the newest `OVERLAP_AGENT_WINDOW` agents, never over the whole of `agent_files`. See [12](12-artifacts-and-files.md#file-overlap-detection). |
@@ -2001,7 +2024,7 @@ value there would become server code in the SPA bundle
 | `control`   | `control`                                                                                                          |
 | `goals`     | `worldObservedAt`, `world`, `retainedRuns`, `stacks`, `environmentReach`, `environmentArrivals`, `stackLandings`   |
 | `plans`     | `plans`, `planParts`, `validationChecks`, `validationResources`                                                    |
-| `fleet`     | `tasks`, `agents`, `parkedOnLimit`, `stallParks`, `flags`, `artifactUrls`, `attachments`, `attachmentUrls`, `overlaps`, `usage`, `runOutcomes` |
+| `fleet`     | `tasks`, `agents`, `endedAgents`, `parkedOnLimit`, `stallParks`, `flags`, `artifactUrls`, `attachments`, `attachmentUrls`, `overlaps`, `usage`, `runOutcomes` |
 | `knowledge` | `knowledge`, `knowledgeGraduations`, `knowledgeSimilarities`, `knowledgeDelivery`, `knowledgeCost`                 |
 | `queue`     | `jobs`, `schedules`, `upcoming`, `runway`                                                                          |
 | `inbox`     | `escalations`, `proposals`, `humanTasks`, `bugFilings`                                                             |
@@ -2042,10 +2065,13 @@ There is a **~30 ms floor** under every sectioned response — the shared reads 
 built from most of them. It is why sections stop at nine rather than one per key: below that size a
 section costs about what its neighbours cost, and the partition is only harder to keep true.
 
-`fleet` is still 1.17 MB, and `tasks` plus `agents` are 87% of what is left on the wire after the
-files list came off ([_Bulk text_](#bulk-text)). **That is the next thing to trim, not the next thing
-to split** — both are all-time reads with no cap, unlike `decisions`, `worldEvents` and `errors`
-beside them.
+`fleet` was still 1.17 MB at that measurement, with `tasks` plus `agents` 87% of what was left on the
+wire after the files list came off ([_Bulk text_](#bulk-text)) — and both were all-time reads with no
+cap, unlike `decisions`, `worldEvents` and `errors` beside them. **They are bounded now**, which was
+the trim that measurement called for rather than a tenth section: see
+[_Bulk collections_](#bulk-collections). On a seeded profile of 1,500 completed agents the whole
+snapshot went from 2.06 MB to 0.29 MB, and — the part that matters — it no longer grows with the age
+of the deployment.
 
 #### How a patch reaches the cockpit
 
@@ -2108,6 +2134,51 @@ transcript's, never a widening of `tasks` back to `Task`.
 
 `test/snapshotShape.test.ts` pins both: that a shipped task has no `prompt` key and that no prompt text
 reaches the payload by any route, and that a settled escalation stays on the server.
+
+### Bulk collections
+
+**No collection on this snapshot is an all-time read.** Trimming the rows was half the answer; the
+other half is that `agents` and `tasks` had no cap at all, over two tables nothing deletes from. Every
+other feed here has one — `decisions`, `worldEvents` and `errors` at 100, the overlap detector at
+`OVERLAP_AGENT_WINDOW` — and these two were shipping every agent the deployment had ever run and every
+task it had ever claimed, on a payload refetched several times a pulse per open cockpit. So what an
+operator paid per action grew for the life of the deployment, and nothing about it was ever red: the
+payload validated, the cockpit drew, and the only symptom was that a harness that had been up for
+months felt slower than one installed yesterday. On the deployment that prompted this the snapshot was
+6.73 MB.
+
+The bound is `ENDED_AGENT_TAIL` (200) in `src/server/fleetHistory.ts`, and it has three parts:
+
+- **Every live agent is shipped, whatever the cap.** The bound is on *history*, and an agent that is
+  out is not history. Dropping a running row would make the console's fleet card a sample of what the
+  fleet is doing, which is the one thing it must never be.
+- **The tail is ordered by when each agent _ended_**, not by when it started. A long run that finished
+  this morning is more recent history than a short one dispatched after it and finished last week, and
+  a started-at cut drops exactly the rows an operator is looking for.
+- **`tasks` is narrowed to the agents shipped**, rather than capped on its own. Every cockpit read of a
+  task starts from an agent — `taskFor(agent)`, `agentOnBranch`, `agentOnGoal`, the needs-you rows — so
+  a task row with no agent to reach it from is a row nothing can draw.
+
+**The count travels even when the rows do not.** `endedAgents` is how many have ended in all, because
+the fleet card's heading is "N shifts ended" and a number read off the shipped list would settle at 200
+and stay there for the life of a deployment that had run twenty thousand — a wrong number that looks
+exactly like a right one. The disclosure says so in words as well, and names where the rest are.
+
+**Where the rest are is `GET /api/issues/:number/agents`**, fetched when a goal page opens — the
+`/api/agents/:id/files` pattern applied to the one surface that draws a goal's whole run history. The
+route matches the goal's own subtree in SQL (`issue:12`, `issue:12:part:signer` — the predicate every
+gate in the dispatcher keys on) and takes the goal's **pull requests from the caller**, because which
+pull requests are a goal's is the three-way match the cockpit already makes to draw the page; a second
+copy of it server-side would be free to disagree with the pull requests drawn beside the agents it
+selected. The page **merges** the answer with the snapshot's own agents rather than replacing them: the
+fetch is blind to anything dispatched since it landed, and the snapshot is blind to anything older than
+the tail, so only the union is the goal's list. A failed fetch is drawn as a shorter list, not an
+error — the snapshot's own rows are still there.
+
+`test/fleetBounds.test.ts` pins the pair: that a live agent survives a cap of zero, that the tail is
+the newest-ended, that a task nothing can reach is off the wire, that `endedAgents` counts all of them,
+and that a goal's older runs come back from its route — including that `issue:70` is not pulled onto
+`issue:7`'s page by a prefix match.
 
 Eight consistency points:
 
