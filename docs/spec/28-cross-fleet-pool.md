@@ -709,21 +709,54 @@ Two layers, split by what the setting is _about_ ([02](02-configuration.md#prece
 
 `fleetId` is explicit and never derived — not from a git author line, not from the hostname — and it
 names **person and target repo**, which is what makes two of one person's deployments distinguishable
-in a pool. A fleet with no id configured while the pool is selected is a boot error, exactly as a
-project with no name is.
+in a pool.
 
 **The config page asks for it in the same breath as the provider.** `fleetId` declares
 `requiredWhen: { path: 'integrations.pool', unless: 'fake' }`
 ([02](02-configuration.md#a-key-another-key-requires)), so the row is drawn even while unset, is
 marked the moment the pool provider is staged as anything but `fake`, and the write is refused until
-it holds something. Without that the boot error is the *only* thing that says so, and it arrives as a
-400 on a save, over a key the page did not draw — an operator who has just turned the pool on being
-told their config is wrong, with nothing to fix it in.
+it holds something. Without that, an operator who has just turned the pool on gets a 400 from the save
+over a key the page did not draw — told their config is wrong, with nothing to fix it in — and a fleet
+that published nothing with nothing saying why.
 
 Beside the empty field it **offers** `userId@pool.project` — `adam@lubbdubb` — as a button and a
 placeholder. That is not the derivation this section rules out: nothing writes it, the offer is absent
 unless both parts resolve, and what lands in the file is what the operator accepted. It is the shape
 of the answer, spelled out, for a field whose whole job is to be an address nobody else writes to.
+
+### A fleet with no name yet
+
+**A pool selected with no `fleetId` boots.** The other coordinates are refused at load
+(`validatePool`, `src/config.ts`) and this one deliberately is not, because of who each of them
+belongs to: `pool.project`, `pool.remote` and `pool.branch` arrive in the **committed**
+`lubbdubb.project.json`, so a missing one is a mis-committed file every clone shares and every clone
+should refuse. The fleet's own name is the **deployment's**, per machine — so the day a team commits
+the pool, a boot error over it is every operator on that team handed a harness that will not start,
+over a key whose one editor is the cockpit that will not open. The refusal put the only person who
+could answer in front of a terminal.
+
+So there are three things instead, and they have to be read together:
+
+- **The desk sits out.** `system.ts` wires no `PoolDesk` while the id is empty, exactly as it wires
+  none for the `fake` provider. This is the part that must not be got wrong: the address is
+  `fleets/<fleetId>/claims.json`, so a `?? ''` publishing under `fleets//` puts a document with no
+  author in somebody else's repository, and the parse on the other side reads the directory name as
+  the address ([The envelope](#the-envelope)). Nothing publishes and nothing polls until the fleet
+  has a name.
+- **The rail asks.** `fleet` is a check on **Needs you** ([26](26-setup.md#the-checks)) — `bad`, since
+  a deployment whose project file says it is in the pool is publishing nothing and reading nobody.
+  Beside the empty field it makes the same `userId@pool.project` offer the config page does, from the
+  same `suggest` declaration, and it is `assumed`: nothing writes it on the operator's behalf, which
+  is what keeps "never derived" true. Where either part is missing there is nothing whole to offer and
+  the row is a `goto` — half an address is `alice@`.
+- **The panel still draws nothing.** `PoolStatus` (`web/src/components/PoolStatus.tsx`) reads a null
+  status, which is also what the `fake` default looks like. The row is what tells the two apart, and it
+  is why the row is `bad` rather than a gap: without it, a fleet that was configured into the pool and
+  never named it would be indistinguishable from one that never opted in.
+
+`fleetId` has no arm in `src/configApply.ts`, so writing it lands in the file and the desk stays out
+until a restart — which the reading restates rather than suppresses, in the shape
+[26](26-setup.md#a-fault-the-file-has-already-answered) describes for every other restart-only key.
 
 | Key                          | Layer      | Default                                                             |
 | ---------------------------- | ---------- | ------------------------------------------------------------------- |
@@ -732,7 +765,7 @@ of the answer, spelled out, for a field whose whole job is to be an address nobo
 | `pool.remote`, `pool.branch` | project    | none; the `git` transport's coordinates                             |
 | `pool.path`                  | project    | empty — the repository root; a prefix when the repository is shared |
 | `pool.digestIntervalMs`      | either     | one hour                                                            |
-| `fleetId`                    | deployment | none; required when the pool is selected                            |
+| `fleetId`                    | deployment | none; required when the pool is selected — the desk sits out until it is set |
 
 **Off by default.** `fake` is the default provider for the same reason it is for `sourceControl` and
 `issues`: a harness that reached a network on a fresh clone would be one nobody could run a test

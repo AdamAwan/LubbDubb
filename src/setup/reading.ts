@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Config } from '../config.js';
+import { configField, suggestedValue } from '../configFields.js';
 import type { ConfigChange } from '../configApply.js';
 import type { PromptTemplates } from '../dispatcher/promptTemplates.js';
 import { RETIRED_TOOL_NAMES } from '../mcp/names.js';
@@ -187,6 +188,7 @@ export async function buildSetupReading(deps: {
     pointedCheck(config, onMock, configFileExists, install),
     await credentialCheck(config, probes),
     await identityCheck(config, probes),
+    ...fleetChecks(config),
     ...watchChecks(config, store),
     await agentCheck(config, probes),
     billingCheck(probes),
@@ -240,6 +242,7 @@ export async function buildSetupReading(deps: {
 const SETTLED_BY: Readonly<Record<string, readonly string[]>> = {
   pointed: ['integrations.issues', 'integrations.sourceControl'],
   identity: ['userId'],
+  fleet: ['fleetId'],
   eligibility: ['ownWorkOnly'],
   watch: ['labelPrefix'],
   agent: ['agentMode', 'claudeCommand'],
@@ -534,6 +537,71 @@ async function identityCheck(config: Config, probes: SetupProbes): Promise<Setup
       group: 'Integrations',
     },
   };
+}
+
+/**
+ * Whether a deployment that has selected the pool has said who it publishes as.
+ *
+ * **Nothing while the pool is `fake`**, which is the default: a check about a
+ * capability that is off is a row for a decision nobody has taken, and the same
+ * argument that keeps `validatePool` quiet about a fake pool keeps this quiet too.
+ * An `ok` row when it is on is the reading having been taken, the same shape
+ * `credential` has when the variable is present.
+ *
+ * This exists because the fault used to be a **boot error**. `fleetId` is the one
+ * pool key that is the operator's rather than the project's — the coordinates
+ * arrive in the committed `lubbdubb.project.json`, and the fleet's own name cannot
+ * — so a team that committed the pool on Tuesday handed every one of its operators
+ * a harness that refused to start, over a key the cockpit is where you set. Refusing
+ * to boot puts the person who can answer in front of a terminal instead of the
+ * panel that asks. So the harness boots, the pool desk sits out
+ * (`src/system.ts`), and this is the ask. → `docs/spec/28-cross-fleet-pool.md#a-fleet-with-no-name-yet`
+ *
+ * **`bad`, not `warn`.** The rest of the harness is unaffected, so the temptation is
+ * to call it a gap — but a fleet with no name publishes nothing and reads nobody,
+ * on a deployment whose project file says it is in the pool. The Knowledge page's
+ * pool panel draws nothing at all in that state, which is exactly what a deployment
+ * that never opted in looks like: this row is the only thing that tells the two
+ * apart, and a soft one would be describing a capability that is off as merely
+ * untidy.
+ *
+ * The offer is `userId@pool.project` and it is `assumed`, so the cockpit puts it in
+ * a field before it puts it in the file — the same offer the config page draws beside
+ * the empty key, from the same declaration in `CONFIG_FIELDS`, because two surfaces
+ * proposing two addresses for the field whose whole job is to be an address nobody
+ * else writes to is worse than one proposing none. Where either part is missing there
+ * is nothing whole to offer and the row is a `goto`: half an address is `alice@`.
+ */
+function fleetChecks(config: Config): SetupCheck[] {
+  if (config.integrations.pool === 'fake') return [];
+  if (config.fleetId !== undefined && config.fleetId !== '') {
+    return [{ id: 'fleet', label: 'Who this fleet is', verdict: 'ok', detail: `fleetId is ${config.fleetId}` }];
+  }
+  const base: SetupCheck = {
+    id: 'fleet',
+    label: 'Who this fleet is',
+    verdict: 'bad',
+    detail: `The pool is on via ${config.integrations.pool} and nothing says who this fleet is, so it publishes nothing and reads nobody.`,
+    remedy:
+      'Name person and target repo — "alice@acme-api" — so two of one person\'s deployments are distinguishable in the pool. It is never derived.',
+    fix: { kind: 'goto', label: 'Open Config', to: 'config', group: 'Integrations' },
+  };
+  const field = configField('fleetId');
+  const offer = field === undefined ? undefined : suggestedValue(field, config);
+  if (offer === undefined) return [base];
+  return [
+    {
+      ...base,
+      remedy: `${base.remedy} Your userId and the project's name make ${offer} — check it before writing.`,
+      fix: {
+        kind: 'config',
+        label: `Set fleetId to ${offer}`,
+        set: { fleetId: offer },
+        confidence: 'assumed',
+        group: 'Integrations',
+      },
+    },
+  ];
 }
 
 /**

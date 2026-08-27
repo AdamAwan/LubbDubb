@@ -985,13 +985,22 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   //
   // The coordinates are read straight from config because `validatePool` has already
   // refused a boot without them — the reads below are the type's, not a second gate.
+  //
+  // **`fleetId` is the exception, and it is a gate.** It is not refused at load, so
+  // that a deployment which selects the pool before naming its fleet boots and is
+  // asked on **Needs you** rather than in a terminal — and an unnamed fleet must
+  // therefore publish nothing at all. `?? ''` below would make its address
+  // `fleets//claims.json`, which every other fleet in the pool reads as a document
+  // with no author, so the desk sits out entirely until the row is answered.
+  // → `docs/spec/28-cross-fleet-pool.md#a-fleet-with-no-name-yet`
+  const fleetId = config.fleetId ?? '';
   const pool =
-    config.integrations.pool === 'fake'
+    config.integrations.pool === 'fake' || fleetId === ''
       ? undefined
       : new PoolDesk({
           store,
           transport: buildPoolTransport(config.integrations, { store, config, now, errors }),
-          fleetId: config.fleetId ?? '',
+          fleetId,
           project: config.pool?.project ?? '',
           harnessVersion: harnessVersion(),
           now,

@@ -307,6 +307,87 @@ test('the reading prefills both answers, so nothing the machine already knows is
 });
 
 /**
+ * The row that replaced a boot error.
+ *
+ * A team commits `integrations.pool` and the project's name; the fleet's own name
+ * is the operator's, per machine. That used to be a refusal to start, which put the
+ * only person who could answer in front of a terminal rather than the panel that
+ * asks — so the harness boots, the pool desk sits out, and this is where it says so.
+ */
+test('a pool selected with no fleetId is a row, and it offers the address rather than deriving one', async () => {
+  const selected = {
+    integrations: { sourceControl: 'fake' as const, issues: 'fake' as const, pool: 'git' as const },
+    pool: { project: 'acme-api', remote: 'https://git.example/eng/wiki.git', branch: 'main' },
+  };
+  const reading = async (over: Parameters<typeof loadConfig>[0]) =>
+    buildSetupReading({
+      config: config({ ...selected, ...over }),
+      store: buildSystem(config()).store,
+      probes: probes(),
+      configFile: '/nowhere/lubbdubb.config.json',
+      pending: [],
+      prompts: defaultPromptTemplates(),
+    });
+
+  // Nothing to join a suggestion from, so nothing is proposed: half an address is
+  // `alice@`, and an operator who accepts it publishes under one that reads like a
+  // mistake to every other fleet in the pool.
+  const unknown = (await reading({})).checks.find((c) => c.id === 'fleet');
+  assert.equal(unknown?.verdict, 'bad');
+  assert.equal(unknown?.fix?.kind, 'goto');
+
+  // Both parts resolve, so the same offer the config page draws beside the empty
+  // field — and `assumed`, so the cockpit puts it in a field before the file.
+  const offered = (await reading({ userId: 'alice' })).checks.find((c) => c.id === 'fleet');
+  assert.equal(offered?.fix?.kind, 'config');
+  assert.deepEqual(offered?.fix?.kind === 'config' && offered.fix.set, { fleetId: 'alice@acme-api' });
+  assert.equal(offered?.fix?.kind === 'config' && offered.fix.confidence, 'assumed');
+
+  const named = (await reading({ userId: 'alice', fleetId: 'alice@acme-api' })).checks.find((c) => c.id === 'fleet');
+  assert.equal(named?.verdict, 'ok');
+
+  // A deployment that never opted in draws no row at all, rather than an `ok` one
+  // about a capability it does not have.
+  const off = (await reading({ integrations: { sourceControl: 'fake', issues: 'fake', pool: 'fake' }, pool: {} }))
+    .checks;
+  assert.equal(
+    off.find((c) => c.id === 'fleet'),
+    undefined,
+  );
+});
+
+/**
+ * `fleetId` has no arm in `configApply.ts`, so an operator who writes it watches the
+ * file say one thing while the process runs another — the same gap `identity` and
+ * `pointed` have, and it is restated here for the same reason rather than falling to
+ * the generic restart row.
+ */
+test('a fleetId the file already holds says restart, not ask again', async () => {
+  const running = config({
+    integrations: { sourceControl: 'fake', issues: 'fake', pool: 'git' },
+    pool: { project: 'acme-api', remote: 'https://git.example/eng/wiki.git', branch: 'main' },
+  });
+  const reading = await buildSetupReading({
+    config: running,
+    store: buildSystem(config()).store,
+    probes: probes(),
+    configFile: '/nowhere/lubbdubb.config.json',
+    pending: pendingFor(running, {
+      integrations: { sourceControl: 'fake', issues: 'fake', pool: 'git' },
+      pool: { project: 'acme-api', remote: 'https://git.example/eng/wiki.git', branch: 'main' },
+      fleetId: 'alice@acme-api',
+    }),
+    prompts: defaultPromptTemplates(),
+  });
+  const fleet = reading.checks.find((c) => c.id === 'fleet');
+  // Still bad: the desk is sitting out until the process comes back, so this fleet
+  // is publishing nothing whatever the file says.
+  assert.equal(fleet?.verdict, 'bad');
+  assert.match(fleet?.detail ?? '', /fleetId = "alice@acme-api"/);
+  assert.equal(fleet?.fix?.kind, 'goto');
+});
+
+/**
  * Pending as the harness itself computes it — what a candidate file says against
  * what the process is running, minus whatever an arm applied on the way.
  *

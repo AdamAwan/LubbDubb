@@ -5,9 +5,9 @@ import {
   configField,
   envOverride,
   readPath,
+  suggestedValue,
   type ConfigFieldAccess,
   type ConfigFieldRequirement,
-  type ConfigFieldSuggestion,
   type ConfigFieldType,
 } from '../configFields.js';
 
@@ -277,21 +277,6 @@ function flatten(
 }
 
 /**
- * The value to offer for an unset key, or undefined where there is nothing whole
- * to offer.
- *
- * Every part must resolve to a non-empty string. `alice@` is not a suggestion,
- * it is a half-typed one — and the operator who accepts it publishes under an
- * address that reads like a mistake to every other fleet in the pool.
- */
-function suggestionFor(suggest: ConfigFieldSuggestion | undefined, config: Config): string | undefined {
-  if (!suggest) return undefined;
-  const parts = suggest.join.map((path) => readPath(config, path));
-  if (!parts.every((part) => typeof part === 'string' && part !== '')) return undefined;
-  return parts.join(suggest.with);
-}
-
-/**
  * One declared field, read out of the running config. `null` for an unset
  * optional — **except** one another key can require, which is drawn empty.
  *
@@ -315,7 +300,7 @@ function entryFor(path: string, config: Config, baseline: Config, project: Parti
   // null, which is a configured value meaning "no ceiling".
   const value = held === undefined ? '' : held;
   const base = held === undefined ? value : readPath(baseline, path);
-  const suggestion = suggestionFor(field.suggest, config);
+  const suggestion = suggestedValue(field, config);
   return {
     path,
     value,

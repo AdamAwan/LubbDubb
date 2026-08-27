@@ -87,8 +87,13 @@ export interface ConfigFieldRequirement {
   unless: string;
 }
 
-/** The keys to join into a suggested value, and what to join them with. */
-export interface ConfigFieldSuggestion {
+/**
+ * The keys to join into a suggested value, and what to join them with.
+ *
+ * Unexported: `suggestedValue` below is the one reader, so nothing outside this
+ * module names the shape.
+ */
+interface ConfigFieldSuggestion {
   join: readonly string[];
   with: string;
 }
@@ -673,6 +678,28 @@ export function readPath(config: Partial<Config>, path: string): unknown {
     cursor = (cursor as Record<string, unknown>)[segment];
   }
   return cursor;
+}
+
+/**
+ * The value to *offer* for an unset field, or undefined where there is nothing
+ * whole to offer.
+ *
+ * Every part must resolve to a non-empty string. `alice@` is not a suggestion, it
+ * is a half-typed one — and the operator who accepts it publishes under an address
+ * that reads like a mistake to every other fleet in the pool.
+ *
+ * One join rule, read by both surfaces that offer a value: the config page's
+ * empty field (`src/server/runningConfig.ts`) and the **Needs you** row that asks
+ * for `fleetId` (`src/setup/reading.ts`). A second copy would be free to offer a
+ * different address from the one the field beside it proposes.
+ * → `docs/spec/28-cross-fleet-pool.md#configuration`
+ */
+export function suggestedValue(field: ConfigField, config: Partial<Config>): string | undefined {
+  const suggest = field.suggest;
+  if (!suggest) return undefined;
+  const parts = suggest.join.map((path) => readPath(config, path));
+  if (!parts.every((part) => typeof part === 'string' && part !== '')) return undefined;
+  return parts.join(suggest.with);
 }
 
 /**
