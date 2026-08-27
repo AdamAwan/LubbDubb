@@ -37,6 +37,26 @@ export interface GoalPartView {
   agentLive: boolean;
 }
 
+/**
+ * One agent on the goal's page, and how the goal reaches it.
+ *
+ * `onPr` is the pull request the dispatch actually named, on the agents this goal
+ * owns *through* one — a CI fix, a review round, a retarget. Null on the agents
+ * dispatched at the goal's own subtree.
+ *
+ * The two are drawn in one list because they are one answer to "who is working
+ * this": a pull request is opened for a goal and closed for a goal, so an agent on
+ * it is an agent on the goal. They are still told apart, and both readings are
+ * load-bearing — the row names the pull request as a way there, and ending the run
+ * counts only the subtree, which is the only thing `clearGoalWork` kills
+ * ([16](../../../docs/spec/16-http-api.md#post-apiissuesnumberdismiss-run)).
+ */
+interface GoalAgentView {
+  agent: Agent;
+  /** The pull request the dispatch named, or null when it named the goal's own subtree. */
+  onPr: number | null;
+}
+
 /** The overview's five-segment reading of a goal. */
 export interface GoalTrack {
   merged: number;
@@ -65,7 +85,7 @@ export interface GoalPageView {
   retiredParts: PlanPart[];
   openPullRequests: OpenPullRequest[];
   closedPullRequests: PullRequest[];
-  agents: Agent[];
+  agents: GoalAgentView[];
   /** This goal's own slice of the decision log, newest first as the server ordered it. */
   decisions: CockpitDecision[];
   /**
@@ -234,9 +254,16 @@ export function buildGoalPage(state: AppState, ref: string, needs: readonly Need
     .flatMap<GoalPartView>((part) => {
       const group = GROUP_OF[part.status];
       if (!group) return [];
-      const agent = state.agents.find(
-        (a) => state.tasks.find((t) => t.id === a.taskId)?.originRef === `${ref}:part:${part.slug}`,
-      );
+      // Two origins reach one part: the part itself, and the pull request it
+      // opened — a CI fix or a review round is dispatched at `pr:<n>` and is as
+      // much somebody's hands on this part as the build agent was. Read off the
+      // part alone, a part whose work has reached review draws no agent at all,
+      // which is most of the ones being worked.
+      const origins = new Set([`${ref}:part:${part.slug}`, ...(part.prNumber === null ? [] : [`pr:${part.prNumber}`])]);
+      const on = state.agents.filter((a) => origins.has(state.tasks.find((t) => t.id === a.taskId)?.originRef ?? ''));
+      // Live first, newest otherwise: the snapshot is newest-first, so the second
+      // arm is the last run of this part and the first is what is happening now.
+      const agent = on.find((a) => a.endedAt === null) ?? on[0];
       return [{ part, group, agentId: agent?.id ?? null, agentLive: agent !== undefined && agent.endedAt === null }];
     })
     .sort((a, b) => a.part.seq - b.part.seq);
@@ -261,7 +288,17 @@ export function buildGoalPage(state: AppState, ref: string, needs: readonly Need
     retiredParts,
     openPullRequests: state.world.pullRequests.filter((pr) => ownsPr(pr, issue, partPrs)),
     closedPullRequests: (state.world.closedPullRequests ?? []).filter((pr) => ownsPr(pr, issue, partPrs)),
-    agents: state.agents.filter((a) => belongsToGoal(state.tasks.find((t) => t.id === a.taskId)?.originRef, ref)),
+    agents: state.agents.flatMap<GoalAgentView>((agent) => {
+      const origin = state.tasks.find((t) => t.id === agent.taskId)?.originRef ?? null;
+      if (belongsToGoal(origin, ref)) return [{ agent, onPr: null }];
+      // A pull request is opened for a goal, so an agent dispatched at one is an
+      // agent on that goal. Resolved through `goalOfPr` rather than off the branch,
+      // which is the same three-way match the pull-request card is drawn with.
+      const pr = origin === null ? null : /^pr:(\d+)$/.exec(origin);
+      if (pr === null) return [];
+      const number = Number(pr[1]);
+      return goalOfPr(state, number) === ref ? [{ agent, onPr: number }] : [];
+    }),
     decisions: state.decisions.filter((d) => belongsToGoal(d.subjectRef, ref)),
     // Equality, not `belongsToGoal`: a check is keyed on the goal itself, and
     // matching descendants would pull a part's ref in as though it were one.

@@ -256,8 +256,87 @@ test('a goal whose number is a prefix of another does not inherit that goal’s 
     [],
   );
 
-  assert.ok(!page?.agents.some((a) => a.id === otherAgent.id));
+  assert.ok(!page?.agents.some((a) => a.agent.id === otherAgent.id));
   assert.ok(!page?.decisions.some((d) => d.id === otherDecision.id));
+});
+
+/**
+ * A pull request is opened for a goal, so an agent dispatched at one is an agent on
+ * the goal. Read off the `issue:<n>` subtree alone the card said *no agent is on
+ * this goal* through every CI fix and review round — which is most of the time a
+ * goal has somebody on it.
+ */
+test('an agent dispatched at this goal’s pull request is one of its agents, and says which PR', () => {
+  const state = buildDemoState().state;
+  const issue = state.world.issues[0]!;
+  const ref = `issue:${issue.number}`;
+  const open: OpenPullRequest = {
+    id: 'pr-911',
+    number: 911,
+    title: 'the goal’s PR',
+    branch: `issue/${issue.number}`,
+    ciStatus: 'failing',
+    unresolvedComments: [],
+    merged: false,
+    health: { blocked: false, reasons: [] },
+    attention: { status: 'harness', reasons: [] },
+    ciVerdict: { actionable: true, dispatch: [], escalate: [], ignored: [], urgent: false },
+  };
+  const ciTask = task({ id: 't:ci', originRef: 'pr:911', title: 'Fix failing CI on PR #911' });
+  const ciAgent = agent({ id: 'a:ci', taskId: ciTask.id });
+  // Another goal's pull request, dispatched the same way — the reading is the
+  // three-way match, never "the origin is a PR".
+  const strayTask = task({ id: 't:stray', originRef: 'pr:912' });
+  const strayAgent = agent({ id: 'a:stray', taskId: strayTask.id });
+
+  const page = buildGoalPage(
+    {
+      ...state,
+      world: { ...state.world, pullRequests: [open] },
+      tasks: [...state.tasks, ciTask, strayTask],
+      agents: [ciAgent, strayAgent],
+    },
+    ref,
+    [],
+  );
+
+  assert.deepEqual(
+    page?.agents.map((a) => [a.agent.id, a.onPr]),
+    [['a:ci', 911]],
+  );
+});
+
+/**
+ * The other half of the same fact one tier down: a part whose work has reached
+ * review has its agents dispatched at `pr:<n>`, so a part row read off its own
+ * origin alone draws no agent on exactly the parts that are moving.
+ */
+test('a part wears the agent on its pull request, preferring the live one', () => {
+  const state = buildDemoState().state;
+  const issue = state.world.issues[0]!;
+  const ref = `issue:${issue.number}`;
+  const parts = [part({ id: 'p:1', slug: 'one', status: 'in_review', prNumber: 921 })];
+
+  const built = task({ id: 't:build', originRef: `${ref}:part:one` });
+  const review = task({ id: 't:review', originRef: 'pr:921' });
+  const page = buildGoalPage(
+    {
+      ...state,
+      plans: [plan(ref)],
+      planParts: parts,
+      tasks: [...state.tasks, built, review],
+      // Newest first, as the snapshot orders them.
+      agents: [
+        agent({ id: 'a:review', taskId: review.id, startedAt: '2026-01-02T00:00:00.000Z' }),
+        agent({ id: 'a:build', taskId: built.id, endedAt: '2026-01-01T01:00:00.000Z', status: 'done' }),
+      ],
+    },
+    ref,
+    [],
+  );
+
+  assert.equal(page?.parts[0]?.agentId, 'a:review');
+  assert.equal(page?.parts[0]?.agentLive, true);
 });
 
 /**

@@ -300,9 +300,13 @@ function Header({
   // rejection, so the click did nothing and said nothing.
   const owed = issue.validation !== null && issue.validation.state === 'flagged' ? issue.validation : null;
   const standing = issue.instructions.length;
-  // What ending the run kills, in the same subtree the header's agent count reads
-  // — so the confirmation states a number the operator can already see above it.
-  const live = page.agents.filter((a) => LIVE_AGENT.has(a.status)).length;
+  // What ending the run kills: the `issue:<n>` subtree only, which is the exact
+  // scope `clearGoalWork` sweeps. The header counts the goal's agents through its
+  // pull requests as well, and those keep running — so the two numbers are read
+  // apart on purpose and the modal says which is which, rather than promising a
+  // kill the route does not do.
+  const live = page.agents.filter((a) => a.onPr === null && LIVE_AGENT.has(a.agent.status)).length;
+  const livePr = page.agents.filter((a) => a.onPr !== null && LIVE_AGENT.has(a.agent.status)).length;
   // Keyed on the run existing and not having been ended, never on anything the
   // page itself is showing: the button is how a run is abandoned, so it has to be
   // reachable for exactly as long as the harness still holds one.
@@ -538,6 +542,7 @@ function Header({
           issueTitle={issue.title}
           outstanding={owed === null ? null : outstanding(owed)}
           agents={live}
+          prAgents={livePr}
           instructions={standing}
           onSubmit={(note) => actions.dismissRun(issue.number, note)}
           onClose={() => setEndingRun(false)}
@@ -1235,7 +1240,19 @@ export function CiLadder({ pr }: { pr: PullRequest }): JSX.Element | null {
   );
 }
 
-/** Who is on this goal right now, and what each has cost where that was measured. */
+/**
+ * Who is on this goal right now, and what each has cost where that was measured.
+ *
+ * **A pull request is for a goal, so an agent on one is on the goal.** A dispatch
+ * names the goal's own subtree or it names a pull request — a CI fix, a review
+ * round, a retarget — and a card that read only the first said *no agent is on
+ * this goal* while somebody was fixing its build, which is the reading an operator
+ * is on this page to take. The row names that pull request as a way there, since a
+ * row saying an agent is on something and not where is the dead end the ref rule
+ * exists to stop. The reference sits **beside** the name rather than inside it:
+ * the row's own click opens the transcript, and one click cannot have two
+ * destinations.
+ */
 function OnThisGoal({
   page,
   view,
@@ -1252,20 +1269,30 @@ function OnThisGoal({
       </h3>
       <div className="cn-rows">
         {page.agents.length === 0 && <p className="cn-empty">No agent is on this goal.</p>}
-        {page.agents.map((agent) => (
-          <button type="button" className="cn-row" key={agent.id} onClick={() => actions.select(agent.id)}>
+        {page.agents.map(({ agent, onPr }) => (
+          <div className="cn-row" key={agent.id}>
             <i
               className={`cn-lamp ${agent.status === 'waiting' ? 'cn-lamp-ask' : agent.endedAt === null ? 'cn-run' : 'cn-off'}`}
             />
-            <span className="cn-grow">
+            <button
+              type="button"
+              className="cn-grow"
+              onClick={() => actions.select(agent.id)}
+              title="Open this agent's drawer — its transcript, what it cost, and its controls"
+            >
               <b className="cn-name">{view.taskFor(agent)?.title ?? agent.id}</b>
               <span className="cn-sub">
                 {agent.status} · {relTime(agent.startedAt, view.now)}
                 {agent.note !== null && ` · ${agent.note}`}
               </span>
-            </span>
+            </button>
             {agent.costUsd !== null && <span className="cn-num">{fmtUsd(agent.costUsd)}</span>}
-          </button>
+            {onPr !== null && (
+              <span className="cn-refs">
+                <Ref to={`pr:${onPr}`} label={`PR #${onPr}`} />
+              </span>
+            )}
+          </div>
         ))}
       </div>
     </section>

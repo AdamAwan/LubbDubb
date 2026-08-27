@@ -35,6 +35,7 @@ export function EndRunModal({
   issueTitle,
   outstanding,
   agents,
+  prAgents,
   instructions,
   onSubmit,
   onClose,
@@ -47,8 +48,16 @@ export function EndRunModal({
    * Non-null is also what makes the note required, mirroring the route's condition.
    */
   outstanding: string | null;
-  /** Live agents on this goal, which ending the run kills. */
+  /** Live agents on this goal's own subtree, which ending the run kills. */
   agents: number;
+  /**
+   * Live agents on this goal's *pull requests*, which it does not kill —
+   * `clearGoalWork` sweeps the `issue:<n>` subtree and a `pr:` dispatch is not in
+   * it ([16](../../../docs/spec/16-http-api.md#post-apiissuesnumberdismiss-run)).
+   * Stated because the page counts them as the goal's agents: an operator reading
+   * "3 agents" above and "1 killed" here needs the difference said, not inferred.
+   */
+  prAgents: number;
   /** Standing instructions on this goal, which ending the run settles unread. */
   instructions: number;
   onSubmit: (note: string | undefined) => Promise<unknown>;
@@ -89,6 +98,13 @@ export function EndRunModal({
           <li>
             {agents === 0 ? 'No agent is running on this goal.' : `${count(agents, 'running agent')} killed mid-turn.`}
           </li>
+          {prAgents > 0 && (
+            <li>
+              {count(prAgents, 'agent')} on this goal’s pull requests {prAgents === 1 ? 'keeps' : 'keep'} running — end
+              {prAgents === 1 ? ' it' : ' them'} from the fleet if you want {prAgents === 1 ? 'it' : 'them'} stopped
+              too.
+            </li>
+          )}
           <li>Any queued job standing in for this goal’s work is cancelled.</li>
           <li>
             {instructions === 0
