@@ -1,4 +1,4 @@
-import type { IssueState, TrackerItem } from '../types.js';
+import type { FeatureSummary, IssueState, TrackerItem } from '../types.js';
 import type { StoreContext } from './context.js';
 import type { ColumnMigrations } from './migrate.js';
 
@@ -25,6 +25,9 @@ export const TICKET_COLUMNS: ColumnMigrations = {
   // — see `TrackerSweepMark.restatedAt`.
   tracker_sweep: { restated_at: 'TEXT' },
   feature_colors: {},
+  // Fresh with the feature summary, and declaring an empty entry for
+  // `feature_colors`' stated reason: new *once* does not keep a table exempt.
+  feature_summaries: {},
 };
 
 /**
@@ -398,6 +401,55 @@ export class TicketStore {
       .prepare(`UPDATE tracker_items SET work_item_state = ?, updated_at = ? WHERE number = ?`)
       .run(patch.state, this.ctx.now(), patch.number);
   }
+
+  /**
+   * Write (or revise) a Feature's summary.
+   *
+   * Upsert on the container, so a re-write revises one row rather than stacking
+   * accounts of the same Feature — idempotence in the write rather than in a
+   * read-then-check, exactly as `recordRetrospective` does it. `created_at`
+   * survives an overwrite, so the row still dates the first time anybody said
+   * where this Feature was.
+   */
+  recordFeatureSummary(input: {
+    originRef: string;
+    standing: string;
+    usable: string | null;
+    blocked: string | null;
+    remaining: string | null;
+    standingKey: string;
+    agentId: string;
+    taskId: string;
+  }): FeatureSummary {
+    const ts = this.ctx.now();
+    const prev = this.getFeatureSummary(input.originRef);
+    const row: FeatureSummary = { ...input, createdAt: prev?.createdAt ?? ts, updatedAt: ts };
+    this.ctx.db
+      .prepare(
+        `INSERT INTO feature_summaries
+           (origin_ref, standing, usable, blocked, remaining, standing_key, agent_id, task_id, created_at, updated_at)
+         VALUES (@originRef, @standing, @usable, @blocked, @remaining, @standingKey, @agentId, @taskId, @createdAt, @updatedAt)
+         ON CONFLICT(origin_ref) DO UPDATE SET
+           standing=excluded.standing, usable=excluded.usable, blocked=excluded.blocked,
+           remaining=excluded.remaining, standing_key=excluded.standing_key, agent_id=excluded.agent_id,
+           task_id=excluded.task_id, updated_at=excluded.updated_at`,
+      )
+      .run(row);
+    return row;
+  }
+
+  getFeatureSummary(originRef: string): FeatureSummary | null {
+    const row = this.ctx.db.prepare(`SELECT * FROM feature_summaries WHERE origin_ref=?`).get(originRef) as
+      | FeatureSummaryRow
+      | undefined;
+    return row ? rowToFeatureSummary(row) : null;
+  }
+
+  /** Every summary on file. The board quotes them; the rule reads only their keys. */
+  listFeatureSummaries(): FeatureSummary[] {
+    const rows = this.ctx.db.prepare(`SELECT * FROM feature_summaries`).all() as FeatureSummaryRow[];
+    return rows.map(rowToFeatureSummary);
+  }
 }
 
 /**
@@ -491,4 +543,32 @@ function parseLabels(raw: string): string[] {
   } catch {
     return [];
   }
+}
+
+interface FeatureSummaryRow {
+  origin_ref: string;
+  standing: string;
+  usable: string | null;
+  blocked: string | null;
+  remaining: string | null;
+  standing_key: string;
+  agent_id: string;
+  task_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+function rowToFeatureSummary(r: FeatureSummaryRow): FeatureSummary {
+  return {
+    originRef: r.origin_ref,
+    standing: r.standing,
+    usable: r.usable,
+    blocked: r.blocked,
+    remaining: r.remaining,
+    standingKey: r.standing_key,
+    agentId: r.agent_id,
+    taskId: r.task_id,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
 }

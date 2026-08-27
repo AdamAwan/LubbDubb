@@ -28,6 +28,7 @@ import type { GoalAppraisalVerdictName } from '../goalAppraisal.js';
 import type { AreaPathTree } from '../../intake/placement.js';
 import type { RemedySubmission } from '../../remedies/remedies.js';
 import type { FactContradiction, FactProposal } from '../../knowledge/knowledge.js';
+import type { FeatureSummaryInput } from '../../summaries/featureSummary.js';
 import type { FactAgreementOutcome, FactContradictionOutcome, FactProposalOutcome } from '../../store/knowledge.js';
 import { issueOrigin, originIssueNumber } from '../../plans/planning.js';
 import { type McpTool, toolJson, type ToolCallResult } from '../protocol.js';
@@ -120,6 +121,14 @@ export interface AgentToolTarget {
     topic: string | null,
   ): { ok: true; entry: ScratchEntry } | { ok: false; error: string };
   readScratch(agentId: string): { ok: true; padRef: string; entries: ScratchEntry[] } | { ok: false; error: string };
+  /**
+   * The Feature's own account of itself. Takes no container argument for the
+   * reason none of these do: the Feature is the credential's own.
+   */
+  recordFeatureSummary(
+    agentId: string,
+    input: FeatureSummaryInput,
+  ): { ok: true; featureOrigin: string } | { ok: false; error: string };
   recordRetrospective(
     agentId: string,
     summary: string,

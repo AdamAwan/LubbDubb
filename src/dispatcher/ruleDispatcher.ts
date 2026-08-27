@@ -48,6 +48,7 @@ import { planBlocked } from './rules/planBlocked.js';
 import { planPart } from './rules/planPart.js';
 import { issuePickup } from './rules/issuePickup.js';
 import { validateCheck } from './rules/validateCheck.js';
+import { featureSummary } from './rules/featureSummary.js';
 
 /**
  * What each rule does, keyed by its id. The **order they run in is not here** —
@@ -83,6 +84,7 @@ const STAGES: Partial<Record<StageRuleId, (s: StageContext) => void>> = {
   'plan-part': planPart,
   'issue-pickup': issuePickup,
   'validate-check': validateCheck,
+  'feature-summary': featureSummary,
 };
 
 /**

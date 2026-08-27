@@ -124,6 +124,7 @@ import type {
   PlanPart,
   PlanPartInput,
   PlanRevision,
+  FeatureSummary,
   Retrospective,
   ScratchEntry,
   ScratchPadSummary,
@@ -1392,6 +1393,15 @@ export class Store {
 
   patchTicketState(patch: { number: number; state: string }): void {
     this.tickets.patchTicketState(patch);
+  }
+  recordFeatureSummary(input: Parameters<TicketStore['recordFeatureSummary']>[0]): FeatureSummary {
+    return this.tickets.recordFeatureSummary(input);
+  }
+  getFeatureSummary(originRef: string): FeatureSummary | null {
+    return this.tickets.getFeatureSummary(originRef);
+  }
+  listFeatureSummaries(): FeatureSummary[] {
+    return this.tickets.listFeatureSummaries();
   }
   // -- Pets -----------------------------------------------------------------
 

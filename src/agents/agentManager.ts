@@ -54,6 +54,7 @@ import { plannerOrigin } from '../mcp/planNotNeeded.js';
 import { goalFingerprint } from '../intake/appraisal.js';
 import { padWriteTarget } from '../scratch/pad.js';
 import { retroSubmitOrigin } from '../retro/retro.js';
+import { featureSummarySubmitOrigin, type FeatureSummaryInput } from '../summaries/featureSummary.js';
 import { remedyOrigin, type RemedySubmission } from '../remedies/remedies.js';
 import {
   corroborationGoal,
@@ -121,6 +122,25 @@ interface AgentManagerOptions {
     /** The profile `issue:<n>`'s work would run on now: its tag, or the configured default. */
     effective: (issueOrigin: string) => string | null;
   };
+  /**
+   * Where a Feature's children stand *now*, as `featureStandingKey` digests it —
+   * what a summary is stamped with when it lands.
+   *
+   * A function rather than the mirror, for `goalProfile`'s reason: the manager
+   * asks one question and gets one string, and stays as ignorant of container
+   * types, watch labels and environments as it is of rules.
+   *
+   * **Read at submission and never at dispatch**, which is the whole of why it is
+   * a callback at all. A key stamped when the agent was launched would record
+   * where the Feature stood before the run, so anything that moved *during* it
+   * would match the stored key for ever after and the Feature would never be
+   * summarised again — silently, and indistinguishably from a Feature at rest.
+   *
+   * Unset (every deployment with no feature board, and the tests that do not care)
+   * stamps an empty key. Nothing dispatches a summariser on such a deployment, so
+   * the row is only ever reachable there by a caller that hand-built the origin.
+   */
+  featureStanding?: (featureOrigin: string) => string | null;
   whitelistedApprovals: WhitelistRule[];
   /** Builds the underlying runtime (PTY or stream-JSON) for a launch spec. */
   createSession: SessionFactory;
@@ -1183,6 +1203,47 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       const filed = lessons.filter((claim) => this.fileFact(caller, retroClaim(claim)).outcome !== 'barred').length;
       this.emit('retrospective', { agentId, taskId: task.id, issueOrigin: origin.issueOrigin });
       return { ok: true, issueOrigin: origin.issueOrigin, lessonsFiled: filed };
+    });
+  }
+
+  /**
+   * Record the Feature summary this agent was dispatched to write (the
+   * `feature_summary` tool).
+   *
+   * {@link featureSummarySubmitOrigin} resolves the container from the credential
+   * and refuses every other caller by name, so an agent working one goal cannot
+   * write the account of the Feature that goal sits under — it has an opinion
+   * about its own story and no view of the rest, which is exactly the reading a
+   * summary must not be.
+   *
+   * The standing key is stamped **here**, from where the children stand at
+   * submission — see {@link AgentManagerOptions.featureStanding} for why a key
+   * taken at dispatch would silently retire the Feature from ever being
+   * summarised again. Idempotence is the store's upsert: a second submission
+   * revises one row.
+   *
+   * **No event, deliberately** — the one write in this class that emits nothing.
+   * `retrospective` and `scratch` exist because what they wrote rides inside
+   * `/api/state`, which the cockpit polls; the feature board is fetched when it is
+   * opened and never polled, so there is no surface to repaint. An event nobody
+   * listens to is a promise the next reader would believe.
+   */
+  recordFeatureSummary(
+    agentId: string,
+    input: FeatureSummaryInput,
+  ): { ok: true; featureOrigin: string } | { ok: false; error: string } {
+    return this.withCaller(agentId, (caller) => {
+      const { task } = caller;
+      const origin = featureSummarySubmitOrigin(task.originRef);
+      if (!origin.ok) return { ok: false, error: origin.error };
+      this.store.recordFeatureSummary({
+        originRef: origin.featureOrigin,
+        ...input,
+        standingKey: this.opts.featureStanding?.(origin.featureOrigin) ?? '',
+        agentId,
+        taskId: task.id,
+      });
+      return { ok: true, featureOrigin: origin.featureOrigin };
     });
   }
 

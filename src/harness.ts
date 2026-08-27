@@ -73,6 +73,22 @@ interface HarnessDeps {
    * dispatch is ever pinned.
    */
   modelPins?: { labelPrefix: string; models: AgentModels };
+  /**
+   * Where every Feature's work stands right now, digested — what rule
+   * `feature-summary` compares against the summaries on file.
+   *
+   * A thunk rather than the mirror, on `modelPins`' terms: the harness asks one
+   * question and gets the answer, and stays as ignorant of container types, watch
+   * labels and environments as it is of the board that draws them. It is also
+   * where the *cost* is gated — the gather is several full-table reads, so the
+   * wiring returns an empty list on a deployment with no feature board and this
+   * pulse then does no read at all.
+   *
+   * Absent = a caller that has not wired it, and then no Feature is ever
+   * summarised: the safe absence, since the other direction would dispatch against
+   * a digest nobody built.
+   */
+  featureStandings?: () => { number: number; title: string; key: string }[];
   /** How long an operator "Up next" priority override survives after its origin stops being tracked (issue #128; 0 disables pruning). */
   upNextOverrideTtlMs: number;
   /**
@@ -673,6 +689,16 @@ export class Harness extends EventEmitter {
             }
           : world;
 
+      // Where every Feature stands, and what the summaries on file were written
+      // against — the two halves of rule `feature-summary`'s one comparison. The
+      // second read is skipped entirely when the first came back empty, which is
+      // every deployment with no feature board.
+      const featureStandings = this.deps.featureStandings?.() ?? [];
+      const featureSummaryKeys =
+        featureStandings.length === 0
+          ? []
+          : store.listFeatureSummaries().map((f) => ({ originRef: f.originRef, standingKey: f.standingKey }));
+
       const plan = await this.deps.dispatcher.decide({
         world: dispatchWorld,
         // Which of `world.issues` above are retained runs rather than the tracker's
@@ -703,6 +729,10 @@ export class Harness extends EventEmitter {
         // Which goals already have a write-up — origins only. Rule `issue-retro` needs to know
         // whether to dispatch one; what it says is deliberately out of its reach.
         retrospectiveOrigins,
+        // Standings and digests only — never a word of what a summary says, for
+        // `retrospectiveOrigins`' reason one line up.
+        featureStandings,
+        featureSummaryKeys,
         recentDecisions,
         proposals,
         rejectionSignals,

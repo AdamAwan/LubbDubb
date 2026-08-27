@@ -201,6 +201,26 @@ export interface DispatchContext {
    * `appraisalSignalQuery`, so it is empty until an issue is actually refused.
    */
   appraisalSignals?: WorldEvent[];
+  /**
+   * Where every Feature's work stands right now, as `featureStandingKey` digests
+   * it — number, title and key, and **never a word of what anybody wrote**. Rule
+   * `feature-summary` compares the key to {@link featureSummaryKeys} and that is
+   * the whole of what it may know, `retrospectiveOrigins`' rule: a rule branching
+   * on summary prose would let one agent's account of a Feature change what the
+   * harness schedules next.
+   *
+   * Absent/empty means the deployment has no feature board — no flag, or a tracker
+   * with no hierarchy to roll up — and nothing is ever summarised, which is the
+   * safe absence: the whole feature is off rather than dispatching against a
+   * digest nobody built.
+   */
+  featureStandings?: { number: number; title: string; key: string }[];
+  /**
+   * The key each Feature's standing summary was written against — origins and
+   * digests, on the same terms as the readings above. Absent/empty means none has
+   * been written, which holds nothing and summarises every Feature once.
+   */
+  featureSummaryKeys?: { originRef: string; standingKey: string }[];
   /** How many more agents may be started this cycle (concurrency headroom). */
   agentHeadroom: number;
   /** Recent audit decisions, so a persistent PR signal isn't re-notified to an agent every cycle. */

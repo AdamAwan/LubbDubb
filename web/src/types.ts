@@ -178,6 +178,7 @@ export type {
   FeatureReach,
   FeatureReportRow,
   FeatureRollup,
+  FeatureSummary,
   FeatureWorkingRow,
   TicketFeatureFacet,
   TicketOrder,

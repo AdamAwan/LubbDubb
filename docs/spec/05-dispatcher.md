@@ -94,6 +94,7 @@ unconditional.
 | `plan-blocked`             | Approved plan is going nowhere       | `planning`           | A released plan has something blocked and nothing moving, so nothing will be dispatched for it — and a live part nobody refused is stuck behind it. Asks a human once; dispatches nobody. |
 | `plan-part`                | Plan part ready                      | `planning`           | A part of an active plan is `ready` and unstaffed.                                                                                                                                        |
 | `issue-pickup`             | Open issue without a PR              | —                    | An eligible open issue has no **open** PR and no agent on it, and the funnel **failed open** on it (route `unplanned`). Never a retained run.                                             |
+| `feature-summary`          | Feature has moved                    | —                    | A Feature's children stand somewhere other than where its summary was written, or it has none. One desk agent says where the Feature is. Last of every rule.                              |
 
 `workItemStates` is the one condition that is not a feature flag: it is true when the operator has
 configured **both** `issueInReviewState` and a non-empty `issuePickupStates`. `workItemInProgress` is
@@ -393,6 +394,10 @@ is no second list to keep in step with it. What each stage contributes:
    it is waiting on a person, and the cockpit's bench is where it is visible.
    → [13](13-jobs-and-tickets.md#human-tasks)
 8. **Issue pickups** (`issue-pickup`), ordered by label-encoded priority then issue number.
+9. **Feature summaries** (`feature-summary`), a desk agent per Feature whose standing has moved —
+   **last**, below even a handed-over validation check, because it is the only rule in the book that
+   produces no work at all: a check is a reading somebody asked for, and this is a paragraph about
+   readings already taken. Nothing may wait behind it.
 9. **Handed-over validation checks** (`validate-check`), last of everything. Validation's standing
    promise is that it blocks nothing, so a check must never take the final slot from a blocked part
    or a red build — that would make the one feature that gates nothing the reason something else did
@@ -1024,6 +1029,45 @@ override that predates the rule would silently drop a new `{token}`.
 The agent answers with `validation_report` ([11](11-mcp-tools.md)), whose third arm — `handback` —
 returns the check to the operator without recording a reading. See
 [20](20-validation.md#the-hand-over) for why there are three answers rather than two.
+
+## `feature-summary` — where a Feature is
+
+`feature-summary` puts one **desk** agent on a Feature to write the account a developer would give the
+person who asked for it: where it is, what of it is usable today and where, what is blocking, and what
+is left. What the summary *is* and how it is drawn is [17](17-cockpit.md#the-feature-summary); the
+dispatcher's half is:
+
+- A **desk** agent, **no branch and no worktree**, on origin `issue:<n>:summary` — `issue-retro`'s
+  shape and its reasons. It writes no files, a checkout would only be a temptation to start work on
+  somebody's story, and its own origin keeps its cooldown and attempt cap out of the budget that gets
+  work done under that container.
+- **The gate is a comparison, not an event.** The summary stores the digest of where every child stood
+  when it was written; the rule fires exactly when that no longer matches the standing now. An unmoved
+  Feature costs one string comparison a pulse and no agent, for ever.
+- **It reads no lens and no prose.** `DispatchContext.featureStandings` carries a number, a title and
+  a digest per Feature and `featureSummaryKeys` carries origins and digests —
+  `retrospectiveOrigins`' rule, and for its reason: a rule branching on what an agent wrote about a
+  Feature would let one account of it change what the harness schedules next. Nothing under
+  `src/dispatcher/` touches `buildFeatureBoard`.
+- **Absent means off.** Both fields are empty on a deployment with no feature board — no flag, or a
+  tracker with no hierarchy — and nothing is ever summarised. One conjunction (`featureBoardOn`)
+  gates the route, the cockpit's tab, the dossier and the digest, so they cannot come to different
+  answers about whether the feature exists at all.
+- **One at a time.** A summariser already on the Feature is not joined by a second: it reads the
+  standing again when it submits, so the movement that would have dispatched the second is already
+  in what the first is writing.
+- **Fails open and silent**, `issue-retro`'s rule: nothing is gated on a summary, so a crashed or
+  capped agent costs the paragraph and nothing else, with no escalation — there is nothing a person
+  can do about it that they cannot do by reading the board under it.
+
+Every item under the Feature, where each stands, the sentence whoever ruled on it wrote and the
+summary already on file are **appended** to the rendered `feature-summary` prompt rather than
+interpolated. The append rule as always, and here it is the whole of what the agent can say: a
+summariser has no worktree and no world of its own.
+
+The agent submits with `feature_summary` ([11](11-mcp-tools.md)); `standing` is required, the three
+sections are optional and trimmed rather than refused, and the write upserts on the container so a
+revision is one row. Nothing is posted to the tracker and nothing is scheduled from what it says.
 
 ## `pr-base-update` — two arms
 

@@ -7,6 +7,7 @@ import { assessIssue } from './tools/assessIssue.js';
 import { concludePart } from './tools/concludePart.js';
 import { concludeWork } from './tools/concludeWork.js';
 import { escalate } from './tools/escalate.js';
+import { featureSummary } from './tools/featureSummary.js';
 import { knowledgeAsk } from './tools/knowledgeAsk.js';
 import { linkTicket } from './tools/linkTicket.js';
 import { noteProgress } from './tools/noteProgress.js';
@@ -57,6 +58,7 @@ const TOOLS: Record<McpToolName, ToolFactory> = {
   scratch_append: scratchAppend,
   scratch_read: scratchRead,
   retro_submit: retroSubmit,
+  feature_summary: featureSummary,
   open_pr: openPr,
   reply_to_review: replyToReview,
   validation_amend: validationAmend,

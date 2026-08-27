@@ -1071,6 +1071,29 @@ CREATE TABLE IF NOT EXISTS feature_colors (
   assigned_at TEXT NOT NULL
 );
 
+-- What a developer would tell a product owner about one Feature: prose, written by
+-- the feature-summary rule's desk agent, revised whenever something under the Feature
+-- moves.
+--
+-- A fresh table rather than columns on feature_colors, which is an assignment
+-- nothing may re-decide, where this is rewritten. standing_key is the whole of the
+-- re-write trigger: it is the digest of where every child stood when the row was
+-- written (featureStandingKey), and the rule dispatches exactly when it differs
+-- from the standing now — so an unchanged Feature costs one string comparison a
+-- pulse and no agent, for ever.
+CREATE TABLE IF NOT EXISTS feature_summaries (
+  origin_ref   TEXT PRIMARY KEY,      -- "issue:29857", the container's own
+  standing     TEXT NOT NULL,         -- the lede: where this Feature is
+  usable       TEXT,                  -- what a person can see or use today
+  blocked      TEXT,                  -- what is stopping the rest
+  remaining    TEXT,                  -- what is left
+  standing_key TEXT NOT NULL,
+  agent_id     TEXT NOT NULL,
+  task_id      TEXT NOT NULL,
+  created_at   TEXT NOT NULL,
+  updated_at   TEXT NOT NULL
+);
+
 -- The sweep's own bookkeeping: one row, id 1. anchor_at is one month before the
 -- first sweep and is **frozen** — a rolling window would drop the far end of the
 -- history every night, silently, which is the opposite of what the mirror is for.

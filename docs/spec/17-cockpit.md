@@ -2726,6 +2726,62 @@ A Feature with nothing worked, nothing delivered and nothing blocked draws **no 
 bar has already said so, and three empty headings would be the loudest thing on the card saying
 nothing.
 
+### The feature summary
+
+Above the briefing, and above everything except the bar and its counts, a card draws **the one piece
+of prose on this board**: where the Feature actually is, written by an agent, in its own voice.
+
+The board answers every question about a Feature except the one it is opened with. A bar, six counts,
+three lists of quotations and a row per child are each true, and a reader assembles _where is this_
+out of them themselves — which two readers do differently. The summary is that sentence, said once,
+by somebody who read the whole Feature.
+
+It is four fields, not a document: **where this is** (required), **usable now**, **blocking**, **left
+to do**. They are four questions, and a reader must not have to find each of them inside a paragraph.
+A field the agent left out is drawn as nothing at all, never an empty heading: nothing usable yet,
+nothing blocked and nothing left are ordinary states, and the lede is where an agent says so.
+
+**It is a quotation like everything else on this card.** The board still composes no sentence: what it
+draws is the four fields as they were submitted, stamped and attributable. That is not the same thing
+as [the verdict this surface refuses](#what-it-deliberately-does-not-draw) — a status word is the
+harness asserting a policy nobody stated, where this is one agent's account of what it read, and the
+prompt refuses it dates, percentages and _on track_ for exactly that reason.
+
+#### It is rewritten when the Feature moves, and the trigger is a comparison
+
+Rule `feature-summary` ([05](05-dispatcher.md)) dispatches one desk agent per Feature whose standing
+has changed since anybody last wrote about it. The obvious trigger — an event, fired when something
+happens — is the one thing it must not be: an event is lost to any restart that straddles it, and
+"since **you** last looked" is a per-reader state the harness has no honest source for.
+
+So the summary stores a **digest of where every child stood when it was written**
+(`featureStandingKey`, `src/summaries/featureSummary.ts`), and the rule fires exactly when that digest
+no longer matches the standing now. An unmoved Feature costs one string comparison a pulse and no
+agent, for ever.
+
+What goes into the digest is **standings, never text**: the tracker's state and its native state, the
+delivery and shortfall verdicts, a run in flight, a landing. Not `changedAt` — a title fixed or a
+comment added moves that, and re-writing a Feature's account because somebody corrected a typo is an
+agent spent on nothing. An item *moving* is what a summary is about, and an item newly linked under
+the Feature is a movement too.
+
+The key is stamped **at submission**, not at dispatch. A key taken when the agent was launched would
+record where the Feature stood before the run, so anything that moved during it would match for ever
+after and that Feature would never be summarised again — silently, and indistinguishably from a
+Feature at rest.
+
+#### Nothing gates on it
+
+A Feature is exactly as delivered with a summary as without one, so a missing summary is silence
+rather than a hold — `issue-retro`'s answer, one tier up ([05](05-dispatcher.md)). An agent that
+crashes, is killed or spends its attempt cap costs the paragraph and nothing else, and no escalation
+is raised: there is nothing a person can do about a summary that did not happen that they cannot do by
+reading the board under it.
+
+The orphan card carries **no summary**, and the omission is the point rather than a gap. A summary
+says where a *Feature* has got to; the orphan bucket is every item the tracker says answers to
+nothing, which share no goal for anybody to have got anywhere with.
+
 ### What it deliberately does not draw
 
 **No verdict about a Feature.** There is no _at risk_, no _on track_ and no forecast date, and their
