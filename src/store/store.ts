@@ -1213,9 +1213,6 @@ export class Store {
   addLocalRunUsage(id: string, delta: LocalRunUsageDelta): void {
     this.localRuns.addLocalRunUsage(id, delta);
   }
-  endStaleLocalRuns(note: string): number {
-    return this.localRuns.endStaleLocalRuns(note);
-  }
 
   // -- PR watch seeds (the harness's own PRs, already tagged) ---------------
 

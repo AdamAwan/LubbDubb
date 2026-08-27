@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import { existsSync } from 'node:fs';
 import { STREAM_TRANSPORT_ARGS } from '../agents/agentProtocol.js';
 import type { AgentSession, SessionFactory } from '../agents/session.js';
 import type { ProcessReaper } from '../agents/processTree.js';
@@ -47,6 +48,40 @@ const RUN_RULES = [
   '  above did not mention. That last part is how the instruction gets better.',
   '- **Before each step, print one line saying what you are about to do, starting with `phase:`** — for',
   '  example `phase: starting the containers`. Somebody is watching this come up and that line is all',
+  '  they have to go on until it does. A few words, on a line of its own.',
+].join('\n');
+
+/**
+ * What a session bringing an **interrupted** run back is told, on top of the
+ * operator's own resume instruction — appended, never interpolated, for the prompt
+ * templates' reason.
+ *
+ * `STOP_RULES_ALONE`'s first bullet, for `STOP_RULES_ALONE`'s reason, pointed the
+ * other way: this session has no memory of the bring-up either, and the mistake it
+ * would make left to infer things is the mirror image. A start's session finds the
+ * ports free; this one finds them held by the containers the reap could not touch,
+ * and a session that reads that as a collision either brings up a second stack or
+ * gives up. It is told outright that what it finds is its own predecessor's work and
+ * that attaching to it is the job.
+ */
+const RESUME_RULES = [
+  'How this works, on top of the above:',
+  '',
+  '- **You did not start this, and the session that did is gone.** The harness restarted underneath it.',
+  '  Whatever survived that — containers, listening ports, background processes — is this run’s own work,',
+  '  not a collision: attach to it, restart only the pieces that did not survive, and do not bring up a',
+  '  second copy of anything already up.',
+  '- Start whatever you do have to start in the **background** and leave it running. This session stays',
+  '  open to hold it: the server is a child of this process, so if you run it in the foreground you block',
+  '  your own turn, and if you stop it before you finish there is nothing left running.',
+  '- **Do not stop it, and do not tidy up.** Finishing your turn is not the end of the run — somebody',
+  '  is about to look at what you brought back. It is stopped from the cockpit, which kills this session.',
+  '- **Do not commit, push, or change code.** This checkout is detached at a commit somebody else',
+  '  wrote and is here to be looked at, not worked on. If it will not come back, say why and stop.',
+  '- **Say where it landed** — the URL and the port — and say what you found already running and what you',
+  '  had to start again. That second half is how the instruction gets better.',
+  '- **Before each step, print one line saying what you are about to do, starting with `phase:`** — for',
+  '  example `phase: checking what is still up`. Somebody is watching this come back and that line is all',
   '  they have to go on until it does. A few words, on a line of its own.',
 ].join('\n');
 
@@ -302,6 +337,99 @@ export class LocalRunner extends EventEmitter {
   }
 
   /**
+   * Bring back the run a previous harness left behind, or settle the row if it
+   * cannot be brought back. The boot sweep, and the only thing that clears a live
+   * row at startup.
+   *
+   * **A row saying `running` at boot is not a run**, which is what the sweep this
+   * replaces was right about: the pid in it belongs to a dead parent, or worse to
+   * whatever has since been given that number, so nothing may go on trusting it. What
+   * the sweep was wrong about is what follows from that. A shutdown reaps the
+   * session's subtree and takes the dev server with it, and cannot touch a container
+   * or anything the start handed to a service — so the machine after a restart is
+   * half an environment, with a row that says `stopped` in front of it and an
+   * operator several minutes from getting the other half back. Continuing it is a
+   * third instruction rather than a re-run of the first, because attaching to what
+   * survived is a different sentence from starting from nothing
+   * ({@link LocalRunPolicy.resumeInstruction}).
+   *
+   * **Called from `main.ts`, below the shutdown handlers**, and not from
+   * `buildSystem`: this spawns a process, and everything that can is below that line
+   * for the reason that file states — a Ctrl-C above it runs no handler, so the
+   * session would be a real orphan holding the checkout with a row claiming it is
+   * live. The cost is that the row reads live for the length of a boot, which is the
+   * truth of it: it is about to be.
+   *
+   * Synchronous, because unlike {@link start} there is no checkout to prepare. That
+   * is deliberate and not an accident of the code: `ensurePreview` is a `reset --hard`
+   * and a `clean -fd`, and running it here would pull the project out from under
+   * containers that are still up — the same ordering hazard a swap's stop-then-prepare
+   * exists for. The checkout already stands at the run's own commit, since
+   * `ensurePreview` is the only thing that ever touches `localRunRoot`.
+   */
+  resumeInterrupted():
+    | { outcome: 'nothing' }
+    | { outcome: 'resumed'; run: LocalRun }
+    | { outcome: 'settled'; run: LocalRun; reason: string } {
+    const live = this.deps.store.liveLocalRun();
+    if (live === null) return { outcome: 'nothing' };
+    const give = (reason: string): { outcome: 'settled'; run: LocalRun; reason: string } => {
+      this.settle(live.id, 'stopped', `the harness restarted — ${reason}`);
+      return { outcome: 'settled', run: live, reason };
+    };
+
+    // A `stopping` row is a teardown the last harness was in the middle of, which is
+    // an operator who asked for this environment to go away. Bringing it back would
+    // be answering the opposite of the last thing they said.
+    if (live.status === 'stopping')
+      return give(
+        'it was being taken down when the harness went, so it was not brought back — whatever was left running is still running',
+      );
+
+    const instruction = this.deps.policy().resumeInstruction.trim();
+    if (instruction === '')
+      return give(
+        'no resume instruction is configured, so it was not brought back and whatever survived the ' +
+          'restart may still be running. Set `localRun.resumeInstruction` on the Config page.',
+      );
+
+    // Checked rather than discovered through a spawn that fails: a bad `cwd` surfaces
+    // as an async spawn error rather than a throw, which would leave this method
+    // reporting a resume that never happened.
+    if (!existsSync(live.dir)) return give(`its checkout at ${live.dir} is gone`);
+
+    this.deps.store.setLocalRunStatus(live.id, 'starting', 'the harness restarted; this run is being brought back');
+    this.runId = live.id;
+    // The tail and the stage belong to the session that printed them, and that
+    // session is gone. Kept, they would caption this bring-up with the last thing the
+    // dead one said.
+    this.tail = [];
+    this.stage = null;
+
+    const session = this.deps.sessions({
+      command: this.deps.claudeCommand,
+      args: [...STREAM_TRANSPORT_ARGS, '--permission-mode', this.deps.permissionMode, ...this.deps.claudeArgs],
+      cwd: live.dir,
+    });
+    this.session = session;
+    // The bring-up's handlers, not a stop's: the turn ending here means the
+    // environment is up again, exactly as it does on a start.
+    this.wire(session, live.id);
+    try {
+      session.start();
+    } catch (err) {
+      this.settle(live.id, 'failed', `could not start a session to bring it back: ${(err as Error).message}`);
+      return { outcome: 'settled', run: live, reason: `a session could not be started: ${(err as Error).message}` };
+    }
+    this.deps.store.markLocalRunPid(live.id, session.pid);
+    session.send(`${instruction}
+
+${RESUME_RULES}`);
+    this.emit('changed');
+    return { outcome: 'resumed', run: this.deps.store.currentLocalRun() ?? live };
+  }
+
+  /**
    * Stop the run, if one is going: the stop **instruction** first, then the reap.
    *
    * **A dev environment is not a process tree**, which is the whole reason this is a
@@ -343,15 +471,35 @@ export class LocalRunner extends EventEmitter {
    */
   stopFast(note = 'the harness shut down'): void {
     const live = this.deps.store.liveLocalRun();
+    // Before the kill, and this is the switch that lets the row outlive the process
+    // below. The wired `exit` handler settles a run whose session dies while it is
+    // meant to be up, which is right everywhere except here: the session dying *is*
+    // the shutdown, and a `failed` written on the way out is a row the next boot
+    // would refuse to bring back.
+    this.runId = null;
     this.stopSession();
-    if (live)
-      this.settle(
-        live.id,
-        'stopped',
-        this.deps.policy().stopInstruction.trim() === ''
-          ? `${note} — the session was killed, so whatever it started may still be running.`
-          : `${note} — the stop instruction was not run on the way down, so whatever it started may still be running.`,
-      );
+    if (live) {
+      if (this.deps.policy().resumeInstruction.trim() === '')
+        this.settle(
+          live.id,
+          'stopped',
+          this.deps.policy().stopInstruction.trim() === ''
+            ? `${note} — the session was killed, so whatever it started may still be running.`
+            : `${note} — the stop instruction was not run on the way down, so whatever it started may still be running.`,
+        );
+      // Otherwise the row is **left live on purpose**, which is the whole of how a
+      // resume is possible at all. Nothing else records that there is an environment
+      // to come back to: the note the settle used to write was a sentence for a
+      // person to read, and `resumeInterrupted` cannot act on prose. The status is
+      // left exactly as it was rather than moved — the harness is going down, and it
+      // has learned nothing about this run to justify writing a different one.
+      else
+        this.deps.store.setLocalRunStatus(
+          live.id,
+          live.status,
+          `${note} — it is left standing to be brought back on the next boot.`,
+        );
+    }
     this.emit('changed');
   }
 

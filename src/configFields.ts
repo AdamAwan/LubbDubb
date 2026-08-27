@@ -491,6 +491,12 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'How it is stopped again. Empty means a stop kills the session but not what it started.',
   },
   {
+    path: 'localRun.resumeInstruction',
+    type: 'text',
+    access: 'plain',
+    why: 'How an environment the harness was holding is brought back after a restart. Empty means it is not.',
+  },
+  {
     path: 'localRun.url',
     type: 'string',
     access: 'plain',
