@@ -252,6 +252,35 @@
   color: var(--cn-amber);
 }
 
+/* The Usage chip: what the account has left. Its resting state is the plain
+   reading beside it — the tints are the two states an operator has to act on, and a
+   gauge that is always coloured is one nobody reads. Amber from three-quarters spent
+   (the window will turn over before the fleet finishes what it is on), red from nine
+   tenths (the next park is close). Both tint through the token layer, so a theme
+   switch takes them with it. */
+.cn-usage-warn {
+  border-color: var(--cn-amber-line-hi);
+  background: var(--cn-amber-bg);
+}
+.cn-usage-warn b {
+  color: var(--cn-amber);
+}
+.cn-usage-spent {
+  border-color: var(--cn-red-line);
+  background: var(--cn-red-bg);
+}
+.cn-usage-spent b {
+  color: var(--cn-red);
+}
+/* The age of a stale reading, drawn beside the number rather than instead of it: the
+   number is still the best answer anyone has, and the age is the caveat on it. Faint
+   and upright — it is not a second measurement. */
+.cn-usage-age {
+  font: 400 10px/1 var(--cn-mono);
+  font-style: normal;
+  color: var(--cn-fg-faint);
+}
+
 /* The fleet gauge: what the fleet is allowed to do, and the countdown to its next
    dispatch decision, read left to right as one thing. The countdown is in here rather
    than a chip of its own further along the bar because Pause is the control that stops
@@ -2833,8 +2862,6 @@ button.cn-grow {
 .cn-why:focus-within .cn-why-tip {
   display: block;
 }
-
-
 
 /* The watch switch. A glyph in the row's own ink, dimmed until it is wanted, so a
    column of them reads as one repeated control rather than as a column of state —

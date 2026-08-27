@@ -33,6 +33,7 @@ const { ThemeSettings } = await import('../web/src/components/ThemeSettings.js')
 const { ColourField } = await import('../web/src/components/ColourField.js');
 const { ConfigValues } = await import('../web/src/components/ConfigValues.js');
 const { RaiseIssueModal, composeGate, canFile } = await import('../web/src/components/RaiseIssueModal.js');
+const { usageReading } = await import('../web/src/console/TopBar.js');
 
 function view(over: Partial<CockpitView> = {}): CockpitView {
   const state = buildDemoState().state;
@@ -126,6 +127,74 @@ test('console.css reaches no form control through .cn', () => {
     m[1]!.trim(),
   );
   assert.deepEqual(offenders, [], 'a descendant element rule restyles the components the console embeds');
+});
+
+/**
+ * The Usage chip (docs/spec/17-cockpit.md#the-usage-chip). Three things about it are
+ * load-bearing and none of them is visible in a screenshot of the resting state.
+ *
+ * The **tighter** window is the one drawn: the two stop the fleet equally, so the
+ * chip showing the five-hour figure while the weekly is nearly spent would be a
+ * gauge reading fine on the morning the fleet stops.
+ *
+ * The **fallback** is the whole of what the chip does on API-key auth and on a fleet
+ * that has not taken a turn — `rateLimits` is null far more often than it is not, and
+ * a chip that went blank there is a hole in the bar where the reading was.
+ *
+ * The **age** appears only once the reading is stale, because the limits are
+ * turn-bound: an idle fleet's number keeps being drawn while the real window moves
+ * underneath it, and the age is the only thing that says so.
+ */
+test('the usage chip draws the tighter window, and falls back to cost', () => {
+  const now = Date.parse('2026-01-01T12:00:00Z');
+  const at = (msAgo: number) => new Date(now - msAgo).toISOString();
+
+  const tight = usageReading(
+    {
+      windows: { fiveHourCostUsd: 1.15, sevenDayCostUsd: 12.4 },
+      rateLimits: {
+        fiveHour: { usedPercentage: 31, resetsAt: null },
+        sevenDay: { usedPercentage: 93, resetsAt: null },
+        capturedAt: at(60_000),
+      },
+      unattributedCostUsd: 0,
+    },
+    now,
+  );
+  assert.equal(tight.value, '93%', 'the chip drew the window that is not the one about to stop the fleet');
+  assert.equal(tight.tone, 'spent');
+  assert.equal(tight.age, null, 'a minute-old reading is current — the age is the stale caveat, not a timestamp');
+  assert.ok(tight.title.includes('five-hour 31%'), 'the window that is not drawn is lost unless the title carries it');
+
+  const stale = usageReading(
+    {
+      windows: { fiveHourCostUsd: 0, sevenDayCostUsd: 0 },
+      rateLimits: { fiveHour: { usedPercentage: 62, resetsAt: null }, sevenDay: null, capturedAt: at(3_600_000) },
+      unattributedCostUsd: 0,
+    },
+    now,
+  );
+  assert.equal(stale.value, '62%');
+  assert.equal(stale.age, '1h ago', 'an hour-old limits reading is drawn without saying it is an hour old');
+
+  const noLimits = usageReading(
+    { windows: { fiveHourCostUsd: 1.15, sevenDayCostUsd: 12.4 }, rateLimits: null, unattributedCostUsd: 0 },
+    now,
+  );
+  assert.equal(noLimits.value, '$1.15', 'no fallback to cost — the chip is blank on every API-key deployment');
+  assert.equal(noLimits.tone, 'plain');
+
+  const nothing = usageReading(
+    { windows: { fiveHourCostUsd: 0, sevenDayCostUsd: 0 }, rateLimits: null, unattributedCostUsd: 0 },
+    now,
+  );
+  assert.equal(nothing.tone, 'quiet', 'nothing spent is a muted reading, never a missing one');
+});
+
+/** And it is on the bar, in both of the shell's arms that draw readings. */
+test('the usage chip is on the top bar', () => {
+  const html = render(view());
+  assert.ok(/<span>Usage<\/span>/.test(html), 'the top bar draws no usage reading');
 });
 
 test('a dropped socket draws no gauge, no rail and no situation area', () => {

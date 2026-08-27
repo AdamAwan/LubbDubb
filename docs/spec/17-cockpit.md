@@ -226,7 +226,7 @@ Five surfaces and one shell.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│ ident ↗issue │ Overview Tickets② Knowledge① Insights │ Fleet ⏸ 14s  Findings … Record ⚙ │ top bar
+│ ident ↗issue │ Overview Tickets② Knowledge① Insights │ Fleet ⏸ 14s  Usage 62% … Record ⚙ │ top bar
 ├────────────────────────────────────────────────────────────────────────┤
 │ the recovery banner, when a previous run left work orphaned            │
 ├───────────────┬────────────────────────────────────────────────────────┤
@@ -2364,8 +2364,8 @@ lands somewhere else entirely, so Back returns to the filter and the list re-rea
 
 ## The top bar and the panels
 
-The strip carries the ident, the nav, the fleet gauge, and four readings: **Faults**, **Launch**,
-**Local**, **Build** — then **Record**, then the Config cog. Findings and Lessons were two of these
+The strip carries the ident, the nav, the fleet gauge, and five readings: **Usage**, **Faults**,
+**Launch**, **Local**, **Build** — then **Record**, then the Config cog. Findings and Lessons were two of these
 until the three claim stores became one; the nav's Knowledge badge is the reading for all of it now,
 and one destination with one number is what stops an operator ruling on the same claim in two places.
 Each is one subject
@@ -2489,6 +2489,37 @@ reason exactly: a second field would let an ask and the fault log both be in fro
 the type exists to rule out. A `Panel` has **three ways out** — the backdrop, the button and Escape —
 because a thing that covers the console must not have exactly one exit; `test/console.test.ts` pins
 them.
+
+### The Usage chip
+
+What the Claude account has left, and the only surface that draws the usage the wire has carried since
+#60 ([18](18-observability.md#usage-accounting)). It leads the readings because it is the one gauge here
+that can stop everything: an allowance that runs out parks the whole fleet
+([10](10-agent-runtimes.md#the-account-usage-windows)), and learning that from a parked agent's row is
+learning it afterwards. Beside the fleet cap it reads as the second half of one sentence — what the
+fleet is allowed to run, and what the account has left to run it on.
+
+**It draws a percentage where there is one, and money where there is not.** `usage.rateLimits` is the
+subscriber 5h/weekly windows and is null on API-key auth, on an older CLI and on a fleet that has not
+taken a turn; `usage.windows` is self-computed and always there. So the chip prefers the limits and
+falls back to the five-hour cost, and it is never both — two numbers in one chip is two subjects. Where
+both windows are reported it shows **the tighter one**: they stop the fleet equally, so the one nearer
+its limit is the one that answers the question, and the other rides in the `title` where it costs no
+width.
+
+**A stale reading is drawn stale.** The limits are turn-bound — they arrive only when an agent takes a
+turn, and an operator's own Claude Code spends from the same allowance — so an idle fleet's reading ages
+while the real window keeps moving underneath it. Past ten minutes the chip grows the age beside the
+number (`.cn-usage-age`) rather than hiding a number that is still the best answer anyone has. There is
+no probe that could ask the account directly, so rendering the staleness is the whole of handling it.
+
+**Two tints and a mute, tinting only what wants acting on.** Amber from three-quarters spent, red from
+nine tenths, and the mute below a quarter — the resting state is the plain reading its neighbours wear,
+because a gauge that is always coloured is one nobody reads. Both tints go through the token layer
+(`--cn-amber-*`, `--cn-red-*`), so a theme switch takes them with it.
+
+It carries no chevron and opens nothing: there is no usage panel, and by the chevron rule above, a
+reading that opens something and one that does not are different promises.
 
 ### The Build gauge
 

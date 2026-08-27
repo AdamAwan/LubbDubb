@@ -3,7 +3,7 @@ import type { JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions, ConsoleTab } from '../cockpit/actions.js';
 import { FleetControl } from '../components/FleetControl.js';
-import { ExtLink } from '../components/util.js';
+import { ExtLink, fmtUsd, relTime, untilTime } from '../components/util.js';
 import { RaiseIssueModal } from '../components/RaiseIssueModal.js';
 import { untriagedCount } from '../worldBuckets.js';
 
@@ -438,6 +438,115 @@ function LocalRun({ view, actions }: { view: CockpitView; actions: CockpitAction
   );
 }
 
+/**
+ * How stale a limits reading has to be before the chip says so beside the value.
+ *
+ * The reading is turn-bound — it arrives only when an agent takes a turn — so an
+ * idle fleet's ages while the account's real window keeps moving underneath it:
+ * an operator's own Claude Code spends from the same allowance. Ten minutes is
+ * about a turn. Under it the number is what the account looks like now; over it
+ * the number is history, and the chip has to stop implying otherwise.
+ * → docs/spec/18-observability.md
+ */
+const USAGE_STALE_MS = 10 * 60 * 1000;
+
+/** What the Usage chip draws: the number, the tone it wears, and the sentence behind it. */
+interface UsageReading {
+  value: string;
+  /** `plain` is the resting state, `quiet` mutes; the other two tint the chip. */
+  tone: 'quiet' | 'plain' | 'warn' | 'spent';
+  title: string;
+  /** The reading's age, drawn beside the value once it is stale enough to matter. */
+  age: string | null;
+}
+
+/**
+ * The account's allowance as one reading — the real subscriber windows where an
+ * agent has reported them, and the rolling cost where none has.
+ *
+ * **The percentage wins, and between the two windows the tighter one wins.** Money
+ * is a proxy for the thing an operator actually wants to know, which is how close
+ * the fleet is to being stopped; the five-hour and the weekly stop it equally, so
+ * the one nearer its limit is the one that answers the question. The other rides in
+ * the `title`, where it costs no width.
+ *
+ * **Cost is the fallback, not a second gauge.** `rateLimits` is null on API-key
+ * auth, on an older CLI, and on a fleet that has not run yet — drawing dollars there
+ * says what can be said rather than leaving the operator's spot on the bar empty. It
+ * is never both: two numbers in one chip is two subjects.
+ *
+ * **A stale reading is drawn stale, never hidden and never freshened.** No probe can
+ * ask the account directly, so the honest chip is the number with its age on it.
+ * → docs/spec/10-agent-runtimes.md#the-account-usage-windows
+ */
+export function usageReading(usage: CockpitView['state']['usage'], now: number): UsageReading {
+  const limits = usage.rateLimits;
+  const windows =
+    limits === null
+      ? []
+      : [
+          ...(limits.fiveHour === null ? [] : [{ label: 'five-hour', w: limits.fiveHour }]),
+          ...(limits.sevenDay === null ? [] : [{ label: 'weekly', w: limits.sevenDay }]),
+        ];
+
+  if (limits === null || windows.length === 0) {
+    const { fiveHourCostUsd, sevenDayCostUsd } = usage.windows;
+    return {
+      value: fmtUsd(fiveHourCostUsd),
+      // Nothing spent is a reading and not the absence of one — the mute rule the
+      // fault and launch counts follow.
+      tone: fiveHourCostUsd === 0 && sevenDayCostUsd === 0 ? 'quiet' : 'plain',
+      title:
+        'No subscriber usage windows have been reported — API-key auth, or no agent has taken a turn yet. ' +
+        `Spent ${fmtUsd(fiveHourCostUsd)} in the last five hours, ${fmtUsd(sevenDayCostUsd)} over seven days.`,
+      age: null,
+    };
+  }
+
+  const tightest = windows.reduce((a, b) => (b.w.usedPercentage > a.w.usedPercentage ? b : a));
+  const pct = Math.round(tightest.w.usedPercentage);
+  const resets = tightest.w.resetsAt === null ? '' : `, resets in ${untilTime(tightest.w.resetsAt, now)}`;
+  const others = windows
+    .filter((entry) => entry !== tightest)
+    .map((entry) => `${entry.label} ${Math.round(entry.w.usedPercentage)}%`)
+    .join(', ');
+  return {
+    value: `${pct}%`,
+    tone: pct >= 90 ? 'spent' : pct >= 75 ? 'warn' : pct >= 25 ? 'plain' : 'quiet',
+    title:
+      `Claude account: ${tightest.label} window ${pct}% used${resets}` +
+      `${others === '' ? '' : ` · ${others}`}. ` +
+      `Read ${relTime(limits.capturedAt, now)} off an agent's turn — the window keeps moving while the fleet is idle.`,
+    age: now - new Date(limits.capturedAt).getTime() >= USAGE_STALE_MS ? relTime(limits.capturedAt, now) : null,
+  };
+}
+
+/**
+ * What the account has left, in the one row an operator glances at.
+ *
+ * It leads the readings because it is the only gauge here that can stop everything:
+ * an allowance that runs out parks the whole fleet, and learning that from a parked
+ * agent's row is learning it afterwards. Beside the fleet cap it reads as the second
+ * half of one sentence — what the fleet is allowed to run, and what the account has
+ * left to run it on.
+ *
+ * A reading and not a way-in: there is no usage panel, and a chevron promises one.
+ */
+function Usage({ view }: { view: CockpitView }): JSX.Element {
+  const reading = usageReading(view.state.usage, view.now);
+  const tone = reading.tone === 'quiet' ? 'cn-quiet' : reading.tone === 'plain' ? '' : `cn-usage-${reading.tone}`;
+  return (
+    <div className={`cn-read ${tone}`} title={reading.title}>
+      <span>Usage</span>
+      <b>{reading.value}</b>
+      {/* The age only appears once the reading has gone stale, so the chip is a
+          number in a fixed spot on every ordinary glance and grows the caveat
+          exactly when the number has stopped being current. */}
+      {reading.age !== null && <i className="cn-usage-age">{reading.age}</i>}
+    </div>
+  );
+}
+
 /** `issue:284` → 284. The panel and this both address a goal by its number. */
 function originIssueNumber(originRef: string): number | null {
   const m = /^issue:(\d+)$/.exec(originRef);
@@ -505,6 +614,7 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
       </div>
 
       <div className="cn-reads">
+        <Usage view={view} />
         <Read
           label="Faults"
           value={`${faultCount}`}
