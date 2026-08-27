@@ -16,6 +16,7 @@ import type {
   FeatureReach,
   FeatureReportRow,
   FeatureRollup,
+  FeatureSummary,
   FeatureWorkingRow,
 } from '../types.js';
 
@@ -160,6 +161,8 @@ function FeatureCard({
 
       {attention !== null && <p className="cn-fb-attn">{attention}</p>}
 
+      <Summary summary={feature.summary} now={now} />
+
       <Briefing briefing={feature.briefing} now={now} actions={actions} />
 
       <div className="cn-fb-side">
@@ -175,6 +178,61 @@ function FeatureCard({
 
       <Children rows={feature.children} total={feature.counts.total} actions={actions} />
     </section>
+  );
+}
+
+/**
+ * Where this Feature is, in the words of the agent rule `feature-summary` sent to
+ * say so.
+ *
+ * **Quoted whole, and it is the only prose on the card.** The lists below it are
+ * evidence — one sentence each, from the person or agent who wrote it, about one
+ * goal — and this is the one reading that is *about the Feature*. It sits above
+ * them because it is the answer to the question the card is opened with, exactly
+ * as the briefing sits above the child rows for the same reason.
+ *
+ * Four blocks rather than a paragraph, because they are four questions and a
+ * reader must not have to find each one inside prose. A block whose field came
+ * back null is **absent**, never an empty heading: nothing usable yet, nothing
+ * blocked and nothing left are ordinary states, and the summary's own lede is
+ * where an agent says so.
+ *
+ * Absent entirely on a Feature nobody has summarised yet, which is every Feature
+ * on the pulse after this ships and any whose summariser has not landed. The
+ * board beneath is unchanged by its absence — nothing here gates anything.
+ * → docs/spec/17-cockpit.md#the-feature-summary
+ */
+function Summary({ summary, now }: { summary: FeatureSummary | null; now: number }): JSX.Element | null {
+  if (summary === null) return null;
+  return (
+    <div className="cn-fb-summary">
+      <p className="cn-fb-standing">{summary.standing}</p>
+      <SummaryBlock title="Usable now" body={summary.usable} />
+      <SummaryBlock title="Blocking" body={summary.blocked} tone="blocked" />
+      <SummaryBlock title="Left to do" body={summary.remaining} />
+      {/* The stamp, drawn as an age and never judged: how old a summary may be
+          before it is stale is a policy no config file states, and the rule that
+          rewrites it fires on movement rather than on a clock. */}
+      <p className="cn-psub cn-fb-stamp">written {relAge(summary.updatedAt, now)}</p>
+    </div>
+  );
+}
+
+function SummaryBlock({
+  title,
+  body,
+  tone,
+}: {
+  title: string;
+  body: string | null;
+  tone?: 'blocked';
+}): JSX.Element | null {
+  if (body === null) return null;
+  return (
+    <div className={`cn-fb-sum-block${tone === undefined ? '' : ` cn-fb-sum-${tone}`}`}>
+      <h4>{title}</h4>
+      <p>{body}</p>
+    </div>
   );
 }
 

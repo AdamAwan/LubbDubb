@@ -115,6 +115,7 @@ import type {
   LocalRun,
   Plan,
   PlanPart,
+  FeatureSummary,
   PlanRevision,
   Proposal,
   PrState,
@@ -1755,6 +1756,19 @@ export interface FeatureRollup {
   /** Empty on a deployment with no environments configured — the whole column is then absent. */
   reach: FeatureReach[];
   /**
+   * The account rule `feature-summary` had written of this Feature, or null where
+   * none has been written yet — a Feature nobody has been on, or one whose
+   * summariser has not landed.
+   *
+   * **The one thing on this board that is prose**, and it is a quotation like
+   * every other reading here: the card draws the agent's four fields as they were
+   * submitted, and composes no sentence of its own. The board still ships no
+   * verdict about a Feature — this is somebody's account, stamped and attributed,
+   * which is a different thing from the harness asserting a status.
+   * → `docs/spec/17-cockpit.md#the-feature-summary`
+   */
+  summary: FeatureSummary | null;
+  /**
    * When any of this Feature's goals last landed a commit, or null for one that
    * has landed nothing. A **stamp, never a verdict**: how old is too old is a
    * policy no config file states, so the board draws the age and says nothing
@@ -1780,8 +1794,16 @@ export interface FeatureBoardPayload {
    * The work the tracker says hangs off no container at all — counted the same
    * way, because a fifth of a fleet's effort answering to no Feature is the one
    * thing a roll-up page must not hide. Null where there is none.
+   *
+   * There is no summary among them, and the omission is the point rather than a
+   * gap: a summary says where a *Feature* has got to, and the orphan bucket is not
+   * one — it is every item the tracker says answers to nothing, which share no
+   * goal for anybody to have got anywhere with.
    */
-  orphans: Omit<FeatureRollup, 'number' | 'title' | 'slot' | 'workItemState' | 'issueType' | 'reach'> | null;
+  orphans: Omit<
+    FeatureRollup,
+    'number' | 'title' | 'slot' | 'workItemState' | 'issueType' | 'reach' | 'summary'
+  > | null;
   /**
    * Items whose parent link was **never resolved** — no hierarchy, or a read that
    * failed. Neither a Feature's nor an orphan's, and counted separately for the
@@ -2019,6 +2041,7 @@ export type {
   PetSpecies,
   PetStage,
   PetWallet,
+  FeatureSummary,
   Proposal,
   Retrospective,
   ScratchEntry,

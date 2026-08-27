@@ -31,6 +31,8 @@ import { attachmentsNote } from '../jobs/attachments.js';
 import { retroSubmitOrigin } from '../retro/retro.js';
 import { retroDossier, retroPad } from '../retro/dossier.js';
 import { goalRecord } from '../retro/record.js';
+import { featureSummarySubmitOrigin } from '../summaries/featureSummary.js';
+import { featureRecords, featureReach, renderFeatureDossier } from '../summaries/featureRecord.js';
 import { neighbourSeedPaths, priorWorkBriefing } from '../briefing/priorWork.js';
 import { ciEvidenceNote, type CiEvidenceReader, type CiEvidenceTarget } from '../ci/ciEvidence.js';
 import { padOriginFor } from '../scratch/pad.js';
@@ -38,6 +40,7 @@ import { dispatchFactScopes, KNOWLEDGE_READ_LIMIT, renderScopedKnowledgeNote } f
 import { retryNote, retryResumeFor, type RetryResume } from './retryResume.js';
 import { isActiveTask } from '../tasks.js';
 import type { Action, DecisionOutcome, Proposal, ProposalKind, Task, WorldEvent } from '../types.js';
+import type { FeatureBoardFacts } from '../summaries/featureRecord.js';
 
 interface ExecutorDeps {
   store: Store;
@@ -105,6 +108,16 @@ interface ExecutorDeps {
    * note then tells the agent to say what changed in its conclusion instead.
    */
   instructionTracker?: (issueNumber: number) => string | null;
+  /**
+   * What a Feature's dossier is gathered with — the container types, the watch
+   * label and the environments, which are config rather than anything the store
+   * holds.
+   *
+   * Absent means this deployment has no feature board, and then a summary dispatch
+   * is composed with no dossier at all — which is safe because nothing dispatches
+   * one there: the same `featureBoardOn` conjunction gates both.
+   */
+  featureBoard?: FeatureBoardFacts;
 }
 
 export interface ExecutionSummary {
@@ -1015,6 +1028,13 @@ export class ActionExecutor {
     // record only the harness kept. Appended for the same reason as the two notes
     // above, and the pad goes first — it is the half nothing else could supply.
     const briefing = retroBriefing(action.originRef, store);
+    // The same for a Feature: a summariser has no worktree and no world either, so
+    // every item under the Feature and the standing of each is appended here.
+    // Appended rather than interpolated for the reason each block above it is, and
+    // resolved here rather than in the rule because no rule may read prose — the
+    // summary on file rides in this block so a re-write revises rather than
+    // restarts. → `docs/spec/17-cockpit.md#the-feature-summary`
+    const feature = featureBriefing(action.originRef, store, this.deps.featureBoard);
     // The images the operator attached to this goal (issue #249). Appended for the
     // reason the four notes above are, and scoped to the *goal* rather than the
     // exact origin — see `attachmentsFor`.
@@ -1052,6 +1072,7 @@ export class ActionExecutor {
       outstanding,
       prior,
       briefing,
+      feature,
       attachments,
     ]
       .filter(Boolean)
@@ -1308,6 +1329,48 @@ function priorWorkFor(originRef: string | null | undefined, store: Store, outsta
  * validated data and this is a page of prose assembled at dispatch time, which is
  * also why it is appended to the rendered prompt rather than interpolated into it.
  */
+/**
+ * Everything a feature-summary agent is given beyond its prompt: every item under
+ * the Feature, where each one stands, the sentence whoever ruled on it wrote, and
+ * the summary on file if there is one.
+ *
+ * Keyed on the **exact** summary origin, `retroBriefing`'s rule: `issue:29857`
+ * and `issue:29857:summary` are different dispatches, and a working agent on the
+ * container itself has no business being handed the whole Feature's standing as
+ * its brief.
+ *
+ * Null where the deployment has no feature board — the same absence that stops
+ * anything dispatching a summariser in the first place, so this is only ever
+ * reached by a hand-built origin.
+ */
+function featureBriefing(
+  originRef: string | null | undefined,
+  store: Store,
+  board: FeatureBoardFacts | undefined,
+): string | null {
+  const target = originRef ? featureSummarySubmitOrigin(originRef) : { ok: false as const, error: '' };
+  if (!target.ok || !board) return null;
+  const record = featureRecords(store, board).find((f) => f.number === target.featureNumber);
+  if (!record) return null;
+  const previous = store.getFeatureSummary(target.featureOrigin);
+  return renderFeatureDossier(
+    record,
+    // Read here and not in the gather: this is the one caller that draws it, and
+    // the pulse's own gather must not pay for a reading nothing compares.
+    featureReach(store, board),
+    previous
+      ? [
+          `**Where this is:** ${previous.standing}`,
+          previous.usable ? `**Usable now:** ${previous.usable}` : null,
+          previous.blocked ? `**Blocked:** ${previous.blocked}` : null,
+          previous.remaining ? `**Left to do:** ${previous.remaining}` : null,
+        ]
+          .filter(Boolean)
+          .join('\n\n')
+      : null,
+  );
+}
+
 function retroBriefing(originRef: string | null | undefined, store: Store): string | null {
   const target = originRef ? retroSubmitOrigin(originRef) : { ok: false as const, error: '' };
   if (!target.ok) return null;

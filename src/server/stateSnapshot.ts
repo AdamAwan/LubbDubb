@@ -47,7 +47,7 @@ import { DEFAULT_COOLDOWN } from '../dispatcher/dispatchCooldown.js';
 import { readRunway } from '../supply/runway.js';
 import { DISPATCH_RULES } from '../dispatcher/rules.js';
 import { trackerCoordinates } from '../mcp/findings.js';
-import { featureBoardOn } from './routes/features.js';
+import { featureBoardOn } from '../features/featureBoard.js';
 import { rejectionSignalQuery } from '../proposals/proposals.js';
 import { graduationReading } from '../knowledge/graduation.js';
 import type { Store } from '../store/store.js';

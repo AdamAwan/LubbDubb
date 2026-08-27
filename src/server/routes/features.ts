@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { FeatureBoardPayload } from '../../wire.js';
 import { allGoalReach } from '../../environments/reach.js';
-import { buildFeatureBoard } from '../../features/featureBoard.js';
+import { buildFeatureBoard, featureBoardOn } from '../../features/featureBoard.js';
 import { buildSpendGoals } from '../../spendInsights.js';
 import { ticketOutcomes } from '../../tickets/outcomes.js';
 import { watchLabelFor } from '../../watchLabels.js';
@@ -81,6 +81,9 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
         }),
         deliveries,
         shortfalls,
+        // What rule `feature-summary`'s agents have written. Quoted whole; the
+        // route reads no field of it.
+        summaries: new Map(store.listFeatureSummaries().map((f) => [f.originRef, f])),
         // Every escalation; the briefing keeps the open ones that name a goal. The
         // filtering is the lens's, not the route's, for the reason every other
         // reading here is quoted rather than prepared.
@@ -132,24 +135,4 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
       } satisfies FeatureBoardPayload;
     }),
   );
-}
-
-/**
- * Whether this deployment has a feature board at all — the operator's flag **and**
- * the provider's hierarchy, in that order.
- *
- * One predicate, exported, because it is asked in two places that must never
- * disagree: this route's refusal and the `config.featureBoard` the cockpit draws
- * its tab off. Two copies would drift into the cockpit's worst shape — a tab whose
- * every fetch 404s, or a route nothing can reach.
- *
- * The provider half is `canPlaceWorkItem`, asked of the connector and never
- * inferred from its name, for `canCloseIssue`'s reason: the one place that decides
- * is the one the route asks. It is the right predicate rather than a near one —
- * placing a work item *is* setting its parent, so a provider that can do it is
- * exactly a provider with the container hierarchy this board rolls up, and GitHub
- * answers false by design. → `src/sink/actionSink.ts`
- */
-export function featureBoardOn(config: { featureBoard: boolean }, connector: { canPlaceWorkItem(): boolean }): boolean {
-  return config.featureBoard && connector.canPlaceWorkItem();
 }

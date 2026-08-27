@@ -8117,6 +8117,51 @@ select:disabled {
   color: var(--cn-fg);
 }
 
+/* -- the summary ----------------------------------------------------------- */
+
+/* The one piece of prose on the card: what a developer would tell the person who
+   asked for the Feature. Above the briefing because it answers the question the
+   card is opened with, where the lists below are the evidence for it. Every colour
+   through a token, so a theme reaches it — see `Summary`. */
+.cn-fb-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  border-left: 2px solid var(--cn-accent);
+  padding: 2px 0 2px 11px;
+}
+.cn-fb-standing {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--cn-fg);
+  overflow-wrap: anywhere;
+}
+.cn-fb-sum-block h4 {
+  margin: 0 0 3px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+}
+.cn-fb-sum-block p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--cn-fg-dim);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* The one block that is a *state* rather than a section: something is waiting on a
+   person, and the heading carries that where four identical headings would not. */
+.cn-fb-sum-blocked h4 {
+  color: var(--cn-amber-ink);
+}
+.cn-fb-stamp {
+  margin: 0;
+}
+
 /* -- the briefing --------------------------------------------------------- */
 
 /* Three lists, in the order the questions get asked: what is in the way, what is

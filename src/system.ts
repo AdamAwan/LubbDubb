@@ -70,6 +70,8 @@ import { loadPromptTemplates, type PromptTemplates } from './dispatcher/promptTe
 import type { Dispatcher } from './dispatcher/dispatcher.js';
 import { openPrForIssue, type IssuePickupPolicy } from './dispatcher/issuePickup.js';
 import { watchLabelFor } from './watchLabels.js';
+import { featureBoardOn } from './features/featureBoard.js';
+import { featureRecords } from './summaries/featureRecord.js';
 import { resolveModelTag } from './modelLabels.js';
 import { orderedProfiles } from './agents/modelPolicy.js';
 import { Harness } from './harness.js';
@@ -661,6 +663,19 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     errors,
   });
 
+  // What a Feature summary is gathered and digested with, or null where this
+  // deployment has no feature board — the same `featureBoardOn` conjunction the
+  // route refuses on and the cockpit draws its tab off, asked once here so the
+  // rule, the dossier and the key an agent's submission is stamped with cannot
+  // come to three different answers about whether the feature exists at all.
+  const featureBoard = featureBoardOn(config, connector)
+    ? {
+        containerTypes: config.issueContainerTypes,
+        watchLabel: watchLabelFor(config.labelPrefix),
+        environments: config.environments,
+      }
+    : null;
+
   const agents: AgentManager = new AgentManager(store, {
     command: config.claudeCommand,
     buildArgs: agentSetup.buildArgs,
@@ -683,6 +698,13 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
             },
           }
         : undefined,
+    // Where a Feature's children stand at the moment a summary lands — read here
+    // and never at dispatch, or anything that moved during the run would match the
+    // stored key for ever and the Feature would never be summarised again.
+    featureStanding: featureBoard
+      ? (featureOrigin: string): string | null =>
+          featureRecords(store, featureBoard).find((f) => `issue:${f.number}` === featureOrigin)?.key ?? null
+      : undefined,
     createSession: agentSetup.factory,
     initialInput: agentSetup.initialInput,
     resumeInput: agentSetup.resumeInput,
@@ -752,6 +774,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     // reads. Config, resolved per issue — null under the fake provider, where the
     // note says there is nothing to update rather than naming a failing command.
     instructionTracker: (issueNumber) => ticketAmendCommands(config, issueNumber),
+    // Absent where there is no feature board, which is also where nothing
+    // dispatches a summariser — one conjunction, asked once, above.
+    featureBoard: featureBoard ?? undefined,
   });
 
   // The accept/reject surface for every act the harness will not perform on its
@@ -1013,6 +1038,12 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     connector,
     dispatcher,
     executor,
+    // Empty on a deployment with no feature board, and then the pulse does no
+    // mirror read at all — the gather is several full-table reads.
+    featureStandings: featureBoard
+      ? (): { number: number; title: string; key: string }[] =>
+          featureRecords(store, featureBoard).map((f) => ({ number: f.number, title: f.title, key: f.key }))
+      : undefined,
     plans,
     appraisals,
     areaPaths,

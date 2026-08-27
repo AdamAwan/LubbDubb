@@ -2192,6 +2192,44 @@ export interface Retrospective {
 }
 
 /**
+ * What a developer would tell a product owner about one Feature — the account rule
+ * `feature-summary` dispatches an agent to write, and the one thing on the feature
+ * board that is prose rather than a fold.
+ *
+ * Four fields rather than one document, because they are the four questions the
+ * card is opened with and a reader must not have to find each of them inside a
+ * paragraph. Only {@link standing} is required: a Feature with nothing usable yet,
+ * nothing blocked, or nothing left are each ordinary states, and an empty section
+ * says so where an invented one would be the forecast the board refuses to make.
+ * → `docs/spec/17-cockpit.md#the-feature-summary`
+ */
+export interface FeatureSummary {
+  /** The Feature, as `issue:<n>` — the same origin shape every verdict is keyed on. */
+  originRef: string;
+  /** Where this Feature actually is: two or three sentences, the card's whole lede. */
+  standing: string;
+  /** What a person can see or use today, and where. Null where the agent named nothing. */
+  usable: string | null;
+  /** What is stopping the rest, and what it needs from a human. Null for nothing blocked. */
+  blocked: string | null;
+  /** What is left to do. Null for a Feature with nothing outstanding. */
+  remaining: string | null;
+  /**
+   * The digest of where every child stood when this was written
+   * (`featureStandingKey`). What makes the summary re-writable exactly once per
+   * movement: the rule dispatches when this differs from the current standing and
+   * does nothing, for ever, while it matches.
+   */
+  standingKey: string;
+  /** The writing agent and its task, from the credential. */
+  agentId: string;
+  taskId: string;
+  /** When the Feature was *first* summarised; preserved across a revision. */
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
  * Which of the three failures an assessor's "not delivered" actually is (issue
  * #159).
  *

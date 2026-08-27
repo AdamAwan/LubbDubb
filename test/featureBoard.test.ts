@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildFeatureBoard, FEATURE_BRIEFING_ROWS, FEATURE_CHILDREN } from '../src/features/featureBoard.js';
-import { featureBoardOn } from '../src/server/routes/features.js';
+import { featureBoardOn } from '../src/features/featureBoard.js';
 import type { MirroredTicket } from '../src/store/tickets.js';
 import type { Escalation, GoalEnvironmentReach, GoalLanding, IssueDelivery, IssueShortfall } from '../src/types.js';
 
@@ -42,6 +42,7 @@ function build(over: Partial<Parameters<typeof buildFeatureBoard>[0]> = {}) {
     environments: [],
     containerTypes: ['Feature', 'Epic'],
     watchLabel: WATCH,
+    summaries: new Map(),
     ...over,
   });
 }
