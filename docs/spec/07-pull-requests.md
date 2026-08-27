@@ -503,6 +503,37 @@ folding them would make one of the two a lie every time they disagree.
 | `elsewhere` | outside the loop              | Stacked on a PR that has to merge first (naming the inherited CI failure when there is one); CI still running; waiting on review; merge blocked by required checks/reviews.                                                                                                                                                                                          |
 | `stalled`   | nobody, and that is the point | Everything else: green, approved, unstaffed, unproposed and still not mergeable by rule `pr-merge-ready`'s reading, so no rule will ever act on it and no human has been asked to. The reasons name what is missing — including the **muted-only** case below.                                                                                                       |
 
+### A pull request a person put on you
+
+`PullRequest.viewerAssignment` ([03](03-world-model.md#pullrequest)) is the one thing the world reports
+about a pull request that **no rule reads**. Everything else — a red check, an unhandled comment, a
+base that moved — is something the harness acts on; an assignment is an obligation a colleague handed
+the operator, and the fleet will do nothing about it whatever it says. So it is folded in _after_ the
+arms above, by `prAttentionStatus` itself, and it does two different things depending on what they
+answered:
+
+| The arms said                         | The assignment                                                                                                                                                                                                                                                             |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `unwatched` / `elsewhere` / `stalled` | **is the court.** Nothing in the harness is coming — no rule will fire, no proposal is waiting, no agent is on it — so the assignment is the whole answer to whose turn it is, and it leads the reasons. The arm's own reason survives behind it as why the fleet is silent. |
+| anything else                         | **is a reason.** A pull request with an agent on its branch is the harness's whoever it is assigned to, and one whose merge is waiting on a verdict already has a row. The clause is appended so the surface still says it, and `assignedToYou` stays unset.                 |
+| `done`                                | **is nothing.** A merged pull request is off the board, and an assignment on one is a fact about a thing that has finished.                                                                                                                                                 |
+
+`assignedToYou` carries the kind on exactly the first row, and it is what the queue rail keys on
+([17](17-cockpit.md#the-queue-rail--needs-you)) — a field rather than the leading reason's wording, so
+rephrasing a sentence cannot silently empty the queue.
+
+**`waiting on review` is the arm this changes most**, and deliberately. It stays `elsewhere` on a pull
+request the operator merely opened, because on a team the reviewer is somebody else and a queue of
+other people's obligations is what makes an inbox stop being read
+([above](#how-long-it-has-been-waiting-on-a-reviewer)). On a pull request that names **them** as the
+reviewer it is the same sentence about the opposite person, and leaving it `elsewhere` would be the
+surface telling an operator that the thing waiting on them is waiting on somebody else.
+
+**A group is never an assignment.** Both providers list a team exactly as they list a person, and an
+identity resolved through team membership is not somebody asking — folding the two would put every
+pull request in the org on the rail, which is the one way to make the rail stop being read. The
+providers resolve it ([15](15-integrations.md)); the lens takes what they say.
+
 Because the first matching arm wins, the ones below it are moot — a PR with an agent on its branch
 reads `an agent is working this branch` whatever its CI says, which is the answer prose about health
 cannot give.

@@ -12,7 +12,7 @@ import type {
   PrTitleInput,
   SendResult,
 } from '../../sink/actionSink.js';
-import type { CiCheck, CiStatus, MergeableState, PrComment, PullRequest } from '../../types.js';
+import type { CiCheck, CiStatus, MergeableState, PrComment, PullRequest, ViewerAssignment } from '../../types.js';
 import { EVIDENCE_LOG_TAIL_LINES, type CiEvidenceTarget, type CiFailureEvidence } from '../../ci/ciEvidence.js';
 import type {
   BranchDeleteCapable,
@@ -31,7 +31,14 @@ import type {
   WorldSlice,
 } from '../integration.js';
 import { closedWindowStart } from '../closedWindow.js';
-import type { AzClosedPull, AzPolicyEvaluation, AzThread, AzTimelineRecord, AzureDevOpsApi } from './azureDevOpsApi.js';
+import type {
+  AzClosedPull,
+  AzPolicyEvaluation,
+  AzReviewer,
+  AzThread,
+  AzTimelineRecord,
+  AzureDevOpsApi,
+} from './azureDevOpsApi.js';
 import { azureRefUrl } from './refUrl.js';
 import { policyCheckMode, policyKindOf, type PolicyCheckModes } from './policyKinds.js';
 
@@ -110,7 +117,17 @@ export class AzureDevOpsSourceControlIntegration
       const { api, prAuthor } = this.opts;
       const viewer = await api.viewerUniqueName();
       let pulls = await api.listActivePullRequests();
-      if (prAuthor) pulls = pulls.filter((p) => p.authorUniqueName === prAuthor);
+      // "Your work" is what you opened **or what somebody asked you for**. Narrowed
+      // to authorship alone, a pull request that named the operator as a reviewer
+      // never entered the world at all, so nothing could report the assignment and
+      // the queue could not raise it — on the default `ownWorkOnly`, which is every
+      // real deployment. It costs no request: the reviewer list rides on the same
+      // page the filter already reads.
+      if (prAuthor) {
+        pulls = pulls.filter(
+          (p) => sameIdentity(p.authorUniqueName, prAuthor) || viewerAssignment(p.reviewers, prAuthor) !== undefined,
+        );
+      }
       const closedPullRequests = await this.recentlyClosed();
 
       const pullRequests = await Promise.all(
@@ -137,13 +154,19 @@ export class AzureDevOpsSourceControlIntegration
             ciChecks: listPolicyCiChecks(policyEvals, this.opts.policyChecks),
             ciChecksWithheld: policyCiDetailWithheld(policyEvals, this.opts.policyChecks),
             unresolvedComments: buildUnresolvedComments(threads, viewer),
-            approved: computeApproved(p.reviewerVotes),
+            approved: computeApproved(p.reviewers.map((r) => r.vote)),
             mergeableState: normalizeMergeState(p.mergeStatus, p.isDraft),
             merged: false, // active PRs only; a completed PR drops out of the list
             state: 'open',
             labels,
             url: p.url,
           };
+          // Against `viewer` — who the credential *is* — and never against
+          // `prAuthor`, which is a filter and is unset the moment a project turns
+          // `ownWorkOnly` off. Read the other way round, turning the filter off
+          // would take the assignment with it.
+          const assignment = viewerAssignment(p.reviewers, viewer);
+          if (assignment !== undefined) pr.viewerAssignment = assignment;
           // Only assert (not-)mergeable when Azure reports a concrete state; leave
           // it unknown while it is still computing ('queued'/'notSet'), mirroring
           // GitHub's tri-state `mergeable`.
@@ -569,6 +592,34 @@ function checkStatusOf(status: string | null): CiCheck['status'] | null {
  * (5) and no reviewer is rejecting (-10) or waiting-for-author (-5) — the Azure
  * analogue of GitHub's "an APPROVED with no outstanding CHANGES_REQUESTED".
  */
+/**
+ * Whether **this** operator was personally asked to review, and how firmly.
+ *
+ * Two things are deliberately not an assignment. A **group** entry is one
+ * (`isContainer`): Azure lists a team exactly as it lists a person, so a policy
+ * naming a team would otherwise put every pull request in the project on every
+ * member's queue — the one way to make a queue stop being read.
+ * And an entry with no `uniqueName` is one: Azure reports group identities as
+ * `vstfs:///…` descriptors, so a blank or a descriptor can never match a UPN and
+ * must not be allowed to match an unset `userId` either.
+ *
+ * Case-insensitive because a UPN is, and an operator who writes their own address
+ * in a config file with different capitalisation from the directory's is not
+ * telling the harness about a different person — they would simply see the
+ * feature do nothing.
+ */
+function viewerAssignment(reviewers: readonly AzReviewer[], viewer: string): ViewerAssignment | undefined {
+  if (viewer === '') return undefined;
+  const mine = reviewers.find((r) => !r.isContainer && sameIdentity(r.uniqueName, viewer));
+  if (mine === undefined) return undefined;
+  return mine.isRequired ? 'reviewer-required' : 'reviewer-optional';
+}
+
+/** Two Azure identities, compared as the directory means them: UPNs, case-insensitively. */
+function sameIdentity(a: string, b: string): boolean {
+  return a !== '' && a.toLowerCase() === b.toLowerCase();
+}
+
 export function computeApproved(votes: number[]): boolean {
   if (votes.some((v) => v < 0)) return false;
   return votes.some((v) => v >= 5);

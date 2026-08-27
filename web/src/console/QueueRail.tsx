@@ -27,6 +27,7 @@ export const KIND_LABEL: Record<NeedKind, string> = {
   limit: 'Usage limit',
   supply: 'Runway',
   dispatch: 'Refused',
+  assigned: 'Assigned',
 };
 
 /**
@@ -96,6 +97,12 @@ export const KIND_TONE: Record<NeedKind, 'red' | 'amber' | 'blue' | 'green'> = {
   // every pulse, and it will go on doing that until somebody moves what is in the
   // way. That is something wrong, which is the only thing this hue says.
   dispatch: 'red',
+  // Blue on the bench task's terms: nothing broke and nothing is waiting on a
+  // yes — this is simply work only a person can do, and the only reason it is on
+  // the rail is that no rule in the harness will ever pick it up. Amber would
+  // file a colleague's request beside a gate the fleet is stopped at, which is
+  // the one reading the hue keeps apart.
+  assigned: 'blue',
 };
 
 /**
@@ -149,6 +156,9 @@ export const KIND_SYMBOL: Record<NeedKind, string> = {
   // `permission`'s circled slash — that one is a gate somebody may open, and this
   // is a door the harness has already tried on every pulse.
   dispatch: '\u22a0',
+  // An inbox tray: the one row that came from outside the harness entirely, and
+  // the glyph says where from. Text-presentation, like every other entry here.
+  assigned: '\u2913',
 };
 
 // The mockup's two railsub headings, in the order they're drawn — 'blocking'

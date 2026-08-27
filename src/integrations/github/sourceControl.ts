@@ -99,7 +99,13 @@ export class GitHubSourceControlIntegration
       const { api, prAuthor } = this.opts;
       const viewer = await api.viewerLogin();
       let pulls = await api.listOpenPulls();
-      if (prAuthor) pulls = pulls.filter((p) => p.authorLogin === prAuthor);
+      // "Your work" is what you opened **or what somebody handed you**. Narrowed to
+      // authorship alone, a pull request assigned to the operator never entered the
+      // world at all, so the assignment could not be reported and the queue could
+      // not raise it — on the default `ownWorkOnly`, which is every real
+      // deployment. Widening costs no request: `assigneeLogins` rides on the list
+      // payload the filter already reads.
+      if (prAuthor) pulls = pulls.filter((p) => p.authorLogin === prAuthor || p.assigneeLogins.includes(prAuthor));
       const closedPullRequests = await this.recentlyClosed();
 
       const pullRequests = await Promise.all(
@@ -132,6 +138,11 @@ export class GitHubSourceControlIntegration
             labels: p.labels,
             url: p.url,
           };
+          // Resolved against `viewer` — the identity the token actually is — and
+          // never against `prAuthor`, which is a *filter* and is unset the moment a
+          // project turns `ownWorkOnly` off. Read the other way round, turning the
+          // filter off would take the assignment with it.
+          if (viewer !== '' && p.assigneeLogins.includes(viewer)) pr.viewerAssignment = 'assignee';
           // GitHub's tri-state `mergeable`: true/false is a real signal, null means
           // "still computing" — leave it unknown rather than asserting not-mergeable.
           if (detail.mergeable !== null) pr.mergeable = detail.mergeable;

@@ -73,7 +73,8 @@ export type NeedKind =
   | 'burn'
   | 'limit'
   | 'supply'
-  | 'dispatch';
+  | 'dispatch'
+  | 'assigned';
 
 /**
  * Who is stopped. `blocking` means an agent is parked and cannot proceed;
@@ -96,6 +97,62 @@ export type NeedKind =
  * *what* the operator does — wait for the window to turn over, then resume.
  */
 export type NeedGroup = 'blocking' | 'yours';
+
+/**
+ * Pull requests a **person** put on the operator, as rows.
+ *
+ * The one kind of row with nothing behind it — no escalation, no proposal, no
+ * task, and no rule that will ever act on it. That is the whole reason it is
+ * here: everything else in this queue is the harness saying it is stuck, and a
+ * pull request somebody assigned to you is work the harness does not know exists.
+ * It sat in the provider's own inbox, which is the surface the console was built
+ * so an operator would not have to keep open.
+ *
+ * **Keyed on `attention.assignedToYou`, never on the pull request's assignment
+ * itself.** The verdict sets that field only when the assignment is what makes
+ * the pull request your court — so a PR assigned to you with an agent already on
+ * its branch, or one whose merge is waiting on your verdict, draws no row here.
+ * The first is the harness's to finish, and the second already has a row of its
+ * own; both would be the same ask twice, which is how a queue teaches an operator
+ * to skim it.
+ *
+ * **`yours`, never `blocking`.** Nothing is parked and no slot is held — the
+ * group is strictly about that, and widening it for how much an operator has to
+ * do would cost it the only thing it means.
+ */
+function assignedPrRows(state: AppState): NeedRow[] {
+  const rows: NeedRow[] = [];
+  for (const pr of state.world.pullRequests) {
+    const assignment = pr.attention?.assignedToYou;
+    if (assignment === undefined) continue;
+    const goalRef = goalOfPr(state, pr.number);
+    rows.push({
+      id: `assigned:pr:${pr.number}`,
+      kind: 'assigned',
+      group: 'yours',
+      // The reasons in order, which is the verdict's own promise: the assignment
+      // leads on every arm that sets this field, and what follows it is why
+      // nothing else is coming — `waiting on review`, `stacked on PR #7`, or the
+      // watch tag being absent.
+      title: askLine(oneLine(`PR #${pr.number} — ${pr.attention?.reasons.join('; ') ?? ''}`), goalRef, state),
+      goalRef,
+      originRef: `pr:${pr.number}`,
+      opens: opensAt(goalRef, state),
+      // Nobody is running it — that is the news. An id here would name some
+      // earlier agent on the same branch.
+      agentId: null,
+      agentLabel: null,
+      holding: 0,
+      // There is no instant to quote. A provider payload says who a pull request
+      // is assigned to and never when it became so, and stamping the snapshot's
+      // "now" would draw a fresh age on every poll — a row that has been yours all
+      // week reading as one that arrived a moment ago. An empty string draws no
+      // age, which is the honest rendering of a span nothing observed.
+      raisedAt: '',
+    });
+  }
+  return rows;
+}
 
 /**
  * What clicking a row opens. `goal` is the goal's page, where the ask is read
@@ -653,6 +710,7 @@ export function buildNeedsYou(
 
   rows.push(...configRows(setup, applied));
   rows.push(...refusedDispatchRows(state));
+  rows.push(...assignedPrRows(state));
 
   if ((state.recovery ?? []).length > 0) {
     rows.push({

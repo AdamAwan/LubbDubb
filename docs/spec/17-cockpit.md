@@ -457,8 +457,8 @@ reads the `ticket*` fields off `place.ts` and asserts the hook forwards every on
 
 A permanent left column holding **every** blocking item in one list: escalations, plan proposals,
 permission requests, goals the appraisal refused at intake, unanswered goal-profile proposals, usage-limit
-parks, bench tasks, close-outs, validate rows, dispatches the executor keeps refusing and the recovery
-hold. `buildNeedsYou`
+parks, bench tasks, close-outs, validate rows, dispatches the executor keeps refusing, pull requests
+somebody assigned to the operator and the recovery hold. `buildNeedsYou`
 (`web/src/view/needsYou.ts`) is the merge, and it is pure.
 
 **The snapshot carries only the escalations that are still open** — the rail's own
@@ -573,6 +573,25 @@ sentence, so both refusals the worktree pool raises arrive here together and so 
 cases — a checkout of the operator's own standing on the branch, or a cap that has to come down — and
 a button that could perform neither is the dead end this cockpit's rules exist to prevent. The band
 draws the thrower's own message instead, which already names the branch, the path and what clears it.
+
+**`assigned` is the one kind that did not come from the harness at all.** Every other row here is
+the fleet saying it is stuck; this one is a pull request a colleague put on the operator, which the
+fleet does not know exists and will never act on. It is read off `attention.assignedToYou`
+([07](07-pull-requests.md#a-pull-request-a-person-put-on-you)) — the field the verdict sets **only**
+when the assignment is what makes the pull request the operator's court, so a PR assigned to them with
+an agent already on its branch, or one whose merge is waiting on their verdict, draws nothing here.
+Both would be the same ask twice, which is how a queue teaches an operator to skim it.
+
+Keyed on that field and never on the assignment itself, for the reason `dispatch` keys on an outcome
+rather than a sentence: a surface matching the leading reason's wording would file every future
+rewording of it as "not assigned". It carries **no age** — a provider payload says who a pull request
+is assigned to and never since when, and stamping the snapshot's "now" would draw a fresh age on every
+poll, a row that has been theirs all week reading as one that arrived a moment ago.
+
+**It has no control either, and for `dispatch`'s reason turned around**: there is no verdict to record
+and no act to authorise, because the harness has no part in this one. The band says what the pull
+request is, why nothing is coming, and offers the `<Ref>` to it — which is the whole of what the row
+owes. It stops being drawn the moment somebody takes the assignment off again.
 
 **Two groups, split on who is stopped.** `blocking` means an agent is parked and cannot proceed;
 `yours` means the obligation is the operator's and nothing inside the fleet is waiting. A profile gate

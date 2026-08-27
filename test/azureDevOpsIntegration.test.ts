@@ -283,7 +283,7 @@ function pull(over: Partial<AzPull> = {}): AzPull {
     url: 'u',
     isDraft: false,
     mergeStatus: 'succeeded',
-    reviewerVotes: [],
+    reviewers: [],
     ...over,
   };
 }
@@ -860,7 +860,7 @@ test('snapshot maps a PR with its CI / approval / mergeability / comments', asyn
         title: 'Add widget',
         branch: 'feat/widget',
         mergeStatus: 'succeeded',
-        reviewerVotes: [10],
+        reviewers: [{ uniqueName: 'reviewer@acme.com', vote: 10, isRequired: true, isContainer: false }],
       }),
     ],
     policyEvals: { 7: [evalRec({ status: 'approved' })] },
@@ -918,6 +918,51 @@ test('snapshot applies the prAuthor filter client-side', async () => {
     [7],
   );
   store.close();
+});
+
+test('a PR that names you as a reviewer is kept by the owner filter and reported as yours', async () => {
+  const me = 'alice@acme.com';
+  const { api } = fakeApi({
+    viewer: me,
+    pulls: [
+      pull({ pullRequestId: 7, authorUniqueName: me }),
+      // Somebody else's, and it names you personally — the case the widened
+      // filter exists for. Required and optional both count; what differs is only
+      // the wording the operator reads.
+      pull({
+        pullRequestId: 8,
+        authorUniqueName: 'bob@acme.com',
+        reviewers: [{ uniqueName: me, vote: 0, isRequired: true, isContainer: false }],
+      }),
+      pull({
+        pullRequestId: 9,
+        authorUniqueName: 'bob@acme.com',
+        // Case is the directory's business, not the operator's: a UPN written
+        // with different capitalisation in a config file is the same person.
+        reviewers: [{ uniqueName: 'Alice@Acme.com', vote: 0, isRequired: false, isContainer: false }],
+      }),
+      // A team the operator belongs to. Azure lists a group exactly as it lists a
+      // person, and reading the two alike would put the whole project's pull
+      // requests on their queue.
+      pull({
+        pullRequestId: 10,
+        authorUniqueName: 'bob@acme.com',
+        reviewers: [
+          { uniqueName: 'vstfs:///Framework/IdentityDomain/x\\\\Team', vote: 0, isRequired: true, isContainer: true },
+        ],
+      }),
+    ],
+  });
+  const sc = new AzureDevOpsSourceControlIntegration({ api, prAuthor: me });
+  const prs = (await sc.snapshot()).pullRequests!;
+
+  assert.deepEqual(
+    prs.map((p) => p.number),
+    [7, 8, 9],
+  );
+  assert.equal(prs.find((p) => p.number === 7)?.viewerAssignment, undefined);
+  assert.equal(prs.find((p) => p.number === 8)?.viewerAssignment, 'reviewer-required');
+  assert.equal(prs.find((p) => p.number === 9)?.viewerAssignment, 'reviewer-optional');
 });
 
 test('a first-read failure rejects rather than serving an empty world', async () => {

@@ -167,6 +167,15 @@ export interface GhPullSummary {
   url: string;
   /** Label names on the PR (the Issues/PR `labels` array). */
   labels: string[];
+  /**
+   * `assignees[].login` — who a person has put the pull request on.
+   *
+   * Read off the **list** payload, which already carries it, so the one signal
+   * with no rule behind it costs no request of its own. Deliberately not
+   * `requested_reviewers`: a review request is a different obligation, and on a
+   * repository with a team review rule it is one the operator's whole org shares.
+   */
+  assigneeLogins: string[];
 }
 
 /**

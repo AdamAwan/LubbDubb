@@ -304,6 +304,33 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
   // be read here: it names the branch, the path, why the lease cannot be taken
   // and what clears it, and every attempt to summarise it on the way through has
   // to be re-made the next time the pool learns a new way to refuse.
+  // A pull request a person put on you. Nothing here is answerable *in the
+  // cockpit* — there is no verdict to record and no act to authorise, because the
+  // harness has no part in this one — so the band's whole job is to say what it is
+  // and offer the way there. The `<Ref>` is that way, and it is why this kind gets
+  // a branch of its own rather than falling through to the escalation lookup,
+  // which would find nothing and draw an empty band: a row that opens onto
+  // nothing is indistinguishable, to an operator, from a console that is broken.
+  if (row.kind === 'assigned') {
+    const number = Number(/^assigned:pr:(\d+)$/.exec(row.id)?.[1]);
+    const pr = view.state.world.pullRequests.find((p) => p.number === number);
+    if (!pr) return null;
+    return (
+      <>
+        <p>
+          <strong>{pr.title}</strong>
+        </p>
+        <p className="cn-tick">{pr.attention?.reasons.join(' · ')}</p>
+        <p className="cn-tick">
+          Nothing in the harness will act on this. It is here because somebody put it on you where the fleet cannot see
+          it, and it stops being drawn the moment they take it off you again.
+        </p>
+        <div className="cn-refs">
+          <Ref to={`pr:${pr.number}`} title="Open the pull request" />
+        </div>
+      </>
+    );
+  }
   if (row.kind === 'dispatch') {
     const refusal = refusedDispatchFor(view.state, row.id);
     if (!refusal) return null;

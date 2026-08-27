@@ -418,6 +418,13 @@ Behaviour worth knowing:
 
 - Auth is `GITHUB_TOKEN` only; `github.owner`/`github.repo` are required. See [02](02-configuration.md).
 
+**A pull request assigned to you** is `assignees[].login` off the list payload, matched against the
+viewer — so `viewerAssignment` is `assignee` or absent, and it costs no request of its own. Requested
+reviewers are deliberately **not** read on this provider: a review request is a different obligation,
+and under a team review rule it is one the operator's whole org shares. The same match widens the
+`prAuthor` filter, since a pull request that never enters the world cannot report anything
+([02](02-configuration.md#ownworkonly)).
+
 ## The `azure` provider
 
 Azure DevOps Repos + Boards, the same shape: all HTTP behind the narrow `AzureDevOpsApi` seam,
@@ -431,6 +438,15 @@ Pure mapping functions: `aggregatePolicyCiStatus`, `computeApproved` (reviewer v
 
 Behaviour worth knowing:
 
+- **A pull request assigned to you is one that names you as a _reviewer_, individually.** Azure has no
+  assignee, so the reviewer list is the same fact: an entry matching the viewer's UPN yields
+  `reviewer-required` or `reviewer-optional` from `isRequired`, both of which count. An entry with
+  `isContainer` is a **group** and never an assignment — Azure lists a team exactly as it lists a
+  person, so reading the two alike would put every pull request in the project on the queue of
+  everyone in that team. Group identities also arrive as `vstfs:///…` descriptors rather than UPNs, so
+  the match fails twice over, and the flag is checked anyway rather than relying on that. The
+  comparison is case-insensitive, because a UPN is. The same match widens the `prAuthor` filter
+  ([02](02-configuration.md#ownworkonly)).
 - **CI status comes from branch-policy _evaluations_, not the PR `statuses` endpoint.** That endpoint
   returns every status ever posted across _all_ iterations, so a stale `failed` from a superseded push
   poisons the PR forever — the false-"failing" bug. `aggregatePolicyCiStatus` reads

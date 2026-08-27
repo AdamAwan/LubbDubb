@@ -59,7 +59,7 @@ import {
 } from './prHealth.js';
 import { mergeProposalRef, proposalHold } from './proposals/proposals.js';
 import { isActiveTask } from './tasks.js';
-import type { Decision, Proposal, PullRequest, TaskSummary, WorldEvent } from './types.js';
+import type { Decision, Proposal, PullRequest, TaskSummary, ViewerAssignment, WorldEvent } from './types.js';
 
 /**
  * Whose court the PR is in. Seven arms, and each names a *different party* rather
@@ -89,6 +89,19 @@ export interface PrAttention {
    * no needs-you entry, no human task, no escalation.
    */
   reviewWaitingSince?: string;
+  /**
+   * Set when this pull request is your court **because a person put it on you** —
+   * the arm that decided was the assignment and not a proposal, an escalation or a
+   * spent attempt cap.
+   *
+   * Carried as its own field rather than left to be read off the leading reason,
+   * because the queue keys on it (`buildNeedsYou`) and a surface that matched the
+   * sentence would file every future rewording of it as "not assigned". It is
+   * absent on a PR that is assigned to you *and* has an agent on it: the
+   * assignment is then a reason, not the answer, and a row for it would ask the
+   * operator to do something the harness is already doing.
+   */
+  assignedToYou?: ViewerAssignment;
 }
 
 /** Everything the contextual arms need. Pure over this plus the PR. */
@@ -141,6 +154,40 @@ export interface PrAttentionContext {
  * arm that matches is the honest answer and the ones below it are moot.
  */
 export function prAttentionStatus(pr: PullRequest, ctx: PrAttentionContext): PrAttention {
+  const verdict = court(pr, ctx);
+  const assigned = pr.viewerAssignment;
+  if (assigned === undefined || verdict.status === 'done') return verdict;
+  const note = assignmentReason(assigned);
+  // The three arms where **nothing in the harness is coming**: no rule will fire,
+  // no proposal is waiting and no agent is on it. There the assignment is not
+  // colour on somebody else's verdict — it is the whole answer to whose turn it
+  // is, and it leads. `waiting on review` in particular is a lie about a pull
+  // request you were handed: the reviewer it names is you.
+  if (verdict.status === 'unwatched' || verdict.status === 'elsewhere' || verdict.status === 'stalled') {
+    return { ...verdict, status: 'you', reasons: [note, ...verdict.reasons], assignedToYou: assigned };
+  }
+  // Every other arm already has a court, and it is the right one: a PR with an
+  // agent on its branch is the harness's whoever it is assigned to. The
+  // assignment rides along as the last reason so the row still says it, and
+  // `assignedToYou` stays unset so the queue does not raise a row for work
+  // somebody is already doing.
+  return { ...verdict, reasons: [...verdict.reasons, note] };
+}
+
+/** How an assignment reads on the row — one clause, in the provider's own terms. */
+function assignmentReason(assignment: ViewerAssignment): string {
+  if (assignment === 'assignee') return 'assigned to you';
+  return assignment === 'reviewer-required' ? 'you are a required reviewer' : 'you are an optional reviewer';
+}
+
+/**
+ * The court, before the assignment is folded in — every arm below is about a rule,
+ * a proposal or an agent, and none of them knows anything about who the pull
+ * request was handed to. Split out so {@link prAttentionStatus} can say where an
+ * assignment *overrides* a court and where it is only a reason, in one place
+ * rather than in eight arms.
+ */
+function court(pr: PullRequest, ctx: PrAttentionContext): PrAttention {
   // A PR that left the open set is off the board. Read through `prState`, which
   // never invents `closed` — an abandoned PR has to have been observed as one.
   const state = prState(pr);

@@ -76,7 +76,7 @@ function pull(over: Partial<AzPull> = {}): AzPull {
     url: 'https://dev.azure.com/o/p/_git/r/pullrequest/31676',
     isDraft: false,
     mergeStatus: 'succeeded',
-    reviewerVotes: [],
+    reviewers: [],
     ...over,
   };
 }

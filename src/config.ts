@@ -104,7 +104,11 @@ export interface Config {
   userId?: string;
   /**
    * Whether the world arrives **filtered to you** — pickup counting only a watch
-   * tag you added, and only pull requests you opened being surfaced.
+   * tag you added, and only pull requests you opened *or were assigned* being
+   * surfaced. Assignment is in the filter because a pull request that never
+   * enters the world cannot report one, and the queue's `assigned` row is the
+   * whole point of reading it.
+   * → `docs/spec/07-pull-requests.md#a-pull-request-a-person-put-on-you`
    *
    * Separate from {@link Config.userId} because the two answer different questions
    * and belong to different people. Identity is personal and lives in an

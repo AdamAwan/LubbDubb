@@ -556,7 +556,7 @@ reading the file is not the same as knowing the policy.
 | Key                    | Type                     | Default                                                           | Behaviour                                                                                                                                                                                                                            |
 | ---------------------- | ------------------------ | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `userId`               | `string` (optional)      | unset                                                             | Who _you_ are to every provider — see [`userId`](#userid). Drives ticket assignment and branch naming, and is who the filters below narrow to. Unset, filed tickets go unassigned and nothing can be filtered.                       |
-| `ownWorkOnly`          | `boolean`                | `true`                                                            | Whether the world arrives filtered to `userId` — pickup needs a watch tag you added, and only pull requests you opened are surfaced. A team decision, so it belongs in the project layer. See [`ownWorkOnly`](#ownworkonly).         |
+| `ownWorkOnly`          | `boolean`                | `true`                                                            | Whether the world arrives filtered to `userId` — pickup needs a watch tag you added, and only pull requests you opened or were assigned are surfaced. A team decision, so it belongs in the project layer. See [`ownWorkOnly`](#ownworkonly).         |
 | `labelPrefix`          | `string`                 | `"lubbdubb"`                                                      | Derives the one tag `${prefix}-watch`. Everything is opt-in: an item without it is left alone. An **empty** prefix turns the gate off.                                                                                               |
 | `issuePriorityLabels`  | `Record<string, number>` | `{ 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 }` | Label → weight for pickup ordering. Replaced wholesale by an override.                                                                                                                                                               |
 | `issueStateColours`    | `Record<string, string>` | `{}`                                                              | Tracker state → `#rrggbb` for its chip in the cockpit. Display only. Keys match on letters and digits, so `In Review` and `in-review` are one state. Replaced wholesale by an override; live.                                        |
@@ -960,7 +960,7 @@ whether to filter by it. That is `ownWorkOnly`, and the line between the two is
 | **Assignment** | `userId`                     | Tickets the harness _files_ are assigned to you.                                                    |
 | **Naming**     | `userId`                     | Branches it opens are named as yours.                                                               |
 | **Ownership**  | `ownWorkOnly` **+** `userId` | `${labelPrefix}-watch` only counts if **you** added it, so nobody else can tag work onto the fleet. |
-| **Authorship** | `ownWorkOnly` **+** `userId` | Only pull requests you opened are surfaced — which is also what lets a merged branch be reaped.     |
+| **Authorship** | `ownWorkOnly` **+** `userId` | Only pull requests you opened **or were assigned** are surfaced — which is also what lets a merged branch be reaped. |
 
 **One string rather than one per provider**, though a GitHub login and an Azure UPN are different
 identities. One project is worked at a time and each project carries its own `lubbdubb.config.json`,
@@ -991,6 +991,18 @@ Both halves are read together in one place, `filterToViewer` (`src/integrations/
 answers who the world is narrowed to at fetch time or `undefined` for nobody. Assignment and branch
 naming deliberately do not come through it: **if the harness files it, it is yours**, whatever the
 project chooses to show you.
+
+**"Your work" is what you opened _or what somebody handed you_.** The filter is authorship **or**
+assignment — a GitHub assignee, an Azure reviewer named individually — for the reason the narrower
+reading fails silently: a pull request a colleague puts on the operator never enters the world at all,
+so nothing can report the assignment and the queue cannot raise it
+([07](07-pull-requests.md#a-pull-request-a-person-put-on-you)), on the default `ownWorkOnly`, which is
+every real deployment. It costs no extra request on either provider: both read the assignment off the
+same list page the filter already fetches.
+
+Nothing downstream widens with it. An assigned pull request that carries no watch tag is still
+`unwatched` to every rule, and the assignment decides a court and nothing else — the fleet does not
+start working a colleague's pull request because it can now see it.
 
 **The default is `true` so the split is invisible on upgrade.** A deployment carrying `userId` keeps
 the gates it already had; one without keeps them off, because a filter needs an identity. Neither
