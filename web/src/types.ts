@@ -168,6 +168,7 @@ export type {
   ChecksSpend,
   Stack,
   StackLanding,
+  StateSection,
   TaskSummary,
   FeatureBlockKind,
   FeatureBlockRow,

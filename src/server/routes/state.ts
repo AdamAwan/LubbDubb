@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import type { StateSection } from '../../wire.js';
 import type {
   CiPolicyPayload,
   ConfigPreviewPayload,
@@ -16,7 +17,7 @@ import { configField, envOverride, fieldValueRefusal } from '../../configFields.
 import { configRevision, editConfigText, readConfigText, writeConfigText } from '../../configFile.js';
 import { MCP_SERVER_ID } from '../../mcp/names.js';
 import { describeRunningConfig } from '../runningConfig.js';
-import { buildStateSnapshot } from '../stateSnapshot.js';
+import { buildStateSections, buildStateSnapshot, STATE_SECTIONS } from '../stateSnapshot.js';
 import { checked } from '../validation.js';
 import type { RouteContext } from './context.js';
 
@@ -50,7 +51,51 @@ export function register(app: FastifyInstance, { system, artifactSigner, attachm
     }
   }
 
-  app.get('/api/state', async () => buildStateSnapshot(system, { artifactSigner, attachmentSigner }));
+  /**
+   * The cockpit snapshot, whole or in named parts.
+   *
+   * `?sections=fleet,activity` builds and answers only those (plus `refUrls`,
+   * which every response carries); a bare call answers the lot, which is what the
+   * first load asks for. An unknown name is **refused rather than ignored**: a
+   * typo silently answering less is a cockpit that quietly stops updating a
+   * surface, which is the failure this route exists to make impossible.
+   *
+   * The point is not payload — it is the rebuild. A `dirty` rides every file an
+   * agent writes, every usage report and every progress note, none of which can
+   * change a goal's pickup verdict; the goal enrichment was ~75 ms of a ~125 ms
+   * build, paid per signal per open cockpit. The socket names what a signal
+   * touched and the browser asks for that.
+   * → `docs/spec/16-http-api.md#sections`
+   */
+  const StateQuery = z.object({
+    sections: z
+      .string()
+      .optional()
+      .transform((raw, ctx) => {
+        if (raw === undefined) return undefined;
+        const named = raw
+          .split(',')
+          .map((part) => part.trim())
+          .filter((part) => part !== '');
+        const unknown = named.filter((part) => !(STATE_SECTIONS as readonly string[]).includes(part));
+        if (unknown.length > 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `unknown state section(s): ${unknown.join(', ')} — known: ${STATE_SECTIONS.join(', ')}`,
+          });
+          return z.NEVER;
+        }
+        return new Set(named as StateSection[]);
+      }),
+  });
+  app.get(
+    '/api/state',
+    checked({ query: StateQuery }, async ({ query }) =>
+      query.sections === undefined
+        ? buildStateSnapshot(system, { artifactSigner, attachmentSigner })
+        : buildStateSections(system, query.sections, { artifactSigner, attachmentSigner }),
+    ),
+  );
 
   // The prompt book the rule dispatcher renders from — what the harness says to
   // its agents, and which of those wordings the operator has replaced.

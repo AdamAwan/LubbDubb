@@ -14,6 +14,7 @@ import type {
   TaskSummary,
   WorldSnapshot,
 } from '../types.js';
+import type { StateSection } from '../wire.js';
 import type {
   CockpitState,
   GoalReachView,
@@ -81,6 +82,52 @@ import { resolveModelTag } from '../modelLabels.js';
 import { orderedProfiles } from '../agents/modelPolicy.js';
 
 /**
+ * The section names, as a value.
+ *
+ * Here and not beside the type in `src/wire.ts`, which the cockpit type-imports
+ * and which therefore carries **no runtime** — anything that survives erasure
+ * there becomes server code in the SPA bundle (`test/wireContract.test.ts`). The
+ * annotation catches a name that is not a section; a section missing from the
+ * list is caught by `test/stateSections.test.ts`, which would find its keys
+ * belonging to no section at all.
+ */
+export const STATE_SECTIONS: readonly StateSection[] = [
+  'harness',
+  'control',
+  'goals',
+  'plans',
+  'fleet',
+  'knowledge',
+  'queue',
+  'inbox',
+  'activity',
+];
+
+const ALL_SECTIONS: ReadonlySet<StateSection> = new Set(STATE_SECTIONS);
+
+/**
+ * A read deferred until something asks for it, and taken once when it is.
+ *
+ * The snapshot's discipline has always been "read once and share, so two parts of
+ * the UI cannot disagree" — this keeps that and adds the other half: a section
+ * nobody asked for pays for nothing. Both properties matter and they pull in
+ * opposite directions, which is why the deferral is a memo rather than a second
+ * read at each call site.
+ */
+function once<T>(read: () => T): () => T {
+  let held: { value: T } | null = null;
+  return () => {
+    held ??= { value: read() };
+    return held.value;
+  };
+}
+
+interface SnapshotOpts {
+  artifactSigner?: (flagId: string) => string;
+  attachmentSigner?: (attachmentId: string) => string;
+}
+
+/**
  * The world the cockpit draws: the baseline the last pulse persisted, **never a
  * fresh provider fetch**. `connector.getState()` is a fan-out — for `azure`,
  * `2 + 3N` REST calls for `N` open PRs — and the cockpit refetches this snapshot
@@ -103,10 +150,30 @@ import { orderedProfiles } from '../agents/modelPolicy.js';
  * an error — which broadcasts another `dirty`. Unbounded, and worst exactly when
  * the provider is already refusing us. An empty world cannot do that.
  */
-export function buildStateSnapshot(
+export function buildStateSnapshot(system: System, opts?: SnapshotOpts): CockpitState {
+  // Every section, so the result is the whole `CockpitState` the type promises —
+  // the cast is sound because `ALL_SECTIONS` is the partition the structural test
+  // holds against the wire type.
+  return buildStateSections(system, ALL_SECTIONS, opts) as CockpitState;
+}
+
+/**
+ * The same build, narrowed to the sections a caller asked for.
+ *
+ * What it exists for: the cockpit refetches on every `dirty`, and a `dirty` rides
+ * *every* file an agent writes, every usage report and every progress note — none
+ * of which say anything about the world's goals. Rebuilding the goal enrichment
+ * for one of those was around 75 ms of a ~125 ms build, per signal, per open
+ * cockpit. The socket now names the sections a signal touched
+ * ({@link ServerEvent}) and the browser asks for those, merging the patch over the
+ * snapshot it holds — so the cockpit's state stays one complete object and no
+ * surface has to learn about partiality. → `docs/spec/16-http-api.md#sections`
+ */
+export function buildStateSections(
   system: System,
-  opts?: { artifactSigner?: (flagId: string) => string; attachmentSigner?: (attachmentId: string) => string },
-): CockpitState {
+  want: ReadonlySet<StateSection>,
+  opts?: SnapshotOpts,
+): Partial<CockpitState> {
   const { store, connector, config, runtimeControl, harness, recovery, updates, agents: fleet } = system;
   const watchLabel = watchLabelFor(config.labelPrefix);
   const baseline = store.getWorldBaseline();
@@ -132,7 +199,7 @@ export function buildStateSnapshot(
   // renderers that deliver it, with the cap the launch reads. Everything the two
   // panels say about what is *sent* comes from here — the block's budget meter,
   // the per-claim drop, and the lesson rows' "sent to agents" chip alike.
-  const delivery = knowledgeDelivery(store, config.knowledgeBlockChars);
+  const delivery = once(() => knowledgeDelivery(store, config.knowledgeBlockChars));
   // The harness's own clock rather than `world.takenAt`: both readings below are
   // about how long ago something happened *now*, and dating them to a world
   // snapshot that is a pulse old would put the staleness verdict a pulse behind
@@ -199,7 +266,13 @@ export function buildStateSnapshot(
   // the detector, which only concurrent agents can contribute to — so it is run
   // over the newest `OVERLAP_AGENT_WINDOW` rows.
   const overlapAgents = agents.slice(0, OVERLAP_AGENT_WINDOW);
-  const files = store.listFilesForAgents(overlapAgents.map((a) => a.id));
+  const overlaps = once(() =>
+    detectFileOverlaps({
+      files: store.listFilesForAgents(overlapAgents.map((a) => a.id)),
+      agents: overlapAgents,
+      tasks,
+    }),
+  );
   // The plan graph, read once and shared by the per-issue pickup verdict below
   // and the snapshot itself, so the chip and the panel can't disagree.
   const plans = store.listPlans();
@@ -469,12 +542,14 @@ export function buildStateSnapshot(
   // plus its local runs, which are billed to the same account and named by the same
   // origin. The work graph is read (not the world) because it never forgets a merged
   // pull request: a goal's total must not fall when its PRs age out of `closedPrs`.
-  const spend = rollUpIssueSpend({
-    agents,
-    tasks,
-    nodes: store.listWorkNodes(),
-    localRuns: store.listLocalRuns(),
-  });
+  const spend = once(() =>
+    rollUpIssueSpend({
+      agents,
+      tasks,
+      nodes: store.listWorkNodes(),
+      localRuns: store.listLocalRuns(),
+    }),
+  );
   // The per-issue enrichment, hoisted so a live world issue and a retained
   // completion synthesized below go through one path — the reasons the pickup and
   // conclusion verdicts are computed here rather than in the browser apply to both,
@@ -554,7 +629,7 @@ export function buildStateSnapshot(
       // dispatched against its parts and its pull requests. Null is "no runtime
       // ever reported usage for this goal", which PTY mode makes the normal case;
       // it is not zero, and the cockpit draws nothing rather than "$0.00".
-      spend: spend.byIssue.get(origin) ?? null,
+      spend: spend().byIssue.get(origin) ?? null,
       // Whether this goal's validation plan is settled. Null is "no checks",
       // which is a third reading and not a synonym for clear: a goal nobody wrote
       // a plan for draws no chip, where a clear one draws a chip it earned.
@@ -565,28 +640,42 @@ export function buildStateSnapshot(
   // `world` literal below because the local run's rows read the same rows: what has
   // happened on a branch has to be the same answer wherever it is asked, and
   // `ciVerdict` in particular is a classification that must not be made twice.
-  const openPullRequests: OpenPullRequest[] = world.pullRequests.map((pr) => ({
-    ...pr,
-    // Two verdicts about one PR because "can this merge" and "whose turn is it" are
-    // different questions with different right answers for the same PR
-    // (see `src/prAttention.ts`).
-    health: prHealth(pr, world.pullRequests),
-    attention: prAttentionStatus(pr, attentionCtx),
-    // The third verdict beside the other two, and it exists for the same reason
-    // they are computed here rather than in the browser: the alternative is shipping
-    // `config.ci` and re-matching client-side, which means a second glob matcher and
-    // a second first-match-wins ordering sitting nowhere near the rule they
-    // duplicate. That drift would fail silently — the cockpit saying *repair* while
-    // the harness held. Same call the dispatcher makes, off the same policy.
-    ciVerdict: classifyCiFailures(pr.ciChecks, config.ci, pr.ciChecksWithheld),
-  }));
+  const openPullRequests = once((): OpenPullRequest[] =>
+    world.pullRequests.map((pr) => ({
+      ...pr,
+      // Two verdicts about one PR because "can this merge" and "whose turn is it" are
+      // different questions with different right answers for the same PR
+      // (see `src/prAttention.ts`).
+      health: prHealth(pr, world.pullRequests),
+      attention: prAttentionStatus(pr, attentionCtx),
+      // The third verdict beside the other two, and it exists for the same reason
+      // they are computed here rather than in the browser: the alternative is shipping
+      // `config.ci` and re-matching client-side, which means a second glob matcher and
+      // a second first-match-wins ordering sitting nowhere near the rule they
+      // duplicate. That drift would fail silently — the cockpit saying *repair* while
+      // the harness held. Same call the dispatcher makes, off the same policy.
+      ciVerdict: classifyCiFailures(pr.ciChecks, config.ci, pr.ciChecksWithheld),
+    })),
+  );
   // Branch → the pull request on it, open rows first so a reopened branch reads as
   // open. Built once: every ref the local-run rows describe looks itself up here,
   // and the lookup is by **branch** precisely so a goal's other pull requests can
   // never be presented as facts about the ref being run.
-  const prByBranch = new Map<string, PullRequest>();
-  for (const pr of [...(world.closedPullRequests ?? []), ...openPullRequests]) prByBranch.set(pr.branch, pr);
-  return {
+  const prByBranch = once(() => {
+    const map = new Map<string, PullRequest>();
+    for (const pr of [...(world.closedPullRequests ?? []), ...openPullRequests()]) map.set(pr.branch, pr);
+    return map;
+  });
+  /**
+   * What this deployment *is*, rather than what the fleet is doing: the cockpit's
+   * config block, the harness's own build, the orphan banner, the vivarium, the dev
+   * environment and the rule book. Almost all of it is fixed for the life of the
+   * process, which is why nothing routine invalidates it.
+   */
+  const harnessSection = (): Pick<
+    CockpitState,
+    'config' | 'recovery' | 'build' | 'pets' | 'localRun' | 'localRunTargets' | 'planning' | 'dispatchRules'
+  > => ({
     config: {
       heartbeatIntervalMs: config.heartbeatIntervalMs,
       maxConcurrentAgents: config.maxConcurrentAgents,
@@ -638,14 +727,6 @@ export function buildStateSnapshot(
       areaPaths: placementCtx.areaTree === null ? [] : truncateAreaPaths(placementCtx.areaTree).paths,
       stateRules: workItemStateRules(config),
     },
-    // When the world below was actually observed — null before the first cycle,
-    // when there is no baseline and the lists are empty. Shipped because the
-    // reading is a pulse old rather than live (see this function's contract), the
-    // same reason `world_read` hands an agent an `observedAt`.
-    worldObservedAt: baseline?.takenAt ?? null,
-    // Live, mutable dispatch controls — the cockpit reads these (not the frozen
-    // config block above) for the current cap and pause state.
-    control,
     // Agents the previous run left orphaned, each awaiting restore / requeue /
     // remove. A non-empty list means the harness is running **no cycles**, which
     // is why the cockpit draws it as a blocking banner rather than one more
@@ -657,6 +738,80 @@ export function buildStateSnapshot(
     // snapshot is built on every cockpit poll and on every broadcast, and a git
     // round trip on that path would put the network in front of the whole UI.
     build: updates.reading(),
+    // Null when the feature is off, so the cockpit draws nothing at all rather
+    // than an empty enclosure that reads as a deployment nobody has used.
+    pets: system.pets.state(),
+    // The live run, or the last one that ended — the panel asks one question and
+    // "nothing is up, the last attempt failed like this" is an answer to it. `live`
+    // is derived here rather than in the cockpit so which statuses count is decided
+    // once, by the thing that sets them.
+    localRun: localRunView(system.localRun.current(), system.localRun.phase(), (ref, origin) =>
+      localRunRefFacts(ref, planPartsOf(origin), {
+        prByBranch: prByBranch(),
+        tasks,
+        defaultBranch: config.defaultBranch,
+      }),
+    ),
+    // Where it could be pointed instead, and what has happened on each of those
+    // branches. Drawn whether anything is up or not, which is why it is a key of its
+    // own rather than something hanging off the run above.
+    localRunTargets: localRunTargetViews({
+      issues: world.issues,
+      partsOf: planPartsOf,
+      prByBranch: prByBranch(),
+      openPrs: openPullRequests(),
+      tasks,
+      defaultBranch: config.defaultBranch,
+    }),
+    // The funnel's policy as the harness is running it: approving a decomposition
+    // is agreeing to a rate as well as a shape, and the sheet states that rate on
+    // the button that performs the approval.
+    planning: config.planning,
+    // The rule book, as data: decision rows carry a rule id; the cockpit looks
+    // the id up here to expand a decision into "which rule fired, and why".
+    dispatchRules: DISPATCH_RULES,
+  });
+
+  /**
+   * The live dispatch controls, and nothing else.
+   *
+   * Its own section because it is the one an operator changes by hand and the one
+   * the cockpit never has to fetch: `control:changed` carries `cap` and `paused`
+   * whole, so the frame *is* the delivery and the browser applies it without a
+   * request. The section exists for the first load and for a client that missed a
+   * frame.
+   */
+  const controlSection = (): Pick<CockpitState, 'control'> => ({
+    // Live, mutable dispatch controls — the cockpit reads these (not the frozen
+    // config block above) for the current cap and pause state.
+    control,
+  });
+
+  /**
+   * The world as the cockpit draws it — every goal with its five verdicts folded,
+   * the chains, and where landed work has reached.
+   *
+   * **The expensive one.** `enrichIssue` runs the pickup, conclusion, delivery,
+   * appraisal and validation verdicts per goal, and `prAttentionStatus` runs per
+   * open pull request; on a 150-goal board that is around 75 ms of the snapshot's
+   * ~125 ms build. It is also the section a fleet event never touches, which is the
+   * whole reason sections exist.
+   */
+  const goalsSection = (): Pick<
+    CockpitState,
+    | 'worldObservedAt'
+    | 'world'
+    | 'retainedRuns'
+    | 'stacks'
+    | 'environmentReach'
+    | 'environmentArrivals'
+    | 'stackLandings'
+  > => ({
+    // When the world below was actually observed — null before the first cycle,
+    // when there is no baseline and the lists are empty. Shipped because the
+    // reading is a pulse old rather than live (see this function's contract), the
+    // same reason `world_read` hands an agent an `observedAt`.
+    worldObservedAt: baseline?.takenAt ?? null,
     // Fold each PR's signals into a health verdict, and each issue's gates into
     // a pickup verdict, so the cockpit can show *why* an item is stuck or
     // untouched rather than leaving it implied by the absence of activity.
@@ -669,7 +824,7 @@ export function buildStateSnapshot(
       // `attention` sits beside `health`, not inside it: health answers "can this
       // merge" and attention answers "whose turn is it", and the two have
       // different right answers for the same PR (see `src/prAttention.ts`).
-      pullRequests: openPullRequests,
+      pullRequests: openPullRequests(),
       // `conclusion` sits beside `pickup` and does not feed it — the same
       // relationship `attention` has to `health` above. Pickup answers "would an
       // agent start on this next cycle", which the work-item state already
@@ -688,41 +843,6 @@ export function buildStateSnapshot(
     // are not here: the former is over, the latter already rides the world list
     // above (with its `run` field).
     retainedRuns: retainedRunIssues(issueRuns, world.issues).map(enrichIssue),
-    // The plan graph, which until now existed only in the database: the per-issue
-    // chip could say "2/5 parts merged" and nothing could say *which* five. The
-    // cockpit joins parts to `upcoming` by origin to draw the dispatch cut.
-    plans: wirePlans,
-    planParts: wirePlanParts,
-    // Null when the feature is off, so the cockpit draws nothing at all rather
-    // than an empty enclosure that reads as a deployment nobody has used.
-    pets: system.pets.state(),
-    // The live run, or the last one that ended — the panel asks one question and
-    // "nothing is up, the last attempt failed like this" is an answer to it. `live`
-    // is derived here rather than in the cockpit so which statuses count is decided
-    // once, by the thing that sets them.
-    localRun: localRunView(system.localRun.current(), system.localRun.phase(), (ref, origin) =>
-      localRunRefFacts(ref, planPartsOf(origin), { prByBranch, tasks, defaultBranch: config.defaultBranch }),
-    ),
-    // Where it could be pointed instead, and what has happened on each of those
-    // branches. Drawn whether anything is up or not, which is why it is a key of its
-    // own rather than something hanging off the run above.
-    localRunTargets: localRunTargetViews({
-      issues: world.issues,
-      partsOf: planPartsOf,
-      prByBranch,
-      openPrs: openPullRequests,
-      tasks,
-      defaultBranch: config.defaultBranch,
-    }),
-    // The validation plan beside the plan graph it hangs off — the checks whole,
-    // superseded ones included, because "this check was withdrawn" is a thing the
-    // sheet has to be able to say.
-    validationChecks,
-    validationResources: wireValidationResources,
-    // The funnel's policy as the harness is running it: approving a decomposition
-    // is agreeing to a rate as well as a shape, and the sheet states that rate on
-    // the button that performs the approval.
-    planning: config.planning,
     // Chains of stacked pull requests, derived from the world rather than stored:
     // a plan *adopts* a stack, so a chain a human opened by hand is drawn on the
     // same terms as one a plan produced. The unfiltered open list, for the reason
@@ -781,15 +901,48 @@ export function buildStateSnapshot(
           landed: landedCount(landing, { ...world, merged: mergedPrs }),
         })),
     ],
+  });
+
+  /**
+   * The plan graph and the validation plan hanging off it.
+   */
+  const plansSection = (): Pick<CockpitState, 'plans' | 'planParts' | 'validationChecks' | 'validationResources'> => ({
+    // The plan graph, which until now existed only in the database: the per-issue
+    // chip could say "2/5 parts merged" and nothing could say *which* five. The
+    // cockpit joins parts to `upcoming` by origin to draw the dispatch cut.
+    plans: wirePlans,
+    planParts: wirePlanParts,
+    // The validation plan beside the plan graph it hangs off — the checks whole,
+    // superseded ones included, because "this check was withdrawn" is a thing the
+    // sheet has to be able to say.
+    validationChecks,
+    validationResources: wireValidationResources,
+  });
+
+  /**
+   * The agents, what they were dispatched to do, and what that has cost.
+   *
+   * The section almost every live signal invalidates — an agent's usage report, its
+   * progress note, a status flip, a file it wrote. `tasks` and `agents` are the bulk
+   * of what is left on the wire after the files list came off
+   * ([16](../../docs/spec/16-http-api.md#bulk-text)), so this is the section to trim
+   * next, not the one to split further.
+   */
+  const fleetSection = (): Pick<
+    CockpitState,
+    | 'tasks'
+    | 'agents'
+    | 'parkedOnLimit'
+    | 'stallParks'
+    | 'flags'
+    | 'artifactUrls'
+    | 'attachments'
+    | 'attachmentUrls'
+    | 'overlaps'
+    | 'usage'
+    | 'runOutcomes'
+  > => ({
     tasks,
-    // Operator-launched jobs (newest first) — the cockpit shows the queued
-    // ones and their place in line, plus recently-dispatched/cancelled history.
-    jobs: store.listJobs(),
-    // The recurrences behind some of them: what to queue and when, oldest first.
-    // Shipped whole rather than as "the ones due soon", because the panel's job is
-    // to let an operator see a standing intention they wrote weeks ago — including
-    // a disabled one, which is invisible everywhere else in the harness.
-    schedules: store.listJobSchedules(),
     agents,
     // Which of those rows are parked on a spent account limit rather than on a
     // question. Asked of the fleet, not derived from the rows: both parks are
@@ -823,7 +976,20 @@ export function buildStateSnapshot(
     // for every world-driven rule — but none of them can see what an agent does
     // once it is running. This is that blind spot, read off rows we already have
     // rather than off an advisory claim an agent has to remember to make.
-    overlaps: detectFileOverlaps({ files, agents: overlapAgents, tasks }),
+    overlaps: overlaps(),
+    usage: buildUsage(system, spend().unattributedCostUsd),
+    // The Yield gauge's reading, from the same `agents` rows the fleet list ships
+    // and the same fold `/api/reliability` opens with.
+    runOutcomes: tallyRunOutcomes(agents),
+  });
+
+  /**
+   * What the fleet knows about working this repository, and what saying it costs.
+   */
+  const knowledgeSection = (): Pick<
+    CockpitState,
+    'knowledge' | 'knowledgeGraduations' | 'knowledgeSimilarities' | 'knowledgeDelivery' | 'knowledgeCost'
+  > => ({
     // Every fact, the rejected ones included: the page is the governance, and a
     // surface drawing only what it let through cannot show that a claim was
     // killed. Nothing in the dispatcher reads one — a fact feeds prompts (phase 3)
@@ -872,31 +1038,25 @@ export function buildStateSnapshot(
     // page draws a cluster whose merge is the operator's click.
     knowledgeSimilarities: store.listSimilarities(),
     // What that list actually sends, from the renderers that send it.
-    knowledgeDelivery: delivery,
+    knowledgeDelivery: delivery(),
     // What sending it costs, over the window Insights opens on. The block's length
     // is the renderer's own answer above rather than a second rendering: a cost
     // drawn from a block that did not ship is a cost for nothing.
-    knowledgeCost: knowledgeBlockCost(agents, delivery.block.length, defaultWindow(readAt)),
-    // Bugs raised from a story row: `filing` while the desk agent writes one, `filed`
-    // with a ref once it exists. Several per story is the normal case, not an error —
-    // a story can be wrong in more than one way.
-    bugFilings,
-    // Open ones and a settled tail alike, exactly as `findings` ships: "we asked
-    // and it was declined" is information, and a row that vanished on being
-    // settled would take the operator's own note with it.
-    humanTasks,
-    // **Open ones only.** Every cockpit surface that reads this filters to
-    // `status === 'open'` — the needs-you queue, the console band, the view
-    // model — and nothing draws a settled one, while each carries a transcript
-    // tail in `context.recentOutput`. Shipping the all-time list was half a
-    // megabyte per refresh spent on rows that were filtered straight back out.
-    escalations: store.listOpenEscalations(),
-    // Acts a human was asked to authorize (issue #109). The cockpit joins these
-    // to their escalation so a decision-bearing item gets accept/reject rather
-    // than a text box, and the decision log reads the settled ones as the human
-    // half of the audit trail.
-    proposals,
-    decisions: shiftLog,
+    knowledgeCost: knowledgeBlockCost(agents, delivery().block.length, defaultWindow(readAt)),
+  });
+
+  /**
+   * What is waiting to be dispatched, and the recurrences behind some of it.
+   */
+  const queueSection = (): Pick<CockpitState, 'jobs' | 'schedules' | 'upcoming' | 'runway'> => ({
+    // Operator-launched jobs (newest first) — the cockpit shows the queued
+    // ones and their place in line, plus recently-dispatched/cancelled history.
+    jobs: store.listJobs(),
+    // The recurrences behind some of them: what to queue and when, oldest first.
+    // Shipped whole rather than as "the ones due soon", because the panel's job is
+    // to let an operator see a standing intention they wrote weeks ago — including
+    // a disabled one, which is invisible everywhere else in the harness.
+    schedules: store.listJobSchedules(),
     // The "Up next" queue: the last cycle's ordered pickup plan with the
     // headroom cut (issue #69). A per-pulse projection — null until a cycle
     // has run, or when the active dispatcher doesn't materialise a plan.
@@ -932,19 +1092,70 @@ export function buildStateSnapshot(
       cap: control.cap,
       standing: allHumanTasks.some((t) => t.kind === 'supply' && t.status === 'open'),
     }),
+  });
+
+  /**
+   * Everything still waiting on a person.
+   */
+  const inboxSection = (): Pick<CockpitState, 'bugFilings' | 'humanTasks' | 'escalations' | 'proposals'> => ({
+    // Bugs raised from a story row: `filing` while the desk agent writes one, `filed`
+    // with a ref once it exists. Several per story is the normal case, not an error —
+    // a story can be wrong in more than one way.
+    bugFilings,
+    // Open ones and a settled tail alike, exactly as `findings` ships: "we asked
+    // and it was declined" is information, and a row that vanished on being
+    // settled would take the operator's own note with it.
+    humanTasks,
+    // **Open ones only.** Every cockpit surface that reads this filters to
+    // `status === 'open'` — the needs-you queue, the console band, the view
+    // model — and nothing draws a settled one, while each carries a transcript
+    // tail in `context.recentOutput`. Shipping the all-time list was half a
+    // megabyte per refresh spent on rows that were filtered straight back out.
+    escalations: store.listOpenEscalations(),
+    // Acts a human was asked to authorize (issue #109). The cockpit joins these
+    // to their escalation so a decision-bearing item gets accept/reject rather
+    // than a text box, and the decision log reads the settled ones as the human
+    // half of the audit trail.
+    proposals,
+  });
+
+  /**
+   * What has happened: the world's own changes, the harness's decisions, and its
+   * recorded failures. Three capped feeds.
+   */
+  const activitySection = (): Pick<CockpitState, 'decisions' | 'worldEvents' | 'errors'> => ({
+    decisions: shiftLog,
     worldEvents,
     // Recorded failures (cycle exceptions, provider outages, agent crashes,
     // route 500s) for the cockpit's Errors panel.
     errors: store.listErrors(100),
+  });
+
+  // Assembled section by section, so a caller that asked for one pays for one. A
+  // full build asks for them all and is the same object it always was —
+  // `test/stateSections.test.ts` holds the partition against `CockpitState`, so a
+  // key added to the wire and to no section is caught rather than silently
+  // dropped from every snapshot.
+  const out: Partial<CockpitState> = {
+    // **Always shipped, whatever was asked for.** Every other section names things
+    // the cockpit draws as links, and this is the map it resolves them in — a
+    // patch that carried new rows and no way to reach them would be the dead end
+    // `<Ref/>` exists to prevent, arriving one section at a time. It is merged
+    // rather than replaced on the client, so a ref learned in one patch survives
+    // the next: a ref's URL is stable, so an entry can only go stale by being
+    // absent.
     refUrls,
-    // The rule book, as data: decision rows carry a rule id; the cockpit looks
-    // the id up here to expand a decision into "which rule fired, and why".
-    dispatchRules: DISPATCH_RULES,
-    usage: buildUsage(system, spend.unattributedCostUsd),
-    // The Yield gauge's reading, from the same `agents` rows the fleet list ships
-    // and the same fold `/api/reliability` opens with.
-    runOutcomes: tallyRunOutcomes(agents),
   };
+  if (want.has('harness')) Object.assign(out, harnessSection());
+  if (want.has('control')) Object.assign(out, controlSection());
+  if (want.has('goals')) Object.assign(out, goalsSection());
+  if (want.has('plans')) Object.assign(out, plansSection());
+  if (want.has('fleet')) Object.assign(out, fleetSection());
+  if (want.has('knowledge')) Object.assign(out, knowledgeSection());
+  if (want.has('queue')) Object.assign(out, queueSection());
+  if (want.has('inbox')) Object.assign(out, inboxSection());
+  if (want.has('activity')) Object.assign(out, activitySection());
+  return out;
 }
 
 /** Build the `flag id → artifact URL` map the cockpit opens chips from. */

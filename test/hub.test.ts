@@ -8,17 +8,18 @@ import type { WebSocket } from 'ws';
 const OPEN = 1;
 
 /** Minimal System: Hub only wires `.on` handlers on these five emitters. */
-function fakeSystem(): { system: System; agents: EventEmitter; localRun: EventEmitter } {
+function fakeSystem(): { system: System; agents: EventEmitter; localRun: EventEmitter; errors: EventEmitter } {
   const agents = new EventEmitter();
   const localRun = new EventEmitter();
+  const errors = new EventEmitter();
   const system = {
     harness: new EventEmitter(),
     agents,
     escalations: new EventEmitter(),
-    errors: new EventEmitter(),
+    errors,
     localRun,
   } as unknown as System;
-  return { system, agents, localRun };
+  return { system, agents, localRun, errors };
 }
 
 /** Fake ws socket that captures everything sent to it. */
@@ -121,9 +122,75 @@ test('the local run gets one coalesced refetch, however much it says', async () 
   assert.deepEqual(sent, [], 'nothing goes out while the window is open');
 
   // The other half: one refetch, not fifty. Each `dirty` costs every connected
-  // cockpit a whole snapshot, and this event fires per line of output.
+  // cockpit a rebuild, and this event fires per line of output.
   await new Promise((resolve) => setTimeout(resolve, 500));
-  assert.deepEqual(sent, [{ type: 'dirty' }]);
+  // And it names its section: a bring-up printing an install log can move the
+  // local-run panel and nothing else, so rebuilding the goals for it was work
+  // thrown away. → `docs/spec/16-http-api.md#sections`
+  assert.deepEqual(sent, [{ type: 'dirty', sections: ['harness'] }]);
+});
+
+/**
+ * Which signals may name a section, and which must not.
+ *
+ * The rule is not "scope everything that can be scoped" — it is that a frame
+ * without `sections` means *all of them*, so an over-narrow frame is the only way
+ * to be wrong, and it is silent: the cockpit simply stops updating a surface, with
+ * a payload that still validates. So the high-frequency signals that provably
+ * touch one section are scoped, and everything that moves the fleet's **headroom**
+ * is not — `countLiveAgents` is the headroom in `pickupCtx`, which decides the
+ * pickup verdict on every goal and the runway band with it.
+ */
+test('a dirty is scoped only where the signal provably touches one section', () => {
+  const { system, agents, errors } = fakeSystem();
+  const hub = new Hub(system);
+  const { socket, sent } = fakeSocket();
+  hub.add(socket);
+
+  const dirtyFor = (emit: () => void): (readonly string[] | undefined)[] => {
+    sent.length = 0;
+    emit();
+    return sent.filter((e): e is Extract<ServerEvent, { type: 'dirty' }> => e.type === 'dirty').map((e) => e.sections);
+  };
+
+  // Nothing about a written file, a usage report or a progress note can change a
+  // goal's verdict — and `files` fires once per file an agent writes.
+  assert.deepEqual(
+    dirtyFor(() => agents.emit('files', {})),
+    [['fleet']],
+  );
+  assert.deepEqual(
+    dirtyFor(() => agents.emit('usage', {})),
+    [['fleet']],
+  );
+  assert.deepEqual(
+    dirtyFor(() => agents.emit('progress', {})),
+    [['fleet']],
+  );
+  // A conclusion and a retrospective are readings folded per goal.
+  assert.deepEqual(
+    dirtyFor(() => agents.emit('conclusion', {})),
+    [['goals']],
+  );
+  assert.deepEqual(
+    dirtyFor(() => agents.emit('retrospective', {})),
+    [['goals']],
+  );
+  // A recorded failure is one capped feed.
+  assert.deepEqual(
+    dirtyFor(() => errors.emit('logged', { message: 'x' })),
+    [['activity']],
+  );
+
+  // …and the ones that free or take a slot stay unscoped, whatever else they say.
+  assert.deepEqual(
+    dirtyFor(() => agents.emit('done', { agentId: 'a', taskId: 't', status: 'done' })),
+    [undefined],
+  );
+  assert.deepEqual(
+    dirtyFor(() => agents.emit('status', { agentId: 'a', taskId: 't', status: 'running' })),
+    [undefined],
+  );
 });
 
 test('malformed and unknown client frames are ignored', () => {

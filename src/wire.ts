@@ -942,6 +942,33 @@ interface CockpitUsage {
 }
 
 /**
+ * The named groups `/api/state` can be asked for, and the units a `dirty` frame
+ * invalidates.
+ *
+ * A **partition** of `CockpitState`, not a menu: every key of the wire type
+ * belongs to exactly one of these, and `refUrls`, which belongs to all of them,
+ * rides every response. `test/stateSections.test.ts` holds that against the type,
+ * so a key added to the wire and to no section is a failing test rather than a
+ * field that silently stops being shipped.
+ *
+ * The lines are drawn by **what invalidates them**, never by what draws them: a
+ * section is worth having exactly when some frequent signal touches it and leaves
+ * the rest alone. `fleet` and `goals` are the pair that matters — an agent's usage
+ * report, its progress note and every file it writes are all `fleet`, and none of
+ * them can change a goal's pickup verdict.
+ */
+export type StateSection =
+  | 'harness'
+  | 'control'
+  | 'goals'
+  | 'plans'
+  | 'fleet'
+  | 'knowledge'
+  | 'queue'
+  | 'inbox'
+  | 'activity';
+
+/**
  * The whole `/api/state` payload — `buildStateSnapshot`'s declared return type and
  * the cockpit's `AppState`, which is now the same type rather than two.
  */

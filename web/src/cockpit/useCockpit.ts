@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, connectWs, isDemo, UnauthorizedError } from '../api.js';
 import type { WsClient } from '../api.js';
-import type { AppState, SetupPayload } from '../types.js';
+import type { AppState, SetupPayload, StateSection } from '../types.js';
 import type { AppliedFix } from '../view/needsYou.js';
 import { useNow } from '../hooks.js';
 import { buildViewModel, type CockpitView } from '../view/viewModel.js';
@@ -64,10 +64,32 @@ export function useCockpit(): CockpitStatus {
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const refreshing = useRef(false);
   const refreshQueued = useRef(false);
+  /**
+   * What the signals waiting to be coalesced actually touched.
+   *
+   * `null` means "everything" and is the safe value: a signal that cannot name its
+   * sections, and the first load, both ask for the lot. A set is the **union** of
+   * what the coalesced signals named, so collapsing a burst can only ever widen
+   * the request — never narrow it past something one of them said had moved.
+   * → `docs/spec/16-http-api.md#sections`
+   */
+  const pending = useRef<Set<StateSection> | null>(null);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (sections: ReadonlySet<StateSection> | null) => {
     try {
-      setState(await api.getState());
+      const patch = await api.getState(sections);
+      setState((prev) => {
+        // A patch is merged over the snapshot we hold, which is what keeps the
+        // cockpit's state one complete `AppState`: `buildViewModel` and every
+        // surface under it go on receiving a whole object and never learn that
+        // anything arrived in parts. A full fetch carries every key, so the merge
+        // is a replacement in that case and the branch is not worth taking.
+        if (prev === null || sections === null) return patch as AppState;
+        // `refUrls` rides every response and is merged rather than replaced: a
+        // ref's URL is stable, so an entry can only go stale by being absent, and
+        // a ref learned in one patch has to survive the next.
+        return { ...prev, ...patch, refUrls: { ...prev.refUrls, ...patch.refUrls } };
+      });
       setDenied(null);
     } catch (err) {
       // A refused credential is the one fetch failure that never resolves itself
@@ -89,37 +111,66 @@ export function useCockpit(): CockpitStatus {
    * may merge the signals in between but must never drop the last, or the cockpit
    * settles on a state older than what it was told about.
    */
-  const scheduleRefresh = useCallback(() => {
-    if (refreshing.current) {
-      refreshQueued.current = true;
-      return;
-    }
-    if (refreshTimer.current) return; // a trailing fetch is already pending
-    refreshTimer.current = setTimeout(() => {
-      refreshTimer.current = null;
-      refreshing.current = true;
-      void refresh().finally(() => {
-        refreshing.current = false;
-        if (refreshQueued.current) {
-          refreshQueued.current = false;
-          scheduleRefresh();
-        }
-      });
-    }, REFRESH_COALESCE_MS);
-  }, [refresh]);
+  const scheduleRefresh = useCallback(
+    (sections?: readonly StateSection[]) => {
+      // Widen first, always — before any early return. A signal that arrives while
+      // a fetch is in flight or a timer is pending still has to be recorded, or the
+      // request that eventually goes out asks for less than it was told about and
+      // the cockpit settles on a surface that quietly stopped updating.
+      if (sections === undefined) pending.current = null;
+      else if (pending.current !== null) for (const section of sections) pending.current.add(section);
+
+      if (refreshing.current) {
+        refreshQueued.current = true;
+        return;
+      }
+      if (refreshTimer.current) return; // a trailing fetch is already pending
+      refreshTimer.current = setTimeout(() => {
+        refreshTimer.current = null;
+        refreshing.current = true;
+        const asked = pending.current;
+        // Reset before the fetch, not after: a signal that lands mid-flight is
+        // about state the in-flight request may already have read past, and it
+        // belongs to the queued fetch behind it.
+        pending.current = new Set();
+        void refresh(asked).finally(() => {
+          refreshing.current = false;
+          if (refreshQueued.current) {
+            refreshQueued.current = false;
+            scheduleRefresh();
+          }
+        });
+      }, REFRESH_COALESCE_MS);
+    },
+    [refresh],
+  );
 
   useEffect(() => {
-    void refresh();
+    void refresh(null);
     const ws = connectWs(
       (ev) => {
-        const e = ev as { type: string; agentId?: string; delta?: string; line?: string; text?: string };
-        if (
-          e.type === 'dirty' ||
-          e.type === 'world:changed' ||
-          e.type === 'control:changed' ||
-          e.type === 'world:events'
-        )
-          scheduleRefresh();
+        const e = ev as {
+          type: string;
+          agentId?: string;
+          delta?: string;
+          line?: string;
+          text?: string;
+          sections?: StateSection[];
+          cap?: number;
+          paused?: boolean;
+        };
+        // The cap or the pause moved, and the frame carries both — so it *is* the
+        // delivery, and there is nothing to fetch. `ControlState` is exactly
+        // `{cap, paused}`: pushing the cap used to cost a rebuild of all 48 keys
+        // of the snapshot, for two numbers the socket had already sent.
+        if (e.type === 'control:changed' && typeof e.cap === 'number' && typeof e.paused === 'boolean') {
+          const control = { cap: e.cap, paused: e.paused };
+          setState((prev) => (prev === null ? prev : { ...prev, control }));
+        }
+        // A `dirty` names the sections it touched, or names none — which means all
+        // of them, and is what a signal that cannot say should send.
+        else if (e.type === 'dirty') scheduleRefresh(e.sections);
+        else if (e.type === 'world:changed' || e.type === 'world:events') scheduleRefresh();
         // The config file moved — a save from another cockpit, or the watcher
         // picking up an edit on disk. Re-broadcast as a DOM event rather than
         // folded into `scheduleRefresh`: the config is not on `/api/state` (it is
@@ -195,9 +246,14 @@ export function useCockpit(): CockpitStatus {
   }, [readSetup]);
 
   const actions = useMemo<CockpitActions>(() => {
-    const then = <T>(p: Promise<T>) => p.then(() => refresh());
+    // An operator's own write is followed by a **full** refresh: a click can move
+    // anything (a watch toggle re-decides pickup, a job lands in the queue and on
+    // the graph), and unlike a socket signal there is nothing here that knows what
+    // it touched. Sections are for the fleet's own chatter, which is what there is
+    // a lot of.
+    const then = <T>(p: Promise<T>) => p.then(() => refresh(null));
     return {
-      refresh,
+      refresh: () => refresh(null),
       pulse: () => then(api.pulse()),
       clearErrors: () => then(api.clearErrors()),
       select: (agentId) => go({ agent: agentId }),
@@ -320,7 +376,7 @@ export function useCockpit(): CockpitStatus {
       // which is a smaller cost than a second code path (issue #449).
       raiseIssue: async (title, body, watch) => {
         const filed = await api.raiseIssue(title, body, watch);
-        await refresh();
+        await refresh(null);
         return filed;
       },
       dismissRun: (n, note) => then(api.dismissRun(n, note)),
