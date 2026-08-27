@@ -1092,7 +1092,12 @@ function Environments({
             {/* Inside the environment's own row and not beside it: a watch belongs
                 to an arrival, and the two surfaces drawn as siblings would be free
                 to disagree about which environment a reading came from. */}
-            <Watch watch={page.watches.find((w) => w.environment === env.environment)} now={now} />
+            <Watch
+              watch={page.watches.find((w) => w.environment === env.environment)}
+              issueNumber={number}
+              now={now}
+              actions={actions}
+            />
           </div>
         ))}
       </div>
@@ -1151,7 +1156,17 @@ function Environments({
  * declares a `watch` both arrive here as `undefined`, because null is a third fact
  * rather than a synonym for clean.
  */
-function Watch({ watch, now }: { watch: GoalWatchView | undefined; now: number }): JSX.Element | null {
+function Watch({
+  watch,
+  issueNumber,
+  now,
+  actions,
+}: {
+  watch: GoalWatchView | undefined;
+  issueNumber: number;
+  now: number;
+  actions: CockpitActions;
+}): JSX.Element | null {
   if (watch === undefined || watch.checks.length === 0) return null;
   return (
     <div className="cn-watch">
@@ -1159,6 +1174,25 @@ function Watch({ watch, now }: { watch: GoalWatchView | undefined; now: number }
         {watch.settledAt === null
           ? `watching until ${relTime(watch.settlesAt, now)}`
           : `settled ${relTime(watch.settledAt, now)}`}
+        {/* Said whether it is open or settled: an extension is why a window's end
+            is not the one the arrival sized, and without it the card states a
+            length nothing in the configuration would produce. */}
+        {watch.extendedAt !== null && ` · extended ${relTime(watch.extendedAt, now)}`}
+        {/* The honest answer for a window that closed before the weekly job ran.
+            It re-opens this window rather than opening a second one, so the
+            readings below stay where they are — and it is a click because putting
+            a settled verdict back in play is not a thing the harness decides. */}
+        <AsyncButton
+          className="cn-watch-more"
+          onClick={() => actions.extendWatch(issueNumber, watch.environment)}
+          title={
+            watch.settledAt === null
+              ? 'Give this window more time — it runs on from now for this environment’s own window length'
+              : 'Re-open this settled window and watch on from now. The readings it already took stay where they are.'
+          }
+        >
+          extend
+        </AsyncButton>
       </span>
       {watch.checks.map((check) => (
         <div className={`cn-watch-row ${check.reading?.verdict ?? 'unread'}`} key={check.checkId}>

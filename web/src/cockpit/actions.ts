@@ -180,6 +180,15 @@ export interface CockpitActions {
    */
   ruleWatchProposal(issueNumber: number, checkId: string, accept: boolean): Promise<void>;
   /**
+   * Give one goal's watch on one environment more time.
+   *
+   * The honest answer for a window that ran out before the weekly job it was
+   * about ever ran. It puts a settled verdict back in play, which is the one thing
+   * nothing in the harness does on its own — so it is a click, and the new end is
+   * measured from now by the environment's own `forMs`.
+   */
+  extendWatch(issueNumber: number, environment: string): Promise<void>;
+  /**
    * A reviewer's confirmation that one of a part's acceptance criteria holds.
    * Keyed on the criterion's text, which is what the server stores — an index
    * would move under a re-worded list and carry the tick onto something nobody

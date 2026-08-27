@@ -102,6 +102,30 @@ interface CloseOutInput {
    */
   validating: ReadonlySet<string>;
   /**
+   * What each goal's post-deploy watch says, in one sentence, keyed on the issue
+   * origin — absent for a goal nothing is watching.
+   *
+   * **Carried, never acted on.** A watch holds nothing by default: it reports, and
+   * this row carries what it reports at the moment an operator is about to close
+   * the ticket. That is `validate`'s arrangement exactly — a close-out settled
+   * early is settled *in front of* the reading rather than past it — and the
+   * detail being rewritten on every pulse is what keeps the sentence the one the
+   * watch is saying now. → `docs/spec/29-post-deploy-watch.md#it-holds-nothing-unless-asked`
+   */
+  watch: ReadonlyMap<string, string>;
+  /**
+   * The goals a `watch.holds: ["close_out"]` opt-in has cleared — those whose
+   * window on a declaring environment has **settled** — or **null where no
+   * environment declares one**, which is every deployment, since `holds` is off.
+   *
+   * {@link opened}'s shape, and nullable for its reason: an empty set would
+   * withhold this obligation everywhere and would look exactly like the feature
+   * working. A settled window rather than an open one is what clears it, because
+   * this row is filed on the *delivery* — days before the work arrives anywhere —
+   * so a hold that waited only on open windows would never withhold a thing.
+   */
+  watchCleared: ReadonlySet<string> | null;
+  /**
    * Whether this deployment's tracker can be closed from the cockpit — the
    * connector's own answer, not a guess from the provider's name.
    *
@@ -150,7 +174,13 @@ export function closeOutPass(input: CloseOutInput): CloseOutStep[] {
         steps.push({
           kind: 'reopen',
           taskId: existing.id,
-          detail: closeOutDetail(issue, delivery, input.validation.get(originRef) ?? null, input.canClose),
+          detail: closeOutDetail(
+            issue,
+            delivery,
+            input.validation.get(originRef) ?? null,
+            input.canClose,
+            input.watch.get(originRef) ?? null,
+          ),
         });
       continue;
     }
@@ -184,6 +214,10 @@ export function closeOutPass(input: CloseOutInput): CloseOutStep[] {
     if (!existing) {
       if (input.opened !== null && !input.opened.has(originRef)) continue;
       if (input.validating.has(originRef)) continue;
+      // And the opt-in a team asks for when it wants the stricter thing: an
+      // environment declaring `holds: ["close_out"]` withholds the row until its
+      // watch on this goal has settled. A **new** row only, like both gates above.
+      if (input.watchCleared !== null && !input.watchCleared.has(originRef)) continue;
     }
 
     // Filed every pulse a row is owed, standing or not. `recordHumanTask` folds
@@ -195,7 +229,13 @@ export function closeOutPass(input: CloseOutInput): CloseOutStep[] {
       kind: 'file',
       originRef,
       title: closeOutTitle(issue.number),
-      detail: closeOutDetail(issue, delivery, input.validation.get(originRef) ?? null, input.canClose),
+      detail: closeOutDetail(
+        issue,
+        delivery,
+        input.validation.get(originRef) ?? null,
+        input.canClose,
+        input.watch.get(originRef) ?? null,
+      ),
     });
   }
 
@@ -245,6 +285,7 @@ function closeOutDetail(
   delivery: IssueDelivery,
   validation: { verdict: ValidationVerdict; outstanding: readonly string[] } | null,
   canClose: boolean,
+  watch: string | null,
 ): string {
   // Capitalised here rather than held as a second record: the words are the same
   // words `deliveryHold` uses, and two records is how the two sentences come to
@@ -266,6 +307,10 @@ function closeOutDetail(
       ...validation.outstanding.map((c) => `- ${c}`),
     );
   }
+  // What the running system has said since the work arrived, and nothing more:
+  // this row is closable whatever it says. A hold would be the stricter thing an
+  // environment opts into, above, and it is off.
+  if (watch !== null) lines.push('', watch);
   if (issue.url) lines.push('', issue.url);
   return lines.join('\n');
 }

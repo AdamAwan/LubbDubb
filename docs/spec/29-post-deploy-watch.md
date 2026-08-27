@@ -1,16 +1,5 @@
 # 29 — The post-deploy watch
 
-**Partly built.** [The declaration](#the-declaration) — both kinds — [the dry run](#the-dry-run) and
-its [baseline](#the-baseline-and-why-a-measure-is-not-trusted-without-one), [asking the
-environment](#asking-the-environment), [the window](#the-window), [the verdict](#the-verdict), the
-working agent's [`watch_declare`](#the-working-agent-at-conclude-time) and [configuring an
-environment](#configuring-an-environment) describe running code, and their paths are backticked.
-What is left is **not built**: [what a finding does](#what-a-finding-does) — the bench row, the bug,
-`holds` and `extend` — and the Needs-you rail that carries them. Their paths stay italic, and the marker comes off section by section in the change
-that makes each true, not later and not in one sweep at the end. [26](26-setup.md) states the same
-discipline for its own unbuilt half. `docs/plans/29-post-deploy-watch.md` tracks which stage owns
-what.
-
 `src/environments/` records where a goal's landed work has got to ([24](24-environments.md)). It
 stops one question short of the one asked next: **is the thing behaving now that it is there.** A
 goal reads `reached` at `liveUk` whether the fix worked, did nothing, or made the outage worse — the
@@ -144,6 +133,14 @@ It also amends the **planner's** checks where the fix changed what the right que
 fixed by adding a retry does not stop producing timeouts; the honest signal becomes "the job fails
 after retries", and only the agent holding the diff knows that.
 
+**It adds and amends, and withdraws nothing.** An agent holding one part's diff knows about one check
+and nothing about the others, and a withdrawal from it would need a pending-delete state to be honest
+about. A check that should go is the operator's to delete or a planner's to stop declaring.
+
+The planner's own guidance is appended too (`watchNote`, `src/plans/planning.ts`), and both notes
+reach the dispatch rules as **rendered strings** rather than as an import: `src/dispatcher/` still
+names nothing under `src/environments/`, which is the lens boundary this subsystem is built inside.
+
 ### The operator, at any point
 
 Edits, adds and deletes on the plan sheet, and **approves** — an agent-authored query is not run
@@ -215,7 +212,7 @@ changed.
 environment the moment it is declared, so the baseline is that reading kept rather than discarded —
 one spawn, one answer, and no second code path free to ask a different question of a system that had
 already changed. A dry run that did not answer therefore leaves the baseline null, which is
-*never taken* and not zero: a measure declaring `noWorseThan: "baseline"` with no baseline reads
+_never taken_ and not zero: a measure declaring `noWorseThan: "baseline"` with no baseline reads
 `unknown`, because a comparison against nothing is not a comparison that passed.
 
 An absolute threshold is allowed and is the right shape for new behaviour that has no before. It is
@@ -314,9 +311,17 @@ arrival the pass above records; `src/environments/watchWindow.ts` is the arithme
 open one, which windows are due a reading and which have run out of time;
 `src/environments/watchVerdict.ts` is the fold below; and `src/store/watches.ts` owns the two tables.
 
-The order inside the pass is load-bearing too: open, then settle, then read. Settling before the
-readings is what stops a window that ran out between two pulses collecting one more reading past its
-own end.
+The order inside the pass is load-bearing too: open, then settle, then read, then file. Settling
+before the readings is what stops a window that ran out between two pulses collecting one more
+reading past its own end; filing after them is what puts this pulse's reading on the bench rather
+than the last one's.
+
+Two more things about _when_ a window is read, both of which a second implementation would get wrong
+quietly. `watchIntervalMs` is measured off **that window's own newest reading** rather than against a
+shared clock, so a window opened mid-interval is read on its own schedule and a backlog deferred past
+the cap keeps its place. And the **whole window is read at once**, not check by check on separate
+clocks: one _last read_ per window is the reading an operator is shown, and staggered per-check clocks
+would make the card a set of answers taken at different times.
 
 ### Opening
 
@@ -358,7 +363,7 @@ the feature on next month safe.
 
 Three things have to be true to open a window, and each is a different kind of no: the environment
 declares an `observe`; the goal declares at least one check; and the confirming reading is fresh. A
-goal that declares its first check *after* it arrived somewhere is therefore not watched there, which
+goal that declares its first check _after_ it arrived somewhere is therefore not watched there, which
 is the honest reading rather than a gap — the declaration is what the operator approved, and
 approving it after the deploy is approving it for the next one.
 
@@ -369,8 +374,23 @@ goal page as the permanent account of what production said about this work. A se
 re-opened by a later reading, for the reason a confirmed landing is never re-asked — this is a record
 of what happened after a deploy, not a monitor.
 
-**Not built:** an operator may **extend** an open or just-settled watch, which is the honest answer
-for a window that closed before the weekly job ran.
+An operator may **extend** a watch, which is the honest answer for a window that closed before the
+weekly job ran. It **re-opens the window it names** rather than opening a second one, and that is a
+decision rather than a shortcut: `watch_windows` is keyed on `(goal, environment)`, so a second
+window is a different key and one goal's readings would be split across two rows nothing joins —
+where the readings taken before it ran out are precisely the evidence behind whatever it says next.
+The verdict that was fixed stays readable, in front of the ones it is about to take.
+
+It is also the one thing in the subsystem that puts a settled verdict back in play, which is why it
+is a click and never a rule. `settleWatchWindow`'s `settled_at IS NULL` guard is untouched by it and
+still says what it always said: what that guard prevents is a _later reading_ moving a stamp the
+harness already wrote, and an operator's decision is not a reading. The new end is measured from
+**now**, by the environment's own `forMs` and through the one function the arrival pass sizes a
+window with (`watchWindowMs`, `src/environments/watchWindow.ts`) — a second reading of that field is
+one edit from a window extending by a different length from the one it opened with, with nothing
+red. `watch_windows.extended_at` records that it happened, so the card can say why a window's end is
+not the one its arrival would have given it.
+→ `POST /api/issues/:number/watch/:environment/extend` (`src/server/routes/watches.ts`)
 
 A settled window is never pruned either, which is the other half of the same rule: its readings are
 the evidence behind a verdict that is now permanent, and a retention rule that dropped them would
@@ -405,7 +425,7 @@ would hide the half that is good news — which is the half the ticket was about
 
 ## What a finding does
 
-**Not built**, apart from the goal page. Three outlets, and no fourth. `src/environments/` is a lens: nothing under `src/dispatcher/` may
+Three outlets, and no fourth. `src/environments/` is a lens: nothing under `src/dispatcher/` may
 import it, which is asserted structurally, so a watch **cannot** spend an agent even by accident.
 
 - **A `human_tasks` row** on the goal, naming the check, what it expected and what it read
@@ -421,6 +441,34 @@ The click is the bound. Arms A and B of a shortfall are put to a person before t
 they spend a fleet ([13](13-jobs-and-tickets.md)); a watch that filed its own bugs is the same loop
 with a log spike as its trigger and nothing on the outside of it.
 
+### The bench row
+
+`kind: 'watch'`, filed by `src/environments/watchFinding.ts` from the pass that took the readings —
+last inside `watchDesk.ts`, so it is filed off this pulse's reading rather than the one before it.
+
+**One row per window, and this is the line the whole arm turns on.** A window is 96 readings per
+check per environment on the defaults, and a row per reading is the Needs-you rail burying its own
+asks under one goal's telemetry. The row is keyed on `(goal, environment)` through a title that
+names the environment and never changes, so `recordHumanTask`'s dedup folds every later reading onto
+the row the first one filed and rewrites its detail — which is what keeps the numbers on it the ones
+the watch is reporting _now_.
+
+**An `unknown` files nothing.** A window nobody could read has said nothing about the work, and a row
+filed off one would put an expired credential in front of a person as though it were a regression.
+It is the fold's own rule ([the verdict](#the-verdict)) one layer up, and the same mistake if it is
+folded.
+
+It wears the `DESK_SETTLED` marker like its siblings (`src/benchSettlement.ts`). A later reading in
+an open window coming back clean says the obligation is not owed _right now_, which is a different
+thing from a person saying they have dealt with it — so the harness retracts its own row and reopens
+it if the reading regresses again, and an operator's own verdict stands for good. Without the marker
+the dedup would refresh their settled row's detail and leave it settled, and the finding would come
+back invisible.
+
+The row carries the reading's own words and no summary of them, because no model read the numbers
+and none will: where a number needs interpreting, that is a row on the bench with the number in
+front of a person.
+
 ### It holds nothing, unless asked
 
 The close-out is **not** held while a watch is open. A 48-hour hold on every delivered goal would put
@@ -429,11 +477,20 @@ argument that keeps an environment gate off the Needs-you rail
 ([24](24-environments.md#in-the-cockpit)).
 
 What the close-out does carry, in its detail, is what the watch says: open and clean so far, settled
-clean, or settled regressed. A row settled early is closed in front of that reading rather than past
-it, which is `validate`'s arrangement exactly ([20](20-validation.md#saying-so-on-the-bench)).
+clean, settled regressed, or an environment nobody could read. A row settled early is closed in front
+of that reading rather than past it, which is `validate`'s arrangement exactly
+([20](20-validation.md#saying-so-on-the-bench)) — the detail is rewritten on every pulse, so the
+sentence an operator reads at the moment they close the ticket is the one the watch is saying then.
 
-`holds: ["close_out"]` on an environment is the opt-in for a team that wants the stricter thing, and
-it is off.
+`holds` on an environment is the opt-in for a team that wants the stricter thing, and it is off. It
+names the obligations an arrival's `opens` names — `close_out`, `validate` — and what clears one is a
+window that has **settled**, not one that is open. That is not a detail: both obligations are filed
+on the _delivery_, pulses or days before the work arrives anywhere, and both hold a **new** row only,
+so a hold scoped to open windows would read as configured and withhold nothing ever.
+`watchClearedGoals` therefore has `openedGoals`' exact shape, null and all — an empty set would
+withhold the obligation on every deployment on earth and would look identical to the feature working
+— and an operator's _not waiting on an environment_ clears a hold as it clears a gate, so a goal whose
+work will never reach an environment does not sit delivered with an empty bench for good.
 
 ### A reading is never a `WorldEvent`
 
@@ -467,8 +524,10 @@ What is left to bound is process spawns and calls to the operator's telemetry:
   lookback does not move in five minutes, and a 48-hour watch read that often is 576 readings per
   check to answer a question nobody asks more than twice a day.
 - **Nothing is asked when no watch is open**, which is the steady state for most of a fleet's life.
-- **A cap per pulse**, oldest watch first, deferring rather than dropping, so a backlog drains in a
-  fixed order and nothing starves — `MAX_LANDINGS_PER_PULSE`'s arrangement.
+- **A cap per pulse — twenty windows**, oldest first, deferring rather than dropping, so a backlog
+  drains in a fixed order and nothing starves — `MAX_LANDINGS_PER_PULSE`'s arrangement, and
+  deliberately smaller than it: what this bounds is a process spawn per open check against the
+  operator's telemetry, not an argument list.
 - One spawn per open check per interval, and open watches are bounded by `for`, so nothing
   accumulates.
 
@@ -506,8 +565,9 @@ number in front of a person.
 was corrected in the building: the harness's other durations carry the suffix
 (`environmentProbeIntervalMs`, `closedPrWindowMs`), and an unsuffixed one is exactly the unit
 ambiguity the convention exists to remove — a window read in the wrong unit settles in two minutes or
-in two months, with nothing red. Nothing reads it yet; it is validated so an operator's file cannot
-carry a value the window pass will later misread.
+in two months, with nothing red. Two things read it, and through one function
+(`watchWindowMs`, `src/environments/watchWindow.ts`): the arrival that opens a window, and the
+operator's click that extends one.
 
 `watch` is optional per environment. An environment without one is observed for reach and nothing
 more, and a goal whose environments declare no `observe` draws no watch surface at all — the same
@@ -520,13 +580,12 @@ can write it; nothing in `src/mcp/` touches config.
 `validateEnvironments` (`src/environments/policy.ts`) grows the refusals whose absence is otherwise silent:
 
 - an empty `observe` on a declared `watch`, which leaves every check unanswerable forever;
-- a `holds` naming an obligation the harness does not file;
+- a `holds` naming an obligation the harness does not file, so holding it would hold nothing;
 - a `describe` without an `observe`, which is a schema for a question nothing asks.
 
 ## In the cockpit
 
-→ [17](17-cockpit.md). Four surfaces and one changed reading. The plan sheet, the goal page's card
-and the strip's fold are built; **the Needs-you rail is not**, and is italic for that reason.
+→ [17](17-cockpit.md). Four surfaces and one changed reading.
 
 **The plan sheet** draws the watch beside the validation checks, each check with its query, its
 expectation, and the dry-run readings under it (`web/src/components/WatchDigest.tsx`). Read-only but
@@ -544,13 +603,25 @@ drops a row that was never anything but a proposal. The state lives on the check
 declaration made at conclude time does not put a goal's whole plan back through approval to carry
 one query. → `POST /api/issues/:number/watch-proposals/:checkId` (`src/server/routes/watches.ts`)
 
+`listGoalWatches` is **live-only**, and that is the guard rather than a filter: every reader that puts
+a query to an environment goes through it, so an agent's unapproved query cannot reach the operator's
+telemetry by a route somebody forgot to filter. The sheet reaches the pending rows through
+`listProposedGoalWatches`, which nothing else reads. A replan's drop sweep skips proposal-only rows
+for the same reason the ruling exists — they were never part of the document, so a planner neither
+adopts nor discards them, and a decision taken off an operator without their seeing it is what the
+approval prevents.
+
 **The goal page's Environments card** grows a watch block **inside** each environment's row —
 indented, on the well, with a tinted left edge (`web/src/console/GoalPage.tsx`,
 `web/src/console/console.css`). Inside the row and not beside it, because a watch belongs to an
 arrival: drawn as a sibling, the two surfaces would be free to disagree about which environment a
 reading came from, which is the disagreement the strip's fold exists to prevent one layer up.
 
-The block says how long the window has left, or when it settled, and then draws **every check** —
+The block says how long the window has left, or when it settled — and, where somebody extended it,
+that it was extended, since otherwise the card states a window length no configuration would produce.
+The **extend** control sits at the end of that line rather than among the readings, because what it
+acts on is the window: a control level with the checks would read as an answer to one of them. Then
+it draws **every check** —
 whether or not anything is wrong, and with no roll-up to a word. A check nothing has read yet says
 so, in those words, for the plan sheet's reason: not yet put to an environment is not a clean
 reading.
@@ -558,21 +629,31 @@ reading.
 A measure draws as a line of **expected, before, now**. The before is what makes the card worth
 looking at — a p95 of 310ms means nothing alone and everything beside the 8,400ms it replaced — and
 it is available precisely because the baseline was taken at declaration. A measure whose baseline was
-never taken says *before: never taken* rather than printing a number with nothing beside it.
+never taken says _before: never taken_ rather than printing a number with nothing beside it.
 
 **An `unknown` says why in words**, on the row, and never in the vocabulary of a clean one. Every
 colour on the block is a `--cn-*` token: a literal would be a surface that stays dark when somebody
 switches to Light, and nothing in `npm run check` reads the stylesheets but
 `test/cockpitTheme.test.ts`.
 
-_**The Needs-you rail**_ carries one row for a settled-regressed watch, with the reading in it and
-the bug-filing control beside it.
+**The Needs-you rail** carries one row for a settled-regressed watch, with the reading in it and the
+bug-filing control beside it (`web/src/view/needsYou.ts`, `web/src/console/NeedsBand.tsx`). It is a
+`human_tasks` row like every other on the rail, so it folds off the reading the desk already took
+rather than computing a second one — which is the disagreement the strip's fold exists to prevent,
+made once for the whole cockpit.
+
+The control opens the bug modal already holding the row's own detail: the check, what it expected and
+what it read. A **seed rather than a payload** — it lands in the editable box every bug is composed
+in, so what is filed is still what the operator sends, and the numbers ride as their own report
+rather than as a paraphrase somebody would have had to retype. It is drawn only where there is a
+tracker to file into and a goal to relate the bug back to, and a false draws no button rather than a
+disabled one.
 
 **The track strip's Environments stage** gains the watch's reading — `reached liveUk · watch clean` —
 folded off the card below it rather than computed a second time, which is the strip's existing rule
 ([17](17-cockpit.md), `web/src/view/goalPage.ts`). This is the one place a watch is reduced to a
 word, and the reduction is one-directional: `regressed` is answered first, then anything not `clean`
-reads *watch not read*, and only a window whose every check came back clean says so. A row with space
+reads _watch not read_, and only a window whose every check came back clean says so. A row with space
 for one reading must never fold an unread environment into an all-clear — the card underneath still
 draws every check.
 
@@ -600,11 +681,11 @@ question marks. A goal that declared no checks renders nothing either, because n
 → [14](14-persistence.md). Three tables, owned by `src/store/watches.ts` and delegated from
 `src/store/store.ts` under the same method names, per the store's composition rule.
 
-| Table            | One row per                   | Written                                                                    |
-| ---------------- | ----------------------------- | -------------------------------------------------------------------------- |
-| `goal_watches`   | `(goal_ref, check_id)`        | `OR REPLACE` on the declaration; the merge key is the slug                 |
-| `watch_windows`  | `(goal_ref, environment)`     | `OR IGNORE` — an arrival opens one window, and re-arriving is not a second |
-| `watch_readings` | `(window, check_id, read_at)` | append-only, and pruned only with the check an amendment dropped           |
+| Table            | One row per                   | Written                                                                                                              |
+| ---------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `goal_watches`   | `(goal_ref, check_id)`        | `OR REPLACE` on the declaration; the merge key is the slug                                                           |
+| `watch_windows`  | `(goal_ref, environment)`     | `OR IGNORE` — an arrival opens one window, and re-arriving is not a second; an operator's extend re-opens _that_ row |
+| `watch_readings` | `(window, check_id, read_at)` | append-only, and pruned only with the check an amendment dropped                                                     |
 
 `goal_watches` also carries the dry run — the environment it was put to, when, what the check's own
 query and its `presence` query each answered, the row count, and a measure's baseline. On the check rather than in a
@@ -628,13 +709,17 @@ rather than as clean — and every database from before this build declares no m
 the schema refused them. `expect_baseline` and `live` carry SQL defaults that are the honest reading
 of a row written before either existed: a signal declares no baseline, and every check the operator's
 own plan approval already authorised is live. It needs no backfill, and that is a property of the freshness guard rather than
-an oversight: null there means *not considered yet*, and an arrival considered for the first time
+an oversight: null there means _not considered yet_, and an arrival considered for the first time
 opens a window only if its confirming reading is fresh — so a database full of nulls is walked once,
 stamped, and opens nothing for work that shipped in March.
 
 `watch_windows.settled_at` null means **still watching**, which is a null that means something: a
 column added to it later, without the gated backfill, would reopen every settled window on the boot
-an operator takes the build ([14](14-persistence.md#when-a-null-means-something)).
+an operator takes the build ([14](14-persistence.md#when-a-null-means-something)). `extended_at` is
+that table's first added column and the one the warning is about — and it needs no backfill, for a
+stated reason rather than by luck: its null means **never extended**, which is exactly true of every
+row written before it existed. A column here whose null meant anything else would have to be gated on
+`ensureColumns`' report.
 
 `watch_readings` is bounded by `for` rather than by a retention rule: a window's readings are the
 evidence behind its verdict, and a rule that dropped them would leave the verdict standing with
@@ -645,8 +730,8 @@ which grows with the fleet's work and not with time. → [Closing](#closing)
 
 At the `buildSystem` seam with `FakeEnvironmentObserver` injected beside `FakeEnvironmentProber`
 ([19](19-development.md)), plus unit tests on the pure halves — `test/watchResult.test.ts`,
-`test/watchDryRun.test.ts`, `test/watchVerdict.test.ts`, `test/watchWindow.test.ts` and
-`test/watchDesk.test.ts`. The ones that earn their place are the silences:
+`test/watchDryRun.test.ts`, `test/watchVerdict.test.ts`, `test/watchWindow.test.ts`,
+`test/watchDesk.test.ts` and `test/watchFinding.test.ts`. The ones that earn their place are the silences:
 
 - a signal with zero rows and **zero presence** is `unknown`, not `clean`;
 - an observation that fails, times out, or answers without the id echo is `unknown`, not `clean`;
@@ -662,6 +747,14 @@ At the `buildSystem` seam with `FakeEnvironmentObserver` injected beside `FakeEn
   reads as success;
 - a settled watch is not re-opened by a later reading;
 - a goal with no declared checks reads null, and draws nothing;
+- a settled-regressed watch files **one** bench row, and a second reading files no second one;
+- a settled-**unknown** watch files nothing — it is not a finding;
+- the close-out's detail carries what the watch says and does **not** hold it with `holds` absent,
+  and does hold it with `holds: ["close_out"]`;
+- a goal delivered with a watch still open closes in front of the reading rather than past it;
+- `extend` re-opens the settled window it names and nothing else, and the verdict that was fixed is
+  still readable under it (`test/watchFinding.test.ts`);
+- **no `WorldEvent` is written by any of it**, asserted against the world's own list;
 - a watch opens **per environment**, so a goal travelling `testUk` → `liveUk` is watched twice with
   separate readings;
 - the per-pulse cap defers rather than drops, oldest window first;

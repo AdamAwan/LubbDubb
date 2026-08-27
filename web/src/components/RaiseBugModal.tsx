@@ -22,15 +22,26 @@ import { AsyncButton } from './AsyncButton.js';
 export function RaiseBugModal({
   issueNumber,
   issueTitle,
+  initialSummary = '',
   onSubmit,
   onClose,
 }: {
   issueNumber: number;
   issueTitle: string;
+  /**
+   * What the box opens holding — the post-deploy watch's reading, when the modal
+   * was opened from its bench row.
+   *
+   * A **seed, not a payload**: it lands in the same editable box, so what is filed
+   * is still whatever the operator sends, and the numbers ride as their own report
+   * rather than as a paraphrase somebody would have had to retype. Empty
+   * everywhere else, which is the box this modal has always opened with.
+   */
+  initialSummary?: string;
   onSubmit: (summary: string, title?: string) => Promise<unknown>;
   onClose: () => void;
 }) {
-  const [summary, setSummary] = useState('');
+  const [summary, setSummary] = useState(initialSummary);
   const [title, setTitle] = useState('');
   const [failed, setFailed] = useState(false);
 

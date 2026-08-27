@@ -138,6 +138,8 @@ function filed(over: Partial<Parameters<typeof closeOutPass>[0]> = {}): { detail
     validation: new Map(),
     opened: null,
     validating: new Set<string>(),
+    watch: new Map<string, string>(),
+    watchCleared: null,
     canClose: true,
     ...over,
   });

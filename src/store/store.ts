@@ -1272,6 +1272,9 @@ export class Store {
   settleWatchWindow(goalRef: string, environment: string): void {
     this.watches.settleWatchWindow(goalRef, environment);
   }
+  extendWatchWindow(goalRef: string, environment: string, settlesAt: string): WatchWindow | null {
+    return this.watches.extendWatchWindow(goalRef, environment, settlesAt);
+  }
   listWatchWindows(): WatchWindow[] {
     return this.watches.listWatchWindows();
   }

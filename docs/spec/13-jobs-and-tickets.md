@@ -385,6 +385,14 @@ it. Everything the claim arm establishes holds: the same tracker gate, a desk jo
 template (`raise-bug`), two statuses, and `link_ticket` closing the loop from the credential by
 carrying the title and body the agent wrote.
 
+It has a **second door**, and the same one: a post-deploy watch's bench row offers the control beside
+its verdicts, and it opens this modal already holding the reading — the check, what it expected and
+what it read. A seed rather than a payload, because what is filed still has to be what the operator
+sends, and because the point of carrying the numbers is that the fleet is handed them rather than a
+paraphrase somebody retyped. Nothing about the arm changes: the relation back to the story is a field
+on `IssueCreateInput` there as here, and never a sentence in a prompt.
+→ [29](29-post-deploy-watch.md#what-a-finding-does)
+
 Four things differ, each for a reason worth keeping:
 
 - **It needs two writes to be correct, and that is why it does not file itself.** A bug that is not
@@ -423,7 +431,7 @@ interface HumanTask {
   detail: string | null; // what to do and how to know it is done, markdown
   originRef: string | null; // the work it belongs to: "issue:12", "issue:12:part:schema", "pr:42"
   partId: string | null; // the plan part this task *is*, when a planner declared a step for a person
-  kind: 'ask' | 'close_out' | 'burn' | 'validate' | 'supply'; // who it is for the harness — see below
+  kind: 'ask' | 'close_out' | 'burn' | 'validate' | 'supply' | 'watch'; // who it is for the harness — see below
   agentId: string | null; // the requesting agent, from the credential; null when nobody individual asked
   taskId: string | null;
   status: 'open' | 'done' | 'declined';
@@ -537,6 +545,13 @@ The second is an environment gate, where one is configured: with `arrival.opens`
 the row waits until the goal's work has actually reached somewhere a person can look at it. Nothing
 gates it on a deployment that configured no environment, which is the default.
 → [24](24-environments.md#what-an-arrival-means)
+
+A third exists and is **off**: an environment declaring `watch.holds: ["close_out"]` withholds the row
+until its post-deploy watch on that goal has settled. It is the stricter thing a team opts into, and
+it is off for the reason the gate is kept off the Needs-you rail — a 48-hour hold on every delivered
+goal would put every goal on the bench in a state nobody can act on. What the row carries by default
+instead is a sentence saying what the watch is reporting.
+→ [29](29-post-deploy-watch.md#it-holds-nothing-unless-asked)
 
 Both hold the **file** arm only, and only for a row that does not exist yet. Everything that settles a
 row still runs, so a ticket closed by hand while a goal is held still discharges an obligation filed
@@ -673,7 +688,7 @@ that leaves standing answers standing.
 
 Tests: `test/validationReady.test.ts`.
 
-### The six arms that file one
+### The seven arms that file one
 
 - **`request_human_task`**, the MCP tool: `{title, detail?}` and nothing that names work. Identity is
   structural, as for every write tool. It queues nothing and blocks nothing, and the response says so
@@ -687,7 +702,17 @@ Tests: `test/validationReady.test.ts`.
   agent that _asked_ but the agent the row is _about_ — a live run spending far past what its kind of
   work costs. It settles itself when that run ends, for the close-out's reason. It holds nothing and
   stops nothing; what it buys is that somebody looks. → [18](18-observability.md#the-burn-watch)
-- **The runway watch**, the harness's newest: `kind: 'supply'`, a null `agentId` and a **null
+- **The post-deploy watch's finding**, the harness's newest: `kind: 'watch'`, a null `agentId` for
+  the close-out sweep's reason, and **one row per window rather than one per reading** — a window is
+  96 readings per check per environment on the defaults, and a row apiece is the rail burying its own
+  asks under one goal's telemetry. It is filed only for a `regressed` reading: an environment nobody
+  could read has said nothing about the work, and a row filed off an `unknown` would put an expired
+  credential in front of a person as a regression. It settles itself when a later reading comes back
+  clean, wearing the `DESK_SETTLED` marker so an operator's own verdict is never overwritten by one.
+  It holds nothing and dispatches nobody — the one thing it offers that costs the fleet anything is a
+  **bug**, behind an operator's click, and that click is the whole bound on the subsystem.
+  → [29](29-post-deploy-watch.md#the-bench-row)
+- **The runway watch**: `kind: 'supply'`, a null `agentId` and a **null
   `originRef`** — it is the one row that is about the fleet rather than about a piece of work, so an
   origin here would file it onto whichever goal happened to be last in the world. Exactly one is ever
   open: a change of state settles the standing row and files the new wording, which is also what

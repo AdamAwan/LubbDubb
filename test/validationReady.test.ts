@@ -111,6 +111,7 @@ const pass = (over: Partial<Parameters<typeof validationReadyPass>[0]> = {}) =>
     existing: [],
     checks: new Map(),
     opened: null,
+    watchCleared: null,
     ...over,
   });
 

@@ -91,6 +91,10 @@ const pass = (over: Partial<Parameters<typeof closeOutPass>[0]> = {}) =>
     // has not configured one — an empty set would withhold every row instead.
     opened: null,
     validating: new Set(),
+    // Nothing is watching, which is every deployment until an environment declares
+    // telemetry: no sentence to carry, and a hold nobody declared holds nothing.
+    watch: new Map(),
+    watchCleared: null,
     // The deployment whose tracker the harness can close, which is every real one —
     // it changes only the wording of a filed row's detail.
     canClose: true,

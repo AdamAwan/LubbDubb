@@ -25,6 +25,21 @@ import type { EnvironmentConfig } from './policy.js';
 const DEFAULT_WINDOW_MS = 48 * 60 * 60 * 1000;
 
 /**
+ * How long a window on this environment runs for.
+ *
+ * One reader of `forMs` rather than two, which is the point: the arrival that
+ * opens a window and the operator's click that extends one must agree about how
+ * long a window on this environment is, and a second `?? DEFAULT_WINDOW_MS`
+ * elsewhere is one edit from a watch that extends by a different length from the
+ * one it opened with, with nothing red.
+ *
+ * @public read by the extend route, which measures the new end from now
+ */
+export function watchWindowMs(environment: EnvironmentConfig): number {
+  return environment.watch?.forMs ?? DEFAULT_WINDOW_MS;
+}
+
+/**
  * How stale a confirming reading may be and still open a window, as a multiple of
  * the probe interval — `ANNOUNCE_WINDOW_INTERVALS` unchanged, and for its reason.
  *
@@ -103,8 +118,7 @@ export function openableArrivals(input: {
     // would open a window if the name ever came back.
     out.push({
       arrival,
-      settlesAt:
-        watchable && fresh ? new Date(seen + (environment.watch?.forMs ?? DEFAULT_WINDOW_MS)).toISOString() : null,
+      settlesAt: watchable && fresh ? new Date(seen + watchWindowMs(environment)).toISOString() : null,
     });
   }
   return out;

@@ -23,6 +23,7 @@ export const KIND_LABEL: Record<NeedKind, string> = {
   bench: 'Bench',
   close_out: 'Close-out',
   validate: 'Validate',
+  watch: 'Watch',
   burn: 'Spend',
   limit: 'Usage limit',
   supply: 'Runway',
@@ -85,6 +86,12 @@ export const KIND_TONE: Record<NeedKind, 'red' | 'amber' | 'blue' | 'green'> = {
   bench: 'blue',
   close_out: 'green',
   validate: 'green',
+  // Amber and not green, though it is the same step-after-a-delivery family: what
+  // this row says is that the running system is answering outside what the goal
+  // declared, which is a thing waiting on somebody rather than a goal landing
+  // well. Red would file it beside a harness that cannot work at all — nothing
+  // here is broken in the harness, and nothing is parked.
+  watch: 'amber',
   burn: 'amber',
   limit: 'amber',
   // A gate rather than a fault, on `permission`'s terms: nothing broke, and an
@@ -145,6 +152,9 @@ export const KIND_SYMBOL: Record<NeedKind, string> = {
   bench: '\u25c6',
   close_out: '\u2691',
   validate: '\u2713',
+  // An eye-like ringed circle against `validate`'s tick: one is a goal's checks
+  // being run, the other is the running system being watched after they were.
+  watch: '\u25ce',
   burn: '\u25b2',
   limit: '\u2016',
   // Against the burn notice's upward triangle deliberately: one is spend
