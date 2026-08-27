@@ -1,8 +1,24 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { desktopPrompt } from '../web/src/components/ValidationSection.js';
-import { desktopDeepLink, discussPrompt, localRunPrompt } from '../web/src/cockpit/desktopLink.js';
+import { readdirSync, statSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import * as React from 'react';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import {
+  askPrompt,
+  checkPrompt,
+  desktopDeepLink,
+  discussPrompt,
+  localRunPrompt,
+} from '../web/src/cockpit/desktopLink.js';
+
+// The classic runtime, as `console.test.ts` sets it up and for its reason.
+(globalThis as { React?: typeof React }).React = React;
+
+const { DesktopLink } = await import('../web/src/components/DesktopLink.js');
 
 /**
  * The cockpit's three affordances for the desktop channel: run a check there,
@@ -19,13 +35,16 @@ import { desktopDeepLink, discussPrompt, localRunPrompt } from '../web/src/cockp
 const SOURCE = readFileSync(new URL('../web/src/components/ValidationSection.tsx', import.meta.url), 'utf8');
 const GOAL_PAGE = readFileSync(new URL('../web/src/console/GoalPage.tsx', import.meta.url), 'utf8');
 
+const desktop = (props: { folder: string; prompt: string; explain: string; ready?: string }): string =>
+  renderToStaticMarkup(createElement(DesktopLink, { ...props, className: 'btn', children: 'Go' }));
+
 test('the prompt addresses a check by its goal and its stored letter', () => {
-  assert.equal(desktopPrompt(249, 'A'), '/lubbdubb 249:A');
+  assert.equal(checkPrompt(249, 'A'), '/lubbdubb 249:A');
   // The letter is the handle that survives an amendment, which is why it is what
   // the skill takes. Built from a row's position instead, this would go on
   // rendering correctly and address a different check after the next amendment —
   // the failure the stored letter exists to prevent, one layer up.
-  assert.equal(desktopPrompt(249, 'D'), '/lubbdubb 249:D');
+  assert.equal(checkPrompt(249, 'D'), '/lubbdubb 249:D');
 });
 
 test('a discussion addresses a plan by its goal number', () => {
@@ -46,12 +65,8 @@ test('running it locally addresses the goal by number, and is offered on every g
   // only where somebody had already configured one would be a dead end found by
   // walking into it. That argument is why the whole channel is unconditional.
   assert.ok(
-    GOAL_PAGE.includes('desktopDeepLink(desktopFolder, localRunPrompt(issue.number))'),
+    /<DesktopLink[^>]*?prompt=\{localRunPrompt\(issue\.number\)\}/s.test(GOAL_PAGE),
     'the goal page links to the run prompt on its own number',
-  );
-  assert.ok(
-    /title=\{`Opens your own Claude Code with "\$\{localRunPrompt\(issue\.number\)\}"/.test(GOAL_PAGE),
-    'and names the command in the title, for the machine with no client to answer the link',
   );
 });
 
@@ -79,14 +94,73 @@ test('a Windows checkout survives the encoding', () => {
 
 test('the command is readable, not only clickable', () => {
   // A deep link reaches only the machine the browser is on, and a client that is
-  // not installed answers nothing at all — so an operator has to be able to read
-  // the command and type it themselves. It is in the title, from the same string
-  // the link carries.
-  assert.ok(
-    /title=\{`Opens your own Claude Code with "\$\{promptText\}"/.test(SOURCE),
-    'the control names the command it sends in its title',
+  // not installed answers **nothing at all** — no error, no tab, no window. So an
+  // operator reading the cockpit from another desk has to be able to read the
+  // command and type it themselves, and the title is the only place left to put
+  // it. `DesktopLink` composes that clause rather than trusting five call sites to
+  // remember it: two of them had already forgotten, and a forgetting is only ever
+  // reported by the person it happened to.
+  const html = desktop({ folder: '/home/you/shop', prompt: checkPrompt(249, 'A'), explain: 'so it runs there.' });
+  assert.match(
+    html,
+    /title="Opens your own Claude Code with &quot;\/lubbdubb 249:A&quot; ready to send, so it runs there\."/,
   );
-  assert.ok(SOURCE.includes('desktopDeepLink(desktopFolder, promptText)'), 'and links to that same string');
+  assert.match(
+    html,
+    /href="claude:\/\/code\/new\?q=%2Flubbdubb\+249%3AA&amp;folder=%2Fhome%2Fyou%2Fshop"/,
+    'the title names the string the link carries',
+  );
+
+  // A deep link is a destination, so it is an anchor — never a button with a
+  // click handler. `claude://` is handed to the OS handler rather than navigated
+  // to, so a `target="_blank"` on it is a blank tab left behind.
+  assert.match(html, /^<a /);
+  assert.doesNotMatch(html, /target=/);
+});
+
+/**
+ * **Ask** is the one command that is not complete when it lands: `q` fills the
+ * composer with the goal already settled and stops, because the operator has not
+ * said what they are asking yet. Guessing a question would be a control that asked
+ * something else on the occasions it was wrong, and there is no reading of a click
+ * that says which question it was. The title has to say so, or it promises a send
+ * that never comes.
+ */
+test('a prompt the operator still has to finish says so', () => {
+  const html = desktop({
+    folder: '/home/you/shop',
+    prompt: askPrompt(284),
+    explain: 'answered from the record.',
+    ready: 'ready for your question',
+  });
+  assert.match(html, /&quot;\/lubbdubb ask 284&quot; ready for your question, answered from the record\./);
+  // The trailing space is what leaves the cursor after the number, and it belongs
+  // in the link rather than in the sentence quoting it.
+  assert.match(html, /q=%2Flubbdubb\+ask\+284\+&/);
+});
+
+/**
+ * The guard that keeps the above true of every control rather than of one. The URL
+ * was already written once; the *control* was written five times, and the titles
+ * had drifted — the plan sheet's two **Discuss…** anchors said what the session
+ * would do and never what command it would arrive with. A sixth site hand-rolling
+ * its own anchor would compile, render and open the right client, and simply be
+ * silent for the operator who has no client to answer it.
+ */
+test('nothing outside DesktopLink builds a link into Claude Code', () => {
+  const root = fileURLToPath(new URL('../web/src/', import.meta.url));
+  const walk = (dir: string): string[] =>
+    readdirSync(dir).flatMap((name) => {
+      const path = join(dir, name);
+      return statSync(path).isDirectory() ? walk(path) : [path];
+    });
+
+  const offenders = walk(root)
+    .filter((file) => /\.tsx$/.test(file))
+    .filter((file) => !file.endsWith('DesktopLink.tsx'))
+    .filter((file) => /desktopDeepLink|claude:\/\//.test(readFileSync(file, 'utf8')));
+
+  assert.deepEqual(offenders, [], 'draw a desktop hand-off through <DesktopLink>');
 });
 
 test('the control sits with the hand-over, on an unrun check', () => {
@@ -96,5 +170,6 @@ test('the control sits with the hand-over, on an unrun check', () => {
   // who knows their own machine does not need the planner's permission.
   const unrun = SOURCE.slice(SOURCE.indexOf("check.state === 'unrun' ?"), SOURCE.indexOf('Back to unrun'));
   assert.ok(unrun.includes('Run it in Claude Code'), 'the desktop hand-off is drawn on an unrun check');
+  assert.ok(unrun.includes('<DesktopLink'), 'and it is drawn through the one control that opens that client');
   assert.ok(unrun.includes('Hand to the fleet'), 'beside the fleet hand-over');
 });

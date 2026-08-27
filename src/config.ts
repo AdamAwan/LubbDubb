@@ -643,6 +643,24 @@ export interface Config {
    */
   knowledgeScopeStaleDays: number;
   /**
+   * How many days a `proposal` nobody has agreed with and no agent has asked for
+   * may sit before the cockpit's Knowledge page stops **drawing** it. `0` turns the
+   * reading off.
+   *
+   * A **reading and never a trigger**, and narrower than `knowledgeScopeStaleDays`
+   * is: it is defined only over `proposal`, the one reach that reaches nobody, so
+   * there is no prompt it can take a claim out of and no reach it can move. A cold
+   * claim goes behind a counted fold rather than out of the store, and the next
+   * corroboration makes it warm again.
+   *
+   * Thirty days because the store has exactly one exit and it is a person: a fleet
+   * fills it at fleet speed and an operator drains it at operator speed, so over a
+   * long enough run the page is mostly claims nobody will ever rule on and the four
+   * that need a decision are somewhere in them. Derived from the rows the store
+   * already holds rather than recorded, for `knowledgeScopeStaleDays`' reason.
+   */
+  knowledgeColdDays: number;
+  /**
    * How long a recorded MCP call keeps its **arguments**, in days. `0` records
    * none at all.
    *
@@ -968,6 +986,7 @@ const DEFAULTS: Config = {
   agentResumeAttempts: 3,
   knowledgeBlockChars: 6_000,
   knowledgeScopeStaleDays: 30,
+  knowledgeColdDays: 30,
   // A fortnight: long enough that "how is this tool actually being used" is a
   // question the tab can still answer about last sprint's work, short enough that
   // a deployment is not holding a year of agent arguments it will never read.

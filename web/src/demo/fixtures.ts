@@ -1822,6 +1822,7 @@ export function buildDemoState(): DemoSeed {
         supersedes: null,
         project: 'lubbdubb',
         keepLocal: false,
+        supersededBy: null,
         originRef: 'pr:412',
         ruledAt: null,
         resolvesWhen: null,
@@ -1840,6 +1841,7 @@ export function buildDemoState(): DemoSeed {
         lastAskedAt: null,
         scopeStale: false,
         scopeLastMatchedAt: ago(3),
+        cold: false,
       },
       {
         // The harness's own, and the other half of phase 4: it read this rather
@@ -1856,6 +1858,7 @@ export function buildDemoState(): DemoSeed {
         supersedes: null,
         project: 'lubbdubb',
         keepLocal: false,
+        supersededBy: null,
         originRef: 'pr:404',
         ruledAt: null,
         resolvesWhen: { kind: 'ci-check-green', ref: 'pr:404', check: 'check (build)' },
@@ -1871,6 +1874,7 @@ export function buildDemoState(): DemoSeed {
         lastAskedAt: null,
         scopeStale: false,
         scopeLastMatchedAt: ago(2),
+        cold: false,
       },
       {
         id: 'fact-needsyou',
@@ -1884,6 +1888,7 @@ export function buildDemoState(): DemoSeed {
         supersedes: null,
         project: 'lubbdubb',
         keepLocal: false,
+        supersededBy: null,
         originRef: 'issue:376',
         ruledAt: null,
         resolvesWhen: null,
@@ -1899,6 +1904,7 @@ export function buildDemoState(): DemoSeed {
         lastAskedAt: ago(5),
         scopeStale: false,
         scopeLastMatchedAt: null,
+        cold: false,
       },
       {
         id: 'fact-injected',
@@ -1910,6 +1916,7 @@ export function buildDemoState(): DemoSeed {
         supersedes: null,
         project: 'lubbdubb',
         keepLocal: false,
+        supersededBy: null,
         originRef: 'issue:364',
         ruledAt: ago(60),
         resolvesWhen: null,
@@ -1931,6 +1938,7 @@ export function buildDemoState(): DemoSeed {
         lastAskedAt: null,
         scopeStale: false,
         scopeLastMatchedAt: null,
+        cold: false,
       },
       {
         // The amendment, filed by the agent that contradicted the claim above and
@@ -1948,6 +1956,7 @@ export function buildDemoState(): DemoSeed {
         supersedes: 'fact-injected',
         project: 'lubbdubb',
         keepLocal: false,
+        supersededBy: null,
         originRef: 'issue:390',
         ruledAt: null,
         resolvesWhen: null,
@@ -1963,6 +1972,7 @@ export function buildDemoState(): DemoSeed {
         lastAskedAt: null,
         scopeStale: false,
         scopeLastMatchedAt: null,
+        cold: false,
       },
       {
         id: 'fact-lookup',
@@ -1974,6 +1984,7 @@ export function buildDemoState(): DemoSeed {
         supersedes: null,
         project: 'lubbdubb',
         keepLocal: false,
+        supersededBy: null,
         originRef: 'issue:341',
         ruledAt: ago(48),
         resolvesWhen: null,
@@ -1992,6 +2003,7 @@ export function buildDemoState(): DemoSeed {
         lastAskedAt: ago(7),
         scopeStale: false,
         scopeLastMatchedAt: null,
+        cold: false,
       },
       {
         // A check scope that has drifted (#27 phase 7). The job was renamed when
@@ -2011,6 +2023,7 @@ export function buildDemoState(): DemoSeed {
         supersedes: null,
         project: 'lubbdubb',
         keepLocal: false,
+        supersededBy: null,
         originRef: 'pr:377',
         ruledAt: ago(24 * 51),
         resolvesWhen: null,
@@ -2026,6 +2039,7 @@ export function buildDemoState(): DemoSeed {
         lastAskedAt: null,
         scopeStale: true,
         scopeLastMatchedAt: ago(24 * 47),
+        cold: false,
       },
       {
         // Goal-scoped and on lookup, which is the other prompt: it never rides the
@@ -2042,6 +2056,7 @@ export function buildDemoState(): DemoSeed {
         supersedes: null,
         project: 'lubbdubb',
         keepLocal: false,
+        supersededBy: null,
         originRef: 'issue:390',
         ruledAt: ago(20),
         resolvesWhen: null,
@@ -2057,6 +2072,75 @@ export function buildDemoState(): DemoSeed {
         lastAskedAt: ago(19),
         scopeStale: false,
         scopeLastMatchedAt: null,
+        cold: false,
+      },
+      {
+        // Gone cold: a proposal nobody agreed with, no agent asked for and no
+        // operator has ruled on, older than `knowledgeColdDays`. Behind the queue's
+        // counted fold rather than out of the store — the row says exactly what it
+        // said, and the next corroboration makes it warm again.
+        id: 'fact-cold',
+        claim:
+          'The staging seed script writes its fixtures before the migrations run, so a fresh database comes ' +
+          'up with the old column names.',
+        scope: 'fleet',
+        lifetime: 'standing',
+        expiresAt: null,
+        reach: 'proposal',
+        supersedes: null,
+        project: 'lubbdubb',
+        keepLocal: false,
+        supersededBy: null,
+        originRef: 'issue:288',
+        ruledAt: null,
+        resolvesWhen: null,
+        aboutRef: null,
+        where: 'scripts/seed.ts',
+        createdAt: ago(24 * 71),
+        updatedAt: ago(24 * 71),
+        corroborations: 1,
+        contradictions: 0,
+        contradictionRatio: 0,
+        openContradictions: 0,
+        asks: 0,
+        lastAskedAt: null,
+        scopeStale: false,
+        scopeLastMatchedAt: null,
+        cold: true,
+      },
+      {
+        // The same wall, written down by a second agent in its own words — which
+        // `claimsMatch` answers no to, so this landed as a copy rather than as the
+        // corroboration that would have carried the first. The pair is what the
+        // cluster below suggests folding into one.
+        id: 'fact-cold-twin',
+        claim:
+          'Fixtures in the staging seed script are written before migrations run, so the column names in a ' +
+          'fresh database are the old ones.',
+        scope: 'fleet',
+        lifetime: 'standing',
+        expiresAt: null,
+        reach: 'proposal',
+        supersedes: null,
+        project: 'lubbdubb',
+        keepLocal: false,
+        supersededBy: null,
+        originRef: 'issue:401',
+        ruledAt: null,
+        resolvesWhen: null,
+        aboutRef: null,
+        where: 'scripts/seed.ts',
+        createdAt: ago(24 * 12),
+        updatedAt: ago(24 * 12),
+        corroborations: 1,
+        contradictions: 0,
+        contradictionRatio: 0,
+        openContradictions: 0,
+        asks: 0,
+        lastAskedAt: null,
+        scopeStale: false,
+        scopeLastMatchedAt: null,
+        cold: false,
       },
       {
         id: 'fact-proposal',
@@ -2068,6 +2152,7 @@ export function buildDemoState(): DemoSeed {
         supersedes: null,
         project: 'lubbdubb',
         keepLocal: false,
+        supersededBy: null,
         originRef: 'issue:390',
         ruledAt: null,
         resolvesWhen: null,
@@ -2083,6 +2168,7 @@ export function buildDemoState(): DemoSeed {
         lastAskedAt: null,
         scopeStale: false,
         scopeLastMatchedAt: null,
+        cold: false,
       },
       {
         // Also out of every prompt, and by a different exit: an operator filed this
@@ -2101,6 +2187,7 @@ export function buildDemoState(): DemoSeed {
         supersedes: null,
         project: 'lubbdubb',
         keepLocal: false,
+        supersededBy: null,
         originRef: 'issue:364',
         ruledAt: ago(8),
         resolvesWhen: null,
@@ -2116,6 +2203,7 @@ export function buildDemoState(): DemoSeed {
         lastAskedAt: null,
         scopeStale: false,
         scopeLastMatchedAt: null,
+        cold: false,
       },
       {
         // Committed, and therefore out of every prompt (#27 phase 6): the claim is
@@ -2133,6 +2221,7 @@ export function buildDemoState(): DemoSeed {
         supersedes: null,
         project: 'lubbdubb',
         keepLocal: false,
+        supersededBy: null,
         originRef: 'issue:341',
         ruledAt: ago(150),
         resolvesWhen: null,
@@ -2150,6 +2239,7 @@ export function buildDemoState(): DemoSeed {
         lastAskedAt: null,
         scopeStale: false,
         scopeLastMatchedAt: null,
+        cold: false,
       },
       {
         // Retired rather than rejected, and drawn rather than dropped: the check it
@@ -2168,6 +2258,7 @@ export function buildDemoState(): DemoSeed {
         supersedes: null,
         project: 'lubbdubb',
         keepLocal: false,
+        supersededBy: null,
         originRef: 'issue:318',
         ruledAt: ago(90),
         resolvesWhen: null,
@@ -2183,6 +2274,7 @@ export function buildDemoState(): DemoSeed {
         lastAskedAt: null,
         scopeStale: false,
         scopeLastMatchedAt: null,
+        cold: false,
       },
       {
         id: 'fact-rejected',
@@ -2194,6 +2286,7 @@ export function buildDemoState(): DemoSeed {
         supersedes: null,
         project: 'lubbdubb',
         keepLocal: false,
+        supersededBy: null,
         originRef: 'issue:355',
         ruledAt: ago(120),
         resolvesWhen: null,
@@ -2209,6 +2302,7 @@ export function buildDemoState(): DemoSeed {
         lastAskedAt: null,
         scopeStale: false,
         scopeLastMatchedAt: null,
+        cold: false,
       },
     ],
     // Every attempt to put a claim in the repository (#27 phase 6). Two, because
@@ -2224,6 +2318,12 @@ export function buildDemoState(): DemoSeed {
     // merge turns on: one agent's report is exactly what every finding was, and
     // queueing work for one asserts nothing — the prompt tells the agent to check
     // the claim first.
+    // One suggested cluster: two agents on two goals hit one wall and wrote it down
+    // in their own words, so the strict matcher filed a copy instead of a voice.
+    // Nothing here has merged anything — the operator's click is what would.
+    knowledgeSimilarities: [
+      { id: 'kns-seed', leftId: 'fact-cold', rightId: 'fact-cold-twin', score: 0.72, createdAt: ago(1) },
+    ],
     knowledgeGraduations: [
       {
         id: 'kng-lookup',
@@ -2876,6 +2976,13 @@ export function buildDemoState(): DemoSeed {
       '#410': 'https://github.com/example/markdown-magpie/pull/410',
       '#406': 'https://github.com/example/markdown-magpie/pull/406',
       '#405': 'https://github.com/example/markdown-magpie/pull/405',
+      // Every open pull request is here, because the server's `buildRefUrls` puts
+      // every one of them there — a demo missing three drew them as plain text on
+      // the one card whose whole job is to be a way to a pull request, and looked
+      // like `<Ref>` refusing rather than like a fixture with a hole in it.
+      '#407': 'https://github.com/example/markdown-magpie/pull/407',
+      '#408': 'https://github.com/example/markdown-magpie/pull/408',
+      '#414': 'https://github.com/example/markdown-magpie/pull/414',
       '#300': 'https://github.com/example/markdown-magpie/issues/300',
       '#332': 'https://github.com/example/markdown-magpie/issues/332',
       '#333': 'https://github.com/example/markdown-magpie/issues/333',
@@ -2892,6 +2999,8 @@ export function buildDemoState(): DemoSeed {
       '#388': 'https://github.com/example/markdown-magpie/issues/388',
       '#390': 'https://github.com/example/markdown-magpie/issues/390',
       '#395': 'https://github.com/example/markdown-magpie/issues/395',
+      '#366': 'https://github.com/example/markdown-magpie/issues/366',
+      '#376': 'https://github.com/example/markdown-magpie/issues/376',
       // The two comments the harness maintains on a ticket by itself, keyed by the
       // canonical ref the snapshot ships and anchored the way the provider builds
       // them. Absent from this map ⇒ the cockpit draws no way in at all.

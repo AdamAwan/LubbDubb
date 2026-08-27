@@ -6,6 +6,7 @@ import { resolveExecutable } from './resolveCommand.js';
 import type { ProcessReaper } from './processTree.js';
 import { assistantText, renderBlocks, type ContentBlock } from './streamTranscript.js';
 import type { AgentUsage } from '../types.js';
+import { debugLog } from '../debug.js';
 
 /**
  * Minimal child-process shape we depend on — injectable so tests drive a fake
@@ -66,6 +67,39 @@ const defaultSpawner: Spawner = (command, args, opts) => {
  * agent did wrong, so it emits `limited` rather than `waiting` or `failed`; see
  * {@link RateLimitPark}.
  */
+/**
+ * Parse one stdout line as a stream-JSON event, tolerating junk glued to its front.
+ *
+ * A plain `JSON.parse` per line assumes `claude` is the only writer on that pipe, and
+ * it is not: **anything that writes to stdout without a trailing newline lands on the
+ * front of the next event.** A `Stop` hook returning a `terminalSequence` is the case
+ * that cost us one — the OSC title escape it emits carries no newline, so the
+ * `result` closing the turn arrived as `\x1b]2;…\x07{"type":"result"…}` and threw.
+ *
+ * The old `catch { return }` then made that a **turn end that never happened**: no
+ * done, no waiting, not even the unannounced stop, because all three are decided on
+ * `result`. An agent that had printed `@@LUBBDUBB_DONE@@` and finished simply went
+ * quiet — its session still live, still holding its worktree lease, still accepting
+ * messages — and looked identical to one still working. Nothing was red, and the only
+ * way to notice was to ask the agent, which could only report what it had printed.
+ *
+ * So a line is retried from each `{` in it, taking the first that parses: the junk is
+ * always a prefix and the event always an object, so the event is always a suffix.
+ * Recovery cannot invent an event — a line with no parseable object still returns
+ * null — and the escape flavour never has to be enumerated, which is the point: the
+ * next writer to do this will not be a hook.
+ */
+function parseEventLine(line: string): StreamEvent | null {
+  for (let i = line.indexOf('{'); i !== -1; i = line.indexOf('{', i + 1)) {
+    try {
+      return JSON.parse(line.slice(i)) as StreamEvent;
+    } catch {
+      // This `{` opened something that is not the event; try the next one.
+    }
+  }
+  return null;
+}
+
 export class StreamJsonSession extends EventEmitter implements AgentSession {
   private child: StreamChild | null = null;
   private _status: AgentSessionStatus = 'starting';
@@ -159,7 +193,11 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
     const msg = { type: 'user', message: { role: 'user', content: text } };
     this.child.stdin.write(JSON.stringify(msg) + '\n');
     this.pendingTurns += 1;
-    this.turnText = '';
+    // Deliberately *not* clearing `turnText`. Every `result` clears it, so it never
+    // spans two turns anyway — and the only thing clearing it here ever did was
+    // erase a sentinel the agent had already printed in the turn this message is
+    // landing in the middle of. A done printed before an answer, a nudge or an
+    // operator's aside arrived is still a done; see the `result` handler.
     if (this._status === 'waiting') this.setStatus('running');
     // Explicitly, rather than leaving it to the transition above: a message typed
     // into an agent that never stopped being `running` is still a fresh start for
@@ -221,11 +259,13 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
   }
 
   private handleEvent(line: string): void {
-    let ev: StreamEvent;
-    try {
-      ev = JSON.parse(line) as StreamEvent;
-    } catch {
-      return; // non-JSON noise
+    const ev = parseEventLine(line);
+    if (!ev) {
+      // Genuinely unreadable, as opposed to an event wearing a prefix. Logged rather
+      // than counted: the population is banners and stderr bleed, and a line that is
+      // not an event cannot be recovered into one.
+      debugLog('agent', `unparseable stream line (${line.length} bytes)`);
+      return;
     }
 
     if (ev.type === 'assistant') {
@@ -275,16 +315,25 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
       const turnText = this.turnText;
       this.turnText = '';
       if (this.pendingTurns > 0) this.pendingTurns -= 1;
+      // Done is decided *above* the queued-turn check, and it is the only sentinel
+      // that is. A queued message makes a question moot — it is usually the answer —
+      // but nothing anyone types makes "I finished" untrue, so a done read only when
+      // the queue happened to be empty is a done lost to a race: the agent announced
+      // it, the harness heard nothing, and the session it should have torn down sat
+      // holding a worktree, indistinguishable from one that stopped without saying
+      // why. Both `finish` and the transitions below are idempotent.
+      if (turnText.includes(DONE_SENTINEL)) {
+        this.finish('done');
+        return;
+      }
       // Only the turn that leaves nothing queued is the session coming to rest; a
       // message sent into the turn this ends is one `claude` runs next, and reading
       // this as an unannounced stop is a park on an agent still working (see
       // {@link pendingTurns}). Judged on the text of the turn that ended, so a
       // sentinel is never carried into the queued one.
       if (this.pendingTurns > 0) return;
-      // End of a turn: decide done vs waiting from the sentinels the agent printed.
-      if (turnText.includes(DONE_SENTINEL)) {
-        this.finish('done');
-      } else if (this.limit) {
+      // End of a turn: decide waiting vs an unannounced stop from what it printed.
+      if (this.limit) {
         // Ordered after the done sentinel deliberately: an agent that finished the
         // work and *then* hit the limit is finished, and parking it would resurrect
         // a settled ending.

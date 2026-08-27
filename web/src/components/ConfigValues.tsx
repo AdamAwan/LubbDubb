@@ -18,6 +18,14 @@ import type { ConfigChange, RunningConfigEntry, RunningConfigGroup, RunningConfi
  *   browser is deliberately never told what a default *is*; it is told
  *   `isDefault`, which is the answer to the question an operator asks.
  *
+ * The one judgement that is made here is whether a key another key requires has
+ * been filled in, and it is made here because it is a question about the **edit**:
+ * `entry.requiredWhen` is the server's declaration, and the value it is judged
+ * against is the staged one. Left to the server it would be the answer for the
+ * config the harness is running — so an operator who switches the pool on and
+ * saves gets the next boot's own refusal as a 400, over a key with no row on the
+ * page to fix it.
+ *
  * Nothing is written from here. Edits stage, and the write goes through the
  * review step — which is drawn from the server's own candidate bytes rather than
  * a guess at them.
@@ -73,6 +81,9 @@ export function ConfigValues({
 
   const shown = payload.groups.find((entry) => entry.title === group) ?? payload.groups[0];
   const broken = Object.values(drafts).some((draft) => draft.error !== null);
+  // Judged over staged ∪ running, so switching the pool provider raises the
+  // requirement in the same keystroke rather than at the next boot.
+  const unmet = unmetRequirements(payload, staged);
 
   const edit = (entry: RunningConfigEntry, raw: string): void => {
     const parsed = parseValue(entry, raw);
@@ -193,6 +204,7 @@ export function ConfigValues({
                 draft={drafts[entry.path]}
                 staged={stagedFor(staged, entry.path)}
                 states={states}
+                required={unmet.some((need) => need.entry.path === entry.path)}
                 onEdit={(raw) => edit(entry, raw)}
                 onReset={() => reset(entry.path)}
                 onUndo={() => undo(entry.path)}
@@ -224,6 +236,7 @@ export function ConfigValues({
                       draft={drafts[entry.path]}
                       staged={stagedFor(staged, entry.path)}
                       states={states}
+                      required={unmet.some((need) => need.entry.path === entry.path)}
                       onEdit={(raw) => edit(entry, raw)}
                       onReset={() => reset(entry.path)}
                       onUndo={() => undo(entry.path)}
@@ -267,9 +280,21 @@ export function ConfigValues({
         <div className="cfg-dirty">
           <span className="cfg-dirtyn">{dirty} staged</span>
           <span className="cfg-dirtywhat">
-            {broken ? 'one of them is not a value this field takes' : `nothing has been written to ${payload.file} yet`}
+            {broken
+              ? 'one of them is not a value this field takes'
+              : unmet.length > 0
+                ? // Named, not counted: the row that needs filling in is usually in
+                  // a group the operator is no longer looking at — they got here by
+                  // changing the key that raised the requirement.
+                  `${unmet[0]?.entry.path ?? ''} is needed while ${unmet[0]?.because ?? ''}`
+                : `nothing has been written to ${payload.file} yet`}
           </span>
           <div className="cfg-dirtyacts">
+            {unmet.length > 0 && unmet[0] && unmet[0].group !== shown?.title && (
+              <button className="btn ghost small" onClick={() => onGroup(unmet[0]?.group ?? null)}>
+                Show it
+              </button>
+            )}
             <button
               className="btn ghost small"
               onClick={() => {
@@ -280,7 +305,7 @@ export function ConfigValues({
             >
               Discard all
             </button>
-            <button className="btn primary small" disabled={broken} onClick={onReview}>
+            <button className="btn primary small" disabled={broken || unmet.length > 0} onClick={onReview}>
               Review &amp; write
             </button>
           </div>
@@ -344,6 +369,7 @@ function Row({
   draft,
   staged,
   states,
+  required,
   onEdit,
   onReset,
   onUndo,
@@ -352,6 +378,8 @@ function Row({
   draft: Draft | undefined;
   staged: 'set' | 'cleared' | null;
   states: readonly string[];
+  /** Another key requires this one, and nothing has filled it in yet. */
+  required: boolean;
   onEdit: (raw: string) => void;
   onReset: () => void;
   onUndo: () => void;
@@ -363,9 +391,10 @@ function Row({
   const raw = draft?.raw ?? rawOf(entry.value);
 
   return (
-    <div className={`cfg-row${entry.isDefault ? '' : ' set'}${staged ? ' staged' : ''}`}>
+    <div className={`cfg-row${entry.isDefault ? '' : ' set'}${staged ? ' staged' : ''}${required ? ' needed' : ''}`}>
       <div className="cfg-key">
         {entry.path}
+        {required && <span className="cfg-need">needed</span>}
         <span className="cfg-why">{entry.why}</span>
       </div>
 
@@ -379,6 +408,20 @@ function Row({
           </span>
         ) : (
           <Widget entry={entry} raw={raw} locked={locked} states={states} onEdit={onEdit} />
+        )}
+        {/* The suggestion is a button and never a value the form fills in: the
+            whole point of an address nobody else writes to is that its owner
+            typed it. Offered while the field is empty, whether or not anything
+            requires it yet. */}
+        {entry.suggestion !== undefined && raw === '' && !locked && staged !== 'cleared' && (
+          <button className="btn ghost small cfg-suggest" onClick={() => onEdit(entry.suggestion ?? '')}>
+            Use <code>{entry.suggestion}</code>
+          </button>
+        )}
+        {required && (
+          <span className="cfg-bad">
+            {entry.requiredWhen?.path} is not “{entry.requiredWhen?.unless}”, so this one has to be set
+          </span>
         )}
         {draft?.error && <span className="cfg-bad">{draft.error}</span>}
         {entry.ms && !draft?.error && staged !== 'cleared' && Number.isFinite(Number(raw)) && (
@@ -488,6 +531,10 @@ function Widget({
       className="cfg-in"
       inputMode={entry.type === 'number' ? 'numeric' : 'text'}
       value={raw}
+      // Greyed rather than filled in, for the button's reason: a placeholder is
+      // legible as "not yet a value", and a prefilled field reads as one the
+      // operator has already answered.
+      placeholder={entry.suggestion ?? ''}
       onChange={(e) => onEdit(e.target.value)}
     />
   );
@@ -610,6 +657,62 @@ function readColourMap(raw: string): Record<string, string> | null {
   }
 }
 
+/** A key another key requires, which nothing has filled in yet. */
+interface Unmet {
+  entry: RunningConfigEntry;
+  /** The group its row is in, so the save bar can offer a way to it. */
+  group: string;
+  /** Why it is needed, in the words of the key that raised it. */
+  because: string;
+}
+
+/**
+ * Every declared requirement the staged config does not satisfy.
+ *
+ * Judged over **staged ∪ running**, which is the whole reason this is here and
+ * not on the server: the requirement an operator runs into is the one their edit
+ * raises, and the server only ever sees the config the harness booted on. The
+ * rule itself is still the server's — `entry.requiredWhen`, declared once in
+ * `src/configFields.ts`.
+ *
+ * A **cleared** path is the one thing this cannot read, because the browser is
+ * never told what a default is. So a cleared *raiser* lifts the requirement (it
+ * is falling back to a value this side cannot name, and the save is still
+ * refused by `loadConfigFromText` if that value keeps it standing), and a cleared
+ * *required* key counts as unfilled unless the project layer is setting it.
+ */
+function unmetRequirements(payload: RunningConfigPayload, staged: Staged): Unmet[] {
+  const out: Unmet[] = [];
+  for (const group of payload.groups) {
+    for (const entry of group.entries) {
+      const need = entry.requiredWhen;
+      if (!need) continue;
+      const raiser = find(payload, need.path);
+      if (!raiser || staged.clear.includes(need.path)) continue;
+      const on = Object.hasOwn(staged.set, need.path) ? staged.set[need.path] : raiser.value;
+      if (on === need.unless) continue;
+      const held = staged.clear.includes(entry.path)
+        ? entry.fromProject
+          ? 'project'
+          : ''
+        : Object.hasOwn(staged.set, entry.path)
+          ? staged.set[entry.path]
+          : entry.value;
+      if (typeof held === 'string' && held.trim() !== '') continue;
+      out.push({ entry, group: group.title, because: `${need.path} is “${String(on)}”` });
+    }
+  }
+  return out;
+}
+
+function find(payload: RunningConfigPayload, path: string): RunningConfigEntry | undefined {
+  for (const group of payload.groups) {
+    const hit = group.entries.find((entry) => entry.path === path);
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
 function stagedFor(staged: Staged, path: string): 'set' | 'cleared' | null {
   if (staged.clear.includes(path)) return 'cleared';
   return Object.hasOwn(staged.set, path) ? 'set' : null;
@@ -620,11 +723,8 @@ function chosenIn(group: RunningConfigGroup | undefined): number {
 }
 
 function configured(payload: RunningConfigPayload, path: string): string {
-  for (const group of payload.groups) {
-    const hit = group.entries.find((entry) => entry.path === path);
-    if (hit) return rawOf(hit.value);
-  }
-  return '—';
+  const hit = find(payload, path);
+  return hit ? rawOf(hit.value) : '—';
 }
 
 /**

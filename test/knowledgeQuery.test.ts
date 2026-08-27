@@ -2,9 +2,14 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   groupFor,
+  inQueueFold,
   inShow,
   KNOWLEDGE_GROUPS,
   nextSort,
+  QUEUE_FOLDS,
+  queueNext,
+  queueOrder,
+  queueStanding,
   sortFacts,
   waitingOn,
 } from '../web/src/cockpit/knowledgeQuery.js';
@@ -35,6 +40,7 @@ function fact(over: Partial<KnowledgeFactView> = {}): KnowledgeFactView {
     supersedes: null,
     project: null,
     keepLocal: false,
+    supersededBy: null,
     originRef: 'issue:1',
     ruledAt: null,
     resolvesWhen: null,
@@ -50,6 +56,7 @@ function fact(over: Partial<KnowledgeFactView> = {}): KnowledgeFactView {
     lastAskedAt: null,
     scopeStale: false,
     scopeLastMatchedAt: null,
+    cold: false,
     ...over,
   };
 }
@@ -215,4 +222,68 @@ test('only the tails may be folded, and nothing that reaches an agent may be', (
   for (const group of KNOWLEDGE_GROUPS) {
     assert.ok(group.blurb.length > 80, `${group.id} has no blurb to put in its tooltip`);
   }
+});
+
+test('the queue is the filter, oldest first', () => {
+  // One predicate, three readings of it: the card that is drawn, the count on the
+  // heading and the reason on the row. A queue built from a second copy of
+  // `waitingOn` is a queue that says four and holds three.
+  const old = fact({ id: 'old', reach: 'lookup', createdAt: ago(24 * 9) });
+  const recent = fact({ id: 'recent', reach: 'lookup', createdAt: ago(2) });
+  const settled = fact({ id: 'settled', reach: 'retired', createdAt: ago(24 * 30) });
+  const facts = [recent, settled, old];
+  const waiting = new Map<string, string>();
+  for (const f of facts) {
+    const why = waitingOn(f, null, new Set());
+    if (why !== null) waiting.set(f.id, why);
+  }
+  const order = queueOrder(facts, waiting);
+  // Oldest first: a queue whose top is the same claim every morning is a queue an
+  // operator stops opening, and the one they keep skipping has to come back up.
+  assert.deepEqual(
+    order.map((f) => f.id),
+    ['old', 'recent'],
+  );
+  // A retired claim asks nothing however it is marked, so it is not in the queue —
+  // and it is not moved by being left out of one, which is the same rule the filter
+  // keeps: this narrows, it never re-homes.
+  assert.equal(groupFor(settled, NOW), 'retired');
+});
+
+test('the queue stands where the address bar says, and falls forward when that claim is dealt with', () => {
+  const first = fact({ id: 'a', reach: 'lookup', createdAt: ago(48) });
+  const second = fact({ id: 'b', reach: 'lookup', createdAt: ago(24) });
+  const order = [first, second];
+  assert.equal(queueStanding(order, null)?.id, 'a', 'a bare link opens on the oldest');
+  assert.equal(queueStanding(order, 'b')?.id, 'b', '?q= is where the operator is standing');
+  // The ordinary case, and why a stale id is not an error worth a screen: the moment
+  // a claim is ruled on it stops being waited on, so `?q=` names a card that is no
+  // longer in the queue and the next one is what should be in front of them.
+  assert.equal(queueStanding([second], 'a')?.id, 'b');
+  assert.equal(queueStanding([], 'a'), null);
+  // Later advances and writes nothing — it steps through the queue's own order.
+  assert.equal(queueNext(order, first)?.id, 'b');
+  assert.equal(queueNext(order, second), null);
+});
+
+test('the queue folds hold the cold, the settled and the store — and never what reaches an agent', () => {
+  assert.deepEqual(
+    QUEUE_FOLDS.map((fold) => fold.id),
+    ['cold', 'settled', 'store'],
+  );
+  for (const fold of QUEUE_FOLDS) {
+    assert.ok(fold.blurb.length > 80, `${fold.id} has no blurb to put in its tooltip`);
+  }
+  const cold = fact({ id: 'cold', reach: 'proposal', cold: true });
+  const injected = fact({ id: 'hot', reach: 'injected' });
+  assert.ok(inQueueFold('cold', cold));
+  assert.ok(!inQueueFold('cold', injected));
+  assert.ok(!inQueueFold('settled', injected));
+  assert.ok(inQueueFold('settled', fact({ reach: 'rejected' })));
+  // The whole store is the whole store: the table behind the third fold is not a
+  // second narrowing of the page.
+  assert.ok(inQueueFold('store', injected) && inQueueFold('store', cold));
+  // Cold is read off the row and never taken here: an age against a configured
+  // window computed in the browser is free to disagree with the count on the fold.
+  assert.ok(!inQueueFold('cold', fact({ id: 'old', reach: 'proposal', createdAt: ago(24 * 400), cold: false })));
 });

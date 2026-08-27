@@ -447,6 +447,7 @@ test('a contradiction is validated on the amendment it demands, and the amendmen
     createdAt: now,
     project: null,
     keepLocal: false,
+    supersededBy: null,
     updatedAt: now,
   };
   const amended = amendmentProposal(standing, parsed.contradiction, now);
@@ -532,6 +533,85 @@ test('a second agent on a second goal is told its call was corroboration, not a 
   assert.equal(payload.corroborations, 2);
   assert.match(payload.note, /agreeing with a claim already raised/i);
   assert.equal(system.store.listFacts().length, 1);
+  system.store.close();
+});
+
+test('agreeWith is a corroboration made on purpose, and the gate is untouched by it', async () => {
+  const system = build();
+  const first = spawnAgent(system, 'issue:12');
+  const filed = await callTool(system, first, 'raise', {
+    claim: 'knip runs every rule at error, so an unimported export turns check red.',
+    scope: 'fleet',
+    evidence: 'check went red on a type nothing named.',
+  });
+  const id = (JSON.parse(filed.text) as { fact: { id: string } }).fact.id;
+
+  // The one thing that moved nothing: agreement from the goal that raised it. Two
+  // *different* goals are what carry a claim to lookup, so an agent agreeing with
+  // its own earlier claim is one voice however it spells the call.
+  const itself = await callTool(system, first, 'raise', { agreeWith: id, evidence: 'saw it again on my own run.' });
+  assert.equal(itself.isError, false);
+  assert.equal((JSON.parse(itself.text) as { corroborations: number }).corroborations, 1);
+  assert.equal(system.store.getFact(id)?.reach, 'proposal');
+
+  // And the call the agent had no way to make before: it read the claim in its own
+  // prompt, hit exactly that wall, and said so — with the matcher not consulted at
+  // all, because there was nothing left for it to guess.
+  const second = spawnAgent(system, 'issue:44');
+  const agreed = await callTool(system, second, 'raise', {
+    agreeWith: id,
+    evidence: 'my own check failed the same way on an unused type.',
+  });
+  assert.equal(agreed.isError, false);
+  const payload = JSON.parse(agreed.text) as { corroborations: number; agreedWith: { id: string } };
+  assert.equal(payload.corroborations, 2);
+  assert.equal(payload.agreedWith.id, id);
+  // The gate is the gate: two goals carry a claim as far as lookup, and no further.
+  assert.equal(system.store.getFact(id)?.reach, 'lookup');
+  // A corroboration and never a second row.
+  assert.equal(system.store.listFacts().length, 1);
+  // The observer's own words, which is what an operator reads to decide whether the
+  // claim should have carried — never the claim restated.
+  const words = system.store.listCorroborations(id).map((c) => c.words);
+  assert.ok(words.some((w) => w.includes('unused type')));
+  system.store.close();
+});
+
+test('agreeWith is refused where raising the same words would be, and refused by name', async () => {
+  const system = build();
+  const first = spawnAgent(system, 'issue:12');
+  const filed = await callTool(system, first, 'raise', {
+    claim: 'The dispatcher reads the lessons table before it ranks anything.',
+    scope: 'fleet',
+    evidence: 'I assumed so.',
+  });
+  const id = (JSON.parse(filed.text) as { fact: { id: string } }).fact.id;
+  system.store.setFactReach(id, 'rejected');
+
+  const second = spawnAgent(system, 'issue:44');
+  const refused = await callTool(system, second, 'raise', { agreeWith: id, evidence: 'I assumed so too.' });
+  assert.equal(refused.isError, true);
+  // The bar is about the claim and never about the spelling of the call that
+  // reaches for it, so the refusal is the same one and carries the same way back.
+  assert.match(refused.text, new RegExp(id));
+  assert.match(refused.text, /contradicts/);
+
+  // Two rulings on one row is not a call anybody can make, and the refusal says so
+  // rather than picking one.
+  const both = await callTool(system, second, 'raise', {
+    claim: 'It does not.',
+    agreeWith: id,
+    contradicts: id,
+    evidence: 'saw both.',
+  });
+  assert.equal(both.isError, true);
+  assert.match(both.text, /cannot both be present/i);
+
+  // An id that names nothing is a typo the agent can fix this turn, so it comes
+  // back as an error rather than a success it would believe.
+  const nobody = await callTool(system, second, 'raise', { agreeWith: 'fact-nope', evidence: 'saw it.' });
+  assert.equal(nobody.isError, true);
+  assert.match(nobody.text, /No claim has that id/);
   system.store.close();
 });
 
@@ -859,11 +939,13 @@ test('the page draws every reach, the rejected tail included', async () => {
 
   const state = buildDemoState().state;
   const draw = (query: {
-    view: 'list' | 'table';
+    view: 'queue' | 'list' | 'table';
     show: 'all' | 'waiting' | 'reaching' | 'settled';
     sort: 'reach' | 'claim' | 'scope' | 'observers' | 'disputes' | 'asks' | 'age';
     desc: boolean;
     fold: string[];
+    standing?: string | null;
+    open?: string[];
   }): string =>
     renderToStaticMarkup(
       createElement(RefLinks, {
@@ -879,7 +961,7 @@ test('the page draws every reach, the rejected tail included', async () => {
           now: Date.now(),
           refUrls: state.refUrls,
           viewingFact: null,
-          query,
+          query: { standing: null, open: [], ...query },
           onQuery: () => undefined,
           onReach: () => undefined,
           onExit: () => undefined,
@@ -889,10 +971,14 @@ test('the page draws every reach, the rejected tail included', async () => {
           onResolveContradiction: () => undefined,
           onViewFact: () => undefined,
           onKeepLocal: () => undefined,
+          onMerge: () => undefined,
+          similarities: state.knowledgeSimilarities,
         }),
       }),
     );
 
+  // `list`, not the queue a bare URL now means: every assertion below is about the
+  // nine headings, which is what `?kn=list` draws and the queue puts behind a click.
   const bare = { view: 'list' as const, show: 'all' as const, sort: 'reach' as const, desc: false };
   // Nothing folded, which is what a bare URL means and what every assertion below
   // is made against: a claim hidden by default would leave no way to tell a list

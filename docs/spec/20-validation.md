@@ -697,8 +697,8 @@ and says nothing about the machine in front of them.
 
 So an unrun check draws **Run it in Claude Code** beside the fleet hand-over: an `<a>` carrying
 `claude://code/new?q=/lubbdubb <issue>:<letter>&folder=<config.desktopFolder>`, built by
-`desktopDeepLink` (`web/src/cockpit/desktopLink.ts`) over `desktopPrompt`
-(`web/src/components/ValidationSection.tsx`). It records nothing, claims nothing and reaches no
+`DesktopLink` (`web/src/components/DesktopLink.tsx`) over `checkPrompt`
+(`web/src/cockpit/desktopLink.ts`). It records nothing, claims nothing and reaches no
 socket of the cockpit's own; it opens that client on the goal's checkout with the command already in
 the box, and the run begins when the operator sends it. It copied the string to the clipboard before,
 which left them holding a line to paste somewhere they still had to go and find.

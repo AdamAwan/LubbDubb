@@ -909,6 +909,7 @@ test('a held part quotes the reconciler’s own reason rather than inventing one
       part: { ...first.part, status: 'blocked', blockedReason: 'waits on staging credentials' },
       group: 'held',
       agentId: null,
+      agentLive: false,
     },
   ];
 
@@ -1103,6 +1104,139 @@ test('the tracker-state colour picker draws the shared field', () => {
   assert.ok(html.includes('value="Done"'), 'an uncoloured state is offered in the datalist');
 });
 
+/**
+ * A key another key requires, drawn while the requirement is raised by an edit
+ * that has not been written yet.
+ *
+ * The whole point of the requirement living in the browser: the pool provider is
+ * `fake` in the config this page was handed, and `git` only in what is staged. A
+ * `required` computed on the server would answer for the running config and let
+ * the operator write a file the next boot refuses — over a key whose row would
+ * not have been drawn at all, since an unset optional is not.
+ */
+test('a key the staged config requires is marked, offered a value, and blocks the write', () => {
+  const html = renderToStaticMarkup(
+    createElement(ConfigValues, {
+      payload: {
+        groups: [
+          {
+            title: 'Integrations',
+            entries: [
+              {
+                path: 'integrations.pool',
+                value: 'fake',
+                isDefault: true,
+                type: 'enum' as const,
+                options: ['fake', 'git'],
+                access: 'plain' as const,
+                live: false,
+                env: null,
+                why: 'Which substrate carries the cross-fleet pool.',
+              },
+              {
+                path: 'fleetId',
+                value: '',
+                isDefault: true,
+                type: 'string' as const,
+                access: 'plain' as const,
+                live: false,
+                env: null,
+                why: 'Who this fleet is in the pool.',
+                requiredWhen: { path: 'integrations.pool', unless: 'fake' },
+                suggestion: 'adam@lubbdubb',
+              },
+            ],
+          },
+        ],
+        file: 'lubbdubb.config.json',
+        projectFile: null,
+        text: '{}',
+        revision: 'abc123',
+        pending: [],
+        canRestart: false,
+      },
+      staged: { set: { 'integrations.pool': 'git' }, clear: [] },
+      saved: null,
+      group: 'Integrations',
+      control: { cap: 2, paused: false },
+      states: [],
+      onGroup: () => undefined,
+      onStage: () => undefined,
+      onReview: () => undefined,
+      onReloaded: () => undefined,
+    }),
+  );
+  assert.ok(html.includes('cfg-need'), 'the row is marked as needed');
+  assert.ok(html.includes('cfg-suggest'), 'the suggestion is offered as a control');
+  assert.ok(html.includes('adam@lubbdubb'), 'and it is userId@pool.project');
+  assert.match(
+    html,
+    /<button class="btn primary small" disabled="">Review &amp; write<\/button>/,
+    'the write is refused while the requirement is unmet',
+  );
+  // Named rather than counted: the row is usually in a group the operator has
+  // already navigated away from.
+  assert.ok(html.includes('fleetId is needed while'), 'and the save bar says which key and why');
+});
+
+/** The same page with the requirement satisfied writes normally. */
+test('a required key that is filled in does not block the write', () => {
+  const html = renderToStaticMarkup(
+    createElement(ConfigValues, {
+      payload: {
+        groups: [
+          {
+            title: 'Integrations',
+            entries: [
+              {
+                path: 'integrations.pool',
+                value: 'git',
+                isDefault: false,
+                type: 'enum' as const,
+                options: ['fake', 'git'],
+                access: 'plain' as const,
+                live: false,
+                env: null,
+                why: 'Which substrate carries the cross-fleet pool.',
+              },
+              {
+                path: 'fleetId',
+                value: 'adam@lubbdubb',
+                isDefault: false,
+                type: 'string' as const,
+                access: 'plain' as const,
+                live: false,
+                env: null,
+                why: 'Who this fleet is in the pool.',
+                requiredWhen: { path: 'integrations.pool', unless: 'fake' },
+                suggestion: 'adam@lubbdubb',
+              },
+            ],
+          },
+        ],
+        file: 'lubbdubb.config.json',
+        projectFile: null,
+        text: '{}',
+        revision: 'abc123',
+        pending: [],
+        canRestart: false,
+      },
+      staged: { set: { fleetId: 'adam@lubbdubb' }, clear: [] },
+      saved: null,
+      group: 'Integrations',
+      control: { cap: 2, paused: false },
+      states: [],
+      onGroup: () => undefined,
+      onStage: () => undefined,
+      onReview: () => undefined,
+      onReloaded: () => undefined,
+    }),
+  );
+  assert.ok(!html.includes('cfg-need'), 'nothing is marked as needed');
+  // The suggestion is an offer for an empty field, so a filled one does not draw it.
+  assert.ok(!html.includes('cfg-suggest'), 'and the offer is gone');
+});
+
 test('the shared colour field keeps the alpha a picker cannot express', () => {
   const seen: string[] = [];
   const html = renderToStaticMarkup(
@@ -1235,10 +1369,14 @@ test('an unwatched PR is drawn spent, not at the same weight as the ones being w
   // several kinds of row and one of them being spent proves nothing.
   const row = html.split('<div class="cn-row').find((chunk) => chunk.includes(ignored.title));
   assert.ok(row, 'the unwatched PR is still listed — one that vanishes is the other bug');
-  assert.ok(row.startsWith(' cn-spent'), 'the unwatched PR’s row carries the spent tone');
-  // The court chip still names it, in the server's own word — the tone is the
-  // second reading, never a replacement for the first.
-  assert.ok(html.includes('>unwatched</i>'), 'the court chip says which arm it is');
+  // The class list, not its order: a row carries the grammar's own class as well
+  // as its tone, and which comes first is not what this pins.
+  assert.ok(row.slice(0, row.indexOf('"')).includes('cn-spent'), 'the unwatched PR’s row carries the spent tone');
+  // The state column still names it, in the server's own word — the tone is the
+  // second reading, never a replacement for the first. It is the row grammar's
+  // chip now rather than a chip of the card's own, which is the point of there
+  // being a state column: the word is where every other card puts its state.
+  assert.ok(row.includes('>unwatched</button>'), 'the state column says which arm it is');
 });
 
 test('a goal row is a way into its page', () => {
@@ -1403,12 +1541,35 @@ test('the knowledge page draws the retired claims too', () => {
   // retired would leave no way to tell a list you have finished with from one that
   // lost rows, and "retired" would read as "deleted" — which is exactly the
   // collision the two words were separated to avoid.
-  const v = view({ tab: 'knowledge' });
+  //
+  // Asserted on the list, which is the surface the rule is about: nothing there is
+  // folded by default, and the retired tail is drawn open. The queue revises that
+  // for itself and is asserted below on what the revision actually rests on.
+  const v = view({ tab: 'knowledge', knowledgeView: 'list' });
   const retired = v.state.knowledge.find((f) => f.reach === 'retired');
   assert.ok(retired, 'the demo fixtures must carry a retired claim to draw');
   // The first plain run of the fixture's text: markdown renders its inline code
   // into its own element, so a longer slice would be split across nodes.
   assert.ok(decode(render(v)).includes(retired.claim.slice(0, 28)), 'a pruned claim stays visible');
+});
+
+test('the knowledge queue folds the settled tail, and the fold says what it holds', () => {
+  // What "nothing is folded by default" was protecting, kept by the thing that
+  // replaces it: the queue draws one claim and puts the tails behind folds, and a
+  // fold that states its own size cannot let *retired* read as *deleted* — the tail
+  // is named, its count is on the heading, and one click has it back.
+  const v = view({ tab: 'knowledge' });
+  const html = decode(render(v));
+  const settled = v.state.knowledge.filter(
+    (f) => f.reach === 'graduated' || f.reach === 'superseded' || f.reach === 'retired' || f.reach === 'rejected',
+  );
+  assert.ok(settled.length > 0, 'the demo fixtures must carry a settled tail to count');
+  assert.ok(html.includes('Settled'), 'the fold has to be named on the page it is folding');
+  assert.ok(html.includes(`· ${settled.length}`), 'and it has to say how many rows it holds');
+  // The three headings that reach an agent carry no fold on the list and are not
+  // folded here either — a page that can hide what the fleet is being told is not a
+  // governance surface. They are what an empty queue draws.
+  assert.ok(!html.includes('▸ Live notices'), 'what reaches an agent is never behind a fold');
 });
 
 /**

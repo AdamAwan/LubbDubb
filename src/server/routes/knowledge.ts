@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { isCold } from '../../knowledge/cold.js';
 import { checkScopeDrift, checkSightings } from '../../knowledge/drift.js';
 import {
   exitableFact,
@@ -98,6 +99,17 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
           ...counts,
           scopeStale: drift?.stale ?? false,
           scopeLastMatchedAt: drift?.lastMatchedAt ?? null,
+          // The fold's own reading, taken from the same counts the row above is —
+          // the payload is what a reader opens, and a `cold` that disagreed with the
+          // fold the reader clicked out of would be the row disagreeing with itself.
+          cold: isCold(
+            fact,
+            { corroborations: counts?.corroborations ?? 0, asks: counts?.asks ?? 0 },
+            {
+              now: Date.now(),
+              coldDays: system.config.knowledgeColdDays,
+            },
+          ),
         },
         corroborations,
         contradictions: contradictions.map(
@@ -234,6 +246,50 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       // `dismissFinding` and `promoteLesson` both take.
       hub.broadcast({ type: 'dirty' });
       return { ok: true, fact };
+    }),
+  );
+
+  /**
+   * Fold a suggested cluster into the claim the operator kept.
+   *
+   * **The suggestion decides nothing and this is where that is spent.** The pass
+   * writes pairs, the page draws a cluster, and this route is the click — nothing
+   * merges itself. A wrong merge is worse than a duplicate, because it hides one
+   * agent's report inside another's; a merge nobody approved is a wrong merge
+   * nobody can see.
+   *
+   * It **rides `superseded` and invents nothing**: the members' voices move onto
+   * the survivor and the members take the reach that already means *a sharper claim
+   * stands in its place*. Not retired and not deleted — four phrasings of one wall
+   * are the evidence it was hit four times.
+   */
+  const MergeBody = z.object({
+    members: z
+      .array(z.string({ required_error: 'members must name the claims to fold into this one, by id' }).min(1), {
+        required_error: 'members must name the claims to fold into this one, by id',
+        invalid_type_error: 'members must name the claims to fold into this one, by id',
+      })
+      .min(1, 'name at least one claim to fold into this one')
+      // A bound rather than none, for every list this file takes: a merge is one
+      // operator's click on one cluster, and an unbounded array is a request that
+      // rewrites the store.
+      .max(50, 'a cluster is a handful of phrasings of one claim, not the store'),
+  });
+  app.post(
+    '/api/knowledge/facts/:id/merge',
+    checked({ params: IdParams, body: MergeBody }, async ({ params, body, reply }) => {
+      const outcome = store.mergeFacts(params.id, body.members);
+      // Told apart for the reach route's reason: an id naming nothing is a 404
+      // whatever was asked of it, and a merge the store will not make is a 409 that
+      // says which claim refused and why.
+      if (outcome.outcome === 'unknown') return reply.code(404).send({ error: 'fact not found' });
+      if (outcome.outcome === 'refused') return reply.code(409).send({ error: outcome.error });
+      // A merge is a ruling: the survivor is stamped, so it may now be publishable
+      // and the fleet's claims document is stale. A flag and never a publish here,
+      // as everywhere else in this file.
+      store.markPoolDirty('claims');
+      hub.broadcast({ type: 'dirty' });
+      return { ok: true, fact: outcome.fact, merged: outcome.merged, corroborations: outcome.corroborations };
     }),
   );
 

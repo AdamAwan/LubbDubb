@@ -62,7 +62,7 @@ import {
   type FactProposal,
 } from '../knowledge/knowledge.js';
 import type { AnsweredFact } from '../mcp/tools/context.js';
-import type { FactContradictionOutcome, FactProposalOutcome } from '../store/knowledge.js';
+import type { FactAgreementOutcome, FactContradictionOutcome, FactProposalOutcome } from '../store/knowledge.js';
 import { partConclusionOrigin } from '../mcp/partOutcome.js';
 import type { AgentToolTarget } from '../mcp/tools/context.js';
 import type { ParsedFlag } from './sentinels.js';
@@ -1316,6 +1316,47 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       });
     }
     return outcome;
+  }
+
+  /**
+   * Say that this agent saw for itself what a claim already says (a `raise` naming
+   * `agreeWith`).
+   *
+   * The observer is the credential's, exactly as {@link proposeFact}'s is and for
+   * the same reason with nothing softened: this call *is* a corroboration, and the
+   * count of corroborators from different goals is what carries a claim to
+   * `lookup`. An agent that could name the goal it was observed on could promote a
+   * claim by asserting two of them, which is the whole of what the gate is for.
+   */
+  agreeWithFact(
+    agentId: string,
+    factId: string,
+    evidence: string,
+  ): { ok: true; outcome: FactAgreementOutcome } | { ok: false; error: string } {
+    return this.withCaller(agentId, ({ agent, task }) => {
+      const outcome = this.store.agreeWithFact(factId, {
+        agentId,
+        taskId: task.id,
+        goalRef: corroborationGoal(task.originRef),
+        sessionId: agent.sessionId,
+        // The agent's own observation, never the claim restated: it is what an
+        // operator reads to decide whether the claim should have carried.
+        words: evidence,
+      });
+      // Only a recorded agreement repaints, for the contradiction arm's reason: a
+      // refusal wrote nothing, and an event on one would put a claim in front of an
+      // operator as though the fleet had just agreed with it.
+      if (outcome.outcome === 'recorded') {
+        this.emit('fact', {
+          agentId,
+          taskId: task.id,
+          fact: outcome.fact,
+          filed: false,
+          corroborations: outcome.corroborations,
+        });
+      }
+      return { ok: true, outcome };
+    });
   }
 
   /**

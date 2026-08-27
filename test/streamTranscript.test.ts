@@ -156,3 +156,43 @@ test('an unstamped render is byte-for-byte what it was before stamps', () => {
 test('prose is never stamped', () => {
   assert.equal(renderBlocks([{ type: 'text', text: 'Hello there' }], T1), 'Hello there');
 });
+
+/**
+ * The stripped sentinel used to leave nothing behind, so a turn that announced it
+ * had finished and one that simply stopped read identically. These lock the record
+ * that replaces it — and, just as importantly, that the harness's *own* messages
+ * cannot forge one: `STALL_NUDGE` quotes both sentinels at an agent verbatim.
+ */
+test('renderBlocks records that a done sentinel was in the text it stripped', () => {
+  const out = plain(renderBlocks([{ type: 'text', text: 'Pushed and green. @@LUBBDUBB_DONE@@' }]));
+  assert.ok(!out.includes('@@LUBBDUBB_DONE@@'), 'the token still never leaks');
+  assert.ok(out.includes('Pushed and green.'));
+  assert.ok(out.includes('✓ announced done'), 'but the announcement is on the glass');
+});
+
+test('renderBlocks records a waiting sentinel with what the agent asked for', () => {
+  const out = plain(renderBlocks([{ type: 'text', text: 'Stuck. @@LUBBDUBB_WAITING:Which auth provider?@@' }]));
+  assert.ok(!out.includes('@@LUBBDUBB_WAITING'));
+  assert.ok(out.includes('⏸ asked for a person'));
+  assert.ok(out.includes('Which auth provider?'));
+});
+
+test('a sentinel marker is stamped like every other labelled line', () => {
+  const out = plain(renderBlocks([{ type: 'text', text: 'all done @@LUBBDUBB_DONE@@' }], T1));
+  assert.match(out, /\[\d{2}:\d{2}:\d{2}\] ✓ announced done/);
+});
+
+test('a message sent *to* the agent never marks, however it quotes the protocol', () => {
+  // The stall nudge names both sentinels at the agent. Marking that would put an
+  // "announced done" in the transcript for the harness asking whether it had.
+  const out = plain(
+    renderBlocks([{ type: 'human', text: 'print @@LUBBDUBB_DONE@@ if you finished, else @@LUBBDUBB_WAITING:x@@' }]),
+  );
+  assert.ok(out.includes('▸ sent'));
+  assert.ok(!out.includes('announced done'));
+  assert.ok(!out.includes('asked for a person'));
+});
+
+test('prose carrying no sentinel gets no marker', () => {
+  assert.equal(renderBlocks([{ type: 'text', text: 'Still working on it.' }]), 'Still working on it.');
+});

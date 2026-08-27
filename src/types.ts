@@ -1200,6 +1200,20 @@ export interface KnowledgeFact {
    * that parent's bar. Nothing else is.
    */
   supersedes: string | null;
+  /**
+   * Which claim stands in this one's place, once one does — the other end of
+   * {@link supersedes}, and the only end a **merge** has.
+   *
+   * An amendment names the claim it sharpens, so a superseded-by-amendment row can
+   * be found from the sharper side. A merge has no such row: four phrasings of one
+   * wall fold into whichever the operator kept, and nothing about the survivor
+   * names the four. Written by both paths for that reason — one answer to *what
+   * replaced this*, rather than one that depends on how it was replaced.
+   *
+   * Null on every row from before the column existed, and null spells *nothing
+   * stands in its place*, which is what those rows already drew.
+   */
+  supersededBy: string | null;
   /** The goal it was first observed on (`issue:41`, `pr:42`), or null when an operator wrote it. */
   originRef: string | null;
   /**
@@ -1519,6 +1533,30 @@ export type GraduationReading = 'waiting' | 'unknown' | GraduationOutcome;
  * told a claim that nobody has committed and that nobody can read yet — and if
  * the attempt is abandoned, would stop telling them forever, with nothing red.
  */
+/**
+ * One pair of claims a machine thinks are one claim
+ * (`docs/spec/27-knowledge.md#one-claim-written-two-ways`).
+ *
+ * **A suggestion, and it decides nothing.** `claimsMatch` — strict, containment
+ * over a character floor — goes on deciding what `proposeFact` joins and what the
+ * rejection bar refuses; this is `claimsSimilar`'s answer, which proposes a
+ * cluster the page draws and an operator merges with a click. One matcher doing
+ * both is the version of this that must not be built: loosening the strict one
+ * would widen the bar by exactly what it gained in agreement, so a claim nobody
+ * has rejected would be refused by name with the agent unable to argue and the
+ * operator told nothing.
+ */
+export interface KnowledgeSimilarity {
+  id: string;
+  /** The older of the two, so one likeness is one row however the pass walked the set. */
+  leftId: string;
+  rightId: string;
+  /** How alike, from 0 to 1 — `claimOverlap`'s answer, and a suggestion's whole weight. */
+  score: number;
+  /** When the pass that saw it ran. A reading of the store as it stood, not a first sighting. */
+  createdAt: string;
+}
+
 export interface KnowledgeGraduation {
   id: string;
   factId: string;

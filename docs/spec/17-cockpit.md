@@ -393,30 +393,32 @@ modals — and nothing that answers _what is true_. It replaced ten independent 
 page on the tickets tab is **one** place, and stepping back out of it has to restore all three at
 once.
 
-| Parameter                            | Carries                                                                                                                                                                                                                  |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `tab`                                | `tickets` / `knowledge` / `insights`; the overview is the absent value. `backlog` and `work` are aliases for `tickets`, and `?panel=knowledge` for `knowledge`, so links to a deleted tab or a promoted panel still land |
-| `goal`                               | the open goal page, as `issue:<n>`                                                                                                                                                                                       |
-| `panel`                              | `knowledge` / `faults` / `launch` / `build` / `record` / `localRun` / `setup` / `pets`                                                                                                                                   |
-| `ask`                                | the queue row a `{ ask }` panel is showing                                                                                                                                                                               |
-| `agent`                              | the open drawer's agent                                                                                                                                                                                                  |
-| `plan` / `retro` / `pad`             | the plan sheet, the retrospective, the notepad                                                                                                                                                                           |
-| `fact`                               | the claim whose provenance is open on the Knowledge tab, by fact id                                                                                                                                                      |
-| `kn`                                 | the Knowledge tab's layout: `table` for one sortable row per claim; `list` is the absent value. Not `view`, which the Tickets tab and Insights already share                                                             |
-| `show`                               | how the Knowledge tab is narrowed: `waiting` / `reaching` / `settled`; `all` is the absent value. A filter, never a move — a claim stays under the heading its reach puts it in                                          |
-| `sort`                               | the Knowledge table's order, `-` for the far end: `-asks` is most-asked-for first; `reach` ascending is the absent value                                                                                                 |
-| `fold`                               | the Knowledge tails an operator has **folded away**, as `rejected,retired` — the folded ones, so the page as it stands is a bare URL and nothing is hidden on arrival                                                    |
-| `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                                                                                                                 |
-| `open`                               | the goal page's reference sections held open, as `record,ticket`                                                                                                                                                         |
-| `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                                                                                                        |
-| `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched`; `any` is the absent value                                                                                                                                       |
-| `tracking`                           | what the harness is doing about it: `any` / `frozen`; `live` is the absent value, since the tab is the surface work happens on                                                                                           |
-| `state`                              | its tracker axis, in the tracker's own word; `any` is the absent value. `open` / `closed` are read as the old `tracking` axis                                                                                            |
-| `feature`                            | one feature by issue number, or `none` for the orphans; every feature is the absent value                                                                                                                                |
-| `group`                              | how the list is arranged: `flat`; `feature` is the absent value                                                                                                                                                          |
-| `order`                              | how the Tickets tab is ordered: `cost`; `added` is the absent value                                                                                                                                                      |
-| `view`                               | the Tickets tab's layout: `card` for the board of state columns; `table` is the absent value                                                                                                                             |
-| `hide`                               | the board columns folded away, as `Closed,Removed` — the **hidden** ones, so an untouched board is a bare URL                                                                                                            |
+| Parameter                            | Carries                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tab`                                | `tickets` / `knowledge` / `insights`; the overview is the absent value. `backlog` and `work` are aliases for `tickets`, and `?panel=knowledge` for `knowledge`, so links to a deleted tab or a promoted panel still land                                                                                                                                                                                 |
+| `goal`                               | the open goal page, as `issue:<n>`                                                                                                                                                                                                                                                                                                                                                                       |
+| `panel`                              | `knowledge` / `faults` / `launch` / `build` / `record` / `localRun` / `setup` / `pets`                                                                                                                                                                                                                                                                                                                   |
+| `ask`                                | the queue row a `{ ask }` panel is showing                                                                                                                                                                                                                                                                                                                                                               |
+| `agent`                              | the open drawer's agent                                                                                                                                                                                                                                                                                                                                                                                  |
+| `plan` / `retro` / `pad`             | the plan sheet, the retrospective, the notepad                                                                                                                                                                                                                                                                                                                                                           |
+| `fact`                               | the claim whose provenance is open on the Knowledge tab, by fact id                                                                                                                                                                                                                                                                                                                                      |
+| `kn`                                 | the Knowledge tab's layout: `list` for the nine headings, `table` for one sortable row per claim; `queue` — one claim at a time — is the absent value. Not `view`, which the Tickets tab and Insights already share → [27](27-knowledge.md#the-queue-is-the-page)                                                                                                                                        |
+| `q`                                  | which claim the Knowledge queue is standing on, by fact id. On `Place` and not a `useState` for the usual reason: a reload has to land on the card the operator was ruling on, and the back button has to step back through the ones behind it → [27](27-knowledge.md#the-queue-is-the-page)                                                                                                             |
+| `show`                               | how the Knowledge tab is narrowed: `waiting` / `reaching` / `settled`; `all` is the absent value. A filter, never a move — a claim stays under the heading its reach puts it in                                                                                                                                                                                                                          |
+| `sort`                               | the Knowledge table's order, `-` for the far end: `-asks` is most-asked-for first; `reach` ascending is the absent value                                                                                                                                                                                                                                                                                 |
+| `fold`                               | the Knowledge tails an operator has **folded away**, as `rejected,retired` — the folded ones, so the page as it stands is a bare URL and nothing is hidden on arrival                                                                                                                                                                                                                                    |
+| `see`                                | the Knowledge **queue's** three folds an operator has **opened**, as `cold,settled` — the other way round from `fold`, and a second parameter rather than that one read backwards: the queue's tails start shut where the list's start drawn, and one parameter meaning the opposite thing depending on `kn` is the drift these are spelled apart to avoid → [27](27-knowledge.md#the-queue-is-the-page) |
+| `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                                                                                                                                                                                                                                                                                                 |
+| `open`                               | the goal page's reference sections held open, as `record,ticket`                                                                                                                                                                                                                                                                                                                                         |
+| `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                                                                                                                                                                                                                                                                                        |
+| `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched`; `any` is the absent value                                                                                                                                                                                                                                                                                                                       |
+| `tracking`                           | what the harness is doing about it: `any` / `frozen`; `live` is the absent value, since the tab is the surface work happens on                                                                                                                                                                                                                                                                           |
+| `state`                              | its tracker axis, in the tracker's own word; `any` is the absent value. `open` / `closed` are read as the old `tracking` axis                                                                                                                                                                                                                                                                            |
+| `feature`                            | one feature by issue number, or `none` for the orphans; every feature is the absent value                                                                                                                                                                                                                                                                                                                |
+| `group`                              | how the list is arranged: `flat`; `feature` is the absent value                                                                                                                                                                                                                                                                                                                                          |
+| `order`                              | how the Tickets tab is ordered: `cost`; `added` is the absent value                                                                                                                                                                                                                                                                                                                                      |
+| `view`                               | the Tickets tab's layout: `card` for the board of state columns; `table` is the absent value                                                                                                                                                                                                                                                                                                             |
+| `hide`                               | the board columns folded away, as `Closed,Removed` — the **hidden** ones, so an untouched board is a bare URL                                                                                                                                                                                                                                                                                            |
 
 **The query string rather than the path**, for three reasons that are one reason — nothing else has to
 agree with the console about where it is served from. The token arrives in the fragment and is
@@ -1297,9 +1299,46 @@ written anywhere in this repository**: every one comes off the verdict. Where th
 per-check detail at all the aggregate speaks under a generic name rather than drawing nothing, because
 missing detail is not a clean bill of health.
 
-`CourtChip` and `CiLadder` are exported from `GoalPage.tsx` and drawn by the overview's rack too — the
-whole chip rather than the tone lookup alone, since two readings of one verdict side by side is how
-the same PR comes to wear two tones, or two thresholds, nobody chose.
+`CiLadder` is exported from `GoalPage.tsx` and drawn by the overview's rack too — the whole component
+rather than the tone lookup alone, since two readings of one verdict side by side is how the same PR
+comes to wear two tones nobody chose. `CourtChip` stays here: the rack draws the same verdict as the
+word in its state column, which is where every card on the overview puts its state, and this page has
+no such column. `waitedFor` is shared for the chip's reason — the rack draws the same age as a fact.
+
+**And the row itself carries it.** `PanelRowModel.live` puts a green edge down the row and a slow
+sweep across it — the whole line, rather than one more mark in one more slot. That is the honest shape
+for what it says: every other reading on a row is a fact _about the thing_ and sits in the slot for
+that fact, while this one says the row's subject is under somebody's hands as you read it, and is
+about to make the rest of the row out of date. A card where one row is moving is readable across a
+room; a 6px mark in the fifth column is not. The two are one signal with two jobs — the sweep is what
+is _happening_, the marker is where to _go_ — and the motion is what a `prefers-reduced-motion` reader
+gives up, never the edge or the marker.
+
+The chip itself is **`web/src/components/AgentOnIt.tsx`, shared**, because it is one fact and the
+cockpit had been saying it two ways: the rack in the slot its checks would be in, and a plan part as
+`open the agent ↗` inside its dependency line — two wordings, two weights and two hovers for one
+sentence, which is how a reader learns to treat one of them as furniture. A part draws it while its
+agent is live and keeps the plain way in once that agent has finished, which is why `GoalPartView`
+carries `agentLive` beside `agentId`: a finished agent is still the way to what happened there, and
+only a live one is a claim that something is happening now. Folded into one field, a merged part would
+pulse. → `test/goalPage.test.ts`
+
+**A live agent on the branch replaces the ladder, on the overview's rack.** Not beside it —
+it supersedes it: the checks are a reading of a commit the agent is in the middle of replacing, so a
+green dot next to a working agent is the least true thing the row can say. The marker is a way into
+that agent's transcript, and it is drawn from `agentOnBranch` — the two-hop join from an agent's
+`taskId` to its task's branch, derived once in the view model because a card doing it itself is a card
+that will do it slightly differently. **Live agents only**: a finished agent's branch is history, and a
+marker that outlived it would be a pull request that looks staffed forever, which is the one row
+nobody re-checks. The moment the agent ends, the checks come back. → `test/panelRows.test.ts`
+
+**A failing check's dot is red.** It was `--cn-inert` — the grey the token block calls _deliberately
+not a verdict_ — on the reasoning that a red check the harness is already dispatching on is not your
+move. But at 6px that is the empty track, so the most actionable reading on the row was drawn as the
+least, and the row said nothing where it should have said the loudest thing it knows. Whose move it
+is is the state column's answer now, which frees the ladder to answer only _is this broken_: red for
+broken, amber where it is broken and **yours** (`escalate` — the policy says the harness must not
+touch it), dashed where the policy ignores it.
 
 **The court chip carries how long a review has been waiting.** A PR carrying
 `attention.reviewWaitingSince` reads `elsewhere · 3d`, with the instant it started waiting in the
@@ -1365,6 +1404,137 @@ Two rules run through all five. **Nothing here re-decides what the server decide
 goal's state is its `pickup.status`. And **an empty card still draws**, muted, because a surface that
 vanishes when quiet is indistinguishable from one that broke.
 
+A third now runs through all five as well: **no card writes a row.** Each builds a `PanelRowModel` and
+hands it to `PanelRow` — see [the row grammar](#the-row-grammar) below.
+
+### The row grammar
+
+`<Ref>` settled how a reference is _drawn_. What it did not settle is where a row puts one, and the
+five cards answered that five ways: the refs group on Fleet and World signals, a prefix inside
+`cn-name` on Pull requests and Up next. The rest of the row had drifted the same way — a
+dot-separated sub-line whose parts differed per card, and one `cn-num` slot carrying a cost on a fleet
+row and a `×3` on a signal row. Each card read correctly alone, which is why none of it was ever a
+bug anybody filed; the overview is only ever read two cards at a time.
+
+So the row is a **value**, `PanelRowModel` in `web/src/console/PanelRow.tsx`, and the card builds one
+rather than writing markup. The fields are the grammar: `lamp`, `title` with its optional `open`,
+`toggle`, `refs`, `facts`, `why`, `reading`, `chips`, `action`. Three of them carry the rules that kept
+being forgotten:
+
+- **`refs` is required.** Null is how a row says it points at nothing — the goal rows say it, because
+  the row _is_ the way to that goal — and a card that simply never got round to drawing a way
+  somewhere no longer compiles into a row that looks finished. It is the cockpit's most repeated bug
+  and every previous fix for it was a convention.
+- **`facts` are labelled pairs**, not a concatenation: `for 41m`, `cost $2.14`, `branch feature/x`,
+  `when 12m ago`, `times ×3`. `41m` alone is an age on one card and a remaining time on another, and
+  the label is the whole of what says which. The count that used to share the cost's slot is a fact
+  with a name now.
+- **`why` is the row's one long sentence, and it is not on the glass**, and **`whyLabel` is the word
+  it wears where the row's state has one.** A queue item's `reason`, a
+  goal's `pickup.reasons`, a pull request's `attention.reasons` — held behind a `?` marker and given
+  up on hover or focus. On the glass it made Up next the one card whose rows were three lines tall and
+  whose shape every other card was an exception to; behind the marker it is one hover away, and the
+  structured half of the same fact (the rule, and the word _held_) stays visible in its place. The
+  marker holds **prose only** — never a ref, never a control: a reason naming `#412` draws it as
+  plain text, and the way there is in the row's own refs slot, where every card keeps one. It is a
+  `button`, so it answers to the keyboard; a reason only a pointer can reach is a reason half the
+  operators do not have.
+
+  A bare `?` says only _there is something to know here_, so a column of them tells an operator
+  scanning a card nothing until they hover every row. Where a card has a word for what is going on —
+  the Fleet card does — the marker wears it and the sentence is the detail behind it. The word is
+  drawn as the cockpit's own chip, in the tone the state deserves: `ask` red, `hold` amber, `quiet`
+  neither. The column widens to `--cn-w-state` on a card that uses words.
+
+  **The Fleet card's four states are ranked, not merged**, because they are read from four different
+  facts and an agent can be in more than one: an open escalation naming the agent (`question`, and it
+  outranks everything — it is your move), the limit park (`limit`), the stall park (`stalled`), and a
+  plain `waiting` (`blocked`). A running agent wears none, which is the point of the column: on a fleet
+  of five the two words in it are the two rows worth looking at. Behind the ended-shifts disclosure a
+  row names how it ended where that is not `done` — `failed`, `crashed`, `killed`, `stopped`. The desk
+  run wears `at a keyboard` here rather than a chip of its own, in its violet: the hollow lamp, the
+  dashed edge and this word are one signal, and it is the same question the column answers on every
+  other row.
+
+  **The Pull requests card's word is the court itself** — `you`, `harness`, `elsewhere`, `stalled`,
+  `settled`, `unwatched`, `prAttentionStatus`'s own arms, quoted rather than re-read. The card drew
+  that verdict twice before: a `?` holding `attention.reasons` and a `CourtChip` holding the same
+  reasons in a `title`, one column apart — two hovers over one sentence, and a state column that said
+  nothing. `you` is the only `ask`; `stalled` and `unwatched` are `hold`, because nothing is going to
+  happen to either on its own. The chip is gone from the overview and stays on the goal page, where
+  there is no state column to put it in. → `test/panelRows.test.ts`
+
+  **The Goals in flight card's word is `pickup.status`, in the operator's words.** Same shape as the
+  rack's, one card up: the verdict was a `pickup` fact with a bare `?` beside it holding
+  `pickup.reasons`, which is one verdict said twice and a marker that said nothing until hovered. It
+  now wears the state column and the reasons stay behind it. The words are translated, because the
+  kind is an identifier the dispatcher passes between its own rules and every one of them reached the
+  glass unedited — `has_pr` is the shape of that, and it asks the operator to know the enum before the
+  row means anything: `in review`, `working`, `up next`, `no capacity`, `kept`, `a container`. A kind
+  with no translation falls through as itself, so one added server-side degrades to the old reading
+  rather than to a blank. `escalated` is the only `ask` — the one status parked on a person by design;
+  `unwatched`, `blocked`, `cooldown` and `appraisal` are `hold`, the harness stopped and waiting on
+  something. The tone is about whether the row wants anything, never about how far along it is.
+  → `test/panelRows.test.ts`
+
+  **The Up next card's word is `QueueStatus`** — `dispatching`, or the named reason it is not:
+  `cooldown`, `capped`, `unapproved`, `superseded`, `waiting`. Third card with the same fix: the
+  status was a fact and the sentence expanding it was a bare `?` one column over, so the slot with the
+  width said nothing until hovered. `unapproved` is the only `ask` — a decomposition nobody has
+  accepted waits on a person; the rest are the harness stopped, and `hold`. The reason itself is still
+  quoted verbatim and still behind the marker: it is a paragraph on the held rows, and re-wording it
+  would put the cockpit's opinion where the queue's own answer to "are we working on the right thing"
+  belongs.
+
+- **Every rail is a ceiling, and the subject has a floor.** The widths are `minmax(0, var(--cn-w-*))`
+  and the subject is `minmax(var(--cn-w-title), 1fr)`. Fixed, the rails were sized against a
+  full-width card and simply overran a half-width one — `1fr` takes what is _left_, so with nothing
+  below it the title was the only track that could give: the Up next card's titles had 80px of 534 and
+  clipped to a word, while World signals — same width, fewer slots — kept 277. The floor is what makes
+  the ceilings bite. It does not make an over-subscribed card fit: a card carrying a state word, a
+  control and a refs group at half width is short on room whatever gives way, and the honest fix for
+  that one is the card's width or one slot fewer. **Up next takes the width**: its rows carry a state
+  word, a profile picker and a refs group beside a title that is a sentence, which is a full-width
+  row's worth of slots. World signals widens with it — not for its own two slots, but because left
+  narrow it was the one card off the grid, a quarter wide under a page of half-width ones, which reads
+  as a card that failed to lay out rather than as one with little to say.
+
+- **`toggle` is the row's switch, and it is pinned left of the subject.** Whether the harness takes an
+  interest in this row at all — the rack's watch tag — is not the row's _work_, which is what `action`
+  is for and why `action` has the width. It is the same control in the same place on every row of the
+  card, so it goes where an eye can skip it. It is drawn as the **state it is in** rather than as the
+  word for the other one: `watch` / `unwatch` was a verb that contradicted every row it appeared on
+  (a row said `unwatch` precisely when it _was_ watched) until you worked out it was an instruction.
+  An open eye is the harness looking; a struck one is not. The verb survives in the hover, where an
+  instruction belongs.
+
+  What a pull-request row states in `facts` are the three _reasons it is not merged yet_ — unresolved
+  `comments`, a `merge` conflict, how long it has been `waiting` on a reviewer — each drawn only where
+  it is true, so a row with none of them is visibly a pull request with nothing in its way. `branch`
+  used to be the only one and was the row's least useful fact: the title says what the work is and the
+  refs say where it is.
+
+The card draws its rows as **one line each on a fixed rail**: lamp, switch, subject, why, reading,
+chips, action, refs. A slot is held open on every row of a card where _any_ row fills it — the census is
+one function, `slotsUsed`, read once per card — which is what makes a slot a fixed **position** and not
+merely an order. Packed as a flex line, the fleet card's verdict sat where the rack's control did and
+every row shifted when the row above it grew a chip, which is why "always look here" had only ever been
+true of the refs group. An empty cell in a column that exists says _this row has no verdict_; a
+closed-up gap says nothing and moves everything after it. The census becomes a `grid-template-columns`
+the card sets once, off the `--cn-w-*` widths stated once for every card.
+
+**There was a second rendering, and it lost.** `columns` drew the card as a table whose headings were
+the union of the `facts` labels its rows carried, with each card naming its own subject and refs
+columns (`Agent is on`, `Dispatch`, `On`); a preview switch on `Place.panelGrammar` spanned the grid so
+both were a link somebody could send while the choice was open. It was a fair second reading of one
+model — but alignment inside a card is a weaker thing than alignment across the page, and a
+seven-column card did not fit the overview's two-up width, so it scrolled sideways. The switch, the
+place field, the table and the per-card heading names all went together; what stayed is the model,
+which is what the exercise was for. Do not reintroduce a per-card layout choice: two ways to draw a
+card is the drift `PanelRowModel` exists to end, one level up.
+
+`test/panelRows.test.ts` holds the rail to one grid per card and pins the prose-only rule on the marker.
+
 - **Goals in flight** carries the **furthest environment** holding a goal whole, where any is —
   last-declared in the operator's list, since that list is the order the work travels in. `partial`
   gets no chip: a row reading `liveUs` for half a feature is the boolean rollup the reach fold refuses
@@ -1400,9 +1570,27 @@ vanishes when quiet is indistinguishable from one that broke.
   (`active` / `has_pr` / `planning` / `delivered`). Read off the dispatcher's own word rather than
   re-inferred from agents, plans and pull requests, which are three inputs the server has already
   folded into one. Each row is a way into that goal's page, carries its segment track, and takes a
-  **court chip read off `needsYou`** — a goal is in your court exactly when the rail is holding an ask
-  about it. Anything else would let a chip say "you" with nothing to answer.
-- **Pull requests** — every open PR with its court chip, its CI ladder, and the watch toggle.
+  **court read off `needsYou`** — a goal is in your court exactly when the rail is holding an ask
+  about it. Anything else would let the row say "you" with nothing to answer. That is said **once**,
+  as the alarmed `asking you` count: the `You` / `Harness` chip that used to sit beside it had no
+  reading of its own beyond that count being non-zero. The row also takes the `live` treatment while an
+  agent is on one of its parts — read off the parts' `agentLive`, not off the track, because the
+  track's moving segment counts `in_review` too and an open pull request is not somebody's hands on
+  the work.
+  **A goal wears the live treatment while an agent is on it**, the same edge, tint and sweep the rack
+  draws, and the same `AgentOnIt` chip — beside its environment rather than in place of its track: on a
+  pull request the marker supersedes the checks, because those are a verdict on a commit being
+  replaced, and a goal's track is how far the plan got, which an agent working does not make untrue.
+  Resolved off the dispatch's **origin** (`agentOnGoal`, through `goalOfOrigin`), not off a branch and
+  not off the parts: an agent's origin is a pull request as often as the goal itself, so a reading that
+  only understood `issue:<n>` would say nothing is happening on every goal whose work has reached a
+  pull request — most of the ones being worked, and indistinguishable from a quiet fleet.
+  → `test/panelRows.test.ts`
+  The track's four colours carry their key in the **hover**: a legend would cost more room than the
+  bar, and four tones with nothing to read them against is a reading only somebody who has read the
+  source can take.
+- **Pull requests** — every open PR with its court in the state column, its CI ladder, and the watch
+  eye pinned left of the title.
   An **unwatched** PR stays in the list, with its health, and is drawn **spent** — the same dimming a
   closed PR and an unwatched goal take, off `attention.status === 'unwatched'` rather than a
   second reading of the labels. The chip alone left the one row nothing will happen on sitting at the
@@ -2180,6 +2368,10 @@ Four panels open from the bar, the ask panel opens from a queue row ([the rail](
   **Superseded**, **Retired**, and the **Rejected** tail. Read top to bottom in the order things
   demand attention rather than in the order of the machine.
 
+  **The page opens on a queue**, and the sections above are what `?kn=list` draws: the oldest claim
+  that needs a ruling, one card at a time, with the evidence under it, and the tails behind three
+  counted folds. → [27](27-knowledge.md#the-queue-is-the-page)
+
   **One page and one card, because there is one store.** What an agent noticed outside its own task,
   what working a goal taught, and what the fleet knows were three surfaces asking the same question of
   the same person — _somebody raised a claim; what is it for?_ — from three places with three counts on
@@ -2453,14 +2645,14 @@ about permission, and a 403 would send whoever reported it looking for a token p
 The bar over each card is segmented, and the four segments that are not `delivered` are the ones a
 reader acts on differently. The precedence is strict and every step of it is load-bearing:
 
-| Standing    | Is                                             | Beaten by                        |
-| ----------- | ---------------------------------------------- | -------------------------------- |
-| `unwatched` | no watch tag — **nothing has ever read it**    | nothing; it wins outright        |
-| `inFlight`  | a run the harness minted and has not finished  | `unwatched`                      |
-| `delivered` | `ticketOutcomes`' word                          | `unwatched`, `inFlight`          |
-| `fellShort` | worked, and the goal still not reached         | `unwatched`, `inFlight`          |
-| `settled`   | `concluded` or `abandoned`                     | `unwatched`, `inFlight`          |
-| `queued`    | watched, and none of the above                 | everything                       |
+| Standing    | Is                                            | Beaten by                 |
+| ----------- | --------------------------------------------- | ------------------------- |
+| `unwatched` | no watch tag — **nothing has ever read it**   | nothing; it wins outright |
+| `inFlight`  | a run the harness minted and has not finished | `unwatched`               |
+| `delivered` | `ticketOutcomes`' word                        | `unwatched`, `inFlight`   |
+| `fellShort` | worked, and the goal still not reached        | `unwatched`, `inFlight`   |
+| `settled`   | `concluded` or `abandoned`                    | `unwatched`, `inFlight`   |
+| `queued`    | watched, and none of the above                | everything                |
 
 **`unwatched` first, and it is the reading the whole board most has to get right.** An item carrying
 no watch tag has not been appraised, not been read and not been spent on — it is _unseen_, not late.
@@ -2489,6 +2681,50 @@ to no container is invisible at portfolio level by construction, and a board tha
 would report a fleet whose every hour rolls up somewhere. It carries its own spend for that reason:
 _this much was spent under no Feature_, which is also the sentence that says every roll-up above it
 understates its own.
+
+### The briefing
+
+Under the bar, each card carries three short lists — **In the way**, **Being worked**, **Delivered** —
+which are the questions somebody outside the fleet asks in that order: _what is stopping this_, _is it
+moving_, _what of it is done_. The counts above answer none of them: `3 fell short` is a number, and
+what a person needs is the sentence saying what fell short.
+
+**Every line in it was written by somebody.** A delivered line is `IssueDelivery.summary` as its
+author wrote it, attributed to them; a blocked line is either the agent's own escalation prompt or the
+assessor's shortfall summary; a working line is a goal and the age of the run on it. Nothing in the
+briefing is composed, scored, summarised or forecast — which is the same discipline the attention line
+one row up keeps from the other side. That line **counts facts and phrases them**; this one **quotes
+sentences and phrases nothing**. A briefing that wrote its own sentence would be exactly the verdict
+about a Feature this surface refuses, wearing an agent's voice.
+
+**Blocked is two words, not one.** `asked` is an agent parked on an escalation nobody has answered —
+the fleet is stopped and what it needs is a reply. `fell short` is an assessor's verdict that the work
+did not reach the goal — nothing is stopped, and what it needs is a decision. Folded into one word a
+reader could not tell which of the two things they owe, so they are drawn in two colours and questions
+sort first: one has an agent waiting against it and the other has been waiting anyway.
+
+**A question counts only where the escalation names the goal.** One raised against a pull request
+(`pr:42:ci`) names no goal here, and it is counted under **no** Feature rather than attributed to a
+guess at which one the PR was for. It is still on the needs-you rail, which is where a parked agent is
+answered.
+
+**Only `open` escalations block**, never "unanswered": `dismissEscalation` stamps no `answeredAt`, so a
+briefing keyed on that field would leave a Feature reporting a question nobody is being asked any more.
+
+**The outcome word decides the done and blocked lists, not the standing.** A re-picked goal is
+`inFlight` and still carries the verdict of its last attempt, and both readings are true at once —
+keying the delivered list off the standing would take finished work off the board for as long as an
+agent is on the goal.
+
+Each list is bounded (`FEATURE_BRIEFING_ROWS`, `src/features/featureBoard.ts`) and **says what it stood for**: `3 of 11`, never three
+rows and silence. Three of eleven blocked items read as three blocked items is the one number on this
+card somebody would act on being wrong about. The orphan card carries a briefing on the same terms —
+work answering to no container is still work, and a person asking what is in the way wants that answer
+too.
+
+A Feature with nothing worked, nothing delivered and nothing blocked draws **no briefing at all**. The
+bar has already said so, and three empty headings would be the loudest thing on the card saying
+nothing.
 
 ### What it deliberately does not draw
 
@@ -2605,12 +2841,13 @@ the form says so **per row** rather than the surface claiming one answer for fif
 per row all come from the server for `isDefault`'s reason — a browser that decided them would be a
 second copy free to drift:
 
-| Drawn from                  | Decided by                                                                 |
-| --------------------------- | -------------------------------------------------------------------------- |
-| the widget                  | `entry.type` — `configFields.ts` ([02](02-configuration.md#fields))        |
-| applies now / needs restart | `entry.live` — true only where `configApply.ts` holds an arm               |
-| not editable                | `entry.env` (the environment beats the file), or `access: 'fileOnly'`      |
-| where the value came from   | `entry.env`, `entry.isDefault` and `entry.fromProject` — one of four words |
+| Drawn from                  | Decided by                                                                  |
+| --------------------------- | --------------------------------------------------------------------------- |
+| the widget                  | `entry.type` — `configFields.ts` ([02](02-configuration.md#fields))         |
+| applies now / needs restart | `entry.live` — true only where `configApply.ts` holds an arm                |
+| not editable                | `entry.env` (the environment beats the file), or `access: 'fileOnly'`       |
+| where the value came from   | `entry.env`, `entry.isDefault` and `entry.fromProject` — one of four words  |
+| what else requires it       | `entry.requiredWhen` — the declaration, judged here against the staged edit |
 
 **Four words, because there are four layers.** `env`, `file`, `project` and `default`: a harness
 pointed at a repository carrying a `lubbdubb.project.json` is running a config assembled from two
@@ -2619,6 +2856,15 @@ A team's value drawn as `default` would send an operator looking for a key their
 have — and a row cleared while the project sets it says it will fall back to the project's value,
 because it will. `isDefault` is therefore _what you would have without your own file_, which is the
 same question as "what does clearing this leave", since the form writes one file and nothing else.
+
+`requiredWhen` is the one row in that table whose _answer_ is not the server's, and the exception
+proves the rule: the question is about the edit in front of the operator, not about the config the
+harness booted on. `fleetId` is required while `integrations.pool` is anything but `fake`, and both
+keys are edited here — so the row is marked, the value on offer (`userId@pool.project`) is drawn beside
+it as a button, and **Review & write** is refused, naming the key and why, with a way to the group it
+is in. The server still refuses the same save; what the page adds is that the operator never reaches
+it ([02](02-configuration.md#a-key-another-key-requires),
+[28](28-cross-fleet-pool.md#configuration)).
 
 A `colourMap` is the one `entry.type` that draws more than a field: `issueStateColours` becomes a
 swatch per state over a `datalist` of the state words the tracker is currently reporting, read off the
@@ -3362,6 +3608,33 @@ The drawer subscribes to full output on open and unsubscribes on close or switch
 `AgentDrawer` opens over the page for one agent, asked for by `actions.select(id)` from wherever an
 agent is drawn — the Fleet card, a goal page's **On this goal** rows, the escalation card's own way in.
 
+**The transcript is polled every five seconds while the run is live, and the poll is the load-bearing
+half of how the pane moves** (issue #639). The socket delivers an agent's output the moment it
+happens, but only what it produced _since this drawer subscribed_ — so what arrives there is a suffix
+of a stream whose earlier part came from `GET /api/agents/:id/transcript`, with no marker joining the
+two. The drawer's rule was therefore "prefer the socket buffer once it is longer than the fetched
+seed", which is the safe reading of that and also meant a run opened mid-flight showed a **frozen
+pane**: the socket had to deliver more bytes than the entire transcript before it before anything
+moved, which on a long run is never. Watching an agent work was the one thing the drawer is for, and
+it was the thing it could not do.
+
+So the seed is re-read on a five-second timer, and the route is
+[ranged](16-http-api.md#get-apiagentsidtranscript) — each poll names what the drawer already holds and
+is answered with the tail, so a quiet run costs an empty string rather than the whole record. The
+socket buffer is still preferred where it is **safe**, which is exactly when the transcript was empty
+when the drawer opened: the socket then carries the stream from its first byte, the two strings are the
+same, and the pane moves at the speed of the agent rather than the timer. Anywhere else it is ignored
+— appending a suffix to a prefix across an unknown gap would draw output that never existed.
+
+Two things about the timer are deliberate:
+
+- **It stops when the run does.** A finished transcript never grows again, so a closed-out agent left
+  open on the glass is not a request every five seconds. A first read that has not landed yet is
+  retried regardless of status, so a drawer opened on a slow response still fills.
+- **A status change does not restart it.** `running ⇄ waiting` is every question an agent asks, and
+  keying the seed effect on liveness would drop the buffer and reseed the pane on each one — every
+  expanded tool call folding shut mid-read. Liveness is read through a ref inside the tick instead.
+
 **The transcript pane is HTML, not a terminal.** What reaches the cockpit is already legible text in
 every mode (`renderBlocks` output, or settled PTY session-file text), never raw TUI bytes, so it renders
 into a scrollable `<div>` with `white-space: pre-wrap; overflow-wrap: anywhere`:
@@ -3673,6 +3946,30 @@ where the decision to leave something running is made. Absent rather than `$0.00
 measured, the convention every spend surface keeps. The goal page's Spend card names the count in a row
 of its own for the same reason: the row above it says "Agents".
 
+## Opening the operator's own Claude Code
+
+Four controls hand work to the operator's own Claude Code rather than to the fleet: the goal header's
+**Ask ↗** and **run it locally ↗**, the validation card's **Run it in Claude Code**, and the plan
+sheet's **Discuss…**. They are all `<DesktopLink>` (`web/src/components/DesktopLink.tsx`), over the
+scheme and the four prompt builders in `web/src/cockpit/desktopLink.ts`.
+
+**They are anchors, never buttons.** A deep link is a destination. `className` stays the caller's,
+because the four live in rows with different tones; what is shared is the address and the sentence.
+
+**The command is in the title as well as the `href`, and the component is what puts it there.** The
+link fires only on the machine the browser is on, and a client that is not installed answers _nothing
+at all_ — no error, no tab, no window. So an operator reading the cockpit from another desk is left
+with the line to type, and the title is the only place to put it. This was a rule each site was
+trusted to remember, and two of the five had already forgotten: the plan sheet's two **Discuss…**
+anchors said what the session would do and never what command it would arrive with. So the title is
+now **assembled** — `Opens your own Claude Code with "<command>" <ready>, <explain>` — and a call site
+supplies only the half that is its own. `test/validationDesktopPrompt.test.ts` pins the composition,
+and pins that no other `.tsx` builds one of these links.
+
+**`ready` is why the clause is a prop and not a constant.** Three of the four commands are complete
+and send as they land; **Ask** is deliberately not, and fills the composer with `/lubbdubb ask 284 `
+so the cursor sits after the number. A title promising a send that never comes is worse than none.
+
 ## Links
 
 A surface that _names_ another thing and gives no way there is the cockpit's most repeated bug. It kept
@@ -3704,6 +4001,15 @@ sites pass a value they are already holding rather than re-deriving a number.
 signal, an agent's note. Deliberately **not** routed through `<Ref>`: a bare `#412` in a sentence does
 not say whether it is a goal or a pull request, and guessing would link onto whichever of the two
 shares the number. The tracker's page answers either.
+
+`<TicketLink number={…} url={…} />` is the fourth, and the destination `<Ref>` deliberately does not
+offer: a ref onto a goal the world carries opens its **page**, so the goal header's `Open ticket ↗`
+needs a control of its own. Three keys are tried, in the order of how much each can be trusted — the
+item's own `url`, then `issue:<n>`, then `#<n>` — and where it lives is the point. Both the ordering
+and the inert `<span>` drawn when none of them resolves are judgements about _how a ref resolves_,
+which is this module's job; written into the page instead, the next surface that wants a ticket writes
+its own third ordering, and `#<n>` first is the one that opens a pull request on a tracker where issue
+412 and PR 412 both exist.
 
 `refLabel(ref)` is the third, and **the only place a ref becomes text** (`#212` from any of its forms).
 It was written three times over, and the fourth surface that wrote it printed the label with no link on

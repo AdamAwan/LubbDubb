@@ -110,6 +110,7 @@ import type {
   KnowledgeCorroboration,
   KnowledgeFact,
   KnowledgeGraduation,
+  KnowledgeSimilarity,
   GraduationReading,
   LocalRun,
   Plan,
@@ -435,6 +436,21 @@ export interface KnowledgeFactView extends KnowledgeFact {
    * rather than assert it.
    */
   scopeLastMatchedAt: string | null;
+  /**
+   * Whether this claim has gone **cold**: a `proposal` nobody has agreed with, no
+   * agent has asked for and no operator has ruled on, older than
+   * `knowledgeColdDays`.
+   *
+   * The verdict is the server's for `scopeStale`'s reason — it is a comparison
+   * against a configured window, and an age taken from `Date.now()` in the browser
+   * would be a second implementation of it, free to disagree with the count on the
+   * fold beside it.
+   *
+   * **A reading about drawing and nothing else.** It moves no reach, takes no claim
+   * out of any prompt — a proposal is in none — and the next corroboration makes it
+   * warm again. Always false while `knowledgeColdDays` is `0`.
+   */
+  cold: boolean;
 }
 
 /**
@@ -1161,6 +1177,17 @@ export interface CockpitState {
    */
   knowledgeGraduations: KnowledgeGraduationView[];
   /**
+   * Which proposals a machine thinks are one claim, as pairs — most alike first.
+   *
+   * **Suggestions, and the page draws them as clusters an operator merges with a
+   * click.** Nothing here has joined, promoted or barred anything: `claimsMatch` is
+   * strict and untouched, and this is `claimsSimilar`'s advisory answer. Shipped as
+   * rows for the reason every other count on that page is server-side — a
+   * similarity recomputed in the browser is free to disagree with the one an
+   * operator acted on. → [27](../docs/spec/27-knowledge.md#one-claim-written-two-ways)
+   */
+  knowledgeSimilarities: KnowledgeSimilarity[];
+  /**
    * Bugs the operator raised from a story row, oldest first — `filing` while the
    * desk agent writes one, `filed` with a ref once it exists.
    *
@@ -1266,6 +1293,32 @@ export interface GoalReachView {
   gateHold: string | null;
   /** The operator's "this one is not waiting on an environment", when they have said so. */
   released: EnvironmentGateRelease | null;
+}
+
+/**
+ * One agent's transcript, or the tail of it — `GET /api/agents/:id/transcript`.
+ *
+ * **Ranged, because the drawer polls it.** The socket carries an agent's output
+ * the moment it happens, but only for what it produced *since the drawer opened*
+ * — so a run already deep into its transcript has nothing on the wire that can be
+ * appended to the copy the cockpit fetched, and the pane sat frozen at its seed
+ * for as long as it was watched (issue #639). The fix is the drawer re-reading
+ * this every few seconds, and re-reading it whole would ship the entire
+ * transcript per poll — megabytes on a long run, per open drawer.
+ *
+ * `from` is the caller's count of the characters it already holds, echoed back
+ * **clamped to `total`** so a client that asks past the end learns where the end
+ * is rather than guessing. `transcript` is the slice from there on, so a poll on
+ * a quiet run costs an empty string.
+ */
+export interface AgentTranscript {
+  agentId: string;
+  /** Where {@link transcript} starts — the requested offset, clamped to {@link total}. */
+  from: number;
+  /** The whole transcript's length in characters, whatever slice was asked for. */
+  total: number;
+  /** Everything from {@link from} to the end. */
+  transcript: string;
 }
 
 export interface WorkRootsPayload {
@@ -1589,6 +1642,87 @@ export interface FeatureReach {
   total: number;
 }
 
+/** One of a Feature's goals with a run the harness minted and has not finished. */
+export interface FeatureWorkingRow {
+  number: number;
+  title: string;
+  /** When that run started — a stamp, drawn as an age and never judged. */
+  since: string;
+}
+
+/**
+ * One goal a delivery verdict stands on, with the sentence its author wrote.
+ *
+ * The summary is quoted, never paraphrased and never assembled from the counts:
+ * it is the one line somebody who read the work committed to, and a board that
+ * reworded it would be asserting something nobody said.
+ */
+export interface FeatureReportRow {
+  number: number;
+  title: string;
+  summary: string;
+  /** Who cast it — `assessor`, `planner` or `operator`, the verdict row's own word. */
+  by: string;
+  at: string;
+}
+
+/**
+ * Why a blocked goal is blocked, and the two are not the same call.
+ *
+ * - `question` is an agent parked on an escalation nobody has answered: the fleet
+ *   is stopped and the thing it needs is a reply.
+ * - `fellShort` is an assessor's verdict that the work did not reach the goal:
+ *   nothing is stopped, and what it needs is a decision about what happens next.
+ *
+ * Folded into one word a reader could not tell "answer me" from "decide", which
+ * are the two different things a person is being asked for.
+ */
+export type FeatureBlockKind = 'question' | 'fellShort';
+
+/** One thing standing between a Feature's work and the next step, in its author's words. */
+export interface FeatureBlockRow {
+  number: number;
+  title: string;
+  kind: FeatureBlockKind;
+  /** The agent's question, or the assessor's shortfall summary. Quoted. */
+  summary: string;
+  /** When it was raised — a stamp, drawn as an age and never judged stale. */
+  since: string;
+}
+
+/**
+ * The briefing: what is happening under a Feature, what of it is done, and what
+ * is stopping the rest — the three questions somebody outside the fleet asks
+ * before they ask anything else.
+ *
+ * **Every line of it is a quotation.** The working rows are the same `inFlight`
+ * reading the bar is drawn from, the done rows carry `IssueDelivery.summary` as
+ * its author wrote it, and the blocking rows carry an escalation's prompt or a
+ * shortfall's summary. Nothing here is composed, scored or forecast — the board
+ * ships no verdict about a Feature ({@link FeatureRollup}), and a briefing that
+ * wrote its own sentence would be exactly that verdict wearing an agent's voice.
+ *
+ * Each list is bounded and says how many it stood for, because a list that simply
+ * stopped would read as the whole Feature.
+ * → `docs/spec/17-cockpit.md#the-briefing`
+ */
+export interface FeatureBriefing {
+  /** Goals being worked now, newest run first. Bounded by `FEATURE_BRIEFING_ROWS`. */
+  working: FeatureWorkingRow[];
+  /** How many goals are being worked in all — the same number as `counts.inFlight`. */
+  workingTotal: number;
+  /**
+   * Goals a delivery verdict stands on, newest first. Only `delivered`, never
+   * `settled`: a delivery says *this was done and here is what it was*, where a
+   * conclusion is an agent closing a goal and asserts nothing about usable work.
+   */
+  delivered: FeatureReportRow[];
+  deliveredTotal: number;
+  /** Questions first, then shortfalls; newest first inside each. */
+  blocking: FeatureBlockRow[];
+  blockingTotal: number;
+}
+
 /** One Feature, with its children folded. */
 export interface FeatureRollup {
   number: number;
@@ -1605,6 +1739,12 @@ export interface FeatureRollup {
   workItemState: string | null;
   issueType: string | null;
   counts: FeatureCounts;
+  /**
+   * What is happening, what is done and what is blocked, in the words of whoever
+   * said it. Above `children` because it is the answer to the question the card
+   * is opened with; the rows below it are the evidence.
+   */
+  briefing: FeatureBriefing;
   children: FeatureChildRow[];
   /**
    * What the fleet has spent across every child, or **null** where it never ran
@@ -1865,6 +2005,7 @@ export type {
   KnowledgeCorroboration,
   KnowledgeFact,
   KnowledgeGraduation,
+  KnowledgeSimilarity,
   Plan,
   PlanEvidence,
   PlanNarrative,

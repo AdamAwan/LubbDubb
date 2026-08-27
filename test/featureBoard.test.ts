@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildFeatureBoard, FEATURE_CHILDREN } from '../src/features/featureBoard.js';
+import { buildFeatureBoard, FEATURE_BRIEFING_ROWS, FEATURE_CHILDREN } from '../src/features/featureBoard.js';
 import { featureBoardOn } from '../src/server/routes/features.js';
 import type { MirroredTicket } from '../src/store/tickets.js';
-import type { GoalEnvironmentReach, GoalLanding } from '../src/types.js';
+import type { Escalation, GoalEnvironmentReach, GoalLanding, IssueDelivery, IssueShortfall } from '../src/types.js';
 
 // --- fixtures --------------------------------------------------------------
 
@@ -33,7 +33,10 @@ function build(over: Partial<Parameters<typeof buildFeatureBoard>[0]> = {}) {
     outcomes: new Map(),
     costs: new Map(),
     featureSlots: new Map(),
-    running: new Set(),
+    running: new Map(),
+    deliveries: [],
+    shortfalls: [],
+    escalations: [],
     reach: [],
     landings: [],
     environments: [],
@@ -86,7 +89,7 @@ test('a live run outranks the verdict of the last attempt — the board is a rea
   const board = build({
     items: [item({ number: 1 })],
     outcomes: new Map([[1, 'fell short']]),
-    running: new Set([1]),
+    running: new Map([[1, '2026-02-01T00:00:00.000Z']]),
   });
 
   const child = board.features[0]?.children[0];
@@ -269,6 +272,173 @@ test('a large Feature ships a bounded slice, and keeps what wants attention in i
   assert.equal(feature.children.length, FEATURE_CHILDREN);
   // An arrival ordering would have cut exactly this row.
   assert.equal(feature.children[0]?.standing, 'fellShort');
+});
+
+// --- the briefing ----------------------------------------------------------
+
+function delivery(number: number, over: Partial<IssueDelivery> = {}): IssueDelivery {
+  return {
+    originRef: `issue:${number}`,
+    summary: `Shipped ${number}`,
+    detail: null,
+    by: 'assessor',
+    agentId: null,
+    taskId: null,
+    decidedAt: '2026-02-01T00:00:00.000Z',
+    updatedAt: '2026-02-01T00:00:00.000Z',
+    ...over,
+  };
+}
+
+function shortfall(number: number, over: Partial<IssueShortfall> = {}): IssueShortfall {
+  return {
+    originRef: `issue:${number}`,
+    cause: null,
+    partSlug: null,
+    summary: `Still missing on ${number}`,
+    detail: null,
+    by: 'assessor',
+    agentId: null,
+    taskId: null,
+    decidedAt: '2026-02-02T00:00:00.000Z',
+    updatedAt: '2026-02-02T00:00:00.000Z',
+    ...over,
+  };
+}
+
+function escalation(over: Partial<Escalation> = {}): Escalation {
+  return {
+    id: 'esc_1',
+    type: 'answer_question',
+    status: 'open',
+    prompt: 'Which tenant should this migrate first?',
+    context: { originRef: 'issue:1' },
+    agentId: 'agent_1',
+    taskId: 'task_1',
+    response: null,
+    createdAt: '2026-02-03T00:00:00.000Z',
+    answeredAt: null,
+    ...over,
+  };
+}
+
+test('the briefing quotes the sentences their authors wrote, never a paraphrase', () => {
+  const board = build({
+    items: [item({ number: 1 }), item({ number: 2 }), item({ number: 3 })],
+    outcomes: new Map([
+      [1, 'delivered'],
+      [2, 'fell short'],
+    ]),
+    running: new Map([[3, '2026-02-04T00:00:00.000Z']]),
+    deliveries: [delivery(1)],
+    shortfalls: [shortfall(2)],
+  });
+
+  const briefing = board.features[0]?.briefing;
+  assert.ok(briefing);
+  assert.deepEqual(briefing.delivered, [
+    { number: 1, title: 'Item 1', summary: 'Shipped 1', by: 'assessor', at: '2026-02-01T00:00:00.000Z' },
+  ]);
+  assert.deepEqual(briefing.working, [{ number: 3, title: 'Item 3', since: '2026-02-04T00:00:00.000Z' }]);
+  assert.deepEqual(briefing.blocking, [
+    {
+      number: 2,
+      title: 'Item 2',
+      kind: 'fellShort',
+      summary: 'Still missing on 2',
+      since: '2026-02-02T00:00:00.000Z',
+    },
+  ]);
+});
+
+test('an open question about a goal blocks it, and outranks a shortfall of any age', () => {
+  const board = build({
+    items: [item({ number: 1 }), item({ number: 2 })],
+    outcomes: new Map([[2, 'fell short']]),
+    shortfalls: [shortfall(2)],
+    escalations: [escalation()],
+  });
+
+  const briefing = board.features[0]?.briefing;
+  assert.ok(briefing);
+  // One has an agent stopped against it; the other is a decision that has been
+  // waiting anyway. A reader owes each a different thing.
+  assert.deepEqual(
+    briefing.blocking.map((b) => b.kind),
+    ['question', 'fellShort'],
+  );
+  assert.equal(briefing.blocking[0]?.summary, 'Which tenant should this migrate first?');
+});
+
+test('an answered or dismissed escalation blocks nothing', () => {
+  // `open` and not "unanswered": a dismissal stamps no `answeredAt`, so a Feature
+  // keyed on that would report a question nobody is being asked any more.
+  const board = build({
+    items: [item({ number: 1 })],
+    escalations: [
+      escalation({ id: 'esc_a', status: 'answered', answeredAt: '2026-02-04T00:00:00.000Z' }),
+      escalation({ id: 'esc_b', status: 'dismissed' }),
+    ],
+  });
+
+  assert.deepEqual(board.features[0]?.briefing.blocking, []);
+});
+
+test('a question raised against a pull request is counted under no Feature', () => {
+  // It names no goal, and attributing it to one would be a guess. It is still on
+  // the needs-you rail, which is where a parked agent is answered.
+  const board = build({
+    items: [item({ number: 1 })],
+    escalations: [escalation({ context: { originRef: 'pr:42:ci' } }), escalation({ id: 'esc_c', context: {} })],
+  });
+
+  assert.deepEqual(board.features[0]?.briefing.blocking, []);
+  assert.equal(board.features[0]?.briefing.blockingTotal, 0);
+});
+
+test('a re-picked goal keeps its delivery in the briefing while the next attempt runs', () => {
+  // The outcome word decides the list, not the standing: both readings are true
+  // at once, and dropping the delivery would take finished work off the board for
+  // as long as an agent is on the goal.
+  const board = build({
+    items: [item({ number: 1 })],
+    outcomes: new Map([[1, 'delivered']]),
+    running: new Map([[1, '2026-02-05T00:00:00.000Z']]),
+    deliveries: [delivery(1)],
+  });
+
+  const briefing = board.features[0]?.briefing;
+  assert.ok(briefing);
+  assert.equal(board.features[0]?.children[0]?.standing, 'inFlight');
+  assert.equal(briefing.delivered.length, 1);
+  assert.equal(briefing.working.length, 1);
+});
+
+test('each briefing list is bounded, and says how many it stood for', () => {
+  // Three of eleven blocked items read as three blocked items is the one number
+  // on this card somebody would act on being wrong about.
+  const count = 8;
+  const items = Array.from({ length: count }, (_, i) => item({ number: i + 1 }));
+  const board = build({
+    items,
+    outcomes: new Map(items.map((i) => [i.number, 'fell short'])),
+    shortfalls: items.map((i) => shortfall(i.number)),
+  });
+
+  const briefing = board.features[0]?.briefing;
+  assert.ok(briefing);
+  assert.equal(briefing.blockingTotal, count);
+  assert.equal(briefing.blocking.length, FEATURE_BRIEFING_ROWS);
+});
+
+test('the orphan card gets a briefing too — the work under no Feature is still work', () => {
+  const board = build({
+    items: [item({ number: 1, parent: null })],
+    outcomes: new Map([[1, 'delivered']]),
+    deliveries: [delivery(1)],
+  });
+
+  assert.equal(board.orphans?.briefing.delivered[0]?.summary, 'Shipped 1');
 });
 
 // --- the gate --------------------------------------------------------------

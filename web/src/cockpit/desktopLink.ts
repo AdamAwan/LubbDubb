@@ -32,8 +32,8 @@ export function desktopDeepLink(folder: string, prompt: string): string {
 
 /**
  * What the operator's Claude is asked when they hit Discuss on a plan — the
- * `/lubbdubb` skill's own second argument form, exactly as `desktopPrompt` is its
- * first.
+ * `/lubbdubb` skill's own second argument form, exactly as {@link checkPrompt} is
+ * its first.
  *
  * **The goal's number, never the plan's id.** The id is a harness row that means
  * nothing to a session on the other side of a socket; the number is what
@@ -75,4 +75,22 @@ export function localRunPrompt(issueNumber: number): string {
  */
 export function askPrompt(issueNumber: number): string {
   return `/lubbdubb ask ${issueNumber} `;
+}
+
+/**
+ * What an operator's Claude is asked when they hit *Run it in Claude Code* on a
+ * validation check — `/lubbdubb 249:A`, the skill's own first argument form.
+ *
+ * **The goal's number and the check's stored letter, never a row's position.**
+ * That pair is what the skill resolves the check by, and a letter derived from
+ * where a row currently sits would address a different check after the next
+ * amendment — the failure the stored letter exists to prevent, one layer up.
+ *
+ * Here rather than in `ValidationSection.tsx`, where it was written: the four
+ * prompt builders are one vocabulary — the argument forms of one skill — and a
+ * builder living in the surface that happens to draw it is how a fifth comes to be
+ * written somewhere else instead of found here.
+ */
+export function checkPrompt(issueNumber: number, letter: string): string {
+  return `/lubbdubb ${issueNumber}:${letter}`;
 }

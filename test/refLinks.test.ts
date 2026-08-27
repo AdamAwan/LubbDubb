@@ -15,7 +15,7 @@ import type { CockpitActions } from '../web/src/cockpit/actions.js';
 
 const { buildDemoState } = await import('../web/src/demo/fixtures.js');
 const { ConsoleRoot } = await import('../web/src/console/ConsoleRoot.js');
-const { Ref, RefLinks, refLabel } = await import('../web/src/components/refs.js');
+const { Ref, RefLinks, TicketLink, refLabel } = await import('../web/src/components/refs.js');
 const { goalIssue } = await import('../web/src/view/goalPage.js');
 
 const actions = new Proxy({}, { get: () => () => undefined }) as CockpitActions;
@@ -298,4 +298,62 @@ test('nothing outside refs.tsx strips a ref down to a number', () => {
     .filter((file) => /replace\(\s*\/\^?(issue|pr):/.test(readFileSync(file, 'utf8')));
 
   assert.deepEqual(offenders, [], 'shorten a ref through refLabel, and draw it through <Ref>');
+});
+
+/**
+ * The one destination `<Ref>` deliberately does not offer. A ref onto a goal the
+ * world carries opens its **page**, so the tracker needs a control of its own —
+ * and the three-key resolution behind it is a judgement about how a ref resolves,
+ * which is why it sits in `refs.tsx` rather than in the page that draws it.
+ */
+function ticket(number: number, world: Record<string, string>, url?: string): string {
+  return renderToStaticMarkup(
+    createElement(RefLinks, {
+      refUrls: world,
+      openGoal: () => undefined,
+      hasGoal: () => false,
+      children: createElement(TicketLink, { number, url, className: 'cn-tgl', children: 'Open ticket ↗' }),
+    }),
+  );
+}
+
+test('a ticket is reached by the most trustworthy key that resolves it', () => {
+  // The item's own address is the provider's, and beats anything derived.
+  assert.match(
+    ticket(412, { 'issue:412': 'https://tracker/derived', '#412': 'https://tracker/pull/412' }, 'https://tracker/412'),
+    /href="https:\/\/tracker\/412"/,
+  );
+
+  // `#<n>` is shared: `buildRefUrls` walks the pull requests before the issues and
+  // the first writer wins, so on a tracker where issue 412 and PR 412 both exist
+  // it is the *pull request's* address. Preferring it was this control quietly
+  // opening the wrong thing.
+  assert.match(
+    ticket(412, { 'issue:412': 'https://tracker/412', '#412': 'https://tracker/pull/412' }),
+    /href="https:\/\/tracker\/412"/,
+    'issue:<n> is unambiguous, and nothing else ever writes it',
+  );
+
+  // A retained run: the harness kept it after its ticket left the world, so it is
+  // in no `world.issues` list and `#<n>` was never built for it. Trying only that
+  // key is why the goals whose ticket is hardest to find by hand were the ones
+  // offering no way to it.
+  assert.match(ticket(412, { 'issue:412': 'https://tracker/412' }), /href="https:\/\/tracker\/412"/);
+  assert.match(
+    ticket(412, { '#412': 'https://tracker/412' }),
+    /href="https:\/\/tracker\/412"/,
+    'and #<n> still answers',
+  );
+});
+
+test('a ticket with no address is drawn inert, never as a link to nowhere', () => {
+  const html = ticket(412, {});
+  assert.match(html, /^<span /, 'a link that leads nowhere is the dead end refs exist to prevent');
+  assert.doesNotMatch(html, /<a /);
+  assert.match(html, /aria-disabled="true"/);
+  // Drawn rather than dropped: a control that comes and goes is a row whose shape
+  // depends on what a provider happened to resolve, and "the tracker gave this
+  // item no address" is a fact worth stating where a missing button says nothing.
+  assert.match(html, /Open ticket/);
+  assert.match(html, /title="No address for this ticket/);
 });

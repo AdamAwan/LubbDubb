@@ -7,6 +7,7 @@
 // Kept side-effect-free at module scope: the real build imports this file but the
 // `VITE_DEMO` branch in api.ts is statically false there, so Rollup drops it.
 import type {
+  AgentTranscript,
   ConfigChange,
   SetupCheck,
   SetupPayload,
@@ -300,8 +301,10 @@ class DemoServer {
     return structuredClone(this.state);
   }
 
-  async getTranscript(agentId: string): Promise<{ transcript: string }> {
-    return { transcript: this.transcripts.get(agentId) ?? '' };
+  async getTranscript(agentId: string, from = 0): Promise<AgentTranscript> {
+    const full = this.transcripts.get(agentId) ?? '';
+    const at = Math.min(from, full.length);
+    return { agentId, from: at, total: full.length, transcript: full.slice(at) };
   }
 
   async pulse(): Promise<{ ok: true }> {
@@ -1049,6 +1052,7 @@ class DemoServer {
         supersedes: null,
         project: 'lubbdubb',
         keepLocal: false,
+        supersededBy: null,
         originRef,
         ruledAt: null,
         resolvesWhen: null,
@@ -1066,6 +1070,7 @@ class DemoServer {
         lastAskedAt: null,
         scopeStale: false,
         scopeLastMatchedAt: null,
+        cold: false,
       },
       ...this.state.knowledge,
     ];
@@ -1089,6 +1094,39 @@ class DemoServer {
       fact.updatedAt = fact.ruledAt;
       this.dirty();
     }
+    return { ok: true };
+  }
+
+  /**
+   * Folding a cluster — the demo mirror of `POST /api/knowledge/facts/:id/merge`,
+   * including the shape that makes a merge safe: the members' voices move onto the
+   * survivor and the members become `superseded` naming it, rather than being
+   * deleted or retired.
+   */
+  async mergeFacts(id: string, members: string[]): Promise<{ ok: true }> {
+    const survivor = this.state.knowledge.find((f) => f.id === id);
+    if (!survivor) return { ok: true };
+    const at = new Date().toISOString();
+    for (const memberId of members) {
+      const member = this.state.knowledge.find((f) => f.id === memberId);
+      if (!member || member.id === survivor.id) continue;
+      if (member.reach === 'rejected' || member.reach === 'superseded') continue;
+      if (member.scope !== survivor.scope) continue;
+      survivor.corroborations += member.corroborations;
+      member.reach = 'superseded';
+      member.supersededBy = survivor.id;
+      member.ruledAt = at;
+      member.updatedAt = at;
+    }
+    // The promotion is the ordinary one on the ordinary rule: the merge let the
+    // voices be counted, and the count is what carries a claim to lookup.
+    if (survivor.reach === 'proposal' && survivor.corroborations > 1) survivor.reach = 'lookup';
+    survivor.ruledAt = at;
+    survivor.updatedAt = at;
+    this.state.knowledgeSimilarities = this.state.knowledgeSimilarities.filter(
+      (pair) => !members.includes(pair.leftId) && !members.includes(pair.rightId),
+    );
+    this.dirty();
     return { ok: true };
   }
 
@@ -3876,7 +3914,7 @@ function demoSetupResolution(answers: { email: string; repoRoot: string }): Setu
 
 export const demoApi = {
   getState: () => getServer().getState(),
-  getTranscript: (agentId: string) => getServer().getTranscript(agentId),
+  getTranscript: (agentId: string, from = 0) => getServer().getTranscript(agentId, from),
   // The demo's world is built fresh in the browser each load, so nothing has ever
   // been recorded for it — an empty graph is the honest answer, and these exist to
   // keep the two API shapes interchangeable.
@@ -4147,6 +4185,7 @@ export const demoApi = {
   placePet: (id: string, placed: boolean) => getServer().placePet(id, placed),
   blendPet: (id: string) => getServer().blendPet(id),
   setFactReach: (id: string, reach: FactRuling) => getServer().setFactReach(id, reach),
+  mergeFacts: (id: string, members: string[]) => getServer().mergeFacts(id, members),
   exitFact: (id: string, exit: FactExit) => getServer().exitFact(id, exit),
   raiseFact: (claim: string, originRef: string | null) => getServer().raiseFact(claim, originRef),
   settleGraduation: (id: string, outcome: GraduationOutcome) => getServer().settleGraduation(id, outcome),

@@ -217,3 +217,65 @@ function ExtLinkFor({
 export function RefText({ text }: { text: string }): ReactNode {
   return linkify(text, useRefWorld().refUrls);
 }
+
+/**
+ * The way to a goal's ticket on the provider — the `Open ticket ↗` the goal page
+ * carries, and the one destination {@link Ref} deliberately does not offer.
+ *
+ * A `<Ref>` onto a goal the world carries opens its **page**, because that is the
+ * richer destination and the one nothing else reaches. So the tracker needs a
+ * control of its own, and this is it: here rather than in the page that draws it,
+ * because everything below is a judgement about *how a ref resolves*, which is
+ * this module's job and not a page's.
+ *
+ * **Three keys, in the order of how much each can be trusted.** The item's own
+ * `url` is the provider's and authoritative. `issue:<n>` is next because it is
+ * **unambiguous**: `stateSnapshot` keys it for every world issue *and* every
+ * retained run, and nothing else ever writes it. `#<n>` is last because it is
+ * **shared** — `buildRefUrls` walks the pull requests before the issues and the
+ * first writer wins, so on a tracker where issue 412 and PR 412 both exist, `#412`
+ * is the pull request's address, and a control that tried it first was quietly
+ * opening the wrong thing.
+ *
+ * Trying only `#<n>` is also why this control used to **vanish on a retained
+ * run**: `#<n>` is built from `world.issues`, and a run the harness kept after its
+ * ticket left the world is by definition not in that list — so the goals whose
+ * ticket was hardest to find by hand were the ones offering no way to it.
+ *
+ * **Inert rather than absent when nothing resolves.** A control that comes and
+ * goes is a row whose shape depends on what a provider happened to resolve, and
+ * "the tracker gave this item no address" is a fact worth stating where a missing
+ * button says nothing and reads as the cockpit having forgotten. It stops being an
+ * `<a>` at that point rather than becoming one with no `href`: a link that leads
+ * nowhere is the dead end this module exists to prevent.
+ */
+export function TicketLink({
+  number,
+  url,
+  className,
+  children,
+}: {
+  number: number;
+  /** The item's own address, where the provider gave it one. */
+  url?: string;
+  className?: string;
+  children: ReactNode;
+}): JSX.Element {
+  const { refUrls } = useRefWorld();
+  const href = url ?? refUrls[`issue:${number}`] ?? refUrls[`#${number}`];
+  if (href === undefined)
+    return (
+      <span
+        className={className}
+        aria-disabled="true"
+        title="No address for this ticket: the tracker did not give the item one, and the harness could not resolve it from the goal’s ref either. Nothing to open."
+      >
+        {children}
+      </span>
+    );
+  return (
+    <a className={className} href={href} target="_blank" rel="noopener noreferrer">
+      {children}
+    </a>
+  );
+}

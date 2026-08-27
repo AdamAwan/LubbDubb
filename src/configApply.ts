@@ -97,6 +97,14 @@ const LIVE_ARMS: Readonly<Record<string, LiveArm>> = {
   knowledgeScopeStaleDays: (next, deps) => {
     deps.running.knowledgeScopeStaleDays = next.knowledgeScopeStaleDays;
   },
+  // `knowledgeScopeStaleDays`' arm and its reason: the snapshot reads the running
+  // config by reference at every poll and takes the cold reading there, so assigning
+  // onto it *is* the arm. Live because it is a number an operator tunes while
+  // looking at the page it folds — a restart-only one would be a number they
+  // widened, watched do nothing, and widened again.
+  knowledgeColdDays: (next, deps) => {
+    deps.running.knowledgeColdDays = next.knowledgeColdDays;
+  },
   // `buildStateSnapshot` reads the running config by reference at every poll and
   // ships the colours to the cockpit, so assigning onto it *is* the arm: a colour
   // picked in the config page is on the chips a heartbeat later. Nothing in the
