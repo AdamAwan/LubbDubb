@@ -139,7 +139,7 @@ test('a save writes the file, applies the live key now, and holds the rest for a
   const { system, file } = fixture();
   const { revision } = await read(system);
 
-  const res = await save(system, { baseline: revision, set: { maxConcurrentAgents: 6, agentMode: 'pty' } });
+  const res = await save(system, { baseline: revision, set: { maxConcurrentAgents: 6, agentMode: 'stream' } });
 
   assert.equal(res.status, 200);
   assert.equal(system.runtimeControl.cap, 6, 'the live cap moved without a restart');
@@ -154,7 +154,7 @@ test('a save writes the file, applies the live key now, and holds the rest for a
 
   const saved = readFileSync(file, 'utf8');
   assert.match(saved, /"maxConcurrentAgents": 6,/);
-  assert.match(saved, /"agentMode": "pty",/);
+  assert.match(saved, /"agentMode": "stream",/);
   assert.match(saved, /"\/\/ maxConcurrentAgents": "Raised for the backlog push/, 'the comment survived the save');
   assert.notEqual(res.body.revision, revision, 'the baseline moved with the file');
 
@@ -281,7 +281,7 @@ test('the preview answers the bytes that would be written, and writes nothing', 
   const { system, file, text } = fixture();
   const { revision } = await read(system);
 
-  const res = await preview(system, { baseline: revision, set: { maxConcurrentAgents: 6, agentMode: 'pty' } });
+  const res = await preview(system, { baseline: revision, set: { maxConcurrentAgents: 6, agentMode: 'stream' } });
 
   assert.equal(res.status, 200);
   assert.match(res.body.text ?? '', /"maxConcurrentAgents": 6,/);

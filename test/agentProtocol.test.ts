@@ -3,12 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-  buildClaudeArgs,
-  buildClaudeStreamArgs,
-  buildInitialMessage,
-  PROTOCOL_SYSTEM_PROMPT,
-} from '../src/agents/agentProtocol.js';
+import { buildClaudeStreamArgs, buildInitialMessage, PROTOCOL_SYSTEM_PROMPT } from '../src/agents/agentProtocol.js';
 import { loadConfig } from '../src/config.js';
 import { buildSystem } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
@@ -16,8 +11,8 @@ import type { Task } from '../src/types.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { failPlanningOpen } from './support/plans.js';
 
-test('buildClaudeArgs injects the protocol system prompt and permission mode', () => {
-  const args = buildClaudeArgs({ permissionMode: 'acceptEdits', extraArgs: ['--model', 'x'] });
+test('buildClaudeStreamArgs injects the protocol system prompt and permission mode', () => {
+  const args = buildClaudeStreamArgs({ permissionMode: 'acceptEdits', extraArgs: ['--model', 'x'] });
   const i = args.indexOf('--append-system-prompt');
   assert.ok(i >= 0);
   assert.equal(args[i + 1], PROTOCOL_SYSTEM_PROMPT);
@@ -27,21 +22,21 @@ test('buildClaudeArgs injects the protocol system prompt and permission mode', (
   assert.deepEqual(args.slice(-2), ['--model', 'x']);
 });
 
-test('buildClaudeArgs omits permission mode when unset', () => {
-  const args = buildClaudeArgs({});
+test('buildClaudeStreamArgs omits permission mode when unset', () => {
+  const args = buildClaudeStreamArgs({});
   assert.equal(args.includes('--permission-mode'), false);
 });
 
-test('buildClaudeArgs pins a chosen session id on a fresh launch', () => {
+test('buildClaudeStreamArgs pins a chosen session id on a fresh launch', () => {
   const id = '550e8400-e29b-41d4-a716-446655440000';
-  const args = buildClaudeArgs({ sessionId: id });
+  const args = buildClaudeStreamArgs({ sessionId: id });
   assert.equal(args[args.indexOf('--session-id') + 1], id);
   assert.equal(args.includes('--resume'), false);
 });
 
-test('buildClaudeArgs resumes an existing session and re-appends the protocol', () => {
+test('buildClaudeStreamArgs resumes an existing session and re-appends the protocol', () => {
   const id = '550e8400-e29b-41d4-a716-446655440000';
-  const args = buildClaudeArgs({ sessionId: id, resume: true });
+  const args = buildClaudeStreamArgs({ sessionId: id, resume: true });
   assert.equal(args[args.indexOf('--resume') + 1], id);
   // --session-id and --resume are mutually exclusive: don't set a new id on resume.
   assert.equal(args.includes('--session-id'), false);
@@ -49,8 +44,8 @@ test('buildClaudeArgs resumes an existing session and re-appends the protocol', 
   assert.equal(args[args.indexOf('--append-system-prompt') + 1], PROTOCOL_SYSTEM_PROMPT);
 });
 
-test('buildClaudeArgs ignores resume when no session id is given', () => {
-  const args = buildClaudeArgs({ resume: true });
+test('buildClaudeStreamArgs ignores resume when no session id is given', () => {
+  const args = buildClaudeStreamArgs({ resume: true });
   assert.equal(args.includes('--resume'), false);
   assert.equal(args.includes('--session-id'), false);
 });
@@ -93,20 +88,18 @@ test('buildClaudeStreamArgs ignores resume when no session id is given', () => {
   assert.equal(args.includes('--session-id'), false);
 });
 
-test('neither builder ever emits --session-id and --resume together', () => {
+test('the launch never emits --session-id and --resume together', () => {
   // `claude` refuses --session-id on an id that already has a transcript (exit 1,
-  // plain stderr, no stream event), so the two arms must stay exclusive on both
-  // runtimes and in both directions.
+  // plain stderr, no stream event), so the two arms must stay exclusive in both
+  // directions.
   const id = '550e8400-e29b-41d4-a716-446655440000';
-  for (const build of [buildClaudeArgs, buildClaudeStreamArgs]) {
-    for (const resume of [false, true]) {
-      const args = build({ sessionId: id, resume });
-      assert.equal(
-        Number(args.includes('--session-id')) + Number(args.includes('--resume')),
-        1,
-        `${build.name} (resume=${resume}) must carry exactly one of the two`,
-      );
-    }
+  for (const resume of [false, true]) {
+    const args = buildClaudeStreamArgs({ sessionId: id, resume });
+    assert.equal(
+      Number(args.includes('--session-id')) + Number(args.includes('--resume')),
+      1,
+      `resume=${resume} must carry exactly one of the two`,
+    );
   }
 });
 
@@ -117,27 +110,12 @@ function settingsOf(args: string[]): Record<string, unknown> | null {
   return JSON.parse(args[i + 1]!) as Record<string, unknown>;
 }
 
-test('allowedTools become a permissions.allow fragment in --settings (stream)', () => {
+test('allowedTools become a permissions.allow fragment in --settings', () => {
   const allow = ['Bash(npm:*)', 'Bash(git:*)'];
   const args = buildClaudeStreamArgs({ permissionMode: 'acceptEdits', allowedTools: allow, fileEvents: true });
   const settings = settingsOf(args);
   assert.deepEqual((settings?.permissions as { allow: string[] }).allow, allow);
   // The file-events hook fragment is still present in the same object.
-  assert.ok(settings?.hooks, 'file-events hook should merge alongside permissions');
-});
-
-test('allowedTools become a permissions.allow fragment in --settings (pty)', () => {
-  const allow = ['Bash(gh:*)'];
-  const args = buildClaudeArgs({
-    permissionMode: 'acceptEdits',
-    allowedTools: allow,
-    statusLine: true,
-    fileEvents: true,
-  });
-  const settings = settingsOf(args);
-  assert.deepEqual((settings?.permissions as { allow: string[] }).allow, allow);
-  // Merged alongside the other fragments, not replacing them.
-  assert.ok(settings?.statusLine, 'status-line fragment should merge alongside permissions');
   assert.ok(settings?.hooks, 'file-events hook should merge alongside permissions');
 });
 
@@ -156,16 +134,15 @@ test('the Bash allowlist never touches --allowedTools (MCP grants stay intact)',
 
 test('no allowedTools means no permissions fragment', () => {
   assert.equal(settingsOf(buildClaudeStreamArgs({ allowedTools: [] })), null);
-  assert.equal(settingsOf(buildClaudeArgs({ allowedTools: [] })), null);
 });
 
-function claudeModeConfig() {
+function terminalModeConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-claude-'));
   return loadConfig({
     selfUpdate: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',
-    agentMode: 'pty',
+    agentMode: 'raw',
     agentPromptDelayMs: 0, // send immediately in tests
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
@@ -175,38 +152,15 @@ function claudeModeConfig() {
   });
 }
 
-test('claude-mode agents launch with protocol args and get the task typed in', async () => {
+test('the terminal runtime still detects the protocol sentinels from real output', async () => {
   const backend = new FakePtyBackend();
-  const system = buildSystem(claudeModeConfig(), { worktrees: new FakeWorktreeManager(), backend });
-
-  system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
-
-  failPlanningOpen(system.store, 901);
-  await system.harness.runCycle('manual');
-
-  // Spawned with our injected system prompt.
-  const spawn = backend.spawned[0]!;
-  assert.ok(spawn.args.includes('--append-system-prompt'));
-  assert.ok(spawn.args.includes('--permission-mode'));
-
-  // The task prompt is typed into the session (delay 0 -> next tick).
-  await new Promise((r) => setTimeout(r, 5));
-  assert.ok(
-    backend.last().writes.some((w) => w.includes('issue #901')),
-    'expected the task prompt to be typed in',
-  );
-  system.store.close();
-});
-
-test('claude-mode still detects the protocol sentinels from real output', async () => {
-  const backend = new FakePtyBackend();
-  const system = buildSystem(claudeModeConfig(), { worktrees: new FakeWorktreeManager(), backend });
+  const system = buildSystem(terminalModeConfig(), { worktrees: new FakeWorktreeManager(), backend });
   system.connector.inject({ kind: 'new_issue', number: 902, title: 'X' });
   failPlanningOpen(system.store, 902);
   await system.harness.runCycle('manual');
 
   const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
-  // Agent (a real claude, following the appended system prompt) announces it needs input.
+  // The agent announces, in its output, that it needs input.
   backend.last().emit('I need to know the target framework.\n@@LUBBDUBB_WAITING:Which framework?@@\n');
   assert.equal(system.store.getAgent(agentId)!.status, 'waiting');
   assert.equal(system.store.listOpenEscalations().length, 1);

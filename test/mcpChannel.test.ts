@@ -1,16 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { connect } from 'node:net';
+import { EventEmitter } from 'node:events';
 import { mkdtempSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-  buildClaudeArgs,
-  buildClaudeStreamArgs,
-  DONE_REMINDER,
-  MCP_PROTOCOL_ADDENDUM,
-} from '../src/agents/agentProtocol.js';
+import { buildClaudeStreamArgs, DONE_REMINDER, MCP_PROTOCOL_ADDENDUM } from '../src/agents/agentProtocol.js';
 import { DONE_SENTINEL } from '../src/agents/sentinels.js';
+import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 import { handleRequest, parseFrame, type McpTool, toolJson } from '../src/mcp/protocol.js';
 import {
   ALLOWED_MCP_TOOLS,
@@ -107,8 +104,9 @@ test('a handler that throws becomes a tool error, never a dead channel', async (
 
 // -- launch wiring -----------------------------------------------------------
 
-test('--mcp-config is wired only when a config path was minted, in both runtimes', () => {
-  for (const build of [buildClaudeArgs, buildClaudeStreamArgs]) {
+test('--mcp-config is wired only when a config path was minted', () => {
+  {
+    const build = buildClaudeStreamArgs;
     const off = build({});
     assert.equal(off.includes('--mcp-config'), false);
     assert.equal(off[off.indexOf('--append-system-prompt') + 1]?.includes(MCP_PROTOCOL_ADDENDUM), false);
@@ -131,7 +129,8 @@ test('--mcp-config is wired only when a config path was minted, in both runtimes
 });
 
 test('the permission backstop tool is wired only alongside the channel it lives on (#130)', () => {
-  for (const build of [buildClaudeArgs, buildClaudeStreamArgs]) {
+  {
+    const build = buildClaudeStreamArgs;
     // No --mcp-config → the tool has no server, so no flag however it's asked for.
     const noChannel = build({ permissionPromptTool: PERMISSION_PROMPT_TOOL });
     assert.equal(noChannel.includes('--permission-prompt-tool'), false);
@@ -506,6 +505,18 @@ test('an empty note is the one thing refused — there is nothing to store', () 
 });
 
 // -- end to end through a built system ---------------------------------------
+
+/** A headless `claude` that spawns, says nothing and never exits — enough to inspect argv. */
+class SilentChild extends EventEmitter implements StreamChild {
+  pid = 4321;
+  stdout = { on: () => {} } as unknown as NodeJS.ReadableStream;
+  stderr = null;
+  stdin = { write: () => {}, end: () => {} } as unknown as NodeJS.WritableStream;
+  override on(event: 'exit', cb: (code: number | null) => void): this {
+    return super.on(event, cb);
+  }
+  kill(): void {}
+}
 
 function testConfig(overrides: Record<string, unknown> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-mcp-'));
@@ -1568,17 +1579,23 @@ test('a listening channel is actually threaded onto the launch (--mcp-config + b
   // The regression guard for the system.ts wiring: AgentManager mints the config
   // path, but the ArgsBuilder must forward it, or `--mcp-config` (and the backstop
   // that lives on that server) never reach the agent — invisible to every test
-  // that drives `mcp.session()` in-process. Exercised in pty mode with a fake PTY.
-  const backend = new FakePtyBackend();
-  const system = buildSystem(testConfig({ agentMode: 'pty' }), {
+  // that drives `mcp.session()` in-process. Exercised on `stream`, the runtime the
+  // channel is actually for: `raw` runs the operator's argv verbatim and builds no
+  // launch of its own, so it could never carry the flag either way.
+  const launches: string[][] = [];
+  const spawner: Spawner = (_command, args) => {
+    launches.push(args);
+    return new SilentChild();
+  };
+  const system = buildSystem(testConfig({ agentMode: 'stream' }), {
     worktrees: new FakeWorktreeManager(),
-    backend,
+    streamSpawner: spawner,
     errorMirror: () => {},
   });
   assert.equal(await system.mcp.listen(), true);
   try {
     spawnAgent(system, 'issue:12');
-    const args = backend.spawned[backend.spawned.length - 1]!.args;
+    const args = launches[launches.length - 1]!;
     assert.equal(args.includes('--mcp-config'), true, 'the minted config path is forwarded onto the launch');
     assert.equal(args[args.indexOf('--allowedTools') + 1], ALLOWED_MCP_TOOLS.join(','));
     assert.equal(args[args.indexOf('--permission-prompt-tool') + 1], PERMISSION_PROMPT_TOOL);

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig } from '../src/config.js';
@@ -146,19 +146,9 @@ test('ending a usage-limit park says so in the transcript', async () => {
   system.store.close();
 });
 
-test('the PTY runtime carries its own sent messages, so the manager must not echo them', () => {
-  // Claude Code's session file records both halves of the conversation, and that
-  // file *is* the PTY transcript — an echo on top of it would double every message.
-  const root = mkdtempSync(join(tmpdir(), 'lubbdubb-sent-pty-'));
-  const dir = join(root, 'project');
-  mkdirSync(dir);
-  writeFileSync(join(dir, 'sess-echo.jsonl'), '');
-  const session = new PtySession(new FakePtyBackend(), {
-    command: 'x',
-    args: [],
-    cwd: '/tmp',
-    submitDelayMs: 0,
-    sessionTranscript: { root, sessionId: 'sess-echo', pollMs: 5 },
-  });
+test('the terminal runtime carries its own sent messages, so the manager must not echo them', () => {
+  // A terminal echoes what is typed into it, and that echo *is* the transcript —
+  // a manager-side echo on top of it would double every message.
+  const session = new PtySession(new FakePtyBackend(), { command: 'x', args: [], cwd: '/tmp', submitDelayMs: 0 });
   assert.equal(session.recordsSentMessages, true);
 });

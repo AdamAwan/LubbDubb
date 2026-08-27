@@ -76,9 +76,9 @@ test('the state colours apply now, because the snapshot reads the running config
 test('a key with no arm lands in the file and is reported as pending, not applied', () => {
   const { running, live } = harness();
 
-  const changes = live.apply(loadConfig({ maxConcurrentAgents: 3, knowledgeBlockChars: 6000, agentMode: 'pty' }));
+  const changes = live.apply(loadConfig({ maxConcurrentAgents: 3, knowledgeBlockChars: 6000, agentMode: 'raw' }));
 
-  assert.deepEqual(changes, [{ path: 'agentMode', from: 'stream', to: 'pty', applied: false }]);
+  assert.deepEqual(changes, [{ path: 'agentMode', from: 'stream', to: 'raw', applied: false }]);
   assert.deepEqual(
     live.pending().map((change) => change.path),
     ['agentMode'],
@@ -90,17 +90,19 @@ test('editing a pending key twice leaves one row, saying where it started and wh
   const { live } = harness();
   const base = { maxConcurrentAgents: 3, knowledgeBlockChars: 6000 };
 
-  live.apply(loadConfig({ ...base, agentMode: 'pty' }));
-  live.apply(loadConfig({ ...base, agentMode: 'raw' }));
+  // Two *different* values, so the row has somewhere to move to: with the runtimes
+  // down to two, the launch command is the restart-only key with room to edit twice.
+  live.apply(loadConfig({ ...base, claudeCommand: 'claude-beta' }));
+  live.apply(loadConfig({ ...base, claudeCommand: 'claude-canary' }));
 
-  assert.deepEqual(live.pending(), [{ path: 'agentMode', from: 'stream', to: 'raw', applied: false }]);
+  assert.deepEqual(live.pending(), [{ path: 'claudeCommand', from: 'claude', to: 'claude-canary', applied: false }]);
 });
 
 test('putting a pending key back to what the harness is running clears it', () => {
   const { live } = harness();
   const base = { maxConcurrentAgents: 3, knowledgeBlockChars: 6000 };
 
-  live.apply(loadConfig({ ...base, agentMode: 'pty' }));
+  live.apply(loadConfig({ ...base, agentMode: 'raw' }));
   live.apply(loadConfig({ ...base }));
 
   assert.deepEqual(live.pending(), [], 'nothing is waiting for a restart any more');
@@ -109,7 +111,7 @@ test('putting a pending key back to what the harness is running clears it', () =
 test('one apply reports live and restart-only changes together, each saying which it is', () => {
   const { live } = harness();
 
-  const changes = live.apply(loadConfig({ maxConcurrentAgents: 8, knowledgeBlockChars: 6000, agentMode: 'pty' }));
+  const changes = live.apply(loadConfig({ maxConcurrentAgents: 8, knowledgeBlockChars: 6000, agentMode: 'raw' }));
 
   assert.deepEqual(changes.map((change) => `${change.path}:${change.applied ? 'now' : 'restart'}`).sort(), [
     'agentMode:restart',

@@ -87,12 +87,12 @@ test('an edit on disk applies a live key without a restart, exactly as a save do
 test('a restart-only edit is held as pending and leaves the running harness alone', async () => {
   const f = fixture({ agentMode: 'raw' });
   try {
-    f.write({ agentMode: 'pty' });
+    f.write({ agentMode: 'stream' });
 
     await waitFor(() => f.live.pending().length === 1, 'the change should be waiting for a restart');
     assert.deepEqual(
       f.live.pending().map((change) => [change.path, change.from, change.to]),
-      [['agentMode', 'raw', 'pty']],
+      [['agentMode', 'raw', 'stream']],
     );
     assert.equal(f.running.agentMode, 'raw', 'the harness keeps the runtime it booted with');
   } finally {

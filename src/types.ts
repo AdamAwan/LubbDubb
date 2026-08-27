@@ -3152,9 +3152,15 @@ export interface RateLimitWindow {
 }
 
 /**
- * Account-level Claude rate limits captured from a PTY agent's status-line
- * payload. Pro/Max only — API-key auth carries no `rate_limits`, and each
- * window can be independently absent.
+ * Account-level Claude usage windows, read off the `rate_limit_event` every
+ * stream agent receives. Pro/Max only — API-key auth carries no windows at all,
+ * and each window can be independently absent.
+ *
+ * Turn-bound, which is what {@link AccountRateLimits.capturedAt} is for: a
+ * reading arrives only when an agent takes a turn, so an idle fleet's ages while
+ * the real window keeps moving underneath it (an operator's own Claude Code on
+ * the same account spends from it too). Stale-and-optimistic is the failure mode
+ * to render honestly, not to hide.
  */
 export interface AccountRateLimits {
   fiveHour: RateLimitWindow | null;

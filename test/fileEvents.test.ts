@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { appendFileSync, mkdirSync, mkdtempSync, writeFileSync, readdirSync, readFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readdirSync, readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -11,7 +11,7 @@ import {
   FILE_EVENTS_SETTINGS,
   HOOK_DEBUG_FILE,
 } from '../src/agents/fileEvents.js';
-import { buildClaudeArgs, buildClaudeStreamArgs } from '../src/agents/agentProtocol.js';
+import { buildClaudeStreamArgs } from '../src/agents/agentProtocol.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { buildSystem } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
@@ -174,21 +174,11 @@ test('LUBBDUBB_EVENTS_DEBUG makes the hook drop a breadcrumb (and readDebug read
   assert.ok(!readdirSync(dir2).includes(HOOK_DEBUG_FILE), 'no breadcrumb file when debug off');
 });
 
-test('buildClaudeArgs merges file-events + status-line into one --settings; stream args get the hook headless', () => {
-  const pty = buildClaudeArgs({ statusLine: true, fileEvents: true });
-  const at = pty.indexOf('--settings');
-  assert.ok(at >= 0, 'expected --settings');
-  // A single settings object carries both fragments (the flag has no array form).
-  assert.match(pty[at + 1]!, /statusLine/);
-  assert.match(pty[at + 1]!, /PostToolUse/);
-
+test('the launch wires the file-events hook into --settings, and nothing when it is off', () => {
   const stream = buildClaudeStreamArgs({ fileEvents: true });
-  const sAt = stream.indexOf('--settings');
-  assert.ok(sAt >= 0, 'stream wires the hook (hooks fire headless)');
-  assert.match(stream[sAt + 1]!, /PostToolUse/);
-  assert.ok(!stream[sAt + 1]!.includes('statusLine'), 'no status line headless');
-
-  assert.ok(!buildClaudeArgs({}).includes('--settings'), 'off by default');
+  const at = stream.indexOf('--settings');
+  assert.ok(at >= 0, 'stream wires the hook (hooks fire headless)');
+  assert.match(stream[at + 1]!, /PostToolUse/);
   assert.ok(!buildClaudeStreamArgs({}).includes('--settings'), 'off by default');
 });
 
@@ -224,14 +214,13 @@ test('FileEventsSpool drains each record once, then dispose removes the dir', ()
 
 // -- end-to-end through AgentManager -----------------------------------------
 
-function testConfig(agentMode: 'raw' | 'pty' = 'raw', sessionTranscriptRoot?: string) {
+function testConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-fe-'));
   return loadConfig({
     selfUpdate: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',
-    agentMode,
-    sessionTranscriptRoot,
+    agentMode: 'raw',
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
     heartbeatIntervalMs: 999_999,
@@ -278,14 +267,14 @@ test('a captured write records a file for every path and an artifact chip only f
   system.store.close();
 });
 
-/** Spawn one agent in a fake-PTY system and hand back it plus the driving backend. */
-async function spawnedPtyAgent(sessionRoot?: string): Promise<{
+/** Spawn one agent in a fake-terminal system and hand back it plus the driving backend. */
+async function spawnedPtyAgent(): Promise<{
   system: ReturnType<typeof buildSystem>;
   backend: FakePtyBackend;
   agent: NonNullable<ReturnType<Store['getAgent']>>;
 }> {
   const backend = new FakePtyBackend();
-  const system = buildSystem(testConfig('pty', sessionRoot), {
+  const system = buildSystem(testConfig(), {
     worktrees: new FakeWorktreeManager(),
     backend,
     errorMirror: () => {},
@@ -296,44 +285,6 @@ async function spawnedPtyAgent(sessionRoot?: string): Promise<{
   assert.ok(agent, 'an agent was dispatched');
   return { system, backend, agent };
 }
-
-test('a captured write surfaces on a session-file update mid-run', async () => {
-  // A mid-run report must not sit spooled until the agent finishes (never, if it
-  // is waiting on a human to review that very file). PTY transcript updates come
-  // from the session file rather than the screen, so that is the stream the drain
-  // has to ride.
-  const root = mkdtempSync(join(tmpdir(), 'lubbdubb-fe-sess-'));
-  const { system, agent } = await spawnedPtyAgent(root);
-  const sessionId = system.store.getAgent(agent.id)?.sessionId;
-  assert.ok(sessionId, 'a pty agent pins a session id');
-
-  const projectDir = join(root, 'project');
-  mkdirSync(projectDir);
-  const sessionFile = join(projectDir, `${sessionId}.jsonl`);
-  writeFileSync(sessionFile, '');
-
-  const dir = system.agents.fileEventsDir(agent.id);
-  writeFileSync(join(dir!, '1-a.json'), JSON.stringify({ path: join(agent.cwd, 'reports/x.md'), tool: 'Write' }));
-
-  const deltas: string[] = [];
-  system.agents.on('output', (e) => deltas.push(e.delta));
-  const record = {
-    type: 'assistant',
-    message: { role: 'assistant', content: [{ type: 'text', text: 'wrote the report' }] },
-  };
-  appendFileSync(sessionFile, `${JSON.stringify(record)}\n`);
-  await tick(900);
-
-  assert.ok(
-    deltas.some((d) => d.includes('wrote the report')),
-    'the session-file record arrived as an output delta',
-  );
-  assert.deepEqual(
-    system.store.listFlags(agent.id).map((f) => f.ref),
-    ['reports/x.md'],
-  );
-  system.store.close();
-});
 
 test('a captured write surfaces when the agent parks on a human', async () => {
   // The escalation is often "review the file I just wrote", and a waiting agent

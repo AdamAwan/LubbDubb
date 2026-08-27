@@ -1,20 +1,19 @@
 import type { Task } from '../types.js';
-import { STATUS_LINE_SETTINGS } from './statusLine.js';
 import { FILE_EVENTS_SETTINGS } from './fileEvents.js';
 import { ALLOWED_MCP_TOOLS } from '../mcp/names.js';
 import { DONE_SENTINEL } from './sentinels.js';
 
 /**
- * How a real Claude Code session is made to speak the harness's PTY protocol.
+ * How a real Claude Code session is made to speak the harness's status protocol.
  *
- * The PtySession detects two sentinels — a "waiting" one (needs a human) and a
- * "done" one (finished). A live `claude` REPL emits neither on its own, so we
- * inject these instructions as an appended system prompt. The agent then
- * *announces* its own state instead of us guessing it from idle output, which is
- * the reliable way to read status out of an interactive model session.
+ * The harness reads two sentinels — a "waiting" one (needs a human) and a "done"
+ * one (finished). `claude` emits neither on its own, so these instructions are
+ * injected as an appended system prompt. The agent then *announces* its own state
+ * instead of the harness guessing it from the shape of its output, which is the
+ * whole reason status is readable at all.
  *
  * Tool-permission prompts (a separate CLI concern, not something the model
- * prints) are handled by `--permission-mode`, not by scraping output.
+ * prints) are handled by `--permission-mode`, not by reading output.
  */
 export const PROTOCOL_SYSTEM_PROMPT = [
   'You are running as an autonomous agent inside the LubbDubb harness, driven over a terminal.',
@@ -268,12 +267,6 @@ interface ClaudeArgsOptions {
    */
   resume?: boolean;
   /**
-   * Wire the status-line capture in (`--settings`), so account rate limits can
-   * be read from the payload the TUI feeds it. PTY launches only — the status
-   * line never renders headless, so it would be dead weight on stream args.
-   */
-  statusLine?: boolean;
-  /**
    * Wire the file-events `PostToolUse` hook in (`--settings`), so files an agent
    * writes surface as artifacts without the agent's prompt knowing the flag
    * protocol. Both runtimes — hooks fire in headless stream mode too.
@@ -381,7 +374,7 @@ function appendMcpConfig(args: string[], opts: ClaudeArgsOptions): void {
 
 /**
  * Pin the conversation this launch runs as — the one piece of argv that makes an
- * agent re-attachable, and identical on both real runtimes (issue #318).
+ * agent re-attachable (issue #318).
  *
  * `--session-id` (mint this id) and `--resume` (re-open it) are **mutually
  * exclusive**, and not merely as a style rule: `claude` refuses `--session-id` on
@@ -396,36 +389,14 @@ function appendSessionFlags(args: string[], opts: ClaudeArgsOptions): void {
   else args.push('--session-id', opts.sessionId);
 }
 
-/** Build the argv for launching an interactive (PTY) `claude` agent that speaks the protocol. */
-export function buildClaudeArgs(opts: ClaudeArgsOptions = {}): string[] {
-  // Re-append the protocol on every launch, including resume: `--resume` replays
-  // the conversation but does not retain the original invocation's appended
-  // system prompt, so waiting/done detection would break without this.
-  const args: string[] = ['--append-system-prompt', protocolPrompt(opts)];
-  appendSessionFlags(args, opts);
-  // Merge every requested settings fragment into a single `--settings` — the flag
-  // has no array form, so status-line + file-events must share one JSON object.
-  const settings = collectSettings(opts);
-  if (settings) args.push('--settings', settings);
-  appendMcpConfig(args, opts);
-  if (opts.permissionMode) args.push('--permission-mode', opts.permissionMode);
-  if (opts.model) args.push('--model', opts.model);
-  if (opts.effort) args.push('--effort', opts.effort);
-  if (opts.extraArgs?.length) args.push(...opts.extraArgs);
-  return args;
-}
-
 /**
  * Combine the enabled `--settings` fragments into one JSON string, or null if
- * none. The flag has no array form, so status-line, file-events and the
- * permission allow-list must share one JSON object; their top-level keys
- * (`statusLine` / `hooks` / `permissions`) are disjoint, so a plain merge is
- * lossless. Used by **both** runtimes (the stream launch just never asks for the
- * PTY-only status line), so an operator allow-list reaches headless agents too.
+ * none. The flag has no array form, so file-events and the permission allow-list
+ * must share one JSON object; their top-level keys (`hooks` / `permissions`) are
+ * disjoint, so a plain merge is lossless.
  */
 function collectSettings(opts: ClaudeArgsOptions): string | null {
   const settings: Record<string, unknown> = {};
-  if (opts.statusLine) Object.assign(settings, STATUS_LINE_SETTINGS);
   if (opts.fileEvents) Object.assign(settings, FILE_EVENTS_SETTINGS);
   // One `permissions` object, however many of its halves were asked for: the
   // allow-list and the extra readable directories are separate concerns that share
@@ -452,8 +423,8 @@ export function buildResumeMessage(): string {
  * bidirectional stream-JSON. No TUI, structured events, stays alive across turns
  * so the waiting/answer loop works. This is the production agent launch.
  *
- * It carries the same `--session-id` / `--resume` pair as the PTY launch, verified
- * against `claude` 2.1.223 rather than assumed (issue #318): headless honours a
+ * It carries a `--session-id` / `--resume` pair, verified against `claude` 2.1.223
+ * rather than assumed (issue #318): headless honours a
  * pinned id (every event echoes it, and the transcript lands under
  * `~/.claude/projects/<slug>/<id>.jsonl`), `--resume` re-opens *that* file and
  * appends to it rather than forking a new id, and a resumed headless session stays
@@ -485,10 +456,8 @@ export const STREAM_TRANSPORT_ARGS: readonly string[] = [
 export function buildClaudeStreamArgs(opts: ClaudeArgsOptions = {}): string[] {
   const args: string[] = [...STREAM_TRANSPORT_ARGS, '--append-system-prompt', protocolPrompt(opts)];
   appendSessionFlags(args, opts);
-  // The status line never renders headless, but PostToolUse hooks and permission
-  // rules do apply — so file-events capture and the operator allow-list are wired
-  // here too (unlike the PTY-only status line, which collectSettings skips when
-  // `statusLine` isn't requested).
+  // PostToolUse hooks and permission rules apply headless, so file-events capture
+  // and the operator allow-list are wired here.
   const settings = collectSettings(opts);
   if (settings) args.push('--settings', settings);
   appendMcpConfig(args, opts);

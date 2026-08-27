@@ -2237,7 +2237,7 @@ Eight consistency points:
   name. An unknown type, or an act about nothing external, is null: the column draws a dash.
 
 `usage.windows` are summed from `usage_events` (all modes, self-computed); `usage.rateLimits` is the
-freshest PTY status-line payload, or `null`, in which case the cockpit chip falls back to cost.
+freshest reading any stream agent reported, or `null`, in which case a reader falls back to cost. **Nothing in the cockpit draws it** — see [18](18-observability.md#usage-accounting).
 
 `issue.spend` is the same money asked per **goal** rather than per window — `rollUpIssueSpend` over
 `agents`, `tasks` and the work graph, so a pull request's CI agents and a plan's parts are charged to

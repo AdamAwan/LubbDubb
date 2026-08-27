@@ -1332,10 +1332,18 @@ interface PlacementContext {
 }
 
 /**
- * Account-level Claude usage for the cockpit chip (issue #60): the rolling cost
- * windows summed from stream-mode turn reports (all modes, self-computed), plus
- * the real subscriber 5h/weekly limits when the PTY status-line capture has
- * seen any (Pro/Max only — null otherwise, and the UI degrades to cost).
+ * Account-level Claude usage (issue #60): the rolling cost windows summed from
+ * stream-mode turn reports (self-computed), plus the real subscriber 5h/weekly
+ * limits when a reading has been seen (Pro/Max only — null otherwise).
+ *
+ * The limits are read from the store, where every stream agent's
+ * `rate_limit_event` lands them.
+ *
+ * **Nothing in the cockpit draws either of these yet.** They are shipped on the
+ * wire and read with `curl`; the surface spec 18 names is not built
+ * ([18](../../docs/spec/18-observability.md)). Shipped anyway because the reading
+ * is turn-bound — it only exists while agents run, so a snapshot that withheld it
+ * until there was somewhere to draw it would have nothing to draw when there was.
  *
  * `unattributedCostUsd` is the other half of the per-goal figures on each issue:
  * the spend that reached no goal at all. It is shipped rather than kept server-side
@@ -1350,7 +1358,7 @@ function buildUsage(system: System, unattributedCostUsd: number) {
       fiveHourCostUsd: system.store.sumUsageCostSince(iso(5 * 60 * 60 * 1000)),
       sevenDayCostUsd: system.store.sumUsageCostSince(iso(7 * 24 * 60 * 60 * 1000)),
     },
-    rateLimits: system.rateLimits?.readLatest() ?? null,
+    rateLimits: system.store.readRateLimits(),
     unattributedCostUsd,
   };
 }

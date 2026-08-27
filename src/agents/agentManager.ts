@@ -7,6 +7,7 @@ import type { ErrorRecorder } from '../errorLog.js';
 import { recentOutputExcerpt } from '../escalation/context.js';
 import type { WhitelistRule } from '../config.js';
 import type {
+  AccountRateLimits,
   Agent,
   AgentAsk,
   AgentFlag,
@@ -201,12 +202,6 @@ interface AgentManagerOptions {
    * is terminal, which is also what every unresumable runtime gets regardless.
    */
   resumeAttempts?: number;
-  /**
-   * Per-session path the PTY status-line capture writes its payload to,
-   * exported to the spawned process as LUBBDUBB_STATUS_FILE. Only meaningful
-   * for runtimes with a session id (PTY); unset for stream/mock.
-   */
-  statusFile?: (sessionId: string) => string;
   /**
    * Spool for the file-events `PostToolUse` hook. When set, each launch gets a
    * per-agent dir exported as `$LUBBDUBB_EVENTS_DIR`; the hook drops written
@@ -541,7 +536,6 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       env: {
         LUBBDUBB_PROMPT: task.prompt,
         LUBBDUBB_TASK_ID: task.id,
-        ...this.statusFileEnv(sessionId),
         ...this.eventsDirEnv(eventsKey),
       },
       waitingPatterns: this.opts.waitingPatterns,
@@ -621,7 +615,6 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       env: {
         LUBBDUBB_PROMPT: task.prompt,
         LUBBDUBB_TASK_ID: task.id,
-        ...this.statusFileEnv(agent.sessionId),
         ...this.eventsDirEnv(eventsKey),
       },
       waitingPatterns: this.opts.waitingPatterns,
@@ -1997,11 +1990,6 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
   // -- internals -----------------------------------------------------------
 
   /** The LUBBDUBB_STATUS_FILE env entry for a launch, when status capture is wired. */
-  private statusFileEnv(sessionId: string | null): Record<string, string> {
-    if (!sessionId || !this.opts.statusFile) return {};
-    return { LUBBDUBB_STATUS_FILE: this.opts.statusFile(sessionId) };
-  }
-
   /** The LUBBDUBB_EVENTS_DIR env entry for a launch, when the file-events hook is wired. */
   private eventsDirEnv(key: string | null): Record<string, string> {
     if (!key || !this.opts.fileEvents) return {};
@@ -2170,6 +2158,12 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       this.emit('usage', { agentId, taskId: task.id, usage });
     });
 
+    // The account's usage windows, which every live agent reports the same values
+    // for. Landed straight in the store rather than re-emitted: there is one
+    // account, so this is not news *about this agent*, and the store's own
+    // freshest-wins guard is what keeps interleaved reports in order.
+    session.on('limits', (limits: AccountRateLimits) => this.store.recordRateLimits(limits));
+
     // An artifact/link the agent surfaced: persist (deduped by ref) and re-emit
     // the stored flag so the server can stream it to the cockpit.
     session.on('flag', (flag: ParsedFlag) => {
@@ -2273,11 +2267,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     const deliver = (): void => {
       if (!this.sessions.has(agentId)) return; // killed/finished before we could send
       try {
-        // Prefer the runtime's boot-race-robust initial delivery (the PTY REPL drops
-        // the first submitting Enter while it initialises); fall back to a plain send
-        // for transports (stream-JSON) that are ready the instant they spawn.
-        if (session.deliverInitial) session.deliverInitial(text);
-        else session.send(text);
+        session.send(text);
       } catch {
         /* session already gone */
       }

@@ -85,8 +85,6 @@ Both implement `AgentSession` and emit the same events, so `AgentManager`, the `
 are agnostic to which is running:
 
 - **`stream`** (default) — `claude -p --output-format stream-json`. No terminal, no TUI.
-- **`pty`** — a real pseudoterminal running the interactive `claude` REPL. This is the only resumable
-  runtime and the only one that captures account rate limits.
 - **`raw`** — runs `claudeCommand`/`claudeArgs` verbatim over a PTY with the prompt in
   `LUBBDUBB_PROMPT`. Used by the mock-agent demo and tests.
 

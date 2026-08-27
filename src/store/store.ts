@@ -33,6 +33,7 @@ import { absorbSinglePlanStatus, backfillWholePlanParts, PlanStore, PLAN_COLUMNS
 import { ValidationStore, VALIDATION_COLUMNS, VALIDATION_REBUILDS } from './validation.js';
 import { IssueVerdictStore, ISSUE_VERDICT_COLUMNS, ISSUE_VERDICT_RENAMES } from './issueVerdicts.js';
 import { ScratchStore } from './scratch.js';
+import { RateLimitStore } from './rateLimits.js';
 import { UpgradeStore } from './upgrades.js';
 import { openPetsFromBeforeEggs, PetStore, PET_COLUMNS } from './pets.js';
 import { InstructionStore } from './instructions.js';
@@ -65,6 +66,7 @@ import {
   type TrackerSweepMark,
 } from './tickets.js';
 import type {
+  AccountRateLimits,
   Agent,
   AgentFile,
   AgentFileInput,
@@ -203,6 +205,7 @@ export class Store {
   private readonly verdicts: IssueVerdictStore;
   private readonly instructions: InstructionStore;
   private readonly scratch: ScratchStore;
+  private readonly rateLimits: RateLimitStore;
   private readonly agents: AgentStore;
   private readonly transcripts: TranscriptStore;
   private readonly escalations: EscalationStore;
@@ -363,6 +366,7 @@ export class Store {
     this.verdicts = new IssueVerdictStore(ctx);
     this.instructions = new InstructionStore(ctx);
     this.scratch = new ScratchStore(ctx);
+    this.rateLimits = new RateLimitStore(ctx);
     this.agents = new AgentStore(ctx);
     this.transcripts = new TranscriptStore(ctx);
     this.escalations = new EscalationStore(ctx);
@@ -975,6 +979,15 @@ export class Store {
   }
   listRetrospectiveOrigins(): string[] {
     return this.scratch.listRetrospectiveOrigins();
+  }
+
+  // -- The account's Claude usage windows ------------------------------------
+
+  recordRateLimits(limits: AccountRateLimits): void {
+    this.rateLimits.recordRateLimits(limits);
+  }
+  readRateLimits(): AccountRateLimits | null {
+    return this.rateLimits.readRateLimits();
   }
 
   // -- The harness's own build ----------------------------------------------

@@ -5,11 +5,26 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildSystem, type System } from '../src/system.js';
 import { loadConfig, type Config } from '../src/config.js';
-import { FakePtyBackend } from '../src/pty/fakeBackend.js';
+import { EventEmitter } from 'node:events';
+import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { UpdateDesk } from '../src/selfUpdate/updateDesk.js';
 import { applyUpgradeAction, buildReading, upgradability, IDLE_INTENT } from '../src/selfUpdate/upgradePlan.js';
 import type { BuildStanding } from '../src/selfUpdate/buildStanding.js';
+
+/** A headless `claude` that spawns, says nothing and never exits: enough to be interrupted. */
+class SilentChild extends EventEmitter implements StreamChild {
+  pid = 4321;
+  stdout = { on: () => {} } as unknown as NodeJS.ReadableStream;
+  stderr = null;
+  stdin = { write: () => {}, end: () => {} } as unknown as NodeJS.WritableStream;
+  override on(event: 'exit', cb: (code: number | null) => void): this {
+    return super.on(event, cb);
+  }
+  kill(): void {}
+}
+
+const silentSpawner: Spawner = () => new SilentChild();
 
 function testConfig(overrides: Partial<Config> = {}): Config {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
@@ -17,7 +32,7 @@ function testConfig(overrides: Partial<Config> = {}): Config {
     auth: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',
-    agentMode: 'pty',
+    agentMode: 'stream',
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
     heartbeatIntervalMs: 999_999,
@@ -142,7 +157,7 @@ function deskFor(system: System, over: Partial<BuildStanding> = {}): UpdateDesk 
 test('a drain pauses dispatch, and cancelling it un-pauses', async () => {
   const system = buildSystem(testConfig(), {
     worktrees: new FakeWorktreeManager(),
-    backend: new FakePtyBackend(),
+    streamSpawner: silentSpawner,
     errorMirror: () => {},
   });
   const desk = deskFor(system);
@@ -163,7 +178,7 @@ test('a drain pauses dispatch, and cancelling it un-pauses', async () => {
 test('a cancel leaves a pause the operator set themselves alone', async () => {
   const system = buildSystem(testConfig(), {
     worktrees: new FakeWorktreeManager(),
-    backend: new FakePtyBackend(),
+    streamSpawner: silentSpawner,
     errorMirror: () => {},
   });
   const desk = deskFor(system);
@@ -179,7 +194,7 @@ test('a cancel leaves a pause the operator set themselves alone', async () => {
 test('a drain becomes ready on the pulse that finds the fleet clear', async () => {
   const system = buildSystem(testConfig(), {
     worktrees: new FakeWorktreeManager(),
-    backend: new FakePtyBackend(),
+    streamSpawner: silentSpawner,
     errorMirror: () => {},
   });
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
@@ -203,7 +218,7 @@ test('a drain becomes ready on the pulse that finds the fleet clear', async () =
 test('an unavailable reading refuses every action, in the reason the reader gave', async () => {
   const system = buildSystem(testConfig(), {
     worktrees: new FakeWorktreeManager(),
-    backend: new FakePtyBackend(),
+    streamSpawner: silentSpawner,
     errorMirror: () => {},
   });
   const desk = deskFor(system, { unavailable: 'LubbDubb is not running from a git checkout' });
@@ -219,7 +234,7 @@ test('an unavailable reading refuses every action, in the reason the reader gave
 test('apply hands off only once the intent is durable', async () => {
   const system = buildSystem(testConfig(), {
     worktrees: new FakeWorktreeManager(),
-    backend: new FakePtyBackend(),
+    streamSpawner: silentSpawner,
     errorMirror: () => {},
   });
   const desk = deskFor(system);
@@ -241,7 +256,7 @@ test('apply hands off only once the intent is durable', async () => {
 test('an upgrade restores the agents it interrupted, without asking', async () => {
   const system = buildSystem(testConfig(), {
     worktrees: new FakeWorktreeManager(),
-    backend: new FakePtyBackend(),
+    streamSpawner: silentSpawner,
     errorMirror: () => {},
   });
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
@@ -271,7 +286,7 @@ test('an upgrade restores the agents it interrupted, without asking', async () =
 test('a restart that was not an upgrade restores nothing', async () => {
   const system = buildSystem(testConfig(), {
     worktrees: new FakeWorktreeManager(),
-    backend: new FakePtyBackend(),
+    streamSpawner: silentSpawner,
     errorMirror: () => {},
   });
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
@@ -289,7 +304,7 @@ test('a restart that was not an upgrade restores nothing', async () => {
 test('a genuine crash inside the upgrade window is left to the operator', async () => {
   const system = buildSystem(testConfig(), {
     worktrees: new FakeWorktreeManager(),
-    backend: new FakePtyBackend(),
+    streamSpawner: silentSpawner,
     errorMirror: () => {},
   });
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
