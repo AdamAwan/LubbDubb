@@ -324,6 +324,14 @@ test('notifySnapshot reduces a whole AppState to the three lists', () => {
           .filter((i) => i.state === 'open' && i.appraisal?.verdict === 'unclear')
           .map((i) => `intake:issue:${i.number}`),
       )
+      .concat(
+        // A pull request a person put on the operator — the one row source that is
+        // not the harness saying it is stuck, and so the one an operator most
+        // wants told about.
+        state.world.pullRequests
+          .filter((pr) => pr.attention.assignedToYou !== undefined)
+          .map((pr) => `assigned:pr:${pr.number}`),
+      )
       .sort(),
   );
 });

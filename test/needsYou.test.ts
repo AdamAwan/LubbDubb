@@ -104,11 +104,24 @@ function orphan(over: Partial<OrphanedWork> = {}): OrphanedWork {
  * raises an `intake` row off `world.issues` alone, so a suite asserting exact row
  * lists would otherwise be asserting the fixture backlog as well as its own — the
  * three tests whose subject *is* an appraisal put one back on the goal they name.
+ *
+ * The demo's assigned pull request goes for the same reason: it raises an
+ * `assigned` row off `world.pullRequests` alone, and it is `test/prAssignment.test.ts`'s
+ * subject rather than this suite's.
  */
 function stateWith(over: Partial<AppState>): AppState {
   const base = buildDemoState();
-  const world = { ...base.world, issues: base.world.issues.map((i) => ({ ...i, appraisal: null })) };
+  const world = {
+    ...base.world,
+    issues: base.world.issues.map((i) => ({ ...i, appraisal: null })),
+    pullRequests: unassignedPrs(base),
+  };
   return { ...base, world, ...over };
+}
+
+/** The demo's pull requests minus the assigned one — see {@link stateWith}. */
+function unassignedPrs(state: AppState): AppState['world']['pullRequests'] {
+  return state.world.pullRequests.filter((pr) => pr.attention.assignedToYou === undefined);
 }
 
 test('partHolding counts live direct dependents and ignores retired ones', () => {
@@ -342,6 +355,7 @@ test('an unanswered profile proposal is a row, and an answered one is not', () =
       recovery: [],
       world: {
         ...base.world,
+        pullRequests: unassignedPrs(base),
         issues: base.world.issues.map((i) =>
           i.number === goal.number
             ? {
@@ -401,6 +415,7 @@ test('a goal the appraisal refused is a row, and an unwatched or workable one is
       recovery: [],
       world: {
         ...base.world,
+        pullRequests: unassignedPrs(base),
         issues: base.world.issues.map((i) =>
           i.number === goal.number
             ? {
@@ -467,6 +482,7 @@ test('each open placement question is its own row, and a settled one is gone', (
       recovery: [],
       world: {
         ...base.world,
+        pullRequests: unassignedPrs(base),
         issues: base.world.issues.map((i) =>
           i.number === goal.number
             ? {

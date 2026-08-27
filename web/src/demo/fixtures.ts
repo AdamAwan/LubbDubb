@@ -486,6 +486,37 @@ export function buildDemoState(): DemoSeed {
             reasons: ['not tagged "lubbdubb-watch" — the harness is leaving it alone'],
           },
         }),
+        // A pull request a colleague put on you: the one row in the queue with no
+        // rule behind it, and the only one that says who asked. Unwatched, because
+        // that is the shape an assigned pull request usually arrives in — somebody
+        // else's work, which the fleet will never act on — and the arm that would
+        // otherwise leave the row with no age at all.
+        demoPr({
+          id: 'pr-415',
+          number: 415,
+          title: 'Retry the reconciliation sweep on a 429',
+          branch: 'feature/sweep-retry',
+          author: 'Priya Raman',
+          viewerAssignment: 'reviewer-optional',
+          ciStatus: 'passing',
+          unresolvedComments: [],
+          approved: false,
+          mergeable: true,
+          baseBranch: 'main',
+          mergeableState: 'clean',
+          merged: false,
+          labels: [],
+          health: { blocked: false, reasons: [] },
+          attention: {
+            status: 'you',
+            reasons: [
+              'Priya Raman marked you as a reviewer',
+              'not tagged "lubbdubb-watch" — the harness is leaving it alone',
+            ],
+            assignedToYou: 'reviewer-optional',
+            reviewWaitingSince: ago(60 * 26),
+          },
+        }),
       ],
       // What the World panel used to lose: a PR you were watching disappears when
       // it leaves the open set, with nothing to say whether it landed.
@@ -2985,6 +3016,7 @@ export function buildDemoState(): DemoSeed {
       '#407': 'https://github.com/example/markdown-magpie/pull/407',
       '#408': 'https://github.com/example/markdown-magpie/pull/408',
       '#414': 'https://github.com/example/markdown-magpie/pull/414',
+      '#415': 'https://github.com/example/markdown-magpie/pull/415',
       '#300': 'https://github.com/example/markdown-magpie/issues/300',
       '#332': 'https://github.com/example/markdown-magpie/issues/332',
       '#333': 'https://github.com/example/markdown-magpie/issues/333',

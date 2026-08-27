@@ -271,8 +271,14 @@ test('the references slot is a column, drawn on rows that have nothing to put in
 
   // The fleet row is the one that had a conditional group. A dispatch with no
   // origin must still draw the slot.
+  //
+  // Bounded from the card's first row rather than from its heading: the queue rail
+  // is drawn between the two markers, and its assigned row carries a slot of its
+  // own — a real one, for the pull request a person put on the operator — which
+  // read from the heading would be counted against the fleet's rows.
   const html = render(view());
-  const fleet = html.slice(html.indexOf('>Fleet'), html.indexOf('Goals in flight'));
+  const card = html.slice(html.indexOf('>Fleet'), html.indexOf('Goals in flight'));
+  const fleet = card.slice(card.search(/<div class="cn-row[ "]/));
   const rows = fleet.match(/<div class="cn-row[ "]/g) ?? [];
   assert.ok(rows.length > 0, 'the demo fixtures must carry fleet rows');
   assert.equal(
