@@ -21,6 +21,12 @@ import type { WatchResult } from './watchResult.js';
  * `GoalReachStatus`' rule one layer up, and the same rule because it is the same
  * mistake.
  *
+ * **A measure is a second arm, not a reinterpretation of the first.** A signal
+ * folds on `tolerate` and answers about rows; a measure folds on the threshold or
+ * the baseline it declared and answers about one number. Neither reads the
+ * other's columns, and a signal's verdict does not change shape because measures
+ * exist.
+ *
  * **Nothing here rolls up to a word.** There is one verdict per check and no fold
  * across them: a goal whose signal passed and whose measure failed is a fix that
  * worked and a proc that is still slow, and a single `regressed` would hide the
@@ -70,6 +76,7 @@ export function watchCheckVerdict(input: {
   }
   if (reading.rows === null || reading.verdict === 'unknown')
     return unreadable(environment, reading.detail ?? 'the observation did not answer');
+  if (check.kind === 'measure') return measureVerdict(check, environment, reading);
   const rows = reading.rows.length;
   if (rows <= check.tolerate) return { verdict: 'clean', rows, detail: null };
   return {
@@ -79,6 +86,51 @@ export function watchCheckVerdict(input: {
       `${environment} answered ${String(rows)} row${rows === 1 ? '' : 's'} where the check declared ` +
       `${check.tolerate === 0 ? 'none at all' : `no more than ${String(check.tolerate)}`}.`,
   };
+}
+
+/**
+ * A measure's comparison: one number against what it declared.
+ *
+ * **Every way of not having a number to compare is `unknown`.** A row count other
+ * than one and a non-numeric `value` are already refused by
+ * {@link parseWatchResult}, and this adds the third: a measure that declared
+ * `noWorseThan: "baseline"` whose baseline was never taken has nothing to compare
+ * against, and a comparison against nothing is not a passing one. The dry run is
+ * where a baseline comes from, so a check whose declaration was never put to an
+ * environment lands here.
+ *
+ * The baseline is read lower-is-better — a percentile, a duration, a queue depth
+ * — and a measure whose good news is a bigger number declares an `over` instead.
+ * → `docs/spec/29-post-deploy-watch.md#the-baseline-and-why-a-measure-is-not-trusted-without-one`
+ */
+function measureVerdict(check: GoalWatch, environment: string, reading: WatchResult): WatchCheckReading {
+  const value = reading.value;
+  if (value === null)
+    return unreadable(environment, 'a measure answers with exactly one row carrying a numeric "value"');
+  const unit = check.unit === null ? '' : ` ${check.unit}`;
+  const read = `${environment} read ${String(value)}${unit}`;
+  if (check.expectUnder !== null && value > check.expectUnder)
+    return regressed(`${read}, where the check declared it must stay under ${String(check.expectUnder)}${unit}.`);
+  if (check.expectOver !== null && value < check.expectOver)
+    return regressed(`${read}, where the check declared it must stay over ${String(check.expectOver)}${unit}.`);
+  if (check.expectBaseline) {
+    if (check.baselineValue === null)
+      return unreadable(
+        environment,
+        'this measure declared it must be no worse than its baseline, and no baseline was ever taken. There ' +
+          'is nothing to compare the reading against, which is not the same as the reading being good.',
+      );
+    if (value > check.baselineValue)
+      return regressed(
+        `${read}, worse than the ${String(check.baselineValue)}${unit} it read before the work arrived.`,
+      );
+  }
+  return { verdict: 'clean', rows: null, detail: null };
+}
+
+/** Outside what was declared, in the words the card draws it in. */
+function regressed(detail: string): WatchCheckReading {
+  return { verdict: 'regressed', rows: null, detail };
 }
 
 /**

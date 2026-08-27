@@ -3429,6 +3429,35 @@ select:disabled {
 .pm-wdetail {
   color: var(--muted);
 }
+/* An agent's declaration, waiting on the operator. Drawn as a change on the well
+   rather than as another reading, because nothing in it has been run: the query
+   goes to the operator's own telemetry with their own credential, and accepting is
+   what puts it there. Tokens only — a literal here is a panel that stays dark when
+   somebody switches to Light. */
+.pm-wpending {
+  background: var(--well);
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--amber);
+  border-radius: 4px;
+  font-size: 12px;
+  margin-top: 6px;
+  padding: 6px 8px;
+}
+.pm-wpending > b {
+  color: var(--muted);
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.pm-wpending > p {
+  margin: 4px 0 0;
+}
+.pm-wrule {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
 
 /* The validation plan. One row per check, the letter in the gutter where the
    part sequence number sits — the same reading position, because it is the same

@@ -922,6 +922,28 @@ class DemoServer {
   }
 
   /**
+   * The operator's ruling on a check the working agent declared — the demo mirror
+   * of `POST /api/issues/:number/watch-proposals/:checkId`.
+   *
+   * Accepting makes the declaration live with **no reading against it**, which is
+   * the honest mirror: the real route runs the dry run, and the demo has no
+   * environment to put a query to. Declining drops a row that was never anything
+   * but a proposal, and clears the pending change off one that was already live.
+   */
+  async ruleWatchProposal(issueNumber: number, checkId: string, accept: boolean): Promise<{ ok: true }> {
+    const origin = `issue:${issueNumber}`;
+    const watches = this.state.goalWatches ?? [];
+    const check = watches.find((w) => w.originRef === origin && w.id === checkId);
+    if (check?.proposal) {
+      if (!accept && !check.live) this.state.goalWatches = watches.filter((w) => w !== check);
+      else if (accept) Object.assign(check, check.proposal.declaration, { live: true, proposal: null });
+      else check.proposal = null;
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
+  /**
    * One validation check's current reading — the demo mirror of the four routes
    * under `/api/issues/:number/validation/:checkId`.
    *
@@ -4194,6 +4216,8 @@ export const demoApi = {
   withdrawInstruction: (issueNumber: number, id: string) => getServer().withdrawInstruction(issueNumber, id),
   dismissRun: (issueNumber: number, note?: string) => getServer().dismissRun(issueNumber, note),
   replan: (planId: string) => getServer().replan(planId),
+  ruleWatchProposal: (issueNumber: number, checkId: string, accept: boolean) =>
+    getServer().ruleWatchProposal(issueNumber, checkId, accept),
   // The demo's plans have one revision each — no replan has landed in a browser
   // session — so the history is that single revision and a null diff, which is
   // exactly what the real route answers for a plan nobody has amended.

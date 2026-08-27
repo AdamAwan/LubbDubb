@@ -265,3 +265,60 @@ export function watchNote(environments: readonly { name: string; watch?: { schem
   }
   return lines.join('\n');
 }
+
+/**
+ * What a **working** agent is told about the post-deploy watch — appended to the
+ * prompt that dispatches the work, never interpolated into it.
+ *
+ * Separate from {@link watchNote} because the two parties are told opposite
+ * things. A planner declares what the ticket says should stop happening, before
+ * the fix exists; a working agent declares what the code it *just wrote* emits,
+ * which is the one thing nobody else in the system can recover — and it is told
+ * that its declaration is a proposal the operator rules on, which a planner's is
+ * not.
+ *
+ * Held back until `watch_declare` existed, deliberately: an instruction naming a
+ * tool that is not granted is worse than none, because it reads as a harness that
+ * lost a tool rather than as a prompt that is out of date.
+ *
+ * Empty where no environment declares telemetry, which is the off switch — there
+ * is nothing to put a query to. Structurally typed for {@link watchNote}'s reason:
+ * `src/environments/` is a lens, and the dispatcher is handed the sentence rather
+ * than the config it was rendered from.
+ */
+export function watchDeclareNote(environments: readonly { name: string; watch?: { schema?: string } }[]): string {
+  const watched = environments.filter((env) => env.watch !== undefined);
+  if (watched.length === 0) return '';
+  const lines = [
+    '',
+    '',
+    '## After it ships',
+    '',
+    'If you added a log line, an exception, a metric or a counter that says whether this is behaving, ' +
+      'declare the watch that reads it with the `watch_declare` tool before you conclude. You are the only ' +
+      'party that knows the message template, the operation name and the property you wrote — a planner ' +
+      'could not have guessed them, and nothing downstream can recover them.',
+    '',
+    'Two kinds. A **signal** counts something that should not be happening, and needs a `presence` query ' +
+      'beside it whose only job is to prove the code path runs at all — without one, a query naming an ' +
+      'operation that does not exist answers zero rows, which looks exactly like a healthy release. A ' +
+      '**measure** asks for one number and declares either a threshold or `noWorseThan: "baseline"`, which ' +
+      'is the right shape for an optimisation: the same query is run the moment the operator accepts it, ' +
+      'and that reading is what your work has to beat.',
+    '',
+    'Use it too where the fix changed what the right question is. A timeout fixed by adding a retry does ' +
+      'not stop producing timeouts — the honest signal becomes "the job fails after retries", and only you ' +
+      "are holding the diff that says so. It merges on the check's id, so naming one leaves the rest alone.",
+    '',
+    'Nothing you declare runs until the operator accepts it: the query goes to their telemetry with their ' +
+      'credential, so it lands on the plan sheet as a pending change. Declaring nothing is a legitimate ' +
+      'answer — a refactor or a docs change has nothing running to watch.',
+    '',
+    `Environments whose telemetry can be asked: ${watched.map((env) => env.name).join(', ')}.`,
+  ];
+  for (const env of watched) {
+    const schema = env.watch?.schema?.trim();
+    if (schema !== undefined && schema !== '') lines.push('', `**${env.name}** — ${schema}`);
+  }
+  return lines.join('\n');
+}

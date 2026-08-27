@@ -20,6 +20,12 @@ import type { WatchResult } from './watchResult.js';
  * will ever match.** Whether the pipe is live at watch time is `presence`'s job.
  * Two failures, two guards, and neither folded into the other.
  *
+ * **A measure's baseline rides this same call.** The number the dry run reads is
+ * the before — the same query, from the same source, taken days before the
+ * arrival — and it is stored rather than discarded. Not a second spawn and not a
+ * second code path: one that asked separately would be free to ask a different
+ * question of a system that had already changed.
+ *
  * → `docs/spec/29-post-deploy-watch.md#the-dry-run`
  */
 export interface WatchDryRunner {
@@ -71,6 +77,7 @@ export class WatchDryRun implements WatchDryRunner {
     presence: WatchReadingVerdict | null;
     rows: number | null;
     detail: string | null;
+    value: number | null;
   }> {
     const command = environment.watch!.observe;
     if (check.presence !== null) {
@@ -87,6 +94,7 @@ export class WatchDryRun implements WatchDryRunner {
           verdict: 'unknown',
           presence,
           rows: null,
+          value: null,
           detail: `the watch could not read ${environment.name} — ${probe.detail ?? 'the observation did not answer'}`,
         };
       if (presence === 'zero')
@@ -94,6 +102,7 @@ export class WatchDryRun implements WatchDryRunner {
           verdict: 'unknown',
           presence,
           rows: null,
+          value: null,
           detail:
             `the presence query matched nothing on ${environment.name}, so the telemetry has never heard of this ` +
             'code path — wrong name, wrong application, or nothing instrumented. A signal cannot report clean ' +
@@ -114,20 +123,29 @@ export class WatchDryRun implements WatchDryRunner {
         verdict,
         presence,
         rows: null,
+        value: null,
         detail: `the watch could not read ${environment.name} — ${result.detail ?? 'the observation did not answer'}`,
       };
+    // A measure answered, so this number **is** the baseline: the same query,
+    // from the same source, before anything changed. Kept rather than discarded,
+    // which is the whole of why it can be trusted as a before — a second call, on
+    // a second schedule, would be free to ask a different question of a system
+    // that had already changed.
+    if (check.kind === 'measure')
+      return { verdict, presence, rows: result.rows!.length, value: result.value, detail: null };
     if (verdict === 'zero')
       return {
         verdict,
         presence,
         rows: 0,
+        value: null,
         detail:
           `the code path runs on ${environment.name} and the thing this reports is not happening. Either the ` +
           'query is wrong or the ticket is — one of the two is worth settling before any of this is built.',
       };
     // Fires on both: the query is proven live and the reported defect is proven
-    // real. Nothing to hand back, and this reading is the baseline.
-    return { verdict, presence, rows: result.rows!.length, detail: null };
+    // real. Nothing to hand back.
+    return { verdict, presence, rows: result.rows!.length, value: null, detail: null };
   }
 }
 

@@ -33,6 +33,7 @@ import { register as registerTickets } from './routes/tickets.js';
 import { register as registerUpgrade } from './routes/upgrade.js';
 import { register as registerStacks } from './routes/stacks.js';
 import { register as registerState } from './routes/state.js';
+import { register as registerWatches } from './routes/watches.js';
 import { register as registerValidation } from './routes/validation.js';
 import { register as registerWork } from './routes/work.js';
 
@@ -68,6 +69,7 @@ const ROUTE_MODULES: RouteModule[] = [
   registerTickets,
   registerUpgrade,
   registerValidation,
+  registerWatches,
   registerWork,
 ];
 

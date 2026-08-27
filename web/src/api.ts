@@ -464,6 +464,11 @@ const realApi = {
       note === undefined ? undefined : { note },
     ),
   replan: (planId: string) => post<{ ok: true }>(`/api/plans/${planId}/replan`),
+  // The operator's ruling on a check an agent declared. Accepting is also what puts
+  // the query to an environment for the first time — with their own credential,
+  // which is the whole reason it is asked.
+  ruleWatchProposal: (issueNumber: number, checkId: string, accept: boolean) =>
+    post<{ ok: true }>(`/api/issues/${issueNumber}/watch-proposals/${encodeURIComponent(checkId)}`, { accept }),
   // A plan's revisions and the last amendment as a diff, fetched when the sheet is
   // opened. Not polled, for the retrospective's reason: every revision carries a
   // write-up, so a replanned plan would put several of them into each poll.

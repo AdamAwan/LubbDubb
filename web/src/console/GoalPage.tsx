@@ -1179,14 +1179,37 @@ function Watch({ watch, now }: { watch: GoalWatchView | undefined; now: number }
   );
 }
 
-/** One check's reading in the operator's words. A reading that did not come back says so. */
+/**
+ * One check's reading in the operator's words. A reading that did not come back
+ * says so.
+ *
+ * **A measure reads as expected, before and now**, and the before is what makes
+ * the row worth looking at: a p95 of 310ms means nothing alone and everything
+ * beside the 8,400ms it replaced. It is available precisely because the baseline
+ * was taken at declaration, days before the arrival — so a measure that has one
+ * says it, and one that never had a baseline taken says *that* rather than
+ * printing a number with nothing beside it.
+ */
 function watchSaid(check: GoalWatchCheckView): string {
   const reading = check.reading;
   if (reading === null) return 'Not yet put to this environment. Nothing has been read.';
   if (reading.detail !== null) return reading.detail;
+  if (check.kind === 'measure') return measureSaid(check, reading.value);
   return check.tolerate === 0
     ? 'No matching rows at all, which is what it declared.'
     : `${String(reading.rows ?? 0)} matching rows, within the ${String(check.tolerate)} it declared.`;
+}
+
+/** Expected, before, now — the three the card draws a measure as. */
+function measureSaid(check: GoalWatchCheckView, value: number | null): string {
+  const unit = check.unit === null ? '' : ` ${check.unit}`;
+  const expected: string[] = [];
+  if (check.expectUnder !== null) expected.push(`under ${String(check.expectUnder)}${unit}`);
+  if (check.expectOver !== null) expected.push(`over ${String(check.expectOver)}${unit}`);
+  if (check.expectBaseline) expected.push('no worse than its baseline');
+  const before = check.baselineValue === null ? 'before: never taken' : `before ${String(check.baselineValue)}${unit}`;
+  const now = value === null ? 'now: nothing read' : `now ${String(value)}${unit}`;
+  return `Expected ${expected.join(' and ')} · ${before} · ${now}.`;
 }
 
 /**

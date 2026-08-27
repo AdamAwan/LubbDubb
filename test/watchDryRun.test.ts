@@ -249,6 +249,93 @@ test('a check an amendment stopped declaring stops being asked about', async () 
   system.store.close();
 });
 
+// --- measures and the baseline ----------------------------------------------
+
+/** One measure, declared as a planner would: no threshold, and the before it is compared against. */
+const MEASURE = {
+  id: 'orders-p95',
+  title: 'The orders proc is no slower than it was',
+  query: 'requests | summarize value = percentile(duration, 95)',
+  expect: { noWorseThan: 'baseline' as const },
+  unit: 'ms',
+};
+
+test('a measure captures its baseline on the dry run it already rides', async () => {
+  const observer = new FakeEnvironmentObserver({
+    'orders-p95:measure': JSON.stringify([watchRow('orders-p95', { value: 8400 })]),
+  });
+  const system = build(observer);
+  const res = await submit(system, spawnPlanner(system), { measures: [MEASURE] });
+  assert.equal(res.isError, false);
+
+  const check = system.store.listGoalWatches().find((w) => w.id === 'orders-p95')!;
+  assert.equal(check.kind, 'measure');
+  assert.equal(check.baselineValue, 8400, 'the number the work has to beat, kept rather than discarded');
+  assert.ok(check.baselineAt !== null);
+  assert.equal(check.dryRunVerdict, 'fires');
+  assert.equal(res.payload['watchDryRun'], undefined, 'a measure that answered has nothing to hand back');
+  // One call, not two: the baseline is the dry run's own reading, so a second
+  // spawn would be free to ask a different question of a system that had already
+  // changed. And no presence query — a measure declares none.
+  assert.deepEqual(
+    observer.asked.map((a) => a.kind),
+    ['measure'],
+  );
+  system.store.close();
+});
+
+test('a measure that answers two rows takes no baseline and is handed back', async () => {
+  const observer = new FakeEnvironmentObserver({
+    'orders-p95:measure': JSON.stringify([
+      watchRow('orders-p95', { value: 8400 }),
+      watchRow('orders-p95', { value: 12 }),
+    ]),
+  });
+  const system = build(observer);
+  const res = await submit(system, spawnPlanner(system), { measures: [MEASURE] });
+  const check = system.store.listGoalWatches().find((w) => w.id === 'orders-p95')!;
+  assert.equal(check.dryRunVerdict, 'unknown');
+  assert.equal(check.baselineValue, null, 'nothing answered, so there is no before');
+  assert.match((res.payload['watchDryRun'] as string[])[0]!, /exactly one row/);
+  system.store.close();
+});
+
+test('an amended measure re-takes its baseline rather than keeping the old one', async () => {
+  const observer = new FakeEnvironmentObserver({
+    'orders-p95:measure': JSON.stringify([watchRow('orders-p95', { value: 8400 })]),
+  });
+  const system = build(observer);
+  const agent = spawnPlanner(system);
+  await submit(system, agent, { measures: [MEASURE] });
+  assert.equal(system.store.listGoalWatches()[0]!.baselineValue, 8400);
+
+  // A baseline is a reading of *that* query. The re-declaration clears it and the
+  // dry run takes a new one, rather than leaving a before standing under text
+  // nobody has put to an environment.
+  await submit(system, agent, { measures: [{ ...MEASURE, query: 'requests | summarize value = avg(duration)' }] });
+  const after = system.store.listGoalWatches()[0]!;
+  assert.equal(after.query, 'requests | summarize value = avg(duration)');
+  assert.deepEqual(
+    observer.asked.filter((a) => a.kind === 'measure').map((a) => a.query),
+    [MEASURE.query, 'requests | summarize value = avg(duration)'],
+    'the amended query was put to the environment, not assumed to answer as its predecessor did',
+  );
+  assert.ok(after.baselineAt !== null, 'and the reading it answered with is the new baseline');
+  system.store.close();
+});
+
+test('a measure whose dry run never answered carries no baseline at all', async () => {
+  // Nothing scripted: the observation did not answer, so there is no before —
+  // which is the state the fold reads as `unknown` rather than as clean.
+  const system = build(new FakeEnvironmentObserver());
+  await submit(system, spawnPlanner(system), { measures: [MEASURE] });
+  const check = system.store.listGoalWatches()[0]!;
+  assert.equal(check.baselineValue, null);
+  assert.equal(check.baselineAt, null);
+  assert.equal(check.dryRunVerdict, 'unknown');
+  system.store.close();
+});
+
 // --- the declaration's own refusals ----------------------------------------
 
 test('a signal without a presence query is refused', () => {
@@ -256,9 +343,22 @@ test('a signal without a presence query is refused', () => {
   assert.equal(parsed.success, false);
 });
 
-test('a watch block declares only signals, and duplicate ids are refused', () => {
-  assert.equal(WatchSchema.safeParse({ signals: [], measures: [] }).success, false);
+test('a measure declaring neither a threshold nor a baseline is refused at ingestion', () => {
+  // The shape most likely to be written by somebody who meant to come back to it:
+  // it reads as a check and cannot fail. `arrival.opens: []`'s refusal.
+  assert.equal(WatchSchema.safeParse({ measures: [{ ...MEASURE, expect: {} }] }).success, false);
+  assert.equal(WatchSchema.safeParse({ measures: [{ ...MEASURE, expect: { under: 500 } }] }).success, true);
+  assert.equal(WatchSchema.safeParse({ measures: [MEASURE] }).success, true);
+  // A measure declares no presence — the field belongs to the other kind.
+  assert.equal(WatchSchema.safeParse({ measures: [{ ...MEASURE, presence: 'x' }] }).success, false);
+});
+
+test('a watch block declares only signals and measures, and duplicate ids are refused', () => {
+  assert.equal(WatchSchema.safeParse({ signals: [], rumours: [] }).success, false);
   assert.equal(WatchSchema.safeParse({ signals: [SIGNAL, SIGNAL] }).success, false);
+  // Unique across the two kinds: the store's key is the slug alone, so a signal
+  // and a measure sharing one would be a single row.
+  assert.equal(WatchSchema.safeParse({ signals: [SIGNAL], measures: [{ ...MEASURE, id: SIGNAL.id }] }).success, false);
   assert.equal(WatchSchema.safeParse({ signals: [SIGNAL] }).success, true);
   // `tolerate` defaults to zero — the thing should not be happening at all.
   const parsed = WatchSchema.parse({ signals: [{ ...SIGNAL, tolerate: undefined }] });

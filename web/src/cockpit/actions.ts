@@ -172,6 +172,14 @@ export interface CockpitActions {
 
   replan(planId: string): Promise<void>;
   /**
+   * Accept or decline a check the working agent declared through `watch_declare`.
+   *
+   * The one control on the watch surface, and the whole of its authorisation
+   * story: an agent's query is not put to the operator's telemetry until the
+   * operator says so, and accepting is what runs it once.
+   */
+  ruleWatchProposal(issueNumber: number, checkId: string, accept: boolean): Promise<void>;
+  /**
    * A reviewer's confirmation that one of a part's acceptance criteria holds.
    * Keyed on the criterion's text, which is what the server stores — an index
    * would move under a re-worded list and carry the tick onto something nobody

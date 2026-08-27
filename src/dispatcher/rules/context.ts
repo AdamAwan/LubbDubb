@@ -238,6 +238,19 @@ export interface StageContext {
    */
   watchNote: string;
   /**
+   * What a **working** agent is told about the post-deploy watch, already
+   * rendered, to be **appended** to whatever prompt it got.
+   *
+   * A second string rather than a flag on {@link watchNote}, because the two
+   * parties are told opposite things: a planner declares what the ticket says
+   * should stop happening, and a working agent declares what the code it just
+   * wrote emits. A finished sentence for {@link watchNote}'s reason — the lens
+   * boundary, in the direction a rule could otherwise cross.
+   * Empty where no environment declares telemetry.
+   * → `src/plans/planning.ts`
+   */
+  watchDeclareNote: string;
+  /**
    * Where a goal's validation resources live, so `validate-check` can tell an
    * agent which directory to look in. A bare string on the same terms as
    * {@link StageContext.defaultBranch}: the dispatcher only ever *phrases* it,

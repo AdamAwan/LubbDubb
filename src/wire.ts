@@ -126,6 +126,7 @@ import type {
   ShortfallCause,
   StackLanding,
   GoalWatch,
+  GoalWatchKind,
   WatchReading,
   WatchWindow,
   PoolFleetReading,
@@ -1418,8 +1419,30 @@ export interface GoalWatchCheckView {
   /** The author's own slug, and the merge key its declaration is folded on. */
   checkId: string;
   title: string;
-  /** The count the check declared it must not exceed. */
+  /**
+   * Which question this check asks, because the card phrases the two differently:
+   * a signal's expectation is a row count, and a measure's is a number against a
+   * threshold or against what the same query read before the work arrived.
+   */
+  kind: GoalWatchKind;
+  /** The count the check declared it must not exceed. Read for a signal only. */
   tolerate: number;
+  /** A measure's ceiling, floor, and whether it declared `noWorseThan: "baseline"`. */
+  expectUnder: number | null;
+  expectOver: number | null;
+  expectBaseline: boolean;
+  /** What the number is in, drawn beside it. */
+  unit: string | null;
+  /**
+   * A measure's **before** — what its query read at declaration, or null where no
+   * baseline was ever taken.
+   *
+   * Carried so the card can draw expected / before / now, which is what makes it
+   * worth looking at: a p95 of 310ms means nothing alone and everything beside the
+   * 8,400ms it replaced. Null is *never taken*, which the fold already reads as
+   * `unknown` rather than as a comparison that passed.
+   */
+  baselineValue: number | null;
   /**
    * The newest reading, or **null while the window has not been read yet**.
    *
@@ -2214,7 +2237,9 @@ export type {
   Retrospective,
   ScratchEntry,
   GoalWatch,
+  GoalWatchInput,
   GoalWatchKind,
+  GoalWatchProposal,
   StackLanding,
   StallPark,
   TaskSummary,

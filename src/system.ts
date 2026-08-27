@@ -50,9 +50,9 @@ import { BranchReapDesk } from './branchReapDesk.js';
 import { EnvironmentDesk } from './environments/environmentDesk.js';
 import { CommandEnvironmentProber, type EnvironmentProber } from './environments/prober.js';
 import { CommandEnvironmentObserver, type EnvironmentObserver } from './environments/observer.js';
-import { WatchDryRun } from './environments/watchDryRun.js';
+import { WatchDryRun, type WatchDryRunner } from './environments/watchDryRun.js';
 import { WatchDesk } from './environments/watchDesk.js';
-import { watchNote } from './plans/planning.js';
+import { watchDeclareNote, watchNote } from './plans/planning.js';
 import { PrWatchDesk } from './prWatchDesk.js';
 import { PrWorkItemDesk } from './prWorkItemDesk.js';
 import { ScheduleDesk } from './schedules/scheduleDesk.js';
@@ -143,6 +143,13 @@ export interface System {
    * empty one. → `docs/spec/28-cross-fleet-pool.md`
    */
   pool?: PoolDesk;
+  /**
+   * The post-deploy watch's dry run. Exposed because accepting an agent's
+   * declaration is route-driven: the operator clicks, the query is put to an
+   * environment once, and what it answered comes back in the same call — which is
+   * also where a measure's baseline is taken. → `docs/spec/29-post-deploy-watch.md`
+   */
+  watch: WatchDryRunner;
   /**
    * Files a tracker item (issue #394). Exposed because filing is **route-driven**:
    * the operator clicks, waits, and is told the item's ref — so it is neither an
@@ -808,6 +815,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     // sentence rather than the environment config it was rendered from — the lens
     // boundary `src/environments/` keeps in both directions.
     watchNote(config.environments),
+    // The working agent's half, rendered here for the same reason and appended by
+    // the two rules that dispatch work: it names `watch_declare`, which only an
+    // agent holding a diff has anything to say through.
+    watchDeclareNote(config.environments),
   );
   const dispatcher: Dispatcher = rules;
 
@@ -1261,6 +1272,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     pool,
     filing,
     upstream,
+    watch: watchDryRun,
     updates,
     runtimeControl,
     pets,

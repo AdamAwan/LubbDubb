@@ -192,7 +192,12 @@ function partCandidate(
           remaining,
         }) +
         partDeclarationNote(part) +
-        partOutcomeNote(part),
+        partOutcomeNote(part) +
+        // Appended for the same reason as everything above it, and this one names
+        // a tool: an instruction interpolated into an override that never learned
+        // its token would be dropped silently, leaving the fleet with a granted
+        // tool nothing tells it about.
+        s.watchDeclareNote,
       originRef: origin,
       originTitle: `${issue.title} — ${part.title}`,
       originSummary: part.scope,

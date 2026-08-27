@@ -47,6 +47,10 @@ const SIGNAL: GoalWatchInput = {
   query: "traces | where message has 'job X timed out'",
   presence: "traces | where operation_Name == 'job X'",
   tolerate: 0,
+  expectUnder: null,
+  expectOver: null,
+  expectBaseline: false,
+  unit: null,
   why: null,
 };
 

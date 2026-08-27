@@ -44,7 +44,7 @@ import { StackLandingStore } from './landings.js';
 import { BranchReapStore } from './branchReaps.js';
 import { dropPartialGoalArrivals, ENVIRONMENT_COLUMNS, EnvironmentStore, repairPartRefGoals } from './environments.js';
 import { LocalRunStore, LOCAL_RUN_COLUMNS } from './localRuns.js';
-import { WatchStore } from './watches.js';
+import { WatchStore, WATCH_COLUMNS } from './watches.js';
 import { PrWatchSeedStore } from './prWatchSeeds.js';
 import { WorkItemLinkStore } from './workItemLinks.js';
 import { ReviewWaitStore } from './reviewWaits.js';
@@ -274,6 +274,7 @@ export class Store {
       LOCAL_RUN_COLUMNS,
       KNOWLEDGE_COLUMNS,
       ENVIRONMENT_COLUMNS,
+      WATCH_COLUMNS,
     ]) {
       addedColumns.push(...ensureColumns(this.db, columns));
     }
@@ -1248,12 +1249,22 @@ export class Store {
       presence: WatchReadingVerdict | null;
       rows: number | null;
       detail: string | null;
+      value: number | null;
     },
   ): void {
     this.watches.recordWatchDryRun(originRef, checkId, reading);
   }
   listGoalWatches(): GoalWatch[] {
     return this.watches.listGoalWatches();
+  }
+  listProposedGoalWatches(): GoalWatch[] {
+    return this.watches.listProposedGoalWatches();
+  }
+  proposeGoalWatch(originRef: string, checks: readonly GoalWatchInput[], note: string): { proposed: string[] } {
+    return this.watches.proposeGoalWatch(originRef, checks, note);
+  }
+  ruleOnWatchProposal(originRef: string, checkId: string, accept: boolean): GoalWatch | null {
+    return this.watches.ruleOnWatchProposal(originRef, checkId, accept);
   }
   openWatchWindow(input: { goalRef: string; environment: string; openedAt: string; settlesAt: string }): void {
     this.watches.openWatchWindow(input);
@@ -1270,6 +1281,7 @@ export class Store {
     checkId: string;
     verdict: WatchCheckVerdict;
     rows: number | null;
+    value: number | null;
     detail: string | null;
   }): void {
     this.watches.recordWatchReading(input);
