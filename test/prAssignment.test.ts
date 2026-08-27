@@ -132,6 +132,35 @@ test('an optional reviewer is told which of the two they are', () => {
   assert.deepEqual(verdict.reasons, ['you have been marked as a reviewer', 'waiting on review']);
 });
 
+test('an assigned pull request says how long it has been waiting on you', () => {
+  const WAITING_SINCE = '2026-07-20T09:00:00.000Z';
+  const waits = new Map([[7, WAITING_SINCE]]);
+
+  // The arm that already carried the age: `waiting on review`, about the operator
+  // now rather than about somebody else.
+  const reviewing = prAttentionStatus(pr({ viewerAssignment: 'reviewer-required' }), ctx({ reviewWaits: waits }));
+  assert.equal(reviewing.reviewWaitingSince, WAITING_SINCE);
+
+  // The one the rail shows most, and the one that carried no age at all: an
+  // assigned pull request nobody tagged never reaches the `waiting on review` arm.
+  const untagged = prAttentionStatus(
+    pr({ viewerAssignment: 'reviewer-required' }),
+    ctx({ watchLabel: 'lubbdubb-watch', reviewWaits: waits }),
+  );
+  assert.equal(untagged.status, 'you');
+  assert.equal(untagged.reviewWaitingSince, WAITING_SINCE);
+
+  // Unassigned, the same untagged pull request is nobody's wait to draw: the arm
+  // is `unwatched` and the clock is about a reviewer who is not the operator.
+  const theirs = prAttentionStatus(pr(), ctx({ watchLabel: 'lubbdubb-watch', reviewWaits: waits }));
+  assert.equal(theirs.reviewWaitingSince, undefined);
+
+  // A clock that is not running draws no age — a reviewer cannot be late for work
+  // that is not ready, and the watermark is deleted the moment it stops waiting.
+  const notReady = prAttentionStatus(pr({ viewerAssignment: 'reviewer-required' }), ctx());
+  assert.equal(notReady.reviewWaitingSince, undefined);
+});
+
 test('an agent on the branch keeps the court, and the assignment rides as a reason', () => {
   const verdict = prAttentionStatus(pr({ viewerAssignment: 'assignee' }), ctx({ tasks: [task()] }));
   assert.equal(verdict.status, 'harness');
@@ -171,6 +200,7 @@ test('an assigned pull request becomes a queue row, and a staffed one does not',
       status: 'you' as const,
       reasons: ['Priya Raman marked you as a reviewer', 'waiting on review'],
       assignedToYou: 'reviewer-optional' as const,
+      reviewWaitingSince: '2026-07-20T09:00:00.000Z',
     },
   };
   const staffed = {
@@ -195,7 +225,29 @@ test('an assigned pull request becomes a queue row, and a staffed one does not',
   assert.doesNotMatch(mine[0]?.title ?? '', /waiting on review/);
   // Which kind of reviewer is the metadata line's, off the field.
   assert.equal(mine[0]?.note, 'Optional reviewer');
-  // No instant exists for "since when", and inventing one draws a fresh age on
-  // every poll.
-  assert.equal(mine[0]?.raisedAt, '');
+  // How long it has been waiting on the operator — the review-wait watermark, not
+  // an invented "when it became yours", which no provider reports and which
+  // stamping "now" for would refresh on every poll.
+  assert.equal(mine[0]?.raisedAt, '2026-07-20T09:00:00.000Z');
+});
+
+test('an assigned row with no clock running draws no age', () => {
+  const base = buildDemoSeed().state;
+  const sample = base.world.pullRequests[0];
+  assert.ok(sample, 'the demo fixtures must carry a pull request');
+
+  const rows = buildNeedsYou(
+    stateWithPrs([
+      {
+        ...sample,
+        number: 9103,
+        attention: {
+          status: 'you' as const,
+          reasons: ['Priya Raman marked you as a reviewer', 'CI failing'],
+          assignedToYou: 'reviewer-required' as const,
+        },
+      },
+    ]),
+  );
+  assert.equal(rows.find((r) => r.kind === 'assigned')?.raisedAt, '');
 });

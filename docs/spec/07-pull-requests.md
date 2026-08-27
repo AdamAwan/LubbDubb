@@ -599,6 +599,19 @@ dispatches, escalates or files a task at any threshold, because the harness has 
 operator does how to make a colleague review faster. The whole of its effect is an age on the court
 chip from the first pulse it is observed waiting ([17](17-cockpit.md#the-overview)).
 
+**An assignment is the second arm that carries it**, and it is the same clock rather than a second
+one. Where an assignment takes over a court ([above](#a-pull-request-a-person-put-on-you)), the
+reviewer the wait is about **is** the operator, so the verdict carries the watermark whichever arm the
+assignment displaced — including `unwatched` and `stalled`, which never reach the `waiting on review`
+arm and so carried no age at all, the case the rail shows most. The queue row draws it as its age
+([17](17-cockpit.md#the-queue-rail--needs-you)). Nothing else moves: the predicate, the fold, the
+watermark and every rule about when the clock runs are untouched — what an assignment changes is only
+_whose_ wait it is.
+
+An assigned pull request whose clock is **not** running — red CI, an unhandled comment, a staffed
+branch, or one the harness has not yet observed a pulse of — draws no age, exactly as before. That is
+the same safe direction the predicate takes: a reviewer cannot be late for work that is not ready.
+
 ### The CI policy decides the court, not `ciStatus`
 
 `ciStatus` is a fold, and this verdict is about courts, so reading the aggregate alone was wrong in

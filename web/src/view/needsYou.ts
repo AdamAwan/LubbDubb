@@ -153,12 +153,19 @@ function assignedPrRows(state: AppState): NeedRow[] {
       agentId: null,
       agentLabel: null,
       holding: 0,
-      // There is no instant to quote. A provider payload says who a pull request
-      // is assigned to and never when it became so, and stamping the snapshot's
-      // "now" would draw a fresh age on every poll — a row that has been yours all
-      // week reading as one that arrived a moment ago. An empty string draws no
-      // age, which is the honest rendering of a span nothing observed.
-      raisedAt: '',
+      // How long it has been waiting on *you* — the review-wait watermark the
+      // pulse folds (`awaitingReview`), which the verdict carries on an assigned
+      // court for exactly this. It is not when the assignment was made: no
+      // provider payload says that, and stamping the snapshot's "now" for it would
+      // draw a fresh age on every poll, a row that has been yours all week reading
+      // as one that arrived a moment ago.
+      //
+      // Empty where the clock is not running — red CI, an unhandled comment, a
+      // staffed branch, or a harness that has not yet observed a pulse of this
+      // pull request — and an empty string draws no age, which is the honest
+      // rendering of a span nothing observed. It also sorts such a row to the top
+      // of its group, which is where an ask whose age is unknown belongs.
+      raisedAt: pr.attention?.reviewWaitingSince ?? '',
     });
   }
   return rows;

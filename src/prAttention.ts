@@ -80,13 +80,18 @@ export interface PrAttention {
   reasons: string[];
   /**
    * How long this pull request has been sitting on a reviewer (ISO instant it
-   * started), on the one arm that means it. Absent everywhere else.
+   * started), on the two arms that mean it: `waiting on review`, and **any court
+   * an assignment took over** — where the reviewer the clock is about is the
+   * operator themselves. Absent everywhere else.
    *
-   * **It does not make the PR your court.** `waiting on review` stays `elsewhere`,
-   * because on a team the reviewer is somebody else and a queue of other people's
-   * obligations is not an inbox — it is the thing that makes an inbox stop being
-   * read. This is an age on a row you were already looking at, and nothing more:
-   * no needs-you entry, no human task, no escalation.
+   * **It does not, by itself, make the PR your court.** `waiting on review` stays
+   * `elsewhere` on a pull request the operator merely opened, because on a team
+   * the reviewer is somebody else and a queue of other people's obligations is
+   * not an inbox — it is the thing that makes an inbox stop being read. There it
+   * is an age on a row you were already looking at and nothing more: no needs-you
+   * entry, no human task, no escalation. What changes on an assignment is only
+   * *whose* wait it is; the clock, and every rule about when it runs, is the same
+   * one. → `docs/spec/07-pull-requests.md#how-long-it-has-been-waiting-on-a-reviewer`
    */
   reviewWaitingSince?: string;
   /**
@@ -173,7 +178,23 @@ export function prAttentionStatus(pr: PullRequest, ctx: PrAttentionContext): PrA
   // is, and it leads. `waiting on review` in particular is a lie about a pull
   // request you were handed: the reviewer it names is you.
   if (verdict.status === 'unwatched' || verdict.status === 'elsewhere' || verdict.status === 'stalled') {
-    return { ...verdict, status: 'you', reasons: [note, ...verdict.reasons], assignedToYou: assigned };
+    // And how long it has been waiting — on *them*, now that the reviewer the
+    // clock is about is the operator. The `waiting on review` arm sets this
+    // itself; the other two never reach it, so an assigned pull request nobody
+    // tagged carried no age at all, which is the case the rail shows most. The
+    // watermark is the same reading either way (`awaitingReview`, folded once per
+    // pulse): the instant this pull request became reviewable with nobody having
+    // reviewed it. Absent — red CI, an unhandled comment, a staffed branch, or a
+    // harness that has not observed a pulse of it yet — draws no age, because a
+    // reviewer cannot be late for work that is not ready.
+    const since = verdict.reviewWaitingSince ?? ctx.reviewWaits?.get(pr.number);
+    return {
+      ...verdict,
+      status: 'you',
+      reasons: [note, ...verdict.reasons],
+      assignedToYou: assigned,
+      ...(since === undefined ? {} : { reviewWaitingSince: since }),
+    };
   }
   // Every other arm already has a court, and it is the right one: a PR with an
   // agent on its branch is the harness's whoever it is assigned to. The

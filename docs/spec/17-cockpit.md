@@ -584,9 +584,16 @@ Both would be the same ask twice, which is how a queue teaches an operator to sk
 
 Keyed on that field and never on the assignment itself, for the reason `dispatch` keys on an outcome
 rather than a sentence: a surface matching the leading reason's wording would file every future
-rewording of it as "not assigned". It carries **no age** — a provider payload says who a pull request
-is assigned to and never since when, and stamping the snapshot's "now" would draw a fresh age on every
-poll, a row that has been theirs all week reading as one that arrived a moment ago.
+rewording of it as "not assigned".
+
+**Its age is how long the pull request has been waiting on _them_** — `reviewWaitingSince`, the
+review-wait watermark the pulse folds, which the verdict carries on an assigned court for exactly this
+([07](07-pull-requests.md#how-long-it-has-been-waiting-on-a-reviewer)). It is deliberately **not** when
+the assignment was made: no provider payload says that, and stamping the snapshot's "now" for it would
+draw a fresh age on every poll, a row that has been theirs all week reading as one that arrived a
+moment ago. A pull request whose clock is not running — red CI, an unhandled comment, a staffed branch,
+or one the harness has not yet observed a pulse of — draws no age, and sorts to the top of its group,
+which is where an ask whose age is unknown belongs.
 
 **The row says who asked, and what they asked about.** Its line is the verdict's leading reason —
 which names the person ([07](07-pull-requests.md#a-pull-request-a-person-put-on-you)) — followed by the
