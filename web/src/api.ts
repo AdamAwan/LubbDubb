@@ -15,6 +15,7 @@ import type {
 // or re-nested key is a compile error here instead of an empty panel.
 import type {
   AgentFilesPayload,
+  GoalAgentsPayload,
   AgentTranscript,
   CiPolicyPayload,
   FilingTargetProbe,
@@ -169,6 +170,15 @@ const realApi = {
   // while the agent is live — never shipped on `/api/state`, where the whole-fleet
   // list it replaces was 87% of the payload.
   getAgentFiles: (agentId: string) => authFetch(`/api/agents/${agentId}/files`).then((r) => json<AgentFilesPayload>(r)),
+  // Every agent that has worked one goal, fetched when its page opens. The
+  // snapshot carries the fleet's live agents and a bounded tail of ended ones, so
+  // this is where a goal's older runs come from — `prs` names the pull requests
+  // the page has already resolved as this goal's, which is the match the server
+  // deliberately does not make a second copy of.
+  getGoalAgents: (ref: string, prs: readonly number[]) =>
+    authFetch(
+      `/api/issues/${/^issue:(\d+)$/.exec(ref)?.[1] ?? ''}/agents${prs.length > 0 ? `?prs=${prs.join(',')}` : ''}`,
+    ).then((r) => json<GoalAgentsPayload>(r)),
   // The work graph is fetched, never polled: `/api/state` comes round every couple
   // of seconds and the graph only ever grows, so the roots are read once on mount
   // and a subtree when one is opened.

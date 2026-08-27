@@ -17,7 +17,7 @@ import { modelLabelsFor } from '../../modelLabels.js';
 import { watchCascadeTargets } from '../../issueRelations.js';
 import { checked, IssueNumberParams, optionalText, requiredBoolean, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
-import type { FilingTargetProbe, IssueFiled } from '../../wire.js';
+import type { FilingTargetProbe, GoalAgentsPayload, IssueFiled } from '../../wire.js';
 
 /**
  * The operator's own arm of every verdict an agent can cast about an issue —
@@ -934,6 +934,52 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   // wants an exception. The failure is still *recorded* — an operator whose `gh`
   // login has lapsed should find that in the Errors panel and not only in a modal
   // they closed.
+  /**
+   * Every agent that has worked one goal, with the tasks they were dispatched on
+   * — the goal page's "On this goal" card, fetched when the page opens.
+   *
+   * Its own route rather than a slice of `/api/state`, for the reason
+   * `/api/agents/:id/files` is one: the snapshot carries the fleet's live agents
+   * and a bounded tail of ended ones, because the all-time list grew for the life
+   * of a deployment and was re-serialised on every `dirty`. A goal's history is
+   * the one thing that needed the rest of it, and it is one goal at a time.
+   * → `docs/spec/16-http-api.md#bulk-collections`
+   *
+   * `prs` names the goal's pull requests, because which pull requests are a
+   * goal's is the cockpit's own three-way match (`ownsPr`) — the same list it
+   * draws on the page. Resolving them again here would be a second matcher, free
+   * to disagree with the pull requests shown beside the agents it selected.
+   *
+   * No 404 for a goal the world has dropped: a run whose ticket closed still has
+   * a page and still has a history, which is the case this card most exists for.
+   */
+  const GoalAgentsQuery = z.object({
+    prs: z
+      .string()
+      .optional()
+      .transform((raw, ctx) => {
+        if (raw === undefined || raw.trim() === '') return [] as number[];
+        const parts = raw.split(',').map((p) => p.trim());
+        const numbers = parts.map(Number);
+        if (numbers.some((n) => !Number.isInteger(n) || n <= 0)) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'prs must be a comma-separated list of PR numbers' });
+          return z.NEVER;
+        }
+        return numbers;
+      }),
+  });
+  app.get(
+    '/api/issues/:number/agents',
+    checked({ params: IssueNumberParams, query: GoalAgentsQuery }, async ({ params, query }) => {
+      const ref = issueConclusionOrigin(params.number);
+      const tasks = store.listGoalTasks(
+        ref,
+        query.prs.map((n) => `pr:${n}`),
+      );
+      return { ref, agents: store.listAgentsForTasks(tasks.map((t) => t.id)), tasks } satisfies GoalAgentsPayload;
+    }),
+  );
+
   app.get('/api/issues/filing-target', async (): Promise<FilingTargetProbe> => {
     try {
       const target = await withDeadline(

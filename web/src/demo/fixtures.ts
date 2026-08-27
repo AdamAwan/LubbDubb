@@ -2591,6 +2591,9 @@ export function buildDemoState(): DemoSeed {
     // Nobody in the demo world is out of account limit. The key is here rather
     // than absent because the wire always ships it, and a surface that has never
     // seen the empty case is one that renders it wrong the first time it happens.
+    // The demo's ended agents are all in the list above, so the count is the
+    // list's — what a deployment inside the tail reads.
+    endedAgents: 0,
     parkedOnLimit: [],
     // Nor is anybody stopped without saying why. Present-and-empty for
     // `parkedOnLimit`'s reason: the wire always ships it, and the empty case is the

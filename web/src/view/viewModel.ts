@@ -12,6 +12,7 @@ import type {
   TicketTrackingFilter,
   TicketWatchFilter,
   InsightsWindow,
+  GoalAgentsPayload,
 } from '../types.js';
 import { buildNeedsYou } from './needsYou.js';
 import type { AppliedFix, NeedRow } from './needsYou.js';
@@ -286,6 +287,14 @@ interface ViewInputs {
   tails: ReadonlyMap<string, string>;
   /** When the last pulse landed — the anchor the countdown is measured from. */
   lastPulseAt: number;
+  /**
+   * The open goal's whole run history, fetched when its page opened, or null when
+   * nothing is open (or the fetch has not landed). The snapshot's `agents` list is
+   * the fleet's live rows and a bounded tail of ended ones, so this is where a
+   * goal's older runs come from — merged with the snapshot's, never instead of it,
+   * since a dispatch made since the fetch is only in the snapshot.
+   */
+  goalAgents?: GoalAgentsPayload | null;
   /** Which plan's modal is open, or null when none is. */
   viewingPlan: string | null;
   /** The goal whose retrospective is open, as an `issue:<n>` ref. */
@@ -367,6 +376,9 @@ export function buildViewModel(input: ViewInputs): CockpitView {
   const sincePulse = now - input.lastPulseAt;
 
   const needsYou = buildNeedsYou(state, input.setup, input.appliedFixes ?? []);
+  const goalPage = input.selectedGoal
+    ? buildGoalPage(state, input.selectedGoal, needsYou, input.goalAgents ?? null)
+    : null;
 
   return {
     state,
@@ -389,7 +401,7 @@ export function buildViewModel(input: ViewInputs): CockpitView {
 
     needsYou,
     selectedGoal: input.selectedGoal,
-    goalPage: input.selectedGoal ? buildGoalPage(state, input.selectedGoal, needsYou) : null,
+    goalPage,
     consolePanel: input.consolePanel,
     tab: input.tab,
     insightsView: input.insightsView,
@@ -408,7 +420,13 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     ticketView: input.ticketView ?? 'table',
     ticketColumns: input.ticketColumns ?? [],
 
-    selectedAgent: state.agents.find((a) => a.id === selected) ?? null,
+    // The snapshot first, then the open goal's fetched history: a row on that
+    // page can be older than the fleet's tail, and a drawer that would not open
+    // for it is a dead end on the one surface that offered the click.
+    selectedAgent:
+      state.agents.find((a) => a.id === selected) ??
+      (input.goalAgents?.agents ?? []).find((a) => a.id === selected) ??
+      null,
     selectedOutput: selected ? input.liveOutput.get(selected) : undefined,
 
     nextPulseIn: Math.max(0, Math.ceil((interval - (sincePulse % interval)) / 1000)),
@@ -425,7 +443,12 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     flagsByAgent: groupByAgent(state.flags),
     tailByAgent: input.tails,
 
-    taskFor: (agent) => state.tasks.find((t) => t.id === agent.taskId) ?? null,
+    // Both lists, for `selectedAgent`'s reason: the drawer of an old run reads its
+    // title from the task the history brought with it.
+    taskFor: (agent) =>
+      state.tasks.find((t) => t.id === agent.taskId) ??
+      (input.goalAgents?.tasks ?? []).find((t) => t.id === agent.taskId) ??
+      null,
     agentOnBranch: new Map(
       state.agents.flatMap((agent) => {
         if (agent.endedAt !== null) return [];

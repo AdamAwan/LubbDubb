@@ -50,6 +50,7 @@ export type {
   FilingTargetProbe,
   EnvironmentGate,
   EnvironmentGateRelease,
+  GoalAgentsPayload,
   GoalArrival,
   InsightsWindow,
   InsightsWindowView,

@@ -391,6 +391,10 @@ export class Store {
   listTasks(): TaskSummary[] {
     return this.tasksStore.listTasks();
   }
+
+  listGoalTasks(goalRef: string, prRefs: readonly string[]): TaskSummary[] {
+    return this.tasksStore.listGoalTasks(goalRef, prRefs);
+  }
   countTasksNamingTools(since: string, names: readonly string[]): Map<string, number> {
     return this.tasksStore.countTasksNamingTools(since, names);
   }
@@ -1023,6 +1027,10 @@ export class Store {
       ...this.localRuns.listLocalRunCostDeltasSince(sinceIso),
     ].sort((a, b) => a.at.localeCompare(b.at));
   }
+  listAgentsForTasks(taskIds: readonly string[]): Agent[] {
+    return this.agents.listAgentsForTasks(taskIds);
+  }
+
   listAgentsByStatus(...statuses: Agent['status'][]): Agent[] {
     return this.agents.listAgentsByStatus(...statuses);
   }

@@ -54,6 +54,10 @@ function Fleet({ view, actions }: { view: CockpitView; actions: CockpitActions }
   const [showEnded, setShowEnded] = useState(false);
   const ended = view.past;
   const desk = view.deskRuns;
+  // The count is the fleet's own, not the list's: the snapshot carries a bounded
+  // tail of ended agents, so a number read off `ended` would settle at the cap and
+  // report it forever on a deployment that had run twenty thousand shifts.
+  const endedTotal = view.state.endedAgents;
 
   return (
     <section className="cn-card cn-span2">
@@ -68,15 +72,24 @@ function Fleet({ view, actions }: { view: CockpitView; actions: CockpitActions }
         </i>
         <button
           type="button"
-          className={`cn-more ${ended.length === 0 ? 'cn-quiet' : ''}`}
+          className={`cn-more ${endedTotal === 0 ? 'cn-quiet' : ''}`}
           onClick={() => setShowEnded(!showEnded)}
           title="Shifts that have ended — the agents no longer running"
         >
-          {ended.length} shift{ended.length === 1 ? '' : 's'} ended {showEnded ? '⌄' : '›'}
+          {endedTotal} shift{endedTotal === 1 ? '' : 's'} ended {showEnded ? '⌄' : '›'}
         </button>
       </h3>
       {view.live.length === 0 && desk.length === 0 && <p className="cn-empty">Nobody is out.</p>}
       {showEnded && ended.length === 0 && <p className="cn-empty">No shift has ended.</p>}
+      {/* Said rather than left to be noticed: the list is the recent tail and the
+          count above is all of them, so a disclosure that opened on 200 rows under
+          a heading reading 4,000 would be lying by omission. A goal's own older
+          runs are on its page, which fetches them. */}
+      {showEnded && endedTotal > ended.length && (
+        <p className="cn-empty">
+          The {ended.length} most recent, of {endedTotal}. Older runs are on the goal they were dispatched for.
+        </p>
+      )}
       <PanelRows
         rows={[
           ...view.live.map((agent) => agentRow(agent, view, actions)),
@@ -444,7 +457,9 @@ function GoalsInFlight({ view, actions }: { view: CockpitView; actions: CockpitA
 
 function goalRow(issue: Issue, view: CockpitView, actions: CockpitActions): PanelRowModel {
   const ref = `issue:${issue.number}`;
-  const page = buildGoalPage(view.state, ref, view.needsYou);
+  // No fetched history: the row draws the track, which is a fold over the plan's
+  // parts, and every agent it needs is a live one.
+  const page = buildGoalPage(view.state, ref, view.needsYou, null);
   const track = page === null ? null : buildGoalTrack(page.parts);
   const asks = view.needsYou.filter((n) => n.goalRef === ref).length;
   const onIt = view.agentOnGoal.get(ref);

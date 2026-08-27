@@ -1269,7 +1269,7 @@ function OnThisGoal({
       </h3>
       <div className="cn-rows">
         {page.agents.length === 0 && <p className="cn-empty">No agent is on this goal.</p>}
-        {page.agents.map(({ agent, onPr }) => (
+        {page.agents.map(({ agent, onPr, title }) => (
           <div className="cn-row" key={agent.id}>
             <i
               className={`cn-lamp ${agent.status === 'waiting' ? 'cn-lamp-ask' : agent.endedAt === null ? 'cn-run' : 'cn-off'}`}
@@ -1280,7 +1280,7 @@ function OnThisGoal({
               onClick={() => actions.select(agent.id)}
               title="Open this agent's drawer — its transcript, what it cost, and its controls"
             >
-              <b className="cn-name">{view.taskFor(agent)?.title ?? agent.id}</b>
+              <b className="cn-name">{title ?? agent.id}</b>
               <span className="cn-sub">
                 {agent.status} · {relTime(agent.startedAt, view.now)}
                 {agent.note !== null && ` · ${agent.note}`}

@@ -1100,7 +1100,8 @@ export interface CockpitState {
    */
   stackLandings: StackLandingView[];
   /**
-   * Every task the harness has claimed, newest first — **without prompts**.
+   * The tasks {@link agents} were dispatched on, newest first — **without
+   * prompts**, and **only those**.
    *
    * {@link TaskSummary}, not `Task`, and that is the whole point: a rendered
    * agent prompt is kilobytes, no cockpit surface reads one, and on a real
@@ -1109,6 +1110,12 @@ export interface CockpitState {
    * task's prompt, because no surface asks for one; adding a surface that does
    * means adding a per-row route beside `/api/agents/:id/transcript`, never
    * widening this back to `Task`. → `docs/spec/16-http-api.md#bulk-text`
+   *
+   * Narrowed to the shipped agents rather than capped on its own, because every
+   * cockpit read of a task starts from an agent — `taskFor(agent)`,
+   * `agentOnBranch`, `agentOnGoal`, the needs-you rows. A task row with no agent
+   * to reach it from is a row nothing can draw.
+   * → `docs/spec/16-http-api.md#bulk-collections`
    */
   tasks: TaskSummary[];
   /** Operator-launched jobs, newest first — the queue and its recent history. */
@@ -1119,7 +1126,31 @@ export interface CockpitState {
    * so the queue above is where a recurrence becomes visible as work.
    */
   schedules: JobSchedule[];
+  /**
+   * Every agent still out, and the tail of the ones that have ended — newest
+   * first.
+   *
+   * **Not the all-time list.** `agents` was one of the two collections here with
+   * no cap on it, over a table nothing deletes from, re-serialised on every
+   * `dirty` — so what it cost grew for the life of the deployment. The bound is
+   * on history only: a live agent is always here whatever the fleet has been
+   * doing, because the console's fleet card must never be a sample of what is
+   * running. → `docs/spec/16-http-api.md#bulk-collections`
+   *
+   * A goal's whole run history is `GET /api/issues/:number/agents`, fetched when
+   * its page opens — the same shape as the transcript and the files list.
+   */
   agents: Agent[];
+  /**
+   * How many agents have ended in all — including the ones older than the tail
+   * above.
+   *
+   * Shipped as a count so the fleet card's "N shifts ended" answers how many
+   * there have been rather than how many travelled: read off `agents.length` it
+   * would report the cap forever on a deployment that had run twenty thousand,
+   * and nothing about the number would look wrong.
+   */
+  endedAgents: number;
   /**
    * The ids of agents parked because the *account's* usage limit is spent, rather
    * than because they asked anything (issue #318). They are ordinary `waiting` rows
@@ -1359,6 +1390,27 @@ export interface AgentTranscript {
 export interface AgentFilesPayload {
   agentId: string;
   files: AgentFile[];
+}
+
+/**
+ * Every agent that has worked one goal, and the tasks they were dispatched on.
+ *
+ * Its own route, fetched when a goal page opens, for the transcript's and the
+ * files list's reason: the goal page is the one surface that draws a goal's whole
+ * run history, and the snapshot's `agents` list is bounded to the fleet's recent
+ * tail. Reading it off the snapshot instead would mean shipping every agent the
+ * deployment has ever run, on every refresh, so that one open page could take one
+ * goal's slice. → `docs/spec/16-http-api.md#bulk-collections`
+ *
+ * `tasks` is here rather than left to the snapshot for the same reason the agents
+ * are: the row draws its task's title, and a title looked up in a bounded list
+ * would go blank on exactly the old runs this route exists to show.
+ */
+export interface GoalAgentsPayload {
+  /** The goal, as `issue:<n>` — echoed so a late response cannot land on another page. */
+  ref: string;
+  agents: Agent[];
+  tasks: TaskSummary[];
 }
 
 export interface WorkRootsPayload {

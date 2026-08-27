@@ -144,6 +144,35 @@ export class TaskStore {
   }
 
   /**
+   * The tasks dispatched on one goal — its own ref, anything under it
+   * (`issue:12:part:signer`), and the pull requests the caller names as the
+   * goal's. Newest first, prompts left behind exactly as {@link listTasks} leaves
+   * them.
+   *
+   * The subtree half is the predicate every gate in the dispatcher keys on
+   * (`src/retro/record.ts`), in SQL because the alternative is reading every task
+   * the deployment has ever claimed to keep a handful. The pull requests are
+   * **named by the caller** rather than resolved here: which pull requests are a
+   * goal's is a three-way match the cockpit already makes to draw the page
+   * (`ownsPr`), and a second copy of it here would be free to disagree with the
+   * list of pull requests drawn beside the agents it selects.
+   */
+  listGoalTasks(goalRef: string, prRefs: readonly string[]): TaskSummary[] {
+    // `goalRef` is `issue:<n>` on every call, but a LIKE pattern built from an
+    // argument is escaped rather than trusted to stay that way.
+    const under = `${goalRef.replace(/[\\%_]/g, (c) => `\\${c}`)}:%`;
+    const inPrs = prRefs.length > 0 ? ` OR origin_ref IN (${prRefs.map(() => '?').join(', ')})` : '';
+    const rows = this.ctx.db
+      .prepare(
+        `SELECT ${SUMMARY_COLUMNS} FROM tasks
+          WHERE origin_ref = ? OR origin_ref LIKE ? ESCAPE '\\'${inPrs}
+          ORDER BY created_at DESC`,
+      )
+      .all(goalRef, under, ...prRefs) as TaskSummaryRow[];
+    return rows.map(rowToSummary);
+  }
+
+  /**
    * Per name, how many tasks dispatched inside the window have that name in their
    * **prompt** — the evidence behind the MCP usage reading's "nothing named it".
    *

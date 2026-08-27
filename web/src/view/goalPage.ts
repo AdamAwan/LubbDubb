@@ -1,6 +1,8 @@
 import type {
   Agent,
   AppState,
+  GoalAgentsPayload,
+  TaskSummary,
   CockpitDecision,
   Issue,
   OpenPullRequest,
@@ -55,6 +57,15 @@ interface GoalAgentView {
   agent: Agent;
   /** The pull request the dispatch named, or null when it named the goal's own subtree. */
   onPr: number | null;
+  /**
+   * What it was sent to do, from whichever list carries its task.
+   *
+   * Resolved here rather than through `view.taskFor` at the call site, because
+   * half these rows are older than the snapshot's bounded fleet list: a title
+   * looked up there would go blank on exactly the runs this page fetched its own
+   * history to show.
+   */
+  title: string | null;
 }
 
 /** The overview's five-segment reading of a goal. */
@@ -126,6 +137,43 @@ export interface GoalPageView {
  */
 function belongsToGoal(candidate: string | null | undefined, ref: string): boolean {
   return candidate === ref || (candidate?.startsWith(`${ref}:`) ?? false);
+}
+
+/**
+ * Whether a dispatch's origin reaches this goal — its own subtree
+ * (`issue:12:part:signer`), or a pull request that is one of the goal's.
+ *
+ * The two arms are one answer to "who is working this": a pull request is opened
+ * for a goal, so an agent dispatched at one is an agent on the goal. The second
+ * arm goes through {@link goalOfPr} rather than off the branch, which is the same
+ * three-way match the pull-request card is drawn with.
+ */
+function reachesGoal(state: AppState, origin: string | null, ref: string): boolean {
+  if (belongsToGoal(origin, ref)) return true;
+  const pr = origin === null ? null : /^pr:(\d+)$/.exec(origin);
+  return pr !== null && goalOfPr(state, Number(pr[1])) === ref;
+}
+
+/**
+ * The pull requests this goal owns, by number — what the goal page names when it
+ * asks the server for the goal's whole run history.
+ *
+ * It is {@link reachesGoal}'s second arm run backwards over the world rather than
+ * a fourth way of matching a pull request to a goal, so the agents the route
+ * selects are the ones this page would have kept anyway. The plan's own part
+ * numbers are unioned in because a part's pull request merged months ago is
+ * outside both world lists, and its run is exactly the history the fetch is for.
+ */
+export function goalPrNumbers(state: AppState, ref: string): number[] {
+  const plan = (state.plans ?? []).find((p) => p.originRef === ref) ?? null;
+  const parts = plan === null ? [] : (state.planParts ?? []).filter((p) => p.planId === plan.id).map((p) => p.prNumber);
+  const world = [...state.world.pullRequests, ...(state.world.closedPullRequests ?? [])];
+  return [
+    ...new Set([
+      ...parts.flatMap((n) => (n === null ? [] : [n])),
+      ...world.filter((pr) => goalOfPr(state, pr.number) === ref).map((pr) => pr.number),
+    ]),
+  ];
 }
 
 /**
@@ -244,9 +292,42 @@ export function goalIssue(state: AppState, ref: string): Issue | undefined {
  * `needs` is passed in rather than rebuilt so the rail and the page are one
  * reading — answering on either settles the row and the next snapshot clears both.
  */
-export function buildGoalPage(state: AppState, ref: string, needs: readonly NeedRow[]): GoalPageView | null {
+export function buildGoalPage(
+  state: AppState,
+  ref: string,
+  needs: readonly NeedRow[],
+  /**
+   * The goal's fetched run history, when the page has one. Defaulted rather than
+   * required because the page is whole without it: it adds the runs older than the
+   * snapshot's bounded fleet list, and the callers that draw a fold over the plan
+   * (the backlog row, the demo's work graph) have no use for them.
+   */
+  history: GoalAgentsPayload | null = null,
+): GoalPageView | null {
   const issue = goalIssue(state, ref);
   if (!issue) return null;
+
+  // Every agent this goal has had, from the two lists that each hold half of it.
+  //
+  // The snapshot's `agents` is the fleet's live rows and a bounded tail of ended
+  // ones, so it always has what is happening now and usually not what happened in
+  // March; `history` is this goal's whole record, fetched when the page opened and
+  // therefore blind to anything dispatched since. Neither is the answer on its
+  // own, and the union is — deduped by id, because the recent runs are in both.
+  const tasksById = new Map<string, TaskSummary>(
+    [...(history?.ref === ref ? history.tasks : []), ...state.tasks].map((t) => [t.id, t]),
+  );
+  const originOf = (agent: Agent): string | null => tasksById.get(agent.taskId)?.originRef ?? null;
+  const onGoal = new Map<string, Agent>();
+  for (const agent of [
+    ...state.agents.filter((a) => reachesGoal(state, originOf(a), ref)),
+    ...(history?.ref === ref ? history.agents : []),
+  ]) {
+    onGoal.set(agent.id, agent);
+  }
+  // Newest first, which is the order the snapshot's own list arrives in and what
+  // every reader below assumes: the first match for a part is its last run.
+  const goalAgents = [...onGoal.values()].sort((a, b) => b.startedAt.localeCompare(a.startedAt));
 
   const plan = (state.plans ?? []).find((p) => p.originRef === ref) ?? null;
   const parts = (state.planParts ?? [])
@@ -260,7 +341,7 @@ export function buildGoalPage(state: AppState, ref: string, needs: readonly Need
       // part alone, a part whose work has reached review draws no agent at all,
       // which is most of the ones being worked.
       const origins = new Set([`${ref}:part:${part.slug}`, ...(part.prNumber === null ? [] : [`pr:${part.prNumber}`])]);
-      const on = state.agents.filter((a) => origins.has(state.tasks.find((t) => t.id === a.taskId)?.originRef ?? ''));
+      const on = goalAgents.filter((a) => origins.has(originOf(a) ?? ''));
       // Live first, newest otherwise: the snapshot is newest-first, so the second
       // arm is the last run of this part and the first is what is happening now.
       const agent = on.find((a) => a.endedAt === null) ?? on[0];
@@ -288,16 +369,14 @@ export function buildGoalPage(state: AppState, ref: string, needs: readonly Need
     retiredParts,
     openPullRequests: state.world.pullRequests.filter((pr) => ownsPr(pr, issue, partPrs)),
     closedPullRequests: (state.world.closedPullRequests ?? []).filter((pr) => ownsPr(pr, issue, partPrs)),
-    agents: state.agents.flatMap<GoalAgentView>((agent) => {
-      const origin = state.tasks.find((t) => t.id === agent.taskId)?.originRef ?? null;
-      if (belongsToGoal(origin, ref)) return [{ agent, onPr: null }];
-      // A pull request is opened for a goal, so an agent dispatched at one is an
-      // agent on that goal. Resolved through `goalOfPr` rather than off the branch,
-      // which is the same three-way match the pull-request card is drawn with.
+    agents: goalAgents.map<GoalAgentView>((agent) => {
+      const origin = originOf(agent);
       const pr = origin === null ? null : /^pr:(\d+)$/.exec(origin);
-      if (pr === null) return [];
-      const number = Number(pr[1]);
-      return goalOfPr(state, number) === ref ? [{ agent, onPr: number }] : [];
+      return {
+        agent,
+        onPr: pr === null ? null : Number(pr[1]),
+        title: tasksById.get(agent.taskId)?.title ?? null,
+      };
     }),
     decisions: state.decisions.filter((d) => belongsToGoal(d.subjectRef, ref)),
     // Equality, not `belongsToGoal`: a check is keyed on the goal itself, and

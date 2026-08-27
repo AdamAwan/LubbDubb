@@ -8,6 +8,7 @@
 // `VITE_DEMO` branch in api.ts is statically false there, so Rollup drops it.
 import type {
   AgentFilesPayload,
+  GoalAgentsPayload,
   AgentTranscript,
   ConfigChange,
   SetupCheck,
@@ -298,8 +299,28 @@ class DemoServer {
 
   // --- REST surface -------------------------------------------------------
   async getState(): Promise<AppState> {
-    // Fresh clone so React sees a new reference and re-renders.
-    return structuredClone(this.state);
+    // Fresh clone so React sees a new reference and re-renders. The ended count
+    // is taken here rather than kept on the seed, because the demo ends agents as
+    // it runs — a stored number would be the seed's forever, and the fleet card
+    // would go on saying nothing had finished.
+    return structuredClone({
+      ...this.state,
+      endedAgents: this.state.agents.filter((a) => a.endedAt !== null).length,
+    });
+  }
+
+  /**
+   * The demo holds every agent it has ever run in `state.agents`, so a goal's
+   * history is a filter over the same rows the real route reads out of the store.
+   * The pull requests are named by the caller there and here alike.
+   */
+  async getGoalAgents(ref: string, prs: readonly number[]): Promise<GoalAgentsPayload> {
+    const origins = new Set(prs.map((n) => `pr:${n}`));
+    const tasks = this.state.tasks.filter(
+      (t) => t.originRef === ref || (t.originRef?.startsWith(`${ref}:`) ?? false) || origins.has(t.originRef ?? ''),
+    );
+    const ids = new Set(tasks.map((t) => t.id));
+    return structuredClone({ ref, agents: this.state.agents.filter((a) => ids.has(a.taskId)), tasks });
   }
 
   async getTranscript(agentId: string, from = 0): Promise<AgentTranscript> {
@@ -3678,7 +3699,7 @@ function buildDemoTrend(): SpendTrend {
  */
 async function demoWorkSubtree(ref: string): Promise<{ nodes: WorkNodeView[]; refUrls: Record<string, string> }> {
   const state = await getServer().getState();
-  const page = buildGoalPage(state, ref, []);
+  const page = buildGoalPage(state, ref, [], null);
   if (page === null) return { nodes: [], refUrls: {} };
   const at = state.world.takenAt;
   const seen = { firstSeenAt: at, lastSeenAt: at, provenance: null, baseRef: null };
@@ -3926,6 +3947,7 @@ export const demoApi = {
   getState: () => getServer().getState(),
   getTranscript: (agentId: string, from = 0) => getServer().getTranscript(agentId, from),
   getAgentFiles: (agentId: string) => getServer().getAgentFiles(agentId),
+  getGoalAgents: (ref: string, prs: readonly number[]) => getServer().getGoalAgents(ref, prs),
   // The demo's world is built fresh in the browser each load, so nothing has ever
   // been recorded for it — an empty graph is the honest answer, and these exist to
   // keep the two API shapes interchangeable.

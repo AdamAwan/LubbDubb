@@ -205,6 +205,24 @@ export class AgentStore {
     return rows.map((r) => ({ agentId: r.agent_id, costUsd: r.cost_usd, at: r.at }));
   }
 
+  /**
+   * The agents dispatched on the named tasks, newest first.
+   *
+   * Takes task ids rather than a goal, for {@link listFilesForAgents}' reason:
+   * the whole table is the read this exists to avoid, and which tasks belong to a
+   * goal is the tasks store's question. An empty list reads nothing at all.
+   */
+  listAgentsForTasks(taskIds: readonly string[]): Agent[] {
+    if (taskIds.length === 0) return [];
+    const rows = this.ctx.db
+      .prepare(
+        `SELECT * FROM agents WHERE task_id IN (${taskIds.map(() => '?').join(', ')})
+         ORDER BY started_at DESC`,
+      )
+      .all(...taskIds) as AgentRow[];
+    return rows.map(rowToAgent);
+  }
+
   listAgentsByStatus(...statuses: Agent['status'][]): Agent[] {
     return this.listAgents().filter((a) => statuses.includes(a.status));
   }
