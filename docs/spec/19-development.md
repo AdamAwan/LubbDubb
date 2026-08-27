@@ -263,6 +263,28 @@ and rebuilding the bundle on each of those would make the loop useless. Cockpit 
 the escape hatch for the case where the build must not run — a checkout installed with
 `--omit=dev` has no vite.
 
+### The chunks
+
+`web/vite.config.ts` cuts the bundle along `node_modules` and four directories under `web/src/` —
+`cockpit`, `components`, `console`, `view` — so `web:build` emits a handful of chunks rather than one
+635 kB file. Two things about that cut are load-bearing:
+
+- **Every chunk is eager.** They are static imports of the entry, so the browser fetches the whole
+  graph on load exactly as it did when the bundle was one file. A *lazy* chunk — one fetched when a
+  panel opens — would fail mid-session against a `web/dist` rebuilt underneath it, which is the one
+  staleness case [16](16-http-api.md#the-spa-fallback) does not already answer with "reload once".
+  Nothing here is worth a second one.
+- **Only `.ts`/`.tsx` are matched.** `main.tsx` imports `styles.css`, `console.css` and `theme.css`
+  in that order, and the last overrides the first two. A CSS module grouped into a chunk takes that
+  chunk's position in the emitted sheet instead of its import position, so grouping one silently
+  reorders the cascade — visible only on whichever surface the two sheets tie on.
+
+The cut is for caching and for keeping each chunk under Vite's 500 kB warning **honestly**: the
+warning is left at its default so it still means something when a directory really does outgrow it.
+A directory not in the list is not a mistake — rolldown folds a group whose modules only one other
+chunk reaches, so a name added there can be a silent no-op. `web:build`'s own per-chunk sizes are
+what settle whether a new cut is worth making.
+
 ## Conventions
 
 - **ESM with explicit `.js` import extensions**, even from `.ts` sources:
