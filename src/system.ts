@@ -1189,16 +1189,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     errors,
   });
   // A row saying `running` after a restart describes a process this harness never
-  // spawned — the pid belongs to something dead, or to whatever has since been
-  // given that number. Settled at boot rather than trusted, the same refusal a
-  // stale desktop claim gets.
-  const stale = store.endStaleLocalRuns('the harness restarted; this run did not survive it');
-  if (stale > 0)
-    errors.record({
-      source: 'cycle',
-      message: `Marked ${stale} local run(s) stopped: a restart does not carry a dev environment with it.`,
-    });
-
+  // spawned, so nothing may go on trusting it — but the machine it left behind is
+  // half an environment rather than none, and what happens to both is
+  // `LocalRunner.resumeInterrupted`. It is called from `main.ts` rather than here
+  // because it can spawn a session, and everything that can is below that file's
+  // shutdown handlers. → docs/spec/23-local-runs.md
   return {
     config,
     store,

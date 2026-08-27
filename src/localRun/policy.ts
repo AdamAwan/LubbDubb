@@ -47,6 +47,23 @@ export interface LocalRunPolicy {
    */
   stopInstruction: string;
   /**
+   * What a session is told to bring an **interrupted** run back, verbatim.
+   *
+   * A third field rather than a re-run of {@link instruction}, because the two are
+   * not the same job. A start is handed a machine with nothing of this project up
+   * on it; a resume is handed one where the last session was reaped mid-flight — the
+   * containers it left are very likely still running, the ports are very likely
+   * still held, and the honest thing to do with them is to attach rather than to
+   * bring up a second stack beside them. Only the project knows which of its pieces
+   * survive a reap, so that is the operator's sentence to write too.
+   *
+   * **Empty means an interrupted run settles the way it always did**, with the note
+   * saying that nothing was configured to bring it back. Blank is a supported state:
+   * a deployment that would rather click Start itself is a deployment that spends
+   * nothing on a boot nobody was watching.
+   */
+  resumeInstruction: string;
+  /**
    * Where the application lands, once it is up — drawn as a link in the panel.
    *
    * Declared rather than detected. Reading it out of the log would mean matching a
@@ -59,5 +76,6 @@ export interface LocalRunPolicy {
 export const DEFAULT_LOCAL_RUN: LocalRunPolicy = {
   instruction: '',
   stopInstruction: '',
+  resumeInstruction: '',
   url: '',
 };

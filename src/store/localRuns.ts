@@ -23,11 +23,11 @@ const LIVE: LocalRunStatus[] = ['starting', 'running', 'stopping'];
 /**
  * The same set as a SQL fragment, **derived** so it cannot drift from {@link LIVE}.
  *
- * It was written out as `('starting', 'running')` in three separate statements here,
- * with `LIVE` beside them read by nobody. Adding a status to three of the four is
- * silent in both directions: missed by `liveLocalRun` the store lets a second run
- * begin beside a live one, and missed by `endStaleLocalRuns` a row stays live across
- * every restart for ever. Neither errors, and both look like the feature working.
+ * It was written out as `('starting', 'running')` in separate statements here, with
+ * `LIVE` beside them read by nobody. Missing a status is silent in both directions:
+ * missed by `liveLocalRun` the store lets a second run begin beside a live one, and
+ * missed by `beginLocalRun`'s supersede a stopped row is left claiming to be up for
+ * ever. Neither errors, and both look like the feature working.
  */
 const LIVE_SQL = `(${LIVE.map((s) => `'${s}'`).join(', ')})`;
 
@@ -204,25 +204,6 @@ export class LocalRunStore {
   listLocalRuns(): LocalRun[] {
     const rows = this.ctx.db.prepare(`SELECT * FROM local_runs ORDER BY started_at DESC`).all() as LocalRunRow[];
     return rows.map(toLocalRun);
-  }
-
-  /**
-   * Mark every live row stopped — the boot sweep.
-   *
-   * A row saying `running` after a restart is a claim about a process this harness
-   * never spawned: the pid belongs to a dead parent, or worse, to something else
-   * that has since been given that number. So the boot settles them rather than
-   * trusting them, which is the same refusal `claimStaleBefore` makes about a claim
-   * whose session no longer exists.
-   */
-  endStaleLocalRuns(note: string): number {
-    const result = this.ctx.db
-      .prepare(
-        `UPDATE local_runs SET status = 'stopped', ended_at = ?, note = COALESCE(note, ?)
-           WHERE status IN ${LIVE_SQL}`,
-      )
-      .run(this.ctx.now(), note);
-    return result.changes;
   }
 }
 

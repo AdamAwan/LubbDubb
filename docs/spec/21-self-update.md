@@ -193,24 +193,31 @@ a decision already taken, not the harness deciding on its own — which is the t
 
 The intent is cleared once this has run, so a second restart restores nothing.
 
-## The local run goes down with the harness
+## The local run goes down with the harness, and can be told to come back
 
-The shutdown path stops the machine's dev environment rather than interrupting it, which is the
-opposite of what it does to an agent — and the asymmetry is deliberate. An agent's conversation is
-worth restoring, and the next boot offers it. A dev environment is not: the session holding it is going
-down with this process, so a row claiming it is live would be a claim about nothing.
-→ [23](23-local-runs.md#the-process)
+The shutdown path stops the machine's dev environment rather than interrupting it: the session holding
+it is going down with this process, so a row claiming that session is live would be a claim about
+nothing. → [23](23-local-runs.md#the-process)
 
 **It takes the fast path, not the project's own stop.** Stopping a local run is a session's turn now —
 the project's `stop` command, because a dev environment is not a process tree and no signal reaches a
 container ([23](23-local-runs.md#stopping-is-a-turn-not-a-signal)). Waiting for a turn here would hang
 the two paths that must not hang: a Ctrl-C, and this one, which is a restart. So `stopFast` reaps the
-session's subtree, kills it, and settles the row with a note saying the stop instruction was not run —
-which is what turns a container that outlived the harness into something the panel states on the next
-boot rather than a mystery an operator finds in `docker ps`.
+session's subtree and kills it without one.
+
+**What happens to the row depends on whether the deployment can bring the run back.** The reap takes
+the dev server and cannot touch a container, so a restart leaves half an environment either way. With a
+`localRun.resumeInstruction` the row is deliberately **left live** — it is the only record that there
+is something to come back to — and the next boot's `resumeInterrupted` attaches a session to what
+survived. Without one it is settled with a note saying the stop instruction did not run, which is what
+turns a container that outlived the harness into something the panel states rather than a mystery an
+operator finds in `docker ps`. → [23](23-local-runs.md#coming-back-after-a-restart)
 
 An upgrade takes the same path — it exits through the same `shutdown`, with `UPGRADE_EXIT_CODE` — so
-the environment goes down for an upgrade too, and the operator starts it again on the new build.
+the environment goes down for an upgrade too, and comes back on the new build if the deployment says
+how. This is the asymmetry with an agent narrowing rather than going: an agent's _conversation_ is
+restored, and a dev environment is now _rebuilt_ from an instruction, which is a different thing done
+for the same reason.
 
 ## Where the shutdown handlers are registered
 

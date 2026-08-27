@@ -68,6 +68,8 @@ function build(
     instruction?: string;
     /** Blank by default, so a stop takes the unconfigured path and needs no turn. */
     stopInstruction?: string;
+    /** Blank by default, so an interrupted run settles rather than being brought back. */
+    resumeInstruction?: string;
     stopTimeoutMs?: number;
     url?: string;
     ref?: string | null;
@@ -91,6 +93,7 @@ function build(
     policy: () => ({
       instruction: over.instruction ?? 'Run the dev server.',
       stopInstruction: over.stopInstruction ?? '',
+      resumeInstruction: over.resumeInstruction ?? '',
       url: over.url ?? '',
     }),
     claudeCommand: 'claude',
@@ -349,8 +352,17 @@ test('a stopping run is live: nothing may begin beside it, and a restart settles
 
   // The store's own rule, not the runner's: `stopping` has to be in the live set in
   // every statement that reads it, or a second run begins beside one being torn down.
-  const settled = store.endStaleLocalRuns('the harness restarted');
-  assert.equal(settled, 1, 'a stopping row is one a restart cannot vouch for either');
+  // And a restart cannot vouch for it either — a second runner over the same database
+  // is what a boot sees.
+  const after = build({ store, resumeInstruction: 'Run /dev-environment continue.' });
+  const settled = after.runner.resumeInterrupted();
+  assert.equal(settled.outcome, 'settled');
+  assert.equal(store.liveLocalRun(), null);
+  // Settled even though this deployment *can* bring a run back, because a teardown in
+  // flight is an operator who asked for this environment to go away. Bringing it back
+  // answers the opposite of the last thing they said.
+  assert.equal(after.sessions.length, 0, 'and nothing was brought back');
+  assert.match(store.currentLocalRun()?.note ?? '', /taken down/);
 
   sessions[0]?.emit('done');
   await stopping;
@@ -403,17 +415,83 @@ test('starting another goal stops the first — one environment, one run', async
   store.close();
 });
 
-test('a restart settles the rows it cannot vouch for', () => {
-  const store = new Store(':memory:');
+test('a restart settles a run it cannot bring back, and names the field that would', () => {
+  const { runner, store } = build();
   store.beginLocalRun({ originRef: 'issue:284', ref: 'main', dir: '/tmp/x', url: null });
   assert.equal(store.liveLocalRun()?.originRef, 'issue:284');
 
   // A row saying `running` after a restart describes a process this harness never
   // spawned — the pid belongs to something dead, or to whatever has since been given
-  // that number. Settled rather than trusted.
-  assert.equal(store.endStaleLocalRuns('the harness restarted'), 1);
+  // that number. With nothing configured to bring it back it is settled rather than
+  // trusted, which is the behaviour every deployment had before the third instruction.
+  const outcome = runner.resumeInterrupted();
+  assert.equal(outcome.outcome, 'settled');
   assert.equal(store.liveLocalRun(), null);
-  assert.match(store.currentLocalRun()?.note ?? '', /restarted/);
+  const note = store.currentLocalRun()?.note ?? '';
+  assert.match(note, /restarted/);
+  assert.match(note, /localRun\.resumeInstruction/, 'and the operator is told what would have changed it');
+  store.close();
+});
+
+test('nothing live is nothing to do', () => {
+  const { runner, store } = build({ resumeInstruction: 'Run /dev-environment continue.' });
+  assert.equal(runner.resumeInterrupted().outcome, 'nothing');
+  store.close();
+});
+
+test('a restart brings an interrupted run back in its own checkout, without preparing it', async () => {
+  const first = build({ resumeInstruction: 'Run /dev-environment continue.' });
+  await first.runner.start('issue:284');
+  const dir = first.store.liveLocalRun()?.dir ?? '';
+  // The shutdown: the session and its subtree go, and the row is deliberately left
+  // standing — nothing else records that there is an environment to come back to.
+  first.runner.stopFast('the harness shut down');
+  assert.deepEqual(first.sessions[0]?.log, ['start', 'reap', 'kill']);
+  const held = first.store.liveLocalRun();
+  assert.ok(held, 'the row outlives the process it was holding');
+  assert.match(held.note ?? '', /next boot/);
+
+  // The boot: a second runner over the same database, which is what a restart is.
+  const after = build({ store: first.store, resumeInstruction: 'Run /dev-environment continue.' });
+  const outcome = after.runner.resumeInterrupted();
+  assert.equal(outcome.outcome, 'resumed');
+  const brought = after.sessions[0];
+  assert.ok(brought, 'a session was spawned to bring it back');
+  assert.equal(brought.spec.cwd, dir, 'in the checkout the run was already using');
+  // Not the start instruction: attaching to what survived a reap is a different
+  // sentence from starting from nothing, and only the project knows which of its
+  // pieces survive one.
+  assert.match(brought.sent[0] ?? '', /continue/);
+  assert.match(brought.sent[0] ?? '', /You did not start this/);
+  assert.match(brought.sent[0] ?? '', /not a collision/);
+  // **Nothing prepared.** `ensurePreview` is a `reset --hard` and a `clean -fd`, and
+  // running it here would pull the project out from under containers that are still
+  // up — the swap's stop-before-prepare hazard, pointed the other way.
+  assert.deepEqual(after.worktrees.previewed, [], 'the checkout already stands at the run’s own commit');
+  assert.equal(after.store.liveLocalRun()?.id, held.id, 'the same run, continued — not a second one');
+
+  // And the turn ending means the environment is up again, exactly as on a start.
+  brought.emit('done');
+  assert.equal(after.store.liveLocalRun()?.status, 'running');
+  first.store.close();
+});
+
+test('a run whose checkout has gone is not brought back', () => {
+  const { runner, store } = build({ resumeInstruction: 'Run /dev-environment continue.' });
+  store.beginLocalRun({
+    originRef: 'issue:284',
+    ref: 'main',
+    dir: join(tmpdir(), 'lubbdubb-gone-' + String(process.pid)),
+    url: null,
+  });
+
+  const outcome = runner.resumeInterrupted();
+  assert.equal(outcome.outcome, 'settled');
+  // Checked rather than discovered through a spawn: a bad `cwd` surfaces as an async
+  // spawn error rather than a throw, so a resume would report success and then not
+  // have happened.
+  assert.match(store.currentLocalRun()?.note ?? '', /is gone/);
+  assert.equal(store.liveLocalRun(), null);
   store.close();
 });
 
