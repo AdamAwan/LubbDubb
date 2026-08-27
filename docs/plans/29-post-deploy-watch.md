@@ -15,26 +15,29 @@ off section by section as each becomes true.
 Four stages. Each is independently useful, ships on its own, and leaves the tree green — the fleet
 can be pointed at any of them and stop.
 
-| Stage | Ships                                            | Useful alone because                                                      |
-| ----- | ------------------------------------------------ | ------------------------------------------------------------------------- |
-| 1     | The seam, signals, presence, the dry run         | "Did the new thing throw" is most of the value and needs no baseline      |
-| 2     | The window, readings, verdicts, the goal page    | The first stage a watch actually runs; stage 1 only ever dry-runs         |
-| 3     | Measures and baselines                           | The optimisation case, which is the one that needs a before               |
-| 4     | The bench row, bug filing, `holds`, extend        | Turns a reading into work; deliberately last, since it is the only arm that touches other subsystems |
+| Stage | Ships                                         | Useful alone because                                                                                 |
+| ----- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| 1 ✅  | The seam, signals, presence, the dry run      | "Did the new thing throw" is most of the value and needs no baseline                                 |
+| 2     | The window, readings, verdicts, the goal page | The first stage a watch actually runs; stage 1 only ever dry-runs                                    |
+| 3     | Measures and baselines                        | The optimisation case, which is the one that needs a before                                          |
+| 4     | The bench row, bug filing, `holds`, extend    | Turns a reading into work; deliberately last, since it is the only arm that touches other subsystems |
 
 Stage 2 is the one to resist splitting further. A watch that opens and never reads is a table nobody
 can see, and a reading with no verdict is a number with no rule — the three together are the smallest
 thing that is true.
 
-## Stage 1 — the seam and the declaration
+## Stage 1 — the seam and the declaration ✅
 
 **Done when** a planner can declare a signal, the harness dry-runs it against the environment on
 submission, and the plan sheet draws the reading. Nothing opens, nothing repeats.
 
+**Shipped.** Every bullet below landed, minus the one prompt addition noted under _What stage 1
+decided_. The spec's **Not built** marker is narrowed to the sections stage 1 did not make true.
+
 ### Config and policy
 
 - `src/environments/policy.ts` — `EnvironmentWatch` on `EnvironmentConfig`: `observe`, optional
-  `schema`, `describe`, `for`, `holds`. Extend `validateEnvironments` with the three refusals the
+  `schema`, `describe`, `forMs` (see below), `holds`. Extend `validateEnvironments` with the three refusals the
   spec names (empty `observe`, unknown `holds`, `describe` without `observe`).
 - `src/config.ts` / `src/configFields.ts` — `watchIntervalMs`, default `1_800_000`. `environments`
   stays `fileOnly`; nothing new becomes operator-editable.
@@ -42,48 +45,82 @@ submission, and the plan sheet draws the reading. Nothing opens, nothing repeats
 
 ### The seam
 
-- _src/environments/observer.ts_ — `EnvironmentObserver` and `CommandEnvironmentObserver`, modelled
+- `src/environments/observer.ts` — `EnvironmentObserver` and `CommandEnvironmentObserver`, modelled
   line for line on `prober.ts`: shell, `repoRoot`, 30s kill, failure detail from the first stderr
   line.
   - Passes `LUBBDUBB_ENVIRONMENT`, `LUBBDUBB_WATCH_ID`, `LUBBDUBB_WATCH_QUERY`.
   - Appends the id projection to the query before handing it over, and **rejects a result that does
     not carry the id back**. This is the whole of the stale-wrapper guard and belongs here, not in a
     caller.
-- _src/environments/fakeObserver.ts_ — scripted fake, beside `fakeProber.ts`. Extending the seam
+- `src/environments/fakeObserver.ts` — scripted fake, beside `fakeProber.ts`. Extending the seam
   means extending the fake in the same change.
-- _src/environments/watchResult.ts_ — the pure parse of a result into `{rows, value, verdict,
-  detail}` against the output contract. Pure, so the contract's edges (two rows for a measure, a
+- `src/environments/watchResult.ts` — the pure parse of a result into `{rows, value, verdict,
+detail}` against the output contract. Pure, so the contract's edges (two rows for a measure, a
   non-numeric `value`, no echo) are unit tests and not integration ones.
 
 ### The declaration
 
-- _src/validation/watchDocument.ts_ — the zod schemas, exported for the same reason
+- `src/validation/watchDocument.ts` — the zod schemas, exported for the same reason
   `ValidationCheckSchema` is: `watch_declare` must refuse exactly what a plan document refuses, and a
   second copy would drift on the day one of them learned a field.
 - `src/plans/planDocument.ts` — `watch: WatchSchema.optional()`, sibling to `validation`. Optional,
   for the reason every post-v1 field is.
 - `src/plans/planIngest.ts` — ingest the block, assign nothing positional (the slug is the merge key,
   as with checks).
-- _src/store/watches.ts_ + `src/store/store.ts` — `goal_watches` only, at this stage.
+- `src/store/watches.ts` + `src/store/store.ts` — `goal_watches` only, at this stage.
 
 ### The dry run
 
-- _src/environments/watchDryRun.ts_ — run each declared check once on submission and on amendment,
+- `src/environments/watchDryRun.ts` — run each declared check once on submission and on amendment,
   store the reading, and hand a failure back to the author as a refusal.
 - Wire through `src/system.ts`, which every component is threaded through.
 
 ### Prompts
 
-- `src/plans/planning.ts` prompt additions and `docs/prompt-templates/` copies — **appended** to the
-  rendered prompt, never interpolated into it. An override that never learned a `{watch}` token would
-  drop it silently, on exactly the deployments that customised most.
+- `src/plans/planning.ts` prompt additions — **appended** to the rendered prompt, never interpolated
+  into it. An override that never learned a `{watch}` token would drop it silently, on exactly the
+  deployments that customised most. No `docs/prompt-templates/` copy: the note is appended beside a
+  rendered template rather than being one, exactly as `relatedWorkNote` is.
 - The instruction that matters is the one aimed at the working agent: _if you added a log line or a
-  metric for this, declare the watch that reads it._
+  metric for this, declare the watch that reads it._ Deferred to stage 3 with `watch_declare` — see
+  below.
 
 ### Tests
 
-_test/watchDocument.test.ts_, _test/watchResult.test.ts_, _test/watchDryRun.test.ts_. The dry-run
+`test/watchResult.test.ts` and `test/watchDryRun.test.ts` (the document schema is exercised from the latter rather than in a third file — its refusals are three assertions, not a suite). The dry-run
 test injects `FakeEnvironmentObserver`; nothing touches a network.
+
+### What stage 1 decided
+
+The plan left these open; each was settled in the building and is recorded here so the next stage
+does not re-litigate it.
+
+- **`for` is spelled `forMs`, on the environment's `watch`.** The harness's other durations carry the
+  suffix, and an unsuffixed one is the unit ambiguity the convention exists to remove. Validated but
+  unread — stage 2 is its first reader. The plan document's own per-goal `for` is stage 2's, since
+  stage 1 opens no window to size.
+- **The dry run is put to one environment — the first declaring an `observe`.** It answers "does this
+  query parse and resolve", which is a property of the query; asking every environment would spawn a
+  process per environment per check on every submission to learn it several times. Where the answer
+  legitimately differs per environment is what `presence` is for, at watch time.
+- **The id echo is checked per row, and an empty result carries none.** Not a hole: zero rows is the
+  answer a signal is not trusted on alone, and the `presence` read — which is not permitted to come
+  back empty — is where a stale wrapper is caught.
+- **The projection is a pipeline segment** (`| extend lubbdubbWatchId = "<id>"`). It is the one place
+  the harness has an opinion about a query language, and it is escapable: an operator can echo
+  `LUBBDUBB_WATCH_ID` from the wrapper instead. Interpolating the id is safe where interpolating the
+  query is not — the id is a kebab-case slug the schema enforces.
+- **The output contract is a JSON array of row objects on stdout.**
+- **A check an amendment stopped declaring is deleted**, not superseded: at this stage the row carries
+  only its declaration and the dry run of it, both replaced. → open question 4.
+- **The working agent's prompt instruction was not added.** It names `watch_declare`, which is stage 3;
+  an instruction pointing at a tool that does not exist is worse than none. The planner's guidance did
+  land, appended (`watchNote`, `src/plans/planning.ts`) and threaded to the rule as a rendered string
+  so `src/dispatcher/` still imports nothing from `src/environments/`.
+- **`measures` is refused by the schema** rather than accepted and ignored, though `watchResult.ts`
+  already parses a measure's row — the shape it refuses is the shape a stale wrapper produces.
+- **The lens boundary is asserted** in `test/watchDryRun.test.ts`; the spec claimed a structural
+  assertion covered `src/environments/` and none existed.
 
 ## Stage 2 — the window, the readings, the card
 
@@ -173,3 +210,7 @@ Worth settling before the stage that hits them, not during.
 3. **Retention for `watch_readings`** — pruned with the window is stated in the spec, but a watch on a
    busy environment at 30-minute intervals for a week is ~336 rows per check, and nothing prunes the
    window itself today.
+4. **Whether a dropped check stays droppable** (stage 2). Stage 1 deletes a check an amendment stopped
+   declaring, which is safe while the row carries only its own declaration. Once a window's readings
+   hang off it, deleting orphans the evidence behind a verdict — so stage 2 either supersedes the row
+   the way a validation check is superseded, or prunes its readings with it deliberately.

@@ -1,8 +1,13 @@
 # 29 — The post-deploy watch
 
-**Not built.** Nothing in this document describes running code. Every path it names is italic for
-that reason, and the marker comes off in the change that makes each section true — not later, and
-not in one sweep at the end. [26](26-setup.md) states the same discipline for its own unbuilt half.
+**Partly built.** [The declaration](#the-declaration), [the dry run](#the-dry-run),
+[asking the environment](#asking-the-environment) and [configuring an
+environment](#configuring-an-environment) describe running code, and their paths are backticked.
+Everything from [the window](#the-window) onwards — opening, readings, verdicts, measures and
+baselines, what a finding does, and every cockpit surface but the plan sheet's — is **not built**:
+its paths stay italic, and the marker comes off section by section in the change that makes each
+true, not later and not in one sweep at the end. [26](26-setup.md) states the same discipline for
+its own unbuilt half. `docs/plans/29-post-deploy-watch.md` tracks which stage owns what.
 
 `src/environments/` records where a goal's landed work has got to ([24](24-environments.md)). It
 stops one question short of the one asked next: **is the thing behaving now that it is there.** A
@@ -21,15 +26,15 @@ know — and everything from the declaration onwards is a scripted pass with no 
 
 ## What it is not
 
-| Not                    | Because                                                                                                                                                                                                                          |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| An APM                 | Nothing here stores telemetry, draws a time series, or is somewhere to go and look. It asks a declared question on a schedule and keeps the answers for one goal, for days.                                                       |
-| Anomaly detection      | No baseline is inferred, no threshold is learned, no reading is scored. An expectation is declared or the check does not exist.                                                                                                   |
-| An alerting system     | A finding is a bench row on one goal. There is no routing, no severity ladder, no on-call. The team's existing alerts are unaffected and unduplicated.                                                                            |
-| A dispatch input       | Same rule as the rest of `src/environments/`: nothing under `src/dispatcher/` may import it. A regression files a row and draws a card; the route from a reading to new work is an operator's click. → [05](05-dispatcher.md)     |
-| A provider integration | An environment's telemetry is a **command**, exactly as its deployed commit is. Application Insights is one answer; the harness holds no opinion and ships no SDK. → [Asking the environment](#asking-the-environment)            |
-| A gate                 | A watch holds nothing by default. It reports, and the close-out carries what it says. One opt-in makes it hold, and it is off. → [What a finding does](#what-a-finding-does)                                                      |
-| A model spend          | No agent is dispatched to read telemetry, interpret a number or decide whether a reading is bad. The only model tokens are riders on sessions already running. → [Cost](#cost)                                                    |
+| Not                    | Because                                                                                                                                                                                                                       |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| An APM                 | Nothing here stores telemetry, draws a time series, or is somewhere to go and look. It asks a declared question on a schedule and keeps the answers for one goal, for days.                                                   |
+| Anomaly detection      | No baseline is inferred, no threshold is learned, no reading is scored. An expectation is declared or the check does not exist.                                                                                               |
+| An alerting system     | A finding is a bench row on one goal. There is no routing, no severity ladder, no on-call. The team's existing alerts are unaffected and unduplicated.                                                                        |
+| A dispatch input       | Same rule as the rest of `src/environments/`: nothing under `src/dispatcher/` may import it. A regression files a row and draws a card; the route from a reading to new work is an operator's click. → [05](05-dispatcher.md) |
+| A provider integration | An environment's telemetry is a **command**, exactly as its deployed commit is. Application Insights is one answer; the harness holds no opinion and ships no SDK. → [Asking the environment](#asking-the-environment)        |
+| A gate                 | A watch holds nothing by default. It reports, and the close-out carries what it says. One opt-in makes it hold, and it is off. → [What a finding does](#what-a-finding-does)                                                  |
+| A model spend          | No agent is dispatched to read telemetry, interpret a number or decide whether a reading is bad. The only model tokens are riders on sessions already running. → [Cost](#cost)                                                |
 
 ## The declaration
 
@@ -37,10 +42,10 @@ A **watch** belongs to a goal and is a list of checks, each of which is one ques
 declared expectation. Two kinds, and the difference is not cosmetic — they fail in opposite
 directions and need opposite guards.
 
-| Kind      | Asks                              | Expectation                       | Cannot be trusted without |
-| --------- | --------------------------------- | --------------------------------- | ------------------------- |
-| `signal`  | how many of these are there       | `tolerate`, a count it must not exceed | a `presence` query   |
-| `measure` | what is this number               | a threshold, or a baseline        | a baseline reading        |
+| Kind      | Asks                        | Expectation                            | Cannot be trusted without |
+| --------- | --------------------------- | -------------------------------------- | ------------------------- |
+| `signal`  | how many of these are there | `tolerate`, a count it must not exceed | a `presence` query        |
+| `measure` | what is this number         | a threshold, or a baseline             | a baseline reading        |
 
 A signal asks about something that should not be happening: exceptions, failures, retries, a log
 line that only gets written when something has gone wrong. Its expectation is a count, almost always
@@ -49,6 +54,13 @@ zero.
 A measure asks for one number: a percentile, a rate, a duration, a queue depth. Its expectation is
 either an absolute (`under`, `over`) or a comparison against what the same query returned **before
 the work arrived**.
+
+**Only `signal` is declarable so far.** A `measure` arrives with the baseline capture that makes it
+honest — an absolute threshold alone is a number somebody guessed, and a measure declaring neither a
+threshold nor a baseline reads as a check and cannot fail. `WatchSchema`
+(`src/validation/watchDocument.ts`) refuses a `measures` key rather than accepting one nothing reads;
+the output contract below already parses a measure's row, because the shape it refuses is the same
+shape a stale wrapper produces.
 
 The two shapes are the two things a change is for. New behaviour should not throw — a signal, and
 there is no before to compare against. Changed behaviour should be better than it was — a measure,
@@ -84,7 +96,7 @@ operator hold different facts and none of them holds all three.
 ### The planner, at plan time
 
 Writes the `watch` block into the plan document, beside `validation`
-([08](08-planning.md), _src/plans/planDocument.ts_). It knows the goal, the ticket and the
+([08](08-planning.md), `src/plans/planDocument.ts`). It knows the goal, the ticket and the
 repository, so it can name a code path, an operation, a role, a feature flag.
 
 **For a defect this is the strong case, and it is worth stating on its own: the watch is knowable
@@ -93,6 +105,9 @@ out in proc Y"_ contains its own post-deploy check — job X stops timing out �
 written, and proven to fire, before a line of the fix exists.
 
 ### The working agent, at conclude time
+
+**Not built.** The tool ships with measures; a planner's declaration is the only writer today, and
+an instruction naming a tool that does not exist is worse than none.
 
 Amends through the `watch_declare` tool (_src/mcp/tools/watchDeclare.ts_), which merges on a check's
 slug exactly as `validation_amend` does ([20](20-validation.md#validation_amend)).
@@ -122,16 +137,29 @@ sheet.
 
 Three outcomes, and each is worth something different:
 
-| Presence | Signal   | Means                                                                                                                  |
-| -------- | -------- | ---------------------------------------------------------------------------------------------------------------------- |
-| fires    | fires    | The query is proven live and the reported defect is proven real. This reading is the baseline.                         |
-| fires    | zero     | The code path runs and the thing being reported is not happening. Either the query is wrong or the ticket is.          |
-| zero     | —        | The telemetry has never heard of this code path. Wrong name, wrong application, or nothing instrumented.                |
+| Presence | Signal | Means                                                                                                         |
+| -------- | ------ | ------------------------------------------------------------------------------------------------------------- |
+| fires    | fires  | The query is proven live and the reported defect is proven real. This reading is the baseline.                |
+| fires    | zero   | The code path runs and the thing being reported is not happening. Either the query is wrong or the ticket is. |
+| zero     | —      | The telemetry has never heard of this code path. Wrong name, wrong application, or nothing instrumented.      |
 
 Rows two and three are handed back to the author as a refusal it can act on, the way a schema
 violation from `plan_submit` is. A syntactically valid query against a table that exists, matching
 nothing, forever, is the failure this whole subsystem is most able to produce and least able to
 notice — and the dry run is where it is cheap to catch, before an agent has spent a day on the work.
+
+**It is put to one environment, not to all of them** — the first that declares an `observe`. A dry
+run answers "does this query parse and resolve", which is a property of the query rather than of the
+deployment, and asking every environment would spawn a process per environment per check on every
+submission to learn the same thing several times over. Where the answer legitimately differs between
+environments is exactly what `presence` is for, and that is asked at watch time, per environment.
+
+An amendment re-asks. The reading is a reading of _that_ query, so a re-declaration clears the
+columns rather than leaving the previous answer standing under new text — and a check an amendment
+stopped declaring is dropped, because at this stage the row carries nothing but its declaration and
+the dry run of it, both of which the amendment has replaced. (Once a window's readings hang off a
+check, dropping the row would orphan them; the plan document records that as the open question it
+is.)
 
 **What a dry run proves is that the query parses and resolves, never that it will ever match.** The
 operation it asks about may not exist until the change deploys. Syntax is settled here; whether the
@@ -170,7 +198,7 @@ back to it — `arrival.opens: []`'s refusal, one document over.
 
 ## Asking the environment
 
-`EnvironmentObserver` (_src/environments/observer.ts_), a seam beside `EnvironmentProber`, with a
+`EnvironmentObserver` (`src/environments/observer.ts`), a seam beside `EnvironmentProber`, with a
 scripted fake for the tests. One method: **run this query against this environment and give me back
 what it said.**
 
@@ -189,9 +217,18 @@ answer a wider question — the prompt-template failure in another costume
 ([05](05-dispatcher.md#prompt-templates)). A per-goal query is unavoidably a parameter, so instead of
 avoiding the failure the harness makes it **observable**:
 
-- the harness appends its own projection to the query it hands over, carrying the check's id;
+- the harness appends its own projection to the query it hands over, carrying the check's id
+  (`idProjection`, `src/environments/watchResult.ts`);
 - a result that does not carry that id back is not an answer. It is `unknown`, with the detail _the
   command answered without the query it was given_.
+
+The projection is written as a pipeline segment — `| extend lubbdubbWatchId = "<id>"` — because the
+queries these environments answer are pipeline queries. That is the one place the harness has an
+opinion about a query language, and it is escapable: an operator whose telemetry is not can echo
+`LUBBDUBB_WATCH_ID` from the wrapper instead, and the verification is identical either way.
+Interpolating the id is safe where interpolating the query is not, and for a stated reason: the id is
+the check's own slug, which the document schema holds to kebab-case, while the query is
+agent-authored and reaches the shell only as a variable's value.
 
 A stale wrapper script that ignores the variable and runs something hardcoded therefore fails loudly
 on its first reading, where a dropped placeholder would have answered confidently and wrongly
@@ -203,15 +240,22 @@ a variable's value and never as part of a command string.
 The harness knows nothing about Application Insights, Kusto, `customDimensions` or `exceptions`. It
 imposes a shape on what comes back and reads nothing else:
 
+- the command prints a **JSON array of rows** on stdout and exits 0;
 - a **signal** answers with rows; the harness counts them, and renders up to two named label columns
   verbatim if present;
 - a **measure** answers with **exactly one row** carrying a numeric `value`;
-- both must carry the id echo.
+- every row must carry the id echo, in the column `lubbdubbWatchId`.
 
-Anything else — a non-zero exit, a timeout, no output, three rows where one was required, a `value`
-that is not a number — is the observation failing, which is `unknown` and never `clean`. That
-includes the silent success, for `at`'s reason: a query with nothing to report and a broken query
-print the same thing.
+Anything else — a non-zero exit, a timeout, no output, output that is not a list of rows, three rows
+where one was required, a `value` that is not a number — is the observation failing, which is
+`unknown` and never `clean`. That includes the silent success, for `at`'s reason: a query with
+nothing to report and a broken query print the same thing.
+
+**An empty result carries no echo, and that is not a hole in the guard.** Zero rows is exactly the
+answer a signal is not allowed to be trusted on alone, which is why it declares a `presence` query —
+and a presence query's own rows are where the echo is checked, on the read that is not permitted to
+come back empty. A wrapper that has stopped honouring `LUBBDUBB_WATCH_QUERY` therefore fails on the
+first reading either way.
 
 A reading is killed after 30 seconds, and the kill answers nothing.
 
@@ -274,11 +318,11 @@ that closed before the weekly job ran.
 
 Per check, three-valued, and folded per environment:
 
-| The reading says                                                    | Verdict     |
-| ------------------------------------------------------------------- | ----------- |
-| within what was declared, with presence answering                   | `clean`     |
-| outside what was declared                                           | `regressed` |
-| the observation failed, or presence is silent                       | `unknown`   |
+| The reading says                                  | Verdict     |
+| ------------------------------------------------- | ----------- |
+| within what was declared, with presence answering | `clean`     |
+| outside what was declared                         | `regressed` |
+| the observation failed, or presence is silent     | `unknown`   |
 
 Two rules, both of which a second implementation would get wrong quietly:
 
@@ -392,6 +436,13 @@ number in front of a person.
 }
 ```
 
+`for` is spelled **`forMs`**, inside `watch`, and is the one place this document's original naming
+was corrected in the building: the harness's other durations carry the suffix
+(`environmentProbeIntervalMs`, `closedPrWindowMs`), and an unsuffixed one is exactly the unit
+ambiguity the convention exists to remove — a window read in the wrong unit settles in two minutes or
+in two months, with nothing red. Nothing reads it yet; it is validated so an operator's file cannot
+carry a value the window pass will later misread.
+
 `watch` is optional per environment. An environment without one is observed for reach and nothing
 more, and a goal whose environments declare no `observe` draws no watch surface at all — the same
 off-by-default arrangement as `environments` itself.
@@ -400,7 +451,7 @@ off-by-default arrangement as `environments` itself.
 command the harness runs on a schedule, which is a thing to write deliberately in a file. No agent
 can write it; nothing in `src/mcp/` touches config.
 
-_validateEnvironments_ grows the refusals whose absence is otherwise silent:
+`validateEnvironments` (`src/environments/policy.ts`) grows the refusals whose absence is otherwise silent:
 
 - an empty `observe` on a declared `watch`, which leaves every check unanswerable forever;
 - a `holds` naming an obligation the harness does not file;
@@ -408,10 +459,15 @@ _validateEnvironments_ grows the refusals whose absence is otherwise silent:
 
 ## In the cockpit
 
-→ [17](17-cockpit.md). Four surfaces and one changed reading.
+→ [17](17-cockpit.md). Four surfaces and one changed reading. **Only the plan sheet is built**; the
+three below it and the strip's fold are italic for that reason.
 
 **The plan sheet** draws the watch beside the validation checks, each check with its query, its
-expectation, and the dry-run readings under it. An amendment from an agent draws as a pending change
+expectation, and the dry-run readings under it (`web/src/components/WatchDigest.tsx`). Read-only, for
+`ValidationDigest`'s reason: the sheet is where checks are _defined_, and approving the plan is what
+authorises the query to run against the operator's own telemetry with the operator's own credential.
+A check nothing has asked about yet says so, in those words — not yet put to an environment is not a
+clean reading. An amendment from an agent draws as a pending change
 with accept and decline, because approving the plan is what authorises the query.
 
 **The goal page's Environments card** grows a watch block **inside** each environment's row —
@@ -454,16 +510,21 @@ question marks. A goal that declared no checks renders nothing either, because n
 
 ## Persistence
 
-→ [14](14-persistence.md). Three tables, owned by a new _src/store/watches.ts_ and delegated from
+→ [14](14-persistence.md). Three tables, owned by `src/store/watches.ts` and delegated from
 `src/store/store.ts` under the same method names, per the store's composition rule.
 
-| Table            | One row per                   | Written                                                                       |
-| ---------------- | ----------------------------- | ----------------------------------------------------------------------------- |
-| `goal_watches`   | `(goal_ref, check_id)`        | `OR REPLACE` on the declaration; the merge key is the slug                    |
-| `watch_windows`  | `(goal_ref, environment)`     | `OR IGNORE` — an arrival opens one window, and re-arriving is not a second    |
-| `watch_readings` | `(window, check_id, read_at)` | append-only, pruned with its window                                           |
+| Table            | One row per                   | Written                                                                    |
+| ---------------- | ----------------------------- | -------------------------------------------------------------------------- |
+| `goal_watches`   | `(goal_ref, check_id)`        | `OR REPLACE` on the declaration; the merge key is the slug                 |
+| _watch_windows_  | `(goal_ref, environment)`     | `OR IGNORE` — an arrival opens one window, and re-arriving is not a second |
+| _watch_readings_ | `(window, check_id, read_at)` | append-only, pruned with its window                                        |
 
-All three are new tables, so none needs a `ColumnMigrations` entry — and a table being new **once**
+`goal_watches` also carries the dry run — the environment it was put to, when, what the check's own
+query and its `presence` query each answered, and the row count. On the check rather than in a
+readings table because it is a reading of the _declaration_, taken before any window exists, and it
+is cleared by a re-declaration for the same reason.
+
+The last two are not built. All three are new tables, so none needs a `ColumnMigrations` entry — and a table being new **once**
 does not keep it exempt from the next column added to it
 ([14](14-persistence.md#migrations)).
 

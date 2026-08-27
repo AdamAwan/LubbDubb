@@ -210,3 +210,58 @@ export function resolvePlanRoute(input: PlanRouteInput): PlanRouteVerdict {
   }
   return { route: 'planning', planner: kind === 'cooldown' ? 'cooldown' : 'dispatch' };
 }
+
+/**
+ * What a planner is told about the post-deploy watch, **appended** to whichever
+ * prompt it got and never interpolated into one.
+ *
+ * Appending has no fallback to get wrong. `loadPromptTemplates` rejects only
+ * *unknown* placeholders, so an operator override that never learned a `{watch}`
+ * token would drop this silently — on exactly the deployments that customised
+ * most, and with nothing red anywhere. → `docs/spec/09-execution.md`
+ *
+ * Empty where no environment declares telemetry, which is the off switch: there
+ * is nothing to put a query to, so asking for one would be asking a planner to
+ * write something no part of the deployment will ever read.
+ *
+ * Structurally typed rather than taking `EnvironmentConfig`, so the dispatcher can
+ * append the result without `src/dispatcher/` importing `src/environments/` —
+ * that directory is a lens, and a rule that could reach it would be a second
+ * opinion about a decision made elsewhere.
+ */
+export function watchNote(environments: readonly { name: string; watch?: { schema?: string } }[]): string {
+  const watched = environments.filter((env) => env.watch !== undefined);
+  if (watched.length === 0) return '';
+  const lines = [
+    '',
+    '',
+    '## After it ships',
+    '',
+    'Beside `validation` — which asks whether the goal was met — the plan document takes a `watch` block, ' +
+      'which asks whether the thing is behaving once it is deployed. Declare a `signal` for anything that ' +
+      'should stop happening, or should never start: an exception, a failure, a retry, a log line only ' +
+      'written when something has gone wrong.',
+    '',
+    '**For a defect this is knowable now, before the fix is.** The bug report *is* the signal — a ticket ' +
+      'reading "job X keeps timing out in proc Y" contains its own post-deploy check, and that check can be ' +
+      'written, and proven to fire, before a line of the fix exists.',
+    '',
+    'Every signal needs a `presence` query: a second query whose only job is to prove the code path runs at ' +
+      'all. A query naming an operation that does not exist answers zero rows, zero rows looks exactly like a ' +
+      'healthy release, and that is the direction that reads as success — so without one the harness would ' +
+      'report your fix verified on the strength of a typo.',
+    '',
+    'Both queries are run once against the environment the moment you submit, and you are told what each ' +
+      'answered. A query that resolves nothing comes back to you here, where it is cheap.',
+    '',
+    'Declaring nothing is a legitimate answer. A refactor, a docs change or a build fix has nothing running ' +
+      'to watch, and an empty watch is not the same claim as a clean one.',
+    '',
+    `Environments whose telemetry can be asked: ${watched.map((env) => env.name).join(', ')}.`,
+  ];
+  for (const env of watched) {
+    const schema = env.watch?.schema?.trim();
+    if (schema !== undefined && schema !== '') lines.push('', `**${env.name}** — ${schema}`);
+  }
+  return lines.join('\n');
+}

@@ -86,7 +86,13 @@ export function issuePlan(s: StageContext): void {
                 body: issue.body,
                 branch,
                 planFile: PLAN_FILE,
-              })) + relatedWorkNote(issue, s.pickup.containerTypes, s.parentCandidates),
+              })) +
+          relatedWorkNote(issue, s.pickup.containerTypes, s.parentCandidates) +
+          // Appended for the same reason and with the same guarantee: an operator
+          // override that never learned a `{watch}` token would drop an
+          // interpolated one silently, on exactly the deployments that customised
+          // most. Empty where no environment declares telemetry.
+          s.watchNote,
         originRef: origin,
         originTitle: issue.title,
         originSummary: issue.body,

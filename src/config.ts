@@ -439,6 +439,19 @@ export interface Config {
    */
   environmentProbeIntervalMs: number;
   /**
+   * How often an **open** post-deploy watch asks its environment again.
+   *
+   * Deliberately not {@link environmentProbeIntervalMs}. Five minutes is right for
+   * a local ancestry question and absurd for this: a percentile over a 24-hour
+   * lookback does not move in five minutes, and a 48-hour watch read that often is
+   * 576 readings per check to answer a question nobody asks more than twice a day.
+   *
+   * Nothing is asked when no watch is open, which is the steady state for most of
+   * a fleet's life.
+   * → `docs/spec/29-post-deploy-watch.md#cost`
+   */
+  watchIntervalMs: number;
+  /**
    * Per-check CI policy: what the harness does about *which* check went red
    * (`src/ci/ciPolicy.ts`). Rules are ordered and matched by glob against the
    * check name; the first match wins.
@@ -979,6 +992,7 @@ const DEFAULTS: Config = {
   // Empty is the off switch, not an empty list of something switched on.
   environments: [],
   environmentProbeIntervalMs: 5 * 60 * 1000,
+  watchIntervalMs: 30 * 60 * 1000,
   ci: { checks: [] },
   upNextOverrideTtlMs: 7 * 24 * 60 * 60 * 1000,
   agentMode: 'stream',

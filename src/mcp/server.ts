@@ -75,6 +75,12 @@ interface McpBridgeServerOptions {
    */
   prReply?: () => McpToolDeps['prReply'];
   /**
+   * The watch's dry run, resolved lazily for `openPr`'s reason: it is built after
+   * this server, and a closure dropped here leaves `plan_submit` silently storing
+   * queries nobody has ever put to an environment.
+   */
+  watch?: () => McpToolDeps['watch'];
+  /**
    * How long a recorded call's arguments are kept, in days. `0` records none at
    * all. Absent takes the store's own default — see `McpCallStore`.
    */
@@ -301,6 +307,7 @@ export class McpBridgeServer {
         openPr: this.opts.openPr?.(),
         filing: this.opts.filing?.(),
         prReply: this.opts.prReply?.(),
+        watch: this.opts.watch?.(),
         errors: this.opts.errors,
       },
       resolved.identity,

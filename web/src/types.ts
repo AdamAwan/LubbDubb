@@ -197,6 +197,8 @@ export type {
   ValidationCheckState,
   ValidationResourceView,
   ValidationVerdict,
+  GoalWatch,
+  WatchReadingVerdict,
   WorldEvent,
   WorldEventKind,
   CockpitState as AppState,

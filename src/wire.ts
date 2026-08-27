@@ -125,6 +125,7 @@ import type {
   ShortfallAuthor,
   ShortfallCause,
   StackLanding,
+  GoalWatch,
   PoolFleetReading,
   PoolMirroredClaim,
   StallPark,
@@ -1067,6 +1068,18 @@ export interface CockpitState {
    */
   validationChecks: ValidationCheck[];
   validationResources: ValidationResourceView[];
+  /**
+   * Every goal's post-deploy watch — what its plan declared a running system would
+   * have to show, and what the dry run read against each check.
+   *
+   * Keyed to a goal by `originRef`, the way the validation checks are, because a
+   * watch belongs to the goal rather than to any one plan of it.
+   *
+   * Absent (rather than empty) on a deployment where no environment declares
+   * telemetry, and the cockpit draws nothing for it: null is not clean, so a goal
+   * that declared no checks must render as no surface rather than as an empty one.
+   */
+  goalWatches: GoalWatch[];
   /**
    * The funnel's policy, as the harness is actually running it.
    *
@@ -2152,6 +2165,8 @@ export type {
   Proposal,
   Retrospective,
   ScratchEntry,
+  GoalWatch,
+  GoalWatchKind,
   StackLanding,
   StallPark,
   TaskSummary,
@@ -2161,6 +2176,7 @@ export type {
   ValidationResourceKind,
   ValidationVerdict,
   ViewerAssignment,
+  WatchReadingVerdict,
   WorkNode,
   WorldEvent,
   WorldEventKind,

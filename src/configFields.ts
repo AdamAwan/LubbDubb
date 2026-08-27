@@ -158,6 +158,13 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'How often an unconfirmed landing is asked about again — and the precision of every “arrived at”.',
   },
   {
+    path: 'watchIntervalMs',
+    type: 'number',
+    ms: true,
+    access: 'plain',
+    why: 'How often an open post-deploy watch asks its environment again. Nothing is asked when none is open.',
+  },
+  {
     path: 'upNextOverrideTtlMs',
     type: 'number',
     ms: true,

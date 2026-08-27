@@ -919,7 +919,10 @@ export function buildStateSections(
   /**
    * The plan graph and the validation plan hanging off it.
    */
-  const plansSection = (): Pick<CockpitState, 'plans' | 'planParts' | 'validationChecks' | 'validationResources'> => ({
+  const plansSection = (): Pick<
+    CockpitState,
+    'plans' | 'planParts' | 'validationChecks' | 'validationResources' | 'goalWatches'
+  > => ({
     // The plan graph, which until now existed only in the database: the per-issue
     // chip could say "2/5 parts merged" and nothing could say *which* five. The
     // cockpit joins parts to `upcoming` by origin to draw the dispatch cut.
@@ -930,6 +933,11 @@ export function buildStateSections(
     // sheet has to be able to say.
     validationChecks,
     validationResources: wireValidationResources,
+    // The post-deploy watch beside them, and read whole for the same reason: what
+    // a goal declared production would have to show is part of judging its plan,
+    // and a goal that declared nothing ships an empty list rather than a fabricated
+    // clean one — null is not clean, so the sheet draws nothing at all for it.
+    goalWatches: store.listGoalWatches(),
   });
 
   /**

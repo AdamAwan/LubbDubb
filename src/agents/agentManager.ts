@@ -70,6 +70,7 @@ import type { ParsedFlag } from './sentinels.js';
 import { classifyArtifact, type FileEventRecord, type FileEventsSpool } from './fileEvents.js';
 import { PLAN_FILE, isPlanFile, parsePlanDocument } from '../plans/planDocument.js';
 import { ingestPlanDocument } from '../plans/planIngest.js';
+import type { WatchDryRunner } from '../environments/watchDryRun.js';
 import { issueOrigin, planOriginIssue } from '../plans/planning.js';
 import { liveParts } from '../plans/parts.js';
 import type { AgentSession, SessionFactory } from './session.js';
@@ -221,6 +222,16 @@ interface AgentManagerOptions {
    * which is a supported configuration, not a degraded one.
    */
   mcp?: McpChannel;
+  /**
+   * The post-deploy watch's dry run, for a plan that arrived as a *file*.
+   *
+   * The tool transport can hand a refusal straight back to its author; this one
+   * cannot — the write is a hook draining a file, with nobody left to answer. So
+   * the reading is taken and stored anyway, because the plan sheet is where an
+   * operator reads it either way, and a plan submitted through the file path
+   * would otherwise draw a watch nothing has ever put to an environment.
+   */
+  watch?: WatchDryRunner;
   /** Central error sink: agent failures (spawn errors, crashes + exit codes) are recorded here. */
   errors?: ErrorRecorder;
 }
@@ -2095,6 +2106,27 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       'fileEvents',
       `agent=${agent.id} plan ingested issue=#${number} parts=${doc.parts.length} status=${result.status} ` +
         `retired=${result.retired.length}`,
+    );
+    // Fire-and-forget, and deliberately: the drain is synchronous and the reading
+    // is a process spawn per declared check. A refusal has no author to go back to
+    // on this path, so it is recorded rather than returned — the alternative is a
+    // failure nothing anywhere mentions.
+    void this.opts.watch?.run(origin).then(
+      (refusals) => {
+        if (refusals.length === 0) return;
+        this.opts.errors?.record({
+          source: 'agent',
+          message:
+            `Agent ${agent.id} declared a watch on issue #${number} whose queries did not resolve: ` +
+            refusals.join('; '),
+        });
+      },
+      (err: unknown) => {
+        this.opts.errors?.record({
+          source: 'agent',
+          message: `The watch dry run for issue #${number} failed: ${(err as Error).message}`,
+        });
+      },
     );
   }
 

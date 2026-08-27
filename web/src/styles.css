@@ -3346,6 +3346,90 @@ select:disabled {
   font-size: 11px;
   margin-top: 4px;
 }
+/* The post-deploy watch, drawn under the validation plan on the plan sheet. Same
+   row shape as a check — a rail in the gutter, coloured by what the dry run read —
+   because it is the same kind of thing read the same way. Every colour a token, so
+   a theme can reach it: a hex here is a surface that stays dark when somebody
+   switches to Light. */
+.pm-wrow {
+  display: flex;
+  gap: 8px;
+  padding: 8px 9px;
+  border-top: 1px solid var(--border);
+  border-left: 2px solid transparent;
+}
+.pm-wrow:first-of-type {
+  border-top: none;
+}
+.pm-wrow > div {
+  min-width: 0;
+  flex: 1;
+}
+/* The three readings, and `unknown` is deliberately not drawn in the vocabulary of
+   a quiet one: it is amber, the hue this cockpit already uses for "still owed",
+   because an environment nobody could read is work rather than an all-clear. */
+.pm-wrow.fires {
+  border-left-color: color-mix(in srgb, var(--green) 45%, transparent);
+}
+.pm-wrow.zero {
+  border-left-color: var(--amber);
+}
+.pm-wrow.unknown {
+  border-left-color: var(--amber);
+}
+.pm-wrow.unread {
+  border-left-color: var(--grey);
+}
+.pm-wbody {
+  display: grid;
+  gap: 6px;
+  margin-top: 5px;
+}
+.pm-wbody > div > b {
+  color: var(--muted);
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+/* A query is the one thing on this sheet that must be read character for
+   character, so it wraps rather than scrolls and keeps its own whitespace. */
+.pm-wquery {
+  background: var(--well);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 11px;
+  margin: 2px 0 0;
+  overflow-x: auto;
+  padding: 6px 7px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.pm-wexpect {
+  margin: 2px 0 0;
+}
+.pm-wwhy {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 5px;
+}
+.pm-wread {
+  border-radius: 4px;
+  font-size: 12px;
+  margin: 6px 0 0;
+  padding: 5px 7px;
+}
+.pm-wread.fires {
+  background: color-mix(in srgb, var(--green) 8%, transparent);
+}
+.pm-wread.zero,
+.pm-wread.unknown {
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+}
+.pm-wdetail {
+  color: var(--muted);
+}
+
 /* The validation plan. One row per check, the letter in the gutter where the
    part sequence number sits — the same reading position, because it is the same
    kind of handle. */

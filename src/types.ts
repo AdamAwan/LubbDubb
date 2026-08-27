@@ -3823,6 +3823,61 @@ export interface GoalArrival {
 }
 
 /**
+ * What a goal's post-deploy watch is meant to be told, per check. Two kinds are
+ * specified; only `signal` is declarable so far.
+ * → `docs/spec/29-post-deploy-watch.md#the-declaration`
+ */
+export type GoalWatchKind = 'signal' | 'measure';
+
+/**
+ * What the dry run learned about one declared check, and the three readings are
+ * genuinely different facts about it.
+ *
+ * - `fires` — the query is proven live and the reported defect is proven real.
+ *   This reading is the baseline.
+ * - `zero` — the query resolves and matches nothing. Either the query is wrong or
+ *   the ticket is, and the author is the only party that can tell which.
+ * - `unknown` — the observation did not answer: it failed, timed out, printed
+ *   nothing, or came back without the id echo. **Never folded into either of the
+ *   others**, in `GoalReachStatus`' rule one layer up: an expired credential and a
+ *   quiet release fail identically, and only one of them is about the work.
+ */
+export type WatchReadingVerdict = 'fires' | 'zero' | 'unknown';
+
+/** One declared check, as a plan document's `watch` block hands it to the store. */
+export interface GoalWatchInput {
+  id: string;
+  /** Position in the document. Display order only — the merge key is the id. */
+  seq: number;
+  kind: GoalWatchKind;
+  title: string;
+  query: string;
+  /** The second query proving the code path runs. Required for a signal; null for a measure. */
+  presence: string | null;
+  /** The count a signal must not exceed. */
+  tolerate: number;
+  why: string | null;
+}
+
+/** One declared check as it is stored, with whatever the dry run read against it. */
+export interface GoalWatch extends GoalWatchInput {
+  /** The goal, `issue:<n>` — the same `originRef` a plan carries. */
+  originRef: string;
+  /** The environment the dry run was put to, or null while none has run. */
+  dryRunEnvironment: string | null;
+  /** When it ran, or null. */
+  dryRunAt: string | null;
+  /** What the check's own query answered, or null while nothing has asked. */
+  dryRunVerdict: WatchReadingVerdict | null;
+  /** What the presence query answered. A signal is not readable without it. */
+  dryRunPresence: WatchReadingVerdict | null;
+  /** How many rows the check's query came back with, or null when it did not answer. */
+  dryRunRows: number | null;
+  /** What an operator is told, in words — the refusal for a `zero` or an `unknown`. */
+  dryRunDetail: string | null;
+}
+
+/**
  * The operator's answer to a goal that is never going to reach the environment
  * its obligations are gated on — a docs change, a config change, work whose
  * deployment nothing here can see.

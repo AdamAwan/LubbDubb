@@ -767,6 +767,32 @@ CREATE TABLE IF NOT EXISTS goal_arrivals (
   PRIMARY KEY (goal_ref, environment)
 );
 
+-- What a goal's plan declared a running system would have to show for its work to
+-- have done what it claimed (see WatchStore). One row per declared check, merged
+-- on the author's own slug; the dry-run columns are what the environment said the
+-- first time the query was put to it, and they are cleared by a re-declaration
+-- because a reading is a reading of *that* query.
+CREATE TABLE IF NOT EXISTS goal_watches (
+  goal_ref   TEXT NOT NULL,        -- issue:<n>
+  check_id   TEXT NOT NULL,        -- the author's kebab-case slug, and the merge key
+  seq        INTEGER NOT NULL,     -- position in the document; display order only
+  kind       TEXT NOT NULL,        -- 'signal' | 'measure'
+  title      TEXT NOT NULL,
+  query      TEXT NOT NULL,
+  presence   TEXT,                 -- the second query proving the code path runs; required for a signal
+  tolerate   INTEGER NOT NULL,     -- the count a signal must not exceed
+  why        TEXT,
+  dry_run_environment TEXT,        -- NULL while nothing has been asked
+  dry_run_at          TEXT,
+  dry_run_verdict     TEXT,        -- 'fires' | 'zero' | 'unknown'
+  dry_run_presence    TEXT,        -- the same three, for the presence query
+  dry_run_rows        INTEGER,     -- NULL when the observation did not answer
+  dry_run_detail      TEXT,        -- what the author is told, in words
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (goal_ref, check_id)
+);
+
 -- Goals the operator has said are not waiting on an environment: a docs change, a
 -- config change, work whose deployment nothing here can see. Lifts every gate on
 -- that goal, and is cleared by deleting the row so "not released" has one shape.

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ValidationSchema } from '../validation/checkDocument.js';
+import { WatchSchema } from '../validation/watchDocument.js';
 import type { PlanNarrative, PlanPartInput } from '../types.js';
 
 /**
@@ -170,6 +171,19 @@ const PlanDocumentSchema = z
      * → `src/validation/checkDocument.ts`
      */
     validation: ValidationSchema.optional(),
+    /**
+     * What a running system would have to show, once this work is deployed, for
+     * it to have done what it claimed — the layer above `validation`, which asks
+     * whether the goal was met, and above `src/environments/`, which asks only
+     * whether the work got there.
+     *
+     * Optional for the reason every field added after v1 is, and **declaring
+     * nothing is a legitimate answer**: a refactor, a docs change and a build fix
+     * have nothing running to watch, and a goal that declares no checks reads
+     * null rather than clean.
+     * → `src/validation/watchDocument.ts`
+     */
+    watch: WatchSchema.optional(),
   })
   .superRefine((doc, ctx) => {
     // **Every plan declares parts**, and that is the whole shape of the schema:

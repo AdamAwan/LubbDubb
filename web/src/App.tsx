@@ -87,6 +87,7 @@ export function App() {
       plan={viewedPlan}
       parts={(state.planParts ?? []).filter((p) => p.planId === viewedPlan.id).sort((a, b) => a.seq - b.seq)}
       checks={(state.validationChecks ?? []).filter((c) => c.originRef === viewedPlan.originRef)}
+      watches={(state.goalWatches ?? []).filter((w) => w.originRef === viewedPlan.originRef)}
       upcoming={state.upcoming?.items ?? []}
       proposal={(state.proposals ?? []).find((p) => p.kind === 'plan' && p.ref === `${viewedPlan.originRef}:plan`)}
       // What the goal has cost so far, for the approval bar. Read off the enriched

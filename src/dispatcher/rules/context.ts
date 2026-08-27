@@ -226,6 +226,18 @@ export interface StageContext {
    */
   prRefStyle: PrRefStyle;
   /**
+   * What a planner is told about the post-deploy watch, already rendered, to be
+   * **appended** to whatever prompt it got.
+   *
+   * A finished string rather than the environment list it was rendered from, and
+   * that is the whole reason it is shaped this way: `src/environments/` is a lens,
+   * nothing under `src/dispatcher/` may import it, and a rule handed the config
+   * could consult it. Handed the sentence, a rule can only pass it on.
+   * Empty where no environment declares telemetry.
+   * → `src/plans/planning.ts`
+   */
+  watchNote: string;
+  /**
    * Where a goal's validation resources live, so `validate-check` can tell an
    * agent which directory to look in. A bare string on the same terms as
    * {@link StageContext.defaultBranch}: the dispatcher only ever *phrases* it,
