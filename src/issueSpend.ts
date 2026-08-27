@@ -158,7 +158,7 @@ export function rollUpIssueSpend(input: SpendInput): SpendRollup {
 
   for (const run of input.localRuns) {
     // The silence kept for an agent, kept for a run: one that reported nothing is
-    // unmeasured rather than free, and under `agentMode: 'pty'` they all are.
+    // unmeasured rather than free, and under `agentMode: 'raw'` they all are.
     if (unmeasured(run)) continue;
     const issueNumber = issueBehind(run.originRef, parentOf);
     localRunAttribution.set(run.id, issueNumber);

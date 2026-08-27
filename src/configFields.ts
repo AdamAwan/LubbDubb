@@ -169,7 +169,7 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
   {
     path: 'agentMode',
     type: 'enum',
-    options: ['stream', 'pty', 'raw'],
+    options: ['stream', 'raw'],
     access: 'plain',
     why: 'How agents are launched. The runtime object is picked once, at boot.',
   },
@@ -203,14 +203,7 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     type: 'number',
     ms: true,
     access: 'plain',
-    why: 'Gap between a PTY message and the carriage return that submits it.',
-  },
-  {
-    path: 'agentIdleWaitMs',
-    type: 'number',
-    ms: true,
-    access: 'plain',
-    why: 'How long a silent agent is left before it is read as waiting.',
+    why: 'Gap between a terminal message and the carriage return that submits it.',
   },
   {
     path: 'agentWaitingPatterns',
@@ -292,12 +285,6 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     type: 'stringList',
     access: 'advanced',
     why: 'Extra arguments, appended last — an --allowedTools here silently drops the harness’s MCP grants.',
-  },
-  {
-    path: 'sessionTranscriptRoot',
-    type: 'string',
-    access: 'advanced',
-    why: 'Where agent session transcripts are read from.',
   },
 
   // ---- Integrations ------------------------------------------------------

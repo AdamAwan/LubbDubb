@@ -1330,9 +1330,7 @@ interface PlacementContext {
  * — null otherwise, and the UI degrades to cost).
  *
  * The limits are read from the store, where every stream agent's
- * `rate_limit_event` lands them, and fall back to the PTY status-line capture on a
- * deployment still running that runtime. The store first because it is the one of
- * the two that is not gated on a runtime.
+ * `rate_limit_event` lands them.
  *
  * `unattributedCostUsd` is the other half of the per-goal figures on each issue:
  * the spend that reached no goal at all. It is shipped rather than kept server-side
@@ -1347,7 +1345,7 @@ function buildUsage(system: System, unattributedCostUsd: number) {
       fiveHourCostUsd: system.store.sumUsageCostSince(iso(5 * 60 * 60 * 1000)),
       sevenDayCostUsd: system.store.sumUsageCostSince(iso(7 * 24 * 60 * 60 * 1000)),
     },
-    rateLimits: system.store.readRateLimits() ?? system.rateLimits?.readLatest() ?? null,
+    rateLimits: system.store.readRateLimits(),
     unattributedCostUsd,
   };
 }

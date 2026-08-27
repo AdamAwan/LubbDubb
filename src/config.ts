@@ -463,22 +463,18 @@ export interface Config {
    * How agents are launched.
    * - `stream`: real Claude Code over headless stream-JSON (`-p --output-format
    *   stream-json`). No TUI, runs unattended, supports the waiting/answer loop.
-   *   The production default.
-   * - `pty`: real Claude Code as an interactive terminal session. Requires a
-   *   claude that has completed first-run onboarding; kept for interactive use.
-   * - `raw`: run `claudeCommand`/`claudeArgs` verbatim, passing the prompt via
-   *   the `LUBBDUBB_PROMPT` env var. Used by the mock-agent demo and tests.
+   *   The production default, and the only mode that runs a model.
+   * - `raw`: run `claudeCommand`/`claudeArgs` verbatim over a terminal, passing
+   *   the prompt via the `LUBBDUBB_PROMPT` env var. Used by the mock-agent demo
+   *   and the tests; it speaks no protocol and calls no model.
    *
-   * In all `claude` modes the harness injects its status protocol via an
-   * appended system prompt and sets a permission mode.
+   * There used to be a third — `pty`, real Claude Code driven as an interactive
+   * terminal session. It is gone: everything it alone could do (a resumable
+   * conversation, the account's usage windows) the stream transport now carries
+   * in structure, and the rest of it was a screen-scrape with a silent failure
+   * mode per feature. → [10](../../docs/spec/10-agent-runtimes.md)
    */
-  agentMode: 'stream' | 'pty' | 'raw';
-  /**
-   * Where Claude Code keeps per-project session transcripts, which PTY mode tails
-   * for its transcript. Defaults to `~/.claude/projects`; override only if the
-   * agent runs with a different HOME than the server.
-   */
-  sessionTranscriptRoot?: string;
+  agentMode: 'stream' | 'raw';
   /** Passed to `claude --permission-mode` so unattended tool calls don't hang the agent. */
   agentPermissionMode: string;
   /**
@@ -523,15 +519,6 @@ export interface Config {
    * the input unsubmitted; the gap lands the CR as a distinct Enter keypress.
    */
   agentSubmitDelayMs: number;
-  /**
-   * Safety net for a turn that ends without a sentinel (PTY only). An agent that
-   * asks for review in prose and stops leaves the harness with no signal at all —
-   * status stays `running` and nothing reaches the inbox. After this long with no
-   * terminal output at all (the TUI repaints at least once a second while it's
-   * working, so silence means it's parked at the prompt), the session is parked as
-   * waiting. Unlatched: output resuming un-parks it. 0 disables.
-   */
-  agentIdleWaitMs: number;
   /** Extra literal substrings that mean "the CLI is waiting for input" (backup escalation). */
   agentWaitingPatterns: string[];
   /**
@@ -549,8 +536,8 @@ export interface Config {
    *
    * A whole-life budget per agent, not a per-stop one, so a stop that keeps
    * repeating still reaches the operator. 0 disables it and restores the immediate
-   * park. Only the stream runtime has a turn boundary to read a stop off; the PTY
-   * runtime parks on silence instead (`agentIdleWaitMs`) and ignores this.
+   * park. Only the stream runtime has a turn boundary to read a stop off, which is
+   * every runtime that runs a model.
    */
   agentStallNudges: number;
   /**
@@ -599,9 +586,8 @@ export interface Config {
    * Long by design, and for the opposite reason `agentStallParkMs` is short. This
    * one is not an operator's window, it is the longest a legitimate step may take
    * without a word — an install, a full test run, a slow fetch — and every byte on
-   * stdout starts it again. It is the PTY runtime's `agentIdleWaitMs` measured
-   * against a different silence: a TUI repaints while it works, so ninety seconds
-   * of nothing means something there, where a protocol that says nothing during a
+   * stdout starts it again. It is a wall clock against a *protocol's* silence,
+   * which says far less than a screen's did: a stream that emits nothing during a
    * tool call means only that a tool call is running.
    */
   agentSilenceParkMs: number;
@@ -998,7 +984,6 @@ const DEFAULTS: Config = {
   ],
   agentPromptDelayMs: 1200,
   agentSubmitDelayMs: 60,
-  agentIdleWaitMs: 90_000,
   agentWaitingPatterns: [],
   agentStallNudges: 2,
   agentStallParkMs: 300_000,

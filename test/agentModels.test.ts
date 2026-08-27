@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig, type Config } from '../src/config.js';
 import { buildSystem } from '../src/system.js';
-import { buildClaudeArgs, buildClaudeStreamArgs } from '../src/agents/agentProtocol.js';
+import { buildClaudeStreamArgs } from '../src/agents/agentProtocol.js';
 import { resolveAgentProfile } from '../src/agents/modelPolicy.js';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
@@ -112,8 +112,9 @@ test('an omitted block loads, and a well-formed one survives the loader', () => 
 
 // -- argv ---------------------------------------------------------------------
 
-test('both launch builders omit --model and --effort entirely when neither is set', () => {
-  for (const build of [buildClaudeArgs, buildClaudeStreamArgs]) {
+test('the launch builder omits --model and --effort entirely when neither is set', () => {
+  {
+    const build = buildClaudeStreamArgs;
     const args = build({ permissionMode: 'acceptEdits' });
     assert.equal(args.includes('--model'), false);
     assert.equal(args.includes('--effort'), false);
@@ -123,15 +124,17 @@ test('both launch builders omit --model and --effort entirely when neither is se
 test('a profile with a model and no effort carries the one flag, not an empty second', () => {
   // The shape `fast` ships as: the smaller models refuse `--effort` outright, so
   // an omitted level must leave the flag off rather than pass anything for it.
-  for (const build of [buildClaudeArgs, buildClaudeStreamArgs]) {
+  {
+    const build = buildClaudeStreamArgs;
     const args = build({ model: 'haiku' });
     assert.equal(args[args.indexOf('--model') + 1], 'haiku');
     assert.equal(args.includes('--effort'), false);
   }
 });
 
-test('both launch builders put --model before the operator args, which keep the last word', () => {
-  for (const build of [buildClaudeArgs, buildClaudeStreamArgs]) {
+test('the launch builder puts --model before the operator args, which keep the last word', () => {
+  {
+    const build = buildClaudeStreamArgs;
     const args = build({ model: 'opus', extraArgs: ['--model', 'sonnet'] });
     assert.equal(args.indexOf('--model') < args.lastIndexOf('--model'), true, 'ours is pushed first');
     assert.equal(args[args.lastIndexOf('--model') + 1], 'sonnet', "the operator's claudeArgs still win");
@@ -139,8 +142,9 @@ test('both launch builders put --model before the operator args, which keep the 
   }
 });
 
-test('both launch builders put --effort before the operator args too', () => {
-  for (const build of [buildClaudeArgs, buildClaudeStreamArgs]) {
+test('the launch builder puts --effort before the operator args too', () => {
+  {
+    const build = buildClaudeStreamArgs;
     const args = build({ model: 'opus', effort: 'medium', extraArgs: ['--effort', 'max'] });
     assert.equal(args[args.indexOf('--effort') + 1], 'medium');
     assert.equal(args[args.lastIndexOf('--effort') + 1], 'max', "the operator's claudeArgs still win");

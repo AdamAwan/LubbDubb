@@ -212,145 +212,24 @@ test('submitDelayMs 0 writes the payload and CR synchronously', () => {
   assert.deepEqual(backend.last().writes, [pasted('go'), '\r']);
 });
 
-test('deliverInitial pastes once, then re-sends only the Enter while the REPL boots', async () => {
-  // The initial-message boot race: a freshly-spawned claude REPL echoes the pasted
-  // prompt into its input box but drops the submitting Enter for ~1-2s while it
-  // finishes initialising. deliverInitial pastes ONCE (so the prompt can't be
-  // duplicated in the box) and re-sends the bare Enter until the turn starts.
-  const backend = new FakePtyBackend();
-  const session = new PtySession(backend, {
-    command: 'x',
-    args: [],
-    cwd: '/tmp',
-    submitDelayMs: 0,
-    initialSubmitIntervalMs: 5,
-    initialSubmitAttempts: 4,
-  });
-  session.start();
-  session.deliverInitial('do the task');
-  // The message is delivered as one bracketed paste plus its submitting CR.
-  assert.deepEqual(backend.last().writes, [pasted('do the task'), '\r']);
-  // While the REPL stays silently 'running', the Enter is re-sent — as bare CRs,
-  // never another paste (a re-paste would accumulate the prompt in the box).
-  // Wait out every scheduled attempt plus slack, so the cap below is asserted
-  // against a settled write log rather than whatever the timer got through in
-  // time (that race made this assertion pass only on a slow enough machine).
-  await new Promise((r) => setTimeout(r, 5 * 4 + 60));
-  const writes = backend.last().writes;
-  assert.equal(writes.filter((w) => w.startsWith(PASTE_START)).length, 1, 'the prompt is pasted exactly once');
-  assert.ok(writes.length > 2, 'the Enter is re-sent while the REPL is not yet accepting it');
-  assert.ok(
-    writes.slice(1).every((w) => w === '\r'),
-    'every retry is a bare CR',
-  );
-  // Bounded: the paste, its submitting CR, then at most `initialSubmitAttempts` re-sends.
-  assert.ok(writes.length <= 2 + 4, `retries are capped, got ${writes.length}`);
-});
+// -- the sentinel wait latch -------------------------------------------------
 
-test('deliverInitial stops re-sending the Enter once the agent progresses', async () => {
-  const backend = new FakePtyBackend();
-  const session = new PtySession(backend, {
-    command: 'x',
-    args: [],
-    cwd: '/tmp',
-    submitDelayMs: 0,
-    initialSubmitIntervalMs: 5,
-    initialSubmitAttempts: 50,
-  });
-  session.start();
-  session.deliverInitial('do the task');
-  // The turn starts and the agent parks on a question: status leaves 'running'.
-  backend.last().emit('@@LUBBDUBB_WAITING:need a decision@@');
-  assert.equal(session.status, 'waiting');
-  const countAtWait = backend.last().writes.length;
-  await new Promise((r) => setTimeout(r, 40));
-  assert.equal(backend.last().writes.length, countAtWait, 'no more Enters are sent once it left running');
-});
-
-// -- idle safety net ---------------------------------------------------------
-
-const idleOpts = { command: 'x', args: [], cwd: '/tmp', idleWaitMs: 30, submitDelayMs: 0 };
 const tick = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
-test('a turn that ends without a sentinel parks the session once the terminal goes quiet', async () => {
+test('a sentinel wait is latched, so later output does not un-park it', async () => {
   const backend = new FakePtyBackend();
-  const session = new PtySession(backend, idleOpts);
-  let reason: string | null = null;
-  session.on('waiting', (r: string) => (reason = r));
-  session.start();
-  // The real failure: the agent asks for review in prose and stops.
-  backend.last().emit('Please review reports/x.md and confirm it is accurate.\r\n');
-  assert.equal(session.status, 'running', 'still running while output is fresh');
-  await tick(60);
-  assert.equal(session.status, 'waiting');
-  assert.match(reason ?? '', /without signalling/);
-});
-
-test('ongoing output keeps pushing the idle countdown back', async () => {
-  const backend = new FakePtyBackend();
-  // A roomier window than the other cases: this one asserts the timer has *not*
-  // fired yet, so the gap between chunks must stay clear of it even when the
-  // whole suite is competing for the event loop.
-  const session = new PtySession(backend, { ...idleOpts, idleWaitMs: 500 });
-  session.start();
-  for (let i = 0; i < 4; i++) {
-    backend.last().emit(`✳ Thinking… (${i}s · esc to interrupt)`);
-    await tick(50); // each chunk re-arms well before the window elapses
-    assert.equal(session.status, 'running', 'a working agent is never parked');
-  }
-  await tick(700);
-  assert.equal(session.status, 'waiting');
-});
-
-test('an idle park is not latched — the agent resuming on its own un-parks it', async () => {
-  const backend = new FakePtyBackend();
-  const session = new PtySession(backend, idleOpts);
-  session.start();
-  backend.last().emit('thinking hard');
-  await tick(60);
-  assert.equal(session.status, 'waiting');
-  // Unlike a sentinel wait, this is an inference: fresh output means it was busy.
-  backend.last().emit('...and here is the answer');
-  assert.equal(session.status, 'running');
-});
-
-test('a sentinel wait outranks the idle net (no duplicate park, latch intact)', async () => {
-  const backend = new FakePtyBackend();
-  const session = new PtySession(backend, idleOpts);
+  const session = new PtySession(backend, { command: 'x', args: [], cwd: '/tmp', submitDelayMs: 0 });
   const reasons: string[] = [];
   session.on('waiting', (r: string) => reasons.push(r));
   session.start();
   backend.last().emit('@@LUBBDUBB_WAITING:need a decision@@');
-  await tick(60);
-  assert.deepEqual(reasons, ['need a decision'], 'the idle timer must not re-park an already-parked session');
-  // The TUI repaints while parked; the latch (not the idle net) holds the wait.
-  backend.last().emit('idle repaint');
   assert.equal(session.status, 'waiting');
-});
-
-test('a dropped submitting Enter is re-surfaced: an answer that never lands parks again', async () => {
-  const backend = new FakePtyBackend();
-  const session = new PtySession(backend, idleOpts);
-  const reasons: string[] = [];
-  session.on('waiting', (r: string) => reasons.push(r));
-  session.start();
-  backend.last().emit('@@LUBBDUBB_WAITING:need a decision@@');
-  session.send('go ahead');
-  assert.equal(session.status, 'running', 'the answer un-parks it');
-  // The TUI never echoes anything back — the Enter was swallowed, the text is
-  // sitting unsent in the input box. Silence must not be mistaken for progress.
-  await tick(60);
+  // Anything the process prints afterwards is not the agent "continuing": only an
+  // answer, a done sentinel or an exit ends a wait it asked for.
+  backend.last().emit('still here');
+  await tick(20);
   assert.equal(session.status, 'waiting');
-  assert.equal(reasons.length, 2);
-});
-
-test('idleWaitMs 0 disables the net entirely (raw/mock sessions)', async () => {
-  const backend = new FakePtyBackend();
-  const session = new PtySession(backend, { command: 'x', args: [], cwd: '/tmp' });
-  session.start();
-  backend.last().emit('quiet output');
-  await tick(60);
-  assert.equal(session.status, 'running');
+  assert.deepEqual(reasons, ['need a decision'], 'and it is announced once');
 });
 
 test('clean exit with no sentinel still counts as done', () => {

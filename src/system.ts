@@ -13,7 +13,6 @@ import { ghCliUpstreamIssues, type UpstreamIssues } from './tickets/upstream.js'
 import type { CiEvidenceReader } from './ci/ciEvidence.js';
 import { ticketAmendCommands } from './goalInstructions.js';
 import { NodePtyBackend, type PtyBackend } from './pty/backend.js';
-import { defaultSessionRoot } from './agents/sessionTranscript.js';
 import { defaultPoolSize, WorktreeManager, type Worktrees } from './worktree/worktreeManager.js';
 import { GitCliObserver, type GitObserver } from './git/gitObserver.js';
 import { fetchRemote } from './git/gitCli.js';
@@ -24,15 +23,9 @@ import type { AreaPathTree } from './intake/placement.js';
 import { TicketSweep } from './tickets/sweep.js';
 import { WorkGraphRecorder } from './graph/workGraphRecorder.js';
 import { AgentManager } from './agents/agentManager.js';
-import {
-  buildClaudeArgs,
-  buildClaudeStreamArgs,
-  buildInitialMessage,
-  buildResumeMessage,
-} from './agents/agentProtocol.js';
+import { buildClaudeStreamArgs, buildInitialMessage, buildResumeMessage } from './agents/agentProtocol.js';
 import { PtySession } from './pty/ptySession.js';
 import { StreamJsonSession, type Spawner } from './agents/streamJsonSession.js';
-import { StatusFileRateLimits } from './agents/statusLine.js';
 import { FileEventsSpool } from './agents/fileEvents.js';
 import { AttachmentFiles } from './jobs/attachmentFiles.js';
 import type { SessionFactory } from './agents/session.js';
@@ -203,16 +196,10 @@ export interface System {
    */
   prompts: PromptTemplates;
   /**
-   * Account rate-limit capture (status-line payloads), wired only for the PTY
-   * runtime — the status line never fires headless. Null in other modes; the
-   * snapshot then falls back to the rolling cost windows from `usage_events`.
-   */
-  rateLimits: StatusFileRateLimits | null;
-  /**
    * Per-agent spool for the file-events `PostToolUse` hook — where written paths
    * land before {@link AgentManager.drainFileEvents} folds them into the files
    * list / artifact chips. Always present; the hook feeding it is only wired for
-   * the real runtimes (stream/pty).
+   * the real runtime (stream).
    */
   fileEvents: FileEventsSpool;
   /**
@@ -407,12 +394,6 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const gitObserver = opts.gitObserver ?? new GitCliObserver(config.repoRoot);
 
   // Pick the agent runtime and how it's launched from the configured mode.
-  // `claudeTui` marks the real interactive claude REPL, which needs two things
-  // raw/mock sessions don't: its transcript read from the session file Claude
-  // Code writes (the screen carries slash menus, hints and column-wrapped prose
-  // that no chrome filter can undo), and an active exit-on-done — the REPL never
-  // ends a session by itself, so without it the process and its worktree leak (#66).
-  const sessionRoot = config.sessionTranscriptRoot ?? defaultSessionRoot();
   // How a stopped agent's *descendants* die with it (issue: a Bash-tool shell
   // outliving its agent pins the worktree cwd, and Windows then refuses rmdir on
   // it forever). See {@link ProcessReaper}.
@@ -428,7 +409,12 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     (realTransport
       ? (pid) => killProcessTree(pid, (message) => errors.record({ source: 'agent', message }))
       : () => {});
-  const ptyFactory = (claudeTui: boolean): SessionFactory => {
+  // `raw` only, and the only terminal runtime left: the operator's argv (in
+  // practice the mock agent) run verbatim, line-oriented, speaking no protocol
+  // beyond the sentinels it prints. None of the TUI machinery the removed `pty`
+  // mode needed applies to it — it writes no session file to tail, it exits by
+  // itself, and it is legitimately silent between steps.
+  const ptyFactory = (): SessionFactory => {
     return (spec) =>
       new PtySession(backend, {
         command: spec.command,
@@ -437,18 +423,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
         env: spec.env,
         waitingPatterns: spec.waitingPatterns,
         submitDelayMs: config.agentSubmitDelayMs,
-        // Needs a pinned session id to name the transcript file. Both real runtimes
-        // now carry one, but only the TUI needs its screen read back out of a file —
-        // stream mode builds its transcript from the events themselves.
-        sessionTranscript:
-          claudeTui && spec.sessionId
-            ? { root: sessionRoot, sessionId: spec.sessionId, startAtEof: spec.resume === true }
-            : undefined,
         onWarning: (message) => errors.record({ source: 'agent', message }),
-        exitOnDone: claudeTui,
-        // Real-TUI only: raw/mock sessions are line-oriented and legitimately
-        // silent between steps, so idle means nothing there.
-        idleWaitMs: claudeTui ? config.agentIdleWaitMs : 0,
         reap: reapTree,
       });
   };
@@ -536,46 +511,17 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
       promptDelayMs: 0, // stdin is ready immediately; no TUI to wait for
       resumable: true,
     },
-    pty: {
-      // Pin the session id up front, `--resume` it later.
-      buildArgs: (({ sessionId, resume, mcpConfigPath, model, effort }) =>
-        buildClaudeArgs({
-          permissionMode: perm,
-          extraArgs,
-          allowedTools,
-          additionalDirectories,
-          sessionId,
-          resume,
-          statusLine: true,
-          fileEvents: true,
-          mcpConfigPath,
-          permissionPromptTool,
-          model: model ?? undefined,
-          effort: effort ?? undefined,
-          knowledgeBlock: knowledgeBlock(),
-        })) as ArgsBuilder,
-      factory: ptyFactory(true),
-      initialInput: (task: Parameters<typeof buildInitialMessage>[0]) => buildInitialMessage(task),
-      resumeInput: buildResumeMessage,
-      promptDelayMs: config.agentPromptDelayMs,
-      resumable: true,
-    },
     raw: {
       // Deliberately ignores `model`: running the operator's argv verbatim is this
       // mode's whole contract, and it speaks no protocol to assign work by.
       buildArgs: (() => config.claudeArgs) as ArgsBuilder,
-      factory: ptyFactory(false),
+      factory: ptyFactory(),
       initialInput: undefined,
       resumeInput: undefined,
       promptDelayMs: config.agentPromptDelayMs,
       resumable: false,
     },
   }[config.agentMode];
-
-  // PTY-only: capture the status-line payloads (the one surface carrying the
-  // account 5h/weekly limits) into per-session files under the OS tmpdir — a
-  // stable spot so the last known limits survive a restart.
-  const rateLimits = config.agentMode === 'pty' ? new StatusFileRateLimits(join(tmpdir(), 'lubbdubb', 'status')) : null;
 
   // File-events capture (the PostToolUse hook's spool): one dir per agent under
   // the OS tmpdir. Wired for every mode — the hook itself is only injected for
@@ -735,7 +681,6 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     silenceParkMs: config.agentSilenceParkMs,
     resumable: agentSetup.resumable,
     resumeAttempts: config.agentResumeAttempts,
-    statusFile: rateLimits ? (sessionId): string => rateLimits.fileFor(sessionId) : undefined,
     fileEvents,
     docsFolderPrefix: config.docsFolderPrefix,
     mcp,
@@ -1274,7 +1219,6 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     projectConfigFile: opts.projectConfigFile ?? projectConfigFilePath(config.repoRoot),
     issuePickup,
     prompts,
-    rateLimits,
     fileEvents,
     attachments,
     mcp,

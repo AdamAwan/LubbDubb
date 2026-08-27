@@ -160,9 +160,9 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
      *
      * Any byte on stdout re-arms it, so the window is the longest a *legitimate*
      * step may take without a word — a full install or test run, not a repaint —
-     * which is why it is measured in tens of minutes where the PTY runtime's
-     * `agentIdleWaitMs` is measured in seconds. A screen that repaints every second
-     * and a protocol that says nothing during a tool call are different silences.
+     * which is why it is measured in tens of minutes rather than seconds. A screen
+     * that repaints while it works would have said far more; a protocol that says
+     * nothing during a tool call says only that a tool call is running.
      */
     private readonly silenceMs: number = 0,
   ) {

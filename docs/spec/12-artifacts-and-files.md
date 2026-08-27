@@ -34,7 +34,7 @@ that coupling: it fires for _any_ file-writing tool regardless of what the agent
 `FILE_EVENTS_SETTINGS` is a `--settings` fragment matching `Write|Edit|MultiEdit|NotebookEdit` — the
 tools whose `tool_input` carries a `file_path`/`notebook_path`. It is wired once into the launch
 `--settings` for **both** runtimes (hooks fire in headless stream mode too; they just do not appear in
-the stream output). Because `--settings` has no array form, the status-line and file-events fragments
+the stream output). Because `--settings` has no array form, the file-events and permissions fragments
 are merged into one JSON object.
 
 The hook body reads the tool payload on stdin, extracts **the written path only — never the file

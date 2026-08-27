@@ -177,9 +177,9 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
   refuses `rmdir` on it — every later dispatch onto that branch fails `EBUSY`, forever, with nothing
   but rejected dispatches to show for it. Reaping _after_ the child dies finds nothing: descendants
   are resolved through the root pid. → [10](docs/spec/10-agent-runtimes.md#reaping-the-process-subtree)
-- **Both real runtimes are resumable, and a launch carries `--session-id` _or_ `--resume`, never
-  both.** Since #318 the stream launch pins an id too, so `restore` is on offer on the default
-  deployment. Write either flag only through `appendSessionFlags` in `src/agents/agentProtocol.ts`:
+- **A launch carries `--session-id` _or_ `--resume`, never both.** Since #318 the stream launch pins
+  an id, so `restore` is on offer on the default deployment. Write either flag only through
+  `appendSessionFlags` in `src/agents/agentProtocol.ts`:
   `claude` refuses `--session-id` on an id that already has a transcript — exit 1, plain stderr, and
   **no stream event at all** — so a relaunch that carried a stored id down the mint arm reads to the
   harness as a process that died for no reason.
@@ -211,26 +211,26 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
   exactly like a successful upgrade until you wonder why the fix is not in.
   → [21](docs/spec/21-self-update.md#applying-it)
 
-The **default `agentMode` is `stream`, not a PTY.** Do not assume terminal semantics on the default
-path. Everything below is PTY-only, and every one of them is a silent failure — the agent keeps
-running and does the wrong thing. → [10](docs/spec/10-agent-runtimes.md#sharp-edges)
+**`agentMode` is `stream` or `raw`, and only `stream` runs a model.** `raw` is the mock agent — argv
+over a terminal — and what nearly every test drives, so a change asserted only there has not been
+asserted against a model. → [10](docs/spec/10-agent-runtimes.md#the-session-contract)
 
 - **`PtySession.kill()` sets status `killed` _before_ signalling the process.** A synchronously
   delivered exit would otherwise be reclassified as `failed`, firing a terminal event. Keep that
   ordering.
 - **`PtySession.send()` writes the text and its submitting carriage return as two separate writes**,
-  `agentSubmitDelayMs` apart. The TUI coalesces one input burst into a paste and treats a trailing
-  CR as a literal newline, so a glued-on CR leaves the message sitting unsubmitted. Test assertions
-  therefore look for the payload as its own write — do not re-glue them.
-- **`deliverInitial()` pastes the prompt once and then re-sends only the bare CR.** A re-paste
-  accumulates it in the input box. "Landed" is observed from the session file, not timed.
-- **PTY sentinel matching goes through `src/pty/sentinelScanner.ts`, never `indexOf`.** The TUI
-  styles the line it prints a sentinel on, so SGR escapes land _inside_ the token. One matcher
-  serves both detection and display-stripping; two views of the same bytes is the bug already fixed
-  once, where detection fired and the strip missed.
-- **Do not launch the server from inside a Claude Code session when using `agentMode: 'pty'`.** The
-  parent's `CLAUDE_CODE_SESSION_ID` / `CLAUDECODE` leak into the spawned `claude`, which then writes
-  no session transcript of its own and falls back to raw screen output.
+  `agentSubmitDelayMs` apart. A line editor folds one input burst into a paste and treats a trailing CR
+  as a literal newline, so a glued-on CR leaves the message unsubmitted. Test assertions therefore look
+  for the payload as its own write — do not re-glue them.
+- **Sentinel matching goes through `src/pty/sentinelScanner.ts`, never `indexOf`.** A program that
+  styles the line it prints a sentinel on puts SGR escapes _inside_ the token. One matcher serves both
+  detection and display-stripping; two views of the same bytes is the bug already fixed once, where
+  detection fired and the strip missed.
+- **The account's 5h/weekly windows are read off `rate_limit_event` beside the park, by a second
+  function that must stay one.** It fires on **every ordinary turn**, well inside the limits, so folded
+  into `rateLimitPark` it is one edit from parking the fleet on a reading that says there is room.
+  Freshest wins by `capturedAt`, not arrival — agents report interleaved, and last-write-wins walks the
+  chip _backwards_. → [10](docs/spec/10-agent-runtimes.md#the-account-usage-windows)
 
 ### Agent launch and the tool channel
 

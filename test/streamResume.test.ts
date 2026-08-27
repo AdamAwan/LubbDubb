@@ -17,10 +17,11 @@ import { failPlanningOpen } from './support/plans.js';
 /**
  * Crash recovery on the **default** runtime (issue #318).
  *
- * `test/resume.test.ts` covers the same ground for PTY; this file exists because
- * the deployment default is `stream`, and until #318 that path pinned no session
- * id at all — so the recovery desk could only ever offer requeue/remove on the
- * mode nearly every deployment actually runs.
+ * Until #318 the stream path pinned no session id at all, so the recovery desk
+ * could only ever offer requeue/remove on the mode nearly every deployment
+ * actually runs. It now pins one, and this file is where that is held — including
+ * the runtime-agnostic desk behaviours that used to be asserted against the PTY
+ * runtime before it was removed.
  */
 
 /** Fake headless `claude`: records what was written to it, replays events on demand. */
@@ -440,4 +441,67 @@ test('a mid-run resume revokes the dead launch credential and drops its spool', 
   assert.deepEqual(released, ['tok0', 'tok1']);
   assert.equal(existsSync(secondSpool!), false);
   store.close();
+});
+
+test('a cockpit kill is NOT offered for recovery on the next boot', async () => {
+  const dir = tmp();
+  const { system: s1, agent } = await spawnAgent(dir);
+
+  // Deliberate per-agent kill from the cockpit.
+  s1.agents.kill(agent.id);
+  assert.equal(s1.store.getAgent(agent.id)!.status, 'killed');
+  s1.store.close();
+
+  const { launches, system: s2, crashed } = reboot(dir);
+  assert.equal(crashed.length, 0, 'killed agents are not candidates');
+  assert.equal(launches.length, 0, 'nothing is re-spawned');
+  assert.equal(s2.store.getAgent(agent.id)!.status, 'killed', 'the kill stays dead');
+  s2.store.close();
+});
+
+test('an orphan with no usable session id is offered requeue and remove, not restore', () => {
+  const dir = tmp();
+  const { spawner, launches } = recordingSpawner();
+  const system = buildSystem(streamConfig(dir), {
+    worktrees: new FakeWorktreeManager(),
+    streamSpawner: spawner,
+    errorMirror: () => {},
+  });
+
+  // A legacy/partial agent row with no session id (e.g. died before one existed).
+  const task = system.store.createTask({ kind: 'code', title: 't', prompt: 'p', branch: 'b', originRef: 'r' });
+  system.store.updateTask(task.id, { status: 'running' });
+  const agent = system.store.createAgent({ taskId: task.id, cwd: dir, pid: 1, status: 'running', sessionId: null });
+
+  const crashed = system.recovery.detect();
+  assert.equal(crashed.length, 1);
+  assert.equal(crashed[0]!.restorable, false);
+  assert.match(crashed[0]!.restoreBlocked!, /session id/);
+
+  const refused = system.recovery.decide(crashed[0]!.taskId, 'restore');
+  assert.equal(refused.ok, false, 'restore is refused rather than half-attempted');
+  assert.equal(system.store.getAgent(agent.id)!.status, 'crashed', 'a refusal leaves the decision outstanding');
+  assert.equal(launches.length, 0);
+  system.store.close();
+});
+
+test('detection is idempotent: a second detect does not re-park or double-count', async () => {
+  const dir = tmp();
+  const { system: s1, agent } = await spawnAgent(dir);
+  s1.agents.interruptAll();
+  s1.store.close();
+
+  const { launches, system: s2 } = reboot(dir);
+  // A repeat detect (e.g. boot ran twice) sees the same one pending decision.
+  assert.equal(s2.recovery.detect().length, 1);
+  assert.equal(s2.recovery.pendingCount(), 1);
+  assert.equal(launches.length, 0, 'still nothing relaunched');
+
+  // And a restore is applied exactly once: the second call finds nothing pending.
+  const taskId = s2.store.getAgent(agent.id)!.taskId;
+  assert.equal(s2.recovery.decide(taskId, 'restore').ok, true);
+  assert.equal(launches.length, 1);
+  assert.equal(s2.recovery.decide(taskId, 'restore').ok, false);
+  assert.equal(launches.length, 1, 'already-live agent is not re-spawned');
+  s2.store.close();
 });

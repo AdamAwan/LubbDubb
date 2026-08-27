@@ -298,7 +298,7 @@ billed to, and for the feature's first three revisions no surface in the cockpit
 The reading arrives for free. The stream runtime emits `usage` at every turn end — cumulative cost,
 tokens and turns off the `result` event ([10](10-agent-runtimes.md)) — and the runner now listens:
 `absorb` takes a session's usage the same way it takes its output. The PTY runtime has no such channel,
-so **every local run of a `agentMode: 'pty'` deployment is unmeasured**, which is the null the columns
+so **every local run of a `agentMode: 'raw'` deployment is unmeasured**, which is the null the columns
 carry rather than a zero ([18](18-observability.md#usage-accounting)).
 
 **The row accumulates; it is not folded.** Every other usage figure the harness holds is a session's

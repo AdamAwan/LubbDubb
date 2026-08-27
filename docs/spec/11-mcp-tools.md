@@ -735,7 +735,7 @@ a trade worth making.
   harnesses on one machine do not fight, and under the OS tmpdir to stay inside the ~104-character
   POSIX limit on socket paths.
 - Launch configs: `<tmpdir>/lubbdubb/mcp/<token>.json`, written with mode `0600`.
-- `bridge.mjs` (spawned by `claude`, shipped `.mjs` like `statusCapture.mjs`) is a **byte-transparent
+- `bridge.mjs` (spawned by `claude`, shipped as plain `.mjs`) is a **byte-transparent
   pipe with no protocol logic**, so `initialize` / `tools/list` / `tools/call` / validation all live in
   `protocol.ts` and `tools.ts` and are testable with no transport at all.
 - A connection that does not hand over a token first is **dropped unanswered**. The handshake line is

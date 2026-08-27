@@ -9,10 +9,9 @@ import { join } from 'node:path';
  * a report has to know the protocol. A `PostToolUse` hook instead fires for
  * *any* file-writing tool (`Write`/`Edit`/…) regardless of what the agent was
  * told, so a report shows up with zero skill-side knowledge. The hook is wired
- * once into the launch `--settings` (both runtimes — hooks fire headless too),
- * mirroring the status-line capture in {@link file://./statusLine.ts}: a small
- * command dumps each write to a per-agent spool dir named by `$LUBBDUBB_EVENTS_DIR`
- * (set in the spawn env), and {@link FileEventsSpool} drains it back on demand.
+ * once into the launch `--settings` (hooks fire headless too): a small command dumps
+ * each write to a per-agent spool dir named by `$LUBBDUBB_EVENTS_DIR` (set in the
+ * spawn env), and {@link FileEventsSpool} drains it back on demand.
  *
  * Detection is intentionally broad; the *promotion* decision (report vs. plain
  * code change) is a separate pure step, {@link classifyArtifact}.

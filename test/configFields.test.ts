@@ -59,7 +59,7 @@ test('the running config reports each field’s type, reach and liveness', () =>
 
   assert.deepEqual(
     { type: byPath.get('agentMode')?.type, options: byPath.get('agentMode')?.options },
-    { type: 'enum', options: ['stream', 'pty', 'raw'] },
+    { type: 'enum', options: ['stream', 'raw'] },
   );
   assert.equal(byPath.get('maxConcurrentAgents')?.live, true, 'the cap has an arm');
   assert.equal(byPath.get('agentMode')?.live, false, 'the runtime object is picked once, at boot');
@@ -89,8 +89,8 @@ test('a value of the wrong type is refused by name, and a right one passes', () 
 
   assert.match(fieldValueRefusal(port, '4300') ?? '', /port must be a number/);
   assert.equal(fieldValueRefusal(port, 4300), null);
-  assert.match(fieldValueRefusal(mode, 'terminal') ?? '', /must be one of stream, pty, raw/);
-  assert.equal(fieldValueRefusal(mode, 'pty'), null);
+  assert.match(fieldValueRefusal(mode, 'terminal') ?? '', /must be one of stream, raw/);
+  assert.equal(fieldValueRefusal(mode, 'raw'), null);
   assert.match(fieldValueRefusal(tools, 'Bash(npm:*)') ?? '', /must be a list of strings/);
   assert.equal(fieldValueRefusal(tools, ['Bash(npm:*)']), null);
 });

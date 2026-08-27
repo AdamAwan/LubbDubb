@@ -2,7 +2,8 @@
 
 ## The session contract
 
-`src/agents/session.ts` defines `AgentSession`, which both runtimes implement. `AgentManager`, the
+`src/agents/session.ts` defines `AgentSession`, which both runtimes implement — `StreamJsonSession`,
+which runs the model, and `PtySession`, which runs the operator's argv for `raw`. `AgentManager`, the
 `Hub` and the cockpit are agnostic to which is running.
 
 ```ts
@@ -11,7 +12,6 @@ interface AgentSession extends EventEmitter {
   readonly pid: number | null;
   start(): void;
   send(text: string): void;
-  deliverInitial?(text: string): void; // optional; boot-race-robust first message
   sendRaw(data: string): void; // no framing, for control chars
   kill(signal?: string): void;
 }
@@ -19,7 +19,8 @@ interface AgentSession extends EventEmitter {
 
 Events, emitted by both: `output(delta)`, `waiting(reason)`, `done()`, `failed()`, `status(status)`,
 `exit(code)`, `activity()`, `flag(ParsedFlag)`. The stream runtime additionally emits
-`usage(AgentUsage)` at each turn end; the PTY runtime has no such channel and never emits it.
+`usage(AgentUsage)` at each turn end and `limits(AccountRateLimits)` whenever `claude` reports the
+account's usage windows; the terminal runtime has neither channel and emits neither.
 
 `activity` is the runtime's own statement that the agent **did** something — one per message carrying
 a tool call. It exists because parking is only ever a _request_: the `escalate` tool returns at once,
@@ -27,9 +28,8 @@ so an agent that carries on leaves the harness saying `waiting` against an alert
 Two properties are load-bearing:
 
 - **It is not derived from `output`**, because only the runtime knows whether its own output is
-  model-produced. Stream emits it off `tool_use` blocks; PTY emits it **only** from the session file
-  (`SessionTranscriptUpdate.toolUses`), never from `handleData` — the screen repaints while a session
-  sits parked, which is the same reason the sentinel park is latched there.
+  model-produced. Stream emits it off `tool_use` blocks; the terminal runtime, which cannot tell its
+  program's output from anything else, never emits it at all.
 - **It is narrowed to tool calls, not any block.** Prose after an escalation is usually the agent
   explaining that it is waiting, and reading that as work would mark alerts stale that need answering.
 
@@ -75,9 +75,9 @@ of buffer or whitespace) so an echoed sentinel mid-token does not fire.
 
 ## Launch arguments
 
-`src/agents/agentProtocol.ts` builds the argv.
-
-**`buildClaudeStreamArgs`** (the production default):
+`src/agents/agentProtocol.ts` builds the argv. There is **one** builder —
+`buildClaudeStreamArgs` — because there is one runtime that launches a model. `raw` passes
+`claudeArgs` through verbatim and never comes here.
 
 ```
 -p --input-format stream-json --output-format stream-json --verbose
@@ -90,29 +90,17 @@ of buffer or whitespace) so an echoed sentinel mid-token does not fire.
 [...claudeArgs]
 ```
 
-**`buildClaudeArgs`** (PTY):
-
-```
---append-system-prompt <protocol [+ tool addendum] [+ injected knowledge]>
-(--session-id <id> | --resume <id>)
-[--settings <merged status-line + file-events + permissions fragments>]
-[--mcp-config <path> --allowedTools <names> [--permission-prompt-tool <name>]]
-[--permission-mode <mode>]
-[--model <model>]
-[...claudeArgs]
-```
-
 Points that are load-bearing:
 
 - The protocol prompt is **re-appended on resume**. `--resume` replays the conversation but does not
   retain the original invocation's appended system prompt, so detection would otherwise break.
-- `--session-id` and `--resume` are mutually exclusive, and both runtimes carry the pair (issue #318 —
+- `--session-id` and `--resume` are mutually exclusive, and the launch carries the pair (issue #318 —
   before it, the stream launch pinned no id at all and the recovery desk could never offer `restore`
   on the default deployment). Exclusivity is not house style: `claude` **refuses** `--session-id` on an
   id that already has a transcript, exiting 1 with a plain-stderr `Session ID … is already in use.`
   and no stream event — so a relaunch that carried the stored id down the mint arm would look to the
   harness like a process that died for no reason. `appendSessionFlags` is the one place either flag is
-  written, and `test/agentProtocol.test.ts` asserts both builders emit exactly one of them.
+  written, and `test/agentProtocol.test.ts` asserts the launch emits exactly one of them.
 - **Headless resume is a verified property, not an assumption** (probed against `claude` 2.1.223 for
   #318): a pinned id is honoured under `-p` and echoed on every event, its transcript lands at
   `~/.claude/projects/<slugified-cwd>/<id>.jsonl`, `--resume` re-opens _that_ file and appends rather
@@ -123,13 +111,12 @@ Points that are load-bearing:
   (`system`/`init` is emitted at the start of _every_ turn, fresh or resumed, so nothing may key off
   it as a resume marker.) `--resume` on an id with no transcript fails cleanly: exit 1, and a
   well-formed `result` of subtype `error_during_execution` on stdout.
-- `--settings` has no array form, so the status-line, file-events and `permissions` fragments
-  are **merged into one JSON object** (`collectSettings`) — disjoint top-level keys, so the merge is
-  lossless. The two halves of `permissions` (`allow` and `additionalDirectories`) are built into one
-  object rather than assigned twice, or whichever was written first would be dropped. `collectSettings` is used by **both** runtimes, so the allow-list reaches headless agents.
+- `--settings` has no array form, so the file-events and `permissions` fragments are **merged into
+  one JSON object** (`collectSettings`) — disjoint top-level keys, so the merge is lossless. The two
+  halves of `permissions` (`allow` and `additionalDirectories`) are built into one object rather than
+  assigned twice, or whichever was written first would be dropped.
 - Operator `claudeArgs` are appended last, so an explicit flag there has the last word.
-- The status line never renders headless, so it is wired for PTY only. `PostToolUse` hooks _do_ fire
-  headless, so file-events capture is wired for both.
+- `PostToolUse` hooks fire headless, so file-events capture rides `--settings` here.
 - `mcpConfigPath` is **per-launch** (minted by `AgentManager`, not fixed at wiring time) and is
   threaded through the `ArgsBuilder` in `src/system.ts` — without that, `--mcp-config` (and the
   permission-prompt tool that lives on that server) never reach the agent.
@@ -525,10 +512,9 @@ Three things about the window, all of which follow from it being a wall clock ra
 
 - **It is long, for the opposite reason `agentStallParkMs` is short.** That one is an operator's
   window to disagree; this one is the longest a _legitimate_ step may take without a word — a cold
-  install, a full test run, a slow fetch. Thirty minutes by default, where the PTY runtime's
-  `agentIdleWaitMs` is ninety seconds, and the two are not in disagreement: a TUI repaints at least
-  once a second while it works, so silence there means the agent is parked at the prompt, while a
-  protocol that says nothing during a tool call means only that a tool call is running.
+  install, a full test run, a slow fetch. Thirty minutes by default, which is minutes rather than the
+  seconds a screen's silence would have warranted: a protocol that says nothing during a tool call
+  means only that a tool call is running.
 - **It is off for every status that is legitimately silent.** Arming runs through `setStatus`, which
   is the one place every transition passes, so a session parked on a question, on a spent limit, or
   ended has no clock at all — an agent waiting on a person may wait all night. `handleSilent` checks
@@ -538,8 +524,7 @@ Three things about the window, all of which follow from it being a wall clock ra
   process's, and one left armed by a kill that found nothing to signal outlives the session and parks
   an agent nobody is running any more.
 
-`agentSilenceParkMs: 0` turns it off and restores the wedge that stands forever. The PTY runtime is
-unaffected: `agentIdleWaitMs` is its own answer to the same question, and it has had one all along.
+`agentSilenceParkMs: 0` turns it off and restores the wedge that stands forever.
 
 Tests: `test/silencePark.test.ts` (the park and the nudge it does not send, the settle and the reap,
 the long step that is not a wedge, the working agent that is never settled under its own hands, and
@@ -580,13 +565,11 @@ and a time down its left edge turns it into a log file.
 
 **A stamp is a time the block came with, never a reading of the clock at render.** `renderBlocks`
 takes the time as an argument and stays pure; the stream runtime passes one reading per message,
-because on that transport an event is read as it happens, and the PTY runtime instead dates each
-block from the session file record's own `timestamp` (`ContentBlock.at`, which wins over the
-argument). That split is load-bearing: `SessionTranscriptTail` replays the file from the top on every
-attach, so a clock read here would date a whole finished session to the second it was reopened —
-making an agent idle since lunch and one still working read identically, which is the exact failure
-these stamps exist to end. A record with no `timestamp` renders unstamped rather than stamped
-`now`.
+because on that transport an event is read as it happens rather than replayed. A block that carries
+its own time (`ContentBlock.at`) still wins over the argument, which is what keeps `renderBlocks`
+usable by anything that replays rather than watches — a clock read at render would date a whole
+finished session to the second it was reopened, making an agent idle since lunch and one still
+working read identically.
 
 A result's label is `↳ result` (or `↳ error`) followed by the stamp and a dim `· N lines` suffix
 giving the **pre-truncation** total, the count omitted when the result is a single line. The cockpit folds that suffix into
@@ -614,9 +597,8 @@ pane sat unchanged until the agent next spoke, and the only evidence the answer 
 a reply to a question the transcript never showed. It reads exactly like a box that does nothing.
 
 - **A runtime that already records both halves says so**, with `AgentSession.recordsSentMessages`, and
-  is never echoed. The PTY runtime sets it: its transcript _is_ Claude Code's session file, which
-  records the human turns, and its degraded screen fallback shows what was typed — so an echo there
-  would print every message twice.
+  is never echoed. The terminal runtime sets it: a terminal echoes what is typed into it, so an echo
+  there would print every message twice.
 - **The echo goes out only where the message did.** `respond` on an agent with no live session
   refuses, and refuses before it writes: a transcript claiming a message was sent to a session that
   is gone is worse than the silence it replaced.
@@ -658,23 +640,26 @@ are worded. The enum members are carried as plain strings rather than re-declare
 someone else's wire format, and a narrower type here would read a value the CLI adds tomorrow as "not
 exhausted".
 
-The PTY runtime emits none of this. The same exhaustion there arrives as screen text, and a park off a
-scraped sentence is one an ordinary line of prose can forge.
+The same event carries the account's usage *windows* beside the exhaustion — read separately, and by a
+function that cannot park anything; see [the account usage windows](#the-account-usage-windows).
 
 ## `PtySession`
 
 `src/pty/ptySession.ts`, over the swappable `PtyBackend` seam (`src/pty/backend.ts`;
-`FakePtyBackend` for tests). Used for `agentMode: 'pty'` and `'raw'`.
-All the "is it waiting / is it done" heuristics live here behind one testable abstraction.
+`FakePtyBackend` for tests). Since the interactive `claude` runtime was removed this serves
+`agentMode: 'raw'` **alone** — the operator's argv, in practice the mock agent, run verbatim over a
+terminal with the prompt in `LUBBDUBB_PROMPT`. It runs no model, speaks no protocol beyond the
+sentinels its program prints, and is what the test suite drives.
 
-`agentMode: 'pty'` marks the real interactive claude TUI (`claudeTui` in the composition root), which
-enables three things `raw`/mock sessions do not get: session-file transcripts, exit-on-done, and the
-idle-wait safety net.
+That is why nothing in it reads a session file, waits out a REPL's boot race, or shuts a finished
+process down: a raw program writes plain lines and exits by itself. Everything that existed for the
+TUI went with it — `SessionTranscriptTail`, the two-source sentinel arbitration, `exitOnDone`, the
+idle-wait net and `deliverInitial`.
 
 ### Sentinel scanning
 
-**PTY sentinel matching goes through `src/pty/sentinelScanner.ts`, never `indexOf`.** The interactive
-TUI styles the line it prints a sentinel on, so SGR escapes land _inside_ the token
+**Sentinel matching goes through `src/pty/sentinelScanner.ts`, never `indexOf`.** A program that
+styles the line it prints a sentinel on puts SGR escapes _inside_ the token
 (`@@LUBB\x1b[0mDUBB_DONE@@`), not merely around it. The scanner matches through the escapes and reports
 **raw byte spans** plus an escape-free payload.
 
@@ -692,61 +677,7 @@ Two consequences:
   (`MAX_SENTINEL_HOLD`, 512 bytes). Unbounded, an agent that merely _mentions_
   `@@LUBBDUBB_WAITING:` without closing it blacked out the transcript for the rest of the run.
 
-Tests: `test/ptySentinelScanner.test.ts`.
-
-### Transcript from the session file
-
-The screen is the wrong source. The interactive claude TUI paints cursor-addressed redraws, so its
-byte stream carries the slash-command dropdown, `Tip:` hints, `(ctrl+o to expand)` markers and input-box
-rules as _content_, with prose already hard-wrapped at the emulator's column width. No chrome blacklist
-recovers the logical lines.
-
-So PTY mode does not read the screen at all. Claude Code writes every session's conversation to
-`~/.claude/projects/<encoded-cwd>/<session-id>.jsonl`, and since PTY is the runtime that pins
-`--session-id`, the harness knows exactly which file is its agent's. `SessionTranscriptTail`
-(`src/agents/sessionTranscript.ts`) tails it and renders the records with the **same** `renderBlocks`
-stream mode uses, so both runtimes converge on one legibility seam and the TUI becomes purely an input
-device.
-
-Consequences:
-
-- The file is append-only, so PTY emits plain `output` deltas like stream. There is no full-replacement
-  `transcript` event and no `Store.setTranscript` path.
-- Records are written per content block as each completes, so the transcript is live at **block**
-  granularity, not token by token.
-- The file is located by globbing `<root>/*/<id>.jsonl` rather than deriving the directory-encoding
-  rule, so an encoding change cannot break it.
-- `parseSessionEntries` drops **local-command envelopes** (`<local-command-caveat>`,
-  `<command-name>`, `<local-command-stdout>`), or `exitOnDone`'s `/exit` would reintroduce exactly the
-  noise this replaced.
-- Human and injected messages render too, so the drawer shows both halves of the conversation.
-
-Tests: `test/sessionTranscript.test.ts`.
-
-### Two-source sentinel detection
-
-The session file is the **primary** detector: clean text through the same `stripSentinels` /
-`extractWaitingReason` helpers stream mode uses, so the styled-token bug class cannot occur there.
-
-The raw-stream `scanSentinels` scan stays as a **backstop**. A terminal sighting is deferred by
-`SENTINEL_BACKSTOP_MS` (5s) to let the file claim it first; if that never happens the terminal
-detection is applied **and** `onWarning` records it, so drift shows up in the Errors panel instead of
-rotting silently. The deferral is skipped entirely when the tail has not located a file
-(`SessionTranscriptTail.located()`), or every transition would wait the full window on a source that
-may never speak. Both paths converge on `noteSentinel`, and each transition is idempotent, so a double
-report is harmless.
-
-### Exit on done
-
-The interactive claude REPL has no natural end — after a turn it sits at the prompt forever — so the
-done sentinel alone would orphan the process and leak its worktree. With `exitOnDone: true` (real TUI
-only; raw/mock processes exit by themselves) the session tears the REPL down after the sentinel-driven
-`finish('done')`: it writes `/exit` plus a delayed Enter (the same paste-vs-keypress split as `send`,
-but bypassing the status guards, since status is already `done`), with a `SIGTERM` backstop after
-`exitGraceMs` (5s). `reportExit` already ignores exits on a `done` session, so neither path
-reclassifies the finish as `failed`.
-
-Tests: `test/ptyExitOnDone.test.ts`, `test/worktreeCleanup.test.ts`.
+Tests: `test/ptySentinelScanner.test.ts`, `test/ptySession.test.ts`.
 
 ### Sharp edges
 
@@ -757,24 +688,10 @@ Tests: `test/ptyExitOnDone.test.ts`, `test/worktreeCleanup.test.ts`.
   branch for every later dispatch; reaping after the root is gone finds nothing, because descendants
   are resolved through it. See [Reaping the process subtree](#reaping-the-process-subtree).
 - **`send()` writes the text and its submitting carriage return as two separate writes**,
-  `agentSubmitDelayMs` apart (default 60ms). The claude TUI coalesces a single input burst into a
-  paste and treats a trailing CR as a literal newline, so a glued-on CR leaves the message sitting in
-  the input unsubmitted. Trailing newlines in the text are stripped so the lone CR does the
-  submitting. Test assertions therefore look for the payload as its own write, not `payload\r`.
-- **`deliverInitial()` handles the first-message boot race.** A freshly-booted claude REPL paints its
-  input box a second or two before its input loop honours a submitting Enter, so the first Enter is
-  silently dropped and the pasted prompt sits unsent. The prompt is pasted **once** (a re-paste
-  accumulates it in the box) and only the bare CR is re-sent until the message lands. "Landed" is
-  **observed, not timed**: the session file records a `user` entry the moment the REPL accepts a
-  message, so a rise in the tail's accepted-message count is direct proof. Without a session file
-  (raw/mock) it degrades to a blind open-loop nudge bounded by `initialSubmitAttempts` (8). Tests:
-  `test/ptyInitialSubmit.test.ts`.
-- **Do not launch the server from inside a Claude Code session when using `agentMode: 'pty'`.**
-  `NodePtyBackend` merges `process.env` into the agent's env, so the parent session's
-  `CLAUDE_CODE_SESSION_ID` / `CLAUDECODE` / `CLAUDE_CODE_CHILD_SESSION` leak into the spawned `claude`,
-  which then treats itself as a child of _that_ session and **writes no session transcript of its
-  own**. The agent still runs and its sentinels still fire (via the terminal backstop), but the
-  transcript falls back to raw screen output with a recorded warning.
+  `agentSubmitDelayMs` apart (default 60ms). A line editor coalesces a single input burst into a paste
+  and treats a trailing CR as a literal newline, so a glued-on CR leaves the message sitting
+  unsubmitted. Trailing newlines in the text are stripped so the lone CR does the submitting. Test
+  assertions therefore look for the payload as its own write, not `payload\r`.
 
 ## `AgentManager`
 
@@ -790,12 +707,12 @@ re-emits them for the server to broadcast.
 2. Mint a file-events spool key — independent of the session id, and minted per spawn either way.
 3. Mint an MCP credential (`mcp.open()`), before the session, so the launch config exists to point
    `--mcp-config` at.
-4. Build the session with env `LUBBDUBB_PROMPT`, `LUBBDUBB_TASK_ID`, plus `LUBBDUBB_STATUS_FILE` and
-   `LUBBDUBB_EVENTS_DIR` when wired.
+4. Build the session with env `LUBBDUBB_PROMPT`, `LUBBDUBB_TASK_ID`, plus `LUBBDUBB_EVENTS_DIR` when
+   wired.
 5. Create the agent row (`starting`), bind the credential to it, set the task `running`.
 6. `wireSession(...)`, then `session.start()`.
-7. Deliver the initial message after `promptDelayMs` (0 for stream, which is ready immediately),
-   preferring `deliverInitial` over `send`.
+7. Deliver the initial message after `promptDelayMs` (0 for stream, whose stdin is ready the moment
+   it spawns).
 
 A synchronous spawn failure calls `failSpawn`: the session is dropped, the error message is written to
 the transcript and flushed, agent and task are marked `failed`, the failure is recorded, and the throw
@@ -975,7 +892,7 @@ drops the session, records a `failed` agent to the error log with its exit code 
 emits `done`, and then calls `maybeReap`.
 
 `reaped` is emitted only once **both** halves have happened — terminal status recorded _and_ process
-exit observed. The two arrive in either order (PTY: sentinel first, exit later; stream: exit first).
+exit observed. The two arrive in either order.
 On reap the file-events spool is disposed and the MCP credential is released. Only then is it safe to
 touch resources the process pinned, which is why worktree removal hangs off this event.
 
@@ -1116,7 +1033,7 @@ Two things about it are load-bearing:
   be marked, the transcript flushed and the credential released — so failures go to the error log and
   the caller carries on.
 
-Reached from `kill`, `complete`, `interruptAll`, and the PTY `exitOnDone` teardown's forced arm: every
+Reached from `kill`, `complete` and `interruptAll`: every
 path by which the _harness_ stops an agent. **An agent that exits by itself is not covered** and
 cannot be — once the root pid is gone there is nothing left to walk from. That residue is why
 `reclaim` must survive a held directory and say so rather than treat the lock as permanent
@@ -1224,7 +1141,7 @@ orphan has no escalations by construction — an escalation is raised by a proce
 
 `restorability` (pure) decides whether restore is on offer and carries the reason when it is not — no
 agent having existed at all, a runtime that cannot resume (only `raw`, which keeps no session id —
-stream and PTY both do, since #318), a row with no `sessionId`, or a worktree no longer on disk. The
+the stream launch does, since #318), a row with no `sessionId`, or a worktree no longer on disk. The
 agentless arm answers **first**,
 because it makes the other three moot: there is no runtime that could resume a conversation nobody ever
 had. The cockpit shows that reason rather than hiding the button, and the card reads `never started`,
@@ -1281,34 +1198,33 @@ Every verdict, and the hold itself, is recorded in the decision log under cycle 
 `spawn` and `resume` share their listener wiring — change one, change both. None of the restore path is
 runtime-specific: it re-uses the row, mints fresh per-launch resources and branches on `waitingReason`,
 which is why teaching the stream launch the two flags was the whole of making the default deployment
-restorable. Tests: `test/crashRecovery.test.ts`, `test/resume.test.ts` (PTY),
-`test/streamResume.test.ts` (stream — the same restart, restore, nudged-vs-parked and
-transcript-continues assertions on the default runtime).
+restorable. Tests: `test/crashRecovery.test.ts`, `test/streamResume.test.ts` (the restart, restore,
+nudged-vs-parked and transcript-continues assertions, plus the runtime-agnostic desk behaviours — a
+cockpit kill that must not be offered, an orphan with no session id, an idempotent detect).
 
 ## Usage capture
 
-Two mode-specific sources. They are not interchangeable.
+Both halves come off the stream transport, and they are not interchangeable.
 
-- **Stream mode** — each `result` event's cumulative `total_cost_usd` / `usage` / `num_turns` becomes
-  a `usage` event. `Store.recordAgentUsage` writes the cumulative values onto the `agents` row (cache
-  tokens folded into input, and the read/write split kept apart beside it —
+- **Per-turn spend.** Each `result` event's cumulative `total_cost_usd` / `usage` / `num_turns`
+  becomes a `usage` event. `Store.recordAgentUsage` writes the cumulative values onto the `agents` row
+  (cache tokens folded into input, and the read/write split kept apart beside it —
   [18](18-observability.md#the-cached-share-is-stored-not-inferred)) **and** the cost _delta_ as a
   timestamped `usage_events` row, so rolling 5h/7d cost windows are a plain `SUM` over the window.
-- **PTY mode** — reports no per-turn usage. It captures the account usage windows instead, from the
-  status-line payload: `buildClaudeArgs({statusLine: true})` wires a `--settings` status command that
-  atomically dumps each payload to `$LUBBDUBB_STATUS_FILE` (per session id, under the OS tmpdir), and
-  `StatusFileRateLimits.readLatest()` reads the freshest one back. Parsing is pure
-  (`parseStatusLinePayload`, `src/agents/statusLine.ts`).
+- **The account's usage windows.** The subscriber 5h/weekly limits, read off `rate_limit_event` —
+  below. `usage.rateLimits` is null when nothing has reported any (API-key auth, an older CLI, a fleet
+  that has not run yet), and the cockpit chip then falls back to the cost windows.
 
-The **account usage windows** are no longer a PTY-only surface, though — see below. `usage.rateLimits`
-is null when nothing has reported any, and the cockpit chip then falls back to the cost windows.
+`raw` reports neither: it runs no model, so there is nothing to price and no account to ask about.
 Tests: `test/usage.test.ts`.
 
-### The account usage windows, headless
+### The account usage windows
 
-The subscriber 5h/weekly windows were reachable only through Claude Code's `statusLine` hook, which
-never renders without a TUI. A later `claude` carries the same figures on the `rate_limit_event` it
-already emits on the stream transport, as an unnamed-in-the-published-schema `unifiedWindows`:
+These were once reachable only through Claude Code's `statusLine` hook, which never renders without a
+TUI — which is what made the cockpit's usage chip a PTY-only surface, and the strongest argument for
+keeping a runtime whose every other feature was a screen-scrape. A later `claude` carries the same
+figures on the `rate_limit_event` it already emits on the stream transport, as an
+unnamed-in-the-published-schema `unifiedWindows`:
 
 ```
 {"type":"rate_limit_event","rate_limit_info":{
@@ -1333,7 +1249,7 @@ Three things this must keep straight:
   backwards to a number nothing marks as wrong. The store's upsert carries that guard.
 - **`unifiedWindows` is newer than the pinned schema and undeclared in the published one.** It is read
   defensively: an older CLI, or API-key auth, yields `null` and the chip degrades to the self-computed
-  cost window — which is what every non-PTY deployment had before this.
+  cost window — which is what every deployment had before this.
 
 The reading is **turn-bound**: it arrives only when an agent takes a turn, so an idle fleet's ages
 while the real window keeps moving (the operator's own Claude Code spends from the same account).

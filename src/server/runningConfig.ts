@@ -139,7 +139,6 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
       'agentAllowedTools',
       'agentPromptDelayMs',
       'agentSubmitDelayMs',
-      'agentIdleWaitMs',
       'agentWaitingPatterns',
       'agentStallNudges',
       'agentStallParkMs',
@@ -153,7 +152,6 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
       'whitelistedApprovals',
       'claudeCommand',
       'claudeArgs',
-      'sessionTranscriptRoot',
     ],
   },
   {

@@ -18,7 +18,7 @@ const COMMENTED = `{
   "//   maxConcurrentAgents, cont": "Put it back to 3 when that is done.",
   "maxConcurrentAgents": 4,
 
-  "// agentMode": "stream = headless, pty = interactive terminal.",
+  "// agentMode": "stream = headless claude, raw = the mock agent.",
   "agentMode": "stream",
   "agentPermissionMode": "acceptEdits",
 
@@ -28,17 +28,17 @@ const COMMENTED = `{
 `;
 
 test('a commented config round-trips through a save with its comments intact', () => {
-  const next = editConfigText(COMMENTED, { set: { maxConcurrentAgents: 6, agentMode: 'pty' } });
+  const next = editConfigText(COMMENTED, { set: { maxConcurrentAgents: 6, agentMode: 'raw' } });
 
   assert.match(next, /"\/\/ maxConcurrentAgents": "Hard cap on concurrent agents\. Raised for the Tuesday/);
   assert.match(next, /"\/\/ {3}maxConcurrentAgents, cont": "Put it back to 3 when that is done\.",/);
-  assert.match(next, /"\/\/ agentMode": "stream = headless, pty = interactive terminal\.",/);
+  assert.match(next, /"\/\/ agentMode": "stream = headless claude, raw = the mock agent\.",/);
   assert.match(next, /"maxConcurrentAgents": 6,/);
-  assert.match(next, /"agentMode": "pty",/);
+  assert.match(next, /"agentMode": "raw",/);
 
   const parsed = JSON.parse(next) as Record<string, unknown>;
   assert.equal(parsed['maxConcurrentAgents'], 6);
-  assert.equal(parsed['agentMode'], 'pty');
+  assert.equal(parsed['agentMode'], 'raw');
 });
 
 test('key order, blank lines and inline objects are left exactly as they were', () => {

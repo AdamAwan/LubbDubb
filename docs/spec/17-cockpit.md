@@ -3574,7 +3574,7 @@ literal — a hex at a use site is a swatch that stays put when somebody switche
 
 **Fetched on open, three states, and the third is the point.** Loading, the reading, and a _failure_ —
 because a fetch that failed must not render as a fleet that has spent nothing. `$0.00` is a real answer
-here (a fresh harness, or one run entirely in PTY mode), so it cannot also be the failure mode. The
+here (a fresh harness, or one run entirely on the mock runtime), so it cannot also be the failure mode. The
 all-unmeasured case gets its own sentence rather than a table of zeroes: **unmeasured is not free**.
 
 ### Reliability

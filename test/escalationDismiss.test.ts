@@ -8,7 +8,6 @@ import { loadConfig } from '../src/config.js';
 import { buildSystem } from '../src/system.js';
 import { buildApp } from '../src/server/app.js';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
-import { parseSessionEntries } from '../src/agents/sessionTranscript.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 /**
@@ -191,19 +190,4 @@ test('dismissing a proposal rejects it rather than leaving a pending verdict beh
 
   await app.close();
   system.store.close();
-});
-
-test('the PTY transcript counts tool calls, so a parked session has proof of work the screen cannot give', () => {
-  // The PTY runtime must never read `activity` off raw output: the TUI repaints
-  // while a session sits parked, which is why the sentinel park is latched there.
-  // The session file is the one source that can say the agent *did* something.
-  const batch = parseSessionEntries([
-    JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'thinking' }] } }),
-    JSON.stringify({
-      type: 'assistant',
-      message: { content: [{ type: 'tool_use', name: 'Bash', input: { command: 'ls' } }] },
-    }),
-  ]);
-  assert.equal(batch.toolUses, 1);
-  assert.equal(parseSessionEntries([JSON.stringify({ type: 'assistant', message: { content: [] } })]).toolUses, 0);
 });

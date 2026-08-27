@@ -62,7 +62,7 @@ one record an operator clears.
 | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `cycle`    | The harness's cycle `catch` (message + stack); plan-reconciliation fetch and status-comment failures; the plan ref-collision guard.                                                                             |
 | `provider` | Provider snapshot `catch`es, via the optional `errors` in `IntegrationContext`; an Azure request that spent every retry (a recovered one records nothing); GitHub rate-limit notices.                                                                                                  |
-| `agent`    | Spawn failures; terminal `failed` agents (with the exit code and an output tail); worktree removal failures; PTY sentinel-drift warnings; invalid or unreadable `plan.json`; MCP channel/config/frame failures. |
+| `agent`    | Spawn failures; terminal `failed` agents (with the exit code and an output tail); worktree removal failures; terminal-runtime warnings; invalid or unreadable `plan.json`; MCP channel/config/frame failures. |
 | `server`   | The Fastify `setErrorHandler` (method, URL, message, stack).                                                                                                                                                    |
 | `boot`     | Each agent found orphaned at boot (a crash, not a clean shutdown); a failed restore.                                                                                                                            |
 
@@ -130,18 +130,17 @@ new" flood.
 
 ## Usage accounting
 
-Two mode-specific sources that must not be conflated.
+Two sources that must not be conflated, both off the stream transport.
 
-- **Stream mode** — each `result` event's cumulative `total_cost_usd` / `usage` / `num_turns` is
+- **Per-turn spend** — each `result` event's cumulative `total_cost_usd` / `usage` / `num_turns` is
   recorded by `Store.recordAgentUsage`: the cumulative values onto the `agents` row (cache tokens
   folded into input, **and** kept apart beside it — see below), and the cost **delta** as a
   timestamped `usage_events` row.
-- **PTY mode** — reports no per-turn usage. It captures the account usage windows from the
-  status-line payload (`StatusFileRateLimits`) instead.
+- **The account's usage windows** — every stream agent's `rate_limit_event` carries them, and they
+  land in `account_rate_limits` as one row for the fleet
+  ([10](10-agent-runtimes.md#the-account-usage-windows)).
 
-The **account usage windows** are not mode-specific, though: every stream agent's `rate_limit_event`
-carries them, and they land in `account_rate_limits` as one row for the fleet
-([10](10-agent-runtimes.md#the-account-usage-windows-headless)).
+`raw`, the mock runtime, reports neither: it runs no model, so there is nothing to price.
 
 `buildUsage` in the snapshot therefore ships both: `windows.fiveHourCostUsd` and
 `windows.sevenDayCostUsd` are `Store.sumUsageCostSince` (available in every mode, because it is
@@ -248,8 +247,8 @@ a new origin shape that lands nowhere shows up as a growing remainder instead of
 quietly under-report. Nothing in the harness reads any of this; it is an operator reading, like the
 error log.
 
-**Null is not zero.** PTY mode reports no usage at all ([above](#usage-accounting)), so an agent that
-measured nothing contributes no row and no agent count, and a goal worked entirely in PTY mode has
+**Null is not zero.** The mock runtime reports no usage at all ([above](#usage-accounting)), so an
+agent that measured nothing contributes no row and no agent count, and a goal worked entirely on it has
 `spend: null`. The cockpit draws nothing there rather than `$0.00`, which would describe an unmeasured
 goal as a free one. `costUsd` is a **running** total: it climbs while agents work and stops when the
 last one ends.
@@ -433,8 +432,8 @@ before it landed, which is exactly what `landing` is.
 
 **Unmeasured runs are counted, once.** A run that reported nothing appears in no figure on the panel
 — the same silence the roll-up keeps — and `totals.unmeasuredRuns` is shipped beside the totals so
-the panel can say how much of the fleet it is speaking for. Without it, a fleet run entirely in PTY
-mode draws a complete-looking breakdown of nothing.
+the panel can say how much of the fleet it is speaking for. Without it, a fleet run entirely on the
+mock runtime draws a complete-looking breakdown of nothing.
 
 **The goal rows are their own fold.** `buildSpendGoals` produces the ranked per-issue rows, the phase
 split inside each and the `attribution` map behind both; `buildSpendInsights` calls it and so does
@@ -616,8 +615,8 @@ already settled is not re-filed while the run continues. Turning the watch off f
 **still settles what is standing**, or a row about a run that ended last Tuesday would have no way
 left to close.
 
-**PTY mode reports no usage at all** ([above](#usage-accounting)), so `costUsd` stays null and no run
-there can ever trip this. That is the fail-open direction and the only safe one: unmeasured is not
+**The mock runtime reports no usage at all** ([above](#usage-accounting)), so `costUsd` stays null and
+no run there can ever trip this. That is the fail-open direction and the only safe one: unmeasured is not
 free, and a watch that cannot see must not be allowed to conclude anything — in either direction.
 
 ## The reliability breakdown
@@ -673,7 +672,7 @@ pull request nobody has fixed shows the least red time on the board.
 `worldDiff.ciStatusOf`; neither is re-derived here. `ciStatusOf` is the sharp edge — `world_events`
 stores a kind, a ref and a _sentence_, so the status a transition carried survives only inside that
 sentence. **The matcher that writes it and the matcher that reads it are the same regexp in the same
-module**, for the PTY sentinel's reason: a reader that re-derived the format for itself would report
+module**, for the sentinel scanner's reason: a reader that re-derived the format for itself would report
 zero failures, silently, the first time the wording changed.
 
 **One fold behind the headline counts.** `tallyRunOutcomes` is exported and called twice — by
