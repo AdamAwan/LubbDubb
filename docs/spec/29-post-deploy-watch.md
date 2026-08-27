@@ -1,12 +1,12 @@
 # 29 — The post-deploy watch
 
-**Partly built.** [The declaration](#the-declaration), [the dry run](#the-dry-run), [asking the
-environment](#asking-the-environment), [the window](#the-window), [the verdict](#the-verdict) and
-[configuring an environment](#configuring-an-environment) describe running code, and their paths are
-backticked. What is left is **not built**: [measures and baselines](#the-baseline-and-why-a-measure-is-not-trusted-without-one)
-and the working agent's [`watch_declare`](#the-working-agent-at-conclude-time), [what a finding
-does](#what-a-finding-does) — the bench row, the bug, `holds` and `extend` — and the Needs-you rail
-that carries them. Their paths stay italic, and the marker comes off section by section in the change
+**Partly built.** [The declaration](#the-declaration) — both kinds — [the dry run](#the-dry-run) and
+its [baseline](#the-baseline-and-why-a-measure-is-not-trusted-without-one), [asking the
+environment](#asking-the-environment), [the window](#the-window), [the verdict](#the-verdict), the
+working agent's [`watch_declare`](#the-working-agent-at-conclude-time) and [configuring an
+environment](#configuring-an-environment) describe running code, and their paths are backticked.
+What is left is **not built**: [what a finding does](#what-a-finding-does) — the bench row, the bug,
+`holds` and `extend` — and the Needs-you rail that carries them. Their paths stay italic, and the marker comes off section by section in the change
 that makes each true, not later and not in one sweep at the end. [26](26-setup.md) states the same
 discipline for its own unbuilt half. `docs/plans/29-post-deploy-watch.md` tracks which stage owns
 what.
@@ -57,12 +57,32 @@ A measure asks for one number: a percentile, a rate, a duration, a queue depth. 
 either an absolute (`under`, `over`) or a comparison against what the same query returned **before
 the work arrived**.
 
-**Only `signal` is declarable so far.** A `measure` arrives with the baseline capture that makes it
-honest — an absolute threshold alone is a number somebody guessed, and a measure declaring neither a
-threshold nor a baseline reads as a check and cannot fail. `WatchSchema`
-(`src/validation/watchDocument.ts`) refuses a `measures` key rather than accepting one nothing reads;
-the output contract below already parses a measure's row, because the shape it refuses is the same
-shape a stale wrapper produces.
+Both are declarable. A `measure` arrived with the baseline capture that makes it honest — an
+absolute threshold alone is a number somebody guessed, and a measure declaring neither a threshold
+nor a baseline reads as a check and cannot fail, which `WatchSchema`
+(`src/validation/watchDocument.ts`) refuses at ingestion. A measure's expectation is written as
+`expect`:
+
+```jsonc
+"measures": [
+  {
+    "id": "orders-p95",
+    "title": "The orders proc is no slower than it was",
+    "query": "requests | where name == 'POST /orders' | summarize value = percentile(duration, 95)",
+    "expect": { "noWorseThan": "baseline" }, // or { "under": 500 } / { "over": 99.5 }
+    "unit": "ms",
+  },
+]
+```
+
+`noWorseThan: "baseline"` is read **lower-is-better**, which is what a percentile, a duration and a
+queue depth all are; a measure whose good news is a bigger number declares an `over` instead. That is
+one rule rather than a per-measure direction, because a direction field would be a second thing to
+get wrong about a comparison the thresholds already express.
+
+A measure declares no `presence`, and that is not an omission. Presence exists because zero rows is
+indistinguishable from a healthy release; a measure that answers no row at all is already `unknown`
+under the output contract, which requires exactly one row carrying a numeric `value`.
 
 The two shapes are the two things a change is for. New behaviour should not throw — a signal, and
 there is no before to compare against. Changed behaviour should be better than it was — a measure,
@@ -108,11 +128,11 @@ written, and proven to fire, before a line of the fix exists.
 
 ### The working agent, at conclude time
 
-**Not built.** The tool ships with measures; a planner's declaration is the only writer today, and
-an instruction naming a tool that does not exist is worse than none.
-
-Amends through the `watch_declare` tool (_src/mcp/tools/watchDeclare.ts_), which merges on a check's
-slug exactly as `validation_amend` does ([20](20-validation.md#validation_amend)).
+Amends through the `watch_declare` tool (`src/mcp/tools/watchDeclare.ts`), which merges on a check's
+slug exactly as `validation_amend` does ([20](20-validation.md#validation_amend)) and refuses exactly
+what a plan document refuses, because it parses with `WatchSchema` rather than a second copy of it.
+The instruction that names it is appended to the two prompts that dispatch work (`watchDeclareNote`,
+`src/plans/planning.ts`), never interpolated into one.
 
 It is the only party in the system that knows what the code actually emits. A planner cannot guess
 the message template of a log line that did not exist when it wrote the plan, and nothing downstream
@@ -187,8 +207,16 @@ environment where nothing happened, and the card says so in the operator's own w
 ### The baseline, and why a measure is not trusted without one
 
 A measure declared with `noWorseThan: "baseline"` has its query run at **declaration time**, days
-before the arrival, and that reading is stored on the check. It is the number the work has to beat,
-taken on the same query, from the same source, before anything changed.
+before the arrival, and that reading is stored on the check (`goal_watches.baseline_value`). It is
+the number the work has to beat, taken on the same query, from the same source, before anything
+changed.
+
+**It rides the dry run rather than being a second call.** The dry run already puts the query to an
+environment the moment it is declared, so the baseline is that reading kept rather than discarded —
+one spawn, one answer, and no second code path free to ask a different question of a system that had
+already changed. A dry run that did not answer therefore leaves the baseline null, which is
+*never taken* and not zero: a measure declaring `noWorseThan: "baseline"` with no baseline reads
+`unknown`, because a comparison against nothing is not a comparison that passed.
 
 An absolute threshold is allowed and is the right shape for new behaviour that has no before. It is
 the wrong shape for an optimisation, where it is a number somebody guessed and where the interesting
@@ -501,12 +529,20 @@ can write it; nothing in `src/mcp/` touches config.
 and the strip's fold are built; **the Needs-you rail is not**, and is italic for that reason.
 
 **The plan sheet** draws the watch beside the validation checks, each check with its query, its
-expectation, and the dry-run readings under it (`web/src/components/WatchDigest.tsx`). Read-only, for
-`ValidationDigest`'s reason: the sheet is where checks are _defined_, and approving the plan is what
-authorises the query to run against the operator's own telemetry with the operator's own credential.
-A check nothing has asked about yet says so, in those words — not yet put to an environment is not a
-clean reading. An amendment from an agent draws as a pending change
-with accept and decline, because approving the plan is what authorises the query.
+expectation, and the dry-run readings under it (`web/src/components/WatchDigest.tsx`). Read-only but
+for one control, for `ValidationDigest`'s reason: the sheet is where checks are _defined_, and
+approving the plan is what authorises the query to run against the operator's own telemetry with the
+operator's own credential. A check nothing has asked about yet says so, in those words — not yet put
+to an environment is not a clean reading.
+
+The one control is the ruling on an agent's declaration. A check `watch_declare` wrote arrived
+**after** the approval, so it draws as a pending change with accept and decline beside it: the live
+check above it still stands, nothing has been put to an environment, and accepting is what does it —
+which is also what takes a measure's baseline. Declining leaves a live check exactly as it was and
+drops a row that was never anything but a proposal. The state lives on the check
+(`goal_watches.live` and `goal_watches.proposal`) rather than on the plan-amendment path, so a
+declaration made at conclude time does not put a goal's whole plan back through approval to carry
+one query. → `POST /api/issues/:number/watch-proposals/:checkId` (`src/server/routes/watches.ts`)
 
 **The goal page's Environments card** grows a watch block **inside** each environment's row —
 indented, on the well, with a tinted left edge (`web/src/console/GoalPage.tsx`,
@@ -519,9 +555,10 @@ whether or not anything is wrong, and with no roll-up to a word. A check nothing
 so, in those words, for the plan sheet's reason: not yet put to an environment is not a clean
 reading.
 
-_Once measures land_, each check draws as a line of **expected, before, now**. The before is what
-makes the card worth looking at — a p95 of 310ms means nothing alone and everything beside the
-8,400ms it replaced — and it is available precisely because the baseline was taken at declaration.
+A measure draws as a line of **expected, before, now**. The before is what makes the card worth
+looking at — a p95 of 310ms means nothing alone and everything beside the 8,400ms it replaced — and
+it is available precisely because the baseline was taken at declaration. A measure whose baseline was
+never taken says *before: never taken* rather than printing a number with nothing beside it.
 
 **An `unknown` says why in words**, on the row, and never in the vocabulary of a clean one. Every
 colour on the block is a `--cn-*` token: a literal would be a surface that stays dark when somebody
@@ -570,16 +607,27 @@ question marks. A goal that declared no checks renders nothing either, because n
 | `watch_readings` | `(window, check_id, read_at)` | append-only, and pruned only with the check an amendment dropped           |
 
 `goal_watches` also carries the dry run — the environment it was put to, when, what the check's own
-query and its `presence` query each answered, and the row count. On the check rather than in a
+query and its `presence` query each answered, the row count, and a measure's baseline. On the check rather than in a
 readings table because it is a reading of the _declaration_, taken before any window exists, and it
 is cleared by a re-declaration for the same reason.
 
-All three are new tables, so none needs a `ColumnMigrations` entry — and a table being new **once**
-does not keep it exempt from the next column added to it
-([14](14-persistence.md#migrations)). The window pass proves the point one table over:
-`goal_arrivals.watched_at` is a column on an **existing** table, and it carries the
-`ColumnMigrations` entry the rule requires, declared in `src/store/environments.ts` and registered in
-`src/store/store.ts`. It needs no backfill, and that is a property of the freshness guard rather than
+All three were new tables **once**, and measures proved exactly what that does not buy: a table being
+new once does not keep it exempt from the next column added to it
+([14](14-persistence.md#migrations)). `goal_watches` grew a measure's thresholds, its unit, its
+baseline and the pending amendment; `watch_readings` grew a measure's `value`; and both sets are
+declared in `WATCH_COLUMNS` (`src/store/watches.ts`) and registered in `src/store/store.ts`. Without
+them each column is invisible on every database from before this build — a threshold that reads
+`undefined` is a measure that can never fail, on exactly the deployments with a history, and nothing
+errors. The window pass proves the same point one table over: `goal_arrivals.watched_at` is a column
+on an **existing** table, and it carries the `ColumnMigrations` entry the rule requires, declared in
+`src/store/environments.ts` and registered in `src/store/store.ts`.
+
+None of the new columns needs a backfill, and each for a stated reason.
+`goal_watches.baseline_value` null means **never taken**, which the fold already reads as `unknown`
+rather than as clean — and every database from before this build declares no measures anyway, since
+the schema refused them. `expect_baseline` and `live` carry SQL defaults that are the honest reading
+of a row written before either existed: a signal declares no baseline, and every check the operator's
+own plan approval already authorised is live. It needs no backfill, and that is a property of the freshness guard rather than
 an oversight: null there means *not considered yet*, and an arrival considered for the first time
 opens a window only if its confirming reading is fresh — so a database full of nulls is walked once,
 stamped, and opens nothing for work that shipped in March.
@@ -603,6 +651,11 @@ At the `buildSystem` seam with `FakeEnvironmentObserver` injected beside `FakeEn
 - a signal with zero rows and **zero presence** is `unknown`, not `clean`;
 - an observation that fails, times out, or answers without the id echo is `unknown`, not `clean`;
 - a measure answering with two rows is `unknown`, not the first row;
+- a measure whose baseline was never taken is `unknown`, not clean — it has nothing to compare
+  against;
+- a measure declaring neither a threshold nor a baseline is refused at ingestion;
+- `watch_declare` merges on the slug and takes effect on nothing until the operator accepts it, and
+  an accepted amendment clears the readings of the text it replaced (`test/watchDeclare.test.ts`);
 - a watch does **not** open for an arrival older than two probe intervals, and the arrival is stamped
   anyway;
 - presence answering zero reads `unknown` in the goal page's own words, end to end — the case that

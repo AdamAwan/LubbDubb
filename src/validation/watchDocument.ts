@@ -14,14 +14,13 @@ import type { GoalWatchInput } from '../types.js';
  *
  * Beside `checkDocument.ts` rather than under `src/environments/` because it is
  * the same kind of thing: the shape of a block in a plan document, exported so
- * that a second writer — `watch_declare`, when it exists — refuses exactly what a
- * plan document refuses rather than drifting on the day one of them learns a
- * field.
+ * that the second writer — `watch_declare` — refuses exactly what a plan document
+ * refuses rather than drifting on the day one of them learns a field.
  *
  * → `docs/spec/29-post-deploy-watch.md#the-declaration`
  */
 
-/** How many signals are kept. Trimmed rather than refused, `MAX_CHECKS`' trade. */
+/** How many checks of each kind are kept. Trimmed rather than refused, `MAX_CHECKS`' trade. */
 const MAX_SIGNALS = 20;
 
 /**
@@ -55,13 +54,64 @@ const WatchSignalSchema = z
   .strict('a signal declares only id/title/query/presence/tolerate/why');
 
 /**
+ * One number: a percentile, a rate, a duration, a queue depth.
+ *
+ * **`expect` must say something a reading could fail.** A measure declaring
+ * neither a threshold nor a baseline reads as a check and cannot fail, which is
+ * the shape most likely to be written by somebody who meant to come back to it —
+ * `arrival.opens: []`'s refusal, one document over. So the object is refused
+ * empty rather than defaulted into a comparison nobody declared.
+ *
+ * A measure declares no `presence`, and that is not an omission: presence exists
+ * because zero rows is indistinguishable from a healthy release, and a measure
+ * that answers no row at all is already `unknown` under the output contract —
+ * exactly one row carrying a numeric `value`, or the observation failed.
+ */
+const WatchExpectSchema = z
+  .object({
+    /** A ceiling: the number must stay below it. */
+    under: z.number().optional(),
+    /** A floor: the number must stay above it. */
+    over: z.number().optional(),
+    /**
+     * The comparison that is worth having, and the one an optimisation is about:
+     * the same query, from the same source, run at declaration time — before
+     * anything changed. Read lower-is-better, which is what a percentile, a
+     * duration and a queue depth all are; a measure where a bigger number is the
+     * good news declares an `over` instead.
+     */
+    noWorseThan: z.literal('baseline').optional(),
+  })
+  .strict('a measure expects only under/over/noWorseThan')
+  .refine((e) => e.under !== undefined || e.over !== undefined || e.noWorseThan !== undefined, {
+    message:
+      'a measure must declare a threshold ("under"/"over") or "noWorseThan": "baseline" — one that ' +
+      'declares neither reads as a check and can never fail',
+  });
+
+const WatchMeasureSchema = z
+  .object({
+    /** Stable and author-chosen: an amendment merges on it, so it must survive a replan. */
+    id: z
+      .string()
+      .min(1)
+      .regex(/^[a-z0-9][a-z0-9-]*$/, 'must be lowercase kebab-case'),
+    title: z.string().min(1),
+    /** The query. Answers exactly one row carrying a numeric `value`, or it did not answer. */
+    query: z.string().min(1),
+    expect: WatchExpectSchema,
+    /** What the number is in, drawn beside it. Never parsed — the harness does no arithmetic on units. */
+    unit: z.string().min(1).optional(),
+    why: z.string().min(1).optional(),
+  })
+  .strict('a measure declares only id/title/query/expect/unit/why');
+
+/**
  * Reached by both transports exactly as `ValidationSchema` is — the `plan.json`
  * drain and the `plan_submit` tool must accept and reject the same documents.
  *
- * Only `signals` at this stage. `measures` — a percentile, a rate, a duration —
- * need a baseline to be worth anything, and a measure declaring neither a
- * threshold nor a baseline reads as a check and cannot fail. They arrive with the
- * baseline capture that makes them honest.
+ * Both kinds, and the ids are unique across the two: a measure and a signal
+ * sharing a slug would be one row in `goal_watches`, whose key is the slug alone.
  */
 export const WatchSchema = z
   .object({
@@ -69,20 +119,31 @@ export const WatchSchema = z
       .array(WatchSignalSchema)
       .default([])
       .transform((list) => (list.length > MAX_SIGNALS ? list.slice(0, MAX_SIGNALS) : list)),
+    measures: z
+      .array(WatchMeasureSchema)
+      .default([])
+      .transform((list) => (list.length > MAX_SIGNALS ? list.slice(0, MAX_SIGNALS) : list)),
   })
-  .strict('a watch block declares only "signals"')
+  .strict('a watch block declares only "signals" and "measures"')
   .superRefine((block, ctx) => {
     const ids = new Set<string>();
-    for (const signal of block.signals) {
-      if (ids.has(signal.id))
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['signals'], message: `duplicate signal id "${signal.id}"` });
-      ids.add(signal.id);
+    for (const check of [...block.signals, ...block.measures]) {
+      if (ids.has(check.id))
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['signals'], message: `duplicate check id "${check.id}"` });
+      ids.add(check.id);
     }
   });
 
-/** The declared signals as store input, sequenced by their order in the document. */
-export function watchSignalInputs(block: z.infer<typeof WatchSchema>): GoalWatchInput[] {
-  return block.signals.map((signal, index) => ({
+/**
+ * The declared checks as store input, sequenced by their order in the document —
+ * signals first, then measures.
+ *
+ * One function over both kinds rather than two, because the store holds one table:
+ * a measure is a row with no `presence`, a `tolerate` nothing reads, and an
+ * expectation the signal columns are null for.
+ */
+export function watchCheckInputs(block: z.infer<typeof WatchSchema>): GoalWatchInput[] {
+  const signals: GoalWatchInput[] = block.signals.map((signal, index) => ({
     id: signal.id,
     seq: index + 1,
     kind: 'signal' as const,
@@ -90,6 +151,30 @@ export function watchSignalInputs(block: z.infer<typeof WatchSchema>): GoalWatch
     query: signal.query,
     presence: signal.presence,
     tolerate: signal.tolerate,
+    expectUnder: null,
+    expectOver: null,
+    expectBaseline: false,
+    unit: null,
     why: signal.why ?? null,
   }));
+  return [
+    ...signals,
+    ...block.measures.map((measure, index) => ({
+      id: measure.id,
+      seq: signals.length + index + 1,
+      kind: 'measure' as const,
+      title: measure.title,
+      query: measure.query,
+      // A measure declares none, and the fold reads that null rather than
+      // inferring it from the kind: presence answers "is this code path running",
+      // which a measure's own single row already fails without.
+      presence: null,
+      tolerate: 0,
+      expectUnder: measure.expect.under ?? null,
+      expectOver: measure.expect.over ?? null,
+      expectBaseline: measure.expect.noWorseThan === 'baseline',
+      unit: measure.unit ?? null,
+      why: measure.why ?? null,
+    })),
+  ];
 }

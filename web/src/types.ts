@@ -198,6 +198,7 @@ export type {
   ValidationResourceView,
   ValidationVerdict,
   GoalWatch,
+  GoalWatchInput,
   GoalWatchView,
   GoalWatchCheckView,
   WatchCheckVerdict,

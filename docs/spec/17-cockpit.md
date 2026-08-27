@@ -1533,6 +1533,13 @@ settled, and then draws **every check** — because a goal whose one signal pass
 regressed is a fix that worked and a thing that is still broken, and one word for the pair would hide
 the half the ticket was about.
 
+A measure draws as **expected, before, now** — `Expected no worse than its baseline · before 8,400 ms
+· now 310 ms`. The before is what makes the row worth looking at: a p95 of 310ms means nothing alone
+and everything beside the number it replaced, and it is available precisely because the baseline was
+taken at declaration rather than inferred later. A measure whose baseline was never taken says *before:
+never taken* rather than printing a number with nothing beside it, which is the same reading its
+verdict takes — `unknown`, because a comparison against nothing is not one that passed.
+
 Three readings, and the third is the one that matters: `clean`, `regressed`, and `unknown` for a watch
 that could not **read** the environment at all. `unknown` says why in words, on the row, and never in
 the vocabulary of a clean one — it takes the same tone as an unknown reach verdict, for the same
@@ -4126,6 +4133,35 @@ The digest shares a file with `ValidationSection` rather than sitting beside it,
 the same things about a check — its letter, its state, its wording, what an amendment withdrew — and
 the failure worth designing against is the two drifting into describing one check differently on two
 surfaces.
+
+### The watch digest
+
+`WatchDigest` (`web/src/components/WatchDigest.tsx`) — what a running system would have to show for
+this work to have done what it claimed, drawn under the validation digest because it is the later
+question: validation asks whether the goal was met, this asks whether the thing is behaving once it
+is there ([29](29-post-deploy-watch.md#in-the-cockpit)).
+
+Each row is the check's title, its kind, its query, its `presence` query where it declares one, what
+it expects, and what the dry run read against the environment. The expectation is phrased by kind
+rather than in one sentence over both: a signal declares a count it must not exceed, and a measure
+declares a number against a threshold or against the baseline the dry run took before the work
+arrived. A check nothing has asked about yet says so in those words — not yet put to an environment is
+not a clean reading — and a goal that declared no checks draws nothing at all, because null is a third
+fact and not a synonym for clean.
+
+**Read-only but for one control, and the exception is the whole point.** A check the working agent
+declared through `watch_declare` arrived *after* the approval that authorises a query to be run
+against the operator's own telemetry with the operator's own credential — so it draws as a **pending
+change** with accept and decline beside it, over the live declaration it amends, which stands
+untouched until somebody rules. Accepting applies it, clears the readings of the text it replaced, and
+runs it once against an environment; declining leaves a live check exactly as it was and drops a row
+that was never anything but a proposal. Nothing else on this sheet takes a verb, for
+`ValidationDigest`'s reason.
+
+The state lives on the check itself (`goal_watches.live` and `goal_watches.proposal`) rather than on
+the plan-amendment path: a declaration made at conclude time would otherwise put a goal's whole plan
+back through approval to carry one query, which holds the goal's own work to move a sentence about
+telemetry.
 
 ### The caveats
 

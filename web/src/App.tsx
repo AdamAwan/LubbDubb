@@ -99,6 +99,7 @@ export function App() {
       refUrls={state.refUrls}
       onClose={() => status.actions.viewPlan(null)}
       onReplan={(id) => status.actions.replan(id)}
+      onWatchProposal={(issueNumber, checkId, accept) => status.actions.ruleWatchProposal(issueNumber, checkId, accept)}
       onDecide={(id, verdict, note) => status.actions.decideProposal(id, verdict, note)}
       onBackOut={(id, verdict, note) => status.actions.backOutProposal(id, verdict, note)}
       onCommentDraft={(id) => status.actions.proposalCommentDraft(id)}

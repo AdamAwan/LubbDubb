@@ -941,7 +941,12 @@ export function buildStateSections(
     // a goal declared production would have to show is part of judging its plan,
     // and a goal that declared nothing ships an empty list rather than a fabricated
     // clean one — null is not clean, so the sheet draws nothing at all for it.
-    goalWatches: store.listGoalWatches(),
+    // Live checks **and** the ones an agent declared that nobody has ruled on:
+    // the plan sheet is where the operator accepts or declines, so a pending row
+    // it never received is an approval nothing can ask for. Nothing else reads
+    // this list, and every reader that puts a query to an environment goes through
+    // `listGoalWatches`, which is live-only.
+    goalWatches: [...store.listGoalWatches(), ...store.listProposedGoalWatches()],
   });
 
   /**
@@ -1454,7 +1459,16 @@ function buildGoalWatchWindows(store: System['store'], environments: Environment
       .map((c) => ({
         checkId: c.id,
         title: c.title,
+        kind: c.kind,
         tolerate: c.tolerate,
+        expectUnder: c.expectUnder,
+        expectOver: c.expectOver,
+        expectBaseline: c.expectBaseline,
+        unit: c.unit,
+        // The **before**, carried beside the reading rather than folded into it:
+        // the card draws expected / before / now, and a number with nothing beside
+        // it is the surface this block exists to be better than.
+        baselineValue: c.baselineValue,
         reading: newest.get(`${window.goalRef} ${window.environment} ${c.id}`) ?? null,
       })),
   }));

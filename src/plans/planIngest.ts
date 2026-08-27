@@ -3,7 +3,7 @@ import type { Plan, PlanStatus } from '../types.js';
 import type { PlanDocument } from './planDocument.js';
 import { planNarrative, planPartInputs } from './planDocument.js';
 import { validationCheckInputs, validationResourceInputs } from '../validation/checkDocument.js';
-import { watchSignalInputs } from '../validation/watchDocument.js';
+import { watchCheckInputs } from '../validation/watchDocument.js';
 import { withdrawResourceAsks } from '../validation/ask.js';
 import { partIsHuman, partOrigin, partsToRetire, planIssueNumber } from './parts.js';
 import { AMENDED_PART_RESOLUTION, withdrawPartAsks } from './partAsks.js';
@@ -151,7 +151,7 @@ export function ingestPlanDocument(
   //
   // Nothing is asked of an environment here. The dry run is the caller's, because
   // only a caller can hand its refusal back to the author.
-  if (doc.watch) store.ingestGoalWatch(originRef, watchSignalInputs(doc.watch));
+  if (doc.watch) store.ingestGoalWatch(originRef, watchCheckInputs(doc.watch));
 
   return { plan, status, retired: retire.map((p) => p.slug) };
 }

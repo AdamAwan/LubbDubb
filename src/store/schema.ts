@@ -781,6 +781,14 @@ CREATE TABLE IF NOT EXISTS goal_watches (
   query      TEXT NOT NULL,
   presence   TEXT,                 -- the second query proving the code path runs; required for a signal
   tolerate   INTEGER NOT NULL,     -- the count a signal must not exceed
+  expect_under    REAL,            -- a measure's ceiling, or NULL
+  expect_over     REAL,            -- a measure's floor, or NULL
+  expect_baseline INTEGER NOT NULL DEFAULT 0,  -- 1 where the measure declared noWorseThan: "baseline"
+  unit            TEXT,            -- what the number is in; drawn, never parsed
+  baseline_value  REAL,            -- the *before*, taken at declaration. NULL means never taken.
+  baseline_at     TEXT,
+  live            INTEGER NOT NULL DEFAULT 1,  -- 0 while an agent's declaration awaits the operator
+  proposal        TEXT,            -- an agent's pending amendment, as JSON; NULL where none is outstanding
   why        TEXT,
   dry_run_environment TEXT,        -- NULL while nothing has been asked
   dry_run_at          TEXT,
@@ -825,6 +833,7 @@ CREATE TABLE IF NOT EXISTS watch_readings (
   read_at     TEXT NOT NULL,
   verdict     TEXT NOT NULL,        -- 'clean' | 'regressed' | 'unknown'
   rows_read   INTEGER,              -- NULL when the observation did not answer
+  value       REAL,                 -- a measure's *now*; NULL for a signal and for anything that did not answer
   detail      TEXT,                 -- why, in words, for anything but a clean one
   PRIMARY KEY (goal_ref, environment, check_id, read_at)
 );

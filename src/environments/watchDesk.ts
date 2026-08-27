@@ -179,6 +179,10 @@ export class WatchDesk {
       goalRef: window.goalRef,
       environment: window.environment,
       checkId: check.id,
+      // The measure's **now**, taken off the observation rather than out of the
+      // fold: the fold's job is the ruling, and a number that only existed inside
+      // it could not be drawn beside the before the card is worth looking at for.
+      value: reading.value,
       ...verdict,
     });
   }

@@ -20,6 +20,10 @@ const CHECK: GoalWatch = {
   query: "traces | where message has 'job X timed out'",
   presence: "traces | where operation_Name == 'job X'",
   tolerate: 0,
+  expectUnder: null,
+  expectOver: null,
+  expectBaseline: false,
+  unit: null,
   why: null,
   dryRunEnvironment: null,
   dryRunAt: null,
@@ -27,7 +31,29 @@ const CHECK: GoalWatch = {
   dryRunPresence: null,
   dryRunRows: null,
   dryRunDetail: null,
+  baselineValue: null,
+  baselineAt: null,
+  live: true,
+  proposal: null,
 };
+
+/**
+ * A measure: one number, no presence query, and an expectation that is either a
+ * threshold or the baseline taken at declaration.
+ */
+const MEASURE: GoalWatch = {
+  ...CHECK,
+  id: 'orders-p95',
+  kind: 'measure',
+  title: 'The orders proc is no slower than it was',
+  query: 'requests | summarize value = percentile(duration, 95)',
+  presence: null,
+  expectBaseline: true,
+  unit: 'ms',
+};
+
+/** A measure's stdout, through the real parser — the one-row, numeric-`value` contract. */
+const measured = (rows: Record<string, unknown>[]) => parseWatchResult(JSON.stringify(rows), MEASURE.id, 'measure');
 
 /** The command's own stdout, through the real parser — never a hand-made result. */
 const answered = (rows: Record<string, unknown>[]) => parseWatchResult(JSON.stringify(rows), CHECK.id, 'signal');
@@ -130,4 +156,116 @@ test('a check that declares no presence query is read on its own answer', () => 
     reading: answered([]),
   });
   assert.equal(verdict.verdict, 'clean');
+});
+
+// --- measures ---------------------------------------------------------------
+
+test('a measure inside its baseline is clean, and the number is the reading', () => {
+  const verdict = watchCheckVerdict({
+    check: { ...MEASURE, baselineValue: 8400 },
+    environment: 'liveUk',
+    presence: null,
+    reading: measured([watchRow(MEASURE.id, { value: 310 })]),
+  });
+  assert.equal(verdict.verdict, 'clean');
+  assert.equal(verdict.detail, null);
+});
+
+test('a measure worse than its baseline is regressed, and says both numbers', () => {
+  const verdict = watchCheckVerdict({
+    check: { ...MEASURE, baselineValue: 310 },
+    environment: 'liveUk',
+    presence: null,
+    reading: measured([watchRow(MEASURE.id, { value: 8400 })]),
+  });
+  assert.equal(verdict.verdict, 'regressed');
+  assert.match(verdict.detail!, /8400 ms/);
+  assert.match(verdict.detail!, /310 ms/);
+});
+
+test('a measure whose baseline was never taken is unknown, not clean', () => {
+  // The shape this whole guard exists for: a comparison against nothing is not a
+  // comparison that passed, and read as clean it would report an optimisation
+  // verified on a number nobody ever had a before for.
+  const verdict = watchCheckVerdict({
+    check: { ...MEASURE, baselineValue: null },
+    environment: 'liveUk',
+    presence: null,
+    reading: measured([watchRow(MEASURE.id, { value: 310 })]),
+  });
+  assert.equal(verdict.verdict, 'unknown');
+  assert.match(verdict.detail!, /no baseline was ever taken/);
+  assert.match(verdict.detail!, /not the same as the reading being good/);
+});
+
+test('a measure answering two rows is unknown, not the first row', () => {
+  // Refused by `parseWatchResult` rather than here — one implementation of the
+  // output contract, and the fold folds its `unknown` forward rather than
+  // re-deciding it.
+  const verdict = watchCheckVerdict({
+    check: { ...MEASURE, baselineValue: 8400 },
+    environment: 'liveUk',
+    presence: null,
+    reading: measured([watchRow(MEASURE.id, { value: 310 }), watchRow(MEASURE.id, { value: 12000 })]),
+  });
+  assert.equal(verdict.verdict, 'unknown');
+  assert.match(verdict.detail!, /exactly one row/);
+});
+
+test('a measure whose value is not a number is unknown', () => {
+  const verdict = watchCheckVerdict({
+    check: { ...MEASURE, baselineValue: 8400 },
+    environment: 'liveUk',
+    presence: null,
+    reading: measured([watchRow(MEASURE.id, { value: 'fast' })]),
+  });
+  assert.equal(verdict.verdict, 'unknown');
+  assert.match(verdict.detail!, /numeric "value"/);
+});
+
+test('an absolute threshold needs no baseline, and a reading past it is regressed', () => {
+  // The right shape for new behaviour, which has no before. A threshold-only
+  // measure is never held `unknown` for want of a baseline it never declared.
+  const under: typeof MEASURE = { ...MEASURE, expectBaseline: false, expectUnder: 500, baselineValue: null };
+  assert.equal(
+    watchCheckVerdict({
+      check: under,
+      environment: 'liveUk',
+      presence: null,
+      reading: measured([watchRow(MEASURE.id, { value: 310 })]),
+    }).verdict,
+    'clean',
+  );
+  const past = watchCheckVerdict({
+    check: under,
+    environment: 'liveUk',
+    presence: null,
+    reading: measured([watchRow(MEASURE.id, { value: 900 })]),
+  });
+  assert.equal(past.verdict, 'regressed');
+  assert.match(past.detail!, /stay under 500 ms/);
+});
+
+test('a floor is the other direction, for a measure whose good news is a bigger number', () => {
+  const over: typeof MEASURE = { ...MEASURE, expectBaseline: false, expectOver: 99.5, unit: '%' };
+  const under = watchCheckVerdict({
+    check: over,
+    environment: 'liveUk',
+    presence: null,
+    reading: measured([watchRow(MEASURE.id, { value: 98 })]),
+  });
+  assert.equal(under.verdict, 'regressed');
+  assert.match(under.detail!, /stay over 99.5 %/);
+});
+
+test('a signal keeps its own arm — a measure is a second one, not a reinterpretation', () => {
+  // The regression this guards: folding both through one comparison would make a
+  // signal's verdict depend on columns a signal never declares.
+  const verdict = watchCheckVerdict({
+    check: { ...CHECK, expectUnder: 0, expectBaseline: true, baselineValue: null },
+    environment: 'liveUk',
+    presence: answered([watchRow(CHECK.id, { runs: 96 })]),
+    reading: answered([]),
+  });
+  assert.deepEqual(verdict, { verdict: 'clean', rows: 0, detail: null });
 });

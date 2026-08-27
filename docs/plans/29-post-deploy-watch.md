@@ -19,7 +19,7 @@ can be pointed at any of them and stop.
 | ----- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | 1 ✅  | The seam, signals, presence, the dry run      | "Did the new thing throw" is most of the value and needs no baseline                                 |
 | 2 ✅  | The window, readings, verdicts, the goal page | The first stage a watch actually runs; stage 1 only ever dry-runs                                    |
-| 3     | Measures and baselines                        | The optimisation case, which is the one that needs a before                                          |
+| 3 ✅  | Measures and baselines                        | The optimisation case, which is the one that needs a before                                          |
 | 4     | The bench row, bug filing, `holds`, extend    | Turns a reading into work; deliberately last, since it is the only arm that touches other subsystems |
 
 Stage 2 is the one to resist splitting further. A watch that opens and never reads is a table nobody
@@ -199,17 +199,70 @@ and 4 still own.
   the question names is a verdict standing with nothing behind it, and pruning the readings with the
   check leaves neither. `WatchStore.ingestGoalWatch` does both, and `test/watchDesk.test.ts` holds it.
 
-## Stage 3 — measures and baselines
+## Stage 3 — measures and baselines ✅
 
 **Done when** a measure declared `noWorseThan: "baseline"` captures its reading at declaration and
 the card draws expected / before / now.
 
-- Extend the schemas with `measures`, `expect`, `unit`; refuse a measure with neither threshold nor
-  baseline at ingestion.
-- Baseline capture rides the stage-1 dry run — it is the same call, stored rather than discarded.
-- _src/mcp/tools/watchDeclare.ts_ + `MCP_TOOL_NAMES` + the `mcp__lubbdubb__*` grants. Three things
-  must agree, and `test/mcpChannel.test.ts` asserts all three against each other.
-- The pending-amendment state on the plan sheet: an agent's declaration is not live until accepted.
+**Shipped.** Every bullet below landed. The spec's **Not built** marker is narrowed to what stage 4
+still owns — the bench row, the bug, `holds`, `extend`, and the Needs-you rail that carries them.
+
+- `src/validation/watchDocument.ts` — `measures`, `expect` (`under` / `over` / `noWorseThan`), `unit`;
+  a measure with neither threshold nor baseline refused at ingestion. `watchSignalInputs` became
+  `watchCheckInputs`, one function over both kinds, because the store holds one table.
+- `src/store/watches.ts` — `WATCH_COLUMNS`, the module's **first** `ColumnMigrations` entries, on two
+  tables that were new one change earlier; registered in `src/store/store.ts`.
+- `src/environments/watchDryRun.ts` — the baseline, stored rather than discarded. The same call.
+- `src/environments/watchVerdict.ts` — the measure arm, beside the signal's rather than over it.
+- `src/mcp/tools/watchDeclare.ts` + `MCP_TOOL_NAMES` + `TOOL_NAMING`, with the grants derived from
+  the names as they already were; `test/mcpChannel.test.ts` holds all three against each other.
+- `src/plans/planning.ts` — `watchDeclareNote`, appended by `plan-part` and `issue-pickup`, threaded
+  as a rendered string so `src/dispatcher/` still imports nothing from `src/environments/`.
+- `src/server/routes/watches.ts` — the operator's ruling, plus the dry run an acceptance runs.
+- `web/src/components/WatchDigest.tsx`, `web/src/console/GoalPage.tsx` — the pending change with
+  accept and decline, and a measure's expected / before / now.
+
+### What stage 3 decided
+
+- **Open question 1 — where the pending-amendment state lives — is settled as: two columns on
+  `goal_watches`** (`live`, and `proposal` holding the declaration as JSON), not the existing
+  plan-amendment path. The second was less to build and is the wrong shape: a replan is the transport
+  that speaks for the *whole* block, so routing one agent's single-check declaration through it would
+  put the goal's plan back into `awaiting_approval` — holding the goal's own work, at conclude time,
+  to carry a sentence about telemetry. The duplication the question worried about turned out to be
+  small, because the ruling is one route and one store method rather than a workflow: nothing here
+  has a verdict history, a proposal row or an inbox item.
+- **A proposal-only row is `live=0` with its declaration in the ordinary columns**, so accepting is a
+  flag rather than a second write of the same text — and `listGoalWatches` is **live-only**, which is
+  the guard rather than a filter: every reader that puts a query to an environment goes through it,
+  and the plan sheet reaches the pending rows through `listProposedGoalWatches`.
+- **A replan's drop sweep skips proposal-only rows.** They were never part of the document, so a
+  planner neither adopts nor discards them — a decision taken off an operator without their seeing it
+  is what the approval exists to prevent. A pending amendment *to* a check the document re-declares
+  goes with the re-declaration, because it amended text that no longer stands.
+- **`noWorseThan: "baseline"` is read lower-is-better**, and a measure whose good news is a bigger
+  number declares an `over`. One rule rather than a per-measure direction field, which would be a
+  second thing to get wrong about a comparison the thresholds already express.
+- **A measure declares no `presence`**, and the fold reads that null rather than inferring it from
+  the kind. Presence exists because zero rows is indistinguishable from a healthy release; a measure
+  that answers no row is already `unknown` under the output contract.
+- **The reading's `value` is taken off the observation, not out of the fold.** The fold's job is the
+  ruling; a number that only existed inside it could not be drawn beside the before, which is the
+  half the card is worth looking at for. `watchCheckVerdict`'s return shape is unchanged, so a
+  signal's verdict did not move.
+- **An absolute threshold needs no baseline.** A threshold-only measure is never held `unknown` for
+  want of a before it never declared — that is the right shape for new behaviour, which has none.
+- **`watch_declare` withdraws nothing.** It adds and amends, merge-only, on `validation_amend`'s
+  terms: an agent holding one part's diff knows about one check and nothing about the others, and a
+  withdrawal from it would need a pending-delete state to be honest about. A check that should go is
+  the operator's to delete or a planner's to stop declaring.
+- **Accepting runs the dry run in the same call**, which is what takes a measure's baseline. Skipping
+  it would leave the one declaration nobody reviewed as the one nobody proved resolves. Declining
+  asks nothing — putting a declined query to an environment would be the approval running the query
+  it exists to gate.
+- **The plan sheet's anchor rail was left alone.** The watch section sits under Validation on the one
+  scroll the sheet already is; a seventh jump target is stage 4's to add if the Needs-you rail wants
+  a way in.
 
 ## Stage 4 — what a finding does
 
@@ -247,9 +300,9 @@ Each of these is silent if it goes wrong, which is why they are listed rather th
 
 Worth settling before the stage that hits them, not during.
 
-1. **Where the pending-amendment state lives** (stage 3) — a column on `goal_watches`, or the
-   existing plan-amendment path. The second is less to build and couples the watch to a replan; the
-   first duplicates a workflow that already exists.
+1. ~~**Where the pending-amendment state lives**~~ — **answered in stage 3**: two columns on
+   `goal_watches`, not the plan-amendment path, which would hold a goal's own work to carry one
+   query. See *What stage 3 decided*.
 2. **Whether `extend` re-opens a settled window or opens a second one** (stage 4). A second window is
    truer to "a watch is a record of a period" and makes the card longer.
 3. ~~**Retention for `watch_readings`**~~ — **answered in stage 2**: nothing prunes a window, and the

@@ -63,6 +63,7 @@ export function PlanModal({
   refUrls,
   onClose,
   onReplan,
+  onWatchProposal,
   onDecide,
   onBackOut,
   onCommentDraft,
@@ -94,6 +95,8 @@ export function PlanModal({
   refUrls: Record<string, string>;
   onClose: () => void;
   onReplan: (planId: string) => Promise<unknown> | unknown;
+  /** The operator's ruling on a check `watch_declare` wrote — see {@link WatchDigest}. */
+  onWatchProposal: (issueNumber: number, checkId: string, accept: boolean) => Promise<unknown> | unknown;
   onDecide: (id: string, verdict: 'accept' | 'reject', note?: string) => Promise<unknown> | unknown;
   /**
    * The two answers that are about the **ticket** rather than the plan — close it
@@ -388,7 +391,18 @@ export function PlanModal({
                     asks whether the thing is behaving once it is there — the later
                     question, drawn later. Nothing renders where nothing was
                     declared. */}
-                <WatchDigest watches={watches} refUrls={refUrls} />
+                <WatchDigest
+                  watches={watches}
+                  refUrls={refUrls}
+                  // Null where the sheet cannot name the goal: the ruling is keyed
+                  // on the issue, and a control that could not say which goal it
+                  // was accepting for would be a button with no destination.
+                  onRule={
+                    issueNumber === null
+                      ? null
+                      : (checkId, accept) => void onWatchProposal(issueNumber, checkId, accept)
+                  }
+                />
               </section>
 
               <section

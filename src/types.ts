@@ -3840,9 +3840,12 @@ export interface GoalArrival {
 }
 
 /**
- * What a goal's post-deploy watch is meant to be told, per check. Two kinds are
- * specified; only `signal` is declarable so far.
- * → `docs/spec/29-post-deploy-watch.md#the-declaration`
+ * What a goal's post-deploy watch is meant to be told, per check.
+ *
+ * A `signal` asks how many of a thing there are and is not trusted without a
+ * `presence` query; a `measure` asks what one number is and is not trusted
+ * without a threshold or a baseline. They fail in opposite directions and carry
+ * opposite guards. → `docs/spec/29-post-deploy-watch.md#the-declaration`
  */
 export type GoalWatchKind = 'signal' | 'measure';
 
@@ -3871,8 +3874,23 @@ export interface GoalWatchInput {
   query: string;
   /** The second query proving the code path runs. Required for a signal; null for a measure. */
   presence: string | null;
-  /** The count a signal must not exceed. */
+  /** The count a signal must not exceed. Zero and unread for a measure. */
   tolerate: number;
+  /** A measure's ceiling — the number must stay below it. Null for a signal, and for a measure declaring none. */
+  expectUnder: number | null;
+  /** A measure's floor — the number must stay above it. */
+  expectOver: number | null;
+  /**
+   * Whether the measure declared `noWorseThan: "baseline"`.
+   *
+   * **A measure that declared it and has no baseline is `unknown`, never clean.**
+   * The baseline is taken at declaration, days before the arrival, and a
+   * comparison with nothing to compare against is not a passing one.
+   * → `docs/spec/29-post-deploy-watch.md#the-baseline-and-why-a-measure-is-not-trusted-without-one`
+   */
+  expectBaseline: boolean;
+  /** What the number is in, drawn beside it. Never parsed — no arithmetic is done on a unit. */
+  unit: string | null;
   why: string | null;
 }
 
@@ -3892,6 +3910,50 @@ export interface GoalWatch extends GoalWatchInput {
   dryRunRows: number | null;
   /** What an operator is told, in words — the refusal for a `zero` or an `unknown`. */
   dryRunDetail: string | null;
+  /**
+   * A measure's **before**: what its query answered at declaration time, on the
+   * same query and from the same source, before anything changed.
+   *
+   * Null means *never taken*, which is a fact and not a zero — a measure declaring
+   * `noWorseThan: "baseline"` reads `unknown` while it is null, because it has
+   * nothing to compare against. Cleared by a re-declaration for the dry run's
+   * reason: a baseline is a reading of *that* query.
+   */
+  baselineValue: number | null;
+  /** When the baseline was taken, or null while none has been. */
+  baselineAt: string | null;
+  /**
+   * Whether this declaration is live — that is, whether the operator has accepted
+   * it.
+   *
+   * False on a row an agent proposed through `watch_declare` and nobody has ruled
+   * on yet. **A false row is never put to an environment**: the query runs inside
+   * the operator's own command with the operator's own credential, and that
+   * approval is the whole of the authorisation story.
+   */
+  live: boolean;
+  /** An agent's pending amendment to this check, or null where none is outstanding. */
+  proposal: GoalWatchProposal | null;
+}
+
+/**
+ * An agent's declaration, waiting on the operator.
+ *
+ * `watch_declare` writes one of these rather than the check itself, for the
+ * reason the plan sheet is read-only: approving the plan is what authorises a
+ * query to be run against the operator's telemetry with the operator's own
+ * credential, and a query that arrived after the approval has not been approved.
+ * Accepting applies it and re-runs the dry run; declining leaves the live check
+ * exactly as it was.
+ * → `docs/spec/29-post-deploy-watch.md#the-working-agent-at-conclude-time`
+ */
+export interface GoalWatchProposal {
+  /** When the agent declared it. */
+  at: string;
+  /** Why the check is changing, in the agent's own words — what the operator reads. */
+  note: string;
+  /** The declaration itself, exactly as it is stored the moment it is accepted. */
+  declaration: GoalWatchInput;
 }
 
 /**
@@ -3948,6 +4010,15 @@ export interface WatchReading {
   verdict: WatchCheckVerdict;
   /** How many rows the check's own query matched, or null when the observation did not answer. */
   rows: number | null;
+  /**
+   * A measure's **now**: the one number its query answered with, or null for a
+   * signal and for any observation that did not answer.
+   *
+   * Stored beside the verdict rather than derived from it, because the card draws
+   * the number as well as the ruling — a p95 of 310ms means nothing alone and
+   * everything beside the 8,400ms it replaced.
+   */
+  value: number | null;
   /** Why, in words — set for every verdict but `clean`, because the cockpit says it in words. */
   detail: string | null;
 }

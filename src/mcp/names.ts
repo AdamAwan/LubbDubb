@@ -43,6 +43,7 @@ export const MCP_TOOL_NAMES = [
   'reply_to_review',
   'validation_amend',
   'validation_report',
+  'watch_declare',
   'review_report',
   'review_route',
   'report_remedy',
@@ -132,6 +133,11 @@ export const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use'> = {
   // Named by `pr-review-triage`, the one prompt whose agent can cast it.
   review_route: 'point-of-use',
   validation_amend: 'point-of-use',
+  // Named by the work prompts' own watch note — the instruction that has a reason
+  // to reach for it is the one dispatching the work that would emit the thing
+  // being watched, and an addendum entry would be read by every planner and
+  // assessor that cannot use it.
+  watch_declare: 'point-of-use',
   report_remedy: 'point-of-use',
   // The one tool an agent is never told about: Claude Code calls it through
   // --permission-prompt-tool, so naming it would invite a call that means nothing.
