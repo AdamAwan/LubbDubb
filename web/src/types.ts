@@ -25,6 +25,7 @@ export type {
   Agent,
   AgentAskQuestion,
   AgentFile,
+  AgentFilesPayload,
   AgentFlag,
   AgentTranscript,
   BugFiling,

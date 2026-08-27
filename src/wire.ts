@@ -1135,8 +1135,6 @@ export interface CockpitState {
   attachments: JobAttachment[];
   /** Attachment id → the URL to load its bytes from, carrying its capability. */
   attachmentUrls: Record<string, string>;
-  /** Every file agents wrote (file-events hook), for the drawer's "files changed" list. */
-  files: AgentFile[];
   /** Paths two concurrently-running agents both wrote (issue #113). */
   overlaps: FileOverlap[];
   /**
@@ -1320,6 +1318,20 @@ export interface AgentTranscript {
   total: number;
   /** Everything from {@link from} to the end. */
   transcript: string;
+}
+
+/**
+ * The files one agent wrote, for the drawer's "files changed" list.
+ *
+ * Its own route, fetched when a drawer opens, for the reason the transcript above
+ * is: the rows are bulk text about **one** agent, and the whole-fleet list they
+ * used to ride on was 87% of the state snapshot — every file every agent ever
+ * wrote, built, serialised and parsed on every refresh so that one open drawer
+ * could read one agent's slice of it. → `docs/spec/16-http-api.md#bulk-text`
+ */
+export interface AgentFilesPayload {
+  agentId: string;
+  files: AgentFile[];
 }
 
 export interface WorkRootsPayload {

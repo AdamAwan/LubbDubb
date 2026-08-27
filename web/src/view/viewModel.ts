@@ -4,7 +4,6 @@ import type {
   SetupPayload,
   TaskSummary,
   AgentFlag,
-  AgentFile,
   OrphanedWork,
   Escalation,
   Proposal,
@@ -165,8 +164,6 @@ export interface CockpitView {
   stallExpiryByAgent: ReadonlyMap<string, string>;
   /** Artifacts agents flagged mid-run, grouped for the card and drawer. */
   flagsByAgent: ReadonlyMap<string, AgentFlag[]>;
-  /** Every file agents wrote, grouped for the drawer's "files changed" list. */
-  filesByAgent: ReadonlyMap<string, AgentFile[]>;
   /** Last non-empty output line per agent, for compact fleet-card previews. */
   tailByAgent: ReadonlyMap<string, string>;
 
@@ -426,7 +423,6 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     limitParked: new Set(state.parkedOnLimit),
     stallExpiryByAgent: new Map(state.stallParks.map((p) => [p.agentId, p.expiresAt])),
     flagsByAgent: groupByAgent(state.flags),
-    filesByAgent: groupByAgent(state.files),
     tailByAgent: input.tails,
 
     taskFor: (agent) => state.tasks.find((t) => t.id === agent.taskId) ?? null,

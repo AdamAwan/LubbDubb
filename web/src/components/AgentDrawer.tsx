@@ -45,7 +45,6 @@ export function AgentDrawer({
   live,
   flags,
   artifactUrls,
-  files,
   limitParked,
   onClose,
   onRespond,
@@ -60,7 +59,6 @@ export function AgentDrawer({
   live: string | undefined;
   flags?: AgentFlag[];
   artifactUrls: Record<string, string>;
-  files?: AgentFile[];
   /** Parked because the account's usage limit is spent, not because it asked anything. */
   limitParked: boolean;
   onClose: () => void;
@@ -73,6 +71,11 @@ export function AgentDrawer({
   onResume: () => Promise<unknown> | unknown;
 }) {
   const [seed, setSeed] = useState('');
+  // The paths this agent has written. Fetched here rather than read off the
+  // snapshot for the transcript's reason exactly: it is bulk text about one agent,
+  // and the whole-fleet list it used to come from was most of `/api/state`.
+  // → `docs/spec/16-http-api.md#bulk-text`
+  const [files, setFiles] = useState<AgentFile[]>([]);
   // Whether the socket buffer is the whole stream — true only while this agent's
   // transcript was still empty when the drawer opened. Set from the first read.
   const [liveIsWhole, setLiveIsWhole] = useState(true);
@@ -95,7 +98,18 @@ export function AgentDrawer({
     let seeded = false;
     held.current = 0;
     setSeed('');
+    setFiles([]);
     setLiveIsWhole(true);
+    // Re-read on the same beat as the transcript: a live agent's writes land while
+    // the drawer is open, and the list is a handful of short rows.
+    const readFiles = (): void => {
+      void api
+        .getAgentFiles(agent.id)
+        .then((r) => {
+          if (active) setFiles(r.files);
+        })
+        .catch(() => {});
+    };
     // One read at a time: a response slower than the interval would otherwise be
     // overlapped by a second read asking from the same offset, and both would
     // append the same tail.
@@ -123,11 +137,13 @@ export function AgentDrawer({
         });
     };
     read();
+    readFiles();
     // A finished run's transcript never grows again, so the poll stops with it —
     // but a first read that has not landed yet is always retried, whatever the
     // status says.
     const timer = setInterval(() => {
       if (liveRef.current || !seeded) read();
+      if (liveRef.current) readFiles();
     }, TRANSCRIPT_POLL_MS);
     return () => {
       active = false;

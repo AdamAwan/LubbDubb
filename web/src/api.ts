@@ -13,6 +13,7 @@ import type {
 // each call site: the server declares each one as its return type, so a renamed
 // or re-nested key is a compile error here instead of an empty panel.
 import type {
+  AgentFilesPayload,
   AgentTranscript,
   CiPolicyPayload,
   FilingTargetProbe,
@@ -152,6 +153,10 @@ const realApi = {
     authFetch(`/api/agents/${agentId}/transcript${from > 0 ? `?from=${from}` : ''}`).then((r) =>
       json<AgentTranscript>(r),
     ),
+  // The files one agent wrote. Fetched when a drawer opens, and again on its poll
+  // while the agent is live — never shipped on `/api/state`, where the whole-fleet
+  // list it replaces was 87% of the payload.
+  getAgentFiles: (agentId: string) => authFetch(`/api/agents/${agentId}/files`).then((r) => json<AgentFilesPayload>(r)),
   // The work graph is fetched, never polled: `/api/state` comes round every couple
   // of seconds and the graph only ever grows, so the roots are read once on mount
   // and a subtree when one is opened.

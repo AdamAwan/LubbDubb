@@ -19,7 +19,7 @@ is about.
 | Module                  | Holds                                                                                                                                                                     |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `routes/state.ts`       | `/api/state`, `/api/prompts`, `/api/config`, `/api/ci-policy`, `/api/mcp`, `/api/health`                                                                                  |
-| `routes/agents.ts`      | One agent's transcript, and respond / kill / complete / interrupt / extend a stall park                                                                                   |
+| `routes/agents.ts`      | One agent's transcript and the files it wrote, and respond / kill / complete / interrupt / extend a stall park                                                            |
 | `routes/artifacts.ts`   | `/artifacts/:id` and `/attachments/:id`, their capability signers, and the path confinement                                                                               |
 | `routes/control.ts`     | `/api/pulse`, `/api/errors/clear`, `/api/control`, `/api/prs/:number/watch`                                                                                               |
 | `routes/escalations.ts` | The whole "Needs you" inbox: escalations, proposals, recovery                                                                                                             |
@@ -255,6 +255,21 @@ The range exists because the agent drawer re-reads this every five seconds while
 ([17](17-cockpit.md#the-agent-drawer)): the socket carries only what an agent produced since the
 drawer subscribed, so the fetch is the only complete copy, and re-fetching it whole per poll would
 ship megabytes of unchanged text per open drawer. A poll on a quiet run costs an empty string.
+
+### `GET /api/agents/:id/files`
+
+`{ agentId, files }` — every path this agent wrote, newest first, as `agent_files` holds them. 404
+when the agent is unknown, exactly as the transcript above: an agent that wrote nothing and an agent
+that does not exist are different answers, and only the first is a row a drawer can be open over.
+
+**Fetched when the drawer opens, and again on its five-second poll while the agent is live.** It used
+to ride the snapshot as a fleet-wide `files` list — every file every agent ever wrote, on a table
+nothing deletes from — so that `filesByAgent.get(openAgent.id)` could take one agent's slice of it in
+the browser. On a seeded profile of 1,500 completed agents that list was **8.8 MB of a 10.1 MB
+payload**: 87% of `/api/state`, built, serialised, transferred and parsed on every `dirty` to draw a
+list about one agent. Moving it here took the snapshot to 1.35 MB and its build from ~1.4 s to
+~130 ms. It is the same trade as the transcript, made for the same reason — see
+[_Bulk text_](#bulk-text).
 
 ### `GET /artifacts/:id`
 
@@ -1949,9 +1964,8 @@ read **once** and shared, so two parts of the UI cannot disagree.
 | `schedules`                     | Recurring briefs, oldest first — **every** one, paused included, since this is the only surface anywhere that says a paused one exists. What a firing produces is an ordinary entry in `jobs`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `agents`                        | Every agent row, including usage and the progress note.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `flags`                         | Every artifact chip, grouped by the cockpit onto agents.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `files`                         | Every file every agent wrote.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `attachments`, `attachmentUrls` | Images an operator attached to a brief (#249), every ref in one list, plus the capability-carrying URL to load each one's bytes. The cockpit filters by `targetRef`: `job:<id>` while queued, `issue:<n>` once filed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `overlaps`                      | Paths two concurrently-live code agents wrote.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `overlaps`                      | Paths two concurrently-live code agents wrote — read server-side over the newest `OVERLAP_AGENT_WINDOW` agents, never over the whole of `agent_files`. See [12](12-artifacts-and-files.md#file-overlap-detection). |
 | `humanTasks`                    | Work only a person can do — open ones and a settled tail, newest first. Its own list rather than part of `escalations`: nobody is parked on one.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `knowledge`                     | Every fact the fleet has written down, newest first, **the rejected ones included** — each with the corroborator count that promotes it, the count of voices disputing it, the ratio between them, how many disputes are unanswered, how often it was asked for (`asks`, `lastAskedAt`) and whether its `check:` scope has stopped matching anything (`scopeStale`, `scopeLastMatchedAt`). Every one of those is taken server-side beside the rows it counts; the ratio in particular, because two counts of _voices_ divided in the browser would be arithmetic over numbers whose rule the view layer does not know — and the staleness verdict for the same reason, since a "days since" taken from `Date.now()` in the view layer would be a second implementation of it. All of them are readings and none of them acts ([27](27-knowledge.md#what-it-costs)). The evidence behind a claim is not here: see `GET /api/knowledge/facts/:id`. |
 | `knowledgeGraduations`          | Every attempt to send a claim on, newest first, the abandoned ones included — which `exit` it took, the job, the document a `docs` exit named, the pull request or ticket it produced, the outcome, and `reading`: what the sweep makes of that pull request right now (`waiting`, `landed`, `abandoned`, or `unknown` for one that left the world without ever being seen closed). The reading is `graduationReading`'s answer over the work graph, the same function the sweep settles on, taken server-side for `distinctCorroborators`' reason — a browser that worked out whether a pull request had landed would be a second implementation of the verdict that takes a claim out of every prompt ([27](27-knowledge.md#sending-a-claim-on)).                                                                                                                                                                                              |
@@ -1975,8 +1989,8 @@ per open cockpit — so a bulk column that rides on one of them is not a size co
 and it is silent: the payload still validates and the cockpit still renders. The symptom is that every
 action takes seconds.
 
-Two collections were the whole of it on a real deployment, where `/api/state` was 24 MB and took 6–15 s
-to serve:
+Three collections were the whole of it. The first two came off a real deployment, where `/api/state`
+was 24 MB and took 6–15 s to serve; the third off a seeded profile built to find what was left:
 
 - **`tasks` shipped every task's rendered agent prompt** — 17.4 MB of the 24 MB, for 1,248 rows.
   Nothing in `web/src` reads `task.prompt`; it was built, serialised, transferred, parsed and
@@ -1987,14 +2001,24 @@ to serve:
   `status === 'open'` first: the needs-you queue, the console band, the view model. It is
   `Store.listOpenEscalations` now, which is a `WHERE` rather than a filter over the all-time read.
 
+- **`files` shipped every file every agent had ever written** — 8.8 MB of a 10.1 MB payload on a
+  seeded profile of 1,500 completed agents, against a table nothing deletes from, so it grows for the
+  life of a deployment. It had **one** consumer: `groupByAgent(state.files)` on the view model, read
+  as `filesByAgent.get(openAgent.id)` for the open drawer. One agent's slice was drawn and the rest
+  discarded, on every refresh. It is `GET /api/agents/:id/files` now, and the drawer fetches its own;
+  the only server-side reader left is the overlap detector, which reads a window
+  ([12](12-artifacts-and-files.md#file-overlap-detection)). The snapshot went to 1.35 MB and its
+  build from ~1.4 s to ~130 ms.
+
 The remaining collections were audited against the same rule and hold none: `agents` carries usage
 counters and a one-line progress note (its transcript is already a route), `decisions`, `worldEvents`
 and `errors` are capped at 100, and `knowledge`, `humanTasks` and `plans` carry short prose that is
 drawn in full.
 
 **The pattern for text a surface does need is a route of its own, fetched on open** —
-`GET /api/agents/:id/transcript` is the precedent, and `/api/spend`, `/api/work`,
-`/api/retrospectives/:ref` and `/api/scratchpads/:ref` follow it. No route ships a task's prompt,
+`GET /api/agents/:id/transcript` is the precedent, `GET /api/agents/:id/files` is the most recent to
+follow it, and `/api/spend`, `/api/work`, `/api/retrospectives/:ref` and `/api/scratchpads/:ref` do
+too. No route ships a task's prompt,
 because no surface asks for one; a surface that wanted one would gain a per-row route beside the
 transcript's, never a widening of `tasks` back to `Task`.
 

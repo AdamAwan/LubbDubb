@@ -39,6 +39,25 @@ interface Writer extends OverlapWriter {
   end: number;
 }
 
+/**
+ * How many of the newest agent rows the detector is run over.
+ *
+ * A **fourth narrowing**, and the same kind as the other three: an overlap is a
+ * statement about concurrency, and concurrency is bounded by the agent cap — so
+ * two agents that can possibly have been live together are two of the newest few
+ * rows, never one from this week and one from March. `agent_files` grows for the
+ * life of a deployment and nothing deletes from it, so without a window the
+ * snapshot read the whole table on every poll (megabytes, and a per-path scan
+ * quadratic in writers: on a repo where every agent touches `package-lock.json`
+ * that is the single largest cost in the whole state build) to answer a question
+ * only the live rows can contribute to — the cockpit folds this list to
+ * `liveOverlapCount`, which counts nothing but live-against-live.
+ *
+ * Well clear of any plausible cap, so the window never cuts a real collision; the
+ * same order as the hundred-row caps the snapshot's other feeds carry.
+ */
+export const OVERLAP_AGENT_WINDOW = 200;
+
 const LIVE: ReadonlySet<AgentStatus> = new Set<AgentStatus>(['starting', 'running', 'waiting']);
 
 /**
@@ -91,6 +110,9 @@ function lifetime(agent: Agent): { start: number; end: number } {
  *   (agent, path) and its timestamp is bumped on rewrite, so it dates the *last*
  *   write rather than the first. Overlapping lifetimes is the reading the data
  *   actually supports.
+ * - **The newest agents only.** The caller reads its rows over a window of agents
+ *   rather than over the whole table — see {@link OVERLAP_AGENT_WINDOW}, which is
+ *   the same narrowing as the two above pushed back into the query.
  */
 export function detectFileOverlaps(input: {
   files: AgentFile[];

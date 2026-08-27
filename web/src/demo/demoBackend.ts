@@ -7,6 +7,7 @@
 // Kept side-effect-free at module scope: the real build imports this file but the
 // `VITE_DEMO` branch in api.ts is statically false there, so Rollup drops it.
 import type {
+  AgentFilesPayload,
   AgentTranscript,
   ConfigChange,
   SetupCheck,
@@ -305,6 +306,15 @@ class DemoServer {
     const full = this.transcripts.get(agentId) ?? '';
     const at = Math.min(from, full.length);
     return { agentId, from: at, total: full.length, transcript: full.slice(at) };
+  }
+
+  /**
+   * The demo records no file writes, so this is empty rather than fabricated: the
+   * old snapshot's `files` list was `[]` here too, and inventing paths would put
+   * a "files changed" list under an agent that changed nothing.
+   */
+  async getAgentFiles(agentId: string): Promise<AgentFilesPayload> {
+    return { agentId, files: [] };
   }
 
   async pulse(): Promise<{ ok: true }> {
@@ -3915,6 +3925,7 @@ function demoSetupResolution(answers: { email: string; repoRoot: string }): Setu
 export const demoApi = {
   getState: () => getServer().getState(),
   getTranscript: (agentId: string, from = 0) => getServer().getTranscript(agentId, from),
+  getAgentFiles: (agentId: string) => getServer().getAgentFiles(agentId),
   // The demo's world is built fresh in the browser each load, so nothing has ever
   // been recorded for it — an empty graph is the honest answer, and these exist to
   // keep the two API shapes interchangeable.

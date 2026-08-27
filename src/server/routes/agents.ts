@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { checked, IdParams } from '../validation.js';
-import type { AgentTranscript } from '../../wire.js';
+import type { AgentFilesPayload, AgentTranscript } from '../../wire.js';
 import type { RouteContext } from './context.js';
 
 /**
@@ -34,6 +34,30 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const from = Math.min(query.from, full.length);
       const payload: AgentTranscript = { agentId: id, from, total: full.length, transcript: full.slice(from) };
       return payload;
+    }),
+  );
+
+  /**
+   * The files one agent wrote, for the drawer's "files changed" list.
+   *
+   * Fetched when a drawer opens rather than shipped on `/api/state`, for the
+   * transcript's reason above: the rows are bulk text about **one** agent. They
+   * used to ride the snapshot as a whole-fleet `files` list — every file every
+   * agent ever wrote, on a table nothing deletes from — which was 87% of the
+   * payload, built, serialised, transferred and parsed on every refresh so that
+   * one open drawer could take one agent's slice of it and the rest could be
+   * thrown away. → `docs/spec/16-http-api.md#bulk-text`
+   *
+   * 404 on an unknown agent rather than an empty list, exactly as the transcript
+   * does: an agent that wrote nothing and an agent that does not exist are
+   * different answers, and only the first is a row the drawer can be open over.
+   */
+  app.get(
+    '/api/agents/:id/files',
+    checked({ params: IdParams }, async ({ params, reply }) => {
+      const { id } = params;
+      if (!store.getAgent(id)) return reply.code(404).send({ error: 'agent not found' });
+      return { agentId: id, files: store.listFiles(id) } satisfies AgentFilesPayload;
     }),
   );
 

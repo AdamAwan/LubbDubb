@@ -51,7 +51,7 @@ import { featureBoardOn } from '../features/featureBoard.js';
 import { rejectionSignalQuery } from '../proposals/proposals.js';
 import { graduationReading } from '../knowledge/graduation.js';
 import type { Store } from '../store/store.js';
-import { detectFileOverlaps } from '../fileOverlap.js';
+import { detectFileOverlaps, OVERLAP_AGENT_WINDOW } from '../fileOverlap.js';
 import {
   KNOWLEDGE_READ_LIMIT,
   renderKnowledgeBlock,
@@ -62,7 +62,7 @@ import { knowledgeBlockCost } from '../knowledge/cost.js';
 import { isCold } from '../knowledge/cold.js';
 import { checkScopeDrift, checkSightings } from '../knowledge/drift.js';
 import { defaultWindow } from '../insightsWindow.js';
-import { acceptanceCriteria, bySlug, partDepth, planIssueNumber } from '../plans/parts.js';
+import { acceptanceCriteria, bySlug, partDepth, partOrigin, planIssueNumber } from '../plans/parts.js';
 import { planScopeDrift } from '../plans/scopeDrift.js';
 import { deliveryHold, deliverySignalQuery } from '../delivery/delivery.js';
 import { appraisalSignalQuery } from '../intake/appraisal.js';
@@ -189,10 +189,17 @@ export function buildStateSnapshot(
   // Bugs the operator raised from a story row. Read here for findings' reason: the
   // ref each carries once filed is a brand-new item the world lists do not hold yet.
   const bugFilings = store.listBugFilings();
-  // Every file every agent wrote, read once: the drawer groups it by agent, and
-  // the overlap detector below joins it *across* agents — the one question the
-  // rows could always answer and nothing ever asked.
-  const files = store.listAllFiles();
+  // The files the newest agents wrote, for the overlap detector below — the one
+  // question the rows could always answer and nothing ever asked.
+  //
+  // **A window, not the table.** The whole of `agent_files` used to ride this
+  // snapshot as `files` so that an open drawer could read one agent's slice of it:
+  // 87% of the payload, built and serialised on every poll, to draw a list about
+  // one agent. That list is `GET /api/agents/:id/files` now, and what is left is
+  // the detector, which only concurrent agents can contribute to — so it is run
+  // over the newest `OVERLAP_AGENT_WINDOW` rows.
+  const overlapAgents = agents.slice(0, OVERLAP_AGENT_WINDOW);
+  const files = store.listFilesForAgents(overlapAgents.map((a) => a.id));
   // The plan graph, read once and shared by the per-issue pickup verdict below
   // and the snapshot itself, so the chip and the panel can't disagree.
   const plans = store.listPlans();
@@ -227,6 +234,28 @@ export function buildStateSnapshot(
   // stored under, and the scope drift, which is a join across `agent_files` and
   // `tasks` the cockpit does not hold. Per plan, because drift needs the issue
   // number to rebuild the part origins the tasks were dispatched on.
+  //
+  // Drift reads its own file rows, and **never the overlap detector's window
+  // above**: a plan is judged against the agents that worked *its* parts, which on
+  // a goal that has been running for a fortnight are nowhere near the newest
+  // couple of hundred rows. Sharing that read would leave the sheet reporting a
+  // part as inside its declared scope because the agent that left it was too old
+  // to be in the window — the check passing for the reason it should have fired.
+  // So the population is the part origins themselves.
+  const partOrigins = new Set(
+    plans.flatMap((plan) => {
+      const issueNumber = planIssueNumber(plan.originRef);
+      if (issueNumber === null) return [];
+      return planParts.filter((p) => p.planId === plan.id).map((p) => partOrigin(issueNumber, p.slug));
+    }),
+  );
+  const driftFiles = store.listFilesForAgents([
+    ...new Set(
+      tasks.flatMap((t) =>
+        t.originRef !== null && partOrigins.has(t.originRef) && t.agentId !== null ? [t.agentId] : [],
+      ),
+    ),
+  ]);
   const drift = new Map<string, string[]>();
   for (const plan of plans) {
     const issueNumber = planIssueNumber(plan.originRef);
@@ -235,7 +264,7 @@ export function buildStateSnapshot(
       issueNumber,
       planParts.filter((p) => p.planId === plan.id),
       tasks,
-      files,
+      driftFiles,
     )) {
       drift.set(d.partId, d.paths);
     }
@@ -789,16 +818,12 @@ export function buildStateSnapshot(
     // the same way `artifactUrls` is and for the same reason: an `<img src>` the
     // browser loads on its own carries no bearer token.
     attachmentUrls: attachmentUrls(attachments, opts?.attachmentSigner),
-    // Every file agents wrote (captured by the file-events hook), grouped by
-    // agentId in the drawer's "files changed" list; the report-like ones also
-    // appear above as artifact chips.
-    files,
     // Paths two agents wrote while both were running (issue #113). The three
     // dispatch gates are complete for what they see, and origin/branch are 1:1
     // for every world-driven rule — but none of them can see what an agent does
     // once it is running. This is that blind spot, read off rows we already have
     // rather than off an advisory claim an agent has to remember to make.
-    overlaps: detectFileOverlaps({ files, agents, tasks }),
+    overlaps: detectFileOverlaps({ files, agents: overlapAgents, tasks }),
     // Every fact, the rejected ones included: the page is the governance, and a
     // surface drawing only what it let through cannot show that a claim was
     // killed. Nothing in the dispatcher reads one — a fact feeds prompts (phase 3)

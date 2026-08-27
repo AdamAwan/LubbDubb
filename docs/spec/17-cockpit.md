@@ -3817,8 +3817,14 @@ rather than the thing the drawer was opened to read, and absent entirely on a de
 no models. The policy itself is visible in the running-config panel, under **Agents** —
 [02](02-configuration.md#model-assignment-by-rule).
 
-The drawer also shows the artifact chips, the **files changed** list from `files`, and offers respond,
-interrupt and kill.
+The drawer also shows the artifact chips, the **files changed** list, and offers respond, interrupt
+and kill.
+
+The files list is **fetched by the drawer**, on open and again on its five-second poll while the agent
+is live — `GET /api/agents/:id/files` ([16](16-http-api.md#get-apiagentsidfiles)), the same seam and
+the same beat as the transcript above. It came off `/api/state`, where a fleet-wide `files` list was
+87% of the payload and existed so that this one panel could take one agent's slice of it in the
+browser; `filesByAgent` is gone from the view model with it. Nothing else drew it.
 
 **A usage-limit park replaces the reply box rather than sitting behind it.** An agent in
 `parkedOnLimit` draws an amber notice above the transcript — the row's own reason, naming the window
