@@ -18,6 +18,11 @@ delivered goal owes a person, and what puts a line on the ticket. Both are opt-i
 and a deployment that declares neither gets exactly what it got before — an observation, drawn on the
 goal page. → [What an arrival means](#what-an-arrival-means)
 
+A goal's work **arriving** is not the same as that work **behaving**, and this subsystem has no
+opinion about the second: a goal reads `reached` whether the fix worked, did nothing, or made things
+worse. That question is [29](29-post-deploy-watch.md), which opens its window on the arrival this one
+records.
+
 ## What it is not
 
 | Not                     | Because                                                                                                                                                                                                                                                                                                     |
