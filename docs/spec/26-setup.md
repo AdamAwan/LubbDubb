@@ -128,7 +128,8 @@ has an arm and applies now; everything else lands in the file and is reported as
 
 ## The checks
 
-`buildSetupReading` (`src/setup/reading.ts`) answers six, plus one about the prompt overrides
+`buildSetupReading` (`src/setup/reading.ts`) answers six, plus one whenever a deployment has selected
+the cross-fleet pool ([below](#a-fleet-with-no-name)), plus one about the prompt overrides
 whenever a deployment has any ([below](#an-override-that-names-a-retired-tool)) and one whenever
 the file has moved ahead of the process ([below](#a-fault-the-file-has-already-answered)), and they
 outlive the first three minutes on purpose. That is the argument for their being checks rather than wizard steps: `credential` is how an
@@ -140,6 +141,7 @@ filter of their own is hiding every tagged item on the tracker.
 | `pointed`      | both capabilities are still `fake`                      | the invented world reads exactly like a real one                                                                                 |
 | `credential`   | no route into the selected provider answers             | asked of **both** capabilities, since a deployment may read issues from one provider and PRs from another                        |
 | `identity`     | `userId` is unset                                       | tickets it files go unassigned and its branches are not named as yours ([02](02-configuration.md#userid))                        |
+| `fleet`        | the pool is selected and `fleetId` is unset             | the fleet publishes nothing and reads nobody, which is what a deployment that never opted in looks like ([28](28-cross-fleet-pool.md#a-fleet-with-no-name-yet)) |
 | `eligibility`  | tagged work exists and none of it is yours              | the fleet is idle **and correct**, which is the hardest state to tell from broken                                                |
 | `wiring`       | nothing tagged, and nothing ever picked up              | the same, on the one day an empty panel is unreadable because none has ever been full                                            |
 | `agent`        | `agentMode` is `raw`, or `claudeCommand` is not on PATH | a `raw` dispatch writes a transcript and never calls a model                                                                     |
@@ -196,6 +198,31 @@ As one standing check it settled into a permanent scold for doing nothing wrong,
   already states, and the one that could disagree with reality is the one that would be wrong.
 
 Every other check names a fault that clears when it is fixed, so none of them can settle into a nag.
+
+### A fleet with no name
+
+The one check here that replaced a **boot error**, and the argument is about who owns the key rather
+than about how bad it is. `fleetId` names this fleet in the cross-fleet pool
+([28](28-cross-fleet-pool.md#a-fleet-with-no-name-yet)), and it is required the moment
+`integrations.pool` leaves `fake` — but the provider is selected in the team's **committed**
+`lubbdubb.project.json` while the id is the operator's own, per machine. So the day the team commits
+the pool, every operator's next start refused, over a key whose one editor is the cockpit that would
+not open. A refusal that puts the only person who can answer in front of a terminal is this surface's
+whole argument stated backwards.
+
+- **The harness boots and the desk sits out.** No `PoolDesk` is wired while the id is empty, because
+  the alternative — publishing under `fleets//` — is a document with no author in somebody else's
+  repository. Nothing is published and nothing polled until the row is answered.
+- **`bad`, not `warn`.** Everything else about the harness works, which is the shape of a gap; but the
+  pool panel draws nothing at all in this state, and that is exactly what a deployment which never
+  opted in looks like. This row is the only thing that tells the two apart.
+- **A deployment on the `fake` pool draws no row**, not an `ok` one — the same rule the retired-tool
+  check follows: no reading about a capability that is off.
+- **The offer is the config page's own.** `userId@pool.project` comes from the `suggest` declaration
+  in `CONFIG_FIELDS` rather than a second join written here, so the two surfaces cannot propose two
+  addresses for the one field whose job is to be an address nobody else writes to. `assumed`, so it
+  lands in a field before it lands in the file; and absent entirely where either part is missing,
+  since `alice@` is not a suggestion but a half-typed one.
 
 ### An override that names a retired tool
 
@@ -271,6 +298,11 @@ the same save. The confirm sheet writes `repoRoot`, `defaultBranch` and the prov
 `integrations`, and hanging those off `pointed` would have a pending `defaultBranch` announce that
 `pointed` had been answered — a sentence about a key that check never looked at. They land in
 `restart` instead, which claims nothing about what they fix.
+
+`fleet` is in it, on `fleetId` alone. The key has no arm in `src/configApply.ts`, so writing it leaves
+the pool desk sitting out until a restart — the row is restated with that in its words rather than
+disappearing the moment the file holds a value the process is not running on
+([28](28-cross-fleet-pool.md#a-fleet-with-no-name-yet)).
 
 `credential` and `billing` are **not** in the map and must not be. Both read the environment, and no
 edit to `lubbdubb.config.json` puts a variable into a running process: a restatement there would tell

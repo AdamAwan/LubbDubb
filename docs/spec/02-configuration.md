@@ -235,8 +235,10 @@ a map half of whose entries do nothing is one an operator reads as broken with n
 ### A key another key requires
 
 Two members of the declaration exist for one situation: a key that is only required when _another_
-key says so. `fleetId` is the case — required the moment `integrations.pool` leaves `fake`, and a boot
-error otherwise ([28](28-cross-fleet-pool.md#configuration)).
+key says so. `fleetId` is the case — required the moment `integrations.pool` leaves `fake`, and until it
+holds something the pool desk sits out and the **Needs you** rail asks for it
+([28](28-cross-fleet-pool.md#a-fleet-with-no-name-yet), [26](26-setup.md#the-checks)). It is not a boot
+error: the person who can answer is the one in front of the cockpit.
 
 - `requiredWhen: { path, unless }` — the key the requirement hangs on, and the one value of it that
   lifts it.
@@ -930,7 +932,7 @@ _about_ — which pool and which project is the team's; who this fleet is is the
 | `pool.remote`, `pool.branch` | project    | `string` (optional) | unset    | The `git` transport's coordinates. Required when it is selected.                                                                                              |
 | `pool.path`                  | project    | `string` (optional) | empty    | A prefix inside that repository, so a shared wiki hosts the pool in a folder. Empty is its root. An absolute, rooted or `..`-bearing path is refused at load. |
 | `pool.digestIntervalMs`      | either     | `number`            | one hour | How often the digest republishes, and how often the backstop re-derives both documents and compares.                                                          |
-| `fleetId`                    | deployment | `string` (optional) | unset    | Who this fleet is. Person and target repo (`alice@acme-api`), never derived. **Required** when the pool is selected.                                          |
+| `fleetId`                    | deployment | `string` (optional) | unset    | Who this fleet is. Person and target repo (`alice@acme-api`), never derived. **Required** when the pool is selected — the desk sits out until it is set, and the rail asks. |
 
 There is deliberately no poll interval beside them: the pulse is the clock, so polling is
 `heartbeatIntervalMs` and not a second key free to be set below it. Retention (ninety UTC days) and the

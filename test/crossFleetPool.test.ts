@@ -22,6 +22,7 @@ import { PoolDesk } from '../src/pool/poolDesk.js';
 import { secretRefusal } from '../src/pool/secrets.js';
 import { distinctCorroborators } from '../src/knowledge/knowledge.js';
 import type { FactObservation, PoolClaimsDocument, PoolDigestDocument } from '../src/types.js';
+import { buildSystem } from '../src/system.js';
 import { gitRepo } from './support/gitRepo.js';
 
 /**
@@ -677,18 +678,36 @@ test('the pool is off by default and refuses an incomplete target when it is on'
       loadConfig({
         integrations: { sourceControl: 'fake', issues: 'fake', pool: 'git' },
         pool: { project: 'acme-api' },
-      }),
-    /no fleetId is set/,
-  );
-  assert.throws(
-    () =>
-      loadConfig({
-        integrations: { sourceControl: 'fake', issues: 'fake', pool: 'git' },
-        pool: { project: 'acme-api' },
         fleetId: 'alice@acme-api',
       }),
     /pool\.remote/,
   );
+});
+
+/**
+ * The fleet's own name is the one pool key a boot refusal was wrong about.
+ *
+ * The coordinates above arrive in the committed `lubbdubb.project.json`, so a
+ * missing one is a mis-committed file every clone shares — but `fleetId` is the
+ * deployment's, and refusing to start over it handed every operator on a team that
+ * committed the pool a harness that would not boot, over a key the cockpit is where
+ * you set. So it boots, the row on **Needs you** asks
+ * (`test/setup.test.ts`), and the desk sits out until it is answered — never
+ * publishing to `fleets//claims.json`, which every other fleet reads as a document
+ * with no author.
+ */
+test('a pool selected before the fleet is named boots, and publishes nothing until it is', () => {
+  const selected = {
+    integrations: { sourceControl: 'fake' as const, issues: 'fake' as const, pool: 'git' as const },
+    pool: { project: 'acme-api', remote: 'https://git.example/eng/wiki.git', branch: 'main' },
+    dbPath: ':memory:',
+  };
+  const unnamed = loadConfig(selected);
+  assert.equal(unnamed.fleetId, undefined);
+  assert.equal(buildSystem(unnamed).pool, undefined, 'no desk, so nothing is published under an empty address');
+
+  const named = loadConfig({ ...selected, fleetId: 'alice@acme-api' });
+  assert.equal(buildSystem(named).pool?.status().fleetId, 'alice@acme-api');
 });
 
 test('a pool path that escapes the clone is refused at config load, not at write time', () => {

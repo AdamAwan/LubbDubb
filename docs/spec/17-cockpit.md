@@ -2864,7 +2864,10 @@ keys are edited here — so the row is marked, the value on offer (`userId@pool.
 it as a button, and **Review & write** is refused, naming the key and why, with a way to the group it
 is in. The server still refuses the same save; what the page adds is that the operator never reaches
 it ([02](02-configuration.md#a-key-another-key-requires),
-[28](28-cross-fleet-pool.md#configuration)).
+[28](28-cross-fleet-pool.md#configuration)). A deployment that got the pool without the id anyway — a
+team's committed project file arriving before the operator named their fleet — is asked by the `fleet`
+row on the rail rather than by a harness that will not boot
+([28](28-cross-fleet-pool.md#a-fleet-with-no-name-yet)).
 
 A `colourMap` is the one `entry.type` that draws more than a field: `issueStateColours` becomes a
 swatch per state over a `datalist` of the state words the tracker is currently reporting, read off the

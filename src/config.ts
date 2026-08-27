@@ -1223,6 +1223,16 @@ function refuseRemovedKeys(fromFile: object, filePath: string): void {
  * the coordinates are**, and the failure is a boot error naming the key rather than
  * a write into whatever the path resolved to.
  * → `docs/spec/28-cross-fleet-pool.md#living-in-somebody-elses-repository`
+ *
+ * **`fleetId` is deliberately not checked here.** It is the one pool key that is the
+ * *operator's* rather than the project's: the coordinates below arrive in the
+ * committed `lubbdubb.project.json`, so a clone missing one is a mis-committed file
+ * every clone shares, while a fleet with no name of its own is a per-machine gap the
+ * person in front of the cockpit is the only one who can close. Refusing to boot over
+ * it put that person in front of a terminal instead of the panel that asks — so it is
+ * a `fleet` row on **Needs you** (`src/setup/reading.ts`), and the pool desk sits out
+ * until it is answered (`src/system.ts`).
+ * → `docs/spec/28-cross-fleet-pool.md#a-fleet-with-no-name-yet`, `docs/spec/26-setup.md`
  */
 function validatePool(merged: Config): void {
   const path = merged.pool?.path ?? '';
@@ -1239,13 +1249,6 @@ function validatePool(merged: Config): void {
       `Refusing to start: integrations.pool is "${merged.integrations.pool}" but no pool.project is set. ` +
         `The project name is what decides whose claims are relevant to whom, and it is declared in the ` +
         `committed lubbdubb.project.json so every clone reads the same string. There is no derivation fallback.`,
-    );
-  }
-  if (!merged.fleetId) {
-    throw new Error(
-      `Refusing to start: integrations.pool is "${merged.integrations.pool}" but no fleetId is set. ` +
-        `A fleet writes its own documents and nobody else's, so it needs a name of its own — set "fleetId" ` +
-        `in lubbdubb.config.json, naming person and target repo (e.g. "alice@acme-api").`,
     );
   }
   if (merged.integrations.pool === 'git' && (!merged.pool.remote || !merged.pool.branch)) {
