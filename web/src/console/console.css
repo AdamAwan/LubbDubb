@@ -252,29 +252,65 @@
   color: var(--cn-amber);
 }
 
-/* The Usage chip: what the account has left. Its resting state is the plain
-   reading beside it — the tints are the two states an operator has to act on, and a
-   gauge that is always coloured is one nobody reads. Amber from three-quarters spent
-   (the window will turn over before the fleet finishes what it is on), red from nine
-   tenths (the next park is close). Both tint through the token layer, so a theme
-   switch takes them with it. */
+/* The Usage chip. Both account windows ride it — either one parks the fleet — with
+   the five-hour on the left and the weekly on the right, always: ordering them by
+   which is worse would move the number an operator glances at without reading. The
+   *weight* carries which one bites instead.
+
+   The slots are `i`/`em`/`b` rather than `span`, and that is load-bearing:
+   `.cn-read span` is a descendant rule, so a wrapping span would be lettered as a
+   second chip label — uppercase, faint, 11px — which is the reading's own name.
+
+   Tabular figures and fixed slots, so the chip is the same width at 9% as at 93%
+   and the four readings beside it never shuffle as an agent reports. */
+.cn-usage-pair {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+.cn-usage-win {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  font-style: normal;
+}
+.cn-usage-win em {
+  font: 500 9.5px/1 var(--cn-mono);
+  font-style: normal;
+  letter-spacing: 0.3px;
+  color: var(--cn-fg-faint);
+}
+.cn-usage-win b {
+  color: var(--cn-fg-dim);
+}
+/* The window nearer its limit, at full strength — the comparison the chip exists to
+   have already done. Everything else about the two slots is identical. */
+.cn-usage-win.cn-binds b {
+  color: var(--cn-fg);
+}
+/* The tints read the binding window alone, so a weekly at 91% is red while the
+   five-hour is empty. Amber from three quarters spent, red from nine tenths: the
+   resting state is the plain reading its neighbours wear, and a gauge that is always
+   coloured is one nobody reads. */
 .cn-usage-warn {
   border-color: var(--cn-amber-line-hi);
   background: var(--cn-amber-bg);
 }
-.cn-usage-warn b {
+.cn-usage-warn .cn-usage-win.cn-binds b {
   color: var(--cn-amber);
 }
 .cn-usage-spent {
   border-color: var(--cn-red-line);
   background: var(--cn-red-bg);
 }
-.cn-usage-spent b {
+.cn-usage-spent .cn-usage-win.cn-binds b {
   color: var(--cn-red);
 }
-/* The age of a stale reading, drawn beside the number rather than instead of it: the
-   number is still the best answer anyone has, and the age is the caveat on it. Faint
-   and upright — it is not a second measurement. */
+/* The age of a stale reading, drawn beside the figures rather than instead of them:
+   they are still the best answer anyone has, and the age is the caveat on them.
+   Faint and upright — it is not a third measurement. */
 .cn-usage-age {
   font: 400 10px/1 var(--cn-mono);
   font-style: normal;

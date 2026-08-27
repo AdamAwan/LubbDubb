@@ -148,12 +148,13 @@ self-computed), and `rateLimits` is `Store.readRateLimits()` — the freshest re
 reported, or `null`.
 
 **The Usage chip on the top bar draws them**, and it is the only reader either has
-([17](17-cockpit.md#the-usage-chip)). It prefers the real limits and falls back to cost, which is the
-rule the shape of the reading forces: `rateLimits` is null on API-key auth, on an older CLI and on a
-fleet that has not run yet, and a chip that went blank there would leave the operator's spot on the bar
-empty in the deployments least able to spare it. Where limits exist it draws the **tighter of the two
-windows** as a percentage — money is a proxy for the question, which is how close the fleet is to being
-stopped, and the five-hour and the weekly stop it equally. And it renders `capturedAt` — see below.
+([17](17-cockpit.md#the-usage-chip)). It draws **both** windows as percentages — either one parks the
+fleet, and a chip carrying the five-hour alone reads fine on the morning a weekly allowance runs out —
+in a fixed order, with the one nearer its limit lettered at full strength. It falls back to the
+five-hour cost only where `rateLimits` is null altogether, which is the rule the shape of the reading
+forces: that is API-key auth, an older CLI and a fleet that has not run yet, and a chip that went blank
+there would leave the operator's spot on the bar empty in the deployments least able to spare it. And it
+renders `capturedAt` — see below.
 
 **The limits reading is turn-bound and the cost windows are not.** A reading arrives only when an
 agent takes a turn, so an idle fleet's `capturedAt` ages while the account's real window keeps moving.

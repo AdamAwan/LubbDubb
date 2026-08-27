@@ -226,7 +226,7 @@ Five surfaces and one shell.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│ ident ↗issue │ Overview Tickets② Knowledge① Insights │ Fleet ⏸ 14s  Usage 62% … Record ⚙ │ top bar
+│ ident ↗issue │ Overview Tickets② Knowledge① Insights │ Fleet ⏸ 14s  Usage 5h 62% 7d 30% … ⚙ │ top bar
 ├────────────────────────────────────────────────────────────────────────┤
 │ the recovery banner, when a previous run left work orphaned            │
 ├───────────────┬────────────────────────────────────────────────────────┤
@@ -2499,24 +2499,43 @@ that can stop everything: an allowance that runs out parks the whole fleet
 learning it afterwards. Beside the fleet cap it reads as the second half of one sentence — what the
 fleet is allowed to run, and what the account has left to run it on.
 
-**It draws a percentage where there is one, and money where there is not.** `usage.rateLimits` is the
-subscriber 5h/weekly windows and is null on API-key auth, on an older CLI and on a fleet that has not
-taken a turn; `usage.windows` is self-computed and always there. So the chip prefers the limits and
-falls back to the five-hour cost, and it is never both — two numbers in one chip is two subjects. Where
-both windows are reported it shows **the tighter one**: they stop the fleet equally, so the one nearer
-its limit is the one that answers the question, and the other rides in the `title` where it costs no
-width.
+**Both windows are on the chip, because either one parks the fleet.** `Usage 5h 62% 7d 30%`. A chip
+carrying the five-hour alone reads fine on the morning a weekly allowance runs out, which is the failure
+a gauge exists to prevent — and the two are not a proxy for each other: a fleet with a whole five-hour
+window and no weekly left has plenty of room today and none by Thursday.
+
+**Five-hour left, weekly right, always — the weight says which one bites.** Ordering the pair by which
+is worse was the obvious alternative and is the one thing this chip must not do: the bar is the row an
+operator glances at without reading, and a gauge whose big number changes slot as the account moves is
+one they have to read. So the position is fixed and the emphasis moves instead. The window nearer its
+limit is lettered at `--cn-fg` and is the one the tone reads; the other sits at `--cn-fg-dim`. Without
+that mark the chip is two numbers and a shrug — comparing them is precisely the work it exists to have
+already done. Figures are `tabular-nums` in fixed slots, so the chip is the same width at 9% as at 93%
+and the readings beside it never shuffle when an agent reports.
+
+**A window nothing reported draws an em dash, not `0%`.** Each is independently nullable on the wire,
+and a zero would claim a fresh allowance nobody measured. An unreported window can never be the one
+nearer its limit either, whatever the other reads.
+
+**Where neither was reported, the five-hour cost stands in.** `usage.rateLimits` is null on API-key
+auth, on an older CLI and on a fleet that has not taken a turn; `usage.windows` is self-computed and
+always there. There is no pair to draw then, so the chip shows money rather than going blank — a hole in
+the bar on the deployments least able to spare one. It is never both: two subjects in one chip.
 
 **A stale reading is drawn stale.** The limits are turn-bound — they arrive only when an agent takes a
-turn, and an operator's own Claude Code spends from the same allowance — so an idle fleet's reading ages
-while the real window keeps moving underneath it. Past ten minutes the chip grows the age beside the
-number (`.cn-usage-age`) rather than hiding a number that is still the best answer anyone has. There is
-no probe that could ask the account directly, so rendering the staleness is the whole of handling it.
+turn, and an operator's own Claude Code spends from the same allowance — so an idle fleet's figures age
+while the real windows keep moving underneath them. Past ten minutes the chip grows the age beside them
+(`.cn-usage-age`) rather than hiding numbers that are still the best answer anyone has. No probe could
+ask the account directly, so rendering the staleness is the whole of handling it.
 
-**Two tints and a mute, tinting only what wants acting on.** Amber from three-quarters spent, red from
-nine tenths, and the mute below a quarter — the resting state is the plain reading its neighbours wear,
-because a gauge that is always coloured is one nobody reads. Both tints go through the token layer
-(`--cn-amber-*`, `--cn-red-*`), so a theme switch takes them with it.
+**Two tints and a mute, tinting only what wants acting on.** Amber from three quarters spent, red from
+nine tenths, the mute below a quarter — all read off the binding window, so a weekly at 91% is red while
+the five-hour is empty. The resting state is the plain reading its neighbours wear. Both tints go
+through the token layer (`--cn-amber-*`, `--cn-red-*`), so a theme switch takes them with it.
+
+**The slots are `i`/`em`/`b` and not `span`, which is load-bearing.** `.cn-read span` is a _descendant_
+rule, so a wrapping `<span>` is lettered as a second chip label — uppercase, faint, 11px — and that face
+is the reading's own name, not a window's.
 
 It carries no chevron and opens nothing: there is no usage panel, and by the chevron rule above, a
 reading that opens something and one that does not are different promises.

@@ -3,7 +3,7 @@ import type { JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions, ConsoleTab } from '../cockpit/actions.js';
 import { FleetControl } from '../components/FleetControl.js';
-import { ExtLink, fmtUsd, relTime, untilTime } from '../components/util.js';
+import { ExtLink, fmtUsd, relTime } from '../components/util.js';
 import { RaiseIssueModal } from '../components/RaiseIssueModal.js';
 import { untriagedCount } from '../worldBuckets.js';
 
@@ -439,60 +439,87 @@ function LocalRun({ view, actions }: { view: CockpitView; actions: CockpitAction
 }
 
 /**
- * How stale a limits reading has to be before the chip says so beside the value.
+ * How stale a limits reading has to be before the chip says so beside the figures.
  *
  * The reading is turn-bound — it arrives only when an agent takes a turn — so an
- * idle fleet's ages while the account's real window keeps moving underneath it:
+ * idle fleet's ages while the account's real windows keep moving underneath it:
  * an operator's own Claude Code spends from the same allowance. Ten minutes is
- * about a turn. Under it the number is what the account looks like now; over it
- * the number is history, and the chip has to stop implying otherwise.
+ * about a turn. Under it the numbers are what the account looks like now; over it
+ * they are history, and the chip has to stop implying otherwise.
  * → docs/spec/18-observability.md
  */
 const USAGE_STALE_MS = 10 * 60 * 1000;
 
-/** What the Usage chip draws: the number, the tone it wears, and the sentence behind it. */
-interface UsageReading {
+/**
+ * One window's slot on the chip. Both are always drawn and always in the same
+ * order — see {@link usageReading}.
+ */
+interface UsageSlot {
+  /** `5h` / `7d`, drawn above-left of the figure it labels. */
+  label: string;
+  /** The percentage, or `—` for a window the wire reported nothing for. */
   value: string;
+  /** Whether this is the window nearer its limit, and so the one lettered at full strength. */
+  binds: boolean;
+}
+
+/** What the Usage chip draws: the figures, the tone they carry, and the sentence behind them. */
+interface UsageReading {
+  /** The two windows, five-hour then weekly. Empty when nothing reported either. */
+  slots: UsageSlot[];
+  /** The five-hour spend, drawn instead of the slots when no window was reported at all. */
+  cost: string | null;
   /** `plain` is the resting state, `quiet` mutes; the other two tint the chip. */
   tone: 'quiet' | 'plain' | 'warn' | 'spent';
   title: string;
-  /** The reading's age, drawn beside the value once it is stale enough to matter. */
+  /** The reading's age, drawn beside the figures once it is stale enough to matter. */
   age: string | null;
 }
 
+/** How far off a window's reset is, at the scale it is actually read: `42m`, `3h`, `2d`. */
+function resetIn(iso: string, now: number): string {
+  const mins = Math.max(0, Math.round((new Date(iso).getTime() - now) / 60_000));
+  if (mins < 60) return `${mins}m`;
+  if (mins < 48 * 60) return `${Math.round(mins / 60)}h`;
+  return `${Math.round(mins / (24 * 60))}d`;
+}
+
 /**
- * The account's allowance as one reading — the real subscriber windows where an
+ * The account's allowance as one reading — **both** subscriber windows where an
  * agent has reported them, and the rolling cost where none has.
  *
- * **The percentage wins, and between the two windows the tighter one wins.** Money
- * is a proxy for the thing an operator actually wants to know, which is how close
- * the fleet is to being stopped; the five-hour and the weekly stop it equally, so
- * the one nearer its limit is the one that answers the question. The other rides in
- * the `title`, where it costs no width.
+ * **Both windows, because either one parks the fleet.** A chip carrying only the
+ * five-hour reads fine on the morning a weekly allowance runs out, which is the
+ * failure a gauge exists to prevent.
  *
- * **Cost is the fallback, not a second gauge.** `rateLimits` is null on API-key
- * auth, on an older CLI, and on a fleet that has not run yet — drawing dollars there
- * says what can be said rather than leaving the operator's spot on the bar empty. It
- * is never both: two numbers in one chip is two subjects.
+ * **Five-hour left, weekly right, always.** Ordering them by which is worse would
+ * put the number an operator glances at without reading in a slot that moves, so
+ * the *position* is fixed and the **weight** carries which one bites: the window
+ * nearer its limit is `binds`, lettered at full strength and the one the tone reads,
+ * while the other sits dim. Without that mark the chip is two numbers and a shrug —
+ * the comparison is precisely the work it exists to have already done.
+ *
+ * **A window nothing reported is an em dash, never `0%`.** Each is independently
+ * nullable on the wire, and a zero would claim a fresh allowance nobody measured.
+ * Where *neither* was reported — API-key auth, an older CLI, a fleet that has not
+ * taken a turn — there is no pair to draw, so the five-hour cost stands in: it is
+ * self-computed and always there, and a chip that went blank would leave a hole in
+ * the bar on the deployments least able to spare one.
  *
  * **A stale reading is drawn stale, never hidden and never freshened.** No probe can
- * ask the account directly, so the honest chip is the number with its age on it.
+ * ask the account directly, so the honest chip is the figures with their age on them.
  * → docs/spec/10-agent-runtimes.md#the-account-usage-windows
  */
 export function usageReading(usage: CockpitView['state']['usage'], now: number): UsageReading {
   const limits = usage.rateLimits;
-  const windows =
-    limits === null
-      ? []
-      : [
-          ...(limits.fiveHour === null ? [] : [{ label: 'five-hour', w: limits.fiveHour }]),
-          ...(limits.sevenDay === null ? [] : [{ label: 'weekly', w: limits.sevenDay }]),
-        ];
+  const five = limits?.fiveHour ?? null;
+  const seven = limits?.sevenDay ?? null;
 
-  if (limits === null || windows.length === 0) {
+  if (limits === null || (five === null && seven === null)) {
     const { fiveHourCostUsd, sevenDayCostUsd } = usage.windows;
     return {
-      value: fmtUsd(fiveHourCostUsd),
+      slots: [],
+      cost: fmtUsd(fiveHourCostUsd),
       // Nothing spent is a reading and not the absence of one — the mute rule the
       // fault and launch counts follow.
       tone: fiveHourCostUsd === 0 && sevenDayCostUsd === 0 ? 'quiet' : 'plain',
@@ -503,20 +530,26 @@ export function usageReading(usage: CockpitView['state']['usage'], now: number):
     };
   }
 
-  const tightest = windows.reduce((a, b) => (b.w.usedPercentage > a.w.usedPercentage ? b : a));
-  const pct = Math.round(tightest.w.usedPercentage);
-  const resets = tightest.w.resetsAt === null ? '' : `, resets in ${untilTime(tightest.w.resetsAt, now)}`;
-  const others = windows
-    .filter((entry) => entry !== tightest)
-    .map((entry) => `${entry.label} ${Math.round(entry.w.usedPercentage)}%`)
-    .join(', ');
+  // A window that reported nothing cannot be the one nearer its limit, whatever the
+  // other says — so the comparison is only ever between windows that exist.
+  const weekBinds = five === null || (seven !== null && seven.usedPercentage > five.usedPercentage);
+  const binding = weekBinds ? seven : five;
+  const pct = (w: typeof five) => (w === null ? '—' : `${Math.round(w.usedPercentage)}%`);
+  const bindingPct = binding === null ? 0 : Math.round(binding.usedPercentage);
+  const other = weekBinds ? five : seven;
+
   return {
-    value: `${pct}%`,
-    tone: pct >= 90 ? 'spent' : pct >= 75 ? 'warn' : pct >= 25 ? 'plain' : 'quiet',
+    slots: [
+      { label: '5h', value: pct(five), binds: !weekBinds },
+      { label: '7d', value: pct(seven), binds: weekBinds },
+    ],
+    cost: null,
+    tone: bindingPct >= 90 ? 'spent' : bindingPct >= 75 ? 'warn' : bindingPct >= 25 ? 'plain' : 'quiet',
     title:
-      `Claude account: ${tightest.label} window ${pct}% used${resets}` +
-      `${others === '' ? '' : ` · ${others}`}. ` +
-      `Read ${relTime(limits.capturedAt, now)} off an agent's turn — the window keeps moving while the fleet is idle.`,
+      `Claude account: ${weekBinds ? 'weekly' : 'five-hour'} window ${bindingPct}% used` +
+      `${binding?.resetsAt == null ? '' : `, resets in ${resetIn(binding.resetsAt, now)}`}` +
+      `${other === null ? '' : ` · ${weekBinds ? 'five-hour' : 'weekly'} ${Math.round(other.usedPercentage)}%`}. ` +
+      `Read ${relTime(limits.capturedAt, now)} off an agent's turn — the windows keep moving while the fleet is idle.`,
     age: now - new Date(limits.capturedAt).getTime() >= USAGE_STALE_MS ? relTime(limits.capturedAt, now) : null,
   };
 }
@@ -531,6 +564,10 @@ export function usageReading(usage: CockpitView['state']['usage'], now: number):
  * left to run it on.
  *
  * A reading and not a way-in: there is no usage panel, and a chevron promises one.
+ *
+ * The slots are `<i>` and their labels `<em>`, deliberately: `.cn-read span` is a
+ * *descendant* rule and would letter a wrapping `<span>` as a second chip label —
+ * uppercase, faint and 11px — which is the reading's own name, not a window's.
  */
 function Usage({ view }: { view: CockpitView }): JSX.Element {
   const reading = usageReading(view.state.usage, view.now);
@@ -538,10 +575,21 @@ function Usage({ view }: { view: CockpitView }): JSX.Element {
   return (
     <div className={`cn-read ${tone}`} title={reading.title}>
       <span>Usage</span>
-      <b>{reading.value}</b>
-      {/* The age only appears once the reading has gone stale, so the chip is a
-          number in a fixed spot on every ordinary glance and grows the caveat
-          exactly when the number has stopped being current. */}
+      {reading.cost === null ? (
+        <i className="cn-usage-pair">
+          {reading.slots.map((slot) => (
+            <i key={slot.label} className={`cn-usage-win ${slot.binds ? 'cn-binds' : ''}`}>
+              <em>{slot.label}</em>
+              <b>{slot.value}</b>
+            </i>
+          ))}
+        </i>
+      ) : (
+        <b>{reading.cost}</b>
+      )}
+      {/* The age only appears once the reading has gone stale, so the chip is the same
+          shape on every ordinary glance and grows the caveat exactly when the figures
+          have stopped being current. */}
       {reading.age !== null && <i className="cn-usage-age">{reading.age}</i>}
     </div>
   );
