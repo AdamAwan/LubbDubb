@@ -1245,11 +1245,11 @@ Three things this must keep straight:
   `rateLimitPark` rather than a branch inside it, so nothing about parking is ever downstream of it —
   and the two answer different questions off one event.
 - **Freshest wins, by `capturedAt` and not by arrival.** Several agents report interleaved; a reading
-  queued behind a slow turn can land after a newer one, and last-write-wins would walk the chip
+  queued behind a slow turn can land after a newer one, and last-write-wins would walk the reading
   backwards to a number nothing marks as wrong. The store's upsert carries that guard.
 - **`unifiedWindows` is newer than the pinned schema and undeclared in the published one.** It is read
-  defensively: an older CLI, or API-key auth, yields `null` and the chip degrades to the self-computed
-  cost window — which is what every deployment had before this.
+  defensively: an older CLI, or API-key auth, yields `null` and a reader degrades to the
+  self-computed cost window — which is what every deployment had before this.
 
 The reading is **turn-bound**: it arrives only when an agent takes a turn, so an idle fleet's ages
 while the real window keeps moving (the operator's own Claude Code spends from the same account).

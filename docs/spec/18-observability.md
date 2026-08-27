@@ -7,7 +7,7 @@ Four durable records answer four different questions, plus one live tail and one
 | Decision log  | What did the harness decide, and why? | `decisions`                       | Decision log |
 | Activity feed | What did the _world_ do?              | `world_events`                    | Activity     |
 | Error log     | What failed?                          | `error_events`                    | Errors       |
-| Usage         | What did it cost?                     | `usage_events` + the `agents` row | Usage chip   |
+| Usage         | What did it cost?                     | `usage_events` + the `agents` row | — not built  |
 
 Cost is asked two ways off that one record: **when** it was spent (the rolling account windows) and
 **what it was spent on** (per goal). The second is derived rather than stored — see
@@ -145,7 +145,14 @@ Two sources that must not be conflated, both off the stream transport.
 `buildUsage` in the snapshot therefore ships both: `windows.fiveHourCostUsd` and
 `windows.sevenDayCostUsd` are `Store.sumUsageCostSince` (available in every mode, because it is
 self-computed), and `rateLimits` is `Store.readRateLimits()` — the freshest reading any agent has
-reported, or `null`. The cockpit chip prefers the real limits and falls back to cost.
+reported, or `null`.
+
+**No cockpit surface draws either of them.** The wire has carried `usage.windows` and
+`usage.rateLimits` since #60 and nothing under `web/src/` reads them — only the demo fixture, which
+fabricates values for the published demo. This document listed a "Usage chip" for long enough that the
+absence read as an oversight rather than a statement, so it is stated here: the reading is real and
+`GET /api/state` is how you get it. A reader that draws it should prefer the real limits and fall back
+to cost, and must render `capturedAt` — see below.
 
 **The limits reading is turn-bound and the cost windows are not.** A reading arrives only when an
 agent takes a turn, so an idle fleet's `capturedAt` ages while the account's real window keeps moving.
