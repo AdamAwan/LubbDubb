@@ -1047,8 +1047,8 @@ export class Store {
   listFiles(agentId: string): AgentFile[] {
     return this.agents.listFiles(agentId);
   }
-  listAllFiles(): AgentFile[] {
-    return this.agents.listAllFiles();
+  listFilesForAgents(agentIds: readonly string[]): AgentFile[] {
+    return this.agents.listFilesForAgents(agentIds);
   }
   listGoalFiles(goalRef: string): GoalFile[] {
     return this.agents.listGoalFiles(goalRef);

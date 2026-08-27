@@ -7,12 +7,14 @@ import type {
   LocalRunView,
   RecoveryVerdict,
   StackLanding,
+  StateSection,
   UpgradeAction,
 } from './types.js';
 // The fetched-on-open routes, as whole payloads rather than shapes re-typed at
 // each call site: the server declares each one as its return type, so a renamed
 // or re-nested key is a compile error here instead of an empty panel.
 import type {
+  AgentFilesPayload,
   AgentTranscript,
   CiPolicyPayload,
   FilingTargetProbe,
@@ -145,13 +147,28 @@ function post<T>(url: string, body?: unknown): Promise<T> {
 }
 
 const realApi = {
-  getState: () => authFetch('/api/state').then((r) => json<AppState>(r)),
+  /**
+   * The snapshot, whole or in named parts.
+   *
+   * `sections` is what a `dirty` frame said it touched; `null` asks for the lot,
+   * which is the first load and any signal that could not say. A partial answer is
+   * merged over the state the cockpit holds — see `useCockpit`.
+   * → `docs/spec/16-http-api.md#sections`
+   */
+  getState: (sections?: ReadonlySet<StateSection> | null) =>
+    authFetch(
+      sections === undefined || sections === null ? '/api/state' : `/api/state?sections=${[...sections].join(',')}`,
+    ).then((r) => json<Partial<AppState>>(r)),
   // Ranged: `from` is what the caller already holds, so the drawer's five-second
   // poll ships the tail rather than the whole record each time (issue #639).
   getTranscript: (agentId: string, from = 0) =>
     authFetch(`/api/agents/${agentId}/transcript${from > 0 ? `?from=${from}` : ''}`).then((r) =>
       json<AgentTranscript>(r),
     ),
+  // The files one agent wrote. Fetched when a drawer opens, and again on its poll
+  // while the agent is live — never shipped on `/api/state`, where the whole-fleet
+  // list it replaces was 87% of the payload.
+  getAgentFiles: (agentId: string) => authFetch(`/api/agents/${agentId}/files`).then((r) => json<AgentFilesPayload>(r)),
   // The work graph is fetched, never polled: `/api/state` comes round every couple
   // of seconds and the graph only ever grows, so the roots are read once on mount
   // and a subtree when one is opened.

@@ -100,19 +100,20 @@ test('the heartbeat counts down within the interval and wraps', () => {
   assert.ok(overdue.nextPulseIn > 0 && overdue.nextPulseIn <= 60);
 });
 
-test('flags and files group by agent, and an agent with none is absent', () => {
+// Files are no longer folded here at all: they are `GET /api/agents/:id/files`,
+// fetched by the drawer that draws them. Flags still ride the snapshot — they are
+// a chip per agent, not a list per agent.
+test('flags group by agent, and an agent with none is absent', () => {
   const state = stateWith({
     agents: [AGENT({ id: 'a1' }), AGENT({ id: 'a2' })],
     flags: [
       { agentId: 'a1', ref: 'x' },
       { agentId: 'a1', ref: 'y' },
     ] as never,
-    files: [{ agentId: 'a2', path: 'p' }] as never,
   });
   const view = build(state);
   assert.equal(view.flagsByAgent.get('a1')?.length, 2);
   assert.equal(view.flagsByAgent.get('a2'), undefined);
-  assert.equal(view.filesByAgent.get('a2')?.length, 1);
 });
 
 // The proposal is keyed by the escalation it hangs off, which is what lets a

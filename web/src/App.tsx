@@ -131,7 +131,6 @@ export function App() {
           live={status.view.selectedOutput}
           flags={status.view.flagsByAgent.get(openAgent.id)}
           artifactUrls={state.artifactUrls ?? {}}
-          files={status.view.filesByAgent.get(openAgent.id)}
           limitParked={status.view.limitParked.has(openAgent.id)}
           onClose={() => status.actions.select(null)}
           onRespond={(text) => status.actions.respondAgent(openAgent.id, text)}

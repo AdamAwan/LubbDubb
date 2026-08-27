@@ -3711,15 +3711,34 @@ Four rules hold them:
 One state object, one socket.
 
 - `api.getState()` fetches `/api/state`. The whole UI renders from that object.
-- A WebSocket connection delivers events. `dirty`, `world:changed`, `control:changed` and
-  `world:events` each trigger a refetch; `cycle:end` also resets the heartbeat countdown anchor.
+- A WebSocket connection delivers events. `dirty`, `world:changed` and `world:events` each trigger a
+  refetch; `cycle:end` also resets the heartbeat countdown anchor.
+- **`control:changed` triggers no refetch at all.** `ControlState` is exactly `{cap, paused}` and the
+  frame carries both, so the cockpit applies it to the state it holds — pushing the fleet cap costs
+  no request. ([16](16-http-api.md#controlchanged-is-the-delivery-not-a-signal-to-fetch))
+- **A refetch asks for the sections the signals named.** A `dirty` carries `sections`, or carries none
+  and means all of them ([16](16-http-api.md#sections)); the answer is a `Partial<AppState>` that the
+  cockpit **merges over the state it holds**. That merge is the whole reason sections cost the
+  presentation layer nothing: the cockpit's state stays one complete `AppState`, so `buildViewModel`
+  and every surface under it go on receiving a whole object and never learn that anything arrived in
+  parts. `refUrls` is merged rather than replaced — a ref's URL is stable, so an entry can only go
+  stale by being absent, and a ref learned in one patch has to survive the next.
 - **Refetches are coalesced** (`scheduleRefresh`, `REFRESH_COALESCE_MS`): at most one request in
   flight, at most one queued behind it, and a short trailing window so a burst collapses into one. The
-  server pairs a coarse `dirty` with almost every specific frame, so one pulse alone is four signals,
-  and `agents.on('files')` fires once per file an agent writes — fetching per signal made the request
-  rate a function of agent tool-call volume. The queued refetch **always runs**: coalescing may merge
-  the signals in between but must never drop the last, or the cockpit settles on a state older than
-  what it was told about. The initial fetch on mount is immediate, not delayed.
+  server pairs a `dirty` with almost every specific frame, so one pulse alone is four signals, and
+  `agents.on('files')` fires once per file an agent writes — fetching per signal made the request rate
+  a function of agent tool-call volume. The queued refetch **always runs**: coalescing may merge the
+  signals in between but must never drop the last, or the cockpit settles on a state older than what
+  it was told about. The initial fetch on mount is immediate, not delayed, and asks for everything.
+- **Coalescing widens, never narrows.** The pending request is the **union** of what the merged
+  signals named, and becomes "everything" the moment one of them names nothing. A signal that lands
+  while a fetch is in flight is recorded before the early return, so it belongs to the queued fetch
+  rather than being lost — narrowing past something a signal reported had moved is the one silent
+  failure this machinery can have.
+- **An operator's own write is followed by a full refresh.** A click can move anything — a watch
+  toggle re-decides pickup, a job lands in the queue and on the graph — and unlike a socket signal
+  there is nothing on the client that knows what it touched. Sections are for the fleet's own chatter,
+  which is what there is a lot of.
 - `agent:output` deltas accumulate into a per-agent scrollback (capped at ~1M characters) — but only
   for the agent whose drawer is open, because output is delivered to subscribers only.
 - `agent:tail` lines land in a separate map.
@@ -3836,8 +3855,14 @@ rather than the thing the drawer was opened to read, and absent entirely on a de
 no models. The policy itself is visible in the running-config panel, under **Agents** —
 [02](02-configuration.md#model-assignment-by-rule).
 
-The drawer also shows the artifact chips, the **files changed** list from `files`, and offers respond,
-interrupt and kill.
+The drawer also shows the artifact chips, the **files changed** list, and offers respond, interrupt
+and kill.
+
+The files list is **fetched by the drawer**, on open and again on its five-second poll while the agent
+is live — `GET /api/agents/:id/files` ([16](16-http-api.md#get-apiagentsidfiles)), the same seam and
+the same beat as the transcript above. It came off `/api/state`, where a fleet-wide `files` list was
+87% of the payload and existed so that this one panel could take one agent's slice of it in the
+browser; `filesByAgent` is gone from the view model with it. Nothing else drew it.
 
 **A usage-limit park replaces the reply box rather than sitting behind it.** An agent in
 `parkedOnLimit` draws an amber notice above the transcript — the row's own reason, naming the window

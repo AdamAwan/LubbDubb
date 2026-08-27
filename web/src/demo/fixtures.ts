@@ -1766,7 +1766,6 @@ export function buildDemoState(): DemoSeed {
     // fixture.
     attachments: [],
     attachmentUrls: {},
-    files: [],
     // A path two live agents are both editing from different branches. Neither
     // dispatch gate is violated — the collision only exists inside the worktrees,
     // which is the whole point of detecting it off what was actually written.

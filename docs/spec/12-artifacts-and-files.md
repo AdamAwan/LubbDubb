@@ -212,7 +212,7 @@ collide; when they do not, the second merge quietly undoes or duplicates the fir
 the file-events hook already writes for everyone, needing no prompt-side knowledge and no tool channel,
 which is exactly what an advisory `claim` could never be.
 
-Three narrowings carry it:
+Four narrowings carry it:
 
 - **Code tasks only.** A desk agent works in a scratch directory, so its `notes.md` and another's are
   different files with one name. Only code agents write into checkouts of the same repository.
@@ -222,6 +222,23 @@ Three narrowings carry it:
 - **Agent lifetimes, not write timestamps.** A file row is deduped per (agent, path) and its timestamp
   is bumped on rewrite, so it dates the _last_ write. Overlapping lifetimes is the reading the data
   actually supports.
+- **The newest `OVERLAP_AGENT_WINDOW` agents, not the table.** The same narrowing as the two above,
+  pushed back into the query: an overlap is a statement about concurrency, concurrency is bounded by
+  the agent cap, so two agents that can possibly have been live together are two of the newest few
+  rows — never one from this week and one from March. The caller reads
+  `Store.listFilesForAgents(ids)` over that window rather than the whole of `agent_files`, which
+  grows for the life of a deployment and is never deleted from. Without it the snapshot read the
+  entire table on every poll, and the per-path scan — quadratic in writers — cost **1.15 s** on a
+  profile where agents converge on a hot file such as `package-lock.json`, the single largest item in
+  the whole state build, to answer a question only the live rows can contribute to.
+
+**The window is scoped to this detector and must not be shared.** Anything that judges what a
+_particular_ agent wrote — `planScopeDrift` is the one that exists — takes its own
+`listFilesForAgents` read over the agents it is actually about. A plan whose parts ran a fortnight ago
+is nowhere near the newest couple of hundred rows, so a drift check reading this window would report a
+part as inside its declared scope because the agent that left the mark was too old to be read: the
+check passing for exactly the reason it should have fired, with nothing red.
+`test/agentFilesRoute.test.ts` pins that.
 
 `lifetime(agent)` is the **one** reading of "was it still going", so the concurrency test and the
 panel's `live` flag cannot disagree. Status decides whether the window is open (the same liveness
@@ -239,6 +256,12 @@ Results are sorted live-first (the only ones an operator can still act on), then
 most recent. Shipped in `/api/state` as `overlaps` and folded to `liveOverlapCount` on the cockpit's
 view model. No console surface draws the list itself: the floor's findings desk did, and deleting the
 floor took the only reader with it.
+
+**The rows it reads are no longer shipped.** `/api/state` used to carry a fleet-wide `files` list
+beside this one so the agent drawer could take its own slice in the browser; that was 87% of the
+payload, and it is `GET /api/agents/:id/files` now
+([16](16-http-api.md#get-apiagentsidfiles)). The detector is the only reader of `agent_files` left on
+the snapshot, which is what makes the window above both possible and necessary.
 
 It is **diagnostic only** — nothing in the dispatcher reads it, for the same reason nothing reads
 `findings` — and it is deliberately after-the-fact, which is the trade for being structural.

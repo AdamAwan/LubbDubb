@@ -618,7 +618,15 @@ transcript is durable.
 
 `recordFlag(agentId, input)` and `recordFile(agentId, input)` — both upserts on their unique key, so a
 repeat refreshes the row rather than duplicating. `getFlag`, `listFlags(agentId)`, `listAllFlags`,
-`listFiles(agentId)`, `listAllFiles`.
+`listFiles(agentId)`, `listFilesForAgents(agentIds)`.
+
+**There is no `listAllFiles`, deliberately.** `agent_files` grows for the life of a deployment and
+nothing ever deletes from it, so a read of the whole table is a cost that rises without bound and has
+no natural caller: the two that existed both wanted a subset. `listFilesForAgents` takes the ids and
+an empty list reads nothing at all, which puts the population at the call site where it can be
+argued about — the overlap detector's window, or the agents behind one plan's parts
+([12](12-artifacts-and-files.md#file-overlap-detection)). Re-adding a whole-table read would put back
+the 8.8 MB the state snapshot used to carry ([16](16-http-api.md#bulk-text)).
 
 `listGoalFiles(goalRef)` is the one read that asks the files question of a **goal** rather than an
 agent: `agent_files` joined out through `agents` to the task whose `origin_ref` says which goal it was

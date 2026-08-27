@@ -404,11 +404,26 @@ export class AgentStore {
     return [...byGoal.values()];
   }
 
-  /** Every recorded file across all agents, newest first — the snapshot feed. */
-  listAllFiles(): AgentFile[] {
+  /**
+   * Every recorded file written by the named agents, newest first — the overlap
+   * detector's feed.
+   *
+   * Takes the agent ids rather than answering the whole table, because the whole
+   * table is what it used to answer: `agent_files` grows for the life of a
+   * deployment and nothing ever deletes from it, so an unbounded read here was a
+   * cost the snapshot paid on every poll for a reading only concurrent agents can
+   * contribute to. The caller names the window
+   * (`OVERLAP_AGENT_WINDOW` in `src/fileOverlap.ts`); an empty list reads nothing
+   * at all.
+   */
+  listFilesForAgents(agentIds: readonly string[]): AgentFile[] {
+    if (agentIds.length === 0) return [];
     const rows = this.ctx.db
-      .prepare(`SELECT * FROM agent_files ORDER BY created_at DESC, rowid DESC`)
-      .all() as AgentFileRow[];
+      .prepare(
+        `SELECT * FROM agent_files WHERE agent_id IN (${agentIds.map(() => '?').join(',')})
+         ORDER BY created_at DESC, rowid DESC`,
+      )
+      .all(...agentIds) as AgentFileRow[];
     return rows.map(rowToFile);
   }
 }

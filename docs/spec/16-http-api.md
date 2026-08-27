@@ -19,7 +19,7 @@ is about.
 | Module                  | Holds                                                                                                                                                                     |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `routes/state.ts`       | `/api/state`, `/api/prompts`, `/api/config`, `/api/ci-policy`, `/api/mcp`, `/api/health`                                                                                  |
-| `routes/agents.ts`      | One agent's transcript, and respond / kill / complete / interrupt / extend a stall park                                                                                   |
+| `routes/agents.ts`      | One agent's transcript and the files it wrote, and respond / kill / complete / interrupt / extend a stall park                                                            |
 | `routes/artifacts.ts`   | `/artifacts/:id` and `/attachments/:id`, their capability signers, and the path confinement                                                                               |
 | `routes/control.ts`     | `/api/pulse`, `/api/errors/clear`, `/api/control`, `/api/prs/:number/watch`                                                                                               |
 | `routes/escalations.ts` | The whole "Needs you" inbox: escalations, proposals, recovery                                                                                                             |
@@ -220,7 +220,13 @@ Silently ignoring a field the caller clearly meant to set is the failure this is
 
 ### `GET /api/state`
 
-The whole cockpit snapshot. See below.
+The cockpit snapshot, whole or in named parts. See [_The state snapshot_](#the-state-snapshot) below
+for what it carries and [_Sections_](#sections) for how it is asked for in pieces.
+
+A bare call answers everything, which is what the first load asks for. `?sections=fleet,activity`
+answers those and `refUrls`, and builds nothing else. An unknown name is a **400 naming it**, never a
+narrower answer: a typo that quietly ships less is a cockpit surface that quietly stops updating,
+which is the one failure this route must not have.
 
 **The world in it is `Store.getWorldBaseline()` — the reading the last pulse persisted — never a fresh
 `connector.getState()`.** That call is a provider fan-out (for `azure`, `2 + 3N` REST calls for `N` open
@@ -255,6 +261,21 @@ The range exists because the agent drawer re-reads this every five seconds while
 ([17](17-cockpit.md#the-agent-drawer)): the socket carries only what an agent produced since the
 drawer subscribed, so the fetch is the only complete copy, and re-fetching it whole per poll would
 ship megabytes of unchanged text per open drawer. A poll on a quiet run costs an empty string.
+
+### `GET /api/agents/:id/files`
+
+`{ agentId, files }` — every path this agent wrote, newest first, as `agent_files` holds them. 404
+when the agent is unknown, exactly as the transcript above: an agent that wrote nothing and an agent
+that does not exist are different answers, and only the first is a row a drawer can be open over.
+
+**Fetched when the drawer opens, and again on its five-second poll while the agent is live.** It used
+to ride the snapshot as a fleet-wide `files` list — every file every agent ever wrote, on a table
+nothing deletes from — so that `filesByAgent.get(openAgent.id)` could take one agent's slice of it in
+the browser. On a seeded profile of 1,500 completed agents that list was **8.8 MB of a 10.1 MB
+payload**: 87% of `/api/state`, built, serialised, transferred and parsed on every `dirty` to draw a
+list about one agent. Moving it here took the snapshot to 1.35 MB and its build from ~1.4 s to
+~130 ms. It is the same trade as the transcript, made for the same reason — see
+[_Bulk text_](#bulk-text).
 
 ### `GET /artifacts/:id`
 
@@ -1949,9 +1970,8 @@ read **once** and shared, so two parts of the UI cannot disagree.
 | `schedules`                     | Recurring briefs, oldest first — **every** one, paused included, since this is the only surface anywhere that says a paused one exists. What a firing produces is an ordinary entry in `jobs`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `agents`                        | Every agent row, including usage and the progress note.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `flags`                         | Every artifact chip, grouped by the cockpit onto agents.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `files`                         | Every file every agent wrote.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `attachments`, `attachmentUrls` | Images an operator attached to a brief (#249), every ref in one list, plus the capability-carrying URL to load each one's bytes. The cockpit filters by `targetRef`: `job:<id>` while queued, `issue:<n>` once filed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `overlaps`                      | Paths two concurrently-live code agents wrote.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `overlaps`                      | Paths two concurrently-live code agents wrote — read server-side over the newest `OVERLAP_AGENT_WINDOW` agents, never over the whole of `agent_files`. See [12](12-artifacts-and-files.md#file-overlap-detection). |
 | `humanTasks`                    | Work only a person can do — open ones and a settled tail, newest first. Its own list rather than part of `escalations`: nobody is parked on one.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `knowledge`                     | Every fact the fleet has written down, newest first, **the rejected ones included** — each with the corroborator count that promotes it, the count of voices disputing it, the ratio between them, how many disputes are unanswered, how often it was asked for (`asks`, `lastAskedAt`) and whether its `check:` scope has stopped matching anything (`scopeStale`, `scopeLastMatchedAt`). Every one of those is taken server-side beside the rows it counts; the ratio in particular, because two counts of _voices_ divided in the browser would be arithmetic over numbers whose rule the view layer does not know — and the staleness verdict for the same reason, since a "days since" taken from `Date.now()` in the view layer would be a second implementation of it. All of them are readings and none of them acts ([27](27-knowledge.md#what-it-costs)). The evidence behind a claim is not here: see `GET /api/knowledge/facts/:id`. |
 | `knowledgeGraduations`          | Every attempt to send a claim on, newest first, the abandoned ones included — which `exit` it took, the job, the document a `docs` exit named, the pull request or ticket it produced, the outcome, and `reading`: what the sweep makes of that pull request right now (`waiting`, `landed`, `abandoned`, or `unknown` for one that left the world without ever being seen closed). The reading is `graduationReading`'s answer over the work graph, the same function the sweep settles on, taken server-side for `distinctCorroborators`' reason — a browser that worked out whether a pull request had landed would be a second implementation of the verdict that takes a claim out of every prompt ([27](27-knowledge.md#sending-a-claim-on)).                                                                                                                                                                                              |
@@ -1967,6 +1987,84 @@ read **once** and shared, so two parts of the UI cannot disagree.
 | `dispatchRules`                 | `DISPATCH_RULES` as data, so a decision row can expand into the rule that fired.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `usage`                         | `{windows: {fiveHourCostUsd, sevenDayCostUsd}, rateLimits, unattributedCostUsd}`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
+### Sections
+
+**The snapshot is a partition of nine named sections, and `/api/state` will build any subset of
+them.** `STATE_SECTIONS` in `src/server/stateSnapshot.ts` is the list; `StateSection` is the type, and
+it lives in `src/wire.ts` while the list does not — the cockpit type-imports the wire, so a runtime
+value there would become server code in the SPA bundle
+([the wire contract](#the-wire-contract)).
+
+| Section     | Holds                                                                                                             |
+| ----------- | ----------------------------------------------------------------------------------------------------------------- |
+| `harness`   | `config`, `build`, `recovery`, `pets`, `localRun`, `localRunTargets`, `planning`, `dispatchRules`                  |
+| `control`   | `control`                                                                                                          |
+| `goals`     | `worldObservedAt`, `world`, `retainedRuns`, `stacks`, `environmentReach`, `environmentArrivals`, `stackLandings`   |
+| `plans`     | `plans`, `planParts`, `validationChecks`, `validationResources`                                                    |
+| `fleet`     | `tasks`, `agents`, `parkedOnLimit`, `stallParks`, `flags`, `artifactUrls`, `attachments`, `attachmentUrls`, `overlaps`, `usage`, `runOutcomes` |
+| `knowledge` | `knowledge`, `knowledgeGraduations`, `knowledgeSimilarities`, `knowledgeDelivery`, `knowledgeCost`                 |
+| `queue`     | `jobs`, `schedules`, `upcoming`, `runway`                                                                          |
+| `inbox`     | `escalations`, `proposals`, `humanTasks`, `bugFilings`                                                             |
+| `activity`  | `decisions`, `worldEvents`, `errors`                                                                               |
+
+`refUrls` is in **all** of them and rides every response, whatever was asked for. Every other section
+names things the cockpit draws as links, and this is the map it resolves them in — a patch carrying
+new rows and no way to reach them would be the dead end `<Ref/>` exists to prevent
+([17](17-cockpit.md#links)), arriving one section at a time. The cockpit **merges** it rather than
+replacing it: a ref's URL is stable, so an entry can only go stale by being absent, and a ref learned
+in one patch has to survive the next.
+
+**The lines are drawn by what invalidates a section, never by what draws it.** A section earns its
+place when some frequent signal touches it and leaves the rest alone. `fleet` and `goals` are the pair
+that matters: an agent's usage report, its progress note and every file it writes are all `fleet`, and
+none of them can change a goal's pickup verdict.
+
+#### What it is for
+
+Not payload — the rebuild. The cockpit refetches on every `dirty`, one pulse is four of them, and
+`agents.on('files')` fires once **per file an agent writes**. Rebuilding all 48 keys for one of those
+meant running `issuePickupStatus` over every goal on the board and `prAttentionStatus` over every open
+pull request: on a seeded 150-goal profile, ~75 ms of a ~125 ms build, per signal, per open cockpit.
+
+Measured on that profile, one refetch:
+
+| Asked for  | Build  | Wire    |
+| ---------- | ------ | ------- |
+| everything | 130 ms | 1345 kB |
+| `fleet`    | 63 ms  | 1174 kB |
+| `goals`    | 57 ms  | 108 kB  |
+| `activity` | 34 ms  | ~0 kB   |
+| `control`  | —      | —       |
+
+`control` costs nothing at all because it is never fetched: see [_The WebSocket_](#server-events).
+
+There is a **~30 ms floor** under every sectioned response — the shared reads and `refUrls`, which is
+built from most of them. It is why sections stop at nine rather than one per key: below that size a
+section costs about what its neighbours cost, and the partition is only harder to keep true.
+
+`fleet` is still 1.17 MB, and `tasks` plus `agents` are 87% of what is left on the wire after the
+files list came off ([_Bulk text_](#bulk-text)). **That is the next thing to trim, not the next thing
+to split** — both are all-time reads with no cap, unlike `decisions`, `worldEvents` and `errors`
+beside them.
+
+#### How a patch reaches the cockpit
+
+`buildStateSections(system, want, opts)` assembles one section literal per requested name. The shared
+reads keep the snapshot's "read once and share, so two parts of the UI cannot disagree" discipline;
+the derivations that only some sections need — the enriched open-PR list, the spend roll-up, the
+overlap detection, the knowledge block — are `once()` thunks, so a section nobody asked for pays for
+nothing while a value two sections share is still taken once.
+
+The browser holds **one complete `AppState`** and merges each patch over it, so `buildViewModel` and
+every surface under it go on receiving a whole object and never learn that anything arrived in parts.
+The coalescing refresh in `useCockpit` accumulates the **union** of what the signals in a burst named,
+and widens to "everything" the moment one of them cannot say — collapsing a burst can only ever ask
+for more, never for less than something in it reported had moved.
+
+`test/stateSections.test.ts` holds the partition against a built snapshot rather than against a
+hand-written key list: a key added to the wire and to no section would otherwise never be shipped, on
+every snapshot, with nothing red.
+
 ### Bulk text
 
 **A collection on this snapshot carries no text nobody draws.** The snapshot is refetched on every
@@ -1975,8 +2073,8 @@ per open cockpit — so a bulk column that rides on one of them is not a size co
 and it is silent: the payload still validates and the cockpit still renders. The symptom is that every
 action takes seconds.
 
-Two collections were the whole of it on a real deployment, where `/api/state` was 24 MB and took 6–15 s
-to serve:
+Three collections were the whole of it. The first two came off a real deployment, where `/api/state`
+was 24 MB and took 6–15 s to serve; the third off a seeded profile built to find what was left:
 
 - **`tasks` shipped every task's rendered agent prompt** — 17.4 MB of the 24 MB, for 1,248 rows.
   Nothing in `web/src` reads `task.prompt`; it was built, serialised, transferred, parsed and
@@ -1987,14 +2085,24 @@ to serve:
   `status === 'open'` first: the needs-you queue, the console band, the view model. It is
   `Store.listOpenEscalations` now, which is a `WHERE` rather than a filter over the all-time read.
 
+- **`files` shipped every file every agent had ever written** — 8.8 MB of a 10.1 MB payload on a
+  seeded profile of 1,500 completed agents, against a table nothing deletes from, so it grows for the
+  life of a deployment. It had **one** consumer: `groupByAgent(state.files)` on the view model, read
+  as `filesByAgent.get(openAgent.id)` for the open drawer. One agent's slice was drawn and the rest
+  discarded, on every refresh. It is `GET /api/agents/:id/files` now, and the drawer fetches its own;
+  the only server-side reader left is the overlap detector, which reads a window
+  ([12](12-artifacts-and-files.md#file-overlap-detection)). The snapshot went to 1.35 MB and its
+  build from ~1.4 s to ~130 ms.
+
 The remaining collections were audited against the same rule and hold none: `agents` carries usage
 counters and a one-line progress note (its transcript is already a route), `decisions`, `worldEvents`
 and `errors` are capped at 100, and `knowledge`, `humanTasks` and `plans` carry short prose that is
 drawn in full.
 
 **The pattern for text a surface does need is a route of its own, fetched on open** —
-`GET /api/agents/:id/transcript` is the precedent, and `/api/spend`, `/api/work`,
-`/api/retrospectives/:ref` and `/api/scratchpads/:ref` follow it. No route ships a task's prompt,
+`GET /api/agents/:id/transcript` is the precedent, `GET /api/agents/:id/files` is the most recent to
+follow it, and `/api/spend`, `/api/work`, `/api/retrospectives/:ref` and `/api/scratchpads/:ref` do
+too. No route ships a task's prompt,
 because no surface asks for one; a surface that wanted one would gain a per-row route beside the
 transcript's, never a widening of `tasks` back to `Task`.
 
@@ -2076,36 +2184,65 @@ Clients may send `{type:'subscribe'|'unsubscribe', agentId}`. Malformed frames a
 
 ### Server events
 
-| Event                  | Payload                           | Delivery                           |
-| ---------------------- | --------------------------------- | ---------------------------------- |
-| `dirty`                | —                                 | broadcast; "re-fetch `/api/state`" |
-| `cycle:start`          | `cycleId`, `source`               | broadcast                          |
-| `cycle:end`            | `cycleId`, `rationale`, `summary` | broadcast (+ `dirty`)              |
-| `world:events`         | `events`                          | broadcast (+ `dirty`)              |
-| `world:changed`        | —                                 | broadcast by mutating routes       |
-| `control:changed`      | `cap`, `paused`                   | broadcast                          |
-| `agent:output`         | `agentId`, `delta`                | **subscribers only**               |
-| `agent:tail`           | `agentId`, `line`                 | broadcast                          |
-| `agent:flag`           | `flag`                            | broadcast (+ `dirty`)              |
-| `agent:finding`        | `finding`                         | broadcast (+ `dirty`)              |
-| `agent:status`         | `agentId`, `taskId`, `status`     | broadcast (+ `dirty`)              |
-| `agent:waiting`        | `agentId`, `taskId`, `reason`     | broadcast (+ `dirty`)              |
-| `agent:done`           | `agentId`, `taskId`, `status`     | broadcast (+ `dirty`)              |
-| `escalation:created`   | `escalation`                      | broadcast (+ `dirty`)              |
-| `escalation:answered`  | `escalation`, `routing`           | broadcast (+ `dirty`)              |
-| `escalation:dismissed` | `escalation`                      | broadcast (+ `dirty`)              |
-| `error:logged`         | `error`                           | broadcast (+ `dirty`)              |
+| Event                  | Payload                           | Delivery                                 |
+| ---------------------- | --------------------------------- | ---------------------------------------- |
+| `dirty`                | `sections?`                       | broadcast; "re-fetch these of `/api/state`" |
+| `cycle:start`          | `cycleId`, `source`               | broadcast                                |
+| `cycle:end`            | `cycleId`, `rationale`, `summary` | broadcast (+ `dirty`, unscoped)          |
+| `world:events`         | `events`                          | broadcast (+ `dirty`, unscoped)          |
+| `world:changed`        | —                                 | broadcast by mutating routes             |
+| `control:changed`      | `cap`, `paused`                   | broadcast; **no refetch** — see below    |
+| `agent:output`         | `agentId`, `delta`                | **subscribers only**                     |
+| `agent:tail`           | `agentId`, `line`                 | broadcast                                |
+| `agent:flag`           | `flag`                            | broadcast (+ `dirty` `fleet`)            |
+| `agent:finding`        | `finding`                         | broadcast (+ `dirty` `fleet`)            |
+| `agent:status`         | `agentId`, `taskId`, `status`     | broadcast (+ `dirty`, unscoped)          |
+| `agent:waiting`        | `agentId`, `taskId`, `reason`     | broadcast (+ `dirty` `fleet`)            |
+| `agent:done`           | `agentId`, `taskId`, `status`     | broadcast (+ `dirty`, unscoped)          |
+| `escalation:created`   | `escalation`                      | broadcast (+ `dirty` `inbox`)            |
+| `escalation:answered`  | `escalation`, `routing`           | broadcast (+ `dirty` `inbox`)            |
+| `escalation:dismissed` | `escalation`                      | broadcast (+ `dirty` `inbox`)            |
+| `error:logged`         | `error`                           | broadcast (+ `dirty` `activity`)         |
 
 Agent **output** is high volume, so it is delivered scoped to subscribers. Everything else is
 low-volume and fleet-wide.
 
-Three events deliberately have **no dedicated frame** and produce only a `dirty`: `usage`, `progress`
-and `files`. Their payload is already on a row the `/api/state` refetch brings, unlike `agent:tail`,
-which exists only as a broadcast and has to carry its own payload.
+#### What a `dirty` may narrow itself to
+
+`sections` names what the signal touched ([_Sections_](#sections)); **a frame without it means all of
+them**, which is what a signal that cannot say should send. That asymmetry is the whole discipline
+here: answering "everything" is never wrong, only expensive, while an over-narrow frame is silent —
+the cockpit simply stops updating a surface, with a payload that still validates and a page that still
+renders.
+
+So the rule is not "scope whatever can be scoped". Two groups stay **unscoped on purpose**:
+
+- **Anything that takes or frees a slot** — `agent:status` and `agent:done`. `countLiveAgents` is the
+  headroom in `pickupCtx`, so a transition moves the pickup verdict on **every** goal and the runway
+  band with it, not just the row that changed. `agent:waiting` is scoped because a park is still a
+  live agent, so headroom does not move.
+- **`cycle:end` and `world:events`** — a pulse dispatches, files, concludes, plans and reaps; a world
+  event is what expires a delivery hold and re-opens a goal for pickup. There is no section either
+  cannot have moved.
+
+`test/hub.test.ts` pins both halves.
+
+#### `control:changed` is the delivery, not a signal to fetch
+
+`ControlState` is exactly `{cap, paused}` and the frame carries both, so the cockpit applies it to the
+state it holds and **makes no request at all**. Pushing the fleet cap used to cost a rebuild of all 48
+snapshot keys and a megabyte on the wire, per open cockpit, for two numbers the socket had already
+sent. The `control` section still exists for the first load and for a client that missed a frame.
+
+Three events deliberately have **no dedicated frame** and produce only a `dirty` — `usage`, `progress`
+and `files`, all scoped to `fleet`. Their payload is already on a row the refetch brings, unlike
+`agent:tail`, which exists only as a broadcast and has to carry its own payload. These three are also
+the reason sections exist at all: `files` fires once per file an agent writes, and none of the three
+can change anything outside `fleet`.
 
 The local run's `changed` is a fourth, and the only one that is **rate-limited**: it fires per line of
 output, and every `dirty` costs every connected cockpit a whole snapshot. So the hub gathers them for
-`LOCAL_RUN_COALESCE_MS` (400) and asks once. Nothing subscribed to it at all when the runner shipped,
+`LOCAL_RUN_COALESCE_MS` (400) and asks once, for `harness`. Nothing subscribed to it at all when the runner shipped,
 which is the failure worth naming: the panel's status, phase and log moved no sooner than the next
 heartbeat, so a bring-up in progress and one that had hung looked identical for a whole pulse at a
 time ([23](23-local-runs.md#saying-what-it-is-doing)).
