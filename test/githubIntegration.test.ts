@@ -240,6 +240,7 @@ function pull(over: Partial<GhPullSummary> = {}): GhPullSummary {
     authorLogin: 'alice',
     url: 'u',
     labels: [],
+    assigneeLogins: [],
     ...over,
   };
 }
@@ -402,6 +403,43 @@ test('linkedPrFromTimeline: null when nothing links a PR', () => {
 // --------------------------------------------------------------------------
 // GitHubSourceControlIntegration.snapshot
 // --------------------------------------------------------------------------
+
+test('a PR somebody assigned to you is kept by the owner filter and reported as yours', async () => {
+  const { api } = fakeApi({
+    viewer: 'lubbdubb-bot',
+    pulls: [
+      pull({ number: 7, authorLogin: 'lubbdubb-bot' }),
+      // Somebody else's, put on you: the whole case the widened filter exists for.
+      pull({ number: 8, authorLogin: 'carol', assigneeLogins: ['lubbdubb-bot'] }),
+      // Somebody else's, and nothing to do with you.
+      pull({ number: 9, authorLogin: 'carol' }),
+    ],
+    detail: {
+      7: { mergeable: true, mergeableState: 'clean', merged: false },
+      8: { mergeable: true, mergeableState: 'clean', merged: false },
+      9: { mergeable: true, mergeableState: 'clean', merged: false },
+    },
+  });
+  const sc = new GitHubSourceControlIntegration({ api, prAuthor: 'lubbdubb-bot' });
+  const slice = await sc.snapshot();
+
+  assert.deepEqual(
+    slice.pullRequests!.map((p) => p.number),
+    [7, 8],
+  );
+  assert.equal(slice.pullRequests!.find((p) => p.number === 7)?.viewerAssignment, undefined);
+  assert.equal(slice.pullRequests!.find((p) => p.number === 8)?.viewerAssignment, 'assignee');
+});
+
+test("someone else's assignee is not yours", async () => {
+  const { api } = fakeApi({
+    viewer: 'lubbdubb-bot',
+    pulls: [pull({ number: 7, authorLogin: 'lubbdubb-bot', assigneeLogins: ['carol'] })],
+    detail: { 7: { mergeable: true, mergeableState: 'clean', merged: false } },
+  });
+  const sc = new GitHubSourceControlIntegration({ api });
+  assert.equal((await sc.snapshot()).pullRequests![0]!.viewerAssignment, undefined);
+});
 
 test('snapshot maps a PR with its CI / approval / mergeability / comments', async () => {
   const { api } = fakeApi({

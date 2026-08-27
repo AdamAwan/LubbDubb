@@ -68,6 +68,7 @@ function ghApi(script: GhScript): GitHubApi {
           baseBranch: 'main',
           headSha: 'sha42',
           authorLogin: 'bot',
+          assigneeLogins: [],
           url: 'https://github.com/o/r/pull/42',
           labels: [],
         },
@@ -160,7 +161,7 @@ function azApi(script: AzScript): AzureDevOpsApi {
     url: 'https://dev.azure.com/o/p/_git/r/pullrequest/42',
     isDraft: false,
     mergeStatus: 'succeeded',
-    reviewerVotes: [],
+    reviewers: [],
   };
   const evaluation: AzPolicyEvaluation = {
     typeId: BUILD_POLICY,

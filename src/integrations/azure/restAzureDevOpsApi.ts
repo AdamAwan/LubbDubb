@@ -143,7 +143,7 @@ interface RawPull {
   mergeStatus?: string;
   lastMergeSourceCommit?: { commitId?: string };
   createdBy?: { uniqueName?: string };
-  reviewers?: Array<{ vote?: number }>;
+  reviewers?: Array<{ vote?: number; uniqueName?: string; isRequired?: boolean; isContainer?: boolean }>;
 }
 
 interface RawClosedPull {
@@ -480,7 +480,15 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
       url: `${this.projectUrl}/_git/${encodeURIComponent(this.repository)}/pullrequest/${p.pullRequestId}`,
       isDraft: p.isDraft ?? false,
       mergeStatus: p.mergeStatus ?? 'notSet',
-      reviewerVotes: (p.reviewers ?? []).map((r) => r.vote ?? 0),
+      reviewers: (p.reviewers ?? []).map((r) => ({
+        uniqueName: r.uniqueName ?? '',
+        vote: r.vote ?? 0,
+        isRequired: r.isRequired ?? false,
+        // Absent means an individual: Azure sets the flag only on the entries that
+        // are groups, so defaulting it the other way would read every reviewer as
+        // a team and drop the assignment on all of them.
+        isContainer: r.isContainer ?? false,
+      })),
     }));
   }
 

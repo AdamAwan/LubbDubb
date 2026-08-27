@@ -217,8 +217,41 @@ export interface PullRequest {
    * treat missing as `[]`.
    */
   labels?: string[];
+  /**
+   * That a **person** put this pull request on you, and how — resolved by the
+   * provider against `config.userId`, never inferred here.
+   *
+   * It is the one signal in a pull request that has no rule behind it. Everything
+   * else the world reports about a PR is something the harness acts on; this is an
+   * obligation a colleague handed the operator, and the harness will do nothing
+   * about it whatever it says. That is why it is a *court* input
+   * (`src/prAttention.ts`) and not a dispatch one — an assigned PR reaches the
+   * cockpit's queue and no rule ever sees it.
+   *
+   * **Absent means the provider does not resolve it**, which is indistinguishable
+   * from nothing being assigned and is meant to be: both draw no row. A provider
+   * that cannot answer costs the operator this feature silently, exactly as
+   * {@link Issue.labelsAddedByViewer} costs them pickup — so a new source-control
+   * provider resolves it or says in `15-integrations.md` that it cannot.
+   * → `docs/spec/07-pull-requests.md#a-pull-request-a-person-put-on-you`
+   */
+  viewerAssignment?: ViewerAssignment;
   url?: string;
 }
+
+/**
+ * How a pull request came to be yours. Three values rather than a boolean because
+ * the providers mean different things by it and the operator has to be told
+ * which: GitHub has one list (`assignees`), Azure has reviewers who are
+ * *required* or *optional*, and "you are an optional reviewer" is not the same
+ * news as "this is yours to drive".
+ *
+ * A **group** an operator belongs to is never one of these on either provider.
+ * An identity resolved through a team is not a person being asked, and folding
+ * the two would fill the queue with every pull request the operator's org has
+ * open — which is the one way to make a queue stop being read.
+ */
+export type ViewerAssignment = 'assignee' | 'reviewer-required' | 'reviewer-optional';
 
 export interface PrComment {
   id: string;

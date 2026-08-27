@@ -256,8 +256,30 @@ export interface AzPull {
   isDraft: boolean;
   /** mergeStatus: succeeded | conflicts | queued | rejectedByPolicy | failure | notSet. */
   mergeStatus: string;
-  /** Reviewer votes: 10 approved, 5 approved-with-suggestions, 0 no vote, -5 waiting, -10 rejected. */
-  reviewerVotes: number[];
+  /**
+   * Everyone Azure lists as a reviewer on the PR — votes *and* who cast them,
+   * because the harness asks two different questions of this list: whether the PR
+   * is approved (any vote), and whether **you personally** were asked for one.
+   */
+  reviewers: AzReviewer[];
+}
+
+/** One entry of a PR's reviewer list. */
+export interface AzReviewer {
+  /** `uniqueName` (a UPN) — empty when Azure reports an identity without one. */
+  uniqueName: string;
+  /** 10 approved, 5 approved-with-suggestions, 0 no vote, -5 waiting, -10 rejected. */
+  vote: number;
+  /** Azure's "required reviewer" flag; false is an optional one. */
+  isRequired: boolean;
+  /**
+   * The entry is a **group**, not a person. Azure lists a team the same way it
+   * lists an individual, and a policy that names a team puts every member of it
+   * behind one row — so an operator inside that team is not somebody a person
+   * asked, and reading the two alike would put every pull request in the project
+   * on their queue.
+   */
+  isContainer: boolean;
 }
 
 /**
