@@ -320,11 +320,11 @@ head line leaves the rack entirely.
 forgets — and an intent routinely outlives it: a three-rung chain where each retarget re-runs CI and
 waits on a review takes longer than the window by design, and the taller the stack the more certain
 it is. Read off the window alone, a rung the harness itself merged reappears as neither open nor
-merged and stops the chain with the reason *"nothing says it merged"* — a stop that is factually
+merged and stops the chain with the reason _"nothing says it merged"_ — a stop that is factually
 false, is never resumed, and silently reverts the feature to per-rung clicking. `settleLandings` and
 `landedCount` therefore ask `Store.mergedPrs()` — the work graph, which is upsert-only for exactly
 this reason — before they ask the world. Without it the cockpit's "landing 1 of 3" also counts back
-*down* to 0 of 3 as rungs age out. The `gone` arm itself stays: a rung genuinely closed without
+_down_ to 0 of 3 as rungs age out. The `gone` arm itself stays: a rung genuinely closed without
 merging still stops the chain.
 
 **Stopping and offering are asked by different predicates, and must be.** `rungFault` is not the
@@ -498,7 +498,7 @@ folding them would make one of the two a lie every time they disagree.
 | `done`      | nobody — off the board        | `prState(pr) !== 'open'`.                                                                                                                                                                                                                                                                                                                                            |
 | `unwatched` | nobody — nobody opted it in   | `!isPrWatched(pr, watchLabel)`. First, because the harness filters these out of the dispatch world entirely — every arm below would describe rules that cannot fire.                                                                                                                                                                                                 |
 | `you`       | yours                         | A **pending proposal** whose ref names this PR; an agent on the branch **parked waiting**; a concern whose **attempt cap is spent** (rule `cooldown-escalate` did); or a failing check the **CI policy holds** (rule `pr-ci-blocked` handed it to a human) **with no other concern under it** — a held check that is one of two problems is a reason, not the court. |
-| `harness`   | the harness's                 | An agent is **running or queued** on the branch; an unstaffed **concern** (rules `pr-ci-failing`/`pr-ci-gate`/`pr-base-update`/`pr-base-update-conflict`/`pr-review-comment`) is dispatchable or on cooldown; the PR is **merge-ready** and the merge gate runs next cycle, or an accepted verdict is inside its settle window.                                                                |
+| `harness`   | the harness's                 | An agent is **running or queued** on the branch; an unstaffed **concern** (rules `pr-ci-failing`/`pr-ci-gate`/`pr-base-update`/`pr-base-update-conflict`/`pr-review-comment`) is dispatchable or on cooldown; the PR is **merge-ready** and the merge gate runs next cycle, or an accepted verdict is inside its settle window.                                      |
 | `settled`   | nobody — you already answered | Merge-ready, and a **rejection still stands** on `pr:<n>:merge`. The reason quotes the note you left.                                                                                                                                                                                                                                                                |
 | `elsewhere` | outside the loop              | Stacked on a PR that has to merge first (naming the inherited CI failure when there is one); CI still running; waiting on review; merge blocked by required checks/reviews.                                                                                                                                                                                          |
 | `stalled`   | nobody, and that is the point | Everything else: green, approved, unstaffed, unproposed and still not mergeable by rule `pr-merge-ready`'s reading, so no rule will ever act on it and no human has been asked to. The reasons name what is missing — including the **muted-only** case below.                                                                                                       |
@@ -512,11 +512,11 @@ the operator, and the fleet will do nothing about it whatever it says. So it is 
 arms above, by `prAttentionStatus` itself, and it does two different things depending on what they
 answered:
 
-| The arms said                         | The assignment                                                                                                                                                                                                                                                             |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The arms said                         | The assignment                                                                                                                                                                                                                                                               |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `unwatched` / `elsewhere` / `stalled` | **is the court.** Nothing in the harness is coming — no rule will fire, no proposal is waiting, no agent is on it — so the assignment is the whole answer to whose turn it is, and it leads the reasons. The arm's own reason survives behind it as why the fleet is silent. |
 | anything else                         | **is a reason.** A pull request with an agent on its branch is the harness's whoever it is assigned to, and one whose merge is waiting on a verdict already has a row. The clause is appended so the surface still says it, and `assignedToYou` stays unset.                 |
-| `done`                                | **is nothing.** A merged pull request is off the board, and an assignment on one is a fact about a thing that has finished.                                                                                                                                                 |
+| `done`                                | **is nothing.** A merged pull request is off the board, and an assignment on one is a fact about a thing that has finished.                                                                                                                                                  |
 
 `assignedToYou` carries the kind on exactly the first row, and it is what the queue rail keys on
 ([17](17-cockpit.md#the-queue-rail--needs-you)) — a field rather than the leading reason's wording, so
@@ -526,11 +526,11 @@ rephrasing a sentence cannot silently empty the queue.
 rather than a form field. `PullRequest.author` ([03](03-world-model.md#pullrequest)) is read for it and
 for nothing else, and it rides on the payload the snapshot already fetches, so it costs no request:
 
-| `viewerAssignment`  | With an author                                    | With none reported                  |
-| ------------------- | ------------------------------------------------- | ----------------------------------- |
-| `reviewer-optional` | `Priya Raman marked you as a reviewer`            | `you have been marked as a reviewer` |
-| `reviewer-required` | `Priya Raman marked you as a reviewer`            | `you have been marked as a reviewer` |
-| `assignee`          | `Priya Raman assigned this pull request to you`   | `assigned to you`                    |
+| `viewerAssignment`  | With an author                                  | With none reported                   |
+| ------------------- | ----------------------------------------------- | ------------------------------------ |
+| `reviewer-optional` | `Priya Raman marked you as a reviewer`          | `you have been marked as a reviewer` |
+| `reviewer-required` | `Priya Raman marked you as a reviewer`          | `you have been marked as a reviewer` |
+| `assignee`          | `Priya Raman assigned this pull request to you` | `assigned to you`                    |
 
 **Which kind of reviewer is deliberately not in the sentence.** It is `assignedToYou`, and a surface
 that wants to say it reads the field — the queue rail draws it as `Required reviewer` /
@@ -704,6 +704,191 @@ implies `you`. Every defect this section now describes — the stale order, the 
 the held-check denial printed over a dispatch — was green against both suites' own fixtures and red on
 the first cell of that table.
 
+## The fleet review
+
+**Off by default** (`review.enabled`). What follows is what a deployment gets when a project turns it
+on.
+
+The gap it closes: every gate in front of a merge asks whether the machinery is happy — CI is green,
+the base is clean, no thread is open, the provider says it is mergeable — and the one thing nothing
+does is _read the diff_. That reading is the operator's, on every pull request, and it is the piece of
+the loop that gets worse the better the fleet works: a harness that opens four pull requests a day
+hands its operator four diffs a day to read. Rule `pr-review` puts the fleet's own reading in front of
+that, so what a person approves is a change something has already argued with.
+
+It is a first pass, not the last word. A human approval is still what rule `pr-merge-ready` requires,
+unchanged.
+
+### When it runs
+
+**On the pulse the pull request appears**, and it leads the PR concerns for it. A review's value
+decays faster than any other concern's: read when the pull request opens, it is a reading of the change
+somebody proposed; read after a CI fix and a base merge, it is partly a reading of the harness's own
+work.
+
+One exception, and it is a stand-down rather than a re-ordering: a pull request with **unhandled human
+review threads** is not reviewed. A reviewer has already asked for changes, so the diff is about to be
+rewritten, and a second opinion on the old one is spent for nothing. The concern comes back on the
+pulse after those threads are handled.
+
+### One round, and what that decides
+
+A pull request is reviewed **once**. Nothing re-reviews it after a push — not the fix for the review's
+own findings, not a CI fix, not a base merge.
+
+That decides the shape of the record, and the decision is worth stating because the obvious
+alternative is wrong in a way nothing would report. `pr_reviews` is keyed on the **pull request**, and
+`head_sha` is recorded but gates nothing. Keyed on the SHA instead — which is what "a review of a diff
+dies with the diff" argues for, and it is a good argument under re-review — the first fix pushed after
+the review would invalidate the row, nothing would ever write another, and the merge gate below would
+then be unsatisfiable for the life of the pull request. It would sit unmergeable forever, with nothing
+red and no rule proposing anything.
+
+### The verdict, and where it comes from
+
+The agent reports through `review_report` ([11](11-mcp-tools.md)) — `clear`, or `findings` with what
+it found — and **that call is the review**. A run that ends without it has reviewed nothing, which is
+the same rule every other verdict-bearing dispatch follows: silence never reads as success.
+
+Two values and no severity ladder, because the verdict gates nothing by itself. What the words are for
+is the person approving the merge.
+
+### The merge gate
+
+Rule `pr-merge-ready` gains one clause (`reviewSatisfied`, `src/review/prReview.ts`): with
+`review.blocking` on, a pull request with **no** review row is not merge-ready. Unknown is never clear.
+
+**It asks whether the review happened, not whether it liked what it saw.** With one round there is
+nothing that could clear a `findings` verdict, so gating on `clear` would wedge every pull request the
+reviewer had an opinion about and leave the operator no exit but to switch the feature off. What
+findings do instead is reach the person who approves — on the pull request's row, and on the pull
+request itself where `review.publish` is on — before they give the approval the gate already required.
+
+`prAttentionStatus` reads the same two halves, so a row that says a review is coming and a rule that
+dispatches one are one reading rather than two.
+
+### The reviewer's checkout
+
+A **read-only checkout of the pull request's branch** (`readOnlyDispatch`, `review/pr-<n>`), never the
+branch itself. Two things follow, and both are the point: the reviewer cannot commit what it found —
+an agent that fixes its own findings then reviews its own fix — and it does not hold the branch lease,
+so the CI fix behind it is not queued behind the review.
+
+### Choosing how to review
+
+**A project may declare more than one way of reviewing** — `review.modes`, keyed by whatever names its
+team uses. Two or more, and rule `pr-review-triage` runs first and picks one. Fewer, and there is no
+triage at all: a decision with one option is not a decision, so nothing is spent making it. That is the
+whole switch — there is no separate flag, because a flag could disagree with the modes and one of them
+would be ignored with nothing to say which.
+
+**The choice is a model's, not a threshold's.** "Under three files" is a proxy for risk, and the things
+that actually make a diff worth a careful read — it touches auth, it is the first change in a
+subsystem, the ticket calls it a spike — are not counted, they are judged. So `review.routingCharterFile`
+is the project's prose about _how to choose_, and a desk agent reads it.
+
+**Metadata, not the diff.** The triage is a desk agent: no worktree, no pool slot, no repository read.
+It gets the title, the branch, the base and what the tracker says, and may ask `world_read` for more. A
+routing decision that needed the diff would cost what the review costs, and then there would be nothing
+left to route for.
+
+**Its verdict is a name, through `review_route`.** Three things act on it before the reviewer reads a
+line — the prompt, the charter appended to it, and the profile it runs on — so an agent that merely
+_said_ which mode it would use would leave all three on the default, silently, and the Decision log
+unable to say which mode ran. A name the project has not declared is refused rather than honoured.
+
+**It fails open.** A triage that crashes, is killed or spends its attempt cap leaves no route, and
+`pr-review` then runs `review.defaultMode` rather than parking — the rule the appraiser, the planner and
+the assessor all follow, because a gate that can quietly stop the fleet is worse than one that
+occasionally reads a diff more carefully than it needed to. So the default should name the **thorough**
+mode; null takes the first declared, which is why a project declares that one first. A `defaultMode`
+naming a mode that does not exist is refused **at load**: it is only ever reached on a day something
+else has already gone wrong, so a typo in it looks correct for as long as the harness is working.
+
+The review waits one pulse for the route — and only while one is still coming. `pr-review` reads the
+same attempt ledger the triage does, so a routing that has given up resolves to the default on that
+pulse rather than holding the pull request for ever.
+
+**Its own origin**, `pr:<n>:review-triage`, for the reason `pr-ci-gate` has one: a routing that cannot
+be got through must not spend the budget the review was never given, and a failure has to name which of
+the two it was about.
+
+**Its own stage, above the PR concerns**, rather than an eighth concern among them. That pass exists
+because at most one _branch_ agent works a branch, and the triage takes no branch — folding it in would
+have it compete for a lease it never takes. Above, so the concern group stays contiguous
+([05](05-dispatcher.md)).
+
+**The routes live in their own table.** `pr_reviews` existing is what satisfies the merge gate, so a row
+written early to carry a route would report a pull request as reviewed by the step that only decided how
+to review it.
+
+### What a project may say about it
+
+Every field of `review` is written to be set by the **project** rather than by each operator, because
+what a team looks for in a diff belongs beside the code it is about. `lubbdubb.project.json` carries any
+key ([02](02-configuration.md#the-project-layer)), so all of it is committed once and shared.
+
+| Key                         | Default  | What it decides                                                                                                 |
+| --------------------------- | -------- | --------------------------------------------------------------------------------------------------------------- |
+| `review.enabled`            | `false`  | Whether the review runs at all. It switches both rules in and out of the pipeline.                              |
+| `review.blocking`           | `true`   | Whether an unreviewed pull request is held out of the merge gate. Off records the verdict and gates nothing.    |
+| `review.publish`            | `'none'` | Whether the reviewer is told to post its findings on the pull request, through `reply_to_review` and only that. |
+| `review.modes`              | `{}`     | The ways this project reviews: `charterFile` and `profile` each. Two or more switches the triage on.            |
+| `review.defaultMode`        | `null`   | The mode a review falls back to when nothing routed it. Null takes the first declared.                          |
+| `review.routingCharterFile` | `null`   | The prose that decides between the modes, read by the triage.                                                   |
+
+```json
+{
+  "review": {
+    "enabled": true,
+    "routingCharterFile": "docs/review/routing.md",
+    "defaultMode": "deep",
+    "modes": {
+      "deep": { "charterFile": "docs/review/deep.md", "profile": "heavy" },
+      "quick": { "charterFile": "docs/review/quick.md", "profile": "light" }
+    }
+  }
+}
+```
+
+Off by default because this is the one rule that spends an agent on **every** pull request. A deployment
+that took the defaults and found its bill changed by a build it had not asked anything of would be right
+to call that a fault. The triage adds a second, cheaper agent — which is worth it only when the modes
+genuinely differ in what they cost, so a mode wants a `profile` as well as a charter.
+
+A mode's `profile` is the project's standing opinion about what a kind of change is worth reading for.
+An operator's own pin on the origin still wins over it ([05](05-dispatcher.md)): a person overruling the
+project for one pull request is the narrower statement.
+
+`review.publish: 'comment'` adds a line to the prompt telling the agent to post through
+`reply_to_review`, which raises an act the executor authorises and signs ([09](09-execution.md)) — the
+same route a rule-drafted reply takes. It is deliberately not a free channel: what the comment _says_ is
+the project's, through the prompt and the charter; where it goes is the harness's. A published finding
+then arrives as an unhandled thread, which rule `pr-review-comment` already answers — so the fix loop for
+a fleet finding is the mature path the fleet already has, and not a second one.
+
+### The charters
+
+There are two kinds, and the symmetry is the point: `routingCharterFile` says **how to choose**, and each
+mode's `charterFile` says **what that mode looks for**. Both are files in the repository, resolved
+against `repoRoot`, and both are **appended** to the rendered prompt under a heading that says whose
+words they are — never interpolated, for the reason every addition to a prompt is appended: an operator's
+override that never learned about a `{charter}` placeholder would drop every word of it silently, on
+exactly the deployments that customised most ([05](05-dispatcher.md#prompt-templates)).
+
+They exist because the obvious place for a team's checklist cannot hold one. Prompt overrides live in
+`promptTemplatesDir`, which defaults into `.lubbdubb/` — the directory a team gitignores — so what a
+project wants its reviewers to look at had no committed home at all.
+
+Two properties, both deliberate:
+
+- **Read from the working tree at `repoRoot`, never from the branch under review.** The project config
+  layer is read the same way and for the same reason: a pull request that could edit the file it is
+  reviewed against is a gate that reviews whatever it is told to.
+- **Read once at boot**, like the template book they sit beside. An edited charter takes effect on the
+  next restart, not the next pulse. A path that names nothing is recorded on the error log rather than
+  swallowed — a team whose charter is not in front of an agent has no other way to find out.
+
 ## Watching
 
 A pull request is worked only while it carries `${labelPrefix}-watch`. `isPrWatched(pr, watchLabel)`
@@ -797,18 +982,20 @@ who wants the policy visible as a check can now promote it knowing the fleet cle
 For each open, unmerged PR in the dispatch world, the dispatcher builds every concern that would on
 its own warrant a code agent, in urgency order:
 
-1. **Comments** (`pr:<n>:comments`) — **one concern for every unhandled thread on the PR**, not one per
+1. **The fleet's review** (`pr:<n>:review`) — when the review is on and nothing has reviewed this pull
+   request yet. See [the fleet review](#the-fleet-review).
+2. **Comments** (`pr:<n>:comments`) — **one concern for every unhandled thread on the PR**, not one per
    thread.
-2. **CI** (`pr:<n>:ci`) — when `ciNeedsAttention(pr)` **and** `inheritedCiFailure` returns null.
-3. **Base** (`pr:<n>:mergeable`) — when `needsBaseUpdate(pr)`. The base is `pr.baseBranch ?? config.defaultBranch`.
+3. **CI** (`pr:<n>:ci`) — when `ciNeedsAttention(pr)` **and** `inheritedCiFailure` returns null.
+4. **Base** (`pr:<n>:mergeable`) — when `needsBaseUpdate(pr)`. The base is `pr.baseBranch ?? config.defaultBranch`.
    A concern either way, because a staffed branch is _told_ about its base moving whichever arm it is
    on; only the free-branch outcome differs, and only for `behind`, which is settled by an act rather
    than by an agent.
 
 Then, by the branch's agent state: notify a running agent, hold for a busy one, or make the most
 urgent concern a dispatch candidate. Candidates from all PRs are ranked together — an operator-flagged
-`urgent` CI check first, then concern class (comment > CI > gate > base), then PR number — before the
-headroom cut.
+`urgent` CI check first, then concern class (review > comment > CI > gate > base), then PR number —
+before the headroom cut.
 
 That class ranking is `concernUrgency` (`src/dispatcher/rules.ts`), which **reads the order off
 `DISPATCH_PIPELINE`** rather than restating it, and it lives beside the pipeline because it has two

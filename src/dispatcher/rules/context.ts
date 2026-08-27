@@ -5,6 +5,8 @@ import type { IssuePickupPolicy } from '../issuePickup.js';
 import type { PromptTemplates } from '../promptTemplates.js';
 import type { RuleHeld } from '../admission.js';
 import type { CiPolicy } from '../../ci/ciPolicy.js';
+import type { PrReviewPolicy } from '../../review/policy.js';
+import type { PrReviewCharters } from '../../review/prReview.js';
 import type { PlanningPolicy } from '../../plans/planning.js';
 import type {
   Issue,
@@ -13,6 +15,8 @@ import type {
   IssueRelative,
   IssueShortfall,
   Plan,
+  PrReview,
+  PrReviewRoute,
   PullRequest,
   TaskSummary,
   ValidationCheck,
@@ -181,6 +185,36 @@ export interface StageContext {
   templates: PromptTemplates;
   planning: PlanningPolicy;
   ci: CiPolicy;
+  /**
+   * The fleet review's policy. Rule `pr-review` is switched in and out on
+   * `review.enabled` in two places that cannot disagree, because both read this
+   * one field: the registry's `enabled` condition, which is what the cockpit and
+   * the pipeline walk see, and `needsFleetReview`, which is what actually holds
+   * the concern — the pass covering the PR concerns is registered under one id,
+   * so the walk alone cannot switch a single rule inside it off.
+   */
+  review: PrReviewPolicy;
+  /**
+   * The project's review charters — how to choose a mode, and what each mode
+   * looks for — read once at boot for `promptTemplatesDir`'s reason. Text rather
+   * than paths: nothing in a rule reads the filesystem, exactly as
+   * {@link StageContext.validationRoot} is only ever phrased.
+   */
+  reviewCharters: PrReviewCharters;
+  /**
+   * The fleet reviews already recorded, keyed by pull request. The rule reads it
+   * to know a pull request has been reviewed, and the merge gate reads it to know
+   * whether it may propose — one map, so the two cannot hold different opinions
+   * about what has been read.
+   */
+  prReviews: ReadonlyMap<number, PrReview>;
+  /**
+   * How the triage decided each pull request should be read, keyed by pull
+   * request. Absent for one nothing has routed — which `pr-review` reads as the
+   * fail-open default rather than as a reason to wait, and `pr-review-triage`
+   * reads as work to do.
+   */
+  prReviewRoutes: ReadonlyMap<number, PrReviewRoute>;
   /** The base a PR is assumed to target when the provider doesn't report one. */
   defaultBranch: string;
   /**

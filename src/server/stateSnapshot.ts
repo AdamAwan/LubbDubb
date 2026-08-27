@@ -475,6 +475,11 @@ export function buildStateSections(
     // renders it. A write from the read path would restart every clock on
     // whatever schedule the cockpit happened to poll on.
     reviewWaits: store.reviewWaits(),
+    // The same two halves the dispatcher reads, so a row saying a review is
+    // coming and a rule dispatching one are the same reading rather than two.
+    review: config.review,
+    prReviews: new Map(store.listPrReviews().map((review) => [review.prNumber, review])),
+    prReviewRoutes: new Map(store.listPrReviewRoutes().map((route) => [route.prNumber, route])),
   };
   // The world's change history the Activity feed / Signals panels draw. Read here
   // rather than at the snapshot literal below because its entries carry structured

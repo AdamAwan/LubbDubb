@@ -46,6 +46,8 @@ import { LocalRunStore, LOCAL_RUN_COLUMNS } from './localRuns.js';
 import { PrWatchSeedStore } from './prWatchSeeds.js';
 import { WorkItemLinkStore } from './workItemLinks.js';
 import { ReviewWaitStore } from './reviewWaits.js';
+import { PrReviewStore } from './prReviews.js';
+import { PrReviewRouteStore } from './prReviewRoutes.js';
 import { DecisionStore, DECISION_COLUMNS } from './decisions.js';
 import { WorldStore, type WorldLabelPatch } from './world.js';
 import { ErrorStore } from './errors.js';
@@ -146,6 +148,10 @@ import type {
   ValidationCheckActor,
   ValidationCheckResultBy,
   ValidationCheckState,
+  PrReview,
+  PrReviewInput,
+  PrReviewRoute,
+  PrReviewRouteInput,
   ValidationResource,
   WorkNode,
   WorkNodeObservation,
@@ -203,6 +209,8 @@ export class Store {
   private readonly prWatchSeeds: PrWatchSeedStore;
   private readonly workItemLinks: WorkItemLinkStore;
   private readonly reviewWaitStore: ReviewWaitStore;
+  private readonly prReviews: PrReviewStore;
+  private readonly prReviewRoutes: PrReviewRouteStore;
   private readonly decisions: DecisionStore;
   private readonly world: WorldStore;
   private readonly errors: ErrorStore;
@@ -360,6 +368,8 @@ export class Store {
     this.prWatchSeeds = new PrWatchSeedStore(ctx);
     this.workItemLinks = new WorkItemLinkStore(ctx);
     this.reviewWaitStore = new ReviewWaitStore(ctx);
+    this.prReviews = new PrReviewStore(ctx);
+    this.prReviewRoutes = new PrReviewRouteStore(ctx);
     this.decisions = new DecisionStore(ctx);
     this.world = new WorldStore(ctx);
     this.errors = new ErrorStore(ctx);
@@ -1246,6 +1256,21 @@ export class Store {
   }
   reviewWaits(): ReadonlyMap<number, string> {
     return this.reviewWaitStore.reviewWaits();
+  }
+
+  // -- Fleet reviews (the harness's own read of a diff) ---------------------
+
+  recordPrReview(input: PrReviewInput): PrReview {
+    return this.prReviews.recordPrReview(input);
+  }
+  listPrReviews(): PrReview[] {
+    return this.prReviews.listPrReviews();
+  }
+  recordPrReviewRoute(input: PrReviewRouteInput): PrReviewRoute {
+    return this.prReviewRoutes.recordPrReviewRoute(input);
+  }
+  listPrReviewRoutes(): PrReviewRoute[] {
+    return this.prReviewRoutes.listPrReviewRoutes();
   }
 
   // -- Decisions (audit) ---------------------------------------------------

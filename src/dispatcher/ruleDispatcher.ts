@@ -13,6 +13,8 @@ import {
 import { dispatchVerdict, DEFAULT_COOLDOWN, type CooldownPolicy } from './dispatchCooldown.js';
 import { type CiPolicy } from '../ci/ciPolicy.js';
 import { DISPATCH_PIPELINE, type DispatchRuleId, type RuleConditions, type StageRuleId } from './rules.js';
+import { DEFAULT_PR_REVIEW, type PrReviewPolicy } from '../review/policy.js';
+import type { PrReviewCharters } from '../review/prReview.js';
 import { rankByPriorityOverride } from './priorityOverride.js';
 import { expeditedOrigins } from './goalPriority.js';
 import { deliveryHold } from '../delivery/delivery.js';
@@ -35,6 +37,7 @@ import { liveParts } from '../plans/parts.js';
 import { isActive, type Candidate, type RawAction, type StageContext } from './rules/context.js';
 import { manualJob } from './rules/manualJob.js';
 import { prCiFailing } from './rules/prCiFailing.js';
+import { prReviewTriage } from './rules/prReviewTriage.js';
 import { workItemInReview } from './rules/workItemInReview.js';
 import { workItemBackToPickup } from './rules/workItemBackToPickup.js';
 import { workItemInProgress } from './rules/workItemInProgress.js';
@@ -70,6 +73,7 @@ import { featureSummary } from './rules/featureSummary.js';
  */
 const STAGES: Partial<Record<StageRuleId, (s: StageContext) => void>> = {
   'manual-job': manualJob,
+  'pr-review-triage': prReviewTriage,
   'pr-ci-failing': prCiFailing,
   'work-item-in-progress': workItemInProgress,
   'work-item-in-review': workItemInReview,
@@ -128,6 +132,8 @@ export class RuleDispatcher implements Dispatcher {
   /** Only the one field any rule reads — see the constructor's narrowing below. */
   private readonly validation: Pick<ValidationPolicy, 'desktopClaimMinutes'>;
   private readonly validationRoot: string;
+  private readonly review: PrReviewPolicy;
+  private readonly reviewCharters: PrReviewCharters;
   private ci: CiPolicy;
 
   /**
@@ -161,7 +167,11 @@ export class RuleDispatcher implements Dispatcher {
     validation: Partial<ValidationPolicy> = {},
     validationRoot = '.lubbdubb/validation',
     prRefStyle: PrRefStyle = '#',
+    review: Partial<PrReviewPolicy> = {},
+    reviewCharters: PrReviewCharters = { routing: null, modes: {} },
   ) {
+    this.review = { ...DEFAULT_PR_REVIEW, ...review };
+    this.reviewCharters = reviewCharters;
     this.validation = {
       // An omitted *duration* is not a feature being switched off, and zero would
       // expire every claim the instant it was taken — so this falls back to the
@@ -227,6 +237,11 @@ export class RuleDispatcher implements Dispatcher {
     const conditions: RuleConditions = {
       workItemStates: s.workItemStates !== null,
       workItemInProgress: s.workItemInProgress !== null,
+      // The one operator switch here, and it reads the same field
+      // `needsFleetReview` does — the PR concerns share one stage, so this
+      // decides what the pipeline *advertises* while the concern's own gate is
+      // what holds it. One field underneath both, so they cannot disagree.
+      review: this.review.enabled,
     };
     for (const rule of DISPATCH_PIPELINE) {
       if (rule.enabled && !rule.enabled(conditions)) continue;
@@ -549,6 +564,10 @@ export class RuleDispatcher implements Dispatcher {
       templates: this.templates,
       planning: this.planning,
       ci: this.ci,
+      review: this.review,
+      reviewCharters: this.reviewCharters,
+      prReviewRoutes: new Map((ctx.prReviewRoutes ?? []).map((route) => [route.prNumber, route])),
+      prReviews: new Map((ctx.prReviews ?? []).map((review) => [review.prNumber, review])),
       defaultBranch: this.defaultBranch,
       prRefStyle: this.prRefStyle,
       validationRoot: this.validationRoot,

@@ -58,8 +58,28 @@ import {
   prState,
 } from './prHealth.js';
 import { mergeProposalRef, proposalHold } from './proposals/proposals.js';
+import { DEFAULT_PR_REVIEW, type PrReviewPolicy } from './review/policy.js';
+import {
+  needsFleetReview,
+  resolvedReviewMode,
+  reviewOrigin,
+  reviewPendingLabel,
+  reviewSatisfied,
+  reviewTriageOrigin,
+  routesBetweenModes,
+  triagePendingLabel,
+} from './review/prReview.js';
 import { isActiveTask } from './tasks.js';
-import type { Decision, Proposal, PullRequest, TaskSummary, ViewerAssignment, WorldEvent } from './types.js';
+import type {
+  Decision,
+  PrReview,
+  PrReviewRoute,
+  Proposal,
+  PullRequest,
+  TaskSummary,
+  ViewerAssignment,
+  WorldEvent,
+} from './types.js';
 
 /**
  * Whose court the PR is in. Seven arms, and each names a *different party* rather
@@ -151,6 +171,22 @@ export interface PrAttentionContext {
    * verdict — every arm answers the same with or without it.
    */
   reviewWaits?: ReadonlyMap<number, string>;
+  /**
+   * The fleet review's policy and what it has already read — the two halves of
+   * the concern rule `pr-review` raises and of the clause it adds to the merge
+   * test.
+   *
+   * Both optional, and the absence is safe in one direction only: no policy means
+   * the feature is off, which is what every deployment that has not turned it on
+   * has, and then this lens answers exactly as it did before the review existed.
+   * An absent map with the policy **on** would read every pull request as
+   * unreviewed — which is the honest reading of "nothing recorded", and the same
+   * one the rule takes.
+   */
+  review?: PrReviewPolicy;
+  prReviews?: ReadonlyMap<number, PrReview>;
+  /** How the triage routed each pull request; absent reads as the fail-open default. */
+  prReviewRoutes?: ReadonlyMap<number, PrReviewRoute>;
 }
 
 /**
@@ -337,7 +373,8 @@ function court(pr: PullRequest, ctx: PrAttentionContext): PrAttention {
     pr.mergeableState !== 'behind' &&
     pr.mergeableState !== 'blocked' &&
     pr.mergeableState !== 'dirty' &&
-    pr.unresolvedComments.every((c) => c.handled);
+    pr.unresolvedComments.every((c) => c.handled) &&
+    reviewSatisfied(fleetReview(pr, ctx), reviewPolicy(ctx));
 
   if (mergeReady) {
     // Ask the gate, not the row: `proposalHold` is where a rejection stops standing
@@ -491,6 +528,25 @@ function ciReading(pr: PullRequest, ctx: PrAttentionContext): CiReading {
  */
 function prConcerns(pr: PullRequest, ctx: PrAttentionContext, ci: CiReading): PrConcern[] {
   const concerns: PrConcern[] = [];
+  // Rule `pr-review`'s concern, asked through the same predicate the rule asks —
+  // imported rather than restated, because this is the reading that tells an
+  // operator an agent is coming and the two disagreeing is the drift this whole
+  // file exists to avoid.
+  if (needsFleetReview(pr, fleetReview(pr, ctx), reviewPolicy(ctx))) {
+    // Which of the two is coming — the routing or the review — read the way the
+    // rules read it, so the row names the origin whose attempt cap the operator
+    // would actually find if they went looking.
+    const route = ctx.prReviewRoutes?.get(pr.number) ?? null;
+    if (route === null && routesBetweenModes(reviewPolicy(ctx))) {
+      concerns.push({ rule: 'pr-review-triage', origin: reviewTriageOrigin(pr.number), label: triagePendingLabel() });
+    } else {
+      concerns.push({
+        rule: 'pr-review',
+        origin: reviewOrigin(pr.number),
+        label: reviewPendingLabel(resolvedReviewMode(route, reviewPolicy(ctx))),
+      });
+    }
+  }
   // **One** concern for the whole review, on the origin rule `pr-review-comment`
   // dispatches under — never one per thread. The per-thread ref is what notify
   // de-dup keys on and nothing dispatches it (`reviewThreads.ts`), so a lens
@@ -552,4 +608,14 @@ function actLabel(proposal: Proposal): string {
   if (proposal.kind === 'merge') return 'the merge';
   if (proposal.kind === 'plan') return 'the plan';
   return 'the drafted reply';
+}
+
+/** The policy, or the defaults — which have the review off, so an unwired caller reads as a build without it. */
+function reviewPolicy(ctx: PrAttentionContext): PrReviewPolicy {
+  return ctx.review ?? DEFAULT_PR_REVIEW;
+}
+
+/** What the fleet recorded about this pull request, or null — never "unknown means fine". */
+function fleetReview(pr: PullRequest, ctx: PrAttentionContext): PrReview | null {
+  return ctx.prReviews?.get(pr.number) ?? null;
 }

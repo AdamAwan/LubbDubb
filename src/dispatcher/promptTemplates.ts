@@ -40,6 +40,8 @@ type PromptId =
   | 'pr-ci-gate'
   | 'pr-base-update-behind'
   | 'pr-base-update-conflict'
+  | 'pr-review-triage'
+  | 'pr-review'
   | 'pr-review-comment'
   | 'pr-concern-escalation'
   | 'finding-ticket'
@@ -515,6 +517,38 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
     template:
       'PR #{number} ("{title}") has merge conflicts with its base branch {base}. Merge {base} into {branch}, resolve the conflicts, and push. If you cannot resolve them cleanly, escalate for a human.',
     doc: 'Sent to a code agent when a PR conflicts with its base branch. Placeholders: {number} {title} {branch} {base}.',
+  },
+  'pr-review-triage': {
+    placeholders: ['number', 'title', 'branch', 'base', 'modes'],
+    template:
+      'Decide how PR #{number} ("{title}") should be reviewed — branch {branch}, targeting {base}. This ' +
+      'project reviews in these modes: {modes}.\n\n' +
+      'You are not reviewing the change. You are choosing what kind of read it needs, and an agent is ' +
+      'dispatched on your answer with a different brief and a different model depending on what you say. ' +
+      'You have the shape of the change rather than its contents — its title, its branch, its target, and ' +
+      'whatever the tracker says about the goal behind it. Ask `world_read` for the pull request and its ' +
+      'issue if you need more than you were given.\n\n' +
+      'Answer with `review_route`. Where what this project says below does not settle it, choose the more ' +
+      'thorough mode: over-reading a small change costs minutes, and under-reading a dangerous one costs ' +
+      'the defect nobody caught.',
+    doc: "Sent to a desk agent to choose which review mode a pull request gets (rule pr-review-triage), on a project that declares more than one in `review.modes`. It sees no code: a routing decision that needed the diff would cost what the review costs. The project's routing charter (review.routingCharterFile) is appended after this text rather than interpolated, so an override cannot silently drop it. {modes} is the comma-joined list of declared mode names. Placeholders: {number} {title} {branch} {base} {modes}.",
+  },
+  'pr-review': {
+    placeholders: ['number', 'title', 'branch', 'base'],
+    template:
+      'Review PR #{number} ("{title}") — branch {branch}, targeting {base}. You are the first reader this ' +
+      'change gets, before the person whose approval it needs.\n\n' +
+      'Read the diff against {base}, then read enough of the surrounding code to say whether the change is ' +
+      'right — not merely whether it is tidy. What a reviewer wants raised: something that does not do what ' +
+      'the pull request says it does, a case the change breaks, a value that can be absent where it is read, ' +
+      'a convention of this repository the change quietly departs from, a test that asserts the thing that ' +
+      'was already true. Say where each one is.\n\n' +
+      'You are reading, not fixing. Do not commit, do not push and do not open anything: your checkout is ' +
+      'read-only, and a finding is worth more than a fix nobody asked you for. Report with `review_report` ' +
+      'when you are done — that call is the review, and a run that ends without it has reviewed nothing.\n\n' +
+      'You get one pass. Nothing reviews this pull request again after a push, so say everything you have ' +
+      'to say now — and say nothing you would not want a colleague to have stopped a merge for.',
+    doc: 'Sent to a read-only agent when a watched pull request has not been reviewed by the fleet (rule pr-review). What the project asks its reviewers to look at (review.charterFile) and what to do with the findings (review.publish) are appended after this text rather than interpolated, so an override cannot silently drop either. Placeholders: {number} {title} {branch} {base}.',
   },
   'pr-review-comment': {
     placeholders: ['number', 'branch', 'author', 'comment'],

@@ -24,6 +24,19 @@ import {
 } from '../reviewThreads.js';
 import { priorCiRemediesNote, priorReviewRemediesNote } from '../../remedies/priorRemedies.js';
 import { remedyAskNote } from '../../remedies/remedies.js';
+import {
+  charterNote,
+  modeCharterHeading,
+  needsFleetReview,
+  publishNote,
+  resolvedReviewMode,
+  reviewBranch,
+  reviewOrigin,
+  reviewSatisfied,
+  reviewTriageOrigin,
+  routesBetweenModes,
+} from '../../review/prReview.js';
+import { readOnlyDispatch } from './readOnlyDispatch.js';
 import { isActive, type RawAction, type StageContext } from './context.js';
 
 /**
@@ -33,8 +46,8 @@ import { isActive, type RawAction, type StageContext } from './context.js';
  * collected here and ranked across PRs below — world order is arbitrary, so it
  * must not decide who wins scarce headroom.
  *
- * **One pass covering seven rules**, registered in `STAGES` under
- * `pr-ci-failing`, which is why `pr-review-comment`, `pr-ci-blocked`,
+ * **One pass covering eight rules**, registered in `STAGES` under
+ * `pr-ci-failing`, which is why `pr-review`, `pr-review-comment`, `pr-ci-blocked`,
  * `pr-ci-gate`, `pr-base-update`, `pr-base-update-conflict` and `pr-merge-ready`
  * have no stage of their own. They are not independent: the five concern rules
  * feed one per-PR list whose *top* entry alone becomes a dispatch, because one
@@ -80,6 +93,67 @@ export function prCiFailing(s: StageContext): void {
     // same conflict twice, since the rewrite re-conflicts the branch. CI and the
     // base still get their agent; they get it on the diff the review settled on.
     const unhandled = pr.unresolvedComments.filter((c) => !c.handled);
+    // The fleet's own read of the diff, and the first thing that happens to a
+    // pull request. It leads because a review's value decays faster than any
+    // other concern's: read on the pulse the pull request opened, it is a reading
+    // of the change somebody proposed; read after a CI fix and a base merge, it
+    // is partly a reading of the harness's own work.
+    //
+    // `needsFleetReview` is the whole gate — including the operator's switch, so
+    // the concern and the registry entry that advertises it are switched off by
+    // one field rather than two. It stands down while a human reviewer has
+    // unhandled threads open (the diff is about to be rewritten) and comes back
+    // once they are handled.
+    const review = s.prReviews.get(pr.number) ?? null;
+    const route = s.prReviewRoutes.get(pr.number) ?? null;
+    // How the triage said to read it, or — where it never answered, or where the
+    // project declares no modes — the fail-open default. Resolved here rather
+    // than by the prompt, because the mode decides the profile too and a dispatch
+    // is priced before it runs.
+    const mode = resolvedReviewMode(route, s.review);
+    // A routing still to come is a review still to come: dispatching now would
+    // spend the deep profile on a pull request the triage was about to route to
+    // the cheap one, which is the whole saving gone. It is a wait rather than a
+    // hold — `pr-review-triage` fails open, so the absence resolves either way,
+    // on the pulse after it answers or on the pulse it gives up.
+    const routing = route === null && routesBetweenModes(s.review) && !triageSpent(s, pr.number);
+    if (needsFleetReview(pr, review, s.review) && !routing) {
+      const origin = reviewOrigin(pr.number);
+      const branch = reviewBranch(pr.number);
+      concerns.push({
+        rule: 'pr-review',
+        origin,
+        // Its own read-only checkout *of* the pull request's branch, so the
+        // reviewer neither holds the branch lease a CI fix needs nor can commit
+        // what it found. A reviewer that could push would be fixing its own
+        // findings and then reviewing the fix.
+        dispatch: readOnlyDispatch(branch, pr.branch),
+        // The mode's profile, and only where the project named one. An operator's
+        // own pin on this origin still wins: `pinFor` is applied where a candidate
+        // becomes an action, so a person overruling the project for one pull
+        // request is unaffected by this.
+        profile: (mode === null ? null : (s.review.modes[mode]?.profile ?? null)) ?? undefined,
+        title: mode === null ? `Review PR #${pr.number}` : `Review PR #${pr.number} (${mode})`,
+        // Appended, never interpolated: the charter is the half a project writes,
+        // and an operator override that never learned about it would drop every
+        // word of it silently.
+        prompt:
+          s.templates.render('pr-review', {
+            number: pr.number,
+            title: pr.title,
+            branch: pr.branch,
+            base: pr.baseBranch ?? s.defaultBranch,
+          }) +
+          publishNote(s.review.publish) +
+          charterNote(mode === null ? null : (s.reviewCharters.modes[mode] ?? null), modeCharterHeading(mode)),
+        dispatchReason:
+          `PR #${pr.number} has not been reviewed by the fleet and no agent is on it` +
+          (mode === null ? '.' : ` (${mode}${route === null ? ', by default' : ''}).`),
+        note: `PR #${pr.number} has not been reviewed yet — read the diff and report what you find.`,
+        originTitle: pr.title,
+        originSummary: `PR #${pr.number} on branch ${pr.branch} · awaiting the fleet's review`,
+      });
+    }
     if (unhandled.length > 0) {
       const authors = [...new Set(unhandled.map((c) => c.author))];
       const many = unhandled.length > 1;
@@ -412,7 +486,11 @@ export function prCiFailing(s: StageContext): void {
       pr.mergeableState !== 'behind' &&
       pr.mergeableState !== 'blocked' &&
       pr.mergeableState !== 'dirty' &&
-      pr.unresolvedComments.every((c) => c.handled);
+      pr.unresolvedComments.every((c) => c.handled) &&
+      // Nothing merges that nobody read. It asks whether the review *happened*,
+      // not whether it liked what it saw — see `reviewSatisfied`, which argues
+      // why a `findings` verdict cannot be the thing that holds the gate.
+      reviewSatisfied(review, s.review);
     // A merge already put to a human is not put to them again: while the
     // verdict on `pr:<n>:merge` stands — unanswered, or a "no" — this rule is
     // held off that PR. Without it every pulse re-proposes the same merge and
@@ -484,11 +562,14 @@ export function prCiFailing(s: StageContext): void {
         rule: top.rule,
         title: top.title,
         kind: 'code',
-        branch: pr.branch,
+        branch: top.dispatch?.branch ?? pr.branch,
         reason: top.dispatchReason,
         action: {
           type: 'dispatch_code_agent',
-          branch: pr.branch,
+          // The pull request's branch for every concern that fixes something, and
+          // a read-only checkout of it for the one that only reads.
+          ...(top.dispatch ?? { branch: pr.branch }),
+          ...(top.profile === undefined ? {} : { profile: top.profile }),
           title: top.title,
           prompt: top.prompt,
           originRef: top.origin,
@@ -587,6 +668,21 @@ interface PrConcern {
    * branch, not in acting where the harness would not have.
    */
   act?: RawAction;
+  /**
+   * Where this concern's agent is checked out, when it is not the pull request's
+   * own branch. Rule `pr-review` is the one that differs and has to: its agent
+   * reads rather than writes, so it takes a read-only checkout of the branch and
+   * leaves the lease — and the branch's next CI fix — alone.
+   */
+  dispatch?: { branch: string; base: string; readOnly: true };
+  /**
+   * The model profile this concern's dispatch is priced on, where the concern
+   * itself knows one — rule `pr-review` does, because the mode the triage chose
+   * is a statement about how much reading the change is worth. Absent leaves the
+   * dispatch to resolve on its rule, which is what every other concern does. An
+   * operator's pin on the origin still overrides it (`pinFor`).
+   */
+  profile?: string;
   title: string;
   prompt: string;
   dispatchReason: string;
@@ -671,4 +767,20 @@ function resolveBranchAgent(ctx: DispatchContext, branch: string): BranchAgent {
   const agent = task.agentId ? ctx.agents.find((a) => a.id === task.agentId) : undefined;
   if (agent && agent.status === 'running') return { kind: 'running', agent };
   return { kind: 'busy' }; // queued / starting / waiting — hold new notes.
+}
+
+/**
+ * Has the triage given up on this pull request?
+ *
+ * The read that makes rule `pr-review`'s wait finite. `pr-review-triage` fails
+ * open silently, so the only way to tell "a route is coming" from "no route is
+ * ever coming" is to ask the same ledger the triage asks — which is exactly what
+ * `dispatchVerdict` answers, and why it is asked here rather than a second
+ * counter being kept. Anything but a spent budget means the route is still on its
+ * way, including a cooldown: the wait is one pulse, and dispatching the wrong
+ * mode to avoid it costs the whole saving.
+ */
+function triageSpent(s: StageContext, prNumber: number): boolean {
+  const verdict = dispatchVerdict(reviewTriageOrigin(prNumber), s.now, s.ctx.recentDecisions, s.cooldown);
+  return verdict.kind === 'escalate' || verdict.kind === 'hold';
 }

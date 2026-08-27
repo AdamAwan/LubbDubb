@@ -484,6 +484,43 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'How long a claimed validation check is held before it is offered again.',
   },
   {
+    path: 'review.enabled',
+    type: 'boolean',
+    access: 'plain',
+    why: 'Have the fleet review a pull request of its own before a person is asked to.',
+  },
+  {
+    path: 'review.blocking',
+    type: 'boolean',
+    access: 'plain',
+    why: 'Hold an unreviewed pull request out of the merge gate. Off records the verdict and gates nothing.',
+  },
+  {
+    path: 'review.publish',
+    type: 'enum',
+    options: ['none', 'comment'],
+    access: 'plain',
+    why: 'Whether the reviewer posts what it found on the pull request, or keeps it to the harness.',
+  },
+  {
+    path: 'review.modes',
+    type: 'json',
+    access: 'plain',
+    why: 'The ways this project reviews — a charter and a profile each. Two or more switches the triage on.',
+  },
+  {
+    path: 'review.defaultMode',
+    type: 'string',
+    access: 'plain',
+    why: 'The mode a review falls back to when the triage could not answer. Name the thorough one.',
+  },
+  {
+    path: 'review.routingCharterFile',
+    type: 'string',
+    access: 'plain',
+    why: 'A file in the repository saying how to choose between the modes, read by the triage agent.',
+  },
+  {
     path: 'localRun.instruction',
     type: 'text',
     access: 'plain',

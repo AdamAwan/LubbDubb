@@ -186,6 +186,13 @@ export interface McpToolDeps {
    */
   areaPaths?: () => AreaPathTree | null;
   /**
+   * The review modes this project declared, in declaration order, as
+   * `review_route` offers them to a triage agent. Empty or absent for a
+   * deployment that declared none — and then no triage is ever dispatched, so
+   * nothing is calling the tool anyway.
+   */
+  reviewModes?: string[];
+  /**
    * The permission backstop (issue #130 phase B). Present when
    * `mcp.permissionEscalation` is on; the `request_permission` tool blocks on it.
    * Absent, that tool reports the backstop is off rather than blocking forever.

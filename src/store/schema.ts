@@ -809,6 +809,38 @@ CREATE TABLE IF NOT EXISTS pr_review_waits (
   since     TEXT NOT NULL
 );
 
+-- The fleet's own review of a pull request (see PrReviewStore): one row per pull
+-- request, written by the review_report tool.
+--
+-- Keyed on the pull request rather than on the commit it read, because the review
+-- runs once: a key that moved with the diff would be invalidated by the first fix
+-- pushed after the review, and with nothing re-reviewing, the merge gate would
+-- never be satisfied again. head_sha records what was in front of the reviewer
+-- and gates nothing.
+CREATE TABLE IF NOT EXISTS pr_reviews (
+  pr_number   INTEGER PRIMARY KEY,
+  head_sha    TEXT,
+  verdict     TEXT NOT NULL,   -- 'clear' | 'findings'
+  summary     TEXT NOT NULL,
+  findings    TEXT NOT NULL,   -- JSON array of strings
+  agent_id    TEXT,
+  reviewed_at TEXT NOT NULL
+);
+
+-- How the harness decided to read a pull request: the triage's verdict, naming one
+-- of the modes the project declared (see PrReviewRouteStore).
+--
+-- Separate from pr_reviews because the merge gate is satisfied by a pr_reviews row
+-- existing: a row written early to carry a route would report the pull request as
+-- reviewed by the step that only decided how to review it.
+CREATE TABLE IF NOT EXISTS pr_review_routes (
+  pr_number  INTEGER PRIMARY KEY,
+  mode       TEXT NOT NULL,
+  reason     TEXT NOT NULL,
+  agent_id   TEXT,
+  decided_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS decisions (
   id         TEXT PRIMARY KEY,
   cycle_id   TEXT NOT NULL,
