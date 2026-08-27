@@ -10,6 +10,7 @@ import { CiLadder, waitedFor } from './GoalPage.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
 import { PanelRows, type PanelRowModel } from './PanelRow.js';
 import { AgentOnIt } from '../components/AgentOnIt.js';
+import { orphanCount, orphanGoal } from '../view/orphanGoal.js';
 
 /**
  * What is shown when no goal is selected: five cards, rows rather than pictures.
@@ -443,11 +444,25 @@ const IN_FLIGHT = new Set(['active', 'has_pr', 'planning', 'delivered']);
  */
 function GoalsInFlight({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const goals = view.state.world.issues.filter((issue) => IN_FLIGHT.has(issue.pickup.status));
+  // Beside the count and not folded into it, for the fleet card's reason: these
+  // goals are in flight *and* missing from the backlog, so a single larger number
+  // would be the wrong reading of both. Zero draws nothing — the ordinary case on
+  // every deployment, and a muted "0 with no Feature" on every card would teach an
+  // operator to stop reading the header.
+  const orphans = orphanCount(view.state, goals);
 
   return (
     <section className="cn-card cn-span2">
       <h3>
         Goals in flight <i className="cn-n">{goals.length}</i>
+        {orphans > 0 && (
+          <i
+            className="cn-n cn-alarm"
+            title="These goals hang off no Feature. Their work will merge and close, and the backlog will never show it."
+          >
+            {orphans} with no Feature
+          </i>
+        )}
       </h3>
       {goals.length === 0 && <p className="cn-empty">No goal is in flight.</p>}
       <PanelRows rows={goals.map((issue) => goalRow(issue, view, actions))} />
@@ -464,11 +479,15 @@ function goalRow(issue: Issue, view: CockpitView, actions: CockpitActions): Pane
   const asks = view.needsYou.filter((n) => n.goalRef === ref).length;
   const onIt = view.agentOnGoal.get(ref);
   const furthest = furthestEnvironment(view.state, ref);
+  const orphan = orphanGoal(view.state, issue);
 
   return {
     key: String(issue.number),
     title: `#${issue.number} ${issue.title}`,
-    className: 'cn-goal-row',
+    // The tint is the half of the warning the chip cannot carry. A chip is read
+    // once the eye is already on the row; a tinted ground is what makes the row
+    // one of the two an operator stops at while scanning past four.
+    className: `cn-goal-row ${orphan === null ? '' : 'cn-row-orphan'}`,
     open: () => actions.selectGoal(ref),
     openTitle: `Open goal #${issue.number} — its plan, its pull requests and anything it is asking you`,
     // The row *is* the way to this goal, so it names nothing else: a ref beside
@@ -505,6 +524,15 @@ function goalRow(issue: Issue, view: CockpitView, actions: CockpitActions): Pane
             has no furthest anything, and a chip claiming one would be the boolean
             rollup the reach fold exists to refuse. */}
         {furthest !== null && <i className="cn-chip cn-ok">{furthest}</i>}
+        {/* Not a `<Ref>` and not a button: the row's title already opens this goal,
+            and a second destination inside a row that is itself a control is the
+            one thing the link rule forbids outright. The way to fix it is the band
+            on the page the row opens. */}
+        {orphan !== null && (
+          <i className="cn-chip cn-orphan-chip" title="This goal hangs off no Feature — open it to place it">
+            ▲ no Feature
+          </i>
+        )}
         {/* Beside the environment rather than in place of the track: on a pull
             request the marker supersedes the checks, because those are a verdict on
             a commit being replaced. A goal's track is how far the plan got, which

@@ -523,6 +523,15 @@ it, or three buttons collapse into one rubber stamp. Like the profile gate it is
 the write — a proposal answered by three buttons that all 400 is the dead end this cockpit's rules
 exist to prevent.
 
+**The parent question's three answers are `ParentPicker`, one component and two placements.** The
+goal page states the same gap louder and offers the same write
+([a goal with no parent Feature](#a-goal-with-no-parent-feature)), and two copies of three buttons is
+two sets of wording, two disabled rules and two chances for one of them to be wired to nothing. The
+band on the goal page is not this row drawn twice: the page filters `placement:parent:` out of its own
+bands, so a goal carrying the question is asked it once per surface. The area-path half keeps its own
+three answers here — a different question, offered from the tracker's tree rather than from the
+board.
+
 **`intake` is the fourth kind with no row of its own underneath it**, and the only one of the four that
 is a refusal rather than a proposal. It is read off `issue.appraisal.verdict === 'unclear'` — the goal
 appraisal's own hold, which stops pickup for the whole goal ([06](06-issue-pickup.md#block-or-inform-and-why-blocking-is-safe)) —
@@ -1121,6 +1130,48 @@ states the other way out, and a control that cannot work teaches nothing that se
 **A band whose source has left the snapshot draws nothing at all.** A header over an empty box would
 claim something is waiting while offering no way to answer it.
 
+#### A goal with no parent Feature
+
+Above every band and every card, between the header and the track, a goal that hangs off nothing gets
+an amber warning of its own. It is not one of the bands above and wears no tone class: the tone
+families are the *needs-you* palette, and a goal is an orphan whether or not the rail is holding a row
+about it.
+
+The reading is `orphanGoal` (`web/src/view/orphanGoal.ts`), and it is three facts read fresh on every
+draw:
+
+- **`config.featureBoard`** — the operator's flag *and* a provider that can place a work item, the
+  same conjunction `featureBoardOn` gates the board itself on ([the two gates](#the-two-gates)). An
+  operator who has not asked for the tier above their stories has not asked to be told which stories
+  are missing from it, and where nothing can write a parent the warning would be a dead end.
+- **`issue.parent === null`** — the tracker saying this item hangs off nothing. `undefined` is a
+  provider that tracks no hierarchy at all, and folding the two together is the silent direction: an
+  amber band on every goal of every GitHub deployment.
+- **Nothing stored.** An operator who sets the parent by hand in Azure ends the warning on the next
+  world read — no timer, no world event to have missed. Same derivation `placementAsks` takes, pointed
+  at the item rather than at the question ([06](06-issue-pickup.md), `src/intake/placement.ts`).
+
+**Why it is louder than the ask it sits above.** The rail's `placement` row is gated on the appraiser
+having *proposed* a container. A goal picked up before the appraiser ran, one whose verdict named
+nothing, and one somebody answered months ago are all orphans the cockpit used to say nothing about —
+and every one of them merges, closes and disappears from the backlog just the same. So the warning is
+the **fact** and never the question: the proposal, where there is one, is what the band *offers*.
+
+**Two weights, one fact.** Unanswered, it draws in full with the three answers under it. Answered —
+"this goal wants none" — it goes grey and one line tall, keeping the way back. The item is still an
+orphan and the board still cannot roll it up, so the reading does not go away; it has stopped being an
+ask, and an amber band standing over a decision somebody made is how a warning gets ignored.
+`IssueAppraisal.parentSettledAt` is what separates the two, shipped on the wire beside `placement`
+because it is the one half of the pair the browser could not derive: `placement` says a question is
+*open*, and an orphan with none open is either a goal nobody proposed anything for or one whose
+answer was "it wants none".
+
+**The three answers are `ParentPicker`, shared with the rail's band.** One write to one tracker field,
+put in two places. The goal page therefore draws the `placement:parent:` row *only* through this
+warning and filters it out of its own bands — one question, once, per page. The rail keeps its row,
+and the ask panel still answers it for an operator working down the queue rather than down a page. The
+area-path half of `placement` is untouched: a different question, with a different answer.
+
 ### Validation on the goal
 
 `ValidationSection` (`web/src/components/`) — how anyone checks the _goal_ was met, and what anybody
@@ -1598,6 +1649,18 @@ card is the drift `PanelRowModel` exists to end, one level up.
   last-declared in the operator's list, since that list is the order the work travels in. `partial`
   gets no chip: a row reading `liveUs` for half a feature is the boolean rollup the reach fold refuses
   to make, one layer up. → [24](24-environments.md#in-the-cockpit)
+- **Goals in flight** also names the goals hanging off **no parent Feature** — `orphanGoal`'s verdict,
+  the same predicate the goal page's band reads
+  ([a goal with no parent Feature](#a-goal-with-no-parent-feature)). Three readings of one fact, each
+  doing a job the others cannot: an alarmed **count beside the header's own**, which is what an
+  operator can act on without opening anything; a **tinted row**, which is what makes it one of the two
+  an eye stops at while scanning past six; and the **chip**, which is the word. The count is
+  `orphanCount` over the very rows the card draws, so the header and its list cannot disagree — a
+  header filtering differently from its own list looks right on both halves and is wrong only where it
+  matters. Zero draws nothing: a muted `0 with no Feature` on every card teaches an operator to stop
+  reading the header. **The chip is not a link.** The row's title already opens the goal, and a
+  reference inside a row that is itself a control is two destinations for one click
+  ([links](#links)); the way to fix it is the band on the page the row opens.
 - **Fleet** — who is out, what they are on, and what it has cost. The lamp reads red off
   `escalationByAgent`, not off `status === 'waiting'`: an agent can be parked with nothing asked of the
   operator, the two disagree in exactly that case, and the ask wins. **Ended shifts are behind a

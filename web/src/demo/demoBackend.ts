@@ -676,6 +676,9 @@ class DemoServer {
               // Nor any placement: the same argument. What the operator sets by
               // hand is a verdict, never a suggestion about where the item is filed.
               placement: [],
+              // Nor any answer to the parent question, which is a different act
+              // with its own control: `setIssueParent` is what stamps that.
+              parentSettledAt: null,
               summary: 'Set by the operator from the cockpit.',
               decidedAt: new Date().toISOString(),
             };
