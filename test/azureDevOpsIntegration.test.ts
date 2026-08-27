@@ -807,11 +807,12 @@ test('request: a transient sign-in-HTML 2xx is retried with a fresh token, then 
   assert.deepEqual(pulls, []);
   assert.equal(fetchState.calls, 2, 'retried once');
   assert.equal(authState.refreshes, 1, 'forced a token refresh before the retry');
-  assert.match(logs[0]!, /retry 1\/2/);
+  // The blip cleared, so nothing is recorded: a self-healing retry is not a fault.
+  assert.deepEqual(logs, []);
 });
 
 test('request: a persistent sign-in page fails with an auth-naming error, not a JSON crash', async () => {
-  const { api, authState, fetchState } = restApi([() => signInHtml()]);
+  const { api, authState, fetchState, logs } = restApi([() => signInHtml()]);
   const err = await api.listActivePullRequests().then(
     () => assert.fail('expected the call to reject'),
     (e: Error) => e,
@@ -821,6 +822,10 @@ test('request: a persistent sign-in page fails with an auth-naming error, not a 
   // 1 initial + MAX_RETRIES(2) attempts, and a refresh before each retry.
   assert.equal(fetchState.calls, 3);
   assert.equal(authState.refreshes, 2);
+  // Only once every attempt is spent is it a fault, and the entry names the attempts.
+  assert.equal(logs.length, 1);
+  assert.match(logs[0]!, /failed after 3 attempts/);
+  assert.match(logs[0]!, /HTML sign-in page instead of JSON/);
 });
 
 test('request: malformed (non-HTML) JSON on a 2xx fails fast without retrying', async () => {

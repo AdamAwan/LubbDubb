@@ -167,8 +167,9 @@ function azureApi(ctx: IntegrationContext): { api: RestAzureDevOpsApi; az: Azure
       'The azure provider needs a target: set `azureDevOps.organization`, `azureDevOps.project` and `azureDevOps.repository` in your config.',
     );
   }
-  // Surface transient-retry notices (sign-in-HTML blips, throttling) in the Errors panel
-  // so an occasional failure is visible even when the retry silently recovers.
+  // Surface a request that failed *every* attempt (sign-in HTML, throttling, network) in
+  // the Errors panel. A blip the retry recovers from records nothing: it is not a fault,
+  // and a row saying the credential was rejected is read as one.
   const log = ctx.errors ? (message: string) => void ctx.errors!.record({ source: 'provider', message }) : undefined;
   return { api: RestAzureDevOpsApi.create(az, resolveAzureAuth(), log), az };
 }

@@ -340,7 +340,10 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     private readonly repository: string,
     private readonly auth: AzureAuth,
     private readonly fetchImpl: typeof fetch = fetch,
-    /** Diagnostic sink for transient-retry notices — wired to the error log in prod, silent by default. */
+    /**
+     * Diagnostic sink for a request that failed every attempt — wired to the error log
+     * in prod, silent by default. A retry that recovers writes nothing here.
+     */
     private readonly log: (message: string) => void = () => {},
     /** Injectable backoff so tests don't wait real milliseconds. */
     private readonly sleep: (ms: number) => Promise<void> = defaultSleep,
@@ -372,12 +375,11 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
       if (attempt > 0) {
         // The previous attempt hit a *transient* failure. Force a fresh token in case a
         // stale/lagging one caused it (the `az`-CLI token can need a beat to propagate
-        // after a refresh), back off, and log so a self-healing blip is still visible.
+        // after a refresh), then back off. Nothing is recorded here: a blip the next
+        // attempt clears is not a fault, and recording it made a self-healing retry
+        // read in the Errors panel exactly like a rejected credential.
         this.auth.forceRefresh?.();
         await this.sleep(RETRY_BACKOFF_MS * attempt);
-        this.log(
-          `Azure DevOps ${method} ${url}: retry ${attempt}/${MAX_RETRIES} after ${lastError?.message ?? 'transient failure'}`,
-        );
       }
 
       let res: Response;
@@ -437,7 +439,12 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
       }
     }
 
-    throw lastError ?? new Error(`Azure DevOps ${method} ${url}: failed after ${MAX_RETRIES} retries`);
+    // Every attempt was spent on a transient failure, so the blip was not one: record
+    // it, naming the attempts, and throw. A caller that degrades to its last good
+    // reading swallows the throw, which is why the recording happens here.
+    const exhausted = lastError ?? new Error(`Azure DevOps ${method} ${url}: failed after ${MAX_RETRIES} retries`);
+    this.log(`Azure DevOps ${method} ${url}: failed after ${MAX_RETRIES + 1} attempts — ${exhausted.message}`);
+    throw exhausted;
   }
 
   private withApiVersion(url: string, params: Record<string, string> = {}, apiVersion: string = API_VERSION): string {
