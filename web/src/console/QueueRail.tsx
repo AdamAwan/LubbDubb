@@ -200,8 +200,26 @@ export function subjectLabel(row: NeedRow): string | null {
  * cannot name is one the operator answers blind.
  */
 function subjectBeside(row: NeedRow): string | null {
+  // A row that draws its own reference has already said its subject, and better:
+  // as the way there rather than as a word. Two `PR #415`s on one row, one of them
+  // dead text beside a live link, is the same repetition this function exists to
+  // stop — the row's line just is not where the other one is said.
+  if (refBeside(row) !== null) return null;
   const subject = subjectLabel(row);
   return subject !== null && row.title.includes(subject) ? null : subject;
+}
+
+/**
+ * The reference a row draws beside its body, or null for the rows that draw none.
+ *
+ * A pull request a person put on the operator is the one ask whose subject lives
+ * outside the cockpit entirely — there is no PR page here — so a row that merely
+ * *named* it left them to go and find it in the provider, which is the surface
+ * this queue exists to replace. Every other kind is about something the cockpit
+ * can open, and {@link NeedDestination} is already the way there.
+ */
+function refBeside(row: NeedRow): string | null {
+  return row.kind === 'assigned' ? row.originRef : null;
 }
 
 /**
@@ -353,14 +371,11 @@ function Row({
   const open =
     row.opens === 'goal' && ref !== null ? () => actions.selectGoal(ref) : () => actions.openPanel({ ask: row.id });
 
-  // A pull request a person put on you is the one ask whose subject lives outside
-  // the cockpit entirely — there is no PR page here, so a row that only *named*
-  // the pull request left the operator to go and find it in the provider, which
-  // is the surface this queue exists to replace. So the card carries the way
-  // there, and it sits **beside** the body rather than in it: one click cannot
-  // have two destinations, so the body stays the control that opens the ask and
-  // the reference is its own target. Same shape as a config row's fix strip.
-  const prRef = row.kind === 'assigned' ? row.originRef : null;
+  // The card carries the way to what the row is about, and it sits **beside** the
+  // body rather than in it: one click cannot have two destinations, so the body
+  // stays the control that opens the ask and the reference is its own target.
+  // Same shape as a config row's fix strip.
+  const prRef = refBeside(row);
   if (prRef !== null) {
     return (
       <div className={`${cls} cn-qref`}>
