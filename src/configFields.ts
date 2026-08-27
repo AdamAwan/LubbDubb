@@ -484,6 +484,31 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'How long a claimed validation check is held before it is offered again.',
   },
   {
+    path: 'review.enabled',
+    type: 'boolean',
+    access: 'plain',
+    why: 'Have the fleet review a pull request of its own before a person is asked to.',
+  },
+  {
+    path: 'review.blocking',
+    type: 'boolean',
+    access: 'plain',
+    why: 'Hold an unreviewed pull request out of the merge gate. Off records the verdict and gates nothing.',
+  },
+  {
+    path: 'review.publish',
+    type: 'enum',
+    options: ['none', 'comment'],
+    access: 'plain',
+    why: 'Whether the reviewer posts what it found on the pull request, or keeps it to the harness.',
+  },
+  {
+    path: 'review.charterFile',
+    type: 'string',
+    access: 'plain',
+    why: 'A file in the repository saying what this project wants looked at, appended to the reviewer’s prompt.',
+  },
+  {
     path: 'localRun.instruction',
     type: 'text',
     access: 'plain',

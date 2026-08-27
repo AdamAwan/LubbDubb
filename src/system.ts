@@ -67,6 +67,7 @@ import { RecoveryDesk } from './agents/recoveryDesk.js';
 import { ActionExecutor } from './executor/actionExecutor.js';
 import { RuleDispatcher } from './dispatcher/ruleDispatcher.js';
 import { loadPromptTemplates, type PromptTemplates } from './dispatcher/promptTemplates.js';
+import { loadReviewCharter } from './review/charter.js';
 import type { Dispatcher } from './dispatcher/dispatcher.js';
 import { openPrForIssue, type IssuePickupPolicy } from './dispatcher/issuePickup.js';
 import { watchLabelFor } from './watchLabels.js';
@@ -635,6 +636,19 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // both of which must work whether or not a cycle is running.
   const prompts = loadPromptTemplates(config.promptTemplatesDir);
 
+  // The project's review charter, on the same terms as the template book above:
+  // read once, from the checkout rather than from any branch, and absent where
+  // the project names no file. A path that names nothing is recorded rather than
+  // swallowed — a team whose charter is not being read has no other way to find
+  // out.
+  const reviewCharter = loadReviewCharter(config.repoRoot, config.review.charterFile, (error, path) =>
+    errors.record({
+      source: 'boot',
+      message: `Review charter "${path}" could not be read; the reviewer runs without it.`,
+      detail: error instanceof Error ? error.message : String(error),
+    }),
+  );
+
   // The desktop channel (the operator's own Claude Code). Constructed
   // unconditionally so `system.desktop` is addressable, and inert until
   // `listen()` — which is the only thing that binds the stable socket or writes
@@ -818,6 +832,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     config.validation,
     config.validationRoot,
     prRefStyle(config.integrations.sourceControl),
+    config.review,
+    reviewCharter,
   );
   const dispatcher: Dispatcher = rules;
 

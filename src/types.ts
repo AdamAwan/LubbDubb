@@ -293,6 +293,43 @@ export interface PrComment {
   handled: boolean;
 }
 
+/**
+ * What the fleet's own reviewer said about a diff — `clear` when it found nothing
+ * worth a person's attention, `findings` when it did.
+ *
+ * Two values and no severity ladder, on purpose: the verdict gates nothing by
+ * itself (see `reviewSatisfied`), so a scale would be a number nothing reads,
+ * and the words that matter are in `summary` and `findings` where the person
+ * approving the pull request sees them.
+ */
+export type PrReviewVerdict = 'clear' | 'findings';
+
+/**
+ * One recorded fleet review — the harness's own record of it, written by the
+ * `review_report` tool and never inferred from a comment on the provider.
+ *
+ * Keyed on the pull request rather than on the commit it read, because the review
+ * runs once (see `needsFleetReview`). `headSha` says what was in front of it and
+ * decides nothing.
+ * → `docs/spec/07-pull-requests.md#the-fleet-review`
+ */
+export interface PrReview {
+  prNumber: number;
+  /** The commit the reviewer read, where the provider reported one. Display only. */
+  headSha: string | null;
+  verdict: PrReviewVerdict;
+  /** One sentence: what this diff does, as the reviewer understood it. */
+  summary: string;
+  /** What it found, one entry each. Empty on a `clear` verdict. */
+  findings: string[];
+  /** The agent that reported it, so the run behind a verdict is reachable. */
+  agentId: string | null;
+  reviewedAt: string;
+}
+
+/** A review as the tool hands it over; the store stamps the rest. */
+export type PrReviewInput = Omit<PrReview, 'reviewedAt'>;
+
 export type IssueState = 'open' | 'closed';
 
 /**

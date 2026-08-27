@@ -58,6 +58,15 @@ type RuleKind = 'rule' | 'admission' | 'terminal';
 export interface RuleConditions {
   workItemStates: boolean;
   workItemInProgress: boolean;
+  /**
+   * The fleet review, `config.review.enabled` — the one condition here that is a
+   * plain operator switch rather than a property of the provider. It is switched
+   * in this way rather than with an `if` inside the concern pass for the reason
+   * the work-item rules are: the registry is where a rule is in or out of the
+   * pipeline, and a rule held back inside its own body is one the Decision log
+   * still advertises as live.
+   */
+  review: boolean;
 }
 
 export interface DispatchRule {
@@ -93,6 +102,14 @@ const RULES = [
 
   // ---- PR concerns. Four of these collect concerns for one branch; the ------
   // order they appear in here *is* the urgency order the fold reads.
+  {
+    id: 'pr-review',
+    kind: 'rule',
+    name: 'Pull request not yet reviewed',
+    description:
+      "A watched pull request nothing has reviewed gets a read-only agent to read the diff and say what it found, before a person is asked to. It leads the PR concerns because the review is the earliest thing that can be done to a pull request and the one whose value decays fastest: a diff read on the pulse it opened is read once, where the same reading taken after a CI fix and a base merge is a reading of somebody else's work. It stands down — rather than ranking below — where a human reviewer already has unhandled threads open, since the diff is about to be rewritten and a second opinion on the old one is spent for nothing. One round, ever: the verdict is recorded against the pull request, nothing re-reviews it after a push, and what it found reaches the person whose approval the merge still needs. Off unless the operator turns it on, because it is the one rule that spends an agent on every pull request.",
+    enabled: (c) => c.review,
+  },
   {
     id: 'pr-review-comment',
     kind: 'rule',

@@ -13,6 +13,7 @@ import type {
   PriorityOverride,
   ProfileOverride,
   Proposal,
+  PrReview,
   PullRequest,
   Remedy,
   TaskSummary,
@@ -73,6 +74,19 @@ export interface DispatchContext {
    * byte-identical to a build without the feature.
    */
   priorRemedies?: Remedy[];
+  /**
+   * The fleet reviews already recorded (`Store.listPrReviews`), which is how rule
+   * `pr-review` knows a pull request has been read and how `pr-merge-ready` knows
+   * it may propose.
+   *
+   * Absent means no reading was wired, and it is the *safe* absence only because
+   * the rule is off by default: with `review.enabled` on and this unwired, every
+   * pull request would look unreviewed forever, which is a review dispatched
+   * every cycle. The composition root wires it beside every other store read for
+   * that reason; a caller building a context by hand and turning the review on
+   * has to as well.
+   */
+  prReviews?: PrReview[];
   /** Current fleet: running / waiting / recently-finished tasks and their agents. */
   tasks: TaskSummary[];
   agents: Agent[];

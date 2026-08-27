@@ -5,6 +5,7 @@ import type { IssuePickupPolicy } from '../issuePickup.js';
 import type { PromptTemplates } from '../promptTemplates.js';
 import type { RuleHeld } from '../admission.js';
 import type { CiPolicy } from '../../ci/ciPolicy.js';
+import type { PrReviewPolicy } from '../../review/policy.js';
 import type { PlanningPolicy } from '../../plans/planning.js';
 import type {
   Issue,
@@ -13,6 +14,7 @@ import type {
   IssueRelative,
   IssueShortfall,
   Plan,
+  PrReview,
   PullRequest,
   TaskSummary,
   ValidationCheck,
@@ -181,6 +183,30 @@ export interface StageContext {
   templates: PromptTemplates;
   planning: PlanningPolicy;
   ci: CiPolicy;
+  /**
+   * The fleet review's policy. Rule `pr-review` is switched in and out on
+   * `review.enabled` in two places that cannot disagree, because both read this
+   * one field: the registry's `enabled` condition, which is what the cockpit and
+   * the pipeline walk see, and `needsFleetReview`, which is what actually holds
+   * the concern — the pass covering the PR concerns is registered under one id,
+   * so the walk alone cannot switch a single rule inside it off.
+   */
+  review: PrReviewPolicy;
+  /**
+   * What this project asks a reviewer to look at (`review.charterFile`), read
+   * once at boot for `promptTemplatesDir`'s reason, or null where the project
+   * names no file. Text rather than a path: nothing in a rule reads the
+   * filesystem, exactly as {@link StageContext.validationRoot} is only ever
+   * phrased.
+   */
+  reviewCharter: string | null;
+  /**
+   * The fleet reviews already recorded, keyed by pull request. The rule reads it
+   * to know a pull request has been reviewed, and the merge gate reads it to know
+   * whether it may propose — one map, so the two cannot hold different opinions
+   * about what has been read.
+   */
+  prReviews: ReadonlyMap<number, PrReview>;
   /** The base a PR is assumed to target when the provider doesn't report one. */
   defaultBranch: string;
   /**

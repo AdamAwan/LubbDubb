@@ -747,6 +747,11 @@ export class Harness extends EventEmitter {
           ...store.listRecentRemedies('ci', PRIOR_REMEDY_ROWS),
           ...store.listRecentRemedies('review', PRIOR_REMEDY_ROWS),
         ],
+        // What the fleet has already read. One list per pulse rather than a
+        // lookup per pull request, and the same list the merge gate asks — a
+        // second read here would be a second opinion about what has been
+        // reviewed.
+        prReviews: store.listPrReviews(),
         // The goal tags and the profiles they may name, so a dispatch on a pinned
         // issue is priced by the pin rather than by its rule.
         modelPins: this.deps.modelPins,

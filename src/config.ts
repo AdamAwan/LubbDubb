@@ -7,6 +7,7 @@ import { DEFAULT_BURN, validateBurnPolicy, type BurnPolicy } from './spendBurn.j
 import { DEFAULT_RUNWAY, validateRunwayPolicy, type RunwayPolicy } from './supply/runway.js';
 import type { SelfUpdatePolicy } from './selfUpdate/upgradePlan.js';
 import { DEFAULT_VALIDATION, type ValidationPolicy } from './validation/policy.js';
+import { DEFAULT_PR_REVIEW, type PrReviewPolicy } from './review/policy.js';
 import { DEFAULT_LOCAL_RUN, type LocalRunPolicy } from './localRun/policy.js';
 import { validateCiPolicy, type CiPolicy } from './ci/ciPolicy.js';
 import { validatePolicyCheckModes, type PolicyCheckModes } from './integrations/azure/policyKinds.js';
@@ -385,6 +386,14 @@ export interface Config {
    * outstanding says so. Off leaves the surface out entirely. Deep-merged.
    */
   validation: ValidationPolicy;
+  /**
+   * The fleet review (`src/review/`) — whether the harness reads a pull request
+   * of its own before a person is asked to, and what a project may say about how.
+   * **Off by default**, unlike the other blocks here, because it is the one rule
+   * that spends an agent on every pull request. Deep-merged, so a project can set
+   * one field alone. → `docs/spec/07-pull-requests.md#the-fleet-review`
+   */
+  review: PrReviewPolicy;
   /**
    * The local run (`src/localRun/`) — the one dev environment on the operator's
    * machine, which goal's code is in it, and how it is brought up. Deep-merged.
@@ -964,6 +973,7 @@ const DEFAULTS: Config = {
   pets: { enabled: true, visible: true },
   selfUpdate: { enabled: true, remote: 'origin', branch: 'main', checkIntervalMs: 60 * 60 * 1000 },
   validation: DEFAULT_VALIDATION,
+  review: DEFAULT_PR_REVIEW,
   localRun: DEFAULT_LOCAL_RUN,
   closedPrWindowMs: 6 * 60 * 60 * 1000,
   // Empty is the off switch, not an empty list of something switched on.
@@ -1084,6 +1094,7 @@ function mergeConfig(overrides: Partial<Config> = {}): Config {
   merged.runway = { ...DEFAULTS.runway, ...overrides.runway };
   merged.selfUpdate = { ...DEFAULTS.selfUpdate, ...overrides.selfUpdate };
   merged.validation = { ...DEFAULTS.validation, ...overrides.validation };
+  merged.review = { ...DEFAULTS.review, ...overrides.review };
   merged.localRun = { ...DEFAULTS.localRun, ...overrides.localRun };
   merged.auth = { ...DEFAULTS.auth, ...overrides.auth };
   // The CI check rules are an ordered list, so this is a replace and not a merge:
@@ -1298,6 +1309,7 @@ export const DEEP_MERGED_BLOCKS = [
   'runway',
   'selfUpdate',
   'validation',
+  'review',
   'localRun',
   'auth',
   'ci',
