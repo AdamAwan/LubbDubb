@@ -58,6 +58,7 @@ import { EnvironmentDesk } from './environments/environmentDesk.js';
 import { CommandEnvironmentProber, type EnvironmentProber } from './environments/prober.js';
 import { CommandEnvironmentObserver, type EnvironmentObserver } from './environments/observer.js';
 import { WatchDryRun } from './environments/watchDryRun.js';
+import { WatchDesk } from './environments/watchDesk.js';
 import { watchNote } from './plans/planning.js';
 import { PrWatchDesk } from './prWatchDesk.js';
 import { PrWorkItemDesk } from './prWorkItemDesk.js';
@@ -948,6 +949,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // offer while its pull request is inside `closedPrWindowMs` and is unrecoverable
   // afterwards — a deployment that configures its first environment later still
   // wants today's landings on record when it does.
+  // The operator's own telemetry, behind the seam the dry run already uses. One
+  // observer for both readers, so a stale wrapper script fails the same way at
+  // declaration time and at watch time.
+  const environmentObserver = opts.environmentObserver ?? new CommandEnvironmentObserver(config.repoRoot);
   const environments = new EnvironmentDesk({
     store,
     environments: config.environments,
@@ -959,6 +964,17 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     git: gitObserver,
     sink: opts.sink ?? connector,
     probeIntervalMs: config.environmentProbeIntervalMs,
+    // The window pass, handed to the desk rather than run beside it: it opens on an
+    // arrival the desk's own third pass records, so *where* it runs is the
+    // invariant and belongs in the file that runs it.
+    watch: new WatchDesk({
+      store,
+      environments: config.environments,
+      observer: environmentObserver,
+      probeIntervalMs: config.environmentProbeIntervalMs,
+      watchIntervalMs: config.watchIntervalMs,
+      errors,
+    }),
     errors,
   });
 
@@ -971,7 +987,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const watchDryRun = new WatchDryRun({
     store,
     environments: config.environments,
-    observer: opts.environmentObserver ?? new CommandEnvironmentObserver(config.repoRoot),
+    observer: environmentObserver,
   });
 
   // The step after the launch, and the one station on the floor a person staffs:

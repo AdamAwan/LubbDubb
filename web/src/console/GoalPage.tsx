@@ -8,11 +8,14 @@ import type {
   Agent,
   EnvironmentGate,
   GoalReachStatus,
+  GoalWatchCheckView,
+  GoalWatchView,
   Issue,
   OpenPullRequest,
   PlanPart,
   PullRequest,
   ValidationVerdict,
+  WatchCheckVerdict,
 } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
@@ -1067,23 +1070,29 @@ function Environments({
       <h3>Environments</h3>
       <div className="cn-rows">
         {page.environments.map((env) => (
-          <div className="cn-row" key={env.environment}>
-            <span className="cn-grow">
-              <b className="cn-name">{env.environment}</b>
-              <span className="cn-sub">
-                {REACH_SAID[env.status]}
-                {/* What arriving here does, on the row that would do it. An
+          <div className="cn-env" key={env.environment}>
+            <div className="cn-row">
+              <span className="cn-grow">
+                <b className="cn-name">{env.environment}</b>
+                <span className="cn-sub">
+                  {REACH_SAID[env.status]}
+                  {/* What arriving here does, on the row that would do it. An
                     operator reading a held goal asks "waiting for what" exactly
                     once, and the answer is configuration they wrote weeks ago. */}
-                {env.opens.length > 0 && ` · opens ${env.opens.map((g) => GATE_SAID[g]).join(' and ')}`}
+                  {env.opens.length > 0 && ` · opens ${env.opens.map((g) => GATE_SAID[g]).join(' and ')}`}
+                </span>
               </span>
-            </span>
-            {env.status !== 'reached' && (
-              <i className="cn-n">
-                {env.landed}/{env.total}
-              </i>
-            )}
-            <i className={`cn-chip ${REACH_TONE[env.status]}`}>{env.status}</i>
+              {env.status !== 'reached' && (
+                <i className="cn-n">
+                  {env.landed}/{env.total}
+                </i>
+              )}
+              <i className={`cn-chip ${REACH_TONE[env.status]}`}>{env.status}</i>
+            </div>
+            {/* Inside the environment's own row and not beside it: a watch belongs
+                to an arrival, and the two surfaces drawn as siblings would be free
+                to disagree about which environment a reading came from. */}
+            <Watch watch={page.watches.find((w) => w.environment === env.environment)} now={now} />
           </div>
         ))}
       </div>
@@ -1123,6 +1132,77 @@ function Environments({
     </section>
   );
 }
+
+/**
+ * What the environment has said since the work arrived in it.
+ *
+ * **Inside the row and not beside it**, because a watch belongs to an arrival:
+ * drawn as a sibling, the two surfaces would be free to disagree about which
+ * environment a reading came from — the disagreement the strip's fold exists to
+ * prevent one layer up.
+ *
+ * **Every check draws, and nothing rolls up to a word.** A goal whose one signal
+ * passed and whose other regressed is a fix that worked and a thing that is still
+ * broken, and a single verdict for the pair would hide the half the ticket was
+ * about.
+ *
+ * Nothing renders where nothing is watched: no empty block, no row of question
+ * marks. A goal that declared no checks and a deployment where no environment
+ * declares a `watch` both arrive here as `undefined`, because null is a third fact
+ * rather than a synonym for clean.
+ */
+function Watch({ watch, now }: { watch: GoalWatchView | undefined; now: number }): JSX.Element | null {
+  if (watch === undefined || watch.checks.length === 0) return null;
+  return (
+    <div className="cn-watch">
+      <span className="cn-watch-head">
+        {watch.settledAt === null
+          ? `watching until ${relTime(watch.settlesAt, now)}`
+          : `settled ${relTime(watch.settledAt, now)}`}
+      </span>
+      {watch.checks.map((check) => (
+        <div className={`cn-watch-row ${check.reading?.verdict ?? 'unread'}`} key={check.checkId}>
+          <span className="cn-grow">
+            <b className="cn-name">{check.title}</b>
+            {/* An `unknown` says why, in words, and never in the vocabulary of a
+                clean one: a failed observation, a timeout and a presence query
+                answering zero are the watch failing to *read* the environment, and
+                only a reading that came back can say anything about the work. */}
+            <span className="cn-sub">{watchSaid(check)}</span>
+          </span>
+          <i className={`cn-chip ${WATCH_TONE[check.reading?.verdict ?? 'unread']}`}>
+            {check.reading?.verdict ?? 'not read'}
+          </i>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** One check's reading in the operator's words. A reading that did not come back says so. */
+function watchSaid(check: GoalWatchCheckView): string {
+  const reading = check.reading;
+  if (reading === null) return 'Not yet put to this environment. Nothing has been read.';
+  if (reading.detail !== null) return reading.detail;
+  return check.tolerate === 0
+    ? 'No matching rows at all, which is what it declared.'
+    : `${String(reading.rows ?? 0)} matching rows, within the ${String(check.tolerate)} it declared.`;
+}
+
+/**
+ * No new colours: every tone is one the console already draws, so a theme switch
+ * carries the watch block without the token layer having to learn about it.
+ *
+ * `unknown` takes the attention tone rather than a neutral one deliberately — an
+ * environment nobody could read is work, not an all-clear, and it is the reading
+ * that most looks like success.
+ */
+const WATCH_TONE: Record<WatchCheckVerdict | 'unread', string> = {
+  clean: 'cn-ok',
+  regressed: 'cn-you',
+  unknown: 'cn-stall',
+  unread: '',
+};
 
 /** What each gate holds, in the words the card's own rows use for it. */
 const GATE_SAID: Record<EnvironmentGate, string> = {

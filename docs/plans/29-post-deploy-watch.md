@@ -18,7 +18,7 @@ can be pointed at any of them and stop.
 | Stage | Ships                                         | Useful alone because                                                                                 |
 | ----- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | 1 ✅  | The seam, signals, presence, the dry run      | "Did the new thing throw" is most of the value and needs no baseline                                 |
-| 2     | The window, readings, verdicts, the goal page | The first stage a watch actually runs; stage 1 only ever dry-runs                                    |
+| 2 ✅  | The window, readings, verdicts, the goal page | The first stage a watch actually runs; stage 1 only ever dry-runs                                    |
 | 3     | Measures and baselines                        | The optimisation case, which is the one that needs a before                                          |
 | 4     | The bench row, bug filing, `holds`, extend    | Turns a reading into work; deliberately last, since it is the only arm that touches other subsystems |
 
@@ -122,18 +122,23 @@ does not re-litigate it.
 - **The lens boundary is asserted** in `test/watchDryRun.test.ts`; the spec claimed a structural
   assertion covered `src/environments/` and none existed.
 
-## Stage 2 — the window, the readings, the card
+## Stage 2 — the window, the readings, the card ✅
 
 **Done when** an arrival opens a watch, it reads on `watchIntervalMs`, it settles at `for`, and the
 goal page draws every check with its verdict.
 
-- _src/store/watches.ts_ — `watch_windows`, `watch_readings`. `settled_at` null means still watching;
-  note it in `docs/spec/14-persistence.md` under the nulls that mean something.
-- _src/environments/watchDesk.ts_ — a fifth pass on `EnvironmentDesk`, **below** the arrival pass,
+**Shipped.** Every bullet below landed. The spec's **Not built** marker is narrowed to what stages 3
+and 4 still own.
+
+- `src/store/watches.ts` — `watch_windows`, `watch_readings`. `settled_at` null means still watching;
+  noted in `docs/spec/14-persistence.md` under the nulls that mean something.
+- `src/store/environments.ts` — `ENVIRONMENT_COLUMNS`, the module's **first** `ColumnMigrations`
+  entry, for `goal_arrivals.watched_at`; registered in `src/store/store.ts`.
+- `src/environments/watchDesk.ts` — a fifth pass on `EnvironmentDesk`, **below** the arrival pass,
   since a window opens on an arrival the pass above records. Cap per pulse, oldest window first.
-- _src/environments/watchWindow.ts_ — pure: which arrivals open a window (two-probe-interval
-  freshness, stamped either way), which checks are due, which windows settle.
-- _src/environments/watchVerdict.ts_ — pure fold to the three verdicts. `unknown` never folds to
+- `src/environments/watchWindow.ts` — pure: which arrivals open a window (two-probe-interval
+  freshness, stamped either way), which windows are due a reading, which settle.
+- `src/environments/watchVerdict.ts` — pure fold to the three verdicts. `unknown` never folds to
   `clean`; no roll-up to a single word.
 - `src/wire.ts` → `web/src/types.ts`, `src/server/stateSnapshot.ts` — `GoalWatchView` beside
   `GoalReachView`. A wire type **is** a domain type or extends it, never a re-declaration.
@@ -151,8 +156,48 @@ goal page draws every check with its verdict.
 
 ### Tests
 
-_test/watchWindow.test.ts_, _test/watchVerdict.test.ts_, _test/watchDesk.test.ts_ at the
+`test/watchWindow.test.ts`, `test/watchVerdict.test.ts`, `test/watchDesk.test.ts` at the
 `buildSystem` seam with `dbPath: ':memory:'`.
+
+### What stage 2 decided
+
+- **`forMs` stays on the environment, and there is no per-goal `for`.** Stage 2 is its first reader,
+  and the plan document's own per-goal `for` was considered and left out: what the length of a window
+  is really about is the release cadence and traffic pattern of a deployment, which the operator knows
+  and a planner drafting a document does not. A second place to answer the same question, answered
+  worse by the party with less information, is not an improvement. Default 48 hours, in
+  `watchWindow.ts`. The window is sized from the **arrival**, not from the pulse that noticed it, so a
+  probe pass that ran long does not extend a watch by its own delay.
+- **`watchIntervalMs` is read per window, off that window's own newest reading**, rather than against
+  a shared clock — so a window opened mid-interval is read on its own schedule and a backlog that
+  defers past the cap keeps its place.
+- **The per-pulse cap is 20 windows**, deliberately smaller than `MAX_LANDINGS_PER_PULSE`: what it
+  bounds is a process spawn per open check against the operator's telemetry, not an argument list.
+  Deferring, oldest window first.
+- **Three things open a window**, and each is a different kind of no: the environment declares an
+  `observe`, the goal declares at least one check, and the arrival is fresh. A goal that declares its
+  first check *after* it arrived is not watched there — the declaration is what the operator approved,
+  and approving it after the deploy is approving it for the next one.
+- **The stamp is spent only where the feature is on.** An arrival on a deployment where no environment
+  declares a `watch` is left unstamped; stamping it would burn the one guard that makes turning the
+  feature on next month safe.
+- **The pass order inside the desk is open → settle → read.** Settling before the readings is what
+  stops a window that ran out between two pulses collecting one more reading past its own end.
+- **The whole window is read at once**, not check by check on separate clocks: one `last read` per
+  window is the reading an operator is shown, and staggered per-check clocks would make the card a
+  set of answers taken at different times.
+- **Open question 3 — retention for `watch_readings` — is settled as: nothing prunes a window.** A
+  settled window's readings are the evidence behind a verdict that is now permanent, and the spec's
+  "pruned with its window" was a rule with nothing to trigger it. What bounds the table is `for` over
+  `watchIntervalMs` — 96 rows per check per environment on the defaults — so it grows with the
+  fleet's work rather than with time. Stated in the spec under *Closing* and *Persistence*.
+- **Open question 4 — whether a dropped check stays droppable — is settled as: it is deleted, and it
+  takes its readings with it**, in the same transaction as the row. Superseding was the alternative
+  and is the wrong shape here: it would keep a check nobody declares in the plan sheet, the goal page
+  and the desk's own read loop, each needing its own retired-row filter, to preserve evidence for a
+  question that is no longer being asked. Deleting *both* is what makes the delete safe — the hazard
+  the question names is a verdict standing with nothing behind it, and pruning the readings with the
+  check leaves neither. `WatchStore.ingestGoalWatch` does both, and `test/watchDesk.test.ts` holds it.
 
 ## Stage 3 — measures and baselines
 
@@ -207,10 +252,7 @@ Worth settling before the stage that hits them, not during.
    first duplicates a workflow that already exists.
 2. **Whether `extend` re-opens a settled window or opens a second one** (stage 4). A second window is
    truer to "a watch is a record of a period" and makes the card longer.
-3. **Retention for `watch_readings`** — pruned with the window is stated in the spec, but a watch on a
-   busy environment at 30-minute intervals for a week is ~336 rows per check, and nothing prunes the
-   window itself today.
-4. **Whether a dropped check stays droppable** (stage 2). Stage 1 deletes a check an amendment stopped
-   declaring, which is safe while the row carries only its own declaration. Once a window's readings
-   hang off it, deleting orphans the evidence behind a verdict — so stage 2 either supersedes the row
-   the way a validation check is superseded, or prunes its readings with it deliberately.
+3. ~~**Retention for `watch_readings`**~~ — **answered in stage 2**: nothing prunes a window, and the
+   bound is `for` over `watchIntervalMs` rather than a retention rule. See *What stage 2 decided*.
+4. ~~**Whether a dropped check stays droppable**~~ — **answered in stage 2**: it is deleted, and its
+   readings are deleted with it in the same transaction. See *What stage 2 decided*.

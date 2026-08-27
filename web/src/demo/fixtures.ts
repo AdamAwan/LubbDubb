@@ -1067,6 +1067,7 @@ export function buildDemoState(): DemoSeed {
         environment: 'staging',
         arrivedAt: '2026-08-19T09:12:00.000Z',
         announcedAt: '2026-08-19T09:12:04.000Z',
+        watchedAt: '2026-08-19T09:12:04.000Z',
       },
     ],
     // One goal in each of the readings worth drawing: whole, half, and unanswerable.
@@ -1104,6 +1105,52 @@ export function buildDemoState(): DemoSeed {
         ],
         gateHold: 'the validation checks and the close-out are waiting for this work to reach staging.',
         released: null,
+      },
+    ],
+    // The layer above reach: #390's work is in staging, and this is what staging
+    // has said since. Two checks and two different answers, which is the whole
+    // point of drawing every check rather than one word — the retry the fix added
+    // is quiet, and the queue depth could not be read at all because the job has
+    // not run in staging yet. An `unknown` is never drawn in a clean one's words.
+    goalWatchWindows: [
+      {
+        goalRef: 'issue:390',
+        environment: 'staging',
+        openedAt: '2026-08-19T09:12:00.000Z',
+        settlesAt: '2026-08-21T09:12:00.000Z',
+        settledAt: null,
+        checks: [
+          {
+            checkId: 'no-checkout-retries',
+            title: 'Checkout stops retrying itself',
+            tolerate: 0,
+            reading: {
+              goalRef: 'issue:390',
+              environment: 'staging',
+              checkId: 'no-checkout-retries',
+              readAt: ago(0.5),
+              verdict: 'clean',
+              rows: 0,
+              detail: null,
+            },
+          },
+          {
+            checkId: 'invoice-queue-depth',
+            title: 'The invoice queue stops backing up',
+            tolerate: 0,
+            reading: {
+              goalRef: 'issue:390',
+              environment: 'staging',
+              checkId: 'invoice-queue-depth',
+              readAt: ago(0.5),
+              verdict: 'unknown',
+              rows: null,
+              detail:
+                'the watch could not read staging — the code path this check is about has not run here, so its ' +
+                'presence query matched nothing. A signal cannot report clean while its presence query is silent.',
+            },
+          },
+        ],
       },
     ],
     // An environment that is up, on the goal whose plan is waiting for approval —

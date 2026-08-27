@@ -7,6 +7,7 @@ import type {
 } from '../types.js';
 import type Database from 'better-sqlite3';
 import type { StoreContext } from './context.js';
+import type { ColumnMigrations } from './migrate.js';
 
 /**
  * Four tables, one question: `goal_landings` — the commit each of a goal's pull
@@ -28,10 +29,34 @@ import type { StoreContext } from './context.js';
  * first arrived somewhere, and the operator's answer for a goal that is never
  * going to.
  *
- * The tables are new, so they need no `ColumnMigrations` entry — but a table being
- * new *once* does not keep it exempt, and a column added later will.
+ * The tables were new once, which is exactly what stops keeping them exempt:
+ * `goal_arrivals.watched_at` is the column the post-deploy watch added to an
+ * existing table, and it is declared in {@link ENVIRONMENT_COLUMNS} below.
  * → `docs/spec/24-environments.md`
  */
+
+/**
+ * `goal_arrivals.watched_at` — when the watch pass considered an arrival, whether
+ * or not it opened a window for it.
+ *
+ * The one column this module has added since its tables were created, and it needs
+ * this entry for the reason every such column does: `CREATE TABLE IF NOT EXISTS`
+ * never alters an existing table, so without it the column is invisible on every
+ * database from before the watch shipped — and the freshness guard would read
+ * `undefined` for every arrival on exactly the deployments that have a history to
+ * storm.
+ *
+ * **It needs no backfill, and that is a property of the guard rather than an
+ * oversight.** Null here means *not considered yet*, and an arrival considered for
+ * the first time only opens a window if its confirming reading is within two probe
+ * intervals of now — so a database full of nulls is walked once, stamped, and
+ * opens nothing for work that shipped in March.
+ * → `docs/spec/14-persistence.md#migrations`
+ */
+export const ENVIRONMENT_COLUMNS: ColumnMigrations = {
+  goal_arrivals: { watched_at: 'TEXT' },
+};
+
 /**
  * Undo the landings and arrivals a part-ref goal was filed under (#472).
  *
@@ -183,7 +208,22 @@ export class EnvironmentStore {
       environment: r.environment,
       arrivedAt: r.arrived_at,
       announcedAt: r.announced_at,
+      watchedAt: r.watched_at,
     }));
+  }
+
+  /**
+   * Stamp an arrival as considered by the watch pass.
+   *
+   * {@link markArrivalAnnounced}'s twin, and called on the same terms: whether or
+   * not a window was opened. That is the whole of how a deployment that adds a
+   * `watch` to an environment it has been probing for a month watches its *next*
+   * arrival rather than opening a window on every goal already in the table.
+   */
+  markArrivalWatched(goalRef: string, environment: string): void {
+    this.ctx.db
+      .prepare(`UPDATE goal_arrivals SET watched_at=? WHERE goal_ref=? AND environment=?`)
+      .run(this.ctx.now(), goalRef, environment);
   }
 
   /**
@@ -254,6 +294,7 @@ interface ArrivalRow {
   arrived_at: string;
   recorded_at: string;
   announced_at: string | null;
+  watched_at: string | null;
 }
 
 interface ReleaseRow {
