@@ -22,6 +22,7 @@ import type {
 import type { ActionSink } from '../../sink/actionSink.js';
 import type { TicketFiler } from '../../tickets/filing.js';
 import type { PromptTemplates } from '../../dispatcher/promptTemplates.js';
+import type { WatchDryRunner } from '../../environments/watchDryRun.js';
 import type { PrRefStyle } from '../../prRef.js';
 import type { AssessmentVerdict } from '../assessment.js';
 import type { GoalAppraisalVerdictName } from '../goalAppraisal.js';
@@ -241,6 +242,16 @@ export interface McpToolDeps {
    * filing job, and the tool says so rather than pretending.
    */
   filing?: TicketFiler;
+  /**
+   * The post-deploy watch's dry run, as `plan_submit` reaches it: every declared
+   * check put to the environment once, the moment the plan lands, so a query that
+   * resolves nothing comes back to its author while it is still cheap to fix.
+   *
+   * Optional for {@link McpToolDeps.openPr}'s reason and with the same floor:
+   * unwired, the plan is stored exactly as it was before the block existed and
+   * nothing is asked of any environment.
+   */
+  watch?: WatchDryRunner;
   errors?: ErrorRecorder;
 }
 

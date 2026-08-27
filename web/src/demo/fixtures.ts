@@ -1740,6 +1740,29 @@ export function buildDemoState(): DemoSeed {
       }),
     ],
     validationResources: [],
+    // The post-deploy watch, on the goal the demo's plan hangs off: one signal,
+    // dry-run against the environment and firing — which is the reading worth
+    // showing, because it is the one that proves the query is live *and* that the
+    // reported defect is real.
+    goalWatches: [
+      {
+        originRef: 'issue:284',
+        id: 'snapshot-download-401s',
+        seq: 1,
+        kind: 'signal',
+        title: 'Snapshot downloads stop 401ing',
+        query: "traces | where message has 'snapshot download rejected' | where timestamp > ago(24h)",
+        presence: "traces | where operation_Name == 'GET /snapshots/{id}/download' | where timestamp > ago(24h)",
+        tolerate: 0,
+        why: 'The ticket is a 401 nobody can reproduce locally; production is the only place it shows.',
+        dryRunEnvironment: 'liveUk',
+        dryRunAt: ago(12),
+        dryRunVerdict: 'fires',
+        dryRunPresence: 'fires',
+        dryRunRows: 41,
+        dryRunDetail: null,
+      },
+    ],
     jobs: [],
     // One recurrence, so the desk's schedule list is not an empty box in the demo.
     // Its `nextRunAt` is null for the reason the demo backend never fires one: the

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type {
   AcceptanceCriterion,
+  GoalWatch,
   IssueSpend,
   Plan,
   PlanDiff,
@@ -20,6 +21,7 @@ import { renderMarkdown } from './markdown.js';
 import { PlanMap } from './PlanMap.js';
 import { ProfilePicker } from './ProfilePicker.js';
 import { ValidationDigest } from './ValidationSection.js';
+import { WatchDigest } from './WatchDigest.js';
 import { partOriginOf, planIssueOf, refLink, relTime } from './util.js';
 import { Ref } from './refs.js';
 
@@ -52,6 +54,7 @@ export function PlanModal({
   plan,
   parts,
   checks,
+  watches,
   upcoming,
   proposal,
   spend,
@@ -74,6 +77,11 @@ export function PlanModal({
   parts: PlanPartView[];
   /** This plan's validation checks, superseded ones included. Drawn read-only. */
   checks: ValidationCheck[];
+  /**
+   * This goal's post-deploy watch — what a running system would have to show once
+   * the work ships. Empty where the plan declared none, and then nothing draws.
+   */
+  watches: GoalWatch[];
   /** The last pulse's ranked plan, joined per part by origin — the dispatch cut. */
   upcoming: QueueItem[];
   /** The pending approval this plan is waiting on, when it is waiting on one. */
@@ -368,6 +376,19 @@ export function PlanModal({
                         }
                   }
                 />
+              </section>
+
+              <section
+                ref={(el) => {
+                  sections.current.watch = el;
+                }}
+              >
+                {/* Read-only for {@link ValidationDigest}'s reason, and below it
+                    deliberately: validation asks whether the goal was met, and this
+                    asks whether the thing is behaving once it is there — the later
+                    question, drawn later. Nothing renders where nothing was
+                    declared. */}
+                <WatchDigest watches={watches} refUrls={refUrls} />
               </section>
 
               <section

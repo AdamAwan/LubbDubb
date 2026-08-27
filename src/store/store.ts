@@ -43,6 +43,7 @@ import { StackLandingStore } from './landings.js';
 import { BranchReapStore } from './branchReaps.js';
 import { dropPartialGoalArrivals, EnvironmentStore, repairPartRefGoals } from './environments.js';
 import { LocalRunStore, LOCAL_RUN_COLUMNS } from './localRuns.js';
+import { WatchStore } from './watches.js';
 import { PrWatchSeedStore } from './prWatchSeeds.js';
 import { WorkItemLinkStore } from './workItemLinks.js';
 import { ReviewWaitStore } from './reviewWaits.js';
@@ -76,6 +77,8 @@ import type {
   EnvironmentReading,
   GoalArrival,
   GoalLanding,
+  GoalWatch,
+  GoalWatchInput,
   IssueAppraisal,
   ErrorLogEntry,
   ErrorLogInput,
@@ -138,6 +141,7 @@ import type {
   StackLanding,
   StackLandingStatus,
   Task,
+  WatchReadingVerdict,
   TrackerItem,
   UpgradeIntent,
   TaskSummary,
@@ -205,6 +209,7 @@ export class Store {
   private readonly landings: StackLandingStore;
   private readonly branchReaps: BranchReapStore;
   private readonly environments: EnvironmentStore;
+  private readonly watches: WatchStore;
   private readonly localRuns: LocalRunStore;
   private readonly prWatchSeeds: PrWatchSeedStore;
   private readonly workItemLinks: WorkItemLinkStore;
@@ -364,6 +369,7 @@ export class Store {
     this.landings = new StackLandingStore(ctx);
     this.branchReaps = new BranchReapStore(ctx);
     this.environments = new EnvironmentStore(ctx);
+    this.watches = new WatchStore(ctx);
     this.localRuns = new LocalRunStore(ctx);
     this.prWatchSeeds = new PrWatchSeedStore(ctx);
     this.workItemLinks = new WorkItemLinkStore(ctx);
@@ -1207,6 +1213,27 @@ export class Store {
   }
   listEnvironmentGateReleases(): EnvironmentGateRelease[] {
     return this.environments.listEnvironmentGateReleases();
+  }
+
+  // -- The post-deploy watch (what a goal declared production would have to show) --
+  ingestGoalWatch(originRef: string, checks: readonly GoalWatchInput[]): void {
+    this.watches.ingestGoalWatch(originRef, checks);
+  }
+  recordWatchDryRun(
+    originRef: string,
+    checkId: string,
+    reading: {
+      environment: string;
+      verdict: WatchReadingVerdict;
+      presence: WatchReadingVerdict | null;
+      rows: number | null;
+      detail: string | null;
+    },
+  ): void {
+    this.watches.recordWatchDryRun(originRef, checkId, reading);
+  }
+  listGoalWatches(): GoalWatch[] {
+    return this.watches.listGoalWatches();
   }
 
   // -- The local run (the machine's one dev environment) --------------------

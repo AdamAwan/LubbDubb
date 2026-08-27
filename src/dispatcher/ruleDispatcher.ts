@@ -128,6 +128,8 @@ export class RuleDispatcher implements Dispatcher {
   private readonly templates: PromptTemplates;
   private readonly defaultBranch: string;
   private readonly prRefStyle: PrRefStyle;
+  /** Rendered above this, in the composition root — see {@link StageContext.watchNote}. */
+  private readonly watchNote: string;
   private readonly planning: PlanningPolicy;
   /** Only the one field any rule reads — see the constructor's narrowing below. */
   private readonly validation: Pick<ValidationPolicy, 'desktopClaimMinutes'>;
@@ -169,7 +171,9 @@ export class RuleDispatcher implements Dispatcher {
     prRefStyle: PrRefStyle = '#',
     review: Partial<PrReviewPolicy> = {},
     reviewCharters: PrReviewCharters = { routing: null, modes: {} },
+    watchNote = '',
   ) {
+    this.watchNote = watchNote;
     this.review = { ...DEFAULT_PR_REVIEW, ...review };
     this.reviewCharters = reviewCharters;
     this.validation = {
@@ -570,6 +574,7 @@ export class RuleDispatcher implements Dispatcher {
       prReviews: new Map((ctx.prReviews ?? []).map((review) => [review.prNumber, review])),
       defaultBranch: this.defaultBranch,
       prRefStyle: this.prRefStyle,
+      watchNote: this.watchNote,
       validationRoot: this.validationRoot,
       validationClaimMinutes: this.validation.desktopClaimMinutes,
       // `workItemStates` narrows both work-item rules' config to non-null. Narrowed

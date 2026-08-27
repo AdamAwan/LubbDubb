@@ -37,7 +37,7 @@ export const planSubmit: ToolFactory = ({ deps, task, ok }) => ({
     'shape for it. Validated immediately: on rejection you get the reason back and can fix and resubmit ' +
     'in this same turn. Replaces writing .lubbdubb/plan.json.',
   inputSchema: PLAN_DOCUMENT_SCHEMA,
-  handler: (args) => {
+  handler: async (args) => {
     const planner = plannerIssue(task);
     if (!planner.ok) return toolError(planner.error);
     // Same schema as the file path, so the two transports accept and reject
@@ -61,6 +61,10 @@ export const planSubmit: ToolFactory = ({ deps, task, ok }) => ({
       // alone", and `{checks: []}` would read to `ingestPlanDocument` as a planner
       // withdrawing every check somebody is halfway through running.
       validation: args.validation,
+      // Passed through rather than defaulted, for `validation`'s reason: absent
+      // means "leave the existing watch alone", and an empty block would read to
+      // `ingestPlanDocument` as a planner withdrawing every check it had declared.
+      watch: args.watch,
     });
     if (!parsed.ok) {
       // Nothing is written on a rejection: the caller retries against an
@@ -72,14 +76,26 @@ export const planSubmit: ToolFactory = ({ deps, task, ok }) => ({
       originRef: issueOrigin(planner.number),
       title: task.originTitle ?? task.title,
     });
-    // Said out loud rather than left to be read off the status string: a
-    // planner that thinks its parts are being worked would otherwise sit
-    // waiting for siblings that will not start until a human clicks accept.
+    // The dry run, after the write and never instead of it: the plan is worth
+    // keeping whatever an environment says about one query, and a refusal here is
+    // something to fix rather than a reason to lose the decomposition. Handed back
+    // in the success payload for that reason — an author that can still act on it,
+    // in this same turn, without having to resubmit everything else.
+    const refusals = (await deps.watch?.run(issueOrigin(planner.number))) ?? [];
     return ok({
       accepted: true,
       status: result.status,
       retired: result.retired,
       awaitingApproval: 'The plan is recorded, but nothing is scheduled until an operator approves it.',
+      ...(refusals.length > 0
+        ? {
+            watchDryRun: refusals,
+            watchDryRunNote:
+              'Each of these queries was run once against the environment it would watch and did not come back ' +
+              'with a reading anybody could act on. Fix the query — or say why the ticket is wrong — and submit ' +
+              'again. A query that resolves nothing forever is the failure this whole surface exists to catch.',
+          }
+        : {}),
     });
   },
 });

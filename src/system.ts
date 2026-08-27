@@ -56,6 +56,9 @@ import { RunwayDesk } from './supply/runwayDesk.js';
 import { BranchReapDesk } from './branchReapDesk.js';
 import { EnvironmentDesk } from './environments/environmentDesk.js';
 import { CommandEnvironmentProber, type EnvironmentProber } from './environments/prober.js';
+import { CommandEnvironmentObserver, type EnvironmentObserver } from './environments/observer.js';
+import { WatchDryRun } from './environments/watchDryRun.js';
+import { watchNote } from './plans/planning.js';
 import { PrWatchDesk } from './prWatchDesk.js';
 import { PrWorkItemDesk } from './prWorkItemDesk.js';
 import { ScheduleDesk } from './schedules/scheduleDesk.js';
@@ -308,6 +311,13 @@ interface BuildOptions {
    * shell on the developer's machine if it did.
    */
   environmentProber?: EnvironmentProber;
+  /**
+   * Override how an environment's telemetry is asked a declared question (tests
+   * inject `FakeEnvironmentObserver`). Without it the real observer runs the
+   * operator's configured `observe` command — which a test has none of, and which
+   * would spawn a shell on the developer's machine if it did.
+   */
+  environmentObserver?: EnvironmentObserver;
   /** Override where recorded errors are mirrored (tests silence the default stderr echo). */
   errorMirror?: (entry: ErrorLogEntry) => void;
   /**
@@ -631,6 +641,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     // route a rule-drafted one takes — held, authorized and signed — instead of
     // being posted from inside the agent with the operator's credential.
     prReply: (): McpToolDeps['prReply'] => executor,
+    // Lazy for the same reason again: the dry run is built below this, and it is
+    // what turns a declared query from text in a document into a query somebody
+    // has proved resolves.
+    watch: (): McpToolDeps['watch'] => watchDryRun,
     errors,
   });
 
@@ -741,6 +755,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     mcp,
     // The `plan.json` transport's half of the approval gate — the tool transport
     // gets the same flag above, so a verdict lands identically either way.
+    //
+    // And its half of the watch's dry run, wrapped rather than passed directly
+    // because the desk is built below this — the same lazy reference every other
+    // late-built component gets, in the one shape this option's type allows.
+    watch: { run: (originRef: string): Promise<string[]> => watchDryRun.run(originRef) },
     errors,
   });
   const escalations = new EscalationInbox(store, agents);
@@ -839,6 +858,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     prRefStyle(config.integrations.sourceControl),
     config.review,
     reviewCharters,
+    // Rendered here rather than in the rule, so the dispatcher is handed a
+    // sentence rather than the environment config it was rendered from — the lens
+    // boundary `src/environments/` keeps in both directions.
+    watchNote(config.environments),
   );
   const dispatcher: Dispatcher = rules;
 
@@ -937,6 +960,18 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     sink: opts.sink ?? connector,
     probeIntervalMs: config.environmentProbeIntervalMs,
     errors,
+  });
+
+  // The layer above: what a goal declared production would have to show for its
+  // work to have done what it claimed. At this stage it only ever dry-runs — one
+  // reading per declared check, taken as the plan is submitted, so a query that
+  // resolves nothing is handed back to its author before an agent has spent a day
+  // on the work. Built whether or not any environment declares an `observe`; with
+  // none, `run` asks nothing and refuses nothing.
+  const watchDryRun = new WatchDryRun({
+    store,
+    environments: config.environments,
+    observer: opts.environmentObserver ?? new CommandEnvironmentObserver(config.repoRoot),
   });
 
   // The step after the launch, and the one station on the floor a person staffs:

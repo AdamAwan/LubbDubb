@@ -26,6 +26,54 @@ export interface EnvironmentConfig {
   at: string;
   /** What arriving here means. Absent = the environment is observed and nothing more. */
   arrival?: EnvironmentArrival;
+  /**
+   * How this environment's telemetry is asked a declared question, once a goal's
+   * work has arrived here. Absent = the environment is observed for reach and
+   * nothing more, and no goal draws a watch surface for it.
+   * → `docs/spec/29-post-deploy-watch.md#configuring-an-environment`
+   */
+  watch?: EnvironmentWatch;
+}
+
+/**
+ * The telemetry half of one environment.
+ *
+ * An environment's telemetry is a **command**, exactly as its deployed commit is:
+ * the harness ships no SDK and holds no opinion about what answers it.
+ * → {@link CommandEnvironmentObserver}
+ */
+interface EnvironmentWatch {
+  /**
+   * The command that answers a declared query, run in a shell in `repoRoot` with
+   * `LUBBDUBB_ENVIRONMENT`, `LUBBDUBB_WATCH_ID` and `LUBBDUBB_WATCH_QUERY` set.
+   * It reads the query out of the variable and prints the rows as JSON.
+   */
+  observe: string;
+  /**
+   * Prose an author is handed about what this environment's telemetry looks like:
+   * what table structured logs land in, what the role names are, where properties
+   * live. Fifteen lines an operator writes once, **appended** to the prompt.
+   */
+  schema?: string;
+  /** An optional command whose output is cached and appended the same way. A schema query, a sample row. */
+  describe?: string;
+  /**
+   * How long a window stays open here, in milliseconds. Absent takes the
+   * subsystem's own default of 48 hours.
+   *
+   * Spelled with the `Ms` suffix the rest of the config uses
+   * (`environmentProbeIntervalMs`, `closedPrWindowMs`) rather than the spec's
+   * original bare `for`: an unsuffixed duration is exactly the unit ambiguity the
+   * convention exists to remove, and a window read in the wrong unit is a watch
+   * that settles in two minutes or in two months with nothing red.
+   */
+  forMs?: number;
+  /**
+   * Which of a delivered goal's obligations an **open** watch here holds. Off by
+   * default, and deliberately: a watch reports, and a 48-hour hold on every
+   * delivered goal would put every goal on the bench in a state nobody can act on.
+   */
+  holds?: EnvironmentGate[];
 }
 
 /** The obligations an arrival may open — see {@link EnvironmentGate}. */
@@ -81,6 +129,7 @@ export function validateEnvironments(environments: EnvironmentConfig[]): void {
           'An empty one names nothing, which leaves every goal unanswered forever.',
       );
     validateArrival(env.arrival, `${where} ("${env.name}")`);
+    validateWatch(env, `${where} ("${env.name}")`);
   });
 }
 
@@ -114,4 +163,48 @@ function validateArrival(arrival: EnvironmentArrival | undefined, where: string)
       `${where}: "arrival" declares nothing. Name what arriving here opens, or set "comment": true — or drop it, ` +
         'and the environment is observed and nothing more.',
     );
+}
+
+/**
+ * The three refusals whose absence is otherwise silent.
+ *
+ * Each leaves a watch that looks configured and answers nothing: an empty
+ * `observe` makes every check unanswerable forever, a `holds` naming an
+ * obligation the harness does not file holds nothing, and a `describe` without an
+ * `observe` is a schema for a question nothing asks.
+ */
+function validateWatch(env: EnvironmentConfig, where: string): void {
+  const watch = env.watch;
+  if (watch === undefined) {
+    if ('describe' in env)
+      throw new Error(
+        `${where}: "describe" belongs inside "watch", beside the "observe" command it describes the schema for.`,
+      );
+    return;
+  }
+  if (typeof watch !== 'object' || watch === null || Array.isArray(watch))
+    throw new Error(`${where}: "watch" must be an object — {"observe": "...", "schema": "..."}.`);
+  if (typeof watch.observe !== 'string' || watch.observe.trim() === '')
+    throw new Error(
+      `${where}: "watch.observe" must be a non-empty command that answers a declared query. ` +
+        'An empty one leaves every check on this environment unanswerable forever.',
+    );
+  if (watch.describe !== undefined && (typeof watch.describe !== 'string' || watch.describe.trim() === ''))
+    throw new Error(`${where}: "watch.describe" must be a non-empty command, or be left out.`);
+  if (
+    watch.forMs !== undefined &&
+    (typeof watch.forMs !== 'number' || !Number.isFinite(watch.forMs) || watch.forMs <= 0)
+  )
+    throw new Error(
+      `${where}: "watch.forMs" must be a positive number of milliseconds — how long a window stays open.`,
+    );
+  if (watch.holds === undefined) return;
+  if (!Array.isArray(watch.holds))
+    throw new Error(`${where}: "watch.holds" must be a list of ${ENVIRONMENT_GATES.join(' / ')}.`);
+  for (const gate of watch.holds)
+    if (!ENVIRONMENT_GATES.includes(gate))
+      throw new Error(
+        `${where}: "${String(gate)}" is not an obligation the harness files, so holding it holds nothing. ` +
+          `"watch.holds" names ${ENVIRONMENT_GATES.join(' / ')}.`,
+      );
 }

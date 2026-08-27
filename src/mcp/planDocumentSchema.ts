@@ -187,6 +187,52 @@ export const PLAN_DOCUMENT_SCHEMA: Record<string, unknown> = {
         },
       },
     },
+    watch: {
+      type: 'object',
+      description:
+        'What a running system would have to show, once this is deployed, for the work to have done what it ' +
+        'claimed. The layer above "validation": that asks whether the goal was met, this asks whether the thing ' +
+        'is behaving now that it is there. Declare it when there is something running you could observe — and ' +
+        'for a defect it is knowable now, because the bug report is the signal: "job X keeps timing out" is ' +
+        'its own post-deploy check. Declaring nothing is a legitimate answer for a refactor, a docs change or a ' +
+        'build fix, and is not the same as declaring everything is fine. Each query is run once against the ' +
+        'environment the moment you submit, and you get told what it answered.',
+      properties: {
+        signals: {
+          type: 'array',
+          description:
+            'Things that should not be happening: exceptions, failures, retries, a log line only written when ' +
+            'something has gone wrong.',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', description: 'Stable lowercase kebab-case id, and the merge key on a replan.' },
+              title: { type: 'string', description: 'One line, the headline.' },
+              query: {
+                type: 'string',
+                description:
+                  "The query itself, in whatever language this deployment's telemetry answers. It is handed to " +
+                  "the operator's command as a value, never pasted into a shell.",
+              },
+              presence: {
+                type: 'string',
+                description:
+                  'A second query whose only job is to prove the code path is running at all. Required, and it ' +
+                  'is the whole design: a query naming an operation that does not exist returns zero rows, and ' +
+                  'zero rows is indistinguishable from a healthy release. Without this the harness would report ' +
+                  'your fix verified on the strength of a typo.',
+              },
+              tolerate: {
+                type: 'number',
+                description: 'The count this must not exceed. Almost always 0 — the thing should not be happening.',
+              },
+              why: { type: 'string', description: 'Why this is the right question to ask after it ships.' },
+            },
+            required: ['id', 'title', 'query', 'presence'],
+          },
+        },
+      },
+    },
   },
   required: ['parts', 'reason'],
 };
