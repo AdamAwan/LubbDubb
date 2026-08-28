@@ -1585,8 +1585,9 @@ from.
 
 ## The overview
 
-What the situation area shows when no goal is selected: five cards, rows rather than pictures, in
-reading order — **Fleet**, **Goals in flight**, **Pull requests**, **Up next**, **World signals**. The
+What the situation area shows when no goal is selected: six cards, rows rather than pictures, in
+reading order — **Fleet**, **Goals in flight**, **Pull requests**, **Up next**, **World signals**,
+**Environments**. The
 fleet's **runway** is a band along the foot of the first of them rather than a sixth card, because "who
 is out" and "what is behind them" are one thought.
 
@@ -1839,6 +1840,16 @@ card is the drift `PanelRowModel` exists to end, one level up.
   world event on its issue ref — so an arrival written as one would lift the delivery park on the goal
   it announced and hand the work straight back to the fleet.
   → [24](24-environments.md#in-the-cockpit)
+- **Environments** — one row per environment that declares a `health` command: the word its own check
+  answered, how long it has been that word, when it was last read, and the check's own reasons behind
+  the row's marker. Here rather than on a goal page because health is a fact about the environment and
+  not about any goal, and the question it answers — "is anything broken out there" — is asked with no
+  goal selected. It is **the one card here that draws nothing when it is empty**, which is the
+  deliberate exception to the rule below: an environment surface on a deployment that configured none
+  is a row of question marks announcing a feature as broken. No new tones — `unknown` takes the same
+  amber as an `orange` tier and is told apart by the word beside it, because a check that could not
+  answer is a thing to look at and drawing it green or red would claim an answer it did not give.
+  → [24](24-environments.md#is-the-environment-well)
 
 ### Rate, removed
 
@@ -4756,7 +4767,7 @@ muting rather than removing the rail, a group with no rows drawing no heading, a
 button and the recovery hold not, the ask drawn above the plan, a goal with no ask drawing no band, the
 goal page answering through the shared card, a held part quoting the reconciler, a retired plan drawing
 what it proposed rather than only saying it has no live parts, an HTML ticket drawn as HTML, a goal with
-no measured spend drawing no `$0.00`, the overview's five cards, an empty rack still drawing, the
+no measured spend drawing no `$0.00`, the overview's six cards and the environments card's absence when nothing declares a check, an empty rack still drawing, the
 the intake hold arriving on the rail rather than on the tickets tab, that tab's rows being ways into
 their goals and its container cascade, the fault
 log keeping its clear at zero, a panel's two ways out, the demo gate on injection, the precedence

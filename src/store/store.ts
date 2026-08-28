@@ -76,6 +76,9 @@ import type {
   Decision,
   EnvironmentReachStatus,
   EnvironmentGateRelease,
+  EnvironmentHealthReading,
+  EnvironmentHealthState,
+  EnvironmentHealthTier,
   EnvironmentReading,
   GoalArrival,
   GoalLanding,
@@ -1213,6 +1216,18 @@ export class Store {
   }
   listEnvironmentReach(): EnvironmentReading[] {
     return this.environments.listEnvironmentReach();
+  }
+  recordEnvironmentHealth(input: {
+    environment: string;
+    state: EnvironmentHealthState;
+    tier: EnvironmentHealthTier | null;
+    reasons: string[];
+    detail: string | null;
+  }): void {
+    this.environments.recordEnvironmentHealth(input);
+  }
+  listEnvironmentHealth(): EnvironmentHealthReading[] {
+    return this.environments.listEnvironmentHealth();
   }
   recordGoalArrival(input: { goalRef: string; environment: string; arrivedAt: string }): void {
     this.environments.recordGoalArrival(input);

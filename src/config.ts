@@ -461,6 +461,18 @@ export interface Config {
    */
   environmentProbeIntervalMs: number;
   /**
+   * How often an environment's own `health` command is asked whether it is well.
+   *
+   * Its own interval rather than {@link environmentProbeIntervalMs}, because the
+   * two have different costs and different silences. A probe is asked only while
+   * some landing is unconfirmed, so an established fleet spawns nothing; health is
+   * asked on every environment that declares it whether or not anything has
+   * shipped, so this number *is* the standing cost of the feature — and it is also
+   * how stale the worst reading on the glass may be while somebody is looking at
+   * it. Nothing is asked on an environment that declares no `health`.
+   */
+  environmentHealthIntervalMs: number;
+  /**
    * How often an **open** post-deploy watch asks its environment again.
    *
    * Deliberately not {@link environmentProbeIntervalMs}. Five minutes is right for
@@ -1005,6 +1017,7 @@ const DEFAULTS: Config = {
   // Empty is the off switch, not an empty list of something switched on.
   environments: [],
   environmentProbeIntervalMs: 5 * 60 * 1000,
+  environmentHealthIntervalMs: 5 * 60 * 1000,
   watchIntervalMs: 30 * 60 * 1000,
   ci: { checks: [] },
   upNextOverrideTtlMs: 7 * 24 * 60 * 60 * 1000,

@@ -81,6 +81,7 @@ import type {
   Decision,
   DeliveryAuthor,
   EnvironmentGateRelease,
+  EnvironmentHealthReading,
   ErrorLogEntry,
   Escalation,
   FactReach,
@@ -1107,6 +1108,17 @@ export interface CockpitState {
    * one. → `docs/spec/24-environments.md#the-lens`
    */
   environmentReach: GoalReachView[];
+  /**
+   * What each environment's own health check last said, in the operator's own
+   * order — one entry per environment that declares a `health` command.
+   *
+   * Empty where none does, which is what the cockpit reads to draw no health
+   * surface at all rather than a row of question marks on a deployment that never
+   * asked for one. An environment whose `health` has since been removed keeps its
+   * stored row and is dropped here: the configuration is what says whether the
+   * question is still being asked. → `docs/spec/24-environments.md#is-the-environment-well`
+   */
+  environmentHealth: EnvironmentHealthReading[];
   /**
    * Every open or settled post-deploy watch, one entry per `(goal, environment)`.
    *
@@ -2193,6 +2205,9 @@ export type {
   Decision,
   EnvironmentGate,
   EnvironmentGateRelease,
+  EnvironmentHealthReading,
+  EnvironmentHealthState,
+  EnvironmentHealthTier,
   ErrorLogEntry,
   Escalation,
   FactLifetime,

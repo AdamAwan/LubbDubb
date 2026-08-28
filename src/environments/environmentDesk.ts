@@ -4,6 +4,7 @@ import type { ActionSink } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
 import type { EnvironmentReachStatus, GoalLanding, WorldSnapshot } from '../types.js';
 import { announceableArrivals, arrivalComment, newArrivals } from './arrival.js';
+import type { EnvironmentHealthProber } from './healthProber.js';
 import { unrecordedLandings } from './landings.js';
 import type { EnvironmentConfig } from './policy.js';
 import type { EnvironmentProber } from './prober.js';
@@ -15,12 +16,16 @@ interface EnvironmentDeskDeps {
   /** The operator's list. Empty is the off switch — only the attribution pass runs. */
   environments: EnvironmentConfig[];
   prober: EnvironmentProber;
+  /** Asks each environment that declares a `health` command whether it is well. */
+  healthProber: EnvironmentHealthProber;
   /** Answers "is this landing in what the environment named", from the local clone. */
   git: GitObserver;
   /** Where an arrival's comment goes. */
   sink: ActionSink;
   /** How long a landing rests before its environment is asked where it is again. */
   probeIntervalMs: number;
+  /** How long a health reading stands before its environment is asked again. */
+  healthIntervalMs: number;
   /**
    * The post-deploy watch's own pass, or undefined where nothing has one.
    *
@@ -53,10 +58,11 @@ interface EnvironmentDeskDeps {
 const MAX_LANDINGS_PER_PULSE = 200;
 
 /**
- * Five passes on the pulse: attribute the merges nothing has attributed yet, ask
- * each environment where it is, record the goals that have just arrived, say so on
- * their tickets, and — last, because it reads what the third pass wrote — open,
- * read and settle the post-deploy watch.
+ * Six passes on the pulse: attribute the merges nothing has attributed yet, ask
+ * each environment whether it is well, ask each environment where it is, record
+ * the goals that have just arrived, say so on their tickets, and — last, because
+ * it reads what the arrival pass wrote — open, read and settle the post-deploy
+ * watch.
  *
  * A desk beside {@link BranchReapDesk} rather than a dispatcher rule, for the
  * reason everything in `src/environments/` sits outside `src/dispatcher/`: it
@@ -88,12 +94,55 @@ export class EnvironmentDesk {
     }
 
     if (this.deps.environments.length === 0) return;
+    // Health first, and unlike the passes below **its position is not an
+    // invariant** — nothing reads what it writes, and it reads nothing the others
+    // write. It is here rather than at the end so that a pulse whose probe or
+    // announce throws still leaves the freshest health on the glass; that is a
+    // preference, and it is said out loud so a later reordering is not read as
+    // breaking a rule this file's other orderings really do state.
+    for (const environment of this.deps.environments) await this.checkHealth(environment);
     for (const environment of this.deps.environments) await this.probe(environment);
     this.recordArrivals();
     await this.announce();
     // Below the arrival pass, and that is the invariant rather than a preference:
     // a window opens on an arrival the pass above writes.
     await this.deps.watch?.run();
+  }
+
+  /**
+   * Ask one environment whether it is well, and write down what it said.
+   *
+   * Asked whether or not anything has shipped, which is what separates this from
+   * the probe below: an environment with nothing pending is not asked *where* it
+   * is, because the answer would serve no landing — but whether it is up is a
+   * question with a reader on a fleet that has shipped nothing all week.
+   *
+   * **An environment declaring no `health` is not asked and gets no row.** A row
+   * of question marks on every environment that never configured one would be the
+   * feature announcing itself as broken, which is the rule the whole subsystem is
+   * drawn to.
+   *
+   * A check that could not answer is written down as `unknown` rather than left
+   * alone, for the reach probe's reason: a health check that has gone dark is a
+   * thing the cockpit has to be able to say, and silence is indistinguishable from
+   * nobody having got round to it.
+   */
+  private async checkHealth(environment: EnvironmentConfig): Promise<void> {
+    const { store, errors } = this.deps;
+    const command = environment.health;
+    if (command === undefined) return;
+    const standing = store.listEnvironmentHealth().find((r) => r.environment === environment.name);
+    const floor = new Date(this.now() - this.deps.healthIntervalMs).toISOString();
+    if (standing !== undefined && standing.observedAt > floor) return;
+    try {
+      const report = await this.deps.healthProber.check(environment.name, command);
+      store.recordEnvironmentHealth({ environment: environment.name, ...report });
+    } catch (err) {
+      errors?.record({
+        source: 'cycle',
+        message: `checking the health of ${environment.name} failed: ${(err as Error).message}`,
+      });
+    }
   }
 
   /**

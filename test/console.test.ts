@@ -1410,11 +1410,29 @@ test('a goal with no measured spend draws no spend row rather than $0.00', () =>
   assert.ok(!unmeasured.includes('$0.00'), 'null is "never measured", not zero');
 });
 
-test('with no goal selected the overview draws its five cards', () => {
+test('with no goal selected the overview draws its six cards', () => {
   const html = render(view());
-  for (const title of ['Fleet', 'Goals in flight', 'Pull requests', 'Up next', 'World signals']) {
+  for (const title of ['Fleet', 'Goals in flight', 'Pull requests', 'Up next', 'World signals', 'Environments']) {
     assert.ok(html.includes(title), `the overview is missing ${title}`);
   }
+});
+
+/**
+ * The one card on this page that draws nothing when it is empty.
+ *
+ * The deliberate exception to the rule the rack pins below: an environment surface
+ * on a deployment that configured no health check is a row of question marks
+ * announcing a feature as broken. Pinned in both directions, because either half
+ * alone is a card that looks right on the fixtures and wrong on a real deployment.
+ */
+test('the environments card draws its readings, and nothing at all without them', () => {
+  const v = view();
+  const html = render(v);
+  assert.ok(html.includes('Pipeline failing'), 'the check’s own words, drawn verbatim');
+  assert.ok(html.includes('not well'), 'and what they add up to, in the operator’s words');
+
+  const none = render({ ...v, state: { ...v.state, environmentHealth: [] } });
+  assert.ok(!none.includes('Environments'), 'nothing configured, nothing drawn');
 });
 
 test('a queued item states why it is held, in the queue’s own words', () => {

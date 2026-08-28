@@ -1,5 +1,8 @@
 import type {
   EnvironmentGateRelease,
+  EnvironmentHealthReading,
+  EnvironmentHealthState,
+  EnvironmentHealthTier,
   EnvironmentReachStatus,
   EnvironmentReading,
   GoalArrival,
@@ -268,6 +271,69 @@ export class EnvironmentStore {
     return rows.map((r) => ({ goalRef: r.goal_ref, note: r.note, releasedAt: r.released_at }));
   }
 
+  /**
+   * Record what an environment's own health check said.
+   *
+   * `OR REPLACE` in effect, like a reach reading and unlike a landing: health is a
+   * status and the newest answer is the answer. What survives the replace is
+   * `changed_at`, and only while the reading says the same thing — the `CASE`
+   * below is that whole rule, kept in the statement rather than in a read-then-write
+   * so two pulses landing together cannot lose an episode's start between them.
+   *
+   * A change of **reasons** under the same state and tier is not a change: a check
+   * whose list shifts while an outage runs is the same outage, and a clock
+   * restarting under it every five minutes would report a fresh one forever.
+   */
+  recordEnvironmentHealth(input: {
+    environment: string;
+    state: EnvironmentHealthState;
+    tier: EnvironmentHealthTier | null;
+    reasons: string[];
+    detail: string | null;
+  }): void {
+    this.ctx.db
+      .prepare(
+        `INSERT INTO environment_health (environment, state, tier, reasons, detail, observed_at, changed_at)
+         VALUES (@environment, @state, @tier, @reasons, @detail, @at, @at)
+         ON CONFLICT(environment) DO UPDATE SET
+           state=excluded.state, tier=excluded.tier, reasons=excluded.reasons,
+           detail=excluded.detail, observed_at=excluded.observed_at,
+           changed_at = CASE
+             WHEN environment_health.state = excluded.state
+              AND ifnull(environment_health.tier, '') = ifnull(excluded.tier, '')
+             THEN environment_health.changed_at ELSE excluded.changed_at END`,
+      )
+      .run({
+        environment: input.environment,
+        state: input.state,
+        tier: input.tier,
+        reasons: JSON.stringify(input.reasons),
+        detail: input.detail,
+        at: this.ctx.now(),
+      });
+  }
+
+  /**
+   * What each environment's health check last said. One row per environment, so it
+   * is bounded by the operator's own list.
+   *
+   * A row is kept for an environment whose `health` command has since been removed
+   * — nothing deletes it — which is why the cockpit's builder ships only the
+   * environments that declare one today rather than everything this returns.
+   */
+  listEnvironmentHealth(): EnvironmentHealthReading[] {
+    const rows = this.ctx.db.prepare(`SELECT * FROM environment_health`).all() as HealthRow[];
+    return rows.map((r) => ({
+      environment: r.environment,
+      state: r.state as EnvironmentHealthState,
+      tier: r.tier as EnvironmentHealthTier | null,
+      reasons: readReasons(r.reasons),
+      detail: r.detail,
+      observedAt: r.observed_at,
+      changedAt: r.changed_at,
+    }));
+  }
+
   /** Every verdict held. One row per landing per environment, so it is bounded by the two. */
   listEnvironmentReach(): EnvironmentReading[] {
     const rows = this.ctx.db.prepare(`SELECT * FROM environment_reach`).all() as ReachRow[];
@@ -301,6 +367,33 @@ interface ReleaseRow {
   goal_ref: string;
   note: string;
   released_at: string;
+}
+
+interface HealthRow {
+  environment: string;
+  state: string;
+  tier: string | null;
+  reasons: string;
+  detail: string | null;
+  observed_at: string;
+  changed_at: string;
+}
+
+/**
+ * The stored reason list, read defensively.
+ *
+ * The column is written by {@link EnvironmentStore.recordEnvironmentHealth} and by
+ * nothing else, so a row that will not parse is not a case anything produces — but
+ * a throw here would take the whole cockpit snapshot down over one environment's
+ * reading, which is a worse answer than drawing a reading with no reasons on it.
+ */
+function readReasons(text: string): string[] {
+  try {
+    const json: unknown = JSON.parse(text);
+    return Array.isArray(json) ? json.filter((r): r is string => typeof r === 'string') : [];
+  } catch {
+    return [];
+  }
 }
 
 interface ReachRow {
