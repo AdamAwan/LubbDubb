@@ -798,6 +798,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     inReviewState: config.issueInReviewState,
     inProgressState: config.issueInProgressState,
     containerTypes: config.issueContainerTypes,
+    parentedTypes: config.issueParentedTypes,
   };
   const rules = new RuleDispatcher(
     issuePickup,

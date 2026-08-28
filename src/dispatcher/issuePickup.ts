@@ -83,6 +83,14 @@ export interface IssuePickupPolicy {
    * back to `DEFAULT_CONTAINER_TYPES`; an explicit `[]` turns the gate off.
    */
   containerTypes?: string[];
+  /**
+   * Provider-native item types expected to hang off a container — `["User Story",
+   * "Bug", …]` for Azure DevOps. One of these with no parent is an orphan: the
+   * appraisal prompt says so and offers the containers the harness can see, and
+   * the cockpit asks where it belongs. Unset falls back to
+   * `DEFAULT_PARENTED_TYPES`; an explicit `[]` turns the orphan report off.
+   */
+  parentedTypes?: string[];
 }
 
 /**

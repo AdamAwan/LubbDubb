@@ -515,7 +515,11 @@ runs: a goal the world no longer carries is not one the funnel is refusing to di
 
 **`placement` is the third kind with no row of its own underneath it**, and the first that holds
 nothing at all. It is read off `issue.appraisal.placement` — the goal's missing parent and its missing area
-path, as the appraisal proposed them ([06](06-issue-pickup.md#where-the-goal-belongs-the-placement-proposals-issue-463)).
+path ([06](06-issue-pickup.md#where-the-goal-belongs-the-placement-proposals-issue-463)). **The parent
+row is the fact and the area-path row is the appraiser's proposal**, which is why the parent row draws
+with no first choice under it where nothing was proposed and the area-path row does not exist at all
+in that case; the difference is argued in 06, and `ParentPicker` already leads with its own container
+list when it has no suggestion to compare against.
 Every other row on this rail stands between the fleet and some work; this one does not. The work is
 dispatched, done and merged whatever the answer is, and what is wrong is that the ticket is invisible
 to whoever plans the backlog — a fault nobody sees until they go looking for work that is not on the
@@ -1198,11 +1202,14 @@ draw:
   world read — no timer, no world event to have missed. Same derivation `placementAsks` takes, pointed
   at the item rather than at the question ([06](06-issue-pickup.md), `src/intake/placement.ts`).
 
-**Why it is louder than the ask it sits above.** The rail's `placement` row is gated on the appraiser
-having _proposed_ a container. A goal picked up before the appraiser ran, one whose verdict named
-nothing, and one somebody answered months ago are all orphans the cockpit used to say nothing about —
-and every one of them merges, closes and disappears from the backlog just the same. So the warning is
-the **fact** and never the question: the proposal, where there is one, is what the band _offers_.
+**Why it is louder than the ask it sits above.** The warning is the **fact** and never the question:
+a goal that hangs off nothing merges, closes and disappears from the backlog whether or not anybody
+proposed a container for it, so the proposal — where there is one — is what the band _offers_ rather
+than what makes it appear. The rail's `placement` row was gated on the appraiser having _proposed_ one
+and now takes the same reading ([06](06-issue-pickup.md#the-parent-question-is-the-fact-the-area-path-question-is-the-proposal)),
+which leaves this band two things of its own: the goal picked up before the appraiser ran at all —
+`placement` rides inside `issue.appraisal`, so there is no row for a goal with no appraisal row — and
+the weight, which is the next paragraph.
 
 **Two weights, one fact.** Unanswered, it draws in full with the three answers under it. Answered —
 "this goal wants none" — it goes grey and one line tall, keeping the way back. The item is still an

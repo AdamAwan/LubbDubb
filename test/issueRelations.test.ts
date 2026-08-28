@@ -4,6 +4,7 @@ import {
   candidateParents,
   containerPickupReason,
   isContainerIssue,
+  DEFAULT_PARENTED_TYPES,
   isOrphanIssue,
   relatedWorkNote,
   watchCascadeTargets,
@@ -138,6 +139,35 @@ test('an issue from a tracker without hierarchy is never an orphan', () => {
 test('a Feature at the top of the tree is not an orphan, and nor is a Task', () => {
   assert.equal(isOrphanIssue(issue({ issueType: 'Feature', parent: null }), DEFAULT_CONTAINER_TYPES), false);
   assert.equal(isOrphanIssue(issue({ issueType: 'Task', parent: null }), DEFAULT_CONTAINER_TYPES), false);
+});
+
+/**
+ * The type names are the operator's, exactly as `issueContainerTypes` is, and the
+ * failure of a closed word list in here is silent in the direction that costs: a
+ * project whose process template calls the thing it works something else has every
+ * item read as "wanted no parent" — no orphan note in any prompt, no candidate
+ * containers offered, no proposal, and no missing-parent question ever asked.
+ */
+test('which types are expected to have a parent is the operator’s policy, not a word list', () => {
+  const defect = issue({ issueType: 'Defect', parent: null });
+  assert.equal(isOrphanIssue(defect, DEFAULT_CONTAINER_TYPES), false, 'not one of the stock template names');
+  assert.equal(isOrphanIssue(defect, DEFAULT_CONTAINER_TYPES, ['defect']), true);
+  assert.equal(isOrphanIssue(defect, DEFAULT_CONTAINER_TYPES, [' DEFECT ']), true, 'matched like every other type');
+  assert.equal(
+    isOrphanIssue(issue({ issueType: 'Bug', parent: null }), DEFAULT_CONTAINER_TYPES, []),
+    false,
+    'an explicit empty list turns the orphan report off, as it does for containers',
+  );
+  assert.equal(
+    isOrphanIssue(issue({ issueType: 'Bug', parent: null }), DEFAULT_CONTAINER_TYPES, DEFAULT_PARENTED_TYPES),
+    true,
+    'and the default is what an unset policy falls back to',
+  );
+  // The note is the other half of the same predicate: the appraiser is told the
+  // item hangs off nothing and offered the containers only where it holds.
+  const candidates = [relative({ number: 12, title: 'Checkout revamp', issueType: 'Feature' })];
+  assert.equal(relatedWorkNote(defect, DEFAULT_CONTAINER_TYPES, candidates), '');
+  assert.match(relatedWorkNote(defect, DEFAULT_CONTAINER_TYPES, candidates, ['Defect']), /might belong to/);
 });
 
 // --------------------------------------------------------------------------

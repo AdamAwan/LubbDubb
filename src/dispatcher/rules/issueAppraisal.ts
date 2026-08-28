@@ -80,7 +80,7 @@ export function issueAppraisal(s: StageContext): void {
             title: issue.title,
             body: issue.body,
             branch,
-          }) + relatedWorkNote(issue, s.pickup.containerTypes, s.parentCandidates),
+          }) + relatedWorkNote(issue, s.pickup.containerTypes, s.parentCandidates, s.pickup.parentedTypes),
         originRef: origin,
         // The exact text the verdict will be fingerprinted against — see
         // `AgentManager.recordAppraisal`, which reads these two fields back off

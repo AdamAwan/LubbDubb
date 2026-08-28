@@ -492,18 +492,28 @@ function ParentAsk({
   proposed: number | null;
   view: CockpitView;
   actions: CockpitActions;
-}): JSX.Element | null {
-  if (proposed === null) return null;
-  const container = view.state.world.issues.find((i) => i.number === proposed);
+}): JSX.Element {
+  const container = proposed === null ? undefined : view.state.world.issues.find((i) => i.number === proposed);
   return (
     <>
-      <p>
-        <strong>This goal rolls up to nothing.</strong> The appraisal suggests{' '}
-        {container ? `“${container.title}”` : `work item #${proposed}`}.
-        <span className="cn-refs">
-          <Ref to={`issue:${proposed}`} title="Open the suggested parent and check it before you accept it" />
-        </span>
-      </p>
+      {proposed === null ? (
+        /* No suggestion, and the band still draws: the row is the item hanging off
+           nothing, and returning null here for want of a proposal was a row that
+           opened onto an empty band — indistinguishable, to an operator, from a
+           cockpit that is broken. `ParentPicker` leads with its own list when it
+           has no first choice to compare against. */
+        <p>
+          <strong>This goal rolls up to nothing.</strong> Nothing has been suggested for it.
+        </p>
+      ) : (
+        <p>
+          <strong>This goal rolls up to nothing.</strong> The appraisal suggests{' '}
+          {container ? `“${container.title}”` : `work item #${proposed}`}.
+          <span className="cn-refs">
+            <Ref to={`issue:${proposed}`} title="Open the suggested parent and check it before you accept it" />
+          </span>
+        </p>
+      )}
       <p className="cn-tick">
         Nothing is held up by this: the work is dispatched, done and merged either way. What is missing is the item’s
         place on the backlog — unparented, it rolls up to nothing and whoever plans the work cannot see it.

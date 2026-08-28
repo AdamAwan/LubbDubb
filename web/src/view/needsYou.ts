@@ -934,7 +934,13 @@ export function buildNeedsYou(
         group: 'yours',
         title: askLine(
           ask.field === 'parent'
-            ? `No parent — #${ask.proposedParent} proposed`
+            ? // The proposal is what the row *offers*, never what makes it appear:
+              // the appraiser is offered candidates off a world list narrowed by tag
+              // and assignee, so on plenty of boards there is nothing for it to name
+              // and the orphan is the same orphan either way.
+              ask.proposedParent === null
+              ? 'No parent Feature'
+              : `No parent — #${ask.proposedParent} proposed`
             : `On no team's board — “${ask.proposedAreaPath}” proposed`,
           goalRef,
           state,

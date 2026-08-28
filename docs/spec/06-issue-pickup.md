@@ -85,16 +85,17 @@ own structure.
 
 Assembled once in `src/system.ts` from config and handed to whichever dispatcher is selected:
 
-| Field             | From config                | Effect                                                                               |
-| ----------------- | -------------------------- | ------------------------------------------------------------------------------------ |
-| `watchLabel`      | derived from `labelPrefix` | Opt-in gate. Empty = gate off.                                                       |
-| `requireOwnLabel` | `userId` being set         | Read `labelsAddedByViewer` instead of `labels` for the watch check.                  |
-| `priorityLabels`  | `issuePriorityLabels`      | Label → weight.                                                                      |
-| `defaultPriority` | `issueDefaultPriority`     | Weight when no label matches.                                                        |
-| `pickupStates`    | `issuePickupStates`        | Allowed provider-native workflow states.                                             |
-| `containerTypes`  | `issueContainerTypes`      | Item types that are never worked. Unset falls back to the default pair; `[]` is off. |
-| `inReviewState`   | `issueInReviewState`       | The state rule `work-item-in-review` parks an item in.                               |
-| `inProgressState` | `issueInProgressState`     | The state rule `work-item-in-progress` moves an item to. Folded into `pickupStates`. |
+| Field             | From config                | Effect                                                                                          |
+| ----------------- | -------------------------- | ----------------------------------------------------------------------------------------------- |
+| `watchLabel`      | derived from `labelPrefix` | Opt-in gate. Empty = gate off.                                                                  |
+| `requireOwnLabel` | `userId` being set         | Read `labelsAddedByViewer` instead of `labels` for the watch check.                             |
+| `priorityLabels`  | `issuePriorityLabels`      | Label → weight.                                                                                 |
+| `defaultPriority` | `issueDefaultPriority`     | Weight when no label matches.                                                                   |
+| `pickupStates`    | `issuePickupStates`        | Allowed provider-native workflow states.                                                        |
+| `containerTypes`  | `issueContainerTypes`      | Item types that are never worked. Unset falls back to the default pair; `[]` is off.            |
+| `parentedTypes`   | `issueParentedTypes`       | Item types expected to hang off a container. Unset falls back to the default list; `[]` is off. |
+| `inReviewState`   | `issueInReviewState`       | The state rule `work-item-in-review` parks an item in.                                          |
+| `inProgressState` | `issueInProgressState`     | The state rule `work-item-in-progress` moves an item to. Folded into `pickupStates`.            |
 
 A bare `new RuleDispatcher()` takes an empty policy, which means no gate and flat priority — the
 act-on-everything behaviour unit tests rely on.
@@ -174,6 +175,15 @@ provider tracks hierarchy (`parent === null`, never `undefined`), the item is no
 and its type is one teams put under a feature (so a Task under a story is not nagged about a parent
 it never wanted).
 
+Both type conditions are the **operator's**: `issueContainerTypes` for the second and
+`issueParentedTypes` for the third, defaulting to the Agile/Scrum/CMMI names for the things a team
+works. The third is policy rather than a word list in the source for the reason `issueBugType` is its
+own key — what a process template calls the thing it works is exactly what varies between projects —
+and the direction it fails in is the one that costs: a type the list does not name is a type no
+orphan note is written for, no candidate container is offered for, and no missing-parent question is
+ever asked about, on every item of it, for ever. Nothing errors, and a board where nothing rolls up
+reads exactly like a board where everything is filed.
+
 A container being unworkable is about **dispatch**, not about the operator's intent: watching one is a
 live act that cascades to its children ([above](#watching-a-container-cascades)), and the pickup gate
 still refuses the container itself.
@@ -187,7 +197,7 @@ tracker's hierarchy and never writes it, so nothing here links, re-parents or ed
 
 ### What the agents are told
 
-`relatedWorkNote(issue, containerTypes, candidates)` is **appended** to the rendered prompt of rules
+`relatedWorkNote(issue, containerTypes, candidates, parentedTypes)` is **appended** to the rendered prompt of rules
 `issue-appraisal`, `issue-plan` (and its replan arm) and `issue-pickup` — never interpolated.
 Appending is the rule every added instruction follows (see
 [05](05-dispatcher.md#prompt-templates)): templates are operator-overridable and `loadPromptTemplates`
@@ -246,7 +256,7 @@ chip.
 | `cooldown`  | Attempted recently; waiting out the re-dispatch gap.                                 |
 | `escalated` | Attempt cap spent; parked on a human.                                                |
 | `delivered` | Assessed as delivered — parked until the world or the operator says otherwise.       |
-| `appraisal`     | Its goal is being checked, or was found unworkable — nothing is dispatched for it.   |
+| `appraisal` | Its goal is being checked, or was found unworkable — nothing is dispatched for it.   |
 | `blocked`   | Eligible, but dispatch is paused or the cap is reached.                              |
 | `eligible`  | Would be picked up next cycle.                                                       |
 
@@ -456,6 +466,7 @@ promise what the next cycle refuses. Two arms, plus a third clearer that is deli
    window, so once an issue's verdict has been overtaken once, no later verdict on it could ever hold
    again. The re-asked proposal this pattern is inherited from has the property for free, because a
    re-ask is a **new row**.
+
 3. **The operator clears it** (`POST /api/issues/:number/delivered` with `{delivered: false}`). A
    delete, which is why it is not an arm — the absence of a verdict keeps exactly one
    representation. Writing an instruction on the goal
@@ -553,11 +564,11 @@ assessment — never the origins where the harness is merely deliberating (`:pla
 distinction lives in `issueOriginRole` (`src/issueOrigins.ts`); see
 [`05-dispatcher.md`](05-dispatcher.md) for what counting a planner's own task as work cost.
 
-| Verdict    | Effect                                                                                                                          |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Verdict    | Effect                                                                                                                              |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `workable` | None on scheduling, unless its **profile proposal** diverges — see below. Stored so the appraisal is not asked again for this text. |
-| `unclear`  | Holds the issue out of **both** rule `issue-plan` and rule `issue-pickup` while it stands.                                      |
-| _no row_   | Holds nothing. This is what a crashed, killed or capped appraiser leaves behind.                                                  |
+| `unclear`  | Holds the issue out of **both** rule `issue-plan` and rule `issue-pickup` while it stands.                                          |
+| _no row_   | Holds nothing. This is what a crashed, killed or capped appraiser leaves behind.                                                    |
 
 ### Block or inform, and why blocking is safe
 
@@ -646,19 +657,56 @@ edit.
 
 ### The question's lifetime is derived, not stored
 
-A question is asked while three things hold, all read fresh on every snapshot
+A question is asked while these hold, all read fresh on every snapshot
 (`placementAsks`, `src/intake/placement.ts`):
 
-1. the appraiser proposed a value,
-2. the operator has not answered it, and
-3. the **live** work item still lacks the field.
+1. the operator has not answered it, and
+2. the **live** work item still lacks the field —
+3. and, for the **area path only**, the appraiser proposed a value.
 
-Condition 3 is what ends it in the ordinary case. An operator who sets the parent by hand in the
+Condition 2 is what ends it in the ordinary case. An operator who sets the parent by hand in the
 tracker makes the row disappear on the next world read — no timer, no world event to have missed, and
 nothing to remember. It is `appraisalHold`'s fingerprint arm pointed at a different fact, and a lookup
 against current state for the same reason.
 
-**An Azure work item is never *without* an area path.** An item nobody has classified sits on the
+### The parent question is the fact; the area path question is the proposal
+
+Condition 3 used to cover both, and for the parent that made the commonest reading of a board
+**silent**. The candidate containers reach an appraiser only through `relatedWorkNote`, off a world
+list narrowed by tag and assignee — so on a project whose open Features are simply not in that
+narrowed list, the appraiser is offered nothing to name, names nothing, and no question was ever put
+to anybody. Nothing is red, and an orphan nobody was asked about looks exactly like an item that is
+properly filed. That is the same argument the goal page's orphan warning already made
+([17](17-cockpit.md#a-goal-with-no-parent-feature)), and the rail now takes the same reading rather than a
+weaker one beside it.
+
+So the parent question is asked because **the live item hangs off nothing** — whoever did or did not
+suggest what to do about it. The proposal, where there is one, is what the question _offers_: the row
+leads with "use #345" when the appraiser named one and with the container list when it did not, which
+is a difference `ParentPicker` already drew. An appraisal fingerprinted against text the ticket no
+longer carries counts as **no appraisal**, so a rewritten ticket asks again with nothing offered
+rather than standing on an answer given about something else.
+
+The area path stays gated on the proposal, and the asymmetry is the point: there is no equivalent gap
+on that side. The project's tree is read whole through `AreaPathDirectory` and handed to the appraiser
+as a closed enum on the tool itself, so an appraiser that can answer at all is always in a position
+to. A node it did not pick is a node the harness has no opinion about, and a row offering the operator
+the whole tree with no first choice is a directory rather than a question.
+
+**Which items are expected to have a parent is `issueParentedTypes`**, and the question is asked
+through `isOrphanIssue` — the same predicate the prompt note uses, so the appraiser and the cockpit
+cannot form two opinions about one item. It reads the operator's type policy for the reason
+`issueBugType` is its own key: what a process template calls the thing a team works is exactly what
+varies between projects, and a closed word list in the source decides — silently, and only on the
+projects that named their types something else — that no item on the board is expected to have a
+parent at all. `[]` turns the orphan report off, as `issueContainerTypes: []` turns its own gate off.
+→ [02](02-configuration.md)
+
+A goal with **no appraisal row at all** still ships no `placement`, because the list is carried inside
+`issue.appraisal` on the wire. A goal picked up before the appraiser ran is the goal page's orphan
+warning's case, and it is drawn there ([17](17-cockpit.md#a-goal-with-no-parent-feature)).
+
+**An Azure work item is never _without_ an area path.** An item nobody has classified sits on the
 project **root** node, so "missing" is equalling the root — compared on a normalised form, because
 Azure echoes whatever separator and casing were written. A reader that tested for an empty string
 would find nothing missing anywhere, on every project, with nothing red.
@@ -681,10 +729,10 @@ been rewritten is the one signal that the old answer may no longer be the right 
 The two fields are different in kind, and the tool treats them differently
 (`validateGoalAppraisal`):
 
-| Field       | How it is answered                                                                                                                                                                                                                             |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `parent`    | A work item number, **free**. The open containers the harness can see are already appended to the appraisal prompt (`relatedWorkNote`, `candidateParents`), and they are a suggestion rather than a closed set — a board is narrowed by tag and assignee, so the right container is often not in it. A hallucinated id costs nothing: a human sees the number, linked, before anything is written. |
-| `area_path` | **Only from the offered set.** A path has to match a node exactly, and a plausible near-miss — the right team spelled the wrong way, a node renamed last quarter — is refused by the provider and visibly wrong to nobody before then. The harness reads the project's tree and offers it; the answer is stored in the provider's own spelling, since that is the string the write has to carry. |
+| Field       | How it is answered                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `parent`    | A work item number, **free**. The open containers the harness can see are already appended to the appraisal prompt (`relatedWorkNote`, `candidateParents`), and they are a suggestion rather than a closed set — a board is narrowed by tag and assignee, so the right container is often not in it. A hallucinated id costs nothing: a human sees the number, linked, before anything is written. Omitting it costs nothing either, and no longer costs the _question_: the missing-parent row is drawn off the item, not off this argument. |
+| `area_path` | **Only from the offered set.** A path has to match a node exactly, and a plausible near-miss — the right team spelled the wrong way, a node renamed last quarter — is refused by the provider and visibly wrong to nobody before then. The harness reads the project's tree and offers it; the answer is stored in the provider's own spelling, since that is the string the write has to carry.                                                                                                                                              |
 
 Both are **optional**, unlike the profile. A profile is required because every dispatch runs on one,
 so an omission is indistinguishable from "the default is right"; most items already have a parent, the
