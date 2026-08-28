@@ -76,6 +76,7 @@ import { featureRecords } from './summaries/featureRecord.js';
 import { resolveModelTag } from './modelLabels.js';
 import { orderedProfiles } from './agents/modelPolicy.js';
 import { Harness } from './harness.js';
+import { LocalCycleTrigger } from './localCycle.js';
 import { RuntimeControl } from './runtimeControl.js';
 import { PetKeeper } from './pets/keeper.js';
 import { LocalRunner } from './localRun/runner.js';
@@ -122,6 +123,14 @@ export interface System {
   executor: ActionExecutor;
   dispatcher: Dispatcher;
   harness: Harness;
+  /**
+   * Fires a local cycle when an agent ends, so the slot it just freed is filled in
+   * seconds rather than at the next heartbeat. Exposed for one reason: `main.ts`
+   * has to stop it on the way down, beside the heartbeat and for the same reason —
+   * a cycle is a thing that starts agents.
+   * → `docs/spec/04-harness-cycle.md#the-local-cycle`
+   */
+  localCycles: LocalCycleTrigger;
   /**
    * Writes the durable work graph each pulse. Exposed because the record outlives
    * the world's memory of it — the routes and tests that read the graph back have
@@ -1233,6 +1242,31 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     });
   });
 
+  // The latency an operator actually feels, closed: nothing used to react to an
+  // agent ending, so the slot it freed sat idle until the next beat — up to
+  // `heartbeatIntervalMs` (five minutes on the default deployment) of an idle fleet
+  // with work queued in front of it. What fires here is a **local** cycle: the full
+  // decide/execute sequence against the world the last real cycle read, with every
+  // world-facing pass skipped, so reacting to an internal event costs a store pass
+  // and no provider traffic. → `docs/spec/04-harness-cycle.md#the-local-cycle`
+  //
+  // Wired here rather than inside `Harness` because it is the composition root that
+  // knows both halves: the harness has no handle on the fleet, and `AgentManager`
+  // must stay ignorant of the pulse. Both terminal events, deliberately — `done` is
+  // when the row stops counting against the cap, `reaped` is when its worktree slot
+  // goes back, and neither implies the other in time. The trigger's debounce folds
+  // the pair (and a whole fleet's worth of them) into one cycle.
+  //
+  // A reaction to a termination, not a termination path: it signals nothing, reaps
+  // nothing, and cannot run while a real cycle is in flight.
+  const localCycles = new LocalCycleTrigger({
+    run: () => harness.runCycle('local'),
+    ready: () => store.open,
+    errors,
+  });
+  agents.on('done', () => localCycles.request());
+  agents.on('reaped', () => localCycles.request());
+
   // The vivarium reads what the operator has already done and writes only its own
   // five tables. Wired to the pulse's own event rather than into `Harness` — it
   // decides nothing, so `harness.ts` has no reason to know it exists, and the
@@ -1300,6 +1334,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     executor,
     dispatcher,
     harness,
+    localCycles,
     graph,
     tickets,
     pool,

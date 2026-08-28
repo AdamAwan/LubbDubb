@@ -18,7 +18,7 @@ returns a report with `cycleId: 'coalesced'` and a zeroed summary rather than qu
 exist because a cycle can be started two ways: by the timer (through `Heartbeat`) and directly by a
 route calling `harness.runCycle('manual')`.
 
-A cycle's `source` is `'timer'`, `'manual'` or `'boot'`.
+A cycle's `source` is `'timer'`, `'manual'`, `'boot'` or [`'local'`](#the-local-cycle).
 
 **A coalesced cycle reads no world.** That is what stops a route from using
 `await harness.runCycle('manual')` as its way of making its own write visible: on a busy fleet most
@@ -26,6 +26,10 @@ manual calls land inside a running cycle and return without fetching anything, s
 cockpit is served still describes the world as it was before the write. A route that has changed the
 outside world folds the change onto the baseline itself and then broadcasts — see the watch routes
 ([16](16-http-api.md#why-both-watch-routes-patch-the-baseline)).
+
+The [local cycle](#the-local-cycle) below does not weaken that. It is a third kind of thing rather than
+a manual cycle that skipped its fetch, it says so on its own report, and a route that has changed the
+outside world still has to fold the change onto the baseline itself.
 
 ## The crash-recovery hold
 
@@ -46,22 +50,99 @@ The hold is re-asked every beat, so it lifts by itself the moment the last decis
 un-hold call and no restart. It emits neither `cycle:start` nor `cycle:end`, for the same reason the
 coalesced return does not: no cycle ran.
 
+## The local cycle
+
+`runCycle('local')` runs the whole decide/execute sequence against the **cached baseline world** — the
+snapshot the last real cycle already read and stored — and calls `connector.getState()` not at all.
+
+It exists because most of the latency an operator feels is internal rather than external. An agent
+finishing frees a slot, and nothing about that is a fact any provider holds; before the local cycle
+nothing reacted to it at all, so the slot sat idle for up to a full heartbeat — five minutes on the
+default deployment — with work queued in front of it. A cycle that reads no world is cheap enough to
+fire on an event ([10](10-agent-runtimes.md#an-ending-is-what-refills-the-slot)).
+
+**It is honest about what it is.** `CycleReport.readWorld` is `false`, `source` is `local`, and the
+audit row's rationale is prefixed `[local]` like any other source — so "was this decided against a
+fresh reading" is answerable from the record rather than inferred. A local cycle's world is as fresh
+as the last real read, which since the change-gated hydration may be very fresh indeed; it is still
+not a new read, and nothing here pretends otherwise.
+
+### What runs, and what does not
+
+A local cycle runs **everything derived from the store** — the plan funnel, the verdicts, the fleet,
+the queue, the parks with an ending nobody has to decide, `dispatcher.decide` and `executor.execute` —
+and skips **every pass whose subject is the world snapshot**:
+
+`connector.getState`, `recordWorldChanges`, `plans.reconcile`, `prWatch`, `prWorkItems`, `naming`,
+`branchReaps`, `updates`, `environments`, `notices`, `pool`, `appraisals.announce`,
+`areaPaths.refresh`, `askReviewedElsewhere` and `tickets`.
+
+Each of those already ran against this exact world, on the cycle that read it, and each is idempotent —
+so re-running them can produce provider traffic and never a new verdict. `notices` is skipped for a
+second reason: it is handed the **pair** the diff was taken from, and a local cycle takes no diff, so
+run with `prev === next` it would read every notice as settled by a world that has not moved.
+`recordWorldChanges` is skipped for the other half of its job: re-stamping the baseline onto itself
+would be a write, on every local cycle, asserting the world was read when it was not.
+
+The line is easy to hold in the code: with the executor's one deliberate exception, **every awaited
+call in the body talks to the outside world and every synchronous one does not**, so the guard sits on
+exactly the awaits.
+
+**Why deciding against a cached world is safe.** Every gate that stops the fleet doing a thing twice —
+the tasks, the agents, the recent decisions and their cooldowns, the verdict tables — is read from the
+store, which is fresh. The world contributes the _subject_ of a decision, not the memory of whether it
+has already been taken. And the dispatcher must already be idempotent over an unchanged world, because
+two consecutive real pulses over a settled world are indistinguishable from one real cycle followed by
+a local one: a rule that would misfire here is a rule that already misfires on every quiet beat. What
+a local cycle can therefore reach that the real cycle before it did not is exactly what the _store_
+has changed — a freed slot, an operator's verdict, a queued job.
+
+**What it is not for.** A decision whose correctness needs a _fresh_ provider reading — has this check
+gone green, has this pull request merged, has this ticket been closed — is not one a local cycle can
+improve on, and no such pass runs on one. And a route that has just changed the outside world still
+cannot use a local cycle to make that change visible, for the coalescing paragraph's reason above: it
+folds the change onto the baseline itself.
+
+### The guards, unchanged
+
+Both refusals above are asked before a local cycle exactly as they are before a real one. It must not
+run while `recovery.pendingCount() > 0` — the harness's model of its own fleet is wrong while orphaned
+rows are undecided, and that is no less true for a cycle that read no world — and it must not run
+while `cycleInFlight`, which would be two cycles deciding at once.
+
+It has a third refusal of its own: with **no baseline at all** — a fresh store before its first real
+cycle — there is nothing to decide against, so it returns `cycleId: 'unbaselined'` and emits nothing,
+in the shape of the other two. Synthesizing an empty world instead would read to every rule as a
+tracker that has just gone dark.
+
+`LocalCycleTrigger` (`src/localCycle.ts`) is what asks for one. It debounces by 250 ms, because an
+ending arrives as up to two events and a fleet's endings arrive together, and it retries a **refused**
+cycle a bounded number of times — a refusal means the freed slot is still empty, and the blocker (a
+cycle in flight) usually clears in seconds. After ten attempts it gives up and the heartbeat is the
+backstop again, so a recovery hold that stands until somebody answers it is not a busy loop. Both
+values are constants in that module; the cadence configuration is stage 3's.
+
 ## Ordering
 
-`runCycle` performs exactly this sequence. The order is load-bearing at five points, noted below.
+`runCycle` performs exactly this sequence. The order is load-bearing at five points, noted below. A
+[local cycle](#the-local-cycle) performs the same sequence with the world-facing passes skipped; the
+list of them is above, and no step below reads differently for it.
 
 ```mermaid
 flowchart TD
     T(["Heartbeat timer · POST /api/pulse · boot"]) --> RH{"recovery.pendingCount() > 0?"}
+    L(["an agent ended — LocalCycleTrigger, debounced"]) --> RH
     RH -- yes --> HELD(["cycleId: held — no snapshot, no dispatch, no act"])
     RH -- no --> CF{"cycle already in flight?"}
     CF -- yes --> CO(["cycleId: coalesced"])
-    CF -- no --> START["emit cycle:start with the new cyc_* id"]
+    CF -- no --> BL{"local, and no baseline yet?"}
+    BL -- yes --> UB(["cycleId: unbaselined"])
+    BL -- no --> START["emit cycle:start with the new cyc_* id"]
 
     subgraph BODY ["one cycle"]
         direction TB
-        START --> W["snapshot the world — connector.getState()"]
-        W --> DIFF["diff against the last baseline<br/>persist world events, emit world:events, replace the baseline"]
+        START --> W["snapshot the world — connector.getState()<br/><i>local: the stored baseline, unread</i>"]
+        W --> DIFF["diff against the last baseline<br/>persist world events, emit world:events, replace the baseline<br/><i>local: skipped, with every other world-facing pass</i>"]
         DIFF --> REC["reconcile plans — before decide, so a part moved to ready<br/>is dispatchable this same cycle"]
         REC --> SEED["tag the harness's own pull requests — once each, so an un-watch sticks"]
         SEED --> NAME["rename PRs onto the convention — idempotent bookkeeping"]
@@ -85,6 +166,9 @@ flowchart TD
     end
 
     EXEC --> END(["emit cycle:end with the CycleReport"])
+    HELD -.-> NONE(["no cycle:start, no cycle:end — no cycle ran"])
+    CO -.-> NONE
+    UB -.-> NONE
     BODY -. a throw anywhere .-> ERR["errors.record({ source: 'cycle' })<br/>zeroed summary, the next pulse tries again"]
     ERR --> END
 ```
@@ -279,8 +363,13 @@ What the dispatcher gets to look at (`src/dispatcher/dispatcher.ts`):
 Returned by `runCycle` and carried on `cycle:end`:
 
 ```ts
-{ cycleId, source, rationale, summary: { cycleId, executed, deferred, rejected }, at }
+{ cycleId, source, readWorld, rationale, summary: { cycleId, executed, deferred, rejected }, at }
 ```
+
+`readWorld` is false for a `local` cycle and for all three refusals, where no cycle ran at all. It is
+carried rather than derived from `source` at each reader, so a second world-less source added later
+cannot be missed by one of them. `cycleRan(report)` answers the other question — the refusals are the
+reports whose ids are not `cyc_*`.
 
 ## Events
 
@@ -295,5 +384,8 @@ Returned by `runCycle` and carried on `cycle:end`:
 - The heartbeat timer.
 - `harness.runCycle('boot')` once at startup.
 - `POST /api/pulse`.
+- **An agent reaching a terminal state** — `done` or `reaped`, through `LocalCycleTrigger`, as a
+  [local cycle](#the-local-cycle), so the slot it freed is refilled in a moment rather than at the next
+  beat.
 - `POST /api/jobs`, `POST /api/findings/:id/promote`, `POST /api/plans/:id/replan`, and each of the
   watch/exclude label toggles — each kicks a cycle so the change takes effect immediately.

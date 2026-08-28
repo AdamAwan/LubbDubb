@@ -403,6 +403,15 @@ export class Store {
     this.pets = new PetStore(ctx);
   }
 
+  /**
+   * Is the handle still open? Asked by anything that fires on a timer rather than
+   * on a call — a cycle that arrives after the store was closed throws from inside
+   * a `void` call, where there is nothing left to record it with.
+   */
+  get open(): boolean {
+    return this.db.open;
+  }
+
   close(): void {
     // Persist anything still buffered before the handle goes away.
     this.transcripts.flushAll();
