@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { loadConfig } from '../src/config.js';
 import { configField, CONFIG_FIELDS, fieldValueRefusal, topSegment } from '../src/configFields.js';
 import { isLiveField, liveFieldPaths } from '../src/configApply.js';
@@ -20,6 +22,32 @@ test('every config key is declared, so a new one cannot arrive un-editable', () 
     missing,
     [],
     `these config keys have no entry in CONFIG_FIELDS, so the form cannot draw them: ${missing.join(', ')}`,
+  );
+});
+
+/**
+ * The third, and the one the other two do not cover. `CONFIG_FIELDS` is checked
+ * against the type, but `lubbdubb.config.example.json` is checked against nothing
+ * — and it is the file an operator is told to copy and run, so a key that outlived
+ * its feature there is worse than a stale comment: it is a setting somebody pastes
+ * into a live deployment, where it merges into nothing and does exactly what an
+ * unset key does. `agentIdleWaitMs` and `sessionTranscriptRoot` shipped in it for
+ * releases after the `pty` runtime they configured was removed, and
+ * `lessonBlockChars` shipped in it while already retired — so the file told a
+ * fresh deployment to warn on its own first boot.
+ */
+test('every key in the shipped example config is one this build still reads', () => {
+  const example = JSON.parse(
+    readFileSync(join(import.meta.dirname, '..', 'lubbdubb.config.example.json'), 'utf8'),
+  ) as Record<string, unknown>;
+  const declared = declaredTopLevelKeys();
+  // The '//'-prefixed keys are the file's inline docs, ignored at load.
+  const unknown = Object.keys(example).filter((key) => !key.startsWith('//') && !declared.has(key));
+
+  assert.deepEqual(
+    unknown,
+    [],
+    `these keys are in lubbdubb.config.example.json but nothing reads them, so copying the file sets them to no effect: ${unknown.join(', ')}`,
   );
 });
 

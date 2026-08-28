@@ -369,6 +369,71 @@ test('a retired top-level key and a retired whole block are both dropped, not me
 });
 
 /**
+ * The two keys the removed `pty` runtime alone read. They are the second kind of
+ * retired entry — neither named a switch that went unconditional, so the harness
+ * is not "already doing it"; the thing they configured is simply gone. Both were
+ * in the shipped example config for as long as the runtime was, which is why they
+ * warn and boot rather than refusing: the file an operator was told to copy is the
+ * file most likely to still carry them.
+ */
+test("the removed pty runtime's two keys warn, are dropped, and name what replaced them", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-config-'));
+  const cwd = process.cwd();
+  process.chdir(dir);
+  const warnings: string[] = [];
+  const realWarn = console.warn;
+  console.warn = (msg: string): void => void warnings.push(msg);
+  t.after(() => {
+    console.warn = realWarn;
+    process.chdir(cwd);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  writeFileSync(
+    join(dir, 'lubbdubb.config.json'),
+    JSON.stringify({
+      agentIdleWaitMs: 90_000,
+      sessionTranscriptRoot: '~/.claude/projects',
+      agentSilenceParkMs: 111,
+    }),
+    'utf8',
+  );
+
+  const cfg = loadDeploymentConfig();
+  assert.equal(cfg.agentSilenceParkMs, 111, 'the rest of the file is still honoured');
+  for (const key of ['agentIdleWaitMs', 'sessionTranscriptRoot'] as const) {
+    assert.ok(!Object.hasOwn(cfg, key), `${key} must not survive onto the config object`);
+    assert.ok(
+      warnings.some((w) => w.includes(key) && w.includes('no longer exists')),
+      `${key} must be named on the boot log`,
+    );
+  }
+  // The one that had a figure worth tuning says where to put it now; the other has
+  // nothing to name, because the stream transport keeps no transcript file.
+  assert.ok(
+    warnings.some((w) => w.includes('agentIdleWaitMs') && w.includes('agentSilenceParkMs')),
+    'the replacement is named, or a tuned deployment silently boots on a default',
+  );
+});
+
+/**
+ * The example config documented `agentMode: "pty"` for as long as the runtime
+ * existed, so it is the stale *value* most likely to still be in a file. It was
+ * already fatal — `src/system.ts` indexes a two-key table by the string — so what
+ * is asserted here is that the failure names the key and the two modes that are
+ * left, rather than dying on a property of `undefined`.
+ */
+test('agentMode "pty" is refused by name, and the two modes that are left still load', () => {
+  assert.throws(
+    () => loadConfig({ agentMode: 'pty' as never }),
+    (err: Error) =>
+      err.message.includes('agentMode') && err.message.includes('"pty" is gone') && err.message.includes('"stream"'),
+  );
+  assert.equal(loadConfig({ agentMode: 'stream' }).agentMode, 'stream');
+  assert.equal(loadConfig({ agentMode: 'raw' }).agentMode, 'raw');
+});
+
+/**
  * The isolation the split exists for. The suite runs in a working copy of this
  * repo, so an operator's own `lubbdubb.config.json` sitting beside it would
  * otherwise merge into every test that builds a config — silently, and

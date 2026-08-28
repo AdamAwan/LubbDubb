@@ -23,7 +23,7 @@
 
   "// ===== AGENTS =====": "How one is launched, what it may run, what it runs on, and how it is nudged.",
 
-  "// agentMode": "How agents are launched. 'stream' = real Claude Code over headless stream-JSON (production default, runs unattended, supports the waiting/answer loop). 'pty' = real Claude Code as an interactive terminal (needs first-run onboarding done; this is the runtime that resumes across restarts). 'raw' = run claudeCommand/claudeArgs verbatim, prompt passed via LUBBDUBB_PROMPT (mock-agent demo + tests). Default 'stream'.",
+  "// agentMode": "How agents are launched. 'stream' = real Claude Code over headless stream-JSON (production default, runs unattended, resumes across restarts, supports the waiting/answer loop) and the ONLY mode that calls a model. 'raw' = run claudeCommand/claudeArgs verbatim over a terminal, prompt passed via LUBBDUBB_PROMPT (mock-agent demo + tests). Those are the only two values: the third, 'pty', is gone and loadConfig refuses it by name. Default 'stream'.",
   "agentMode": "raw",
 
   "// claudeCommand": "The agent binary to launch. Default 'claude'. Here it's 'bash' so the example can run the mock agent.",
@@ -83,13 +83,10 @@
   "// agentPromptDelayMs": "Wait this long (ms) after spawn before delivering the task, giving an interactive REPL time to boot. Stream mode uses 0. Default 1200.",
   "agentPromptDelayMs": 1200,
 
-  "// agentSubmitDelayMs": "PTY only. Gap (ms) between typing a message and sending its submitting carriage return — the claude TUI folds a burst into a paste and treats a glued-on CR as a literal newline, leaving the text unsubmitted. Set 0 to write both at once. Default 60.",
+  "// agentSubmitDelayMs": "agentMode 'raw' only — the one terminal runtime left. Gap (ms) between writing a message and writing its submitting carriage return: a line editor folds a single burst into a paste and treats a glued-on CR as a literal newline, leaving the text unsubmitted. Set 0 to write both at once. Default 60.",
   "agentSubmitDelayMs": 60,
 
-  "// agentIdleWaitMs": "PTY only. Safety net for a turn that ends without a sentinel: after this long (ms) with no terminal output at all, the session is parked as waiting so it reaches the inbox instead of sitting 'running' forever. Unlatched — output resuming un-parks it. 0 disables. Default 90000.",
-  "agentIdleWaitMs": 90000,
-
-  "// agentWaitingPatterns": "Extra literal substrings that mean 'the CLI is waiting for input' (backup escalation heuristic, PTY). Default [].",
+  "// agentWaitingPatterns": "Extra literal substrings that mean 'the CLI is waiting for input' — the backup escalation heuristic for agentMode 'raw', which speaks no protocol to say so. Default [].",
   "agentWaitingPatterns": [],
 
   "// agentStallNudges": "How many times an agent that ends a turn with no sentinel in it is asked to account for itself before the stop is put to a human. Most such stops are a forgotten done sentinel, or an agent waiting on a build or CI that nothing would have woken it from — neither has anything for a person to answer. A whole-life budget per agent; 0 parks on the first one. Stream runtime only. Default 2.",
@@ -98,14 +95,8 @@
   "// agentResumeAttempts": "How many times an agent whose process dies mid-run is re-attached to its own conversation before the harness settles it as failed. Counted on the agent row, so it survives a restart and bounds the agent's whole life, not one launch. 0 disables. Default 3.",
   "agentResumeAttempts": 3,
 
-  "// lessonBlockChars": "How many characters of PROMOTED lessons ride in every agent's system prompt (#355). Characters rather than a count, because what is being bounded is context and a lesson runs from one line to 2,000 characters. The block is identical for every agent in the fleet, so it is a cached prefix paid once rather than per dispatch — which is also why nothing per-dispatch may go in it. Over the cap, whole lessons are dropped OLDEST-VOUCHED FIRST (never a truncated claim, which would be a claim nobody promoted), and the drop is shown to you per row in the cockpit's Lessons panel — the agent is never told the list it reads is partial. 0 renders nothing at all, and then launch arguments are byte-identical to a build without the feature. Default 6000.",
-  "lessonBlockChars": 6000,
-
-  "// whitelistedApprovals": "PTY waiting prompts the harness may auto-answer instead of escalating. Each rule: { match: <substring of the waiting prompt>, response: <text typed back> }. Default [].",
+  "// whitelistedApprovals": "Waiting prompts the harness may auto-answer instead of escalating — matched against the reason an agent parked, whichever runtime raised it. Each rule: { match: <substring of the waiting prompt>, response: <text typed back> }. Default [].",
   "whitelistedApprovals": [{ "match": "Allow running tests", "response": "yes" }],
-
-  "// sessionTranscriptRoot": "Where Claude Code keeps per-project session transcripts, which PTY mode tails for its legible transcript. Default '~/.claude/projects'. Override only if the agent runs with a different HOME than the server.",
-  "sessionTranscriptRoot": "~/.claude/projects",
 
   "// ===== INTEGRATIONS =====": "Who you are, which providers fulfil which capability, and which items count as work.",
 
@@ -169,7 +160,7 @@
     "desktopClaimMinutes": 30
   },
 
-  "// spendBurn": "The LIVE burn watch — the one cost reading taken while the money is still being spent. Every other spend surface is a post-mortem you have to go and open; this one compares a RUNNING agent's cost so far against the median of settled runs of its own kind of work, and files a visible 'burn' obligation when it is far past. The bucket is the dispatch rule AND the profile, never the rule alone: a goal pinned to 'deep' legitimately costs several times the same rule on 'fast', so a rule-only baseline would flag every pinned run and nothing else. It HOLDS NOTHING AND KILLS NOTHING — an expensive run is not a wrong run and no threshold can tell the two apart, so the notice is the prompt to open the transcript and decide. It refreshes its figures every pulse and settles itself when the run ends. Three gates must ALL hold, because a multiple on its own fires constantly and a notice you learn to dismiss unread is worse than none. On by default; deep-merged, so you can set one field alone. NOTE: PTY mode reports no usage at all, so on agentMode 'pty' nothing can ever trip this — that is the fail-open direction and the only safe one.",
+  "// spendBurn": "The LIVE burn watch — the one cost reading taken while the money is still being spent. Every other spend surface is a post-mortem you have to go and open; this one compares a RUNNING agent's cost so far against the median of settled runs of its own kind of work, and files a visible 'burn' obligation when it is far past. The bucket is the dispatch rule AND the profile, never the rule alone: a goal pinned to 'deep' legitimately costs several times the same rule on 'fast', so a rule-only baseline would flag every pinned run and nothing else. It HOLDS NOTHING AND KILLS NOTHING — an expensive run is not a wrong run and no threshold can tell the two apart, so the notice is the prompt to open the transcript and decide. It refreshes its figures every pulse and settles itself when the run ends. Three gates must ALL hold, because a multiple on its own fires constantly and a notice you learn to dismiss unread is worse than none. On by default; deep-merged, so you can set one field alone. NOTE: agentMode 'raw' is the mock and reports no usage at all, so nothing can ever trip this there — that is the fail-open direction and the only safe one.",
   "spendBurn": {
     "// enabled": "Master switch. Default true. Off files nothing and STILL settles rows already standing, so turning it off drains the bench rather than stranding a row about a run that ended last Tuesday.",
     "enabled": true,
