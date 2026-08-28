@@ -548,13 +548,17 @@ export interface Config {
   /** Wait this long after spawn before typing the task in, giving the REPL time to boot. */
   agentPromptDelayMs: number;
   /**
-   * Gap between typing a message and sending the submitting carriage return (PTY
-   * only). The claude TUI folds a single input burst into a paste and treats a
-   * trailing CR as a literal newline, so a glued-on CR leaves the text sitting in
-   * the input unsubmitted; the gap lands the CR as a distinct Enter keypress.
+   * Gap between writing a message and writing the submitting carriage return.
+   * `raw` only — the one terminal runtime left. A line editor folds a single input
+   * burst into a paste and treats a trailing CR as a literal newline, so a glued-on
+   * CR leaves the text sitting in the input unsubmitted; the gap lands the CR as a
+   * distinct Enter keypress.
    */
   agentSubmitDelayMs: number;
-  /** Extra literal substrings that mean "the CLI is waiting for input" (backup escalation). */
+  /**
+   * Extra literal substrings that mean "the CLI is waiting for input" — the backup
+   * escalation heuristic for `raw`, which speaks no protocol to say so.
+   */
   agentWaitingPatterns: string[];
   /**
    * How many times an agent that ends a turn with **no** sentinel in it is asked to
@@ -1223,6 +1227,10 @@ const RETIRED_KEYS: Readonly<Record<string, string>> = {
   'azureDevOps.defaultAssignee': 'tickets the harness files are assigned to "userId"',
   lessonBlockChars:
     'the system prompt carries one block and it is the knowledge base\'s — a promoted lesson is mirrored in as an injected fleet claim, so "knowledgeBlockChars" is the one cap on what every agent reads',
+  agentIdleWaitMs:
+    'it was the removed "pty" runtime\'s silence watch, read off a terminal that had gone quiet — what replaced it is "agentSilenceParkMs", which reads the same silence off the stream protocol and parks on it, so a deployment that had tuned this figure boots on that key\'s default until somebody sets it',
+  sessionTranscriptRoot:
+    'only the removed "pty" runtime read it, to tail the transcript file `claude` writes per project — the stream transport carries the transcript in structure, so there is no file to find and no path to point at',
   'github.filters': 'pull requests are filtered to "userId"\'s while "ownWorkOnly" is on',
   'azureDevOps.filters.prAuthor': 'pull requests are filtered to "userId"\'s while "ownWorkOnly" is on',
   'azureDevOps.filters.workItemAssignedTo': 'work items are filtered to "userId"\'s while "ownWorkOnly" is on',
@@ -1330,6 +1338,32 @@ function validateReview(merged: Config): void {
         `cannot answer, so a name with nothing behind it is only reached on the day something else went wrong.`,
     );
   }
+}
+
+/**
+ * The one *value* that no longer means anything, refused by name.
+ *
+ * {@link REMOVED_KEYS} and {@link RETIRED_KEYS} are both keyed on a key, and
+ * `agentMode` is neither gone nor unconditional — it still chooses between the two
+ * runtimes that are left. What went is one of the three things it could say. The
+ * example config shipped `'pty'` in its documented set for as long as the runtime
+ * existed, so it is the stale value most likely to be sitting in an operator's
+ * file, and until now it took the deployment down anyway: `src/system.ts` indexes
+ * a two-key table by this string, so an unknown mode is `undefined` and the boot
+ * dies reading a property off it, naming nothing.
+ *
+ * So this is not a new refusal, it is the same refusal given a name and the key
+ * that replaced the runtime. → `docs/spec/10-agent-runtimes.md`
+ */
+function validateAgentMode(merged: Config): void {
+  const mode: string = merged.agentMode;
+  if (mode === 'stream' || mode === 'raw') return;
+  throw new Error(
+    `Refusing to start: agentMode is "${mode}", and the only modes are "stream" (real Claude Code over ` +
+      `headless stream-JSON, the only one that runs a model) and "raw" (the mock — your argv over a terminal). ` +
+      `"pty" is gone: everything it alone could do, the stream transport now carries in structure. Set ` +
+      `"agentMode": "stream".`,
+  );
 }
 
 /**
@@ -1575,6 +1609,10 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   // merged field by field, so `{"spendBurn": {"multiple": 6}}` keeps the default
   // floor rather than leaving it undefined. What is left here is the judging.
   const merged = mergeConfig(overrides);
+
+  // The one mode that is gone. Refused by name because the alternative is not
+  // "nothing happens" — it is a boot that dies indexing a table by it.
+  validateAgentMode(merged);
 
   validateCiPolicy(merged.ci);
 

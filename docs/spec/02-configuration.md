@@ -91,11 +91,15 @@ its reason is the part that gets rewritten.
 A **retired key** (`RETIRED_KEYS`) is **warned about, dropped, and the harness boots**. Almost every
 entry named a subsystem that is now **unconditional**, so a file setting one is asking for something
 the harness either already does or will never do again — and refusing would take a running deployment
-down at boot over one stale line. `lessonBlockChars` is the one entry of a second kind: it bounded a
-block that no longer renders, and what replaced it is bounded by `knowledgeBlockChars`. It warns
-rather than refusing for the same reason and carries a real cost — a deployment that had tuned the
-figure boots on the new key's default until somebody sets it — which is why the warning names the
-replacement. The warning is on the boot log, naming the key: a deployment that
+down at boot over one stale line. `lessonBlockChars`, `agentIdleWaitMs` and `sessionTranscriptRoot`
+are entries of a second kind: each named a thing that is gone rather than a switch that went
+unconditional — a block that no longer renders, and two keys the removed `pty` runtime alone read.
+They warn rather than refusing for the same reason and the first two carry a real cost — a deployment
+that had tuned the figure boots on the replacement's default until somebody sets it — which is why
+their warnings name the key that replaced them (`knowledgeBlockChars`, `agentSilenceParkMs`).
+`sessionTranscriptRoot` names none, because there is nothing to name: the stream transport carries
+the transcript in structure, so there is no file to tail and no path to point at. The warning is on
+the boot log, naming the key: a deployment that
 had switched a funnel off is getting it back, and has to hear that from the harness rather than from
 the fleet's behaviour. The key is dropped rather than left to merge into nothing, so no value
 survives on the policy object for something later to read.
@@ -117,8 +121,19 @@ rather than the field inside it. The list:
 | `github.filters`, `azureDevOps.filters.prAuthor`                       | follows `ownWorkOnly` + `userId`                                                                     |
 | `azureDevOps.filters.workItemAssignedTo`                               | follows `ownWorkOnly` + `userId`                                                                     |
 | `lessonBlockChars`                                                     | one block ships, and it is the knowledge base's ([27](27-knowledge.md#delivery-two-prompts-not-one)) |
+| `agentIdleWaitMs`                                                      | the removed `pty` runtime's silence watch; `agentSilenceParkMs` reads the same silence off the stream ([10](10-agent-runtimes.md)) |
+| `sessionTranscriptRoot`                                                | only `pty` tailed a transcript file; the stream transport carries it in structure ([10](10-agent-runtimes.md)) |
 
 Both lists are permanent — a config written before a removal outlives the release that made it.
+
+One **value** is refused the same way, and it is the only one: `agentMode: "pty"`. Neither list
+reaches it, because they are keyed on a key and `agentMode` is neither gone nor unconditional — it
+still chooses between the two runtimes that are left, and what went is one of the three things it
+could say. It was in the example config's documented set for as long as the runtime existed, so it is
+the stale value most likely to still be sitting in a file; and it already took the deployment down,
+because `src/system.ts` indexes a two-key table by the string and an unknown mode is `undefined`. So
+`validateAgentMode` is not a new refusal — it is that one given a name, the two modes that are left,
+and what to set instead. → [10](10-agent-runtimes.md)
 
 A third function, `loadConfigFromText`, builds the config a given file text _would_ produce on this
 machine — the same three layers, from text rather than from disk. That is how a save from the cockpit
