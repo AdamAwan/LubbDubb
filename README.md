@@ -365,6 +365,10 @@ security workflows, and the hosted GitHub Pages demo build.
 | [`docs/prompt-templates/`](docs/prompt-templates/)     | The rule dispatcher's built-in prompt bodies, ready to override                |
 | [`CLAUDE.md`](CLAUDE.md)                               | Operating notes for agents working in this repo — the sharp edges              |
 
+## License
+
+[MIT](LICENSE). Copyright (c) 2026 Adam Awan.
+
 [s02]: docs/spec/02-configuration.md
 [s05]: docs/spec/05-dispatcher.md
 [s06]: docs/spec/06-issue-pickup.md
