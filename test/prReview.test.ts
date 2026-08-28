@@ -18,6 +18,13 @@ import {
   triageRuns,
 } from '../src/review/prReview.js';
 import { prsToStampReviewIntake, withinReviewIntake } from '../src/review/intake.js';
+import { FakeReviewProber } from '../src/review/fakeReviewProber.js';
+import type { PrReviewReading } from '../src/review/prReview.js';
+
+/** A reading with only what a case is about set; every other arm reads as "no row". */
+function reading(over: Partial<PrReviewReading> = {}): PrReviewReading {
+  return { review: null, route: null, intake: new Map(), elsewhere: new Set(), ...over };
+}
 import { DEFAULT_PR_REVIEW } from '../src/review/policy.js';
 import type { PrReview, PrReviewRoute, PullRequest } from '../src/types.js';
 import { findTask } from './support/tasks.js';
@@ -180,15 +187,15 @@ test('the predicates are one reading: unknown is never clear, and off gates noth
   // is for it. The guard's own arm is exercised in the backfill test below.
   const intake = new Map([[3, true]]);
 
-  assert.equal(needsFleetReview(pr, null, null, on, intake), true);
-  assert.equal(needsFleetReview(pr, review, null, on, intake), false);
-  assert.equal(needsFleetReview(pr, null, null, DEFAULT_PR_REVIEW, intake), false, 'off proposes nothing');
+  assert.equal(needsFleetReview(pr, reading({ intake }), on), true);
+  assert.equal(needsFleetReview(pr, reading({ intake, review }), on), false);
+  assert.equal(needsFleetReview(pr, reading({ intake }), DEFAULT_PR_REVIEW), false, 'off proposes nothing');
 
-  assert.equal(reviewSatisfied(pr, null, null, on, intake), false, 'a pull request nobody read is held');
-  assert.equal(reviewSatisfied(pr, review, null, on, intake), true);
-  assert.equal(reviewSatisfied(pr, null, null, { ...on, blocking: false }, intake), true, 'record-only gates nothing');
+  assert.equal(reviewSatisfied(pr, reading({ intake }), on), false, 'a pull request nobody read is held');
+  assert.equal(reviewSatisfied(pr, reading({ intake, review }), on), true);
+  assert.equal(reviewSatisfied(pr, reading({ intake }), { ...on, blocking: false }), true, 'record-only gates nothing');
   assert.equal(
-    reviewSatisfied(pr, null, null, DEFAULT_PR_REVIEW, intake),
+    reviewSatisfied(pr, reading({ intake }), DEFAULT_PR_REVIEW),
     true,
     'off is the build without the feature',
   );
@@ -474,8 +481,8 @@ test('the intake predicates: absent is outside, and backfill is a live read', ()
   );
 
   // Both halves, so a pull request nothing will review is not one nothing can merge.
-  assert.equal(needsFleetReview(pr, null, null, on, new Map()), false);
-  assert.equal(reviewSatisfied(pr, null, null, on, new Map()), true);
+  assert.equal(needsFleetReview(pr, reading(), on), false);
+  assert.equal(reviewSatisfied(pr, reading(), on), true);
 });
 
 test('stamping: the pulse that first sees a pull request judges it, and never re-judges it', () => {
@@ -611,8 +618,123 @@ test('the skip predicates: off is not on offer, and silence is never a skip', ()
     'an operator who turns allowSkip back off has every standing skip fall back to a review',
   );
 
-  assert.equal(needsFleetReview(pr, null, skip, on, intake), false);
-  assert.equal(reviewSatisfied(pr, null, skip, on, intake), true);
-  assert.equal(needsFleetReview(pr, null, skip, off, intake), true, 'and the review comes back with it');
-  assert.equal(reviewSatisfied(pr, null, skip, off, intake), false);
+  assert.equal(needsFleetReview(pr, reading({ intake, route: skip }), on), false);
+  assert.equal(reviewSatisfied(pr, reading({ intake, route: skip }), on), true);
+  assert.equal(needsFleetReview(pr, reading({ intake, route: skip }), off), true, 'and the review comes back with it');
+  assert.equal(reviewSatisfied(pr, reading({ intake, route: skip }), off), false);
+});
+
+// --------------------------------------------------------------------------
+// A review that happened somewhere else
+// --------------------------------------------------------------------------
+
+/** The build above, plus the operator's external check and a scripted prober. */
+function buildWithProber(verdicts: Record<number, 'reviewed' | 'not-reviewed' | 'unknown'>) {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
+  const prober = new FakeReviewProber(verdicts);
+  const config = loadConfig({
+    selfUpdate: { enabled: false } as never,
+    labelPrefix: '',
+    dbPath: ':memory:',
+    agentMode: 'raw',
+    deskRoot: join(dir, 'desk'),
+    worktreeRoot: join(dir, 'wt'),
+    heartbeatIntervalMs: 999_999,
+    maxConcurrentAgents: 3,
+    // Never run: `reviewProber` is injected, which is the whole point of the seam —
+    // the real one would spawn a shell on whoever is running the suite.
+    review: { ...DEFAULT_PR_REVIEW, enabled: true, reviewedElsewhere: 'exit 0' },
+  });
+  const system = buildSystem(config, {
+    backend: new FakePtyBackend(),
+    sink: undefined,
+    worktrees: new FakeWorktreeManager(),
+    reviewProber: prober,
+  });
+  return { system, prober };
+}
+
+test('a pull request reviewed elsewhere is not reviewed again, and not held either', async () => {
+  const { system, prober } = buildWithProber({ 40: 'reviewed' });
+  system.connector.inject({ kind: 'new_pr', number: 40, title: 'A change', branch: 'feature-40' });
+  system.connector.inject({ kind: 'ci_passed', prNumber: 40 });
+  system.connector.inject({ kind: 'pr_approved', prNumber: 40 });
+  system.connector.inject({ kind: 'pr_mergeable', prNumber: 40, mergeable: true, mergeableState: 'clean' });
+  await system.harness.runCycle('manual');
+
+  assert.deepEqual(prober.asked, [40]);
+  assert.equal(
+    findTask(system.store, (t) => t.originRef === 'pr:40:review'),
+    undefined,
+    'somebody has read this diff; a second opinion is one nobody asked for',
+  );
+  // The same sharp half the intake and the skip have: a pull request nothing will
+  // review must not be one nothing can merge.
+  assert.equal(system.store.listDecisions().filter((d) => d.action.type === 'merge_pr').length, 1);
+
+  // Recorded, so the command is not spawned for it again.
+  await system.harness.runCycle('manual');
+  assert.deepEqual(prober.asked, [40], 'the answer is stored, so the shell-out happens once');
+  system.store.close();
+});
+
+test('a check that says no is asked again, and one that says nothing leaves the fleet reviewing', async () => {
+  // 'not-reviewed' is a real answer; 'unknown' is a command that broke. Both must
+  // leave the review to the fleet — folding either into "already reviewed" would
+  // switch the whole feature off on the deployments whose gate broke.
+  const { system, prober } = buildWithProber({ 41: 'not-reviewed', 42: 'unknown' });
+  system.connector.inject({ kind: 'new_pr', number: 41, title: 'A change', branch: 'feature-41' });
+  system.connector.inject({ kind: 'new_pr', number: 42, title: 'Another', branch: 'feature-42' });
+  await system.harness.runCycle('manual');
+
+  assert.ok(findTask(system.store, (t) => t.originRef === 'pr:41:review'));
+  assert.ok(findTask(system.store, (t) => t.originRef === 'pr:42:review'));
+  assert.deepEqual(prober.asked, [41, 42]);
+  // A check failing since the day it was configured is otherwise indistinguishable
+  // from one that keeps answering "no" — the feature quietly doing nothing.
+  assert.ok(
+    system.store.listErrors(10).some((e) => /reviewedElsewhere check for PR 42 said nothing/.test(e.message)),
+    'a verdict that said nothing is on the error log, never swallowed',
+  );
+  assert.equal(
+    system.store.listErrors(10).filter((e) => /PR 41/.test(e.message)).length,
+    0,
+    'a real "no" is an answer, not a fault',
+  );
+  system.store.close();
+});
+
+test('the check is asked only of the pull requests a review is otherwise due for', async () => {
+  const { system, prober } = buildWithProber({});
+  // 43 stands down behind a human thread, 44 was already open when the review was
+  // switched on. Neither would be dispatched, so neither costs a process spawn.
+  system.connector.inject({ kind: 'new_pr', number: 43, title: 'A change', branch: 'feature-43' });
+  system.connector.inject({ kind: 'pr_comment', prNumber: 43, author: 'alice', body: 'try another approach' });
+  system.connector.inject({
+    kind: 'new_pr',
+    number: 44,
+    title: 'Old work',
+    branch: 'feature-44',
+    openedAt: LAST_MONTH,
+  });
+  system.connector.inject({ kind: 'new_pr', number: 45, title: 'New work', branch: 'feature-45' });
+  await system.harness.runCycle('manual');
+
+  assert.deepEqual(
+    prober.asked,
+    [45],
+    'one spawn per would-be review, not one per open pull request — the reading the rules use decides',
+  );
+  system.store.close();
+});
+
+test('no command configured spawns nothing at all', async () => {
+  const { system } = build({ enabled: true });
+  system.connector.inject({ kind: 'new_pr', number: 46, title: 'A change', branch: 'feature-46' });
+  await system.harness.runCycle('manual');
+  assert.ok(
+    findTask(system.store, (t) => t.originRef === 'pr:46:review'),
+    'every deployment before this existed, unchanged',
+  );
+  system.store.close();
 });

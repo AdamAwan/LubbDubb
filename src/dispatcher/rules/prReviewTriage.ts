@@ -5,6 +5,7 @@ import {
   reviewTriageOrigin,
   routesBetweenModes,
   reviewModeNames,
+  reviewReading,
   skipNote,
   triageRuns,
 } from '../../review/prReview.js';
@@ -56,16 +57,7 @@ export function prReviewTriage(s: StageContext): void {
     if (pr.merged) continue;
     // The same gate the review itself takes: a pull request already reviewed, or
     // one whose diff a human reviewer is about to have rewritten, needs no route.
-    if (
-      !needsFleetReview(
-        pr,
-        s.prReviews.get(pr.number) ?? null,
-        s.prReviewRoutes.get(pr.number) ?? null,
-        s.review,
-        s.prReviewIntake,
-      )
-    )
-      continue;
+    if (!needsFleetReview(pr, reviewReading(s, pr.number), s.review)) continue;
     if (s.prReviewRoutes.has(pr.number)) continue;
 
     const origin = reviewTriageOrigin(pr.number);

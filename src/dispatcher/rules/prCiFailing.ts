@@ -34,6 +34,7 @@ import {
   reviewOrigin,
   reviewSatisfied,
   reviewTriageOrigin,
+  reviewReading,
   triageRuns,
 } from '../../review/prReview.js';
 import { readOnlyDispatch } from './readOnlyDispatch.js';
@@ -104,8 +105,11 @@ export function prCiFailing(s: StageContext): void {
     // one field rather than two. It stands down while a human reviewer has
     // unhandled threads open (the diff is about to be rewritten) and comes back
     // once they are handled.
-    const review = s.prReviews.get(pr.number) ?? null;
-    const route = s.prReviewRoutes.get(pr.number) ?? null;
+    // One reading per pull request, built once and asked by both the concern below
+    // and the merge gate further down — the arrangement `src/review/prReview.ts`
+    // exists for, since two gathers of the same rows is two chances to differ.
+    const reading = reviewReading(s, pr.number);
+    const route = reading.route;
     // How the triage said to read it, or — where it never answered, or where the
     // project declares no modes — the fail-open default. Resolved here rather
     // than by the prompt, because the mode decides the profile too and a dispatch
@@ -117,7 +121,7 @@ export function prCiFailing(s: StageContext): void {
     // hold — `pr-review-triage` fails open, so the absence resolves either way,
     // on the pulse after it answers or on the pulse it gives up.
     const routing = route === null && triageRuns(s.review) && !triageSpent(s, pr.number);
-    if (needsFleetReview(pr, review, route, s.review, s.prReviewIntake) && !routing) {
+    if (needsFleetReview(pr, reading, s.review) && !routing) {
       const origin = reviewOrigin(pr.number);
       const branch = reviewBranch(pr.number);
       concerns.push({
@@ -490,7 +494,7 @@ export function prCiFailing(s: StageContext): void {
       // Nothing merges that nobody read. It asks whether the review *happened*,
       // not whether it liked what it saw — see `reviewSatisfied`, which argues
       // why a `findings` verdict cannot be the thing that holds the gate.
-      reviewSatisfied(pr, review, route, s.review, s.prReviewIntake);
+      reviewSatisfied(pr, reading, s.review);
     // A merge already put to a human is not put to them again: while the
     // verdict on `pr:<n>:merge` stands — unanswered, or a "no" — this rule is
     // held off that PR. Without it every pulse re-proposes the same merge and

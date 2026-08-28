@@ -156,6 +156,36 @@ export interface PrReviewPolicy {
    */
   allowSkip: boolean;
   /**
+   * A command asking whether a pull request has **already been reviewed somewhere
+   * else** — an Azure branch policy with a required approver, a review bot,
+   * another org's gate. Null (the default) asks nothing, which is every deployment
+   * before this existed.
+   *
+   * The gap it closes: `pr_reviews` answers "has the *fleet* read this", which is
+   * the only question the harness can answer on its own — and on a team that
+   * already has a reviewer that is the wrong question. Without it the fleet spends
+   * an agent on a diff somebody has read, and (with {@link blocking}) holds the
+   * merge for a review that is already done.
+   *
+   * **A command, because there is no generic form**, exactly as an environment's
+   * `health` is one: this is a policy evaluation on one deployment, a label on
+   * another, and a script that asks two systems on a third. It is run in a shell in
+   * `repoRoot` with `LUBBDUBB_PR` set, and **the exit code is the answer** — 0 for
+   * "already reviewed" — because what an operator reaches for here already exits 0
+   * for yes (`az repos pr policy list … | grep -q approved`, a `gh` query, a
+   * `curl -f`), and a stdout contract would mean a wrapper around each one.
+   *
+   * **A check that could not answer leaves the fleet reviewing.** A missing
+   * command, a timeout and a real "no" are one exit code apart, and folding any of
+   * them into "already reviewed" would silently switch the whole feature off on
+   * exactly the deployments whose gate broke. So only a clean exit 0 stands a pull
+   * request down; everything else is the fail-open direction the triage and the
+   * appraiser already take, and a failure that said nothing is recorded on the
+   * error log rather than swallowed.
+   * → `docs/spec/07-pull-requests.md#a-review-that-happened-somewhere-else`
+   */
+  reviewedElsewhere: string | null;
+  /**
    * The mode a review runs in when nothing chose one — a triage that crashed, was
    * killed or spent its attempt cap.
    *
@@ -192,6 +222,7 @@ export const DEFAULT_PR_REVIEW: PrReviewPolicy = {
   publish: 'none',
   modes: {},
   allowSkip: false,
+  reviewedElsewhere: null,
   defaultMode: null,
   routingCharterFile: null,
 };

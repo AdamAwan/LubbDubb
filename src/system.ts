@@ -49,6 +49,7 @@ import { RunwayDesk } from './supply/runwayDesk.js';
 import { BranchReapDesk } from './branchReapDesk.js';
 import { EnvironmentDesk } from './environments/environmentDesk.js';
 import { CommandEnvironmentHealthProber, type EnvironmentHealthProber } from './environments/healthProber.js';
+import { CommandReviewProber, type ReviewProber } from './review/reviewedElsewhere.js';
 import { CommandEnvironmentProber, type EnvironmentProber } from './environments/prober.js';
 import { CommandEnvironmentObserver, type EnvironmentObserver } from './environments/observer.js';
 import { WatchDryRun, type WatchDryRunner } from './environments/watchDryRun.js';
@@ -314,6 +315,14 @@ interface BuildOptions {
    * it — a test has none, and would spawn a shell on the developer's machine.
    */
   environmentHealthProber?: EnvironmentHealthProber;
+  /**
+   * Override how a pull request is asked whether it has already been reviewed
+   * somewhere else (tests inject `FakeReviewProber`). Without it the real prober
+   * runs the operator's configured `review.reviewedElsewhere` command, on the same
+   * terms as the environment probes around it — a test has none, and would spawn a
+   * shell on the developer's machine.
+   */
+  reviewProber?: ReviewProber;
   /**
    * Override how an environment's telemetry is asked a declared question (tests
    * inject `FakeEnvironmentObserver`). Without it the real observer runs the
@@ -1106,6 +1115,13 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     // The one thing the pulse needs of the review policy: whether to stamp the
     // intake ledger the dispatcher reads a few lines later.
     review: config.review,
+    // Only where the project configured a command, so a deployment that did not
+    // asks nobody and spawns nothing — and the pulse's own guard reads the same
+    // absence, so the two cannot disagree about whether the check runs.
+    reviewProber:
+      config.review.reviewedElsewhere === null
+        ? undefined
+        : (opts.reviewProber ?? new CommandReviewProber(config.repoRoot)),
     schedules,
     // Only when the watch is on: absent, the pulse takes no reading and the gauge
     // reads unknown, which is the behaviour of every deployment before this existed.

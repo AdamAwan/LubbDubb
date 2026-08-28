@@ -797,6 +797,42 @@ at the point of asking rather than baked into the stamp, so turning it on next w
 pull requests already stamped as backlog — baked in, the switch would be inert on exactly the pull
 requests it was reached for.
 
+### A review that happened somewhere else
+
+**Off** (`review.reviewedElsewhere: null`). `pr_reviews` answers "has the **fleet** read this", which is
+the only question the harness can answer on its own — and on a team that already has a reviewer it is
+the wrong question. An Azure branch policy with a required approver, a review bot, another org's gate:
+each of those is a read that happened, and the fleet spending an agent on the same diff is a second
+opinion nobody asked for, held merge included.
+
+**A command, because there is no generic form** — an environment's `health` exactly
+([24](24-environments.md#is-the-environment-well)). This is a policy evaluation on one deployment, a
+label on another, and a script that asks two systems on a third, so the harness ships no opinion and
+runs the operator's. It runs in a shell in `repoRoot` with `LUBBDUBB_PR` set, and **the exit code is
+the answer** — 0 for "already reviewed" — because what an operator reaches for here already exits 0 for
+yes (`az repos pr policy list … | grep -q approved`, a `gh` query, a `curl -f`), and a stdout contract
+would mean a wrapper around each one, which is where the mistakes go.
+
+**The verdict is three-valued and `unknown` never folds into `reviewed`.** A missing command, a timeout
+and a real "no" are one exit code apart, and reading any of them as "already reviewed" would silently
+switch the whole fleet review off on exactly the deployments whose gate broke. So only a clean exit 0
+stands a pull request down; a clean non-zero exit is a real no, and a kill or a shell that never ran
+the command is `unknown` — both leave the fleet reviewing, which is the fail-open direction the triage
+and the appraiser already take. An `unknown` goes on the error log, because a check that has been
+failing since the day it was configured is otherwise indistinguishable from one that keeps saying no.
+
+**Only `reviewed` is recorded** (`pr_review_externals`), and it is its own table rather than a
+`pr_reviews` row: that row means _the fleet read this and here is what it found_, and writing an
+external gate as one would put a verdict in the cockpit, the Decision log and the next agent's prompt
+that nothing in this harness performed. The other two verdicts are re-asked next pulse, because a gate
+that has not passed yet may pass later.
+
+**Asked in the pulse, not in a rule**, since it is a process spawn and the rules are pure and
+synchronous — and asked only of the pull requests a review is _otherwise due for_ on that pulse, which
+is the whole of the cost control: one spawn per would-be review rather than one per open pull request
+for ever. A pull request already reviewed, skipped, outside the intake or standing down behind a human
+thread is never asked about, because the pulse builds its reading exactly the way the rules do.
+
 ### Skipping a review altogether
 
 **Off** (`review.allowSkip`), and it is the one answer the triage can give that waives the gate rather
@@ -854,9 +890,12 @@ is the person approving the merge.
 Rule `pr-merge-ready` gains one clause (`reviewSatisfied`, `src/review/prReview.ts`): with
 `review.blocking` on, a pull request with **no** review row is not merge-ready. Unknown is never clear.
 
-Two things are not held, and both are decisions rather than silences: a pull request outside the
-[intake](#the-backfill-guard), and one the triage [skipped](#skipping-a-review-altogether). Neither has
-a review coming, so holding either would be the gate waiting on something that will never arrive.
+**Every arm `needsFleetReview` stands down on releases this gate too**, and the symmetry is what makes
+each of them a decision rather than a wedge: a pull request outside the [intake](#the-backfill-guard),
+one the triage [skipped](#skipping-a-review-altogether), and one
+[already read elsewhere](#a-review-that-happened-somewhere-else). None has a review coming, so holding
+any of them would be the gate waiting on something that will never arrive. `PrReviewReading` is the one
+bundle all four arms travel in, so an arm added later reaches both predicates or does not compile.
 
 **It asks whether the review happened, not whether it liked what it saw.** With one round there is
 nothing that could clear a `findings` verdict, so gating on `clear` would wedge every pull request the
@@ -936,6 +975,7 @@ key ([02](02-configuration.md#the-project-layer)), so all of it is committed onc
 | `review.blocking`           | `true`   | Whether an unreviewed pull request is held out of the merge gate. Off records the verdict and gates nothing.    |
 | `review.backfill`           | `false`  | Whether switching it on reviews the pull requests already open. Off reviews only what the harness watches appear. |
 | `review.allowSkip`          | `false`  | Whether the triage may answer that a pull request needs no review at all. It also turns the triage on by itself. |
+| `review.reviewedElsewhere`  | `null`   | A command asking whether a pull request has already been reviewed outside the harness. Exit 0 = yes; anything else leaves the fleet reviewing. |
 | `review.publish`            | `'none'` | Whether the reviewer is told to post its findings on the pull request, through `reply_to_review` and only that. |
 | `review.modes`              | `{}`     | The ways this project reviews: `charterFile` and `profile` each. Two or more switches the triage on.            |
 | `review.defaultMode`        | `null`   | The mode a review falls back to when nothing routed it. Null takes the first declared.                          |

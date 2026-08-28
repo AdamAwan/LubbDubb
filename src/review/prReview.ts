@@ -152,6 +152,13 @@ export function resolvedReviewMode(route: PrReviewRoute | null, policy: PrReview
  * avoid. The SHA is still recorded, because *what was read* is worth saying; it
  * simply decides nothing.
  *
+ * **A pull request something outside the harness has already reviewed is not
+ * reviewed again**, where the project configured a check for it
+ * (`review.reviewedElsewhere`). `pr_reviews` can only answer whether the *fleet*
+ * read it, which on a team that already has a reviewer is the wrong question —
+ * and `reviewSatisfied` reads the same row, so the merge is not held for a review
+ * that is already done.
+ *
  * **A pull request the triage skipped is not reviewed**, where the project allows
  * a skip at all (`review.allowSkip`). It is the one answer the triage can give
  * that waives the read rather than sizing it, and `reviewSatisfied` honours the
@@ -171,21 +178,17 @@ export function resolvedReviewMode(route: PrReviewRoute | null, policy: PrReview
  * nothing. It comes back on the next pulse after the threads are handled — the
  * work is not lost, only deferred to a diff that is going to survive.
  */
-export function needsFleetReview(
-  pr: PullRequest,
-  review: PrReview | null,
-  route: PrReviewRoute | null,
-  policy: PrReviewPolicy,
-  intake: PrReviewIntake,
-): boolean {
+export function needsFleetReview(pr: PullRequest, reading: PrReviewReading, policy: PrReviewPolicy): boolean {
   if (!policy.enabled) return false;
-  if (pr.merged || review !== null) return false;
+  if (pr.merged || reading.review !== null) return false;
   // The triage's own answer that nothing needs to read this one.
-  if (reviewSkipped(route, policy)) return false;
+  if (reviewSkipped(reading.route, policy)) return false;
+  // Somebody outside the harness already read it.
+  if (reading.elsewhere.has(pr.number)) return false;
   // A pull request that was already open when the review was switched on is not
   // the review's, and this is the only condition here that is about *time* — see
-  // `src/review/intake.ts` for why the four above cannot answer it.
-  if (!withinReviewIntake(pr, intake, policy)) return false;
+  // `src/review/intake.ts` for why the others cannot answer it.
+  if (!withinReviewIntake(pr, reading.intake, policy)) return false;
   return pr.unresolvedComments.every((c) => c.handled);
 }
 
@@ -203,30 +206,24 @@ export function needsFleetReview(
  * looked at; the judgement stays a human's, exactly as it was.
  *
  * Unknown is never clear: a pull request the review is for and has no row is
- * held. A pull request **outside the intake** is not — it is one no review is
- * coming for, so holding it would be the backfill guard wedging the merges it
- * was written to protect.
+ * held. A pull request the review is **not** for is another matter — outside the
+ * intake, skipped by the triage, or already read somewhere else — and holding one
+ * of those would be each guard wedging the merges it was written to protect.
  */
-export function reviewSatisfied(
-  pr: PullRequest,
-  review: PrReview | null,
-  route: PrReviewRoute | null,
-  policy: PrReviewPolicy,
-  intake: PrReviewIntake,
-): boolean {
+export function reviewSatisfied(pr: PullRequest, reading: PrReviewReading, policy: PrReviewPolicy): boolean {
   if (!policy.enabled || !policy.blocking) return true;
-  // A skip is a decision, so it releases the gate. Read here as well as in
-  // `needsFleetReview` for the intake's reason and it is the same reason: a pull
-  // request nothing will review must not be a pull request nothing can merge, or
-  // the triage's cheapest answer is the one that wedges the branch.
-  if (reviewSkipped(route, policy)) return true;
-  // The sharp half of the backfill guard. A pull request outside the intake is one
-  // nothing will *ever* review, so holding it would trade twenty wasted reviews
-  // for twenty pull requests that can never merge — the same harm, wearing the
+  // **Every arm `needsFleetReview` stands down on releases the gate here**, and
+  // that symmetry is the whole of what makes each of them a decision rather than a
+  // wedge: a pull request nothing will *ever* review must not be a pull request
+  // nothing can merge. Held one-sidedly, the guard would trade twenty wasted
+  // reviews for twenty branches that can never land — the same harm wearing the
   // fix, and the only symptom a queue of held merges that reads as the gate
-  // working. Held only where a review is genuinely still coming.
-  if (!withinReviewIntake(pr, intake, policy)) return true;
-  return review !== null;
+  // working. So a skip, an external review and a pull request outside the intake
+  // all pass; the gate holds only where a review is genuinely still coming.
+  if (reviewSkipped(reading.route, policy)) return true;
+  if (reading.elsewhere.has(pr.number)) return true;
+  if (!withinReviewIntake(pr, reading.intake, policy)) return true;
+  return reading.review !== null;
 }
 
 /** How the wait reads on a pull request's row while the review is still to come. */
@@ -322,6 +319,57 @@ export function modeCharterHeading(mode: string | null): string {
  * ever phrased — so the files are read once at boot (`src/review/charter.ts`) and
  * what reaches a stage is what they said.
  */
+/**
+ * Everything the review's two questions are asked of, gathered once per pulse.
+ *
+ * A bundle rather than four arguments, and the reason is the file's own: the rules,
+ * the lens and the merge gate all ask {@link needsFleetReview} and {@link
+ * reviewSatisfied}, and every arm those predicates gain has to reach *all* of them
+ * or the two drift. As positional arguments each new arm is four call sites to
+ * remember; as a field it is one type, and a caller that has not been updated does
+ * not compile.
+ */
+export interface PrReviewReading {
+  /** The fleet's own verdict, where it has one. */
+  review: PrReview | null;
+  /** How the triage said to read it — or that it should not be read at all. */
+  route: PrReviewRoute | null;
+  /** Which pull requests the review is *for* — the backfill guard. → `src/review/intake.ts` */
+  intake: PrReviewIntake;
+  /**
+   * Pull requests a check outside the harness reported already reviewed
+   * (`pr_review_externals`). Empty where the operator configured no check, which is
+   * every deployment before that existed.
+   */
+  elsewhere: ReadonlySet<number>;
+}
+
+/**
+ * What the four rows say about one pull request, gathered from whatever holds
+ * them.
+ *
+ * Structural rather than typed to `StageContext` so the two rules, the lens and
+ * anything later all gather the reading the same way: the four field names are
+ * spelled once here, and a caller that has one of them under a different name has
+ * to say so rather than quietly assemble a reading with an arm missing.
+ */
+export function reviewReading(
+  rows: {
+    prReviews: ReadonlyMap<number, PrReview>;
+    prReviewRoutes: ReadonlyMap<number, PrReviewRoute>;
+    prReviewIntake: PrReviewIntake;
+    prReviewedElsewhere: ReadonlySet<number>;
+  },
+  prNumber: number,
+): PrReviewReading {
+  return {
+    review: rows.prReviews.get(prNumber) ?? null,
+    route: rows.prReviewRoutes.get(prNumber) ?? null,
+    intake: rows.prReviewIntake,
+    elsewhere: rows.prReviewedElsewhere,
+  };
+}
+
 export interface PrReviewCharters {
   /** How to choose a mode, for the triage. Null where the project names no file. */
   routing: string | null;

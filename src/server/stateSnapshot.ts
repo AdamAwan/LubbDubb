@@ -487,6 +487,7 @@ export function buildStateSections(
     // this ledger, and a snapshot that stamped it would judge a pull request's
     // intake against whatever schedule the cockpit happened to poll on.
     prReviewIntake: store.prReviewIntake(),
+    prReviewedElsewhere: store.prsReviewedElsewhere(),
   };
   // The world's change history the Activity feed / Signals panels draw. Read here
   // rather than at the snapshot literal below because its entries carry structured

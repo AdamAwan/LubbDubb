@@ -222,6 +222,11 @@ export interface StageContext {
    * that is the absence chosen. → `src/review/intake.ts`
    */
   prReviewIntake: PrReviewIntake;
+  /**
+   * Pull requests a check outside the harness reported already reviewed
+   * (`Store.prsReviewedElsewhere`). Empty where the operator configured no check.
+   */
+  prReviewedElsewhere: ReadonlySet<number>;
   /** The base a PR is assumed to target when the provider doesn't report one. */
   defaultBranch: string;
   /**

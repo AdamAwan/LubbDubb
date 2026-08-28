@@ -64,10 +64,12 @@ import {
   resolvedReviewMode,
   reviewOrigin,
   reviewPendingLabel,
+  reviewReading,
   reviewSatisfied,
   reviewTriageOrigin,
   triageRuns,
   triagePendingLabel,
+  type PrReviewReading,
 } from './review/prReview.js';
 import type { PrReviewIntake } from './review/intake.js';
 import { isActiveTask } from './tasks.js';
@@ -193,6 +195,11 @@ export interface PrAttentionContext {
    * → `src/review/intake.ts`
    */
   prReviewIntake?: PrReviewIntake;
+  /**
+   * Pull requests an external check reported already reviewed. Absent reads as
+   * none, matching the dispatcher.
+   */
+  prReviewedElsewhere?: ReadonlySet<number>;
   /** How the triage routed each pull request; absent reads as the fail-open default. */
   prReviewRoutes?: ReadonlyMap<number, PrReviewRoute>;
 }
@@ -382,7 +389,7 @@ function court(pr: PullRequest, ctx: PrAttentionContext): PrAttention {
     pr.mergeableState !== 'blocked' &&
     pr.mergeableState !== 'dirty' &&
     pr.unresolvedComments.every((c) => c.handled) &&
-    reviewSatisfied(pr, fleetReview(pr, ctx), fleetRoute(pr, ctx), reviewPolicy(ctx), reviewIntake(ctx));
+    reviewSatisfied(pr, reading(pr, ctx), reviewPolicy(ctx));
 
   if (mergeReady) {
     // Ask the gate, not the row: `proposalHold` is where a rejection stops standing
@@ -540,11 +547,11 @@ function prConcerns(pr: PullRequest, ctx: PrAttentionContext, ci: CiReading): Pr
   // imported rather than restated, because this is the reading that tells an
   // operator an agent is coming and the two disagreeing is the drift this whole
   // file exists to avoid.
-  if (needsFleetReview(pr, fleetReview(pr, ctx), fleetRoute(pr, ctx), reviewPolicy(ctx), reviewIntake(ctx))) {
+  if (needsFleetReview(pr, reading(pr, ctx), reviewPolicy(ctx))) {
     // Which of the two is coming — the routing or the review — read the way the
     // rules read it, so the row names the origin whose attempt cap the operator
     // would actually find if they went looking.
-    const route = fleetRoute(pr, ctx);
+    const route = reading(pr, ctx).route;
     if (route === null && triageRuns(reviewPolicy(ctx))) {
       concerns.push({ rule: 'pr-review-triage', origin: reviewTriageOrigin(pr.number), label: triagePendingLabel() });
     } else {
@@ -624,16 +631,25 @@ function reviewPolicy(ctx: PrAttentionContext): PrReviewPolicy {
 }
 
 /** What the fleet recorded about this pull request, or null — never "unknown means fine". */
-function fleetReview(pr: PullRequest, ctx: PrAttentionContext): PrReview | null {
-  return ctx.prReviews?.get(pr.number) ?? null;
-}
-
-function fleetRoute(pr: PullRequest, ctx: PrAttentionContext): PrReviewRoute | null {
-  return ctx.prReviewRoutes?.get(pr.number) ?? null;
-}
-
+const NO_REVIEWS: ReadonlyMap<number, PrReview> = new Map();
+const NO_ROUTES: ReadonlyMap<number, PrReviewRoute> = new Map();
 const NO_INTAKE: PrReviewIntake = new Map<number, boolean>();
+const NO_EXTERNALS: ReadonlySet<number> = new Set<number>();
 
-function reviewIntake(ctx: PrAttentionContext): PrReviewIntake {
-  return ctx.prReviewIntake ?? NO_INTAKE;
+/**
+ * The same reading the two rules build, through the same helper — the point of
+ * this file: a row saying a review is coming and a rule dispatching one are one
+ * reading rather than two. Every arm is optional here and every absence reads as
+ * "no row", which is what the dispatcher does with an unwired one.
+ */
+function reading(pr: PullRequest, ctx: PrAttentionContext): PrReviewReading {
+  return reviewReading(
+    {
+      prReviews: ctx.prReviews ?? NO_REVIEWS,
+      prReviewRoutes: ctx.prReviewRoutes ?? NO_ROUTES,
+      prReviewIntake: ctx.prReviewIntake ?? NO_INTAKE,
+      prReviewedElsewhere: ctx.prReviewedElsewhere ?? NO_EXTERNALS,
+    },
+    pr.number,
+  );
 }

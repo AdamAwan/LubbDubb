@@ -942,6 +942,19 @@ CREATE TABLE IF NOT EXISTS pr_review_routes (
 -- re-derived from the world would hand a team's whole backlog to the fleet on the
 -- pulse after it was written. One row per pull request the review has seen,
 -- written whether or not it is eligible — the environments arrival stamp exactly.
+-- Pull requests a check *outside* the harness reported already reviewed (see
+-- PrReviewExternalStore). Its own table rather than a pr_reviews row, because that
+-- row means "the fleet read this, and here is what it found" — writing an external
+-- gate as one would put a verdict in the cockpit and in the next agent's prompt
+-- that nothing in this harness ever performed. Only the "reviewed" verdict lands: a
+-- gate that has not passed yet may pass later, and a row for the absence of an
+-- answer would freeze it into one.
+CREATE TABLE IF NOT EXISTS pr_review_externals (
+  pr_number INTEGER PRIMARY KEY,
+  detail    TEXT NOT NULL,      -- what said so, for the audit trail
+  at        TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS pr_review_intake (
   pr_number    INTEGER PRIMARY KEY,
   -- 1 = the harness watched this pull request appear, so the review is for it.

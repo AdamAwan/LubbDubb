@@ -51,6 +51,7 @@ import { ReviewWaitStore } from './reviewWaits.js';
 import { PrReviewStore } from './prReviews.js';
 import { PrReviewRouteStore, PR_REVIEW_ROUTE_COLUMNS } from './prReviewRoutes.js';
 import { PrReviewIntakeStore } from './prReviewIntake.js';
+import { PrReviewExternalStore } from './prReviewExternals.js';
 import { DecisionStore, DECISION_COLUMNS } from './decisions.js';
 import { WorldStore, type WorldLabelPatch } from './world.js';
 import { ErrorStore } from './errors.js';
@@ -227,6 +228,7 @@ export class Store {
   private readonly prReviews: PrReviewStore;
   private readonly prReviewRoutes: PrReviewRouteStore;
   private readonly prReviewIntakeRows: PrReviewIntakeStore;
+  private readonly prReviewExternals: PrReviewExternalStore;
   private readonly decisions: DecisionStore;
   private readonly world: WorldStore;
   private readonly errors: ErrorStore;
@@ -392,6 +394,7 @@ export class Store {
     this.prReviews = new PrReviewStore(ctx);
     this.prReviewRoutes = new PrReviewRouteStore(ctx);
     this.prReviewIntakeRows = new PrReviewIntakeStore(ctx);
+    this.prReviewExternals = new PrReviewExternalStore(ctx);
     this.decisions = new DecisionStore(ctx);
     this.world = new WorldStore(ctx);
     this.errors = new ErrorStore(ctx);
@@ -1380,6 +1383,12 @@ export class Store {
   }
   prReviewIntake(): ReadonlyMap<number, boolean> {
     return this.prReviewIntakeRows.prReviewIntake();
+  }
+  recordPrReviewedElsewhere(prNumber: number, detail: string): void {
+    this.prReviewExternals.recordPrReviewedElsewhere(prNumber, detail);
+  }
+  prsReviewedElsewhere(): ReadonlySet<number> {
+    return this.prReviewExternals.prsReviewedElsewhere();
   }
 
   // -- Decisions (audit) ---------------------------------------------------
