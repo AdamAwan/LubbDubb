@@ -2,6 +2,7 @@
   "name": "lubbdubb",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "Self-hosted orchestration harness — a cockpit that watches your work inputs, decides what to do, and dispatches AI agents autonomously.",
   "type": "module",
   "engines": {
