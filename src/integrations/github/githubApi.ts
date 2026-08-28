@@ -176,6 +176,21 @@ export interface GhPullSummary {
    * repository with a team review rule it is one the operator's whole org shares.
    */
   assigneeLogins: string[];
+  /**
+   * `updated_at` — the **change token** the snapshot's hydration cache gates the
+   * per-PR review / comment / detail fan-out on. Rides on the list payload that
+   * is fetched anyway, so it costs no request.
+   *
+   * Optional in the same sense as {@link GhCheckRun.id}: the real API always
+   * sends one, and a fixture that predates the cache does not. Absent means "no
+   * token", which resolves to a full re-hydration every pulse — i.e. exactly the
+   * behaviour before this existed.
+   *
+   * **It does not cover CI.** A check run completing or a commit status posting
+   * moves nothing here, which is why those two reads are gated on `head.sha` and
+   * on the cached verdict being terminal instead.
+   */
+  updatedAt?: string;
 }
 
 /**

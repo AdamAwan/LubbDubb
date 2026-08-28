@@ -35,12 +35,54 @@ import type {
   GhCheckRun,
   GhClosedPull,
   GhCombinedStatus,
+  GhPullSummary,
   GhReview,
   GhReviewComment,
   GhReviewThread,
   GitHubApi,
 } from './githubApi.js';
+import { HydrationCache } from './hydrationCache.js';
 import { githubRefUrl } from './refUrl.js';
+
+/**
+ * The half of a hydrated pull request that costs the four per-PR reads —
+ * `getPull`, `listPullReviews`, `listPullReviewComments` and the review-thread
+ * GraphQL query — held against the `updated_at` the list payload reported when
+ * it was read. Everything else on a {@link PullRequest} comes off the list
+ * payload, which is fetched every pulse and so is never cached.
+ */
+interface CachedPullDetail {
+  /** The token this hydration is valid for. */
+  updatedAt: string;
+  approved: boolean;
+  viewerApproved: boolean;
+  unresolvedComments: PrComment[];
+  mergeable: boolean | null;
+  mergeableState: MergeableState;
+  merged: boolean;
+}
+
+/**
+ * The CI half, held against the head SHA rather than `updated_at` — a check run
+ * completing does not touch a pull request's `updated_at`, so gating these on it
+ * would freeze a red build as green (or a green one as pending) for as long as
+ * nobody commented.
+ */
+interface CachedPullCi {
+  headSha: string;
+  ciStatus: CiStatus;
+  ciChecks: CiCheck[];
+}
+
+/**
+ * Whether a CI reading is finished with, i.e. safe to reuse while the head SHA
+ * holds. `pending` is a build still running and `unknown` is one nothing has
+ * reported yet — both are readings that will change without any token moving, so
+ * both are refetched every pulse.
+ */
+function ciSettled(status: CiStatus): boolean {
+  return status === 'passing' || status === 'failing';
+}
 
 interface GitHubSourceControlOpts {
   /** The GitHub client, already bound to a single owner/repo. */
@@ -92,7 +134,18 @@ export class GitHubSourceControlIntegration
   private lastGood: PullRequest[] | null = null;
   private lastGoodClosed: PullRequest[] | null = null;
 
-  constructor(private readonly opts: GitHubSourceControlOpts) {}
+  /**
+   * Change-gated hydration, keyed by PR number. **Not** a degradation path: a hit
+   * is a *current* reading GitHub's own list payload says has not moved, so it
+   * never sets `stale`, which means the read failed. → {@link HydrationCache}
+   */
+  private readonly detailCache: HydrationCache<CachedPullDetail>;
+  private readonly ciCache: HydrationCache<CachedPullCi>;
+
+  constructor(private readonly opts: GitHubSourceControlOpts) {
+    this.detailCache = new HydrationCache(opts.now);
+    this.ciCache = new HydrationCache(opts.now);
+  }
 
   async snapshot(): Promise<WorldSlice> {
     try {
@@ -110,14 +163,7 @@ export class GitHubSourceControlIntegration
 
       const pullRequests = await Promise.all(
         pulls.map(async (p): Promise<PullRequest> => {
-          const [detail, reviews, comments, threads, status, checks] = await Promise.all([
-            api.getPull(p.number),
-            api.listPullReviews(p.number),
-            api.listPullReviewComments(p.number),
-            this.reviewThreads(p.number),
-            api.getCombinedStatus(p.headSha),
-            api.listCheckRuns(p.headSha),
-          ]);
+          const [detail, ci] = await Promise.all([this.pullDetail(p, viewer), this.pullCi(p)]);
           const pr: PullRequest = {
             id: `pr_${p.number}`,
             number: p.number,
@@ -127,11 +173,11 @@ export class GitHubSourceControlIntegration
             // The commit the checks above ran against — what tells a check that was
             // fixed from one that flaked (`src/knowledge/noticeDesk.ts`).
             headSha: p.headSha,
-            ciStatus: aggregateCiStatus(checks, status),
-            ciChecks: listCiChecks(checks, status),
-            unresolvedComments: buildUnresolvedComments(comments, viewer, threads),
-            approved: computeApproved(reviews),
-            mergeableState: normalizeMergeState(detail.mergeableState),
+            ciStatus: ci.ciStatus,
+            ciChecks: ci.ciChecks,
+            unresolvedComments: detail.unresolvedComments,
+            approved: detail.approved,
+            mergeableState: detail.mergeableState,
             merged: detail.merged,
             // Listed as open, so 'open' unless the detail read caught it mid-merge.
             state: detail.merged ? 'merged' : 'open',
@@ -144,7 +190,7 @@ export class GitHubSourceControlIntegration
           // Only ever `true`: a reviewer who has not answered and one GitHub
           // reports no review from are the same silence, and `false` would assert
           // a verdict nobody gave.
-          if (viewerApproved(reviews, viewer)) pr.viewerApproved = true;
+          if (detail.viewerApproved) pr.viewerApproved = true;
           // Resolved against `viewer` — the identity the token actually is — and
           // never against `prAuthor`, which is a *filter* and is unset the moment a
           // project turns `ownWorkOnly` off. Read the other way round, turning the
@@ -156,6 +202,12 @@ export class GitHubSourceControlIntegration
           return pr;
         }),
       );
+
+      // A PR that has left the open set is never hydrated again, so its entries
+      // are dead weight from here on.
+      const open = pulls.map((p) => p.number);
+      this.detailCache.retain(open);
+      this.ciCache.retain(open);
 
       this.lastGood = pullRequests;
       this.lastGoodClosed = closedPullRequests;
@@ -174,6 +226,74 @@ export class GitHubSourceControlIntegration
   }
 
   /**
+   * The four per-PR reads behind {@link CachedPullDetail}, or the last hydration
+   * when GitHub's `updated_at` says the pull request has not been touched since.
+   *
+   * Everything gated here changes only through something done *to* the pull
+   * request — a review, a comment, a resolution, a push, a retarget — and every
+   * one of those bumps `updated_at`. What it does **not** cover is the world
+   * moving underneath: a base branch that advances turns `mergeable_state`
+   * `behind` or `dirty` without touching this token, which is why the cache
+   * expires entries rather than trusting one forever
+   * (`MAX_REUSE_MS` in {@link HydrationCache}).
+   */
+  private async pullDetail(p: GhPullSummary, viewer: string): Promise<CachedPullDetail> {
+    const { api } = this.opts;
+    // No token on the payload (an old fixture) means no reuse, ever — the cache
+    // must not invent a token, since the only safe reading of "we cannot tell
+    // whether it moved" is that it did.
+    const cached = p.updatedAt === undefined ? undefined : this.detailCache.get(p.number);
+    if (cached !== undefined && cached.updatedAt === p.updatedAt) return cached;
+
+    const [detail, reviews, comments, threads] = await Promise.all([
+      api.getPull(p.number),
+      api.listPullReviews(p.number),
+      api.listPullReviewComments(p.number),
+      this.reviewThreads(p.number),
+    ]);
+    const fresh: CachedPullDetail = {
+      updatedAt: p.updatedAt ?? '',
+      approved: computeApproved(reviews),
+      viewerApproved: viewerApproved(reviews, viewer),
+      unresolvedComments: buildUnresolvedComments(comments, viewer, threads ?? []),
+      mergeable: detail.mergeable,
+      mergeableState: normalizeMergeState(detail.mergeableState),
+      merged: detail.merged,
+    };
+    // Not cached when the resolution read failed — `fresh` is then a degradation,
+    // and a degradation must not be served as a hit for as long as the token holds.
+    if (p.updatedAt !== undefined && threads !== null) this.detailCache.set(p.number, fresh);
+    return fresh;
+  }
+
+  /**
+   * The two CI reads, or the last hydration when the head SHA has not moved
+   * **and** the verdict it produced was terminal.
+   *
+   * Both conditions, because each covers what the other cannot. The SHA is the
+   * only token that moves when a push invalidates a build — `updated_at` does
+   * move on a push too, but the reverse does not hold, and a comment must not buy
+   * a CI refetch it changes nothing about. Terminality covers the rest: a build
+   * that is queued, running or has not reported settles with no token moving at
+   * all, so anything short of `passing`/`failing` is re-read every pulse. A
+   * settled verdict on an unmoved commit is the one reading that cannot change.
+   */
+  private async pullCi(p: GhPullSummary): Promise<CachedPullCi> {
+    const { api } = this.opts;
+    const cached = this.ciCache.get(p.number);
+    if (cached !== undefined && cached.headSha === p.headSha && ciSettled(cached.ciStatus)) return cached;
+
+    const [status, checks] = await Promise.all([api.getCombinedStatus(p.headSha), api.listCheckRuns(p.headSha)]);
+    const fresh: CachedPullCi = {
+      headSha: p.headSha,
+      ciStatus: aggregateCiStatus(checks, status),
+      ciChecks: listCiChecks(checks, status),
+    };
+    this.ciCache.set(p.number, fresh);
+    return fresh;
+  }
+
+  /**
    * Review-thread resolution, or an empty list when it cannot be read.
    *
    * The one call in the snapshot allowed to fail on its own. It is the sole
@@ -188,7 +308,7 @@ export class GitHubSourceControlIntegration
    * staying *open*, the safe direction: an operator sees an agent dispatched for a
    * comment they had resolved, rather than their review being silently dropped.
    */
-  private async reviewThreads(number: number): Promise<GhReviewThread[]> {
+  private async reviewThreads(number: number): Promise<GhReviewThread[] | null> {
     try {
       return await this.opts.api.listPullReviewThreads(number);
     } catch (err) {
@@ -197,7 +317,10 @@ export class GitHubSourceControlIntegration
         message: `${this.id} could not read review-thread resolution for PR #${number}: ${(err as Error).message}`,
         detail: 'Falling back to reply-based handling — a resolved thread may still be treated as open.',
       });
-      return [];
+      // `null`, not `[]`: the difference is what stops the hydration cache from
+      // holding a degraded reading for as long as the token sits still. A
+      // GraphQL outage is retried on the next pulse, exactly as before the cache.
+      return null;
     }
   }
 
