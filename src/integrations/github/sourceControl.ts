@@ -41,7 +41,7 @@ import type {
   GhReviewThread,
   GitHubApi,
 } from './githubApi.js';
-import { HydrationCache } from './hydrationCache.js';
+import { HydrationCache } from '../hydrationCache.js';
 import { githubRefUrl } from './refUrl.js';
 
 /**

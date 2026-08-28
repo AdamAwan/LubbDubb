@@ -19,7 +19,7 @@ import type {
   WorldSlice,
 } from '../integration.js';
 import type { GhTimelineEvent, GitHubApi } from './githubApi.js';
-import { HydrationCache } from './hydrationCache.js';
+import { HydrationCache } from '../hydrationCache.js';
 import { githubRefUrl } from './refUrl.js';
 
 /**

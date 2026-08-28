@@ -34,6 +34,7 @@ import { closedWindowStart } from '../closedWindow.js';
 import type {
   AzClosedPull,
   AzPolicyEvaluation,
+  AzPull,
   AzReviewer,
   AzThread,
   AzTimelineRecord,
@@ -41,6 +42,7 @@ import type {
 } from './azureDevOpsApi.js';
 import { azureRefUrl } from './refUrl.js';
 import { policyCheckMode, policyKindOf, type PolicyCheckModes } from './policyKinds.js';
+import { HydrationCache } from '../hydrationCache.js';
 
 interface AzureSourceControlOpts {
   /** The Azure DevOps client, already bound to a single organization/project/repository. */
@@ -99,6 +101,15 @@ export class AzureDevOpsSourceControlIntegration
   private lastGoodClosed: PullRequest[] | null = null;
   /** commitId per PR from the last snapshot — needed to complete a merge later. */
   private mergeCommits = new Map<number, string>();
+  /**
+   * The branch-policy evaluations from the last fan-out, beside the token they
+   * were read against — the one per-PR read this provider can skip. See
+   * {@link policyEvaluations} for what that token covers and what it does not.
+   *
+   * Nothing to do with {@link lastGood}: that is the degradation path and says so
+   * with `stale: true`, this is a current reading that cost no request.
+   */
+  private readonly policyReadings = new HydrationCache<{ token: string; evals: AzPolicyEvaluation[] }>();
 
   constructor(private readonly opts: AzureSourceControlOpts) {}
 
@@ -132,11 +143,17 @@ export class AzureDevOpsSourceControlIntegration
 
       const pullRequests = await Promise.all(
         pulls.map(async (p): Promise<PullRequest> => {
-          const [threads, policyEvals, labels] = await Promise.all([
+          // Threads and labels are paid for every pulse: nothing on the cheap
+          // list payload covers either, and gating a read on a token that does
+          // not cover it is how a cache starts lying. The policy evaluations —
+          // the third of the three — are gated, and read *after* the threads
+          // because the thread fingerprint is part of what covers them. That
+          // costs one extra round trip on a miss and none at all on a hit.
+          const [threads, labels] = await Promise.all([
             api.listPullThreads(p.pullRequestId),
-            api.listPolicyEvaluations(p.pullRequestId),
             api.listPullLabels(p.pullRequestId),
           ]);
+          const policyEvals = await this.policyEvaluations(p, threads);
           this.mergeCommits.set(p.pullRequestId, p.lastMergeSourceCommit);
           const pr: PullRequest = {
             id: `pr_${p.pullRequestId}`,
@@ -186,6 +203,9 @@ export class AzureDevOpsSourceControlIntegration
         }),
       );
 
+      // A PR that has left the active set (or the author filter) is never asked
+      // about again. Done after the fan-out so this pulse's hits survive to be read.
+      this.policyReadings.retain(pulls.map((p) => p.pullRequestId));
       this.lastGood = pullRequests;
       this.lastGoodClosed = closedPullRequests;
       return { pullRequests, closedPullRequests };
@@ -199,6 +219,50 @@ export class AzureDevOpsSourceControlIntegration
       if (this.lastGood === null) throw err;
       return { pullRequests: this.lastGood!, closedPullRequests: this.lastGoodClosed!, stale: true };
     }
+  }
+
+  /**
+   * This pull request's branch-policy evaluations — from the network, or from
+   * the last fan-out when nothing that could have moved them has moved.
+   *
+   * The subtle one. A pull request's head commit is **not** a token for its
+   * policy evaluations: a build completing changes the evaluation and nothing
+   * else, which is exactly the transition the harness exists to notice. So a
+   * reading is only reused when both halves hold.
+   *
+   * *Settled* — every enabled build/status evaluation has reached a verdict
+   * (`approved` / `rejected` / `notApplicable`) and none is `isExpired`. While
+   * any of them is `queued`, `running`, expired or unreported, the answer is
+   * expected to change without anything else about the PR changing, and the read
+   * is always paid for. This is the rule that keeps a running build from being
+   * cached as pending forever.
+   *
+   * *Unmoved* — the token below covers, field by field, what a settled
+   * evaluation can still be a function of:
+   *
+   * - `lastMergeSourceCommit`, `mergeStatus`, `isDraft` — the build and status
+   *   policies re-evaluate when the head moves.
+   * - the reviewer votes, off the same list payload the filter already reads —
+   *   the required/minimum-reviewer policies.
+   * - a fingerprint of the threads fetched a moment ago — the comment-resolution
+   *   policy, whose whole input is those threads.
+   *
+   * What it does **not** cover is stated plainly rather than papered over: a
+   * work-item-linking policy (its input is a relation written on the work item,
+   * which this capability never reads), a merge-strategy policy, an unrecognised
+   * policy type, and any policy an administrator adds, retires or reconfigures.
+   * Those are covered only by `HydrationCache`'s age backstop, which is set
+   * to the heartbeat the fleet ran at before any of this existed — so the worst
+   * case for them is the freshness they already had, and every pulse faster than
+   * that is saved requests rather than a new blind spot.
+   */
+  private async policyEvaluations(p: AzPull, threads: AzThread[]): Promise<AzPolicyEvaluation[]> {
+    const token = policyReuseToken(p, threads);
+    const hit = this.policyReadings.get(p.pullRequestId);
+    if (hit !== undefined && hit.token === token && policyEvalsSettled(hit.evals)) return hit.evals;
+    const evals = await this.opts.api.listPolicyEvaluations(p.pullRequestId);
+    this.policyReadings.set(p.pullRequestId, { token, evals });
+    return evals;
   }
 
   /**
@@ -428,6 +492,54 @@ export function mergeableFromStatus(mergeStatus: string): boolean | undefined {
   if (mergeStatus === 'succeeded') return true;
   if (mergeStatus === 'conflicts') return false;
   return undefined;
+}
+
+/**
+ * Everything about a pull request that a **settled** branch-policy evaluation
+ * can still be a function of, folded into one comparable string.
+ *
+ * Read off payloads the pulse has already paid for — the active-PR list and the
+ * threads — so building it costs no request. Order-insensitive on both lists:
+ * Azure does not promise a stable order for either, and a token that moved
+ * because two reviewers swapped places would gate nothing.
+ */
+function policyReuseToken(p: AzPull, threads: AzThread[]): string {
+  const reviewers = p.reviewers.map((r) => `${r.uniqueName}:${r.vote}:${r.isRequired}`).sort();
+  // The thread's own status and how many comments it carries: between them, the
+  // whole of what a comment-resolution policy evaluates. The bodies are not part
+  // of it — an edited comment does not resolve or unresolve a thread.
+  const threadFingerprint = threads.map((t) => `${t.id}:${t.status ?? ''}:${t.comments.length}`).sort();
+  return JSON.stringify([p.lastMergeSourceCommit, p.mergeStatus, p.isDraft, reviewers, threadFingerprint]);
+}
+
+/**
+ * Has every automated policy on this pull request reached a verdict?
+ *
+ * The gate on reusing a cached evaluation list. `queued` and `running` are the
+ * obvious unsettled states; `isExpired` is the third, and the one worth naming —
+ * an expired build-validation evaluation is `queued` with nothing in flight, and
+ * becomes an ordinary running one the moment a build is queued for the current
+ * head, which is a transition no token on the pull request reports. A `null`
+ * status counts as unsettled too: Azure reports both "no verdict yet" and "does
+ * not apply" thinly, and reading the ambiguous one as settled would be the
+ * expensive mistake.
+ *
+ * Scoped to the **build and status** kinds because they are the ones whose
+ * verdict arrives on its own, from a machine, with nothing about the pull request
+ * changing. A reviewer or comment policy only moves when a person does something
+ * the reuse token already sees.
+ */
+export function policyEvalsSettled(evals: AzPolicyEvaluation[]): boolean {
+  for (const e of evals) {
+    if (!e.isEnabled) continue;
+    const kind = policyKindOf(e.typeId);
+    if (kind !== 'build' && kind !== 'status') continue;
+    if (e.isExpired === true) return false;
+    if (e.status !== 'approved' && e.status !== 'rejected' && e.status !== 'broken' && e.status !== 'notApplicable') {
+      return false;
+    }
+  }
+  return true;
 }
 
 /**
