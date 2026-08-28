@@ -76,6 +76,33 @@ export interface PrReviewPolicy {
    */
   blocking: boolean;
   /**
+   * Whether switching {@link enabled} on reviews the pull requests **already
+   * open**, or only the ones the harness watches appear from that pulse on.
+   *
+   * **Off**, and off for {@link enabled}'s own reason one step later. `enabled`
+   * is off by default because this is the rule that spends an agent on every
+   * pull request, and a deployment whose bill changed by a build it had not
+   * asked anything of would be right to call that a fault. The day a project
+   * turns it on is exactly that day again: a team with twenty pull requests open
+   * means "read what we open from here", and gets twenty agents on one pulse and
+   * — with {@link blocking} — twenty pull requests it cannot merge until each has
+   * been read. Nothing errors, and the queue of held merges is indistinguishable
+   * from the feature working.
+   *
+   * So the intake ledger (`src/review/intake.ts`) stamps every open pull request
+   * the first time the review sees it, **either way**, and only the ones the
+   * harness watched appear are eligible. That stamp is the whole of how a project
+   * turning this on next month reviews its *next* pull request rather than every
+   * one already open — the environments arrival rule exactly
+   * ([24](docs/spec/24-environments.md#announcing-an-arrival)).
+   *
+   * On, every open pull request with no verdict is eligible, which is the
+   * behaviour a team adopting this deliberately — a backlog they *want* read —
+   * asks for. It is read live rather than baked into the stamp, so turning it on
+   * later still reaches the pull requests already stamped as backlog.
+   */
+  backfill: boolean;
+  /**
    * Whether the reviewer is told to publish what it found on the pull request.
    *
    * `'none'` keeps the review inside the harness: the verdict is on the pull
@@ -103,6 +130,31 @@ export interface PrReviewPolicy {
    * ignored silently.
    */
   modes: Record<string, PrReviewMode>;
+  /**
+   * Whether the triage may decide a pull request needs **no review at all** — a
+   * version bump, a generated lockfile, a one-word typo in a comment — rather
+   * than only which of the declared modes reads it.
+   *
+   * **Off**, because it is the one answer the triage can give that waives the gate
+   * the feature exists to be. Everything else it decides is about *how much* to
+   * read; this decides whether anything does, and with `blocking` on it is also
+   * what lets the merge through. A project asks for it deliberately or it is not
+   * on offer, and a triage that never learned about it cannot reach for it: the
+   * `review_route` tool does not carry the argument, and the prompt does not
+   * mention it.
+   *
+   * **It also turns the triage on by itself.** `review.modes` is the switch for the
+   * *routing* question because a decision with one option is not a decision — but
+   * with skipping allowed, one declared mode is two options ("read it that way" or
+   * "do not"), so the triage runs. `triageRuns` is that reading, and every rule
+   * asks it rather than `routesBetweenModes`.
+   *
+   * **Never the fail-open direction.** A triage that crashed, was killed or spent
+   * its cap leaves no route, and `pr-review` then reads the pull request in the
+   * default mode — exactly as before. A skip is only ever something an agent said
+   * on purpose, recorded with its reason on the route row; silence is a review.
+   */
+  allowSkip: boolean;
   /**
    * The mode a review runs in when nothing chose one — a triage that crashed, was
    * killed or spent its attempt cap.
@@ -136,8 +188,10 @@ export interface PrReviewPolicy {
 export const DEFAULT_PR_REVIEW: PrReviewPolicy = {
   enabled: false,
   blocking: true,
+  backfill: false,
   publish: 'none',
   modes: {},
+  allowSkip: false,
   defaultMode: null,
   routingCharterFile: null,
 };

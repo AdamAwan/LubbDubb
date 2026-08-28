@@ -5,6 +5,8 @@ import {
   reviewTriageOrigin,
   routesBetweenModes,
   reviewModeNames,
+  skipNote,
+  triageRuns,
 } from '../../review/prReview.js';
 import type { RawAction, StageContext } from './context.js';
 
@@ -41,10 +43,12 @@ import type { RawAction, StageContext } from './context.js';
  */
 export function prReviewTriage(s: StageContext): void {
   const { ctx } = s;
-  // Nothing to choose between: with one mode, or none, the review runs what there
-  // is. The switch is the modes themselves rather than a flag of its own, so the
-  // two cannot disagree about whether routing happens.
-  if (!routesBetweenModes(s.review)) return;
+  // Nothing to decide: with one mode and no skip on offer, the review runs what
+  // there is. The switch is the modes and `allowSkip` themselves rather than a flag
+  // of its own, so no two of them can disagree about whether the triage happens —
+  // and `allowSkip` alone is enough, because "read it" and "do not" are two answers
+  // however many modes there are.
+  if (!triageRuns(s.review)) return;
   // `ctx.world.pullRequests` is the dispatch world — the operator's ignore tag has
   // already taken the unwatched out of it (they survive on `s.openPrs`, which is
   // for resolving stacks and never for acting).
@@ -52,7 +56,16 @@ export function prReviewTriage(s: StageContext): void {
     if (pr.merged) continue;
     // The same gate the review itself takes: a pull request already reviewed, or
     // one whose diff a human reviewer is about to have rewritten, needs no route.
-    if (!needsFleetReview(pr, s.prReviews.get(pr.number) ?? null, s.review)) continue;
+    if (
+      !needsFleetReview(
+        pr,
+        s.prReviews.get(pr.number) ?? null,
+        s.prReviewRoutes.get(pr.number) ?? null,
+        s.review,
+        s.prReviewIntake,
+      )
+    )
+      continue;
     if (s.prReviewRoutes.has(pr.number)) continue;
 
     const origin = reviewTriageOrigin(pr.number);
@@ -64,7 +77,9 @@ export function prReviewTriage(s: StageContext): void {
     if (verdict.kind === 'escalate' || verdict.kind === 'hold') continue;
 
     const title = `Choose how to review PR #${pr.number}`;
-    const reason = `PR #${pr.number} has no review mode yet, and this project declares ${reviewModeNames(s.review).length}.`;
+    const reason = routesBetweenModes(s.review)
+      ? `PR #${pr.number} has no review mode yet, and this project declares ${reviewModeNames(s.review).length}.`
+      : `PR #${pr.number} has no routing yet, and this project lets the triage skip a review.`;
     s.candidates.push({
       origin,
       rule: 'pr-review-triage',
@@ -85,7 +100,13 @@ export function prReviewTriage(s: StageContext): void {
             branch: pr.branch,
             base: pr.baseBranch ?? s.defaultBranch,
             modes: reviewModeNames(s.review).join(', '),
-          }) + charterNote(s.reviewCharters.routing, 'How this project chooses'),
+          }) +
+          // Appended, never interpolated, for the reason every addition to a
+          // prompt is: an operator's override that never learned about a `{skip}`
+          // placeholder would drop the whole option silently, on exactly the
+          // deployments that customised most.
+          skipNote(s.review) +
+          charterNote(s.reviewCharters.routing, 'How this project chooses'),
         originRef: origin,
         originTitle: pr.title,
         rule: 'pr-review-triage',

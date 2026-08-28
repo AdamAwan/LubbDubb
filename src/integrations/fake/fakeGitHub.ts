@@ -148,6 +148,13 @@ export class FakeGitHubIntegration
               mergeableState: 'unknown',
               merged: false,
               labels: event.labels ?? [],
+              // A pull request the fake has this moment created, so it is by
+              // construction one the harness watched appear — the fleet review's
+              // intake ledger reads this, and a fake that omitted it would put
+              // every test's pull request outside the intake and review none of
+              // them (`src/review/intake.ts`). Overridable so a test can place one
+              // in the past, which is the only way to be a backlog pull request.
+              openedAt: event.openedAt ?? new Date().toISOString(),
             });
           }
           break;
@@ -235,6 +242,8 @@ export class FakeGitHubIntegration
         mergeableState: 'unknown',
         merged: false,
         labels: [],
+        // Just opened, so within the review's intake — same reason as above.
+        openedAt: new Date().toISOString(),
       });
     });
     return { ok: true, ref: String(number) };

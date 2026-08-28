@@ -20,7 +20,22 @@ export type InjectableEvent =
   | { kind: 'ci_failed'; prNumber: number }
   | { kind: 'ci_passed'; prNumber: number }
   | { kind: 'pr_comment'; prNumber: number; author: string; body: string }
-  | { kind: 'new_pr'; number: number; title: string; branch: string; baseBranch?: string; labels?: string[] }
+  | {
+      kind: 'new_pr';
+      number: number;
+      title: string;
+      branch: string;
+      baseBranch?: string;
+      labels?: string[];
+      /**
+       * When it was opened, for a test that needs a pull request the harness did
+       * *not* watch appear — the fleet review's backfill guard is the one thing
+       * that reads it, and "already open when the review was switched on" cannot
+       * be expressed any other way. Absent = now, which is what an injected pull
+       * request otherwise is.
+       */
+      openedAt?: string;
+    }
   // PR-monitoring signals that walk a PR toward mergeable.
   | { kind: 'pr_approved'; prNumber: number }
   | { kind: 'pr_mergeable'; prNumber: number; mergeable?: boolean; mergeableState?: MergeableState }

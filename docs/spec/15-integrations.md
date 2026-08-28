@@ -432,6 +432,15 @@ three states that move a stance, so a later `CHANGES_REQUESTED` takes an earlier
 are for the assignment row alone ([07](07-pull-requests.md#a-pull-request-a-person-put-on-you)), and
 neither costs a request.
 
+**When it was opened** is `created_at`, off the same list payload again. It is read by the fleet
+review's backfill guard and by nothing else, and it is what separates a pull request the harness
+watched appear from one that was already open when a project switched the review on
+([07](07-pull-requests.md#the-backfill-guard)). **A provider that cannot resolve it** costs its
+deployment the pull requests open on the first pulse with the review on — they are caught up silently
+and nothing from the second pulse on is affected — so a new source-control provider resolves it or says
+here that it cannot. Azure's is `creationDate`, reported empty where Azure did not, which the intake
+reads as "cannot say" rather than as the epoch.
+
 ## The `azure` provider
 
 Azure DevOps Repos + Boards, the same shape: all HTTP behind the narrow `AzureDevOpsApi` seam,

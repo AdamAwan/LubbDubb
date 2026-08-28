@@ -136,6 +136,10 @@ export class GitHubSourceControlIntegration
             // Listed as open, so 'open' unless the detail read caught it mid-merge.
             state: detail.merged ? 'merged' : 'open',
             labels: p.labels,
+            // The one thing that separates a pull request the harness watched
+            // appear from one that was already open when a project switched the
+            // fleet review on (`src/review/intake.ts`).
+            openedAt: p.openedAt,
             url: p.url,
           };
           // The login is the only name GitHub puts on the list payload, and it is

@@ -194,6 +194,11 @@ export interface McpToolDeps {
    */
   reviewModes?: string[];
   /**
+   * Whether the triage may answer that a pull request needs no review at all
+   * (`review.allowSkip`). Absent reads as off, so the argument is not offered.
+   */
+  reviewAllowSkip?: boolean;
+  /**
    * The permission backstop (issue #130 phase B). Present when
    * `mcp.permissionEscalation` is on; the `request_permission` tool blocks on it.
    * Absent, that tool reports the backstop is off rather than blocking forever.

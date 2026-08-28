@@ -49,7 +49,8 @@ import { PrWatchSeedStore } from './prWatchSeeds.js';
 import { WorkItemLinkStore } from './workItemLinks.js';
 import { ReviewWaitStore } from './reviewWaits.js';
 import { PrReviewStore } from './prReviews.js';
-import { PrReviewRouteStore } from './prReviewRoutes.js';
+import { PrReviewRouteStore, PR_REVIEW_ROUTE_COLUMNS } from './prReviewRoutes.js';
+import { PrReviewIntakeStore } from './prReviewIntake.js';
 import { DecisionStore, DECISION_COLUMNS } from './decisions.js';
 import { WorldStore, type WorldLabelPatch } from './world.js';
 import { ErrorStore } from './errors.js';
@@ -225,6 +226,7 @@ export class Store {
   private readonly reviewWaitStore: ReviewWaitStore;
   private readonly prReviews: PrReviewStore;
   private readonly prReviewRoutes: PrReviewRouteStore;
+  private readonly prReviewIntakeRows: PrReviewIntakeStore;
   private readonly decisions: DecisionStore;
   private readonly world: WorldStore;
   private readonly errors: ErrorStore;
@@ -278,6 +280,7 @@ export class Store {
       KNOWLEDGE_COLUMNS,
       ENVIRONMENT_COLUMNS,
       WATCH_COLUMNS,
+      PR_REVIEW_ROUTE_COLUMNS,
     ]) {
       addedColumns.push(...ensureColumns(this.db, columns));
     }
@@ -388,6 +391,7 @@ export class Store {
     this.reviewWaitStore = new ReviewWaitStore(ctx);
     this.prReviews = new PrReviewStore(ctx);
     this.prReviewRoutes = new PrReviewRouteStore(ctx);
+    this.prReviewIntakeRows = new PrReviewIntakeStore(ctx);
     this.decisions = new DecisionStore(ctx);
     this.world = new WorldStore(ctx);
     this.errors = new ErrorStore(ctx);
@@ -1370,6 +1374,12 @@ export class Store {
   }
   listPrReviewRoutes(): PrReviewRoute[] {
     return this.prReviewRoutes.listPrReviewRoutes();
+  }
+  recordPrReviewIntake(prNumber: number, watchedOpen: boolean): void {
+    this.prReviewIntakeRows.recordPrReviewIntake(prNumber, watchedOpen);
+  }
+  prReviewIntake(): ReadonlyMap<number, boolean> {
+    return this.prReviewIntakeRows.prReviewIntake();
   }
 
   // -- Decisions (audit) ---------------------------------------------------

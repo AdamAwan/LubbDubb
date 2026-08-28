@@ -34,7 +34,7 @@ import {
   reviewOrigin,
   reviewSatisfied,
   reviewTriageOrigin,
-  routesBetweenModes,
+  triageRuns,
 } from '../../review/prReview.js';
 import { readOnlyDispatch } from './readOnlyDispatch.js';
 import { isActive, type RawAction, type StageContext } from './context.js';
@@ -116,8 +116,8 @@ export function prCiFailing(s: StageContext): void {
     // the cheap one, which is the whole saving gone. It is a wait rather than a
     // hold — `pr-review-triage` fails open, so the absence resolves either way,
     // on the pulse after it answers or on the pulse it gives up.
-    const routing = route === null && routesBetweenModes(s.review) && !triageSpent(s, pr.number);
-    if (needsFleetReview(pr, review, s.review) && !routing) {
+    const routing = route === null && triageRuns(s.review) && !triageSpent(s, pr.number);
+    if (needsFleetReview(pr, review, route, s.review, s.prReviewIntake) && !routing) {
       const origin = reviewOrigin(pr.number);
       const branch = reviewBranch(pr.number);
       concerns.push({
@@ -490,7 +490,7 @@ export function prCiFailing(s: StageContext): void {
       // Nothing merges that nobody read. It asks whether the review *happened*,
       // not whether it liked what it saw — see `reviewSatisfied`, which argues
       // why a `findings` verdict cannot be the thing that holds the gate.
-      reviewSatisfied(review, s.review);
+      reviewSatisfied(pr, review, route, s.review, s.prReviewIntake);
     // A merge already put to a human is not put to them again: while the
     // verdict on `pr:<n>:merge` stands — unanswered, or a "no" — this rule is
     // held off that PR. Without it every pulse re-proposes the same merge and

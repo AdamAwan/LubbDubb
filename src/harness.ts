@@ -38,6 +38,8 @@ import type { UpcomingPlan } from './wire.js';
 import { isActiveTask } from './tasks.js';
 import type { StackLandingDesk } from './stacks/landingDesk.js';
 import type { PoolDesk } from './pool/poolDesk.js';
+import type { PrReviewPolicy } from './review/policy.js';
+import { prsToStampReviewIntake } from './review/intake.js';
 
 /**
  * How many accounts of each kind the dispatch context carries.
@@ -66,6 +68,18 @@ interface HarnessDeps {
    * is worked, which is the no-prefix and test posture.
    */
   prWatchLabel: string;
+  /**
+   * The fleet review's policy — held here for one thing only: the intake ledger's
+   * stamping pass, which runs in {@link Harness.runCycle} below rather than in a
+   * desk of its own.
+   *
+   * **Not optional, and that is the point.** The dispatcher reads the ledger, so a
+   * stamping pass that could be left unwired would be a fleet that reviews nothing
+   * with nothing to say why — the shape `userId` has for issue pickup. A required
+   * field means the composition root cannot build a harness that reads a ledger
+   * nothing writes. → `src/review/intake.ts`
+   */
+  review: PrReviewPolicy;
   /**
    * What a dispatch needs to resolve the profile its origin is pinned to (issue
    * #342) — passed straight through to the dispatch context. Absent = no
@@ -699,6 +713,26 @@ export class Harness extends EventEmitter {
           ? []
           : store.listFeatureSummaries().map((f) => ({ originRef: f.originRef, standingKey: f.standingKey }));
 
+      // The review's intake ledger, stamped before the dispatcher reads it and in
+      // the same pulse — this is a store write, not a provider one, so it carries
+      // none of the one-pulse lag the label desks above accept. Every open watched
+      // pull request the review has not judged yet gets a stamp here, eligible or
+      // not, which is the whole of how a project turning `review.enabled` on next
+      // month reviews its *next* pull request rather than its whole backlog.
+      // → `src/review/intake.ts`
+      for (const stamp of prsToStampReviewIntake(dispatchWorld.pullRequests, {
+        enabled: this.deps.review.enabled,
+        stamped: store.prReviewIntake(),
+        now: world.takenAt,
+        // Two pulses, for the reason the arrival window is two probe intervals: a
+        // pull request opened just before the pulse that first sees it is still one
+        // this harness watched, and a cycle that ran long must not turn that into a
+        // pull request nobody reads.
+        windowMs: this.deps.heartbeatIntervalMs * 2,
+      })) {
+        store.recordPrReviewIntake(stamp.prNumber, stamp.watchedOpen);
+      }
+
       const plan = await this.deps.dispatcher.decide({
         world: dispatchWorld,
         // Which of `world.issues` above are retained runs rather than the tracker's
@@ -753,6 +787,9 @@ export class Harness extends EventEmitter {
         // reviewed.
         prReviews: store.listPrReviews(),
         prReviewRoutes: store.listPrReviewRoutes(),
+        // Read after the stamping pass above, so a pull request first seen on this
+        // pulse is judged on this pulse rather than the next.
+        prReviewIntake: store.prReviewIntake(),
         // The goal tags and the profiles they may name, so a dispatch on a pinned
         // issue is priced by the pin rather than by its rule.
         modelPins: this.deps.modelPins,

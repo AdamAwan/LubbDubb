@@ -13,8 +13,11 @@ import {
   needsFleetReview,
   resolvedReviewMode,
   reviewSatisfied,
+  reviewSkipped,
   routesBetweenModes,
+  triageRuns,
 } from '../src/review/prReview.js';
+import { prsToStampReviewIntake, withinReviewIntake } from '../src/review/intake.js';
 import { DEFAULT_PR_REVIEW } from '../src/review/policy.js';
 import type { PrReview, PrReviewRoute, PullRequest } from '../src/types.js';
 import { findTask } from './support/tasks.js';
@@ -173,14 +176,22 @@ test('the predicates are one reading: unknown is never clear, and off gates noth
     reviewedAt: '2026-01-01T00:00:00.000Z',
   };
 
-  assert.equal(needsFleetReview(pr, null, on), true);
-  assert.equal(needsFleetReview(pr, review, on), false);
-  assert.equal(needsFleetReview(pr, null, DEFAULT_PR_REVIEW), false, 'off proposes nothing');
+  // Within the intake: the harness watched this pull request appear, so the review
+  // is for it. The guard's own arm is exercised in the backfill test below.
+  const intake = new Map([[3, true]]);
 
-  assert.equal(reviewSatisfied(null, on), false, 'a pull request nobody read is held');
-  assert.equal(reviewSatisfied(review, on), true);
-  assert.equal(reviewSatisfied(null, { ...on, blocking: false }), true, 'record-only gates nothing');
-  assert.equal(reviewSatisfied(null, DEFAULT_PR_REVIEW), true, 'off is the build without the feature');
+  assert.equal(needsFleetReview(pr, null, null, on, intake), true);
+  assert.equal(needsFleetReview(pr, review, null, on, intake), false);
+  assert.equal(needsFleetReview(pr, null, null, DEFAULT_PR_REVIEW, intake), false, 'off proposes nothing');
+
+  assert.equal(reviewSatisfied(pr, null, null, on, intake), false, 'a pull request nobody read is held');
+  assert.equal(reviewSatisfied(pr, review, null, on, intake), true);
+  assert.equal(reviewSatisfied(pr, null, null, { ...on, blocking: false }, intake), true, 'record-only gates nothing');
+  assert.equal(
+    reviewSatisfied(pr, null, null, DEFAULT_PR_REVIEW, intake),
+    true,
+    'off is the build without the feature',
+  );
 
   assert.equal(charterNote(null, 'Heading'), '');
   assert.equal(charterNote('   ', 'Heading'), '', 'an empty file is no charter, not an empty heading');
@@ -204,7 +215,13 @@ test('with two modes declared, the triage runs first and the review waits for it
     'dispatching now would price the review on a mode nothing has chosen yet',
   );
 
-  system.store.recordPrReviewRoute({ prNumber: 12, mode: 'quick', reason: 'A copy change.', agentId: null });
+  system.store.recordPrReviewRoute({
+    prNumber: 12,
+    mode: 'quick',
+    skipped: false,
+    reason: 'A copy change.',
+    agentId: null,
+  });
   await system.harness.runCycle('manual');
 
   const review = findTask(system.store, (t) => t.originRef === 'pr:12:review');
@@ -234,7 +251,13 @@ test('the mode carries its profile onto the dispatch', async () => {
     modes: { deep: { charterFile: null, profile: 'heavy' }, quick: { charterFile: null, profile: 'light' } },
   });
   system.connector.inject({ kind: 'new_pr', number: 14, title: 'A change', branch: 'feature-14' });
-  system.store.recordPrReviewRoute({ prNumber: 14, mode: 'quick', reason: 'A copy change.', agentId: null });
+  system.store.recordPrReviewRoute({
+    prNumber: 14,
+    mode: 'quick',
+    skipped: false,
+    reason: 'A copy change.',
+    agentId: null,
+  });
   await system.harness.runCycle('manual');
 
   const review = findTask(system.store, (t) => t.originRef === 'pr:14:review');
@@ -260,6 +283,7 @@ test('routing predicates: one mode is no choice, and an unknown route reads as t
   const route = (mode: string): PrReviewRoute => ({
     prNumber: 1,
     mode,
+    skipped: false,
     reason: 'because',
     agentId: null,
     decidedAt: '2026-01-01T00:00:00.000Z',
@@ -316,4 +340,279 @@ test('a triage that spent its attempts fails open: the review runs the default m
   // minutes, under-reading a dangerous one costs the defect nobody caught.
   assert.match(review!.title, /\(deep\)$/);
   system.store.close();
+});
+
+// --------------------------------------------------------------------------
+// The backfill guard
+// --------------------------------------------------------------------------
+
+/** Long enough ago to be outside two pulses of the window the intake reads. */
+const LAST_MONTH = '2026-07-01T00:00:00.000Z';
+
+test('the backlog is not reviewed: switching the review on catches the open set up silently', async () => {
+  const { system } = build({ enabled: true });
+  // Three pull requests already open on the pulse the review is switched on, and
+  // green, approved and mergeable — the exact shape a team adopting this has.
+  for (const n of [20, 21, 22]) {
+    system.connector.inject({
+      kind: 'new_pr',
+      number: n,
+      title: `Change ${n}`,
+      branch: `feature-${n}`,
+      openedAt: LAST_MONTH,
+    });
+    system.connector.inject({ kind: 'ci_passed', prNumber: n });
+    system.connector.inject({ kind: 'pr_approved', prNumber: n });
+    system.connector.inject({ kind: 'pr_mergeable', prNumber: n, mergeable: true, mergeableState: 'clean' });
+  }
+  await system.harness.runCycle('manual');
+
+  assert.deepEqual(
+    system.store
+      .listTasks()
+      .filter((t) => (t.originRef ?? '').endsWith(':review'))
+      .map((t) => t.originRef),
+    [],
+    'twenty open pull requests would be twenty agents on one pulse — the guard is that none of them is',
+  );
+  // The sharp half. A pull request nothing will ever review must not be a pull
+  // request nothing can merge, or the guard trades wasted reviews for wedged
+  // branches — the same harm, wearing the fix.
+  assert.equal(
+    system.store.listDecisions().filter((d) => d.action.type === 'merge_pr').length,
+    3,
+    'the merge gate holds only where a review is genuinely still coming',
+  );
+
+  // And the stamp is what makes it silent rather than one pulse late: the ledger
+  // has judged all three, so the next pulse re-judges none of them.
+  await system.harness.runCycle('manual');
+  assert.equal(
+    system.store.listTasks().filter((t) => (t.originRef ?? '').endsWith(':review')).length,
+    0,
+    'a guard that re-derived its answer from the world would hand the backlog over on the next pulse',
+  );
+  system.store.close();
+});
+
+test('and the next pull request is: the review speaks for what the harness watched appear', async () => {
+  const { system } = build({ enabled: true });
+  system.connector.inject({
+    kind: 'new_pr',
+    number: 23,
+    title: 'Old work',
+    branch: 'feature-23',
+    openedAt: LAST_MONTH,
+  });
+  await system.harness.runCycle('manual');
+  assert.equal(
+    findTask(system.store, (t) => t.originRef === 'pr:23:review'),
+    undefined,
+  );
+
+  system.connector.inject({ kind: 'new_pr', number: 24, title: 'New work', branch: 'feature-24' });
+  await system.harness.runCycle('manual');
+
+  assert.ok(
+    findTask(system.store, (t) => t.originRef === 'pr:24:review'),
+    'the pull request opened while the review was watching is the one it is for',
+  );
+  assert.equal(
+    findTask(system.store, (t) => t.originRef === 'pr:23:review'),
+    undefined,
+    'and the backlog stays out of it — the stamp was taken once',
+  );
+  system.store.close();
+});
+
+test('review.backfill reads the backlog on purpose, and reaches pull requests already stamped', async () => {
+  const { system } = build({ enabled: true });
+  system.connector.inject({
+    kind: 'new_pr',
+    number: 25,
+    title: 'Old work',
+    branch: 'feature-25',
+    openedAt: LAST_MONTH,
+  });
+  await system.harness.runCycle('manual');
+  assert.equal(
+    findTask(system.store, (t) => t.originRef === 'pr:25:review'),
+    undefined,
+    'stamped as backlog first, which is the case the live read has to survive',
+  );
+
+  // Turned on after the stamp went down. Read live rather than baked into the row,
+  // or the switch would be inert on exactly the pull requests it was reached for.
+  const on = build({ enabled: true, backfill: true });
+  on.system.connector.inject({
+    kind: 'new_pr',
+    number: 25,
+    title: 'Old work',
+    branch: 'feature-25',
+    openedAt: LAST_MONTH,
+  });
+  await on.system.harness.runCycle('manual');
+  assert.ok(
+    findTask(on.system.store, (t) => t.originRef === 'pr:25:review'),
+    'a team that wants its backlog read asks for it, and gets it',
+  );
+  on.system.store.close();
+  system.store.close();
+});
+
+test('the intake predicates: absent is outside, and backfill is a live read', () => {
+  const pr = { number: 4, merged: false, unresolvedComments: [] } as unknown as PullRequest;
+  const on = { ...DEFAULT_PR_REVIEW, enabled: true };
+
+  assert.equal(withinReviewIntake(pr, new Map(), on), false, 'unstamped is not the review’s');
+  assert.equal(withinReviewIntake(pr, new Map([[4, false]]), on), false, 'stamped as backlog stays backlog');
+  assert.equal(withinReviewIntake(pr, new Map([[4, true]]), on), true);
+  assert.equal(
+    withinReviewIntake(pr, new Map([[4, false]]), { ...on, backfill: true }),
+    true,
+    'the operator’s switch is read at the point of asking, so it reaches a stamped row',
+  );
+
+  // Both halves, so a pull request nothing will review is not one nothing can merge.
+  assert.equal(needsFleetReview(pr, null, null, on, new Map()), false);
+  assert.equal(reviewSatisfied(pr, null, null, on, new Map()), true);
+});
+
+test('stamping: the pulse that first sees a pull request judges it, and never re-judges it', () => {
+  const now = '2026-08-01T12:00:00.000Z';
+  const on = { enabled: true, now, windowMs: 60_000 };
+  const fresh = { number: 1, openedAt: '2026-08-01T11:59:30.000Z', unresolvedComments: [] } as unknown as PullRequest;
+  const old = { number: 2, openedAt: LAST_MONTH, unresolvedComments: [] } as unknown as PullRequest;
+  const undated = { number: 3, unresolvedComments: [] } as unknown as PullRequest;
+
+  // An empty ledger is the first pulse with the review on, so `openedAt` is the
+  // only thing separating the two — which is why the field exists.
+  assert.deepEqual(prsToStampReviewIntake([fresh, old, undated], { ...on, stamped: new Map() }), [
+    { prNumber: 1, watchedOpen: true },
+    { prNumber: 2, watchedOpen: false },
+    // Cannot say, read as backlog on the first pulse: the safe direction, and the
+    // only thing a provider that does not report the field costs.
+    { prNumber: 3, watchedOpen: false },
+  ]);
+
+  // Once the ledger is asking, every pull request new to it is one of a series —
+  // including an undated one, which is what carries a provider that cannot answer.
+  assert.deepEqual(
+    prsToStampReviewIntake([old, undated], { ...on, stamped: new Map([[9, false]]) }),
+    [
+      { prNumber: 2, watchedOpen: true },
+      { prNumber: 3, watchedOpen: true },
+    ],
+    'the ledger was already asking before these appeared',
+  );
+
+  assert.deepEqual(
+    prsToStampReviewIntake([fresh], { ...on, stamped: new Map([[1, false]]) }),
+    [],
+    // First write wins, and that is what makes eligibility survive a wait: a pull
+    // request stood down for unhandled human threads, or held behind a saturated
+    // cap, keeps the verdict its first pulse gave it rather than being re-judged
+    // against a clock that has since moved past its opening.
+    'a stamped pull request is never stamped again',
+  );
+  assert.deepEqual(prsToStampReviewIntake([fresh], { ...on, enabled: false, stamped: new Map() }), []);
+});
+
+// --------------------------------------------------------------------------
+// Skipping a review altogether
+// --------------------------------------------------------------------------
+
+test('allowSkip turns the triage on by itself: one mode plus a skip is two answers', async () => {
+  const { system } = build({
+    enabled: true,
+    allowSkip: true,
+    modes: { deep: { charterFile: null, profile: null } },
+  });
+  system.connector.inject({ kind: 'new_pr', number: 30, title: 'A change', branch: 'feature-30' });
+  await system.harness.runCycle('manual');
+
+  const triage = findTask(system.store, (t) => t.originRef === 'pr:30:review-triage');
+  assert.ok(triage, '"read it that way" and "do not read it" is a decision, however many modes there are');
+  // Appended, never interpolated: an override that never learned about the option
+  // would drop every word of it silently.
+  assert.match(triage!.prompt, /needs \*\*no review at all\*\*/);
+  assert.match(triage!.prompt, /`skip: true`/);
+  assert.equal(
+    findTask(system.store, (t) => t.originRef === 'pr:30:review'),
+    undefined,
+    'dispatching now would spend a review the triage was about to waive',
+  );
+  system.store.close();
+});
+
+test('a skipped pull request is not reviewed, and not held out of the merge gate either', async () => {
+  const { system } = build({
+    enabled: true,
+    allowSkip: true,
+    modes: { deep: { charterFile: null, profile: null } },
+  });
+  system.connector.inject({ kind: 'new_pr', number: 31, title: 'Bump the version', branch: 'feature-31' });
+  system.connector.inject({ kind: 'ci_passed', prNumber: 31 });
+  system.connector.inject({ kind: 'pr_approved', prNumber: 31 });
+  system.connector.inject({ kind: 'pr_mergeable', prNumber: 31, mergeable: true, mergeableState: 'clean' });
+  await system.harness.runCycle('manual');
+  assert.equal(
+    system.store.listDecisions().filter((d) => d.action.type === 'merge_pr').length,
+    0,
+    'held while the triage is still deciding',
+  );
+
+  system.store.recordPrReviewRoute({
+    prNumber: 31,
+    mode: '',
+    skipped: true,
+    reason: 'A version bump in package.json and its lockfile; reading the diff cannot change anything.',
+    agentId: null,
+  });
+  await system.harness.runCycle('manual');
+
+  assert.equal(
+    findTask(system.store, (t) => t.originRef === 'pr:31:review'),
+    undefined,
+    'the triage said nothing needs to read this one',
+  );
+  assert.equal(
+    system.store.listDecisions().filter((d) => d.action.type === 'merge_pr').length,
+    1,
+    'a skip is a decision, so it releases the gate — otherwise the cheapest answer wedges the branch',
+  );
+  system.store.close();
+});
+
+test('the skip predicates: off is not on offer, and silence is never a skip', () => {
+  const pr = { number: 5, merged: false, unresolvedComments: [] } as unknown as PullRequest;
+  const intake = new Map([[5, true]]);
+  const one = { deep: { charterFile: null, profile: null } };
+  const off = { ...DEFAULT_PR_REVIEW, enabled: true, modes: one };
+  const on = { ...off, allowSkip: true };
+  const skip: PrReviewRoute = {
+    prNumber: 5,
+    mode: '',
+    skipped: true,
+    reason: 'A lockfile regeneration.',
+    agentId: null,
+    decidedAt: '2026-01-01T00:00:00.000Z',
+  };
+
+  assert.equal(triageRuns(off), false, 'one mode and no skip is nothing to decide');
+  assert.equal(triageRuns(on), true);
+  assert.equal(triageRuns({ ...off, modes: { ...one, quick: { charterFile: null, profile: null } } }), true);
+
+  assert.equal(reviewSkipped(null, on), false, 'the fail-open direction is a review, never a skip');
+  assert.equal(reviewSkipped(skip, on), true);
+  assert.equal(
+    reviewSkipped(skip, off),
+    false,
+    'an operator who turns allowSkip back off has every standing skip fall back to a review',
+  );
+
+  assert.equal(needsFleetReview(pr, null, skip, on, intake), false);
+  assert.equal(reviewSatisfied(pr, null, skip, on, intake), true);
+  assert.equal(needsFleetReview(pr, null, skip, off, intake), true, 'and the review comes back with it');
+  assert.equal(reviewSatisfied(pr, null, skip, off, intake), false);
 });

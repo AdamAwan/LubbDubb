@@ -572,6 +572,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     // And what a triage agent is offered when it routes a pull request: the
     // project's own review modes, in the order it declared them.
     reviewModes: reviewModeNames(config.review),
+    reviewAllowSkip: config.review.allowSkip,
     // What the appraiser is offered when it proposes where a goal belongs. A thunk
     // rather than a snapshot: the directory refreshes on the pulse, and a list
     // captured here would pin every agent to the tree as it stood at boot.
@@ -1102,6 +1103,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     environments,
     prWatch,
     prWorkItems,
+    // The one thing the pulse needs of the review policy: whether to stamp the
+    // intake ledger the dispatcher reads a few lines later.
+    review: config.review,
     schedules,
     // Only when the watch is on: absent, the pulse takes no reading and the gauge
     // reads unknown, which is the behaviour of every deployment before this existed.

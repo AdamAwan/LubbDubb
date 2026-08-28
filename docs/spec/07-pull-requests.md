@@ -721,7 +721,9 @@ unchanged.
 
 ### When it runs
 
-**On the pulse the pull request appears**, and it leads the PR concerns for it. A review's value
+**On the pulse the pull request appears** — and only for a pull request that *did* appear while the
+review was watching, which is [the backfill guard](#the-backfill-guard) below. It leads the PR concerns
+for it. A review's value
 decays faster than any other concern's: read when the pull request opens, it is a reading of the change
 somebody proposed; read after a CI fix and a base merge, it is partly a reading of the harness's own
 work.
@@ -730,6 +732,100 @@ One exception, and it is a stand-down rather than a re-ordering: a pull request 
 review threads** is not reviewed. A reviewer has already asked for changes, so the diff is about to be
 rewritten, and a second opinion on the old one is spent for nothing. The concern comes back on the
 pulse after those threads are handled.
+
+### The backfill guard
+
+**Switching `review.enabled` on does not review the pull requests already open.** The four conditions
+above are all about a pull request's *state* and none of them is about time, so without a guard the
+pulse a project adopts this puts an agent on its entire open backlog at once. On a repository with
+twenty open pull requests that is twenty review agents queued behind `maxConcurrentAgents`, twenty
+read-only checkouts cycling through a pool of `cap + 2` slots — each hand-over a `git clean -ffdx` and
+a cold dependency install — and, with `review.blocking`, twenty pull requests held out of
+`pr-merge-ready` until each has been read. Every part of that is indistinguishable from the feature
+working: nothing errors, the queue fills with real candidates, and the held merges read as the gate
+doing its job.
+
+It is also `review.enabled`'s own argument one step later. That flag is off by default because this is
+the rule that spends an agent on every pull request, and a deployment whose bill changed by a build it
+had not asked anything of would be right to call that a fault. The day a project turns it on is that
+day again: "review what we open from here" is what a team means, and the whole backlog is not it.
+
+So `pr_review_intake` is a **per-pull-request ledger** (`src/review/intake.ts`), and it is the two
+patterns this repo already uses for exactly this problem rather than a third:
+
+- **Stored, not derived** — `pr_watch_seeds`' argument ([Watching](#watching)). "Was this pull request
+  already open when the review started asking" is in no provider payload, and the live rows cannot
+  stand in for it: a pull request nothing has reviewed *yet* and one nothing will *ever* review are the
+  same absence in `pr_reviews`. A guard that re-derived its answer from the world would hand the
+  backlog over on the next pulse — a control that silently undoes itself.
+- **Stamped either way** — the environments arrival rule
+  ([24](24-environments.md#announcing-an-arrival)). Every open pull request the review has not judged
+  gets a row on the pulse it is first seen, eligible or not. That stamp is the whole of how a project
+  turning this on next month reviews its *next* pull request rather than every one already open; a pass
+  that recorded only the eligible would leave the backlog unstamped and re-judged against a ledger that
+  had meanwhile filled up, which is the same bug one pulse late.
+
+A pull request is one the harness **watched appear** when *either* of two things holds, and it is both
+for the arrival rule's reason — each alone is wrong in one direction:
+
+- **It was opened inside the window** — `PullRequest.openedAt`, within two `heartbeatIntervalMs`. Two
+  pulses rather than one because a pull request opened just before the pulse that first sees it is
+  still one this harness watched, and a cycle that ran long must not turn that into a pull request
+  nobody reads. Without this test a deployment's first pulse with the review on has an empty ledger, so
+  a pull request the fleet opened ninety seconds ago is indistinguishable from a month-old one and
+  neither is read — the feature's whole first impression spent on the guard.
+- **The ledger was already asking before it appeared.** Without this a pull request that slipped past
+  the window — stood down for unhandled human threads, held behind a saturated cap, on cooldown —
+  falls out of the intake for good, having been the harness's to review the whole time. The stamp is
+  what makes eligibility survive a wait: taken once, on the pulse the review first saw the pull
+  request, and never re-judged against a clock that has moved on. `recordPrReviewIntake` is
+  `INSERT OR IGNORE` for that reason.
+
+`openedAt` absent is **"cannot say"**, never "old": the first test is simply unavailable, the second
+carries every pull request from the second pulse on, and a provider that does not report it costs that
+deployment its first pulse's open set and nothing else. It rides the list payload both providers
+already read, so resolving it spends no request.
+
+**Both halves of the guard, and the second is the sharp one.** `reviewSatisfied` asks the intake as
+well as `needsFleetReview` does. A pull request nothing will ever review must not be a pull request
+nothing can merge — held, the guard would trade twenty wasted reviews for twenty wedged branches,
+which is the same harm wearing the fix, and the only symptom a queue of held merges that reads as the
+gate working.
+
+`review.backfill: true` is the opt-in for a team that *wants* its backlog read. It is a **live read**
+at the point of asking rather than baked into the stamp, so turning it on next week still reaches the
+pull requests already stamped as backlog — baked in, the switch would be inert on exactly the pull
+requests it was reached for.
+
+### Skipping a review altogether
+
+**Off** (`review.allowSkip`), and it is the one answer the triage can give that waives the gate rather
+than sizing it. Everything else it decides is about *how much* to read; this decides whether anything
+does, and with `review.blocking` it is also what lets the merge through. So a project asks for it
+deliberately or it is not on offer at all: `review_route` does not carry the argument, and
+`skipNote` puts nothing in the prompt.
+
+On, the triage answers `skip: true` instead of a mode, with the same required reason — and that reason
+matters most here, because the route row is the only account of why a change went in unread. What
+follows is read off the row by both halves, exactly as the intake is: `needsFleetReview` dispatches
+nothing, and `reviewSatisfied` does not hold the merge. A skip that only did the first would make the
+triage's cheapest answer the one that wedges the branch.
+
+**It turns the triage on by itself.** `review.modes` is the switch for the *routing* question because a
+decision with one option is not a decision — but with skipping allowed, one declared mode is two
+answers ("read it that way" or "do not"), so the triage runs. `triageRuns` is that reading, and every
+rule asks it rather than `routesBetweenModes`, which stays the narrower fact the triage's own prompt is
+built from.
+
+**Never the fail-open direction.** A triage that crashes, is killed or spends its cap leaves no route,
+and `pr-review` then reads the pull request in `review.defaultMode` — unchanged. A skip is only ever
+something an agent said on purpose. And it is honoured only while the project still allows it: an
+operator who turns `allowSkip` back off has every standing skip fall back to a review, the safe
+direction and the same one a route naming a removed mode takes.
+
+The prompt's wording pushes *against* the skip deliberately. A model asked to size a read and handed a
+"no read needed" option reaches for it more often than a team would, and the cost is asymmetric in
+exactly the way the fail-open default already accounts for.
 
 ### One round, and what that decides
 
@@ -758,6 +854,10 @@ is the person approving the merge.
 Rule `pr-merge-ready` gains one clause (`reviewSatisfied`, `src/review/prReview.ts`): with
 `review.blocking` on, a pull request with **no** review row is not merge-ready. Unknown is never clear.
 
+Two things are not held, and both are decisions rather than silences: a pull request outside the
+[intake](#the-backfill-guard), and one the triage [skipped](#skipping-a-review-altogether). Neither has
+a review coming, so holding either would be the gate waiting on something that will never arrive.
+
 **It asks whether the review happened, not whether it liked what it saw.** With one round there is
 nothing that could clear a `findings` verdict, so gating on `clear` would wedge every pull request the
 reviewer had an opinion about and leave the operator no exit but to switch the feature off. What
@@ -780,7 +880,9 @@ so the CI fix behind it is not queued behind the review.
 team uses. Two or more, and rule `pr-review-triage` runs first and picks one. Fewer, and there is no
 triage at all: a decision with one option is not a decision, so nothing is spent making it. That is the
 whole switch — there is no separate flag, because a flag could disagree with the modes and one of them
-would be ignored with nothing to say which.
+would be ignored with nothing to say which. `review.allowSkip` turns the triage on the same way, by
+adding an answer rather than a flag about whether to ask: see
+[Skipping a review altogether](#skipping-a-review-altogether).
 
 **The choice is a model's, not a threshold's.** "Under three files" is a proxy for risk, and the things
 that actually make a diff worth a careful read — it touches auth, it is the first change in a
@@ -792,8 +894,8 @@ It gets the title, the branch, the base and what the tracker says, and may ask `
 routing decision that needed the diff would cost what the review costs, and then there would be nothing
 left to route for.
 
-**Its verdict is a name, through `review_route`.** Three things act on it before the reviewer reads a
-line — the prompt, the charter appended to it, and the profile it runs on — so an agent that merely
+**Its verdict is a name, through `review_route`** — or, where the project allows it, a skip. Three
+things act on a name before the reviewer reads a line — the prompt, the charter appended to it, and the profile it runs on — so an agent that merely
 _said_ which mode it would use would leave all three on the default, silently, and the Decision log
 unable to say which mode ran. A name the project has not declared is refused rather than honoured.
 
@@ -832,6 +934,8 @@ key ([02](02-configuration.md#the-project-layer)), so all of it is committed onc
 | --------------------------- | -------- | --------------------------------------------------------------------------------------------------------------- |
 | `review.enabled`            | `false`  | Whether the review runs at all. It switches both rules in and out of the pipeline.                              |
 | `review.blocking`           | `true`   | Whether an unreviewed pull request is held out of the merge gate. Off records the verdict and gates nothing.    |
+| `review.backfill`           | `false`  | Whether switching it on reviews the pull requests already open. Off reviews only what the harness watches appear. |
+| `review.allowSkip`          | `false`  | Whether the triage may answer that a pull request needs no review at all. It also turns the triage on by itself. |
 | `review.publish`            | `'none'` | Whether the reviewer is told to post its findings on the pull request, through `reply_to_review` and only that. |
 | `review.modes`              | `{}`     | The ways this project reviews: `charterFile` and `profile` each. Two or more switches the triage on.            |
 | `review.defaultMode`        | `null`   | The mode a review falls back to when nothing routed it. Null takes the first declared.                          |
@@ -843,6 +947,7 @@ key ([02](02-configuration.md#the-project-layer)), so all of it is committed onc
     "enabled": true,
     "routingCharterFile": "docs/review/routing.md",
     "defaultMode": "deep",
+    "allowSkip": true,
     "modes": {
       "deep": { "charterFile": "docs/review/deep.md", "profile": "heavy" },
       "quick": { "charterFile": "docs/review/quick.md", "profile": "light" }

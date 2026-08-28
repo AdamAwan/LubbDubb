@@ -1,5 +1,6 @@
 import type { PrReview, PrReviewRoute, PullRequest } from '../types.js';
 import type { PrReviewPolicy } from './policy.js';
+import { withinReviewIntake, type PrReviewIntake } from './intake.js';
 
 /**
  * The fleet's own read of a pull request, before a person is asked for theirs.
@@ -76,6 +77,39 @@ export function routesBetweenModes(policy: PrReviewPolicy): boolean {
 }
 
 /**
+ * Does the triage run at all?
+ *
+ * Two questions can need it, and either alone is enough. **Which mode** is a
+ * decision only where the project declared more than one ({@link
+ * routesBetweenModes}). **Whether to review** is a decision wherever the project
+ * allowed a skip — and it is one even with a single declared mode, since "read it
+ * that way" and "do not read it" are two answers. So a project that declares one
+ * mode and allows skipping gets a triage, where before this it got none.
+ *
+ * Every rule asks this rather than `routesBetweenModes`, which stays the narrower
+ * fact the triage's own prompt is built from: a rule reading the mode count would
+ * silently give a skip-only project no triage, and every pull request the default
+ * mode.
+ */
+export function triageRuns(policy: PrReviewPolicy): boolean {
+  return routesBetweenModes(policy) || policy.allowSkip;
+}
+
+/**
+ * Did the triage decide this pull request needs no review?
+ *
+ * Asked by `needsFleetReview` *and* by `reviewSatisfied`, which is the whole of
+ * what makes a skip a decision rather than a wedge: nothing is dispatched, and
+ * nothing is held. Honoured only where the project still allows it, so an
+ * operator who turns `allowSkip` back off has every standing skip fall back to a
+ * review — the safe direction, and the same one a route naming a removed mode
+ * takes in {@link resolvedReviewMode}.
+ */
+export function reviewSkipped(route: PrReviewRoute | null, policy: PrReviewPolicy): boolean {
+  return policy.allowSkip && route !== null && route.skipped;
+}
+
+/**
  * The mode a review runs in when nothing chose one.
  *
  * This is the fail-open target, and everything about it points the same way: a
@@ -118,15 +152,40 @@ export function resolvedReviewMode(route: PrReviewRoute | null, policy: PrReview
  * avoid. The SHA is still recorded, because *what was read* is worth saying; it
  * simply decides nothing.
  *
+ * **A pull request the triage skipped is not reviewed**, where the project allows
+ * a skip at all (`review.allowSkip`). It is the one answer the triage can give
+ * that waives the read rather than sizing it, and `reviewSatisfied` honours the
+ * same row so the merge is not held for a review nobody is coming to give.
+ *
+ * **A pull request already open when the review was switched on is not the
+ * review's.** The other conditions are all about the pull request's state and
+ * none of them is about time, so without this the pulse a project sets
+ * `review.enabled` puts an agent on its entire open backlog at once. The intake
+ * ledger is what separates the two (`src/review/intake.ts`), and `reviewSatisfied`
+ * asks the same question so that a pull request nothing will review is not a pull
+ * request nothing can merge.
+ *
  * **A pull request with unhandled human review threads is skipped**, and skipped
  * rather than ordered below them: a reviewer already asked for changes, so the
  * diff is about to be rewritten and a second opinion on the old one is spent for
  * nothing. It comes back on the next pulse after the threads are handled — the
  * work is not lost, only deferred to a diff that is going to survive.
  */
-export function needsFleetReview(pr: PullRequest, review: PrReview | null, policy: PrReviewPolicy): boolean {
+export function needsFleetReview(
+  pr: PullRequest,
+  review: PrReview | null,
+  route: PrReviewRoute | null,
+  policy: PrReviewPolicy,
+  intake: PrReviewIntake,
+): boolean {
   if (!policy.enabled) return false;
   if (pr.merged || review !== null) return false;
+  // The triage's own answer that nothing needs to read this one.
+  if (reviewSkipped(route, policy)) return false;
+  // A pull request that was already open when the review was switched on is not
+  // the review's, and this is the only condition here that is about *time* — see
+  // `src/review/intake.ts` for why the four above cannot answer it.
+  if (!withinReviewIntake(pr, intake, policy)) return false;
   return pr.unresolvedComments.every((c) => c.handled);
 }
 
@@ -143,10 +202,30 @@ export function needsFleetReview(pr: PullRequest, review: PrReview | null, polic
  * `pr-merge-ready` already requires. The gate's job is to stop a merge nobody
  * looked at; the judgement stays a human's, exactly as it was.
  *
- * Unknown is never clear: a pull request with no row is held.
+ * Unknown is never clear: a pull request the review is for and has no row is
+ * held. A pull request **outside the intake** is not — it is one no review is
+ * coming for, so holding it would be the backfill guard wedging the merges it
+ * was written to protect.
  */
-export function reviewSatisfied(review: PrReview | null, policy: PrReviewPolicy): boolean {
+export function reviewSatisfied(
+  pr: PullRequest,
+  review: PrReview | null,
+  route: PrReviewRoute | null,
+  policy: PrReviewPolicy,
+  intake: PrReviewIntake,
+): boolean {
   if (!policy.enabled || !policy.blocking) return true;
+  // A skip is a decision, so it releases the gate. Read here as well as in
+  // `needsFleetReview` for the intake's reason and it is the same reason: a pull
+  // request nothing will review must not be a pull request nothing can merge, or
+  // the triage's cheapest answer is the one that wedges the branch.
+  if (reviewSkipped(route, policy)) return true;
+  // The sharp half of the backfill guard. A pull request outside the intake is one
+  // nothing will *ever* review, so holding it would trade twenty wasted reviews
+  // for twenty pull requests that can never merge — the same harm, wearing the
+  // fix, and the only symptom a queue of held merges that reads as the gate
+  // working. Held only where a review is genuinely still coming.
+  if (!withinReviewIntake(pr, intake, policy)) return true;
   return review !== null;
 }
 
@@ -184,6 +263,33 @@ export function publishNote(publish: PrReviewPolicy['publish']): string {
     'way you may write to it: the harness authorises what goes out and signs it as a machine, where a ' +
     "`gh` command from your shell posts under the operator's own name with nothing recording that it " +
     'happened. Report first — the comment is a copy of the record, not the record.\n'
+  );
+}
+
+/**
+ * What the triage is told about skipping, appended rather than interpolated for
+ * the reason every addition to a prompt is.
+ *
+ * Empty where the project did not allow it, so a triage on a deployment that
+ * never asked for skipping is not offered the idea at all — the same shape
+ * {@link publishNote} uses for the opposite case, and the same reason: an agent
+ * told nothing about a channel does not go and use it anyway.
+ *
+ * The wording pushes *against* the skip, deliberately. A model asked to size a
+ * read and handed a "no read needed" option will reach for it more often than a
+ * team would, and the cost is asymmetric in exactly the way the fail-open default
+ * already accounts for: over-reading a trivial change costs minutes, and a skip is
+ * the one answer that also lets the merge through.
+ */
+export function skipNote(policy: PrReviewPolicy): string {
+  if (!policy.allowSkip) return '';
+  return (
+    '\n\nThis project also lets you decide that a pull request needs **no review at all** — pass ' +
+    '`skip: true` to `review_route` instead of a mode. Reach for it only where reading the diff could ' +
+    'not change anything: a version bump, a regenerated lockfile, a typo in a comment or a string. ' +
+    'Anything that changes behaviour, however small the diff, gets a mode. A skip also releases the ' +
+    'merge gate, so it is the one answer of yours that lets a change through unread — and your reason ' +
+    'is the only account of why, for whoever finds it later.\n'
   );
 }
 

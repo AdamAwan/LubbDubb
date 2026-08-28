@@ -66,9 +66,10 @@ import {
   reviewPendingLabel,
   reviewSatisfied,
   reviewTriageOrigin,
-  routesBetweenModes,
+  triageRuns,
   triagePendingLabel,
 } from './review/prReview.js';
+import type { PrReviewIntake } from './review/intake.js';
 import { isActiveTask } from './tasks.js';
 import type {
   Decision,
@@ -185,6 +186,13 @@ export interface PrAttentionContext {
    */
   review?: PrReviewPolicy;
   prReviews?: ReadonlyMap<number, PrReview>;
+  /**
+   * The review's intake ledger, keyed by pull request. Absent reads as an empty
+   * one — no pull request within the intake — which matches what the dispatcher
+   * does with an unwired ledger, so the row and the rule stay one reading.
+   * → `src/review/intake.ts`
+   */
+  prReviewIntake?: PrReviewIntake;
   /** How the triage routed each pull request; absent reads as the fail-open default. */
   prReviewRoutes?: ReadonlyMap<number, PrReviewRoute>;
 }
@@ -374,7 +382,7 @@ function court(pr: PullRequest, ctx: PrAttentionContext): PrAttention {
     pr.mergeableState !== 'blocked' &&
     pr.mergeableState !== 'dirty' &&
     pr.unresolvedComments.every((c) => c.handled) &&
-    reviewSatisfied(fleetReview(pr, ctx), reviewPolicy(ctx));
+    reviewSatisfied(pr, fleetReview(pr, ctx), fleetRoute(pr, ctx), reviewPolicy(ctx), reviewIntake(ctx));
 
   if (mergeReady) {
     // Ask the gate, not the row: `proposalHold` is where a rejection stops standing
@@ -532,12 +540,12 @@ function prConcerns(pr: PullRequest, ctx: PrAttentionContext, ci: CiReading): Pr
   // imported rather than restated, because this is the reading that tells an
   // operator an agent is coming and the two disagreeing is the drift this whole
   // file exists to avoid.
-  if (needsFleetReview(pr, fleetReview(pr, ctx), reviewPolicy(ctx))) {
+  if (needsFleetReview(pr, fleetReview(pr, ctx), fleetRoute(pr, ctx), reviewPolicy(ctx), reviewIntake(ctx))) {
     // Which of the two is coming — the routing or the review — read the way the
     // rules read it, so the row names the origin whose attempt cap the operator
     // would actually find if they went looking.
-    const route = ctx.prReviewRoutes?.get(pr.number) ?? null;
-    if (route === null && routesBetweenModes(reviewPolicy(ctx))) {
+    const route = fleetRoute(pr, ctx);
+    if (route === null && triageRuns(reviewPolicy(ctx))) {
       concerns.push({ rule: 'pr-review-triage', origin: reviewTriageOrigin(pr.number), label: triagePendingLabel() });
     } else {
       concerns.push({
@@ -618,4 +626,14 @@ function reviewPolicy(ctx: PrAttentionContext): PrReviewPolicy {
 /** What the fleet recorded about this pull request, or null — never "unknown means fine". */
 function fleetReview(pr: PullRequest, ctx: PrAttentionContext): PrReview | null {
   return ctx.prReviews?.get(pr.number) ?? null;
+}
+
+function fleetRoute(pr: PullRequest, ctx: PrAttentionContext): PrReviewRoute | null {
+  return ctx.prReviewRoutes?.get(pr.number) ?? null;
+}
+
+const NO_INTAKE: PrReviewIntake = new Map<number, boolean>();
+
+function reviewIntake(ctx: PrAttentionContext): PrReviewIntake {
+  return ctx.prReviewIntake ?? NO_INTAKE;
 }

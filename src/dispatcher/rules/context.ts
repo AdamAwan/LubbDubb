@@ -7,6 +7,7 @@ import type { RuleHeld } from '../admission.js';
 import type { CiPolicy } from '../../ci/ciPolicy.js';
 import type { PrReviewPolicy } from '../../review/policy.js';
 import type { PrReviewCharters } from '../../review/prReview.js';
+import type { PrReviewIntake } from '../../review/intake.js';
 import type { PlanningPolicy } from '../../plans/planning.js';
 import type {
   Issue,
@@ -215,6 +216,12 @@ export interface StageContext {
    * reads as work to do.
    */
   prReviewRoutes: ReadonlyMap<number, PrReviewRoute>;
+  /**
+   * The review's intake ledger, keyed by pull request: which ones the review is
+   * for. Empty means none of them — see `DispatchContext.prReviewIntake` for why
+   * that is the absence chosen. → `src/review/intake.ts`
+   */
+  prReviewIntake: PrReviewIntake;
   /** The base a PR is assumed to target when the provider doesn't report one. */
   defaultBranch: string;
   /**
