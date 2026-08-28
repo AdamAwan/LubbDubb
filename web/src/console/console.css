@@ -252,6 +252,30 @@
   color: var(--cn-amber);
 }
 
+/* The Environments gauge, and it wears two tints rather than one. `ill` is an
+   environment the check called not well — red, because that is the tone the card's
+   row takes for the same reading, and a bar that graded an outage more gently than
+   the card behind it would be the quieter of two surfaces saying one thing.
+   `watch` is amber, and it is both the orange tier and `unknown`: a check that
+   could not answer is a thing to look at, told apart from a mild outage by the word
+   beside it rather than by a third colour claiming an answer it did not give.
+   Its resting state is neither — the muted `n well` reading, where it spends nearly
+   all of its life. */
+.cn-env-ill {
+  border-color: var(--cn-red-line);
+  background: var(--cn-red-bg);
+}
+.cn-env-ill b {
+  color: var(--cn-red-ink);
+}
+.cn-env-watch {
+  border-color: var(--cn-amber-line-hi);
+  background: var(--cn-amber-bg);
+}
+.cn-env-watch b {
+  color: var(--cn-amber-ink-hi);
+}
+
 /* The Usage chip. Both account windows ride it — either one parks the fleet — with
    the five-hour on the left and the weekly on the right, always: ordering them by
    which is worse would move the number an operator glances at without reading. The

@@ -2430,8 +2430,8 @@ lands somewhere else entirely, so Back returns to the filter and the list re-rea
 
 ## The top bar and the panels
 
-The strip carries the ident, the nav, the fleet gauge, and five readings: **Usage**, **Faults**,
-**Launch**, **Local**, **Build** — then **Record**, then the Config cog. Findings and Lessons were two of these
+The strip carries the ident, the nav, the fleet gauge, and six readings: **Usage**, **Faults**,
+**Launch**, **Local**, **Build**, **Env** — then **Record**, then the Config cog. Findings and Lessons were two of these
 until the three claim stores became one; the nav's Knowledge badge is the reading for all of it now,
 and one destination with one number is what stops an operator ruling on the same claim in two places.
 Each is one subject
@@ -2618,6 +2618,34 @@ It goes amber only at `behind` and `ready`, the two states where something is wa
 It is deliberately **not** drawn as the crash-recovery banner. That treatment is a stop sign, and it
 is loud because the harness is running no cycles at all while it is up; an available update stops
 nothing, so borrowing it would say something untrue — and after the second time, be scrolled past.
+
+### The Environments gauge
+
+The only reading on this bar about the world the work ships into rather than about the fleet or this
+build: whether any environment's health check says something out there is broken
+([24](24-environments.md#is-the-environment-well)). The Build gauge's argument applied to the subject
+that needed it more — health was drawn on one card on one tab, so an outage reached exactly the people
+already looking at it.
+
+**The value is a count and a word, never a bare number**: `1 red`, `2 not well`, `1 no answer`,
+`4 well`. `Env 1` would leave an operator opening the card to find out which of three quite different
+things it meant, which is the only thing they wanted to know. The count is of the environments sharing
+the _worst_ word rather than of every environment that is not well, so `2 red` and `1 orange` never add
+up into one figure describing neither.
+
+The fold is `environmentsReading` in `TopBar.tsx`, exported for `test/console.test.ts` exactly as
+`usageReading` is, because it is the whole of the chip's judgement. Its ranking is the card's tones read
+as an ordering: an **untiered `unhealthy` ranks with a red**, since an unstated severity is not a reason
+to rank an outage below one that stated it, and `unknown` sits below both — it is not a claim that
+anything is wrong — and above `healthy`, since it is not a claim that anything is right. Red and an
+untiered unhealthy take `.cn-env-ill`; an orange and an `unknown` take `.cn-env-watch`, told apart by
+the word beside them rather than by a third colour claiming an answer the check did not give.
+
+**Absent, not zeroed, where no environment declares a check** — the Environments card's own exception,
+for its reason: a chip reading `0 well` on a deployment that configured none announces a feature as
+broken. It opens the **overview**, where the card is, rather than a panel of its own: the reasons, the
+ages and the per-environment rows are the card's, and a second surface drawing them is a second place
+for them to disagree.
 
 Four panels open from the bar, the ask panel opens from a queue row ([the rail](#the-queue-rail--needs-you)), and Settings is a shell-owned modal beside them:
 
@@ -3285,7 +3313,7 @@ to say. Both halves are asserted in `test/notify.test.ts` against a stubbed engi
 |            |                                                                                                                                                                                                                                           |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Stored     | `localStorage` under `lubbdubb.notify`, beside the token — a property of this browser, so two people on one deployment can want different things. Not `Place`: the address bar holds where you are, and this is not somewhere you can be. |
-| Categories | `needsYou`, `errors`, `agents`, each independently switchable. `agents` is described in the panel as frequent rather than quietly defaulted off — switchable is the answer to noise, not a default nobody finds.                          |
+| Categories | `needsYou`, `errors`, `agents`, `environments`, each independently switchable. `environments` fires on a health reading's change of state or tier ([24](24-environments.md#being-told)). `agents` is described in the panel as frequent rather than quietly defaulted off — switchable is the answer to noise, not a default nobody finds.                          |
 | Permission | Requested only from the button, never a mount effect: every engine requires a user gesture and some refuse silently. `enabled` is written only once the browser has actually granted, so a switch can never read on and do nothing.       |
 | Suppressed | Only while the cockpit is **both** `document.visibilityState === 'visible'` **and** `document.hasFocus()`. A notification for a row you are looking at is noise, and the point is to reach you when you are elsewhere.                    |
 

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
+import type { EnvironmentHealthReading } from '../types.js';
 import type { CockpitActions, ConsoleTab } from '../cockpit/actions.js';
 import { FleetControl } from '../components/FleetControl.js';
 import { ExtLink, fmtUsd, relTime } from '../components/util.js';
@@ -278,6 +279,119 @@ function Read({
     <button type="button" className={cls} onClick={onOpen} title={title} aria-label={title}>
       <span>{label}</span>
       {value !== null && <b>{value}</b>}
+      <i className="cn-chev">›</i>
+    </button>
+  );
+}
+
+/**
+ * What the Environments chip draws: the worst reading, said in one count and one
+ * word, and the sentence behind it.
+ *
+ * The fold is exported for the tests, like {@link usageReading}'s: this is the
+ * whole of the chip's judgement — which reading is worst, and what to call it — and a rank
+ * that drifts is a bar reporting an outage as an amber.
+ */
+interface EnvironmentsReading {
+  /** `1 red`, `2 not well`, `1 no answer`, `4 well`. */
+  value: string;
+  /** True while the worst environment is well — the state it spends nearly all its life in. */
+  quiet: boolean;
+  /** Which tint the chip takes, or none. */
+  tone: 'ill' | 'watch' | null;
+  title: string;
+}
+
+/**
+ * Worst first, and an **untiered `unhealthy` ranks with a red**: an unstated
+ * severity is not a reason to rank an outage below one that stated it, which is
+ * the card's rule for the tone read as an ordering.
+ *
+ * `unknown` sits below both because it is not a claim that anything is wrong —
+ * and above `healthy` because it is not a claim that anything is right.
+ */
+function healthRank(reading: EnvironmentHealthReading): number {
+  if (reading.state === 'unhealthy') return reading.tier === 'orange' ? 1 : 0;
+  if (reading.state === 'unknown') return 2;
+  return 3;
+}
+
+/** What one reading is called on the chip — the tier where it named one, else the state's word. */
+function healthWord(reading: EnvironmentHealthReading): string {
+  if (reading.tier !== null) return reading.tier;
+  return reading.state === 'healthy' ? 'well' : reading.state === 'unknown' ? 'no answer' : 'not well';
+}
+
+/**
+ * Fold the readings to the one thing a glance can settle: is anything out there
+ * broken, and how many.
+ *
+ * **The value is a count and a word, never a bare number.** `Env 1` would leave
+ * an operator opening the card to find out which of three quite different things
+ * it meant, which is the only thing they wanted to know.
+ *
+ * The count is of environments sharing the *worst* word rather than of every
+ * environment that is not well, so `2 red` and `1 orange` never add up into a
+ * single figure that describes neither.
+ *
+ * `unknown` takes the amber the orange takes and is told apart by its word, which
+ * is the card's pairing exactly: a check that could not answer is a thing to look
+ * at, and drawing it green or red would be claiming an answer it did not give.
+ */
+export function environmentsReading(readings: readonly EnvironmentHealthReading[], now: number): EnvironmentsReading {
+  const worst = [...readings].sort((a, b) => healthRank(a) - healthRank(b))[0]!;
+  const word = healthWord(worst);
+  const count = readings.filter((r) => healthWord(r) === word).length;
+  const rank = healthRank(worst);
+  const read = `read ${relTime(worst.observedAt, now)}`;
+  const title =
+    rank === 3
+      ? `Every environment answered well — ${read}. Open the overview for the readings.`
+      : `${worst.environment} ${worst.state === 'unknown' ? 'did not answer' : 'is not well'} — ${word} since ${relTime(worst.changedAt, now).replace(' ago', '')}, ${read}. Open the overview for what the check said.`;
+  return {
+    value: `${count} ${word}`,
+    quiet: rank === 3,
+    tone: rank === 2 ? 'watch' : rank === 3 ? null : 'ill',
+    title,
+  };
+}
+
+/**
+ * Whether anything out there is broken — the bar's reading of the Environments
+ * card, and the only thing on this strip that is about the world the work ships
+ * into rather than about the fleet or this build.
+ *
+ * The Build gauge's argument, applied to a subject that needed it more: a reading
+ * in a fixed spot is one an operator can glance at, where a surface that appears
+ * only when there is news is one they have to notice. Health was drawn on one card
+ * on one tab, so an outage in testUk reached exactly the people already looking at
+ * it.
+ *
+ * **Absent, not zeroed, where no environment declares a check** — the card's own
+ * exception, for its reason: a chip reading `0 well` on a deployment that
+ * configured none announces a feature as broken.
+ *
+ * It opens the overview rather than a panel of its own. The reasons, the ages and
+ * the per-environment rows are the card's, and a second surface drawing them is a
+ * second place for them to disagree.
+ */
+function Environments({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element | null {
+  const readings = view.state.environmentHealth ?? [];
+  if (readings.length === 0) return null;
+  const reading = environmentsReading(readings, view.now);
+  return (
+    <button
+      type="button"
+      className={`cn-read cn-act ${reading.quiet ? 'cn-quiet' : ''} ${reading.tone === null ? '' : `cn-env-${reading.tone}`}`}
+      onClick={() => {
+        actions.selectGoal(null);
+        actions.openTab('overview');
+      }}
+      title={reading.title}
+      aria-label={reading.title}
+    >
+      <span>Env</span>
+      <b>{reading.value}</b>
       <i className="cn-chev">›</i>
     </button>
   );
@@ -679,6 +793,7 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
         />
         <LocalRun view={view} actions={actions} />
         <Build view={view} actions={actions} />
+        <Environments view={view} actions={actions} />
         {/* The tail of the strip is the two ways-in that are not gauges. Every
             reading above states a count or a state and is glanced at; these two
             state nothing and are aimed at, so they sit together at the end rather

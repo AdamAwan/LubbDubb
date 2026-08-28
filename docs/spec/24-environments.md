@@ -257,6 +257,40 @@ the same amber as `orange` and is told apart by the word beside it, which is the
 check that could not answer is a thing to look at, and drawing it green or red would be claiming an
 answer it did not give.
 
+### Being told
+
+The card is where the detail is read; it is not a way to be told. Two surfaces carry the reading further,
+and both are **volume rather than meaning** — nothing below opens a gate, files a bench row or reaches a
+prompt, which is still the whole of what health does.
+
+**The `Env` gauge on the top bar** — the worst reading as a count and a word, muted while everything is
+well, tinted when it is not, opening the overview where the card is. It is drawn only where some
+environment declares a check, the card's own exception for the card's own reason. The ranking, the
+wording and the tones are [17](17-cockpit.md#the-environments-gauge).
+
+**An `environments` notification category**, beside Needs you, Errors and Agent finished
+([17](17-cockpit.md#notifications)). It fires on a change of **state or tier** between two readings the
+cockpit holds both of — which is `changed_at`'s own rule read forwards, and it is the rule that makes
+this channel survivable: a check whose reason list shifts under one tier is the same episode still
+running, and firing on it would be a notification every `environmentHealthIntervalMs` for as long as the
+outage lasts. Three things follow from it, each of which is the feature failing quietly if it is dropped:
+
+- **The all-clear is a notification too.** A channel that announces outages and never their end leaves
+  somebody checking the cockpit to find out, which is what being notified was meant to replace. It
+  carries how long the episode ran, measured between the two readings' `changedAt` rather than against
+  the clock, so it says the same thing however late the cockpit noticed.
+- **An `unknown` gets its own sentence** — _"liveEu did not answer"_, with the harness's account of why.
+  Told as an outage, an expired credential is a page in the night about a credential, which is the
+  failure the three-valued state exists to prevent; told as nothing, an environment nobody is watching
+  reports that it is fine.
+- **An environment the previous snapshot had no reading for announces nothing.** A first reading is not
+  an event: a newly configured environment — or a snapshot that arrived without the list at all — would
+  otherwise announce itself on the pulse the cockpit first saw it, healthy and unhealthy alike. It is
+  `notifiableChanges`' seeding rule applied per environment.
+
+The decision is pure and lives with the other three categories in `web/src/cockpit/notify.ts`;
+`test/notify.test.ts` is where what fires is read.
+
 ### What health does not see
 
 - **Whether the environment being ill is anything to do with the harness's work.** A red testUk and a

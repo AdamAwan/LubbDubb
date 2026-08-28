@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { AppState } from '../web/src/types.js';
+import type { AppState, EnvironmentHealthReading } from '../web/src/types.js';
 import {
   fireNotifications,
   notifiableChanges,
@@ -16,7 +16,20 @@ const buildDemoState = () => buildDemoSeed().state;
 
 /** The snapshot slice, with the three lists overridable per case. */
 function snap(over: Partial<ReturnType<typeof notifySnapshot>> = {}) {
-  return { needsYou: [], errors: [], agents: [], ...over };
+  return { needsYou: [], errors: [], agents: [], environments: [], ...over };
+}
+
+/** One health reading, with the fields a case is about spelled out per call. */
+function health(over: Partial<EnvironmentHealthReading> & { environment: string }): EnvironmentHealthReading {
+  return {
+    state: 'healthy',
+    tier: null,
+    reasons: [],
+    detail: null,
+    observedAt: '2026-03-01T12:00:00.000Z',
+    changedAt: '2026-03-01T09:00:00.000Z',
+    ...over,
+  };
 }
 
 test('the first snapshot notifies nothing, however much is already waiting', () => {
@@ -244,7 +257,7 @@ function withEngine(
   return raised;
 }
 
-const ON = { enabled: true, categories: { needsYou: true, errors: true, agents: true } };
+const ON = { enabled: true, categories: { needsYou: true, errors: true, agents: true, environments: true } };
 const ONE_ITEM = [{ id: 'esc_1', kind: 'escalation' as const, title: 'Which database?' }];
 const oneChange = () => notifiableChanges(snap(), snap({ needsYou: ONE_ITEM }));
 
@@ -303,11 +316,106 @@ test('a switched-off category is dropped and its siblings are not', () => {
   );
 });
 
-test('notifySnapshot reduces a whole AppState to the three lists', () => {
+test("an environment that stops being well notifies, with the check's own reasons", () => {
+  const before = snap({ environments: [health({ environment: 'testUk' })] });
+  const after = snap({
+    environments: [
+      health({
+        environment: 'testUk',
+        state: 'unhealthy',
+        tier: 'red',
+        reasons: ['Solr down', 'Pipeline failing'],
+        changedAt: '2026-03-01T12:00:00.000Z',
+      }),
+    ],
+  });
+  const items = notifiableChanges(before, after);
+  assert.equal(items.length, 1);
+  assert.equal(items[0]!.category, 'environments');
+  assert.equal(items[0]!.title, 'testUk is not well');
+  assert.equal(items[0]!.body, 'Red · Solr down · Pipeline failing');
+  // Keyed on the reading, so the all-clear stacks beside this rather than replacing it.
+  assert.equal(items[0]!.tag, 'env:testUk:2026-03-01T12:00:00.000Z');
+});
+
+test('a reason list shifting under the same tier is the same episode and says nothing', () => {
+  // `changed_at`'s own rule read forwards: state or tier moves it, reasons do not
+  // — and a notification per five-minute reading is the channel nobody keeps on.
+  const ill = (reasons: string[]) =>
+    snap({ environments: [health({ environment: 'testUk', state: 'unhealthy', tier: 'red', reasons })] });
+  assert.deepEqual(notifiableChanges(ill(['Solr down']), ill(['Solr down', 'Pipeline failing'])), []);
+});
+
+test('a worsening tier notifies, because the severity is what the tier is for', () => {
+  const orange = snap({ environments: [health({ environment: 'testUk', state: 'unhealthy', tier: 'orange' })] });
+  const red = snap({
+    environments: [health({ environment: 'testUk', state: 'unhealthy', tier: 'red', reasons: ['Solr down'] })],
+  });
+  const items = notifiableChanges(orange, red);
+  assert.equal(items.length, 1);
+  assert.equal(items[0]!.body, 'Red · Solr down');
+});
+
+test('a recovery notifies and says how long the episode ran', () => {
+  // An alert with no all-clear leaves somebody checking, and the span is measured
+  // between the two readings rather than against the clock.
+  const before = snap({
+    environments: [
+      health({
+        environment: 'testUk',
+        state: 'unhealthy',
+        tier: 'red',
+        reasons: ['Solr down'],
+        changedAt: '2026-03-01T08:20:00.000Z',
+      }),
+    ],
+  });
+  const after = snap({ environments: [health({ environment: 'testUk', changedAt: '2026-03-01T12:00:00.000Z' })] });
+  const items = notifiableChanges(before, after);
+  assert.equal(items.length, 1);
+  assert.equal(items[0]!.title, 'testUk is well again');
+  assert.equal(items[0]!.body, 'After 3h 40m not well');
+});
+
+test('a check that could not answer is neither an outage nor an all-clear', () => {
+  const before = snap({ environments: [health({ environment: 'liveEu' })] });
+  const after = snap({
+    environments: [
+      health({ environment: 'liveEu', state: 'unknown', detail: 'the health check exited 127: az: not found' }),
+    ],
+  });
+  const items = notifiableChanges(before, after);
+  assert.equal(items.length, 1);
+  assert.equal(items[0]!.title, 'liveEu did not answer');
+  assert.equal(items[0]!.body, 'the health check exited 127: az: not found');
+});
+
+test('an environment the previous snapshot had no reading for announces nothing', () => {
+  // A first reading is not an event: a newly configured environment — or a
+  // snapshot that arrived without the list — would otherwise announce itself on
+  // the pulse the cockpit first saw it, healthy and unhealthy alike.
+  const after = snap({
+    environments: [health({ environment: 'liveUs', state: 'unhealthy', tier: 'red', reasons: ['down'] })],
+  });
+  assert.deepEqual(notifiableChanges(snap(), after), []);
+});
+
+test('several environments changing at once is one notification that says how many', () => {
+  const before = snap({
+    environments: [health({ environment: 'a' }), health({ environment: 'b' }), health({ environment: 'c' })],
+  });
+  const ill = (environment: string) => health({ environment, state: 'unhealthy', tier: 'red', reasons: ['down'] });
+  const items = notifiableChanges(before, snap({ environments: [ill('a'), ill('b'), ill('c')] }));
+  assert.equal(items.length, 1);
+  assert.equal(items[0]!.title, '3 environments changed');
+});
+
+test('notifySnapshot reduces a whole AppState to the four lists', () => {
   const state = buildDemoState();
   const reduced = notifySnapshot(state);
   assert.equal(reduced.agents.length, state.agents.length);
   assert.equal(reduced.errors.length, state.errors.length);
+  assert.equal(reduced.environments.length, (state.environmentHealth ?? []).length);
   // The needs-you rows are the *rendered* queue, not a raw list off the state —
   // which is the point of diffing them: they cover the sources that arrive as one
   // coarse `dirty` and never announce themselves individually, the appraisal's own

@@ -13,6 +13,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { buildViewModel } from '../web/src/view/viewModel.js';
 import type { CockpitView } from '../web/src/view/viewModel.js';
+import type { EnvironmentHealthReading } from '../web/src/types.js';
 import type { GoalPartView } from '../web/src/view/goalPage.js';
 import type { CockpitActions, ConsolePanel } from '../web/src/cockpit/actions.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE } from '../web/src/console/QueueRail.js';
@@ -33,7 +34,7 @@ const { ThemeSettings } = await import('../web/src/components/ThemeSettings.js')
 const { ColourField } = await import('../web/src/components/ColourField.js');
 const { ConfigValues } = await import('../web/src/components/ConfigValues.js');
 const { RaiseIssueModal, composeGate, canFile } = await import('../web/src/components/RaiseIssueModal.js');
-const { usageReading } = await import('../web/src/console/TopBar.js');
+const { usageReading, environmentsReading } = await import('../web/src/console/TopBar.js');
 
 function view(over: Partial<CockpitView> = {}): CockpitView {
   const state = buildDemoState().state;
@@ -1879,4 +1880,98 @@ test('the way to the tracker is always drawn, and prefers the unambiguous key', 
     !/<a[^>]*>Open ticket/.test(nowhere),
     'a link that leads nowhere is the dead end refs exist to prevent, so it stops being one',
   );
+});
+
+/**
+ * The Environments chip on the top bar — the fold, which is where its whole
+ * judgement lives: which reading is worst, what to call it, and how many share
+ * that word.
+ */
+const envRead = (over: Partial<EnvironmentHealthReading> & { environment: string }): EnvironmentHealthReading => ({
+  state: 'healthy',
+  tier: null,
+  reasons: [],
+  detail: null,
+  observedAt: new Date(Date.now() - 3 * 60_000).toISOString(),
+  changedAt: new Date(Date.now() - 2 * 60 * 60_000).toISOString(),
+  ...over,
+});
+
+test('the environments chip reads the worst environment, as a count and a word', () => {
+  const now = Date.now();
+  const red = environmentsReading(
+    [
+      envRead({ environment: 'liveUk' }),
+      envRead({ environment: 'testUk', state: 'unhealthy', tier: 'red', reasons: ['Solr down'] }),
+      envRead({ environment: 'liveEu', state: 'unhealthy', tier: 'orange' }),
+    ],
+    now,
+  );
+  // A bare number would leave an operator opening the card to find out which of
+  // three quite different things it meant.
+  assert.equal(red.value, '1 red');
+  assert.equal(red.tone, 'ill');
+  assert.equal(red.quiet, false);
+  assert.match(red.title, /testUk is not well/);
+
+  // The count is of the worst word only: `2 red` and `1 orange` must never add up
+  // into one figure that describes neither.
+  const two = environmentsReading(
+    [
+      envRead({ environment: 'a', state: 'unhealthy', tier: 'red' }),
+      envRead({ environment: 'b', state: 'unhealthy', tier: 'red' }),
+      envRead({ environment: 'c', state: 'unhealthy', tier: 'orange' }),
+    ],
+    now,
+  );
+  assert.equal(two.value, '2 red');
+});
+
+test('an untiered unhealthy ranks and draws with a red, not below an orange', () => {
+  // An unstated severity is not a reason to draw an outage quietly — the card's
+  // rule for the tone, read here as an ordering.
+  const reading = environmentsReading(
+    [
+      envRead({ environment: 'liveEu', state: 'unhealthy', tier: 'orange' }),
+      envRead({ environment: 'testUk', state: 'unhealthy', tier: null, reasons: ['down'] }),
+    ],
+    Date.now(),
+  );
+  assert.equal(reading.value, '1 not well');
+  assert.equal(reading.tone, 'ill');
+});
+
+test('a check that could not answer is amber and says so, never green and never red', () => {
+  const reading = environmentsReading(
+    [envRead({ environment: 'liveUk' }), envRead({ environment: 'liveEu', state: 'unknown', detail: 'exit 127' })],
+    Date.now(),
+  );
+  assert.equal(reading.value, '1 no answer');
+  assert.equal(reading.tone, 'watch');
+  assert.match(reading.title, /liveEu did not answer/);
+});
+
+test('a well fleet mutes the chip rather than moving it', () => {
+  const reading = environmentsReading(
+    [envRead({ environment: 'liveUk' }), envRead({ environment: 'liveEu' })],
+    Date.now(),
+  );
+  assert.equal(reading.value, '2 well');
+  assert.equal(reading.quiet, true);
+  assert.equal(reading.tone, null);
+});
+
+test('the chip is absent, not zeroed, where no environment declares a check', () => {
+  // The card's own exception: a reading on a deployment that configured none
+  // announces a feature as broken.
+  const v = view();
+  const drawn = render({ ...v, state: { ...v.state, environmentHealth: [] } });
+  assert.ok(!/>Env</.test(drawn), 'no environment health, no gauge');
+
+  const withOne = render({
+    ...v,
+    state: { ...v.state, environmentHealth: [envRead({ environment: 'testUk', state: 'unhealthy', tier: 'red' })] },
+  });
+  assert.ok(/>Env</.test(withOne), 'and it is drawn as soon as one environment answers');
+  assert.ok(withOne.includes('cn-env-ill'), 'wearing the tint its worst reading earns');
 });
