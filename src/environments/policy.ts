@@ -24,6 +24,18 @@ export interface EnvironmentConfig {
    * → {@link CommandEnvironmentProber}
    */
   at: string;
+  /**
+   * A command that answers whether this environment is **well** right now, run in
+   * a shell in `repoRoot` with `LUBBDUBB_ENVIRONMENT` set. Absent = health is not
+   * asked here and the environment draws no health row at all.
+   *
+   * A second command rather than a second thing for `at` to print, because they
+   * are different questions on different clocks: `at` names a commit and is asked
+   * only while a landing is unconfirmed, and this one asks about the environment
+   * itself and is worth asking on a fleet that has shipped nothing all week.
+   * → {@link CommandEnvironmentHealthProber}
+   */
+  health?: string;
   /** What arriving here means. Absent = the environment is observed and nothing more. */
   arrival?: EnvironmentArrival;
   /**
@@ -127,6 +139,14 @@ export function validateEnvironments(environments: EnvironmentConfig[]): void {
       throw new Error(
         `${where} ("${env.name}"): "at" must be a non-empty command printing the commit this environment is at. ` +
           'An empty one names nothing, which leaves every goal unanswered forever.',
+      );
+    // Refused rather than defaulted for `at`'s reason: an empty command answers
+    // nothing, and an environment whose health row reads `unknown` forever looks
+    // exactly like one whose credentials expired.
+    if (env.health !== undefined && (typeof env.health !== 'string' || env.health.trim() === ''))
+      throw new Error(
+        `${where} ("${env.name}"): "health" must be a non-empty command printing a {"state": …} report, ` +
+          'or be left out — with none, this environment is observed for reach and draws no health row.',
       );
     validateArrival(env.arrival, `${where} ("${env.name}")`);
     validateWatch(env, `${where} ("${env.name}")`);

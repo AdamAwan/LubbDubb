@@ -1070,6 +1070,28 @@ export function buildDemoState(): DemoSeed {
         watchedAt: '2026-08-19T09:12:04.000Z',
       },
     ],
+    // One environment of each health worth drawing: well, not well with a tier and
+    // its own reasons, and a check that could not answer at all.
+    environmentHealth: [
+      {
+        environment: 'staging',
+        state: 'healthy',
+        tier: null,
+        reasons: [],
+        detail: null,
+        observedAt: '2026-08-19T09:14:00.000Z',
+        changedAt: '2026-08-17T22:40:00.000Z',
+      },
+      {
+        environment: 'prod',
+        state: 'unhealthy',
+        tier: 'orange',
+        reasons: ['Pipeline failing', 'Solr down'],
+        detail: null,
+        observedAt: '2026-08-19T09:14:00.000Z',
+        changedAt: '2026-08-19T08:05:00.000Z',
+      },
+    ],
     // One goal in each of the readings worth drawing: whole, half, and unanswerable.
     // `staging` opens both obligations, so the second goal also draws the hold —
     // delivered, and its bench rows waiting on an environment it has not reached.

@@ -158,6 +158,13 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'How often an unconfirmed landing is asked about again — and the precision of every “arrived at”.',
   },
   {
+    path: 'environmentHealthIntervalMs',
+    type: 'number',
+    ms: true,
+    access: 'plain',
+    why: 'How often each environment’s own health check is asked whether it is well.',
+  },
+  {
     path: 'watchIntervalMs',
     type: 'number',
     ms: true,

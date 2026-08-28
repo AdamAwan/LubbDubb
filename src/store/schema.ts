@@ -767,6 +767,23 @@ CREATE TABLE IF NOT EXISTS goal_arrivals (
   PRIMARY KEY (goal_ref, environment)
 );
 
+-- What one environment's own health check last said (see EnvironmentStore). One
+-- row per environment, replaced each reading: health is a status, not a history,
+-- and a table growing a row every five minutes per environment would be a log
+-- nothing reads. changed_at is kept across a reading that says the same thing, so
+-- "red" can be drawn as "red since Tuesday" -- moved by a change of state or tier
+-- and not by a change of reasons, since a shifting reason list under one tier is
+-- the same episode still running.
+CREATE TABLE IF NOT EXISTS environment_health (
+  environment TEXT PRIMARY KEY,
+  state       TEXT NOT NULL,      -- healthy | unhealthy | unknown
+  tier        TEXT,               -- red | orange, for an unhealthy; NULL otherwise
+  reasons     TEXT NOT NULL,      -- the check's own sentences, as a JSON list
+  detail      TEXT,               -- why, for an unknown the harness refused
+  observed_at TEXT NOT NULL,
+  changed_at  TEXT NOT NULL       -- when it last became what it is now
+);
+
 -- What a goal's plan declared a running system would have to show for its work to
 -- have done what it claimed (see WatchStore). One row per declared check, merged
 -- on the author's own slug; the dry-run columns are what the environment said the

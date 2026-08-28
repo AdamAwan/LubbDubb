@@ -48,6 +48,7 @@ import { SpendBurnDesk } from './spendBurnDesk.js';
 import { RunwayDesk } from './supply/runwayDesk.js';
 import { BranchReapDesk } from './branchReapDesk.js';
 import { EnvironmentDesk } from './environments/environmentDesk.js';
+import { CommandEnvironmentHealthProber, type EnvironmentHealthProber } from './environments/healthProber.js';
 import { CommandEnvironmentProber, type EnvironmentProber } from './environments/prober.js';
 import { CommandEnvironmentObserver, type EnvironmentObserver } from './environments/observer.js';
 import { WatchDryRun, type WatchDryRunner } from './environments/watchDryRun.js';
@@ -306,6 +307,13 @@ interface BuildOptions {
    * shell on the developer's machine if it did.
    */
   environmentProber?: EnvironmentProber;
+  /**
+   * Override how an environment is asked whether it is well (tests inject
+   * `FakeEnvironmentHealthProber`). Without it the real prober runs the operator's
+   * configured `health` command, on the same terms as the two seams either side of
+   * it — a test has none, and would spawn a shell on the developer's machine.
+   */
+  environmentHealthProber?: EnvironmentHealthProber;
   /**
    * Override how an environment's telemetry is asked a declared question (tests
    * inject `FakeEnvironmentObserver`). Without it the real observer runs the
@@ -914,6 +922,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     store,
     environments: config.environments,
     prober: opts.environmentProber ?? new CommandEnvironmentProber(config.repoRoot),
+    // Whether the environment is *well*, beside where it is: a different question
+    // on a different clock, so a different command and a different interval.
+    healthProber: opts.environmentHealthProber ?? new CommandEnvironmentHealthProber(config.repoRoot),
     // The clone answers "is this landing in what the environment named", which is
     // what keeps the probe to one spawn per environment however many goals are in
     // flight. The same observer the plan reconciler fetches for, so the objects
@@ -921,6 +932,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     git: gitObserver,
     sink: opts.sink ?? connector,
     probeIntervalMs: config.environmentProbeIntervalMs,
+    healthIntervalMs: config.environmentHealthIntervalMs,
     // The window pass, handed to the desk rather than run beside it: it opens on an
     // arrival the desk's own third pass records, so *where* it runs is the
     // invariant and belongs in the file that runs it.

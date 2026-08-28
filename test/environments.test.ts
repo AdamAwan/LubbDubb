@@ -9,6 +9,7 @@ import { buildSystem } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { mergeShaFor } from '../src/integrations/fake/fakeGitHub.js';
+import { FakeEnvironmentHealthProber } from '../src/environments/fakeHealthProber.js';
 import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
 import { CommandEnvironmentProber } from '../src/environments/prober.js';
 import { validateEnvironments, type EnvironmentConfig } from '../src/environments/policy.js';
@@ -777,6 +778,8 @@ function announcingDesk(environments: EnvironmentConfig[], now: () => number) {
   const desk = new EnvironmentDesk({
     store,
     environments,
+    healthProber: new FakeEnvironmentHealthProber(),
+    healthIntervalMs: 60_000,
     prober: new FakeEnvironmentProber(),
     git: new FakeGitObserver(),
     sink,
@@ -852,6 +855,8 @@ function establishedDeployment(environments: EnvironmentConfig[], now: number) {
     new EnvironmentDesk({
       store,
       environments: envs,
+      healthProber: new FakeEnvironmentHealthProber(),
+      healthIntervalMs: 60_000,
       prober: new FakeEnvironmentProber(),
       git: new FakeGitObserver(),
       sink,
@@ -1047,6 +1052,8 @@ test('a part’s merge lands under the goal, arrives as the goal, and opens the 
   const desk = new EnvironmentDesk({
     store,
     environments,
+    healthProber: new FakeEnvironmentHealthProber(),
+    healthIntervalMs: 60_000,
     prober: new FakeEnvironmentProber({ testUk: ['head-testUk'] }),
     git: new FakeGitObserver().setContains('head-testUk', 'sha1', true).setContains('head-testUk', 'sha2', true),
     sink,
@@ -1165,6 +1172,8 @@ test('a partial goal arrival is discarded and re-derived after every part arrive
   const desk = new EnvironmentDesk({
     store: after,
     environments,
+    healthProber: new FakeEnvironmentHealthProber(),
+    healthIntervalMs: 60_000,
     prober,
     git,
     sink,

@@ -3759,6 +3759,59 @@ export interface EnvironmentReading {
 }
 
 /**
+ * Whether an environment is **well**, as its own health check answered.
+ *
+ * Beside {@link EnvironmentReachStatus} and deliberately not folded into it: reach
+ * is a question about one commit and health is a question about the environment,
+ * and the two have different right answers at the same moment — a testUk holding
+ * every commit a goal owns while its search index is down is `reached` and it is
+ * `unhealthy`. Folded, the loudest half of the pair would be the one nobody could
+ * see. → `docs/spec/24-environments.md#is-the-environment-well`
+ *
+ * Three values, for {@link EnvironmentReachStatus}'s reason. A check that could
+ * not answer — the command is missing, it timed out, the credentials expired —
+ * must be readable as neither `healthy` nor `unhealthy`: the first is an
+ * environment nobody is watching reporting that it is fine, and the second is a
+ * page in the night about a credential.
+ */
+export type EnvironmentHealthState = 'healthy' | 'unhealthy' | 'unknown';
+
+/**
+ * How bad an `unhealthy` environment is, worst first.
+ *
+ * A closed set because the tier is what decides how loudly the reading is drawn,
+ * and a tier the cockpit cannot rank would be drawn at some tone nobody asked for.
+ * A report naming another word is refused and says so on the glass, where the
+ * person who wrote the script will read it.
+ */
+export type EnvironmentHealthTier = 'red' | 'orange';
+
+/** The current standing of one environment's health check — one row, replaced each reading. */
+export interface EnvironmentHealthReading {
+  /** The environment's name as the operator configured it. */
+  environment: string;
+  state: EnvironmentHealthState;
+  /** How bad, for an `unhealthy`. Null everywhere else, and null on an untiered one. */
+  tier: EnvironmentHealthTier | null;
+  /** What the check said is wrong, in its own words. Drawn verbatim, never parsed. */
+  reasons: string[];
+  /** Why, for an `unknown` the harness refused rather than the check declared. */
+  detail: string | null;
+  /** When the check last answered — as precise as `environmentHealthIntervalMs`. */
+  observedAt: string;
+  /**
+   * When it last became what it is now.
+   *
+   * Held because "red" and "red since Tuesday" are different sentences, and the
+   * second is the one an operator acts on. Moved by a change of state or tier and
+   * **not** by a change of reasons: a check whose reason list shifts under the same
+   * tier is the same episode still running, and a clock restarting under it every
+   * five minutes would report a fresh outage forever.
+   */
+  changedAt: string;
+}
+
+/**
  * A whole goal's standing in one environment, folded from its landings.
  *
  * `partial` is the reading this exists for: a goal is several pull requests, they

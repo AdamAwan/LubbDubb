@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import type { System } from '../system.js';
 import type { Config } from '../config.js';
 import type {
+  EnvironmentHealthReading,
   Issue,
   IssueAppraisal,
   IssueDelivery,
@@ -820,6 +821,7 @@ export function buildStateSections(
     | 'retainedRuns'
     | 'stacks'
     | 'environmentReach'
+    | 'environmentHealth'
     | 'goalWatchWindows'
     | 'environmentArrivals'
     | 'stackLandings'
@@ -871,6 +873,11 @@ export function buildStateSections(
     // environment configured, which the cockpit draws as no row rather than as a
     // row of unknowns.
     environmentReach: buildEnvironmentReach(store, config.environments),
+    // Whether each environment is well, beside where the work has got to. Read
+    // from the store and filtered by today's configuration, so an environment
+    // whose `health` command was removed stops being drawn rather than showing
+    // its last reading for ever.
+    environmentHealth: buildEnvironmentHealth(store, config.environments),
     goalWatchWindows: buildGoalWatchWindows(store, config.environments),
     // Off the same table the comments are posted from, capped like every other
     // feed here. Empty with nothing configured, so the cockpit's signals list is
@@ -1393,6 +1400,23 @@ function buildUsage(system: System, unattributedCostUsd: number) {
  * Empty when nothing is configured, so the cockpit draws no row rather than a row
  * of unknowns on a deployment that never asked for one.
  */
+/**
+ * What each environment's own health check last said, in the operator's order.
+ *
+ * **The configuration decides the set, and the store only fills it in.** Nothing
+ * deletes a stored reading, so an environment whose `health` was removed — or
+ * renamed — would otherwise be drawn with its last answer for ever, on a question
+ * nobody is asking any more. An environment that declares `health` and has not
+ * been asked yet is simply absent until its first reading, rather than being
+ * invented as an `unknown` the harness never got.
+ */
+function buildEnvironmentHealth(store: System['store'], environments: EnvironmentConfig[]): EnvironmentHealthReading[] {
+  const readings = store.listEnvironmentHealth();
+  return environments
+    .filter((env) => env.health !== undefined)
+    .flatMap((env) => readings.filter((r) => r.environment === env.name));
+}
+
 function buildEnvironmentReach(store: System['store'], environments: EnvironmentConfig[]): GoalReachView[] {
   if (environments.length === 0) return [];
   const arrivals = store.listGoalArrivals();

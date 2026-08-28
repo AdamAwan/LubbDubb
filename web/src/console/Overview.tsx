@@ -1,7 +1,16 @@
 import { useState, type JSX } from 'react';
 import type { CockpitView, DeskRun } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
-import type { Agent, GoalArrival, Issue, OpenPullRequest, QueueItem, SupplyState, WorldEvent } from '../types.js';
+import type {
+  Agent,
+  EnvironmentHealthReading,
+  GoalArrival,
+  Issue,
+  OpenPullRequest,
+  QueueItem,
+  SupplyState,
+  WorldEvent,
+} from '../types.js';
 import { buildGoalPage, buildGoalTrack, furthestEnvironment, goalOfPr, type GoalTrack } from '../view/goalPage.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { elapsed, fmtUsd, relTime } from '../components/util.js';
@@ -13,14 +22,14 @@ import { AgentOnIt } from '../components/AgentOnIt.js';
 import { orphanCount, orphanGoal } from '../view/orphanGoal.js';
 
 /**
- * What is shown when no goal is selected: five cards, rows rather than pictures.
+ * What is shown when no goal is selected: six cards, rows rather than pictures.
  *
  * Document order is reading order — Fleet, Goals in flight, Pull requests, Up
- * next, World signals — and no card carries a CSS `order`, so the DOM and the
- * page agree at every width. The arrangement across tracks is `.cn-grid`'s
- * business alone.
+ * next, World signals, Environments — and no card carries a CSS `order`, so the
+ * DOM and the page agree at every width. The arrangement across tracks is
+ * `.cn-grid`'s business alone.
  *
- * Two rules run through all five. **Nothing here re-decides what the server
+ * Two rules run through all six. **Nothing here re-decides what the server
  * decided**: a PR's court is `attention.status`, its checks are `ciVerdict`, a
  * queued item's hold is the queue's own sentence, and a goal's state is its
  * `pickup.status` — every one quoted, none parsed. And **an empty card still
@@ -35,6 +44,7 @@ export function Overview({ view, actions }: { view: CockpitView; actions: Cockpi
       <Rack view={view} actions={actions} />
       <UpNext view={view} actions={actions} />
       <WorldSignals view={view} />
+      <Environments view={view} />
     </div>
   );
 }
@@ -855,6 +865,98 @@ function queueRow(item: QueueItem, view: CockpitView, actions: CockpitActions): 
       />
     ),
   };
+}
+
+/**
+ * Whether each environment is **well** right now — one row per environment whose
+ * operator gave it a health check.
+ *
+ * On the overview rather than on a goal page, because health is a fact about the
+ * environment and not about any goal: drawn per goal it would be the same sentence
+ * repeated on every card, and the one place it is actually read — "is anything
+ * broken out there" — has no goal selected.
+ *
+ * **The one card here that draws nothing when it is empty**, which is the
+ * deliberate exception to this page's other rule: an environment surface on a
+ * deployment that configured none is a row of question marks announcing a feature
+ * as broken, and that rule is older than this card
+ * (`docs/spec/24-environments.md#in-the-cockpit`). An environment that *is*
+ * configured and has not answered yet draws its row and says so.
+ *
+ * Nothing here re-decides anything. The tier is the check's own word, the reasons
+ * are its own sentences drawn verbatim, and `unknown` is drawn as its own reading
+ * rather than folded into either of the two that mean something.
+ */
+function Environments({ view }: { view: CockpitView }): JSX.Element | null {
+  const readings = view.state.environmentHealth ?? [];
+  if (readings.length === 0) return null;
+  const ill = readings.filter((r) => r.state !== 'healthy').length;
+  return (
+    <section className="cn-card cn-span2">
+      <h3>
+        Environments <i className="cn-n">{ill === 0 ? readings.length : `${ill}/${readings.length}`}</i>
+      </h3>
+      <PanelRows rows={readings.map((reading) => healthRow(reading, view.now))} />
+    </section>
+  );
+}
+
+/**
+ * One environment's health, as a row.
+ *
+ * The reasons go behind the marker rather than on the glass, where every other
+ * card's long sentence goes: a check naming six services would otherwise be the
+ * one row on this page three lines tall. What stays visible is the half a glance
+ * needs — the word, and how long it has been that word.
+ */
+function healthRow(reading: EnvironmentHealthReading, now: number): PanelRowModel {
+  const said = HEALTH_SAID[reading.state];
+  return {
+    key: reading.environment,
+    title: reading.environment,
+    // Nowhere to go: an environment is a command in a config file, not a thing
+    // with a page. Said in the model rather than left out, which is the field's
+    // whole purpose.
+    refs: null,
+    chips: <i className={`cn-chip ${healthTone(reading)}`}>{reading.tier ?? reading.state}</i>,
+    // The check's own sentences, verbatim and joined — or the harness's account of
+    // why it has none, which is a different thing and never dressed as one.
+    why: reading.reasons.length > 0 ? reading.reasons.join(' · ') : reading.detail,
+    whyLabel: said,
+    whyTone: reading.state === 'healthy' ? 'quiet' : reading.state === 'unknown' ? 'hold' : healthAsk(reading),
+    facts: [
+      { label: 'since', value: relTime(reading.changedAt, now) },
+      { label: 'read', value: relTime(reading.observedAt, now) },
+    ],
+  };
+}
+
+/** What each state is called on the row, in the words an operator would use. */
+const HEALTH_SAID: Record<EnvironmentHealthReading['state'], string> = {
+  healthy: 'well',
+  unhealthy: 'not well',
+  unknown: 'no answer',
+};
+
+/**
+ * No new colours: every tone is one the cockpit already draws, so the card follows
+ * a theme switch without the token layer having to learn about it.
+ *
+ * `unknown` takes the same amber as `orange` and is told apart by the word beside
+ * it, which is the honest pairing — a check that could not answer is a thing to
+ * look at, and drawing it green or red would be claiming an answer it did not give.
+ * An **untiered** `unhealthy` takes red: a severity nobody stated is not a reason
+ * to draw an outage quietly.
+ */
+function healthTone(reading: EnvironmentHealthReading): string {
+  if (reading.state === 'healthy') return 'cn-ok';
+  if (reading.state === 'unknown') return 'cn-stall';
+  return reading.tier === 'orange' ? 'cn-stall' : 'cn-you';
+}
+
+/** An orange is the harness holding its nerve; a red — or an untiered one — is your move. */
+function healthAsk(reading: EnvironmentHealthReading): 'ask' | 'hold' {
+  return reading.tier === 'orange' ? 'hold' : 'ask';
 }
 
 /**

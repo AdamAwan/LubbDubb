@@ -13,6 +13,11 @@ Two halves, and they are deliberately independent. The first runs on every deplo
 any environment is configured, because what it captures expires. The second runs only when there is
 something to ask.
 
+An environment may also be asked a third question, on its own command and its own clock: whether it is
+**well** right now. That half answers about the environment rather than about any commit, nothing in
+the harness reads what it writes, and it is off unless an environment declares it.
+→ [Is the environment well?](#is-the-environment-well)
+
 An environment may also carry **meaning**: arriving there can be what opens the obligations a
 delivered goal owes a person, and what puts a line on the ticket. Both are opt-in, per environment,
 and a deployment that declares neither gets exactly what it got before — an observation, drawn on the
@@ -147,6 +152,122 @@ tie-breaker was whether the command had complained on stderr. An environment nam
 has nothing to say no _about_: either it answered or it did not, and whether a landing is in it is a
 question for the clone. The platform-dependent clause simply has nothing to be about any more.
 
+## Is the environment well?
+
+`src/environments/health.ts`, `healthProber.ts`. A second command, `health`, and a second question:
+not _where_ this environment is, but whether it is **up** right now.
+
+Beside reach rather than folded into it, because the two have different right answers at the same
+moment. A testUk holding every commit a goal owns while its search index is down is `reached`, and it
+is `unhealthy`; folded, the loudest half of the pair is the one nobody can see. They are also on
+different clocks — reach is asked only while some landing is unconfirmed, so an established fleet
+spawns nothing, while health is worth asking on a fleet that has shipped nothing all week.
+
+**Off unless an environment declares it.** An environment with no `health` is not asked, gets no row,
+and draws nothing — the rule the whole subsystem is built to, for the reason the card is absent
+entirely on a deployment with no environments at all.
+
+### The output contract, which is all the schema the harness has
+
+The command prints one JSON object and the harness reads four fields out of it:
+
+```jsonc
+{ "state": "Healthy" }
+
+{ "state": "NotHealthy", "tier": "Orange", "reasons": ["Pipeline failing"] }
+
+{ "state": "NotHealthy", "tier": "Red", "reasons": ["Pipeline failing", "Solr down"] }
+```
+
+The harness knows nothing about pipelines, Solr, pods or dashboards, exactly as it knows nothing
+about Kusto ([29](29-post-deploy-watch.md)). It imposes a shape and reads nothing else.
+
+- **`state`** is `Healthy`, `NotHealthy` or `Unknown`. The vocabulary is deliberately generous on the
+  way in and closed on the way out: `Healthy`, `healthy` and `HEALTHY` are one word, `NotHealthy`,
+  `not-healthy` and `unhealthy` are another, because this contract is a script somebody writes once
+  from an example — but what comes out is one of three values the cockpit can draw and the store can
+  key on.
+- **`tier`** is `Red` or `Orange`, and says how bad an unhealthy one is. A **closed** set, because the
+  tier is what decides how loudly the reading is drawn: a tier the cockpit cannot rank would be drawn
+  at some tone nobody asked for, so an unrecognised one is refused and says so on the glass, where the
+  person who wrote the script will read it. A **missing** tier is not refused — the state is the
+  signal and the tier is the detail — and an untiered `NotHealthy` is drawn at the loudest tone there
+  is, since an unstated severity is not a reason to draw an outage quietly. A `tier` on a **healthy**
+  report is refused: the two halves disagree about the only thing the reading is for.
+- **`reasons`** are the check's own sentences, drawn verbatim and never parsed. Bounded at twelve of
+  200 characters, because a row is a reading and not a log.
+- Anything else in the object is ignored.
+
+**The state is three-valued for `EnvironmentReachStatus`'s reason**, and it is the sharp edge of this
+half. A check that could not answer — the binary is missing, the credential expired, it timed out —
+must be readable as neither of the other two. Read as `healthy`, an environment nobody is watching
+reports that it is fine; read as `unhealthy`, a broken credential is a page in the night. So every
+unreadable answer lands on `unknown` with an account of why: no output, output that is not JSON, a
+state nobody declared, a `reasons` that is not a list.
+
+**The report is read from stdout whatever the exit code**, and that is the one place this differs from
+`at` and from `observe`. A health script that says `NotHealthy` and exits 1 is the shape half the
+world already writes — `set -e`, a `curl -f`, a pipeline task's own convention — and refusing it would
+turn every real outage into `unknown` on exactly the deployments whose script works. The exit code is
+consulted only when stdout said nothing readable, and then it is the better account of the silence:
+`exited 127: command not found` rather than "did not answer with JSON". A check that declared
+`Unknown` itself keeps its own reasons, because it answered — what it answered was that it could not
+tell.
+
+A check is killed after 30 seconds and the kill answers nothing, as everywhere else here.
+
+### What is stored, and for how long
+
+One row per environment in `environment_health`, replaced on every reading: health is a **status**, not
+a history, and a table growing a row per environment per interval would be a log nothing reads.
+
+What survives the replace is `changed_at` — when the environment last became what it is now — because
+"red" and "red since Tuesday" are different sentences and the second is the one an operator acts on.
+It is moved by a change of **state or tier** and not by a change of **reasons**: a check whose list
+shifts while an outage runs is the same outage, and a clock restarting under it every interval would
+report a fresh one forever.
+
+A reading is not re-asked inside `environmentHealthIntervalMs` (default 5 minutes), which is its own
+key rather than `environmentProbeIntervalMs` because the costs differ in kind: a probe is asked only
+while something is unconfirmed, and this is asked on every declaring environment whether or not
+anything has shipped. That number *is* the standing cost of the feature, and it is also how stale the
+worst reading on the glass may be while somebody is looking at it.
+
+**Nothing reads what this pass writes.** It opens no gate, holds no obligation, files no bench row and
+reaches no prompt — a health reading is drawn, and that is all it does. That is why the pass's
+position in the desk is a preference rather than an invariant, and why the desk says so in the file:
+the orderings either side of it are real, and a later reordering of this one must not be read as
+breaking one.
+
+### Health in the cockpit
+
+An **Environments** card on the overview, one row per environment that declares a check: the word, how
+long it has been that word, when it was last read, and the check's own reasons behind the row's
+marker. On the overview and not on a goal page, because health is a fact about the environment and not
+about any goal — drawn per goal it would be the same sentence repeated on every card, and the one
+place it is actually read, "is anything broken out there", has no goal selected.
+
+It is the one card there that draws **nothing** when it is empty, which is the deliberate exception to
+that page's rule that an empty card still draws: an environment surface on a deployment that
+configured none is a row of question marks announcing a feature as broken. An environment that *is*
+configured and has not answered yet draws its row and says so.
+
+The tones are ones the cockpit already defines, so a theme switch needs no new token. `unknown` takes
+the same amber as `orange` and is told apart by the word beside it, which is the honest pairing: a
+check that could not answer is a thing to look at, and drawing it green or red would be claiming an
+answer it did not give.
+
+### What health does not see
+
+- **Whether the environment being ill is anything to do with the harness's work.** A red testUk and a
+  goal that has just arrived in it are two readings on one page, and nothing here relates them. That
+  question is [29](29-post-deploy-watch.md), which asks a goal's own declared checks.
+- **A history.** The row is the current reading and `changed_at` is as far back as it goes; there is
+  no chart of last week's outages, and the reason is the one above — this is a status.
+- **An environment's health while nothing else is configured.** `environments` is still the off
+  switch for the whole subsystem: `health` alone on an entry with no `at` is not a configuration the
+  policy allows, because `at` is what an environment *is* here.
+
 ## Configuring an environment
 
 ```jsonc
@@ -155,6 +276,7 @@ question for the clone. The platform-dependent clause simply has nothing to be a
     {
       "name": "testUk",
       "at": "az pipelines runs list --pipeline-ids 42 --status completed --result succeeded --top 1 --query '[0].sourceVersion' -o tsv",
+      "health": "./scripts/health.sh",
       "arrival": { "opens": ["validate", "close_out"], "comment": true },
     },
     { "name": "liveUk", "at": "./scripts/deployed-sha.sh uk", "arrival": { "comment": true } },
@@ -162,6 +284,7 @@ question for the clone. The platform-dependent clause simply has nothing to be a
     { "name": "liveUs", "at": "git rev-parse origin/production" },
   ],
   "environmentProbeIntervalMs": 300000,
+  "environmentHealthIntervalMs": 300000,
 }
 ```
 
@@ -178,6 +301,9 @@ because each failure is otherwise silent in the same direction:
 - an **empty** `at` names no commit, which leaves every goal unanswered forever;
 - a **`command`** key, which is the previous shape and asked a different question. Named rather than
   ignored: loading it silently is an environment that never answers anything;
+- an empty **`health`**, which answers nothing — an environment whose health row reads `unknown`
+  forever looks exactly like one whose credentials expired, and left out entirely is the honest way to
+  say the question is not asked here;
 - an `arrival` that **opens nothing and says nothing**, or one naming an obligation the harness does
   not file. An `"opens": []` reads as a gate and gates nothing, which is the shape most likely to be
   written by somebody who meant one and left it for later.
@@ -365,9 +491,10 @@ forever.
 `src/environments/environmentDesk.ts`, run from the pulse beside the other bookkeeping and not in the
 dispatcher — it staffs nothing, decides no dispatch, and no rule reads what it writes.
 
-Five passes: attribute the merges nothing has attributed yet, ask each environment where it is,
-record the goals that have just arrived, say so on their tickets, and run the post-deploy watch's own
-window pass ([29](29-post-deploy-watch.md#the-window)).
+Six passes: attribute the merges nothing has attributed yet, ask each environment whether it is well
+([above](#is-the-environment-well)), ask each environment where it is, record the goals that have just
+arrived, say so on their tickets, and run the post-deploy watch's own window pass
+([29](29-post-deploy-watch.md#the-window)).
 
 The fifth is **held here rather than run beside this desk**, and its position is the invariant rather
 than a preference: a watch window opens on an arrival the third pass records, so above that pass it
@@ -375,7 +502,7 @@ would read arrivals that have not been written yet and the whole feature would b
 forever, with nothing red. Making the order a line in this file is what stops a reordering elsewhere
 being silent.
 
-The attribution pass runs unconditionally; the other four return immediately with no environments
+The attribution pass runs unconditionally; the other five return immediately with no environments
 configured. That split is not tidiness: a merge SHA is only on offer while its pull request is inside
 `closedPrWindowMs`, so a deployment that configures its first environment next month still wants this
 month's landings on record when it does.
@@ -553,7 +680,7 @@ Stated so a later change does not discover them as bugs:
 
 ## Persistence
 
-Four tables, described in [14](14-persistence.md), all owned by `EnvironmentStore`:
+Five tables, described in [14](14-persistence.md), all owned by `EnvironmentStore`:
 
 | Table                       | One row per               | Written                                               |
 | --------------------------- | ------------------------- | ----------------------------------------------------- |
@@ -561,6 +688,7 @@ Four tables, described in [14](14-persistence.md), all owned by `EnvironmentStor
 | `environment_reach`         | `(sha, environment)`      | `OR REPLACE` — an observation of something that moves |
 | `goal_arrivals`             | `(goal_ref, environment)` | `OR IGNORE` — arriving twice is not two arrivals      |
 | `environment_gate_releases` | goal                      | `OR REPLACE`, deleted to clear                        |
+| `environment_health`        | environment               | replaced each reading, `changed_at` held across an unchanged one |
 
 `goal_landings` is keyed on the pull request for `branch_reaps`' reason — a branch name is reusable,
 and a goal can land more than once.
