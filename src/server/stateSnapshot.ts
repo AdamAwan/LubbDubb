@@ -483,10 +483,6 @@ export function buildStateSections(
     review: config.review,
     prReviews: new Map(store.listPrReviews().map((review) => [review.prNumber, review])),
     prReviewRoutes: new Map(store.listPrReviewRoutes().map((route) => [route.prNumber, route])),
-    // Read, never stamped, here — `reviewWaits`' reason exactly: the pulse writes
-    // this ledger, and a snapshot that stamped it would judge a pull request's
-    // intake against whatever schedule the cockpit happened to poll on.
-    prReviewIntake: store.prReviewIntake(),
     prReviewedElsewhere: store.prsReviewedElsewhere(),
   };
   // The world's change history the Activity feed / Signals panels draw. Read here

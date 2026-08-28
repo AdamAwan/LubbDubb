@@ -159,12 +159,6 @@ export class AzureDevOpsSourceControlIntegration
             merged: false, // active PRs only; a completed PR drops out of the list
             state: 'open',
             labels,
-            // The one thing that separates a pull request the harness watched
-            // appear from one that was already open when a project switched the
-            // fleet review on (`src/review/intake.ts`). Omitted rather than sent
-            // empty where Azure did not report it, so the intake reads it as
-            // "cannot say" rather than as the epoch.
-            ...(p.openedAt === '' ? {} : { openedAt: p.openedAt }),
             url: p.url,
           };
           // The name a person goes by, with the UPN behind it: Azure leaves

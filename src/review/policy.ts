@@ -76,33 +76,6 @@ export interface PrReviewPolicy {
    */
   blocking: boolean;
   /**
-   * Whether switching {@link enabled} on reviews the pull requests **already
-   * open**, or only the ones the harness watches appear from that pulse on.
-   *
-   * **Off**, and off for {@link enabled}'s own reason one step later. `enabled`
-   * is off by default because this is the rule that spends an agent on every
-   * pull request, and a deployment whose bill changed by a build it had not
-   * asked anything of would be right to call that a fault. The day a project
-   * turns it on is exactly that day again: a team with twenty pull requests open
-   * means "read what we open from here", and gets twenty agents on one pulse and
-   * — with {@link blocking} — twenty pull requests it cannot merge until each has
-   * been read. Nothing errors, and the queue of held merges is indistinguishable
-   * from the feature working.
-   *
-   * So the intake ledger (`src/review/intake.ts`) stamps every open pull request
-   * the first time the review sees it, **either way**, and only the ones the
-   * harness watched appear are eligible. That stamp is the whole of how a project
-   * turning this on next month reviews its *next* pull request rather than every
-   * one already open — the environments arrival rule exactly
-   * ([24](docs/spec/24-environments.md#announcing-an-arrival)).
-   *
-   * On, every open pull request with no verdict is eligible, which is the
-   * behaviour a team adopting this deliberately — a backlog they *want* read —
-   * asks for. It is read live rather than baked into the stamp, so turning it on
-   * later still reaches the pull requests already stamped as backlog.
-   */
-  backfill: boolean;
-  /**
    * Whether the reviewer is told to publish what it found on the pull request.
    *
    * `'none'` keeps the review inside the harness: the verdict is on the pull
@@ -218,7 +191,6 @@ export interface PrReviewPolicy {
 export const DEFAULT_PR_REVIEW: PrReviewPolicy = {
   enabled: false,
   blocking: true,
-  backfill: false,
   publish: 'none',
   modes: {},
   allowSkip: false,

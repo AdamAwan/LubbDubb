@@ -71,7 +71,6 @@ import {
   triagePendingLabel,
   type PrReviewReading,
 } from './review/prReview.js';
-import type { PrReviewIntake } from './review/intake.js';
 import { isActiveTask } from './tasks.js';
 import type {
   Decision,
@@ -188,13 +187,6 @@ export interface PrAttentionContext {
    */
   review?: PrReviewPolicy;
   prReviews?: ReadonlyMap<number, PrReview>;
-  /**
-   * The review's intake ledger, keyed by pull request. Absent reads as an empty
-   * one — no pull request within the intake — which matches what the dispatcher
-   * does with an unwired ledger, so the row and the rule stay one reading.
-   * → `src/review/intake.ts`
-   */
-  prReviewIntake?: PrReviewIntake;
   /**
    * Pull requests an external check reported already reviewed. Absent reads as
    * none, matching the dispatcher.
@@ -633,7 +625,6 @@ function reviewPolicy(ctx: PrAttentionContext): PrReviewPolicy {
 /** What the fleet recorded about this pull request, or null — never "unknown means fine". */
 const NO_REVIEWS: ReadonlyMap<number, PrReview> = new Map();
 const NO_ROUTES: ReadonlyMap<number, PrReviewRoute> = new Map();
-const NO_INTAKE: PrReviewIntake = new Map<number, boolean>();
 const NO_EXTERNALS: ReadonlySet<number> = new Set<number>();
 
 /**
@@ -647,7 +638,6 @@ function reading(pr: PullRequest, ctx: PrAttentionContext): PrReviewReading {
     {
       prReviews: ctx.prReviews ?? NO_REVIEWS,
       prReviewRoutes: ctx.prReviewRoutes ?? NO_ROUTES,
-      prReviewIntake: ctx.prReviewIntake ?? NO_INTAKE,
       prReviewedElsewhere: ctx.prReviewedElsewhere ?? NO_EXTERNALS,
     },
     pr.number,

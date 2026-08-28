@@ -935,13 +935,6 @@ CREATE TABLE IF NOT EXISTS pr_review_routes (
   decided_at TEXT NOT NULL
 );
 
--- Which open pull requests the fleet review is for, as against which were simply
--- already open when a project switched it on (see PrReviewIntakeStore). Stored
--- because neither the world nor pr_reviews answers it: a pull request nothing has
--- reviewed yet and one nothing will ever review are the same absence, so a guard
--- re-derived from the world would hand a team's whole backlog to the fleet on the
--- pulse after it was written. One row per pull request the review has seen,
--- written whether or not it is eligible — the environments arrival stamp exactly.
 -- Pull requests a check *outside* the harness reported already reviewed (see
 -- PrReviewExternalStore). Its own table rather than a pr_reviews row, because that
 -- row means "the fleet read this, and here is what it found" — writing an external
@@ -953,15 +946,6 @@ CREATE TABLE IF NOT EXISTS pr_review_externals (
   pr_number INTEGER PRIMARY KEY,
   detail    TEXT NOT NULL,      -- what said so, for the audit trail
   at        TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS pr_review_intake (
-  pr_number    INTEGER PRIMARY KEY,
-  -- 1 = the harness watched this pull request appear, so the review is for it.
-  -- 0 = it was already open when the review started asking. Taken once, on the
-  -- pulse the review first saw it, and never re-judged (INSERT OR IGNORE).
-  watched_open INTEGER NOT NULL,
-  at           TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS decisions (

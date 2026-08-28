@@ -143,8 +143,6 @@ interface RawPull {
   mergeStatus?: string;
   lastMergeSourceCommit?: { commitId?: string };
   createdBy?: { uniqueName?: string; displayName?: string };
-  /** ISO instant the PR was opened. */
-  creationDate?: string;
   reviewers?: Array<{ vote?: number; uniqueName?: string; isRequired?: boolean; isContainer?: boolean }>;
 }
 
@@ -483,7 +481,6 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
       url: `${this.projectUrl}/_git/${encodeURIComponent(this.repository)}/pullrequest/${p.pullRequestId}`,
       isDraft: p.isDraft ?? false,
       mergeStatus: p.mergeStatus ?? 'notSet',
-      openedAt: p.creationDate ?? '',
       reviewers: (p.reviewers ?? []).map((r) => ({
         uniqueName: r.uniqueName ?? '',
         vote: r.vote ?? 0,

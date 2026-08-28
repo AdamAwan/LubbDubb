@@ -176,15 +176,6 @@ export interface GhPullSummary {
    * repository with a team review rule it is one the operator's whole org shares.
    */
   assigneeLogins: string[];
-  /**
-   * `created_at` — when the pull request was opened.
-   *
-   * Read by the fleet review's intake ledger, which is what stops the review
-   * spending an agent on a team's whole open backlog the pulse they switch it on
-   * ([`src/review/intake.ts`]). It rides the list payload this already reads, so
-   * it costs no request.
-   */
-  openedAt: string;
 }
 
 /**

@@ -39,7 +39,6 @@ import { isActiveTask } from './tasks.js';
 import type { StackLandingDesk } from './stacks/landingDesk.js';
 import type { PoolDesk } from './pool/poolDesk.js';
 import type { PrReviewPolicy } from './review/policy.js';
-import { prsToStampReviewIntake } from './review/intake.js';
 import { needsFleetReview, reviewReading } from './review/prReview.js';
 import type { ReviewProber } from './review/reviewedElsewhere.js';
 
@@ -71,15 +70,10 @@ interface HarnessDeps {
    */
   prWatchLabel: string;
   /**
-   * The fleet review's policy — held here for one thing only: the intake ledger's
-   * stamping pass, which runs in {@link Harness.runCycle} below rather than in a
-   * desk of its own.
-   *
-   * **Not optional, and that is the point.** The dispatcher reads the ledger, so a
-   * stamping pass that could be left unwired would be a fleet that reviews nothing
-   * with nothing to say why — the shape `userId` has for issue pickup. A required
-   * field means the composition root cannot build a harness that reads a ledger
-   * nothing writes. → `src/review/intake.ts`
+   * The fleet review's policy — held here for one thing only: the pass below that
+   * asks the operator's `review.reviewedElsewhere` command which of this pulse's
+   * would-be reviews have already happened. Everything else about the review is
+   * decided in the rules, off the dispatch context's own copy.
    */
   review: PrReviewPolicy;
   /**
@@ -727,29 +721,9 @@ export class Harness extends EventEmitter {
           ? []
           : store.listFeatureSummaries().map((f) => ({ originRef: f.originRef, standingKey: f.standingKey }));
 
-      // The review's intake ledger, stamped before the dispatcher reads it and in
-      // the same pulse — this is a store write, not a provider one, so it carries
-      // none of the one-pulse lag the label desks above accept. Every open watched
-      // pull request the review has not judged yet gets a stamp here, eligible or
-      // not, which is the whole of how a project turning `review.enabled` on next
-      // month reviews its *next* pull request rather than its whole backlog.
-      // → `src/review/intake.ts`
-      for (const stamp of prsToStampReviewIntake(dispatchWorld.pullRequests, {
-        enabled: this.deps.review.enabled,
-        stamped: store.prReviewIntake(),
-        now: world.takenAt,
-        // Two pulses, for the reason the arrival window is two probe intervals: a
-        // pull request opened just before the pulse that first sees it is still one
-        // this harness watched, and a cycle that ran long must not turn that into a
-        // pull request nobody reads.
-        windowMs: this.deps.heartbeatIntervalMs * 2,
-      })) {
-        store.recordPrReviewIntake(stamp.prNumber, stamp.watchedOpen);
-      }
-
-      // And the other question the ledger cannot answer: has somebody *outside* the
-      // harness already read this pull request? Asked here rather than in a rule
-      // because it is a process spawn and the rules are pure and synchronous — and
+      // Has somebody *outside* the harness already read this pull request? Asked
+      // here rather than in a rule because it is a process spawn and the rules are
+      // pure and synchronous — and
       // asked only of the pull requests a review would otherwise be dispatched for
       // this pulse, which is what keeps the cost to the handful of pulses between a
       // pull request appearing and its review landing rather than one spawn per open
@@ -810,9 +784,6 @@ export class Harness extends EventEmitter {
         // reviewed.
         prReviews: store.listPrReviews(),
         prReviewRoutes: store.listPrReviewRoutes(),
-        // Read after the stamping pass above, so a pull request first seen on this
-        // pulse is judged on this pulse rather than the next.
-        prReviewIntake: store.prReviewIntake(),
         prReviewedElsewhere: store.prsReviewedElsewhere(),
         // The goal tags and the profiles they may name, so a dispatch on a pinned
         // issue is priced by the pin rather than by its rule.
@@ -961,7 +932,6 @@ export class Harness extends EventEmitter {
     const rows = {
       prReviews: new Map(store.listPrReviews().map((r) => [r.prNumber, r])),
       prReviewRoutes: new Map(store.listPrReviewRoutes().map((r) => [r.prNumber, r])),
-      prReviewIntake: store.prReviewIntake(),
       prReviewedElsewhere: store.prsReviewedElsewhere(),
     };
     for (const pr of world.pullRequests) {

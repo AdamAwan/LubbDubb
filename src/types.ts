@@ -185,25 +185,6 @@ export interface PullRequest {
   /** When the PR left the open set (ISO). Only set on a closed/merged PR. */
   closedAt?: string;
   /**
-   * When the pull request was opened (ISO) — GitHub's `created_at`, Azure's
-   * `creationDate`.
-   *
-   * Read by the fleet review's intake ledger (`src/review/intake.ts`) and by
-   * nothing else. It is the one thing that tells a pull request the harness
-   * watched appear from one that was already open on the pulse the review was
-   * switched on, which is what stops the feature reviewing a team's whole
-   * backlog the day they adopt it.
-   *
-   * **Absent means the provider does not report it**, and the intake reads that
-   * as "cannot say" rather than as old or new: such a deployment's first pulse
-   * with the review on catches its open set up silently and reviews everything
-   * from the second pulse on, which is the safe direction and the only thing the
-   * absence costs. It rides the list payload every provider already reads, so a
-   * provider that resolves it spends no request on it.
-   * → `docs/spec/07-pull-requests.md#the-backfill-guard`
-   */
-  openedAt?: string;
-  /**
    * The commit the merge produced on the base branch. Only ever set on a *merged*
    * PR, and only by a provider that reports it.
    *

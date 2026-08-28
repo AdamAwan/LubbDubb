@@ -22,7 +22,6 @@ import type {
   WorldEvent,
   WorldSnapshot,
 } from '../types.js';
-import type { PrReviewIntake } from '../review/intake.js';
 import type { AgentModels, ProfileSource } from '../agents/modelPolicy.js';
 import type { ParseResult } from './actions.js';
 import type { QueueStatus } from './admission.js';
@@ -96,21 +95,6 @@ export interface DispatchContext {
    * and the same one a triage that never answered produces.
    */
   prReviewRoutes?: PrReviewRoute[];
-  /**
-   * The review's intake ledger (`Store.prReviewIntake`) — which open pull requests
-   * the review is for, as against which were already open when a project switched
-   * it on.
-   *
-   * **Absent means an empty ledger, and therefore no pull request within the
-   * intake at all**: rule `pr-review` proposes nothing and the merge gate holds
-   * nothing. That is the safe absence in both directions at once, and it is the
-   * direction chosen deliberately — the alternative, reading an unwired ledger as
-   * "everything is ours", is the backfill this exists to prevent, arrived at by
-   * forgetting a wire. The existing suite is the floor under it: a pull request
-   * appearing while the review is on is asserted to be reviewed on that pulse, so
-   * a composition root that stopped stamping goes red rather than quiet.
-   */
-  prReviewIntake?: PrReviewIntake;
   /**
    * Pull requests an external check reported already reviewed
    * (`Store.prsReviewedElsewhere`). Absent reads as none, which is every

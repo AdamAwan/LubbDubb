@@ -576,7 +576,6 @@ export class RuleDispatcher implements Dispatcher {
       reviewCharters: this.reviewCharters,
       prReviewRoutes: new Map((ctx.prReviewRoutes ?? []).map((route) => [route.prNumber, route])),
       prReviews: new Map((ctx.prReviews ?? []).map((review) => [review.prNumber, review])),
-      prReviewIntake: ctx.prReviewIntake ?? new Map<number, boolean>(),
       prReviewedElsewhere: ctx.prReviewedElsewhere ?? new Set<number>(),
       defaultBranch: this.defaultBranch,
       prRefStyle: this.prRefStyle,

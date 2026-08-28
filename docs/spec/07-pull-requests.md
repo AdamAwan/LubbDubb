@@ -721,9 +721,7 @@ unchanged.
 
 ### When it runs
 
-**On the pulse the pull request appears** — and only for a pull request that *did* appear while the
-review was watching, which is [the backfill guard](#the-backfill-guard) below. It leads the PR concerns
-for it. A review's value
+**On the pulse the pull request appears**, and it leads the PR concerns for it. A review's value
 decays faster than any other concern's: read when the pull request opens, it is a reading of the change
 somebody proposed; read after a CI fix and a base merge, it is partly a reading of the harness's own
 work.
@@ -732,70 +730,6 @@ One exception, and it is a stand-down rather than a re-ordering: a pull request 
 review threads** is not reviewed. A reviewer has already asked for changes, so the diff is about to be
 rewritten, and a second opinion on the old one is spent for nothing. The concern comes back on the
 pulse after those threads are handled.
-
-### The backfill guard
-
-**Switching `review.enabled` on does not review the pull requests already open.** The four conditions
-above are all about a pull request's *state* and none of them is about time, so without a guard the
-pulse a project adopts this puts an agent on its entire open backlog at once. On a repository with
-twenty open pull requests that is twenty review agents queued behind `maxConcurrentAgents`, twenty
-read-only checkouts cycling through a pool of `cap + 2` slots — each hand-over a `git clean -ffdx` and
-a cold dependency install — and, with `review.blocking`, twenty pull requests held out of
-`pr-merge-ready` until each has been read. Every part of that is indistinguishable from the feature
-working: nothing errors, the queue fills with real candidates, and the held merges read as the gate
-doing its job.
-
-It is also `review.enabled`'s own argument one step later. That flag is off by default because this is
-the rule that spends an agent on every pull request, and a deployment whose bill changed by a build it
-had not asked anything of would be right to call that a fault. The day a project turns it on is that
-day again: "review what we open from here" is what a team means, and the whole backlog is not it.
-
-So `pr_review_intake` is a **per-pull-request ledger** (`src/review/intake.ts`), and it is the two
-patterns this repo already uses for exactly this problem rather than a third:
-
-- **Stored, not derived** — `pr_watch_seeds`' argument ([Watching](#watching)). "Was this pull request
-  already open when the review started asking" is in no provider payload, and the live rows cannot
-  stand in for it: a pull request nothing has reviewed *yet* and one nothing will *ever* review are the
-  same absence in `pr_reviews`. A guard that re-derived its answer from the world would hand the
-  backlog over on the next pulse — a control that silently undoes itself.
-- **Stamped either way** — the environments arrival rule
-  ([24](24-environments.md#announcing-an-arrival)). Every open pull request the review has not judged
-  gets a row on the pulse it is first seen, eligible or not. That stamp is the whole of how a project
-  turning this on next month reviews its *next* pull request rather than every one already open; a pass
-  that recorded only the eligible would leave the backlog unstamped and re-judged against a ledger that
-  had meanwhile filled up, which is the same bug one pulse late.
-
-A pull request is one the harness **watched appear** when *either* of two things holds, and it is both
-for the arrival rule's reason — each alone is wrong in one direction:
-
-- **It was opened inside the window** — `PullRequest.openedAt`, within two `heartbeatIntervalMs`. Two
-  pulses rather than one because a pull request opened just before the pulse that first sees it is
-  still one this harness watched, and a cycle that ran long must not turn that into a pull request
-  nobody reads. Without this test a deployment's first pulse with the review on has an empty ledger, so
-  a pull request the fleet opened ninety seconds ago is indistinguishable from a month-old one and
-  neither is read — the feature's whole first impression spent on the guard.
-- **The ledger was already asking before it appeared.** Without this a pull request that slipped past
-  the window — stood down for unhandled human threads, held behind a saturated cap, on cooldown —
-  falls out of the intake for good, having been the harness's to review the whole time. The stamp is
-  what makes eligibility survive a wait: taken once, on the pulse the review first saw the pull
-  request, and never re-judged against a clock that has moved on. `recordPrReviewIntake` is
-  `INSERT OR IGNORE` for that reason.
-
-`openedAt` absent is **"cannot say"**, never "old": the first test is simply unavailable, the second
-carries every pull request from the second pulse on, and a provider that does not report it costs that
-deployment its first pulse's open set and nothing else. It rides the list payload both providers
-already read, so resolving it spends no request.
-
-**Both halves of the guard, and the second is the sharp one.** `reviewSatisfied` asks the intake as
-well as `needsFleetReview` does. A pull request nothing will ever review must not be a pull request
-nothing can merge — held, the guard would trade twenty wasted reviews for twenty wedged branches,
-which is the same harm wearing the fix, and the only symptom a queue of held merges that reads as the
-gate working.
-
-`review.backfill: true` is the opt-in for a team that *wants* its backlog read. It is a **live read**
-at the point of asking rather than baked into the stamp, so turning it on next week still reaches the
-pull requests already stamped as backlog — baked in, the switch would be inert on exactly the pull
-requests it was reached for.
 
 ### A review that happened somewhere else
 
@@ -826,6 +760,25 @@ failing since the day it was configured is otherwise indistinguishable from one 
 external gate as one would put a verdict in the cockpit, the Decision log and the next agent's prompt
 that nothing in this harness performed. The other two verdicts are re-asked next pulse, because a gate
 that has not passed yet may pass later.
+
+**It is also how a team adopts the feature without reviewing their backlog.** Switching
+`review.enabled` on makes every open pull request with no verdict eligible at once — `needsFleetReview`
+has no condition about time — so a repository with twenty of them gets twenty review agents queued
+behind `maxConcurrentAgents`, twenty read-only checkouts cycling through a pool of `cap + 2` slots (each
+hand-over a `git clean -ffdx` and a cold dependency install), and, with `review.blocking`, twenty pull
+requests held out of `pr-merge-ready` until each has been read.
+
+A cutover **guard in the harness** was considered and is deliberately **not** implemented. It would
+have been a per-pull-request ledger stamping what was open on the pulse the review started asking — and
+its discriminating work happens exactly once, at adoption, after which it stamps every pull request
+eligible for ever: a table, a provider field for the pull request's age, and a predicate arm, all
+carrying a one-time problem. This command already answers the same question, permanently, and answers
+it *better* at the cutover, because the operator knows their own and the harness can only guess a
+window. `LUBBDUBB_PR` is in the environment, so the whole guard is `[ "$LUBBDUBB_PR" -lt 677 ]`,
+composed with whatever the real policy query is — a cutoff a team chose, at a precision they know,
+rather than two pulses the harness picked. What it does not soften is a backlog nobody has reviewed at
+all, and that is the honest division: the fleet reading twenty unread diffs is the feature working, and
+deciding to spend that is the operator's call, not the harness's.
 
 **Asked in the pulse, not in a rule**, since it is a process spawn and the rules are pure and
 synchronous — and asked only of the pull requests a review is _otherwise due for_ on that pulse, which
@@ -891,11 +844,11 @@ Rule `pr-merge-ready` gains one clause (`reviewSatisfied`, `src/review/prReview.
 `review.blocking` on, a pull request with **no** review row is not merge-ready. Unknown is never clear.
 
 **Every arm `needsFleetReview` stands down on releases this gate too**, and the symmetry is what makes
-each of them a decision rather than a wedge: a pull request outside the [intake](#the-backfill-guard),
-one the triage [skipped](#skipping-a-review-altogether), and one
-[already read elsewhere](#a-review-that-happened-somewhere-else). None has a review coming, so holding
-any of them would be the gate waiting on something that will never arrive. `PrReviewReading` is the one
-bundle all four arms travel in, so an arm added later reaches both predicates or does not compile.
+each of them a decision rather than a wedge: a pull request the triage
+[skipped](#skipping-a-review-altogether), and one
+[already read elsewhere](#a-review-that-happened-somewhere-else). Neither has a review coming, so
+holding it would be the gate waiting on something that will never arrive. `PrReviewReading` is the one
+bundle every arm travels in, so an arm added later reaches both predicates or does not compile.
 
 **It asks whether the review happened, not whether it liked what it saw.** With one round there is
 nothing that could clear a `findings` verdict, so gating on `clear` would wedge every pull request the
@@ -973,9 +926,8 @@ key ([02](02-configuration.md#the-project-layer)), so all of it is committed onc
 | --------------------------- | -------- | --------------------------------------------------------------------------------------------------------------- |
 | `review.enabled`            | `false`  | Whether the review runs at all. It switches both rules in and out of the pipeline.                              |
 | `review.blocking`           | `true`   | Whether an unreviewed pull request is held out of the merge gate. Off records the verdict and gates nothing.    |
-| `review.backfill`           | `false`  | Whether switching it on reviews the pull requests already open. Off reviews only what the harness watches appear. |
 | `review.allowSkip`          | `false`  | Whether the triage may answer that a pull request needs no review at all. It also turns the triage on by itself. |
-| `review.reviewedElsewhere`  | `null`   | A command asking whether a pull request has already been reviewed outside the harness. Exit 0 = yes; anything else leaves the fleet reviewing. |
+| `review.reviewedElsewhere`  | `null`   | A command asking whether a pull request has already been reviewed outside the harness — and the way a team adopts this without reviewing their backlog. Exit 0 = yes; anything else leaves the fleet reviewing. |
 | `review.publish`            | `'none'` | Whether the reviewer is told to post its findings on the pull request, through `reply_to_review` and only that. |
 | `review.modes`              | `{}`     | The ways this project reviews: `charterFile` and `profile` each. Two or more switches the triage on.            |
 | `review.defaultMode`        | `null`   | The mode a review falls back to when nothing routed it. Null takes the first declared.                          |
@@ -988,6 +940,7 @@ key ([02](02-configuration.md#the-project-layer)), so all of it is committed onc
     "routingCharterFile": "docs/review/routing.md",
     "defaultMode": "deep",
     "allowSkip": true,
+    "reviewedElsewhere": "az repos pr policy list --id \"$LUBBDUBB_PR\" --query \"[?configuration.type.displayName=='Minimum number of reviewers' && status=='approved']\" -o tsv | grep -q .",
     "modes": {
       "deep": { "charterFile": "docs/review/deep.md", "profile": "heavy" },
       "quick": { "charterFile": "docs/review/quick.md", "profile": "light" }

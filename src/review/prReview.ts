@@ -1,6 +1,5 @@
 import type { PrReview, PrReviewRoute, PullRequest } from '../types.js';
 import type { PrReviewPolicy } from './policy.js';
-import { withinReviewIntake, type PrReviewIntake } from './intake.js';
 
 /**
  * The fleet's own read of a pull request, before a person is asked for theirs.
@@ -163,14 +162,7 @@ export function resolvedReviewMode(route: PrReviewRoute | null, policy: PrReview
  * a skip at all (`review.allowSkip`). It is the one answer the triage can give
  * that waives the read rather than sizing it, and `reviewSatisfied` honours the
  * same row so the merge is not held for a review nobody is coming to give.
- *
- * **A pull request already open when the review was switched on is not the
- * review's.** The other conditions are all about the pull request's state and
- * none of them is about time, so without this the pulse a project sets
- * `review.enabled` puts an agent on its entire open backlog at once. The intake
- * ledger is what separates the two (`src/review/intake.ts`), and `reviewSatisfied`
- * asks the same question so that a pull request nothing will review is not a pull
- * request nothing can merge.
+
  *
  * **A pull request with unhandled human review threads is skipped**, and skipped
  * rather than ordered below them: a reviewer already asked for changes, so the
@@ -185,10 +177,6 @@ export function needsFleetReview(pr: PullRequest, reading: PrReviewReading, poli
   if (reviewSkipped(reading.route, policy)) return false;
   // Somebody outside the harness already read it.
   if (reading.elsewhere.has(pr.number)) return false;
-  // A pull request that was already open when the review was switched on is not
-  // the review's, and this is the only condition here that is about *time* — see
-  // `src/review/intake.ts` for why the others cannot answer it.
-  if (!withinReviewIntake(pr, reading.intake, policy)) return false;
   return pr.unresolvedComments.every((c) => c.handled);
 }
 
@@ -206,23 +194,22 @@ export function needsFleetReview(pr: PullRequest, reading: PrReviewReading, poli
  * looked at; the judgement stays a human's, exactly as it was.
  *
  * Unknown is never clear: a pull request the review is for and has no row is
- * held. A pull request the review is **not** for is another matter — outside the
- * intake, skipped by the triage, or already read somewhere else — and holding one
- * of those would be each guard wedging the merges it was written to protect.
+ * held. A pull request the review is **not** for is another matter — skipped by
+ * the triage, or already read somewhere else — and holding one of those would be
+ * each of those decisions wedging the very merge it was made about.
  */
 export function reviewSatisfied(pr: PullRequest, reading: PrReviewReading, policy: PrReviewPolicy): boolean {
   if (!policy.enabled || !policy.blocking) return true;
   // **Every arm `needsFleetReview` stands down on releases the gate here**, and
   // that symmetry is the whole of what makes each of them a decision rather than a
   // wedge: a pull request nothing will *ever* review must not be a pull request
-  // nothing can merge. Held one-sidedly, the guard would trade twenty wasted
-  // reviews for twenty branches that can never land — the same harm wearing the
-  // fix, and the only symptom a queue of held merges that reads as the gate
-  // working. So a skip, an external review and a pull request outside the intake
-  // all pass; the gate holds only where a review is genuinely still coming.
+  // nothing can merge. Held one-sidedly, a team's whole open set could be stood
+  // down from review and held out of the merge gate at the same time, and the only
+  // symptom would be a queue of held merges that reads as the gate working. So a
+  // skip and an external review both pass; the gate holds only where the fleet's
+  // own review is genuinely still coming.
   if (reviewSkipped(reading.route, policy)) return true;
   if (reading.elsewhere.has(pr.number)) return true;
-  if (!withinReviewIntake(pr, reading.intake, policy)) return true;
   return reading.review !== null;
 }
 
@@ -334,8 +321,6 @@ export interface PrReviewReading {
   review: PrReview | null;
   /** How the triage said to read it — or that it should not be read at all. */
   route: PrReviewRoute | null;
-  /** Which pull requests the review is *for* — the backfill guard. → `src/review/intake.ts` */
-  intake: PrReviewIntake;
   /**
    * Pull requests a check outside the harness reported already reviewed
    * (`pr_review_externals`). Empty where the operator configured no check, which is
@@ -357,7 +342,6 @@ export function reviewReading(
   rows: {
     prReviews: ReadonlyMap<number, PrReview>;
     prReviewRoutes: ReadonlyMap<number, PrReviewRoute>;
-    prReviewIntake: PrReviewIntake;
     prReviewedElsewhere: ReadonlySet<number>;
   },
   prNumber: number,
@@ -365,7 +349,6 @@ export function reviewReading(
   return {
     review: rows.prReviews.get(prNumber) ?? null,
     route: rows.prReviewRoutes.get(prNumber) ?? null,
-    intake: rows.prReviewIntake,
     elsewhere: rows.prReviewedElsewhere,
   };
 }
