@@ -76,6 +76,39 @@ export function routesBetweenModes(policy: PrReviewPolicy): boolean {
 }
 
 /**
+ * Does the triage run at all?
+ *
+ * Two questions can need it, and either alone is enough. **Which mode** is a
+ * decision only where the project declared more than one ({@link
+ * routesBetweenModes}). **Whether to review** is a decision wherever the project
+ * allowed a skip — and it is one even with a single declared mode, since "read it
+ * that way" and "do not read it" are two answers. So a project that declares one
+ * mode and allows skipping gets a triage, where before this it got none.
+ *
+ * Every rule asks this rather than `routesBetweenModes`, which stays the narrower
+ * fact the triage's own prompt is built from: a rule reading the mode count would
+ * silently give a skip-only project no triage, and every pull request the default
+ * mode.
+ */
+export function triageRuns(policy: PrReviewPolicy): boolean {
+  return routesBetweenModes(policy) || policy.allowSkip;
+}
+
+/**
+ * Did the triage decide this pull request needs no review?
+ *
+ * Asked by `needsFleetReview` *and* by `reviewSatisfied`, which is the whole of
+ * what makes a skip a decision rather than a wedge: nothing is dispatched, and
+ * nothing is held. Honoured only where the project still allows it, so an
+ * operator who turns `allowSkip` back off has every standing skip fall back to a
+ * review — the safe direction, and the same one a route naming a removed mode
+ * takes in {@link resolvedReviewMode}.
+ */
+export function reviewSkipped(route: PrReviewRoute | null, policy: PrReviewPolicy): boolean {
+  return policy.allowSkip && route !== null && route.skipped;
+}
+
+/**
  * The mode a review runs in when nothing chose one.
  *
  * This is the fail-open target, and everything about it points the same way: a
@@ -118,15 +151,32 @@ export function resolvedReviewMode(route: PrReviewRoute | null, policy: PrReview
  * avoid. The SHA is still recorded, because *what was read* is worth saying; it
  * simply decides nothing.
  *
+ * **A pull request something outside the harness has already reviewed is not
+ * reviewed again**, where the project configured a check for it
+ * (`review.reviewedElsewhere`). `pr_reviews` can only answer whether the *fleet*
+ * read it, which on a team that already has a reviewer is the wrong question —
+ * and `reviewSatisfied` reads the same row, so the merge is not held for a review
+ * that is already done.
+ *
+ * **A pull request the triage skipped is not reviewed**, where the project allows
+ * a skip at all (`review.allowSkip`). It is the one answer the triage can give
+ * that waives the read rather than sizing it, and `reviewSatisfied` honours the
+ * same row so the merge is not held for a review nobody is coming to give.
+
+ *
  * **A pull request with unhandled human review threads is skipped**, and skipped
  * rather than ordered below them: a reviewer already asked for changes, so the
  * diff is about to be rewritten and a second opinion on the old one is spent for
  * nothing. It comes back on the next pulse after the threads are handled — the
  * work is not lost, only deferred to a diff that is going to survive.
  */
-export function needsFleetReview(pr: PullRequest, review: PrReview | null, policy: PrReviewPolicy): boolean {
+export function needsFleetReview(pr: PullRequest, reading: PrReviewReading, policy: PrReviewPolicy): boolean {
   if (!policy.enabled) return false;
-  if (pr.merged || review !== null) return false;
+  if (pr.merged || reading.review !== null) return false;
+  // The triage's own answer that nothing needs to read this one.
+  if (reviewSkipped(reading.route, policy)) return false;
+  // Somebody outside the harness already read it.
+  if (reading.elsewhere.has(pr.number)) return false;
   return pr.unresolvedComments.every((c) => c.handled);
 }
 
@@ -143,11 +193,24 @@ export function needsFleetReview(pr: PullRequest, review: PrReview | null, polic
  * `pr-merge-ready` already requires. The gate's job is to stop a merge nobody
  * looked at; the judgement stays a human's, exactly as it was.
  *
- * Unknown is never clear: a pull request with no row is held.
+ * Unknown is never clear: a pull request the review is for and has no row is
+ * held. A pull request the review is **not** for is another matter — skipped by
+ * the triage, or already read somewhere else — and holding one of those would be
+ * each of those decisions wedging the very merge it was made about.
  */
-export function reviewSatisfied(review: PrReview | null, policy: PrReviewPolicy): boolean {
+export function reviewSatisfied(pr: PullRequest, reading: PrReviewReading, policy: PrReviewPolicy): boolean {
   if (!policy.enabled || !policy.blocking) return true;
-  return review !== null;
+  // **Every arm `needsFleetReview` stands down on releases the gate here**, and
+  // that symmetry is the whole of what makes each of them a decision rather than a
+  // wedge: a pull request nothing will *ever* review must not be a pull request
+  // nothing can merge. Held one-sidedly, a team's whole open set could be stood
+  // down from review and held out of the merge gate at the same time, and the only
+  // symptom would be a queue of held merges that reads as the gate working. So a
+  // skip and an external review both pass; the gate holds only where the fleet's
+  // own review is genuinely still coming.
+  if (reviewSkipped(reading.route, policy)) return true;
+  if (reading.elsewhere.has(pr.number)) return true;
+  return reading.review !== null;
 }
 
 /** How the wait reads on a pull request's row while the review is still to come. */
@@ -188,6 +251,33 @@ export function publishNote(publish: PrReviewPolicy['publish']): string {
 }
 
 /**
+ * What the triage is told about skipping, appended rather than interpolated for
+ * the reason every addition to a prompt is.
+ *
+ * Empty where the project did not allow it, so a triage on a deployment that
+ * never asked for skipping is not offered the idea at all — the same shape
+ * {@link publishNote} uses for the opposite case, and the same reason: an agent
+ * told nothing about a channel does not go and use it anyway.
+ *
+ * The wording pushes *against* the skip, deliberately. A model asked to size a
+ * read and handed a "no read needed" option will reach for it more often than a
+ * team would, and the cost is asymmetric in exactly the way the fail-open default
+ * already accounts for: over-reading a trivial change costs minutes, and a skip is
+ * the one answer that also lets the merge through.
+ */
+export function skipNote(policy: PrReviewPolicy): string {
+  if (!policy.allowSkip) return '';
+  return (
+    '\n\nThis project also lets you decide that a pull request needs **no review at all** — pass ' +
+    '`skip: true` to `review_route` instead of a mode. Reach for it only where reading the diff could ' +
+    'not change anything: a version bump, a regenerated lockfile, a typo in a comment or a string. ' +
+    'Anything that changes behaviour, however small the diff, gets a mode. A skip also releases the ' +
+    'merge gate, so it is the one answer of yours that lets a change through unread — and your reason ' +
+    'is the only account of why, for whoever finds it later.\n'
+  );
+}
+
+/**
  * The project's own words, appended verbatim under a heading that says whose they
  * are — a mode's charter for the reviewer, the routing charter for the triage.
  *
@@ -216,6 +306,53 @@ export function modeCharterHeading(mode: string | null): string {
  * ever phrased — so the files are read once at boot (`src/review/charter.ts`) and
  * what reaches a stage is what they said.
  */
+/**
+ * Everything the review's two questions are asked of, gathered once per pulse.
+ *
+ * A bundle rather than four arguments, and the reason is the file's own: the rules,
+ * the lens and the merge gate all ask {@link needsFleetReview} and {@link
+ * reviewSatisfied}, and every arm those predicates gain has to reach *all* of them
+ * or the two drift. As positional arguments each new arm is four call sites to
+ * remember; as a field it is one type, and a caller that has not been updated does
+ * not compile.
+ */
+export interface PrReviewReading {
+  /** The fleet's own verdict, where it has one. */
+  review: PrReview | null;
+  /** How the triage said to read it — or that it should not be read at all. */
+  route: PrReviewRoute | null;
+  /**
+   * Pull requests a check outside the harness reported already reviewed
+   * (`pr_review_externals`). Empty where the operator configured no check, which is
+   * every deployment before that existed.
+   */
+  elsewhere: ReadonlySet<number>;
+}
+
+/**
+ * What the four rows say about one pull request, gathered from whatever holds
+ * them.
+ *
+ * Structural rather than typed to `StageContext` so the two rules, the lens and
+ * anything later all gather the reading the same way: the four field names are
+ * spelled once here, and a caller that has one of them under a different name has
+ * to say so rather than quietly assemble a reading with an arm missing.
+ */
+export function reviewReading(
+  rows: {
+    prReviews: ReadonlyMap<number, PrReview>;
+    prReviewRoutes: ReadonlyMap<number, PrReviewRoute>;
+    prReviewedElsewhere: ReadonlySet<number>;
+  },
+  prNumber: number,
+): PrReviewReading {
+  return {
+    review: rows.prReviews.get(prNumber) ?? null,
+    route: rows.prReviewRoutes.get(prNumber) ?? null,
+    elsewhere: rows.prReviewedElsewhere,
+  };
+}
+
 export interface PrReviewCharters {
   /** How to choose a mode, for the triage. Null where the project names no file. */
   routing: string | null;

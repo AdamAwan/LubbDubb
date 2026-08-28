@@ -13,8 +13,17 @@ import {
   needsFleetReview,
   resolvedReviewMode,
   reviewSatisfied,
+  reviewSkipped,
   routesBetweenModes,
+  triageRuns,
 } from '../src/review/prReview.js';
+import { FakeReviewProber } from '../src/review/fakeReviewProber.js';
+import type { PrReviewReading } from '../src/review/prReview.js';
+
+/** A reading with only what a case is about set; every other arm reads as "no row". */
+function reading(over: Partial<PrReviewReading> = {}): PrReviewReading {
+  return { review: null, route: null, elsewhere: new Set(), ...over };
+}
 import { DEFAULT_PR_REVIEW } from '../src/review/policy.js';
 import type { PrReview, PrReviewRoute, PullRequest } from '../src/types.js';
 import { findTask } from './support/tasks.js';
@@ -173,14 +182,14 @@ test('the predicates are one reading: unknown is never clear, and off gates noth
     reviewedAt: '2026-01-01T00:00:00.000Z',
   };
 
-  assert.equal(needsFleetReview(pr, null, on), true);
-  assert.equal(needsFleetReview(pr, review, on), false);
-  assert.equal(needsFleetReview(pr, null, DEFAULT_PR_REVIEW), false, 'off proposes nothing');
+  assert.equal(needsFleetReview(pr, reading(), on), true);
+  assert.equal(needsFleetReview(pr, reading({ review }), on), false);
+  assert.equal(needsFleetReview(pr, reading(), DEFAULT_PR_REVIEW), false, 'off proposes nothing');
 
-  assert.equal(reviewSatisfied(null, on), false, 'a pull request nobody read is held');
-  assert.equal(reviewSatisfied(review, on), true);
-  assert.equal(reviewSatisfied(null, { ...on, blocking: false }), true, 'record-only gates nothing');
-  assert.equal(reviewSatisfied(null, DEFAULT_PR_REVIEW), true, 'off is the build without the feature');
+  assert.equal(reviewSatisfied(pr, reading(), on), false, 'a pull request nobody read is held');
+  assert.equal(reviewSatisfied(pr, reading({ review }), on), true);
+  assert.equal(reviewSatisfied(pr, reading(), { ...on, blocking: false }), true, 'record-only gates nothing');
+  assert.equal(reviewSatisfied(pr, reading(), DEFAULT_PR_REVIEW), true, 'off is the build without the feature');
 
   assert.equal(charterNote(null, 'Heading'), '');
   assert.equal(charterNote('   ', 'Heading'), '', 'an empty file is no charter, not an empty heading');
@@ -204,7 +213,13 @@ test('with two modes declared, the triage runs first and the review waits for it
     'dispatching now would price the review on a mode nothing has chosen yet',
   );
 
-  system.store.recordPrReviewRoute({ prNumber: 12, mode: 'quick', reason: 'A copy change.', agentId: null });
+  system.store.recordPrReviewRoute({
+    prNumber: 12,
+    mode: 'quick',
+    skipped: false,
+    reason: 'A copy change.',
+    agentId: null,
+  });
   await system.harness.runCycle('manual');
 
   const review = findTask(system.store, (t) => t.originRef === 'pr:12:review');
@@ -234,7 +249,13 @@ test('the mode carries its profile onto the dispatch', async () => {
     modes: { deep: { charterFile: null, profile: 'heavy' }, quick: { charterFile: null, profile: 'light' } },
   });
   system.connector.inject({ kind: 'new_pr', number: 14, title: 'A change', branch: 'feature-14' });
-  system.store.recordPrReviewRoute({ prNumber: 14, mode: 'quick', reason: 'A copy change.', agentId: null });
+  system.store.recordPrReviewRoute({
+    prNumber: 14,
+    mode: 'quick',
+    skipped: false,
+    reason: 'A copy change.',
+    agentId: null,
+  });
   await system.harness.runCycle('manual');
 
   const review = findTask(system.store, (t) => t.originRef === 'pr:14:review');
@@ -260,6 +281,7 @@ test('routing predicates: one mode is no choice, and an unknown route reads as t
   const route = (mode: string): PrReviewRoute => ({
     prNumber: 1,
     mode,
+    skipped: false,
     reason: 'because',
     agentId: null,
     decidedAt: '2026-01-01T00:00:00.000Z',
@@ -315,5 +337,220 @@ test('a triage that spent its attempts fails open: the review runs the default m
   // Onto the thorough mode, not the cheap one: over-reading a small change costs
   // minutes, under-reading a dangerous one costs the defect nobody caught.
   assert.match(review!.title, /\(deep\)$/);
+  system.store.close();
+});
+
+// --------------------------------------------------------------------------
+// Skipping a review altogether
+// --------------------------------------------------------------------------
+
+test('allowSkip turns the triage on by itself: one mode plus a skip is two answers', async () => {
+  const { system } = build({
+    enabled: true,
+    allowSkip: true,
+    modes: { deep: { charterFile: null, profile: null } },
+  });
+  system.connector.inject({ kind: 'new_pr', number: 30, title: 'A change', branch: 'feature-30' });
+  await system.harness.runCycle('manual');
+
+  const triage = findTask(system.store, (t) => t.originRef === 'pr:30:review-triage');
+  assert.ok(triage, '"read it that way" and "do not read it" is a decision, however many modes there are');
+  // Appended, never interpolated: an override that never learned about the option
+  // would drop every word of it silently.
+  assert.match(triage!.prompt, /needs \*\*no review at all\*\*/);
+  assert.match(triage!.prompt, /`skip: true`/);
+  assert.equal(
+    findTask(system.store, (t) => t.originRef === 'pr:30:review'),
+    undefined,
+    'dispatching now would spend a review the triage was about to waive',
+  );
+  system.store.close();
+});
+
+test('a skipped pull request is not reviewed, and not held out of the merge gate either', async () => {
+  const { system } = build({
+    enabled: true,
+    allowSkip: true,
+    modes: { deep: { charterFile: null, profile: null } },
+  });
+  system.connector.inject({ kind: 'new_pr', number: 31, title: 'Bump the version', branch: 'feature-31' });
+  system.connector.inject({ kind: 'ci_passed', prNumber: 31 });
+  system.connector.inject({ kind: 'pr_approved', prNumber: 31 });
+  system.connector.inject({ kind: 'pr_mergeable', prNumber: 31, mergeable: true, mergeableState: 'clean' });
+  await system.harness.runCycle('manual');
+  assert.equal(
+    system.store.listDecisions().filter((d) => d.action.type === 'merge_pr').length,
+    0,
+    'held while the triage is still deciding',
+  );
+
+  system.store.recordPrReviewRoute({
+    prNumber: 31,
+    mode: '',
+    skipped: true,
+    reason: 'A version bump in package.json and its lockfile; reading the diff cannot change anything.',
+    agentId: null,
+  });
+  await system.harness.runCycle('manual');
+
+  assert.equal(
+    findTask(system.store, (t) => t.originRef === 'pr:31:review'),
+    undefined,
+    'the triage said nothing needs to read this one',
+  );
+  assert.equal(
+    system.store.listDecisions().filter((d) => d.action.type === 'merge_pr').length,
+    1,
+    'a skip is a decision, so it releases the gate — otherwise the cheapest answer wedges the branch',
+  );
+  system.store.close();
+});
+
+test('the skip predicates: off is not on offer, and silence is never a skip', () => {
+  const pr = { number: 5, merged: false, unresolvedComments: [] } as unknown as PullRequest;
+  const one = { deep: { charterFile: null, profile: null } };
+  const off = { ...DEFAULT_PR_REVIEW, enabled: true, modes: one };
+  const on = { ...off, allowSkip: true };
+  const skip: PrReviewRoute = {
+    prNumber: 5,
+    mode: '',
+    skipped: true,
+    reason: 'A lockfile regeneration.',
+    agentId: null,
+    decidedAt: '2026-01-01T00:00:00.000Z',
+  };
+
+  assert.equal(triageRuns(off), false, 'one mode and no skip is nothing to decide');
+  assert.equal(triageRuns(on), true);
+  assert.equal(triageRuns({ ...off, modes: { ...one, quick: { charterFile: null, profile: null } } }), true);
+
+  assert.equal(reviewSkipped(null, on), false, 'the fail-open direction is a review, never a skip');
+  assert.equal(reviewSkipped(skip, on), true);
+  assert.equal(
+    reviewSkipped(skip, off),
+    false,
+    'an operator who turns allowSkip back off has every standing skip fall back to a review',
+  );
+
+  assert.equal(needsFleetReview(pr, reading({ route: skip }), on), false);
+  assert.equal(reviewSatisfied(pr, reading({ route: skip }), on), true);
+  assert.equal(needsFleetReview(pr, reading({ route: skip }), off), true, 'and the review comes back with it');
+  assert.equal(reviewSatisfied(pr, reading({ route: skip }), off), false);
+});
+
+// --------------------------------------------------------------------------
+// A review that happened somewhere else
+// --------------------------------------------------------------------------
+
+/** The build above, plus the operator's external check and a scripted prober. */
+function buildWithProber(verdicts: Record<number, 'reviewed' | 'not-reviewed' | 'unknown'>) {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
+  const prober = new FakeReviewProber(verdicts);
+  const config = loadConfig({
+    selfUpdate: { enabled: false } as never,
+    labelPrefix: '',
+    dbPath: ':memory:',
+    agentMode: 'raw',
+    deskRoot: join(dir, 'desk'),
+    worktreeRoot: join(dir, 'wt'),
+    heartbeatIntervalMs: 999_999,
+    maxConcurrentAgents: 3,
+    // Never run: `reviewProber` is injected, which is the whole point of the seam —
+    // the real one would spawn a shell on whoever is running the suite.
+    review: { ...DEFAULT_PR_REVIEW, enabled: true, reviewedElsewhere: 'exit 0' },
+  });
+  const system = buildSystem(config, {
+    backend: new FakePtyBackend(),
+    sink: undefined,
+    worktrees: new FakeWorktreeManager(),
+    reviewProber: prober,
+  });
+  return { system, prober };
+}
+
+test('a pull request reviewed elsewhere is not reviewed again, and not held either', async () => {
+  const { system, prober } = buildWithProber({ 40: 'reviewed' });
+  system.connector.inject({ kind: 'new_pr', number: 40, title: 'A change', branch: 'feature-40' });
+  system.connector.inject({ kind: 'ci_passed', prNumber: 40 });
+  system.connector.inject({ kind: 'pr_approved', prNumber: 40 });
+  system.connector.inject({ kind: 'pr_mergeable', prNumber: 40, mergeable: true, mergeableState: 'clean' });
+  await system.harness.runCycle('manual');
+
+  assert.deepEqual(prober.asked, [40]);
+  assert.equal(
+    findTask(system.store, (t) => t.originRef === 'pr:40:review'),
+    undefined,
+    'somebody has read this diff; a second opinion is one nobody asked for',
+  );
+  // The same sharp half the skip has: a pull request nothing will review must not
+  // be one nothing can merge.
+  assert.equal(system.store.listDecisions().filter((d) => d.action.type === 'merge_pr').length, 1);
+
+  // Recorded, so the command is not spawned for it again.
+  await system.harness.runCycle('manual');
+  assert.deepEqual(prober.asked, [40], 'the answer is stored, so the shell-out happens once');
+  system.store.close();
+});
+
+test('a check that says no is asked again, and one that says nothing leaves the fleet reviewing', async () => {
+  // 'not-reviewed' is a real answer; 'unknown' is a command that broke. Both must
+  // leave the review to the fleet — folding either into "already reviewed" would
+  // switch the whole feature off on the deployments whose gate broke.
+  const { system, prober } = buildWithProber({ 41: 'not-reviewed', 42: 'unknown' });
+  system.connector.inject({ kind: 'new_pr', number: 41, title: 'A change', branch: 'feature-41' });
+  system.connector.inject({ kind: 'new_pr', number: 42, title: 'Another', branch: 'feature-42' });
+  await system.harness.runCycle('manual');
+
+  assert.ok(findTask(system.store, (t) => t.originRef === 'pr:41:review'));
+  assert.ok(findTask(system.store, (t) => t.originRef === 'pr:42:review'));
+  assert.deepEqual(prober.asked, [41, 42]);
+  // A check failing since the day it was configured is otherwise indistinguishable
+  // from one that keeps answering "no" — the feature quietly doing nothing.
+  assert.ok(
+    system.store.listErrors(10).some((e) => /reviewedElsewhere check for PR 42 said nothing/.test(e.message)),
+    'a verdict that said nothing is on the error log, never swallowed',
+  );
+  assert.equal(
+    system.store.listErrors(10).filter((e) => /PR 41/.test(e.message)).length,
+    0,
+    'a real "no" is an answer, not a fault',
+  );
+  system.store.close();
+});
+
+test('the check is asked only of the pull requests a review is otherwise due for', async () => {
+  const { system, prober } = buildWithProber({});
+  // 43 stands down behind a human thread and 44 has a verdict already. Neither
+  // would be dispatched, so neither costs a process spawn.
+  system.connector.inject({ kind: 'new_pr', number: 43, title: 'A change', branch: 'feature-43' });
+  system.connector.inject({ kind: 'pr_comment', prNumber: 43, author: 'alice', body: 'try another approach' });
+  system.connector.inject({ kind: 'new_pr', number: 44, title: 'Read already', branch: 'feature-44' });
+  system.store.recordPrReview({
+    prNumber: 44,
+    headSha: null,
+    verdict: 'clear',
+    summary: 'ok',
+    findings: [],
+    agentId: null,
+  });
+  system.connector.inject({ kind: 'new_pr', number: 45, title: 'New work', branch: 'feature-45' });
+  await system.harness.runCycle('manual');
+
+  assert.deepEqual(
+    prober.asked,
+    [45],
+    'one spawn per would-be review, not one per open pull request — the reading the rules use decides',
+  );
+  system.store.close();
+});
+
+test('no command configured spawns nothing at all', async () => {
+  const { system } = build({ enabled: true });
+  system.connector.inject({ kind: 'new_pr', number: 46, title: 'A change', branch: 'feature-46' });
+  await system.harness.runCycle('manual');
+  assert.ok(
+    findTask(system.store, (t) => t.originRef === 'pr:46:review'),
+    'every deployment before this existed, unchanged',
+  );
   system.store.close();
 });

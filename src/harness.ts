@@ -38,6 +38,9 @@ import type { UpcomingPlan } from './wire.js';
 import { isActiveTask } from './tasks.js';
 import type { StackLandingDesk } from './stacks/landingDesk.js';
 import type { PoolDesk } from './pool/poolDesk.js';
+import type { PrReviewPolicy } from './review/policy.js';
+import { needsFleetReview, reviewReading } from './review/prReview.js';
+import type { ReviewProber } from './review/reviewedElsewhere.js';
 
 /**
  * How many accounts of each kind the dispatch context carries.
@@ -66,6 +69,25 @@ interface HarnessDeps {
    * is worked, which is the no-prefix and test posture.
    */
   prWatchLabel: string;
+  /**
+   * The fleet review's policy — held here for one thing only: the pass below that
+   * asks the operator's `review.reviewedElsewhere` command which of this pulse's
+   * would-be reviews have already happened. Everything else about the review is
+   * decided in the rules, off the dispatch context's own copy.
+   */
+  review: PrReviewPolicy;
+  /**
+   * Asks something outside the harness whether a pull request has already been
+   * reviewed (`review.reviewedElsewhere`).
+   *
+   * Optional, unlike {@link review} itself, and the asymmetry is deliberate: the
+   * intake stamp is a store write the dispatcher *depends* on, so a harness that
+   * could be built without it would review nothing. This is a shell-out to an
+   * operator's command, and absent it simply asks nobody — which is exactly what
+   * every deployment that configured no command does, and what a test must do
+   * rather than spawn a shell on the developer's machine.
+   */
+  reviewProber?: ReviewProber;
   /**
    * What a dispatch needs to resolve the profile its origin is pinned to (issue
    * #342) — passed straight through to the dispatch context. Absent = no
@@ -699,6 +721,15 @@ export class Harness extends EventEmitter {
           ? []
           : store.listFeatureSummaries().map((f) => ({ originRef: f.originRef, standingKey: f.standingKey }));
 
+      // Has somebody *outside* the harness already read this pull request? Asked
+      // here rather than in a rule because it is a process spawn and the rules are
+      // pure and synchronous — and
+      // asked only of the pull requests a review would otherwise be dispatched for
+      // this pulse, which is what keeps the cost to the handful of pulses between a
+      // pull request appearing and its review landing rather than one spawn per open
+      // pull request for ever. → `src/review/reviewedElsewhere.ts`
+      await this.askReviewedElsewhere(store, dispatchWorld);
+
       const plan = await this.deps.dispatcher.decide({
         world: dispatchWorld,
         // Which of `world.issues` above are retained runs rather than the tracker's
@@ -753,6 +784,7 @@ export class Harness extends EventEmitter {
         // reviewed.
         prReviews: store.listPrReviews(),
         prReviewRoutes: store.listPrReviewRoutes(),
+        prReviewedElsewhere: store.prsReviewedElsewhere(),
         // The goal tags and the profiles they may name, so a dispatch on a pinned
         // issue is priced by the pin rather than by its rule.
         modelPins: this.deps.modelPins,
@@ -876,6 +908,48 @@ export class Harness extends EventEmitter {
    * baseline on. One read, handed to both, so the two cannot come to be looking at
    * different pulses.
    */
+  /**
+   * Ask the operator's check which of this pulse's would-be reviews have already
+   * happened elsewhere, and record the ones that have.
+   *
+   * **Only the pull requests a review is otherwise due for**, which is the whole
+   * of the cost control: the reading is built the way the rules build it, so a
+   * pull request already reviewed, skipped, outside the intake or standing down
+   * behind a human thread is never asked about. `reviewed` is stored and the pull
+   * request is never asked again; the other two verdicts are not, because a gate
+   * that has not passed yet may pass later.
+   *
+   * A verdict that said **nothing** goes on the error log and leaves the fleet
+   * reviewing. Recorded rather than swallowed because a check that has been
+   * failing since the day it was configured is otherwise indistinguishable from
+   * one that keeps answering "no" — the feature quietly doing nothing, which is
+   * the shape this whole change is about.
+   */
+  private async askReviewedElsewhere(store: HarnessDeps['store'], world: WorldSnapshot): Promise<void> {
+    const prober = this.deps.reviewProber;
+    const command = this.deps.review.reviewedElsewhere;
+    if (prober === undefined || command === null || command.trim() === '') return;
+    const rows = {
+      prReviews: new Map(store.listPrReviews().map((r) => [r.prNumber, r])),
+      prReviewRoutes: new Map(store.listPrReviewRoutes().map((r) => [r.prNumber, r])),
+      prReviewedElsewhere: store.prsReviewedElsewhere(),
+    };
+    for (const pr of world.pullRequests) {
+      if (!needsFleetReview(pr, reviewReading(rows, pr.number), this.deps.review)) continue;
+      const report = await prober.check(pr.number, command);
+      if (report.verdict === 'reviewed') {
+        store.recordPrReviewedElsewhere(pr.number, command);
+        continue;
+      }
+      if (report.verdict === 'unknown') {
+        this.deps.errors.record({
+          source: 'cycle',
+          message: `the review.reviewedElsewhere check for PR ${pr.number} said nothing: ${report.detail ?? 'no detail'}`,
+        });
+      }
+    }
+  }
+
   private recordWorldChanges(store: HarnessDeps['store'], world: WorldSnapshot, prev: WorldSnapshot | null): void {
     // A stale slice is by construction equal to the last one the same source
     // reported, so a diff against it loses nothing — but diffing it would, and

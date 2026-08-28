@@ -104,6 +104,61 @@ export interface PrReviewPolicy {
    */
   modes: Record<string, PrReviewMode>;
   /**
+   * Whether the triage may decide a pull request needs **no review at all** — a
+   * version bump, a generated lockfile, a one-word typo in a comment — rather
+   * than only which of the declared modes reads it.
+   *
+   * **Off**, because it is the one answer the triage can give that waives the gate
+   * the feature exists to be. Everything else it decides is about *how much* to
+   * read; this decides whether anything does, and with `blocking` on it is also
+   * what lets the merge through. A project asks for it deliberately or it is not
+   * on offer, and a triage that never learned about it cannot reach for it: the
+   * `review_route` tool does not carry the argument, and the prompt does not
+   * mention it.
+   *
+   * **It also turns the triage on by itself.** `review.modes` is the switch for the
+   * *routing* question because a decision with one option is not a decision — but
+   * with skipping allowed, one declared mode is two options ("read it that way" or
+   * "do not"), so the triage runs. `triageRuns` is that reading, and every rule
+   * asks it rather than `routesBetweenModes`.
+   *
+   * **Never the fail-open direction.** A triage that crashed, was killed or spent
+   * its cap leaves no route, and `pr-review` then reads the pull request in the
+   * default mode — exactly as before. A skip is only ever something an agent said
+   * on purpose, recorded with its reason on the route row; silence is a review.
+   */
+  allowSkip: boolean;
+  /**
+   * A command asking whether a pull request has **already been reviewed somewhere
+   * else** — an Azure branch policy with a required approver, a review bot,
+   * another org's gate. Null (the default) asks nothing, which is every deployment
+   * before this existed.
+   *
+   * The gap it closes: `pr_reviews` answers "has the *fleet* read this", which is
+   * the only question the harness can answer on its own — and on a team that
+   * already has a reviewer that is the wrong question. Without it the fleet spends
+   * an agent on a diff somebody has read, and (with {@link blocking}) holds the
+   * merge for a review that is already done.
+   *
+   * **A command, because there is no generic form**, exactly as an environment's
+   * `health` is one: this is a policy evaluation on one deployment, a label on
+   * another, and a script that asks two systems on a third. It is run in a shell in
+   * `repoRoot` with `LUBBDUBB_PR` set, and **the exit code is the answer** — 0 for
+   * "already reviewed" — because what an operator reaches for here already exits 0
+   * for yes (`az repos pr policy list … | grep -q approved`, a `gh` query, a
+   * `curl -f`), and a stdout contract would mean a wrapper around each one.
+   *
+   * **A check that could not answer leaves the fleet reviewing.** A missing
+   * command, a timeout and a real "no" are one exit code apart, and folding any of
+   * them into "already reviewed" would silently switch the whole feature off on
+   * exactly the deployments whose gate broke. So only a clean exit 0 stands a pull
+   * request down; everything else is the fail-open direction the triage and the
+   * appraiser already take, and a failure that said nothing is recorded on the
+   * error log rather than swallowed.
+   * → `docs/spec/07-pull-requests.md#a-review-that-happened-somewhere-else`
+   */
+  reviewedElsewhere: string | null;
+  /**
    * The mode a review runs in when nothing chose one — a triage that crashed, was
    * killed or spent its attempt cap.
    *
@@ -138,6 +193,8 @@ export const DEFAULT_PR_REVIEW: PrReviewPolicy = {
   blocking: true,
   publish: 'none',
   modes: {},
+  allowSkip: false,
+  reviewedElsewhere: null,
   defaultMode: null,
   routingCharterFile: null,
 };

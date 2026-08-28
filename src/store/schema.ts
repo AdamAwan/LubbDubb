@@ -924,10 +924,28 @@ CREATE TABLE IF NOT EXISTS pr_reviews (
 -- reviewed by the step that only decided how to review it.
 CREATE TABLE IF NOT EXISTS pr_review_routes (
   pr_number  INTEGER PRIMARY KEY,
-  mode       TEXT NOT NULL,
+  mode       TEXT NOT NULL,          -- empty on a skip: no mode was chosen
+  -- 1 = the triage decided this pull request needs no review at all (review.allowSkip).
+  -- Nullable, matching the ALTER TABLE that adds it to a database from before it
+  -- existed: null is what those rows meant — routed and reviewed — so there is no
+  -- backfill, and the column has one shape everywhere.
+  skipped    INTEGER,
   reason     TEXT NOT NULL,
   agent_id   TEXT,
   decided_at TEXT NOT NULL
+);
+
+-- Pull requests a check *outside* the harness reported already reviewed (see
+-- PrReviewExternalStore). Its own table rather than a pr_reviews row, because that
+-- row means "the fleet read this, and here is what it found" — writing an external
+-- gate as one would put a verdict in the cockpit and in the next agent's prompt
+-- that nothing in this harness ever performed. Only the "reviewed" verdict lands: a
+-- gate that has not passed yet may pass later, and a row for the absence of an
+-- answer would freeze it into one.
+CREATE TABLE IF NOT EXISTS pr_review_externals (
+  pr_number INTEGER PRIMARY KEY,
+  detail    TEXT NOT NULL,      -- what said so, for the audit trail
+  at        TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS decisions (

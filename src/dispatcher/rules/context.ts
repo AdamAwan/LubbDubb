@@ -215,6 +215,11 @@ export interface StageContext {
    * reads as work to do.
    */
   prReviewRoutes: ReadonlyMap<number, PrReviewRoute>;
+  /**
+   * Pull requests a check outside the harness reported already reviewed
+   * (`Store.prsReviewedElsewhere`). Empty where the operator configured no check.
+   */
+  prReviewedElsewhere: ReadonlySet<number>;
   /** The base a PR is assumed to target when the provider doesn't report one. */
   defaultBranch: string;
   /**

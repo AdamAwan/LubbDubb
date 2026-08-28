@@ -339,8 +339,24 @@ export interface PrReview {
  */
 export interface PrReviewRoute {
   prNumber: number;
-  /** The mode's key in `review.modes`, as the triage agent named it. */
+  /** The mode's key in `review.modes`, as the triage agent named it. Empty on a skip. */
   mode: string;
+  /**
+   * The triage decided this pull request needs **no review at all** — the one
+   * answer it can give that waives the gate rather than sizing it, and available
+   * only where the project set `review.allowSkip`.
+   *
+   * Read by `needsFleetReview` (nothing is dispatched) *and* by `reviewSatisfied`
+   * (the merge is not held), because the two together are what makes a skip a
+   * decision rather than a wedge: a pull request nothing will review must not be
+   * a pull request nothing can merge. {@link reason} is the whole record of why,
+   * and it is why the tool refuses a skip without one.
+   *
+   * False on every row written before this existed, which is what those rows
+   * meant — so the column needs no backfill, only its `ColumnMigrations` entry.
+   * → `docs/spec/07-pull-requests.md#skipping-a-review-altogether`
+   */
+  skipped: boolean;
   /** Why, in the triage's own words — the whole of what an operator reads later. */
   reason: string;
   agentId: string | null;

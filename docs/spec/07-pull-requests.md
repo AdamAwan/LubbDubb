@@ -731,6 +731,91 @@ review threads** is not reviewed. A reviewer has already asked for changes, so t
 rewritten, and a second opinion on the old one is spent for nothing. The concern comes back on the
 pulse after those threads are handled.
 
+### A review that happened somewhere else
+
+**Off** (`review.reviewedElsewhere: null`). `pr_reviews` answers "has the **fleet** read this", which is
+the only question the harness can answer on its own — and on a team that already has a reviewer it is
+the wrong question. An Azure branch policy with a required approver, a review bot, another org's gate:
+each of those is a read that happened, and the fleet spending an agent on the same diff is a second
+opinion nobody asked for, held merge included.
+
+**A command, because there is no generic form** — an environment's `health` exactly
+([24](24-environments.md#is-the-environment-well)). This is a policy evaluation on one deployment, a
+label on another, and a script that asks two systems on a third, so the harness ships no opinion and
+runs the operator's. It runs in a shell in `repoRoot` with `LUBBDUBB_PR` set, and **the exit code is
+the answer** — 0 for "already reviewed" — because what an operator reaches for here already exits 0 for
+yes (`az repos pr policy list … | grep -q approved`, a `gh` query, a `curl -f`), and a stdout contract
+would mean a wrapper around each one, which is where the mistakes go.
+
+**The verdict is three-valued and `unknown` never folds into `reviewed`.** A missing command, a timeout
+and a real "no" are one exit code apart, and reading any of them as "already reviewed" would silently
+switch the whole fleet review off on exactly the deployments whose gate broke. So only a clean exit 0
+stands a pull request down; a clean non-zero exit is a real no, and a kill or a shell that never ran
+the command is `unknown` — both leave the fleet reviewing, which is the fail-open direction the triage
+and the appraiser already take. An `unknown` goes on the error log, because a check that has been
+failing since the day it was configured is otherwise indistinguishable from one that keeps saying no.
+
+**Only `reviewed` is recorded** (`pr_review_externals`), and it is its own table rather than a
+`pr_reviews` row: that row means _the fleet read this and here is what it found_, and writing an
+external gate as one would put a verdict in the cockpit, the Decision log and the next agent's prompt
+that nothing in this harness performed. The other two verdicts are re-asked next pulse, because a gate
+that has not passed yet may pass later.
+
+**It is also how a team adopts the feature without reviewing their backlog.** Switching
+`review.enabled` on makes every open pull request with no verdict eligible at once — `needsFleetReview`
+has no condition about time — so a repository with twenty of them gets twenty review agents queued
+behind `maxConcurrentAgents`, twenty read-only checkouts cycling through a pool of `cap + 2` slots (each
+hand-over a `git clean -ffdx` and a cold dependency install), and, with `review.blocking`, twenty pull
+requests held out of `pr-merge-ready` until each has been read.
+
+A cutover **guard in the harness** was considered and is deliberately **not** implemented. It would
+have been a per-pull-request ledger stamping what was open on the pulse the review started asking — and
+its discriminating work happens exactly once, at adoption, after which it stamps every pull request
+eligible for ever: a table, a provider field for the pull request's age, and a predicate arm, all
+carrying a one-time problem. This command already answers the same question, permanently, and answers
+it *better* at the cutover, because the operator knows their own and the harness can only guess a
+window. `LUBBDUBB_PR` is in the environment, so the whole guard is `[ "$LUBBDUBB_PR" -lt 677 ]`,
+composed with whatever the real policy query is — a cutoff a team chose, at a precision they know,
+rather than two pulses the harness picked. What it does not soften is a backlog nobody has reviewed at
+all, and that is the honest division: the fleet reading twenty unread diffs is the feature working, and
+deciding to spend that is the operator's call, not the harness's.
+
+**Asked in the pulse, not in a rule**, since it is a process spawn and the rules are pure and
+synchronous — and asked only of the pull requests a review is _otherwise due for_ on that pulse, which
+is the whole of the cost control: one spawn per would-be review rather than one per open pull request
+for ever. A pull request already reviewed, skipped, outside the intake or standing down behind a human
+thread is never asked about, because the pulse builds its reading exactly the way the rules do.
+
+### Skipping a review altogether
+
+**Off** (`review.allowSkip`), and it is the one answer the triage can give that waives the gate rather
+than sizing it. Everything else it decides is about *how much* to read; this decides whether anything
+does, and with `review.blocking` it is also what lets the merge through. So a project asks for it
+deliberately or it is not on offer at all: `review_route` does not carry the argument, and
+`skipNote` puts nothing in the prompt.
+
+On, the triage answers `skip: true` instead of a mode, with the same required reason — and that reason
+matters most here, because the route row is the only account of why a change went in unread. What
+follows is read off the row by both halves, exactly as the intake is: `needsFleetReview` dispatches
+nothing, and `reviewSatisfied` does not hold the merge. A skip that only did the first would make the
+triage's cheapest answer the one that wedges the branch.
+
+**It turns the triage on by itself.** `review.modes` is the switch for the *routing* question because a
+decision with one option is not a decision — but with skipping allowed, one declared mode is two
+answers ("read it that way" or "do not"), so the triage runs. `triageRuns` is that reading, and every
+rule asks it rather than `routesBetweenModes`, which stays the narrower fact the triage's own prompt is
+built from.
+
+**Never the fail-open direction.** A triage that crashes, is killed or spends its cap leaves no route,
+and `pr-review` then reads the pull request in `review.defaultMode` — unchanged. A skip is only ever
+something an agent said on purpose. And it is honoured only while the project still allows it: an
+operator who turns `allowSkip` back off has every standing skip fall back to a review, the safe
+direction and the same one a route naming a removed mode takes.
+
+The prompt's wording pushes *against* the skip deliberately. A model asked to size a read and handed a
+"no read needed" option reaches for it more often than a team would, and the cost is asymmetric in
+exactly the way the fail-open default already accounts for.
+
 ### One round, and what that decides
 
 A pull request is reviewed **once**. Nothing re-reviews it after a push — not the fix for the review's
@@ -758,6 +843,13 @@ is the person approving the merge.
 Rule `pr-merge-ready` gains one clause (`reviewSatisfied`, `src/review/prReview.ts`): with
 `review.blocking` on, a pull request with **no** review row is not merge-ready. Unknown is never clear.
 
+**Every arm `needsFleetReview` stands down on releases this gate too**, and the symmetry is what makes
+each of them a decision rather than a wedge: a pull request the triage
+[skipped](#skipping-a-review-altogether), and one
+[already read elsewhere](#a-review-that-happened-somewhere-else). Neither has a review coming, so
+holding it would be the gate waiting on something that will never arrive. `PrReviewReading` is the one
+bundle every arm travels in, so an arm added later reaches both predicates or does not compile.
+
 **It asks whether the review happened, not whether it liked what it saw.** With one round there is
 nothing that could clear a `findings` verdict, so gating on `clear` would wedge every pull request the
 reviewer had an opinion about and leave the operator no exit but to switch the feature off. What
@@ -780,7 +872,9 @@ so the CI fix behind it is not queued behind the review.
 team uses. Two or more, and rule `pr-review-triage` runs first and picks one. Fewer, and there is no
 triage at all: a decision with one option is not a decision, so nothing is spent making it. That is the
 whole switch — there is no separate flag, because a flag could disagree with the modes and one of them
-would be ignored with nothing to say which.
+would be ignored with nothing to say which. `review.allowSkip` turns the triage on the same way, by
+adding an answer rather than a flag about whether to ask: see
+[Skipping a review altogether](#skipping-a-review-altogether).
 
 **The choice is a model's, not a threshold's.** "Under three files" is a proxy for risk, and the things
 that actually make a diff worth a careful read — it touches auth, it is the first change in a
@@ -792,8 +886,8 @@ It gets the title, the branch, the base and what the tracker says, and may ask `
 routing decision that needed the diff would cost what the review costs, and then there would be nothing
 left to route for.
 
-**Its verdict is a name, through `review_route`.** Three things act on it before the reviewer reads a
-line — the prompt, the charter appended to it, and the profile it runs on — so an agent that merely
+**Its verdict is a name, through `review_route`** — or, where the project allows it, a skip. Three
+things act on a name before the reviewer reads a line — the prompt, the charter appended to it, and the profile it runs on — so an agent that merely
 _said_ which mode it would use would leave all three on the default, silently, and the Decision log
 unable to say which mode ran. A name the project has not declared is refused rather than honoured.
 
@@ -832,6 +926,8 @@ key ([02](02-configuration.md#the-project-layer)), so all of it is committed onc
 | --------------------------- | -------- | --------------------------------------------------------------------------------------------------------------- |
 | `review.enabled`            | `false`  | Whether the review runs at all. It switches both rules in and out of the pipeline.                              |
 | `review.blocking`           | `true`   | Whether an unreviewed pull request is held out of the merge gate. Off records the verdict and gates nothing.    |
+| `review.allowSkip`          | `false`  | Whether the triage may answer that a pull request needs no review at all. It also turns the triage on by itself. |
+| `review.reviewedElsewhere`  | `null`   | A command asking whether a pull request has already been reviewed outside the harness — and the way a team adopts this without reviewing their backlog. Exit 0 = yes; anything else leaves the fleet reviewing. |
 | `review.publish`            | `'none'` | Whether the reviewer is told to post its findings on the pull request, through `reply_to_review` and only that. |
 | `review.modes`              | `{}`     | The ways this project reviews: `charterFile` and `profile` each. Two or more switches the triage on.            |
 | `review.defaultMode`        | `null`   | The mode a review falls back to when nothing routed it. Null takes the first declared.                          |
@@ -843,6 +939,8 @@ key ([02](02-configuration.md#the-project-layer)), so all of it is committed onc
     "enabled": true,
     "routingCharterFile": "docs/review/routing.md",
     "defaultMode": "deep",
+    "allowSkip": true,
+    "reviewedElsewhere": "az repos pr policy list --id \"$LUBBDUBB_PR\" --query \"[?configuration.type.displayName=='Minimum number of reviewers' && status=='approved']\" -o tsv | grep -q .",
     "modes": {
       "deep": { "charterFile": "docs/review/deep.md", "profile": "heavy" },
       "quick": { "charterFile": "docs/review/quick.md", "profile": "light" }

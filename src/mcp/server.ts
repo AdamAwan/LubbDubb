@@ -46,6 +46,8 @@ interface McpBridgeServerOptions {
    * triage is ever dispatched and nothing calls the tool.
    */
   reviewModes?: string[];
+  /** Whether `review_route` offers a skip — `review.allowSkip`. */
+  reviewAllowSkip?: boolean;
   /**
    * The project's area tree, for `appraise_issue` to offer an appraiser when it says
    * where a goal belongs. A thunk for {@link agents}' reason — the directory
@@ -302,6 +304,7 @@ export class McpBridgeServer {
         agents: this.opts.agents(),
         profiles: this.opts.profiles,
         reviewModes: this.opts.reviewModes,
+        reviewAllowSkip: this.opts.reviewAllowSkip,
         areaPaths: this.opts.areaPaths,
         permissions: this.opts.permissions?.(),
         openPr: this.opts.openPr?.(),

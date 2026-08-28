@@ -95,6 +95,14 @@ export interface DispatchContext {
    * and the same one a triage that never answered produces.
    */
   prReviewRoutes?: PrReviewRoute[];
+  /**
+   * Pull requests an external check reported already reviewed
+   * (`Store.prsReviewedElsewhere`). Absent reads as none, which is every
+   * deployment that configured no `review.reviewedElsewhere` command — and is the
+   * safe absence: the fleet reviews a pull request somebody else has read, which
+   * is a wasted agent rather than a diff nobody looked at.
+   */
+  prReviewedElsewhere?: ReadonlySet<number>;
   /** Current fleet: running / waiting / recently-finished tasks and their agents. */
   tasks: TaskSummary[];
   agents: Agent[];

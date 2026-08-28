@@ -483,6 +483,7 @@ export function buildStateSections(
     review: config.review,
     prReviews: new Map(store.listPrReviews().map((review) => [review.prNumber, review])),
     prReviewRoutes: new Map(store.listPrReviewRoutes().map((route) => [route.prNumber, route])),
+    prReviewedElsewhere: store.prsReviewedElsewhere(),
   };
   // The world's change history the Activity feed / Signals panels draw. Read here
   // rather than at the snapshot literal below because its entries carry structured
