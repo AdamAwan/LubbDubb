@@ -35,13 +35,17 @@ it on does.
 | `operating.md`      | The operator's guide: what changes about the job, and the five decisions that stay yours.      |
 | `operating.html`    | The same guide as a page to skim — open it in a browser. Kept in step with `operating.md`.     |
 | `prompt-templates/` | Ready-to-copy samples of the rule dispatcher's built-in prompt bodies, one file per prompt id. |
-| `plans/`            | Build plans for specs still marked unbuilt. Each is deleted by the change that finishes it.     |
 
 `spec/` holds the specification and nothing else. Dated design documents — the proposals that
 preceded a feature, recording the options weighed at the time — are **not** kept here: they age out
 of agreement with the code the moment it moves, and a reader cannot tell by looking which of two
 documents describes the application. The reasoning that is still load-bearing lives in the spec
 document that owns the behaviour; the rest is in the git history.
+
+A **build plan** — the staged order a spec still marked unbuilt gets built in — lives under `plans/`
+while it is being worked and is **deleted by the change that finishes the last stage**, for the same
+reason: once the code has landed it is a second document describing the application, and a reader
+cannot tell by looking which of the two is true. There is none open at present.
 
 ## `CLAUDE.md` and `spec/` — the division of labour
 
@@ -104,7 +108,7 @@ deliberately left unchecked, and why, is in
 | [25](spec/25-supply.md)              | Supply and the runway      | Whether there is work left for the fleet, and whether the reason there is not is you                                    |
 | [26](spec/26-setup.md)               | Configuration health       | The checks that catch a silently-misconfigured harness, the fixes they carry, and the sheet that points it at a project |
 | [27](spec/27-knowledge.md)           | Knowledge                  | The one claim store: scope, reach, corroboration, delivery, and the three ways a claim leaves                           |
-| [28](spec/28-cross-fleet-pool.md)     | The cross-fleet pool       | The distance above `fleet`: one namespace per fleet, what a claim carries across, and the shared digest                 |
+| [28](spec/28-cross-fleet-pool.md)    | The cross-fleet pool       | The distance above `fleet`: one namespace per fleet, what a claim carries across, and the shared digest                 |
 | [29](spec/29-post-deploy-watch.md)   | The post-deploy watch      | Whether shipped work behaves: the declaration, the dry run, the window, and the three verdicts                          |
 
 ## Conventions used throughout

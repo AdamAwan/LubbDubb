@@ -3,6 +3,7 @@ import type { Store } from '../store/store.js';
 import type { GoalWatch, WatchWindow } from '../types.js';
 import type { EnvironmentObserver } from './observer.js';
 import type { EnvironmentConfig } from './policy.js';
+import { watchFindings, watchWindowReadings } from './watchFinding.js';
 import { watchCheckVerdict } from './watchVerdict.js';
 import { dueWindows, openableArrivals, settlingWindows } from './watchWindow.js';
 
@@ -38,6 +39,9 @@ interface WatchDeskDeps {
  * 2. **Settle**, before anything is read, so a window that ran out between two
  *    pulses stops at its own end rather than collecting one more reading past it.
  * 3. **Read**, capped, oldest window first, deferring rather than dropping.
+ * 4. **File**, for a window that is settled or settling regressed — one bench row
+ *    per window and never one per reading. Last, so it is filed off the reading
+ *    this pulse just took rather than the one before it.
  *
  * No model runs in any of it. The expectation is declared, the comparison is
  * arithmetic, and a verdict that came from a judgement nobody can reproduce would
@@ -62,6 +66,45 @@ export class WatchDesk {
     this.open();
     this.settle();
     await this.read();
+    this.file();
+  }
+
+  /**
+   * Say on the bench that an environment is answering outside what the goal
+   * declared.
+   *
+   * It writes `human_tasks` rows and nothing else — it dispatches nobody, touches
+   * no sink, and no rule reads what it writes. That is the bound the whole
+   * subsystem is built on: a watch cannot spend an agent even by accident, and the
+   * route from a reading to new work is an operator's click on the row this files.
+   */
+  private file(): void {
+    const { store, errors } = this.deps;
+    try {
+      const steps = watchFindings({
+        readings: watchWindowReadings({
+          windows: store.listWatchWindows(),
+          checks: store.listGoalWatches(),
+          readings: store.listWatchReadings(),
+        }),
+        existing: store.listHumanTasksOfKind('watch'),
+      });
+      for (const step of steps) {
+        if (step.kind === 'file')
+          store.recordHumanTask({
+            title: step.title,
+            detail: step.detail,
+            originRef: step.originRef,
+            kind: 'watch',
+            agentId: null,
+            taskId: null,
+          });
+        else if (step.kind === 'reopen') store.reopenHumanTask(step.taskId, step.detail);
+        else store.settleHumanTask(step.taskId, step.status, step.resolution);
+      }
+    } catch (err) {
+      errors?.record({ source: 'cycle', message: `filing watch findings failed: ${(err as Error).message}` });
+    }
   }
 
   /**

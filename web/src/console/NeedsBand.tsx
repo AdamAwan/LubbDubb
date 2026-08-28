@@ -9,6 +9,7 @@ import { EscalationCard } from '../components/EscalationCard.js';
 import { HumanTaskActions } from '../components/HumanTaskActions.js';
 import { renderMarkdown } from '../components/markdown.js';
 import { ParentPicker } from '../components/ParentPicker.js';
+import { RaiseBugModal } from '../components/RaiseBugModal.js';
 import { Ref } from '../components/refs.js';
 import { goalIssue } from '../view/goalPage.js';
 import { refusedDispatchFor } from '../view/needsYou.js';
@@ -125,6 +126,15 @@ function closeTicketFor(task: HumanTask, view: CockpitView): boolean {
  * @public shared with the ask panel, which draws the body under its own header
  */
 export function needBody(row: NeedRow, view: CockpitView, actions: CockpitActions): ReactNode {
+  // The post-deploy watch's finding. It answers the same two ways as a bench row
+  // and carries one control the others do not, so it gets a component of its own
+  // rather than a fourth `row.kind ===` on the branch below — the control needs
+  // state, and `needBody` is a function rather than a component.
+  if (row.kind === 'watch') {
+    const task = (view.state.humanTasks ?? []).find((t) => t.id === row.id);
+    if (!task) return null;
+    return <WatchFinding task={task} view={view} actions={actions} />;
+  }
   // A burn notice answers the same two ways as a bench row — done, or declined
   // with a reason — because that is all it ever asks for: it holds nothing, and
   // the run it names carries on either way. What differs is only where the
@@ -381,6 +391,81 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
       onExtend={(id) => actions.extendStall(id)}
       onViewPlan={(id) => actions.viewPlan(id)}
     />
+  );
+}
+
+/**
+ * What a post-deploy watch found, and the one thing an operator can do about it
+ * that costs the fleet anything.
+ *
+ * **The bug is a click, and it is the whole bound on this subsystem.** Nothing
+ * under `src/dispatcher/` may read a watch, so no reading dispatches an agent;
+ * the route from a number to new work is here, and it is a person deciding that
+ * the number means something. Arms A and B of a shortfall are put to a person
+ * before they happen because they spend a fleet, and a watch that filed its own
+ * bugs would be the same loop with a log spike as its trigger and nothing on the
+ * outside of it.
+ *
+ * **The reading rides as the operator's own report.** The modal opens holding the
+ * row's own detail — the check, what it expected and what it read — so the fleet
+ * is handed the numbers rather than a paraphrase, and it is still editable,
+ * because what is filed has to be what the operator actually says. The relation
+ * back to the goal is a field on `IssueCreateInput` and never a sentence in a
+ * prompt, which is the existing filing path's own rule and why this reuses it
+ * rather than filing anything itself. → `src/bugFiling.ts`
+ *
+ * The control is drawn only where there is a tracker to file into and a goal to
+ * relate the bug back to. A false draws no button rather than a disabled one: the
+ * row's other two verdicts still answer it, and a control that cannot work
+ * teaches nothing.
+ */
+function WatchFinding({
+  task,
+  view,
+  actions,
+}: {
+  task: HumanTask;
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element {
+  const [raising, setRaising] = useState(false);
+  const number = Number(/^issue:(\d+)$/.exec(task.originRef ?? '')?.[1]);
+  const issue = Number.isFinite(number) ? view.state.world.issues.find((i) => i.number === number) : undefined;
+  const canRaise = issue !== undefined && view.state.config.canFileTickets;
+  return (
+    <>
+      <p>{task.title}</p>
+      {task.detail && <div className="cn-tick">{renderMarkdown(task.detail, view.state.refUrls)}</div>}
+      <div className="cn-acts">
+        <HumanTaskActions
+          task={task}
+          buttonClass="cn-btn"
+          noteOnDone={null}
+          onDone={(id, note) => actions.completeHumanTask(id, note)}
+          onDecline={(id, note) => actions.declineHumanTask(id, note)}
+          onCloseTicket={null}
+        />
+        {canRaise && (
+          <button
+            type="button"
+            className="cn-btn"
+            onClick={() => setRaising(true)}
+            title="Raise a bug from this reading — the numbers ride as your own report, and the bug is related back to this goal"
+          >
+            Raise a bug…
+          </button>
+        )}
+      </div>
+      {raising && issue && (
+        <RaiseBugModal
+          issueNumber={issue.number}
+          issueTitle={issue.title}
+          initialSummary={task.detail ?? task.title}
+          onSubmit={(summary, title) => actions.raiseBug(issue.number, summary, title)}
+          onClose={() => setRaising(false)}
+        />
+      )}
+    </>
   );
 }
 

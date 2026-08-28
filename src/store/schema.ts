@@ -817,6 +817,7 @@ CREATE TABLE IF NOT EXISTS watch_windows (
   opened_at   TEXT NOT NULL,        -- the arrival that opened it
   settles_at  TEXT NOT NULL,        -- opened_at + the environment's forMs
   settled_at  TEXT,                 -- NULL while it is still watching
+  extended_at TEXT,                 -- when an operator last extended it; NULL means never extended
   PRIMARY KEY (goal_ref, environment)
 );
 

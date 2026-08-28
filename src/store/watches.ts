@@ -30,11 +30,12 @@ import type { ColumnMigrations } from './migrate.js';
  * Own table, own wire list, merged at the feed's door — what arrivals already do.
  *
  * The tables were new *once*, which is exactly what does not keep them exempt:
- * measures and the pending amendment added columns to two of them, and they are
- * declared in {@link WATCH_COLUMNS} below. `watch_windows.settled_at` null means
- * *still watching*, so a column added to **that** table needs a backfill gated on
- * `ensureColumns`' report as well, or every settled window reopens on the boot an
- * operator takes the build.
+ * measures, the pending amendment and an operator's extension have since added
+ * columns to all three, and they are declared in {@link WATCH_COLUMNS} below.
+ * `watch_windows.settled_at` null means *still watching*, so a column added to
+ * **that** table needs its null read before anything else — one whose absence
+ * means something needs a backfill gated on `ensureColumns`' report, or every
+ * settled window reopens on the boot an operator takes the build.
  * → `docs/spec/29-post-deploy-watch.md#persistence`
  */
 
@@ -56,7 +57,15 @@ import type { ColumnMigrations } from './migrate.js';
  * carry SQL defaults that are the honest reading of a row written before either
  * existed: a signal declares no baseline, and every check the operator's own plan
  * approval already authorised is live.
- * → `docs/spec/14-persistence.md#migrations`
+ *
+ * `watch_windows.extended_at` is the third table's first added column, and it is
+ * the one the table's own warning is about: `settled_at` null means *still
+ * watching*, so a column here whose null meant something would reopen every
+ * settled window on the boot an operator takes the build. This one's null means
+ * **never extended**, which is true of every row written before the column
+ * existed, so there is nothing to backfill and nothing gated on
+ * `ensureColumns`' report. That is a property of what the column says, not luck.
+ * → `docs/spec/14-persistence.md#when-a-null-means-something`
  */
 export const WATCH_COLUMNS: ColumnMigrations = {
   goal_watches: {
@@ -70,6 +79,7 @@ export const WATCH_COLUMNS: ColumnMigrations = {
     proposal: 'TEXT',
   },
   watch_readings: { value: 'REAL' },
+  watch_windows: { extended_at: 'TEXT' },
 };
 
 /** The three tables' writer and reader. One module per group of related tables, per the store's composition rule. */
@@ -103,7 +113,7 @@ export class WatchStore {
    * exists to avoid. A pending amendment *to* a check the document still declares
    * is dropped with the re-declaration, because it was an amendment to text that
    * no longer stands.
-   * → `docs/plans/29-post-deploy-watch.md`
+   * → `docs/spec/29-post-deploy-watch.md#the-working-agent-at-conclude-time`
    */
   ingestGoalWatch(originRef: string, checks: readonly GoalWatchInput[]): void {
     const ids = checks.map((c) => c.id);
@@ -327,8 +337,8 @@ export class WatchStore {
   openWatchWindow(input: { goalRef: string; environment: string; openedAt: string; settlesAt: string }): void {
     this.ctx.db
       .prepare(
-        `INSERT OR IGNORE INTO watch_windows (goal_ref, environment, opened_at, settles_at, settled_at)
-         VALUES (@goalRef, @environment, @openedAt, @settlesAt, NULL)`,
+        `INSERT OR IGNORE INTO watch_windows (goal_ref, environment, opened_at, settles_at, settled_at, extended_at)
+         VALUES (@goalRef, @environment, @openedAt, @settlesAt, NULL, NULL)`,
       )
       .run(input);
   }
@@ -347,18 +357,45 @@ export class WatchStore {
       .run(this.ctx.now(), goalRef, environment);
   }
 
+  /**
+   * Give a window more time, on the operator's own click.
+   *
+   * **It re-opens *this* window rather than opening a second one**, which is the
+   * shape the table has: a row is keyed on `(goal_ref, environment)`, so a second
+   * window would be a different key, and the goal's readings would be one series
+   * split across two rows nothing joins. Re-opening keeps the account whole — the
+   * readings taken before the window ran out are still the evidence behind what it
+   * says next.
+   *
+   * That is deliberately the one thing that clears `settled_at`, and it does not
+   * weaken {@link settleWatchWindow}'s guard: what that guard prevents is a
+   * *later reading* moving a stamp the harness already wrote, and nothing here is
+   * a reading. Between the two, a settled verdict is put back in play only by
+   * somebody deciding it should be.
+   *
+   * Null back means no such window, which the route refuses rather than reporting
+   * as done: a click that extended nothing must not answer `ok`.
+   */
+  extendWatchWindow(goalRef: string, environment: string, settlesAt: string): WatchWindow | null {
+    const now = this.ctx.now();
+    const changed = this.ctx.db
+      .prepare(
+        `UPDATE watch_windows SET settles_at=?, settled_at=NULL, extended_at=? WHERE goal_ref=? AND environment=?`,
+      )
+      .run(settlesAt, now, goalRef, environment).changes;
+    if (changed === 0) return null;
+    const row = this.ctx.db
+      .prepare(`SELECT * FROM watch_windows WHERE goal_ref=? AND environment=?`)
+      .get(goalRef, environment) as WatchWindowRow;
+    return hydrateWindow(row);
+  }
+
   /** Every window, oldest first — the order the desk drains its per-pulse cap in. */
   listWatchWindows(): WatchWindow[] {
     const rows = this.ctx.db
       .prepare(`SELECT * FROM watch_windows ORDER BY opened_at ASC, environment ASC`)
       .all() as WatchWindowRow[];
-    return rows.map((r) => ({
-      goalRef: r.goal_ref,
-      environment: r.environment,
-      openedAt: r.opened_at,
-      settlesAt: r.settles_at,
-      settledAt: r.settled_at,
-    }));
+    return rows.map(hydrateWindow);
   }
 
   /**
@@ -414,6 +451,18 @@ interface WatchWindowRow {
   opened_at: string;
   settles_at: string;
   settled_at: string | null;
+  extended_at: string | null;
+}
+
+function hydrateWindow(row: WatchWindowRow): WatchWindow {
+  return {
+    goalRef: row.goal_ref,
+    environment: row.environment,
+    openedAt: row.opened_at,
+    settlesAt: row.settles_at,
+    settledAt: row.settled_at,
+    extendedAt: row.extended_at,
+  };
 }
 
 /** `watch_readings`, the same. `rows_read` because `rows` is not a name SQLite likes. */

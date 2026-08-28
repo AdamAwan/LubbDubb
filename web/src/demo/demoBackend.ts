@@ -930,6 +930,28 @@ class DemoServer {
    * environment to put a query to. Declining drops a row that was never anything
    * but a proposal, and clears the pending change off one that was already live.
    */
+  /**
+   * Give a window more time — the demo mirror of
+   * `POST /api/issues/:number/watch/:environment/extend`.
+   *
+   * It re-opens the window it names, which is what the real route does: the
+   * readings already drawn stay where they are, in front of whatever it reads
+   * next. The demo asks no environment, so nothing new arrives under them.
+   */
+  async extendWatch(issueNumber: number, environment: string): Promise<{ ok: true }> {
+    const window = (this.state.goalWatchWindows ?? []).find(
+      (w) => w.goalRef === `issue:${issueNumber}` && w.environment === environment,
+    );
+    if (window) {
+      const now = new Date();
+      window.settledAt = null;
+      window.extendedAt = now.toISOString();
+      window.settlesAt = new Date(now.getTime() + 48 * 60 * 60 * 1000).toISOString();
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
   async ruleWatchProposal(issueNumber: number, checkId: string, accept: boolean): Promise<{ ok: true }> {
     const origin = `issue:${issueNumber}`;
     const watches = this.state.goalWatches ?? [];
@@ -4218,6 +4240,7 @@ export const demoApi = {
   replan: (planId: string) => getServer().replan(planId),
   ruleWatchProposal: (issueNumber: number, checkId: string, accept: boolean) =>
     getServer().ruleWatchProposal(issueNumber, checkId, accept),
+  extendWatch: (issueNumber: number, environment: string) => getServer().extendWatch(issueNumber, environment),
   // The demo's plans have one revision each — no replan has landed in a browser
   // session — so the history is that single revision and a null diff, which is
   // exactly what the real route answers for a plan nobody has amended.

@@ -72,6 +72,7 @@ export type NeedKind =
   | 'bench'
   | 'close_out'
   | 'validate'
+  | 'watch'
   | 'burn'
   | 'limit'
   | 'supply'
@@ -491,6 +492,7 @@ const TASK_KIND: Record<HumanTask['kind'], NeedKind> = {
   ask: 'bench',
   close_out: 'close_out',
   validate: 'validate',
+  watch: 'watch',
   burn: 'burn',
   supply: 'supply',
 };

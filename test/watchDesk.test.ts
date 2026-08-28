@@ -284,6 +284,27 @@ test('a settled watch is not re-opened by a later reading', async () => {
   system.store.close();
 });
 
+test('an extended window is read again and settles at its new end', async () => {
+  // Extending re-opens the window it names rather than opening a second one, so
+  // the pass has to pick it up again — a re-opened window nothing reads is an
+  // operator's click that changed a stamp and nothing else, with nothing red.
+  const observer = new FakeEnvironmentObserver(CLEAN);
+  const system = build(observer, [{ ...TEST_UK, watch: { ...TEST_UK.watch!, forMs: 1 } }]);
+  arrived(system, 'testUk');
+
+  await system.harness.runCycle();
+  assert.notEqual(system.store.listWatchWindows()[0]?.settledAt, null, 'settled before anything was read');
+  assert.deepEqual(observer.asked, []);
+
+  system.store.extendWatchWindow('issue:12', 'testUk', new Date(Date.now() + 60 * 60 * 1000).toISOString());
+  await system.harness.runCycle();
+
+  assert.equal(system.store.listWatchWindows().length, 1, 'one window, not two');
+  assert.equal(system.store.listWatchWindows()[0]?.settledAt, null, 'watching again');
+  assert.equal(system.store.listWatchReadings().length, 1, 'and read on its own schedule from now');
+  system.store.close();
+});
+
 test('a window is not read again inside watchIntervalMs, and the arrival opens only one', async () => {
   const observer = new FakeEnvironmentObserver(CLEAN);
   const system = build(observer);

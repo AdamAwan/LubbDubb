@@ -61,6 +61,16 @@ interface ValidationReadyInput {
    * → `docs/spec/24-environments.md#what-an-arrival-means`
    */
   opened: ReadonlySet<string> | null;
+  /**
+   * The goals a `watch.holds: ["validate"]` opt-in has cleared — those whose
+   * window on a declaring environment has **settled** — or **null where no
+   * environment declares one**, which is every deployment, since `holds` is off.
+   *
+   * {@link opened}'s shape and nullable for its reason: an empty set would
+   * withhold this row everywhere and would look identical to the feature working.
+   * → `docs/spec/29-post-deploy-watch.md#it-holds-nothing-unless-asked`
+   */
+  watchCleared: ReadonlySet<string> | null;
 }
 
 /**
@@ -128,6 +138,10 @@ export function validationReadyPass(input: ValidationReadyInput): ValidationRead
     // Held, not dropped. The settle arms above still run, so a check ticked off
     // early still closes a row that was filed before the gate was configured.
     if (input.opened !== null && !input.opened.has(originRef) && !existing) continue;
+    // And the stricter thing a team opts into: an environment declaring
+    // `holds: ["validate"]` withholds a **new** row until its watch on this goal
+    // has settled. Off by default, and a row already standing is never un-filed.
+    if (input.watchCleared !== null && !input.watchCleared.has(originRef) && !existing) continue;
     steps.push({
       kind: 'file',
       originRef,

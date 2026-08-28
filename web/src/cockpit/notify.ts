@@ -164,6 +164,7 @@ const NEED_KIND_LABEL: Record<NeedKind, string> = {
   bench: 'Work only you can do',
   close_out: 'A delivered goal needs closing',
   validate: 'A delivered goal is ready to be validated',
+  watch: 'A post-deploy watch is reporting a regression',
   burn: 'A run is spending far more than usual',
   limit: 'An agent is out of account limit',
   supply: 'The fleet is running out of work',

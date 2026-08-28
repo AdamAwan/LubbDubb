@@ -488,6 +488,20 @@ close-out is the step after a launch and reads as one ([13](13-jobs-and-tickets.
 `Bench` would tell an operator nothing about why it appeared the day the goal was delivered. All three
 are answered the same two ways — done, or declined with a reason — which is why they share a body.
 
+`watch` is the fourth human task and the one that does **not** share it. It answers the same two ways
+and carries a third control the others have no use for — **Raise a bug…**, which opens the bug modal
+already holding the row's own detail: the check, what it expected and what it read. A seed rather than
+a payload, so what is filed is still what the operator sends and the fleet is handed the numbers
+rather than a paraphrase somebody retyped ([13](13-jobs-and-tickets.md#the-other-filing-kind--a-bug-the-operator-raised)).
+It is drawn only where there is a tracker to file into and a goal to relate the bug back to, and a
+false draws no button rather than a disabled one.
+
+That click is the whole bound on the subsystem: nothing under `src/dispatcher/` may read a watch, so
+no reading ever dispatches an agent, and the route from a number to new work is a person deciding the
+number means something. The row itself is a `human_tasks` row like every other on the rail, which is
+also how the rail folds off the reading the desk already took rather than computing a second one.
+→ [29](29-post-deploy-watch.md#the-bench-row)
+
 **`profile` is the second kind with no row of its own underneath it** — it is read off
 `issue.appraisal.awaitingProfileAnswer`, the goal-profile gate ([06](06-issue-pickup.md#the-second-arm-an-unanswered-profile-proposal-issue-342)),
 because the harness raises no escalation and files no task for it: the proposal _is_ the ask. It is in
@@ -645,24 +659,25 @@ and an operator glancing at the rail could not tell a queue of successes from a 
 reading every row. The palette now answers _what the ask is_, and the group is carried as weight
 within it.
 
-| Kind         | Tag         | Tone  | Glyph | Why that tone                                          |
-| ------------ | ----------- | ----- | ----- | ------------------------------------------------------ |
-| `recovery`   | Recovery    | red   | `↺`   | A restart left runs orphaned. Something went wrong.    |
-| `escalation` | Escalation  | red   | `?`   | An agent hit a question it cannot get past.            |
-| `permission` | Permission  | amber | `⊘`   | A gate, not a fault — a command is waiting on a yes.   |
-| `limit`      | Usage limit | amber | `‖`   | Nothing broke; an allowance window has to turn over.   |
-| `burn`       | Spend       | amber | `▲`   | A heads-up on a run that carries on either way.        |
-| `plan`       | Plan        | blue  | `◇`   | A plan to read and decide on.                          |
-| `reply`      | Reply       | amber | `↵`   | A drafted reply, held until you send it.               |
-| `merge`      | Merge       | amber | `⊕`   | A merge waiting on your verdict.                       |
-| `shortfall`  | Shortfall   | blue  | `✗`   | Delivered work that did not reach its goal.            |
-| `intake`     | Intake      | blue  | `◌`   | The appraisal could not say a goal is workable.        |
-| `profile`    | Profile     | blue  | `⊙`   | Which profile a goal runs on.                          |
-| `placement`  | Backlog     | amber | `▣`   | Nothing is held; the ticket is off the board.          |
-| `bench`      | Bench       | blue  | `◆`   | Work only a person can do. Informative, not broken.    |
-| `close_out`  | Close-out   | green | `⚑`   | A goal was **delivered**; this is the step after it.   |
-| `validate`   | Validate    | green | `✓`   | The other step after a delivery — run its checks.      |
-| `dispatch`   | Refused     | red   | `⊠`   | The harness keeps trying this and keeps being told no. |
+| Kind         | Tag         | Tone  | Glyph | Why that tone                                                 |
+| ------------ | ----------- | ----- | ----- | ------------------------------------------------------------- |
+| `recovery`   | Recovery    | red   | `↺`   | A restart left runs orphaned. Something went wrong.           |
+| `escalation` | Escalation  | red   | `?`   | An agent hit a question it cannot get past.                   |
+| `permission` | Permission  | amber | `⊘`   | A gate, not a fault — a command is waiting on a yes.          |
+| `limit`      | Usage limit | amber | `‖`   | Nothing broke; an allowance window has to turn over.          |
+| `burn`       | Spend       | amber | `▲`   | A heads-up on a run that carries on either way.               |
+| `plan`       | Plan        | blue  | `◇`   | A plan to read and decide on.                                 |
+| `reply`      | Reply       | amber | `↵`   | A drafted reply, held until you send it.                      |
+| `merge`      | Merge       | amber | `⊕`   | A merge waiting on your verdict.                              |
+| `shortfall`  | Shortfall   | blue  | `✗`   | Delivered work that did not reach its goal.                   |
+| `intake`     | Intake      | blue  | `◌`   | The appraisal could not say a goal is workable.               |
+| `profile`    | Profile     | blue  | `⊙`   | Which profile a goal runs on.                                 |
+| `placement`  | Backlog     | amber | `▣`   | Nothing is held; the ticket is off the board.                 |
+| `bench`      | Bench       | blue  | `◆`   | Work only a person can do. Informative, not broken.           |
+| `close_out`  | Close-out   | green | `⚑`   | A goal was **delivered**; this is the step after it.          |
+| `validate`   | Validate    | green | `✓`   | The other step after a delivery — run its checks.             |
+| `watch`      | Watch       | amber | `◎`   | The running system is answering outside what a goal declared. |
+| `dispatch`   | Refused     | red   | `⊠`   | The harness keeps trying this and keeps being told no.        |
 
 `KIND_TONE` and `KIND_SYMBOL` (`web/src/console/QueueRail.tsx`) are total over `NeedKind`, beside
 `KIND_LABEL`, so a new kind fails the typecheck rather than drawing in whatever the last rule in the
@@ -1166,13 +1181,13 @@ claim something is waiting while offering no way to answer it.
 
 Above every band and every card, between the header and the track, a goal that hangs off nothing gets
 an amber warning of its own. It is not one of the bands above and wears no tone class: the tone
-families are the *needs-you* palette, and a goal is an orphan whether or not the rail is holding a row
+families are the _needs-you_ palette, and a goal is an orphan whether or not the rail is holding a row
 about it.
 
 The reading is `orphanGoal` (`web/src/view/orphanGoal.ts`), and it is three facts read fresh on every
 draw:
 
-- **`config.featureBoard`** — the operator's flag *and* a provider that can place a work item, the
+- **`config.featureBoard`** — the operator's flag _and_ a provider that can place a work item, the
   same conjunction `featureBoardOn` gates the board itself on ([the two gates](#the-two-gates)). An
   operator who has not asked for the tier above their stories has not asked to be told which stories
   are missing from it, and where nothing can write a parent the warning would be a dead end.
@@ -1184,10 +1199,10 @@ draw:
   at the item rather than at the question ([06](06-issue-pickup.md), `src/intake/placement.ts`).
 
 **Why it is louder than the ask it sits above.** The rail's `placement` row is gated on the appraiser
-having *proposed* a container. A goal picked up before the appraiser ran, one whose verdict named
+having _proposed_ a container. A goal picked up before the appraiser ran, one whose verdict named
 nothing, and one somebody answered months ago are all orphans the cockpit used to say nothing about —
 and every one of them merges, closes and disappears from the backlog just the same. So the warning is
-the **fact** and never the question: the proposal, where there is one, is what the band *offers*.
+the **fact** and never the question: the proposal, where there is one, is what the band _offers_.
 
 **Two weights, one fact.** Unanswered, it draws in full with the three answers under it. Answered —
 "this goal wants none" — it goes grey and one line tall, keeping the way back. The item is still an
@@ -1195,11 +1210,11 @@ orphan and the board still cannot roll it up, so the reading does not go away; i
 ask, and an amber band standing over a decision somebody made is how a warning gets ignored.
 `IssueAppraisal.parentSettledAt` is what separates the two, shipped on the wire beside `placement`
 because it is the one half of the pair the browser could not derive: `placement` says a question is
-*open*, and an orphan with none open is either a goal nobody proposed anything for or one whose
+_open_, and an orphan with none open is either a goal nobody proposed anything for or one whose
 answer was "it wants none".
 
 **The three answers are `ParentPicker`, shared with the rail's band.** One write to one tracker field,
-put in two places. The goal page therefore draws the `placement:parent:` row *only* through this
+put in two places. The goal page therefore draws the `placement:parent:` row _only_ through this
 warning and filters it out of its own bands — one question, once, per page. The rail keeps its row,
 and the ask panel still answers it for an operator working down the queue rather than down a page. The
 area-path half of `placement` is untouched: a different question, with a different answer.
@@ -1529,15 +1544,19 @@ tinted left edge — the layer above reach, saying what the running system has d
 arrived ([29](29-post-deploy-watch.md#in-the-cockpit)). Inside the row and not beside it, because a
 watch belongs to an arrival: drawn as a sibling, the two surfaces would be free to disagree about
 which environment a reading came from. The block says how long the window has left, or when it
-settled, and then draws **every check** — because a goal whose one signal passed and whose other
+settled — and, where somebody extended it, that it was extended, since otherwise the line states a
+window length no configuration would produce. The **extend** control sits at the end of that line
+rather than among the readings, because what it acts on is the window: a control level with the checks
+would read as an answer to one of them, and what it actually does is re-open the window and let the
+readings under it carry on ([29](29-post-deploy-watch.md#closing)). Then it draws **every check** — because a goal whose one signal passed and whose other
 regressed is a fix that worked and a thing that is still broken, and one word for the pair would hide
 the half the ticket was about.
 
 A measure draws as **expected, before, now** — `Expected no worse than its baseline · before 8,400 ms
 · now 310 ms`. The before is what makes the row worth looking at: a p95 of 310ms means nothing alone
 and everything beside the number it replaced, and it is available precisely because the baseline was
-taken at declaration rather than inferred later. A measure whose baseline was never taken says *before:
-never taken* rather than printing a number with nothing beside it, which is the same reading its
+taken at declaration rather than inferred later. A measure whose baseline was never taken says _before:
+never taken_ rather than printing a number with nothing beside it, which is the same reading its
 verdict takes — `unknown`, because a comparison against nothing is not one that passed.
 
 Three readings, and the third is the one that matters: `clean`, `regressed`, and `unknown` for a watch
@@ -2996,7 +3015,7 @@ agent, for ever.
 What goes into the digest is **standings, never text**: the tracker's state and its native state, the
 delivery and shortfall verdicts, a run in flight, a landing. Not `changedAt` — a title fixed or a
 comment added moves that, and re-writing a Feature's account because somebody corrected a typo is an
-agent spent on nothing. An item *moving* is what a summary is about, and an item newly linked under
+agent spent on nothing. An item _moving_ is what a summary is about, and an item newly linked under
 the Feature is a movement too.
 
 The key is stamped **at submission**, not at dispatch. A key taken when the agent was launched would
@@ -3013,7 +3032,7 @@ is raised: there is nothing a person can do about a summary that did not happen 
 reading the board under it.
 
 The orphan card carries **no summary**, and the omission is the point rather than a gap. A summary
-says where a *Feature* has got to; the orphan bucket is every item the tracker says answers to
+says where a _Feature_ has got to; the orphan bucket is every item the tracker says answers to
 nothing, which share no goal for anybody to have got anywhere with.
 
 ### What it deliberately does not draw
@@ -4150,7 +4169,7 @@ not a clean reading — and a goal that declared no checks draws nothing at all,
 fact and not a synonym for clean.
 
 **Read-only but for one control, and the exception is the whole point.** A check the working agent
-declared through `watch_declare` arrived *after* the approval that authorises a query to be run
+declared through `watch_declare` arrived _after_ the approval that authorises a query to be run
 against the operator's own telemetry with the operator's own credential — so it draws as a **pending
 change** with accept and decline beside it, over the live declaration it amends, which stands
 untouched until somebody rules. Accepting applies it, clears the readings of the text it replaced, and

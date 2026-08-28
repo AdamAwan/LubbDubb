@@ -268,6 +268,11 @@ this desk exists to end, one step earlier. Nothing gates it on a deployment that
 environment, which is the default — and the gate holds the file arm only, so results recorded against
 an already-filed row still settle it. → [24](24-environments.md#what-an-arrival-means)
 
+A second hold reads the same way and is **off**: `watch.holds: ["validate"]` on an environment waits
+until its post-deploy watch on that goal has settled rather than until the goal arrives. Nullable,
+satisfied by whichever declaring environment settles first, cleared by an operator's release, and
+holding the file arm only. → [29](29-post-deploy-watch.md#it-holds-nothing-unless-asked)
+
 The close-out is the step **after** this one: the `close_out` row is not filed while this one is open.
 → [24](24-environments.md#the-bench-asks-for-one-thing-at-a-time)
 
@@ -281,7 +286,7 @@ them to tell it something it can see.
 makes the first honest, and it does not happen by itself: `recordHumanTask` dedups on the title
 regardless of status and `validateTitle` is stable, so a re-file would fold onto the declined row and
 leave it declined. The desk therefore settles its retraction with the `DESK_SETTLED` marker
-([13](13-jobs-and-tickets.md#the-six-arms-that-file-one)) and **reopens** the row it recognises when
+([13](13-jobs-and-tickets.md#the-seven-arms-that-file-one)) and **reopens** the row it recognises when
 the goal is delivered again. Without that, delivered → shortfall → replan → delivered — which is what
 `issue-assess` and `issue-shortfall` do for a living — leaves the goal's one announcement surface gone
 permanently, while the chip, the sheet and the checks all still read `unrun` correctly. An operator's

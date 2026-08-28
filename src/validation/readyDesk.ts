@@ -1,4 +1,5 @@
 import { openedGoals } from '../environments/arrival.js';
+import { watchClearedGoals } from '../environments/watchFinding.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
 import type { Store } from '../store/store.js';
 import type { Issue, ValidationCheck } from '../types.js';
@@ -53,6 +54,12 @@ export class ValidationReadyDesk {
       shortfalls: this.store.listShortfalls(),
       existing,
       checks: this.checksByOrigin(deliveries.map((d) => d.originRef)),
+      watchCleared: watchClearedGoals(
+        'validate',
+        this.environments,
+        this.store.listWatchWindows(),
+        this.store.listEnvironmentGateReleases(),
+      ),
       opened: openedGoals(
         'validate',
         this.environments,

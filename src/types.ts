@@ -1823,14 +1823,19 @@ export type HumanTaskStatus = 'open' | 'done' | 'declined';
  * third of that family: the goal it names is delivered with checks a person still
  * has to run, and the check rows it is waiting on are ones the harness reads
  * every pulse — so it settles itself as they are recorded (see
- * `src/validation/ready.ts`).
+ * `src/validation/ready.ts`). `watch` is the fourth: a post-deploy watch whose
+ * declared checks came back outside what was declared, filed **one row per window
+ * and never one per reading** — 96 readings per check per environment is the rail
+ * burying its own asks. The harness settles it itself when a later reading in the
+ * same window comes back clean, so it is the family's shape exactly (see
+ * `src/environments/watchFinding.ts`).
  *
  * A discriminator rather than a title match. The close-out sweep has to find its
  * own row again on the next pulse, and the alternative is recognising it by the
  * sentence it wrote — parsing prose the harness composed, which is the failure
  * mode `signalPolarity` and the reason plates already refuse.
  */
-export type HumanTaskKind = 'ask' | 'close_out' | 'burn' | 'validate' | 'supply';
+export type HumanTaskKind = 'ask' | 'close_out' | 'burn' | 'validate' | 'supply' | 'watch';
 
 /**
  * A unit of work only a person can do: flipping a setting in a console nobody
@@ -3983,6 +3988,21 @@ export interface WatchWindow {
    * → `docs/spec/14-persistence.md#when-a-null-means-something`
    */
   settledAt: string | null;
+  /**
+   * When an operator last **extended** it, or null where nobody has.
+   *
+   * A window that ran out before the weekly job ran is the case this answers, and
+   * extending re-opens *this* window rather than opening a second one — the goal's
+   * readings are one series, and a second row keyed on the same
+   * `(goal, environment)` is not a thing the table can hold anyway.
+   *
+   * Null here means **never extended**, which is the honest reading of every row
+   * written before the column existed and is why it is the one column on this
+   * table that needs no backfill. `settledAt` is the null that means something,
+   * and this one is deliberately not.
+   * → `docs/spec/29-post-deploy-watch.md#closing`
+   */
+  extendedAt: string | null;
 }
 
 /**

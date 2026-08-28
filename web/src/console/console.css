@@ -1473,12 +1473,35 @@
   padding: 7px 10px;
 }
 .cn-watch-head {
-  display: block;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
   font-size: 11px;
   letter-spacing: 0.6px;
   text-transform: uppercase;
   color: var(--cn-fg-faint);
   margin-bottom: 5px;
+}
+/* The extend control, drawn as a quiet word at the end of the window's own line
+   rather than as a button among the readings: it is about the *window*, and a
+   control sitting level with the checks would read as an answer to one of them.
+   Every colour is a token — a literal here is a surface that stays dark when
+   somebody switches to Light, which `test/cockpitTheme.test.ts` is the only thing
+   in `npm run check` that would catch. */
+.cn-watch-more {
+  margin-left: auto;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: var(--cn-fg-dim);
+  cursor: pointer;
+  border-bottom: 1px dotted var(--cn-line);
+}
+.cn-watch-more:hover {
+  color: var(--cn-fg);
 }
 .cn-watch-row {
   display: flex;

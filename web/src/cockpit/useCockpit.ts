@@ -326,6 +326,7 @@ export function useCockpit(): CockpitStatus {
 
       replan: (planId) => then(api.replan(planId)),
       ruleWatchProposal: (issueNumber, checkId, accept) => then(api.ruleWatchProposal(issueNumber, checkId, accept)),
+      extendWatch: (issueNumber, environment) => then(api.extendWatch(issueNumber, environment)),
       setAcceptance: (planId, slug, criterion, met) => then(api.setAcceptance(planId, slug, criterion, met)),
       setValidation: (issueNumber, checkId, act) => then(api.setValidation(issueNumber, checkId, act)),
       viewPlan: (planId) => go({ plan: planId }),

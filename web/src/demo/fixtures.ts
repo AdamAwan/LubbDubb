@@ -1119,6 +1119,7 @@ export function buildDemoState(): DemoSeed {
         openedAt: '2026-08-19T09:12:00.000Z',
         settlesAt: '2026-08-21T09:12:00.000Z',
         settledAt: null,
+        extendedAt: null,
         checks: [
           {
             checkId: 'no-checkout-retries',

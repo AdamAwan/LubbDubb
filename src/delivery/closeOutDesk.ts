@@ -1,4 +1,5 @@
 import { openedGoals } from '../environments/arrival.js';
+import { watchClearedGoals, watchCloseOutLine, watchWindowReadings } from '../environments/watchFinding.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
 import type { Store } from '../store/store.js';
 import type { Issue } from '../types.js';
@@ -49,6 +50,18 @@ export class DeliveryCloseOutDesk {
     // standing rows, so it is the one arm with work to do precisely when nothing
     // is delivered — clearing the last delivery is exactly that state.
     if (deliveries.length === 0 && existing.length === 0) return;
+    // What the running system has said since the work arrived, resolved once and
+    // read two ways: a sentence every row carries, and — only where an environment
+    // opted in — the goals whose row waits. The windows come from a pass that runs
+    // *below* this one in the pulse, so both read what the last pulse wrote. That
+    // is the honest lag rather than a fault: a window and the arrival it opens on
+    // are written by the same pass, so a goal is never gate-opened here on a pulse
+    // whose window this cannot see.
+    const readings = watchWindowReadings({
+      windows: this.store.listWatchWindows(),
+      checks: this.store.listGoalWatches(),
+      readings: this.store.listWatchReadings(),
+    });
     const steps = closeOutPass({
       issues: world.issues,
       deliveries,
@@ -62,6 +75,18 @@ export class DeliveryCloseOutDesk {
           .listHumanTasksOfKind('validate')
           .filter((t) => t.status === 'open' && t.originRef !== null)
           .map((t) => t.originRef!),
+      ),
+      watch: new Map(
+        deliveries.flatMap((d) => {
+          const said = watchCloseOutLine(d.originRef, readings);
+          return said === null ? [] : [[d.originRef, said] as const];
+        }),
+      ),
+      watchCleared: watchClearedGoals(
+        'close_out',
+        this.environments,
+        this.store.listWatchWindows(),
+        this.store.listEnvironmentGateReleases(),
       ),
       canClose: this.canClose(),
       opened: openedGoals(

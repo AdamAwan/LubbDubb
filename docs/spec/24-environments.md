@@ -244,6 +244,15 @@ Three rules hold it together:
 A gate holds only the **filing** of a row. Everything that settles one still runs, so a ticket closed
 by hand while a goal is held still discharges a close-out filed before the gate was configured.
 
+A second, later hold exists on the same two obligations and is **off**: `watch.holds`, which withholds
+a row until the environment's post-deploy watch on that goal has settled rather than until the goal
+arrives. It reads the same way — nullable, satisfied by whichever declaring environment gets there
+first, cleared by an operator's release, holding the filing and never the settling — and it is off for
+the reason this hold is kept off the Needs-you rail: a 48-hour hold on every delivered goal would put
+every goal on the bench in a state nobody can act on. What a watch does by default is put what it is
+reporting into the close-out's own detail.
+→ [29](29-post-deploy-watch.md#it-holds-nothing-unless-asked)
+
 ### `comment`
 
 `{ "comment": true }` puts one line on the goal's ticket when its whole work arrives — through
@@ -345,7 +354,7 @@ exists to stop.
 
 **Clearing the delivery retracts the `close_out` row, and re-delivering brings it back**, on the
 validate row's rule and through the same mechanism: the retraction wears the `DESK_SETTLED` marker
-([13](13-jobs-and-tickets.md#the-six-arms-that-file-one)) and the pass reopens the row it recognises.
+([13](13-jobs-and-tickets.md#the-seven-arms-that-file-one)) and the pass reopens the row it recognises.
 Without the second half the retraction is permanent, and a missing `close_out` row is the one absence
 that looks exactly like a goal that was never delivered — worse here than on the validate side, since
 this is the row that says the goal is finished. An operator's own answer on the row still stands
