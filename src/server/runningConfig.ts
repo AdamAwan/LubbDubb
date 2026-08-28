@@ -177,6 +177,7 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
       'issueInReviewState',
       'issueInProgressState',
       'issueContainerTypes',
+      'issueParentedTypes',
       'issueFilingTypes',
       'issueBugType',
     ],

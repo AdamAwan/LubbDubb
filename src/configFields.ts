@@ -439,6 +439,12 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'Item types that hold work rather than being work. Their children are the work.',
   },
   {
+    path: 'issueParentedTypes',
+    type: 'stringList',
+    access: 'plain',
+    why: 'Item types expected to hang off a container. One of these with no parent is reported as an orphan and you are asked where it belongs; anything else is never asked. List your process template’s names — a type missing here is one no missing-parent question is ever raised for.',
+  },
+  {
     path: 'issueBugType',
     type: 'string',
     access: 'plain',

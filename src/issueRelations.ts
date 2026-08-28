@@ -33,21 +33,31 @@ import type { Issue, IssueRelative } from './types.js';
 export const DEFAULT_CONTAINER_TYPES: readonly string[] = ['Feature', 'Epic'];
 
 /**
- * Types whose items are expected to hang off a container. Everything a team
- * actually works is here; anything else (a Task under a story, say) is left out
- * of the orphan report rather than being nagged about a parent it doesn't need.
+ * Types whose items are expected to hang off a container — the default for
+ * `issueParentedTypes`. Everything a team actually works is here; anything else
+ * (a Task under a story, say) is left out of the orphan report rather than being
+ * nagged about a parent it doesn't need.
+ *
+ * A **default** rather than the list, for the reason `issueBugType` is its own
+ * key: what a process template calls the thing a team works is exactly what
+ * varies between projects, and a closed word list decides — silently, and only on
+ * the projects that named their types something else — that no item on the board
+ * is expected to have a parent. Nothing errors: the orphan note never reaches an
+ * appraiser, the candidate containers are never offered, no placement is ever
+ * proposed and the missing-parent question is never asked, on every item, for
+ * ever. Matched case-insensitively, as every type comparison here is.
  */
-const PARENTED_TYPES: ReadonlySet<string> = new Set([
-  'user story',
-  'story',
-  'product backlog item',
-  'requirement',
-  'bug',
-  'tech debt',
-  'technical debt',
-  'debt',
-  'issue',
-]);
+export const DEFAULT_PARENTED_TYPES: readonly string[] = [
+  'User Story',
+  'Story',
+  'Product Backlog Item',
+  'Requirement',
+  'Bug',
+  'Tech Debt',
+  'Technical Debt',
+  'Debt',
+  'Issue',
+];
 
 /** Case-insensitive membership, the way every type comparison here is made. */
 function includesType(types: readonly string[], type: string): boolean {
@@ -107,11 +117,22 @@ export function containerPickupReason(issue: Issue, containerTypes: readonly str
  * orphan. It must not be a container itself, since a Feature legitimately sits at
  * the top. And its type must be one teams put under a feature, so a Task under a
  * story is not reported as parentless when it never wanted a feature.
+ *
+ * The third reads the operator's `issueParentedTypes`, exactly as the second
+ * reads their `issueContainerTypes` — one policy about type names, stated in one
+ * file, rather than a word list in here that a customised process template walks
+ * straight past. This is the predicate the missing-parent question is asked
+ * through as well as the note, so a project it silently answers "no" for is a
+ * project the harness never mentions a missing parent on at all.
  */
-export function isOrphanIssue(issue: Issue, containerTypes: readonly string[] | undefined): boolean {
+export function isOrphanIssue(
+  issue: Issue,
+  containerTypes: readonly string[] | undefined,
+  parentedTypes?: readonly string[] | undefined,
+): boolean {
   if (issue.parent !== null) return false; // undefined = untracked, object = has one
   if (isContainerIssue(issue, containerTypes)) return false;
-  return issue.issueType !== undefined && PARENTED_TYPES.has(issue.issueType.trim().toLowerCase());
+  return issue.issueType !== undefined && includesType(parentedTypes ?? DEFAULT_PARENTED_TYPES, issue.issueType);
 }
 
 /**
@@ -231,6 +252,7 @@ export function relatedWorkNote(
   issue: Issue,
   containerTypes?: readonly string[],
   candidates: readonly IssueRelative[] = [],
+  parentedTypes?: readonly string[],
 ): string {
   const lines: string[] = [];
 
@@ -249,7 +271,7 @@ export function relatedWorkNote(
           `harness can read. Work from this item alone and say so rather than assuming the wider goal.`,
       );
     }
-  } else if (isOrphanIssue(issue, containerTypes)) {
+  } else if (isOrphanIssue(issue, containerTypes, parentedTypes)) {
     lines.push(
       `This item has no parent feature. Stories, bugs and tech-debt items are expected to belong to one, so the ` +
         `wider goal it serves is not recorded. Do not invent a parent or widen the work to a goal you inferred — ` +

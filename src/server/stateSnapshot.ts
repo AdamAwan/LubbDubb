@@ -32,7 +32,7 @@ import type {
 } from '../wire.js';
 import { buildRefUrls, decisionSubjectRef, issueCommentRef } from './refUrls.js';
 import { fleetHistory } from './fleetHistory.js';
-import { placementAsks, truncateAreaPaths, type AreaPathTree } from '../intake/placement.js';
+import { placementAsks, truncateAreaPaths, type AreaPathTree, type PlacementTypePolicy } from '../intake/placement.js';
 import { buildStacks } from '../stacks/stack.js';
 import { landedCount, landingFor, landingReadiness } from '../stacks/landing.js';
 import { prHealth, prState } from '../prHealth.js';
@@ -583,6 +583,7 @@ export function buildStateSections(
   const placementCtx: PlacementContext = {
     areaTree: system.areaPaths.current(),
     canPlace: connector.canPlaceWorkItem(),
+    types: { containerTypes: config.issueContainerTypes, parentedTypes: config.issueParentedTypes },
   };
   const enrichIssue = (issue: Issue) => {
     const origin = issueConclusionOrigin(issue.number);
@@ -1318,7 +1319,9 @@ function appraisalVerdictOf(appraisal: IssueAppraisal | undefined, issue: Issue,
     // buttons, all of which 400. In practice the gate never bites — only a
     // provider that tracks hierarchy can report an orphan in the first place — and
     // it is here so that stays true by construction rather than by coincidence.
-    placement: placement.canPlace ? placementAsks(appraisal, issue, placement.areaTree, appraisal.goalRef) : [],
+    placement: placement.canPlace
+      ? placementAsks(appraisal, issue, placement.areaTree, appraisal.goalRef, placement.types)
+      : [],
     // Carried whole, and deliberately *not* gated on `canPlace` the way the asks
     // above are: this is a stamp of something the operator did, not a question
     // being put to them, and a deployment that has since lost the ability to
@@ -1338,6 +1341,12 @@ function appraisalVerdictOf(appraisal: IssueAppraisal | undefined, issue: Issue,
 interface PlacementContext {
   areaTree: AreaPathTree | null;
   canPlace: boolean;
+  /**
+   * The operator's `issueContainerTypes` / `issueParentedTypes`, carried whole
+   * because the parent question is asked through `isOrphanIssue` and half a policy
+   * silently falls back to the built-in defaults.
+   */
+  types: PlacementTypePolicy;
 }
 
 /**

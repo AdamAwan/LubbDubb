@@ -1,7 +1,7 @@
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
 import type { IntegrationSelection } from './integrations/integration.js';
-import { DEFAULT_CONTAINER_TYPES } from './issueRelations.js';
+import { DEFAULT_CONTAINER_TYPES, DEFAULT_PARENTED_TYPES } from './issueRelations.js';
 import { DEFAULT_PLANNING, type PlanningPolicy } from './plans/planning.js';
 import { DEFAULT_BURN, validateBurnPolicy, type BurnPolicy } from './spendBurn.js';
 import { DEFAULT_RUNWAY, validateRunwayPolicy, type RunwayPolicy } from './supply/runway.js';
@@ -266,6 +266,28 @@ export interface Config {
    * template's names (matched case-insensitively).
    */
   issueContainerTypes: string[];
+  /**
+   * Provider-native item types that are expected to *hang off* a container — the
+   * other half of {@link issueContainerTypes}. An item of one of these types with
+   * no parent is an orphan: the harness says so in the appraisal prompt, offers
+   * the appraiser the open containers it can see, and asks you where it belongs.
+   * An item of any other type (a Task under a story, say) is never asked about,
+   * because it never wanted a Feature.
+   *
+   * Defaults to the Agile/Scrum/CMMI names for the things a team works —
+   * `["User Story", "Story", "Product Backlog Item", "Requirement", "Bug",
+   * "Tech Debt", "Technical Debt", "Debt", "Issue"]` — matched
+   * case-insensitively. **List your own process template's names if it uses
+   * others**, because the failure is silent in the direction that costs: a type
+   * this list does not name is one the harness never reports a missing parent
+   * for, on every item, for ever. Nothing errors, and a board where nothing rolls
+   * up looks exactly like a board where everything is filed. Set `[]` to turn the
+   * orphan report off, as `issueContainerTypes` does its own gate.
+   *
+   * Meaningful only for Azure DevOps, the one provider whose items carry a type
+   * and a hierarchy; GitHub issues have neither and are unaffected.
+   */
+  issueParentedTypes: string[];
   /**
    * The work item types the harness **files** at, when an operator files a
    * finding, a brief or unrecorded work from the cockpit. The **first** entry
@@ -957,6 +979,7 @@ const DEFAULTS: Config = {
   // facets, so a deployment that never configures this still gets a working one.
   issueBoardStates: [],
   issueContainerTypes: [...DEFAULT_CONTAINER_TYPES],
+  issueParentedTypes: [...DEFAULT_PARENTED_TYPES],
   issueFilingTypes: [...DEFAULT_FILING_TYPES],
   // Each policy's own module owns the operator default; the dispatcher's fallback
   // for an *omitted* policy is a separate answer (off) and lives with the rules.

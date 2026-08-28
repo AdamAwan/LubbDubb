@@ -49,7 +49,7 @@ export function issuePickup(s: StageContext): void {
             body: issue.body,
             branch,
           }) +
-          relatedWorkNote(issue, s.pickup.containerTypes, s.parentCandidates) +
+          relatedWorkNote(issue, s.pickup.containerTypes, s.parentCandidates, s.pickup.parentedTypes) +
           // The unplanned arm of the same instruction: a goal small enough to skip
           // a plan still emits things worth watching, and this agent is the only
           // one that knows what it wrote. Appended, never interpolated.

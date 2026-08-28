@@ -112,13 +112,19 @@ test('a proposal is asked while the live item still lacks the field, and not aft
 
 test('an unclassified item is one on the project root, not one with an empty area path', () => {
   const proposed = appraisal({ proposedAreaPath: 'Contoso\\Web' });
-  assert.equal(placementAsks(proposed, issue({ areaPath: 'Contoso' }), TREE, 'abc123').length, 1);
+  // Read off the area-path arm alone: the fixture item is an orphan too, so the
+  // parent question stands beside every one of these regardless of the answer.
+  const areas = (i: Issue): string[] =>
+    placementAsks(proposed, i, TREE, 'abc123')
+      .filter((a) => a.field === 'areaPath')
+      .map((a) => a.proposedAreaPath ?? '');
+  assert.deepEqual(areas(issue({ areaPath: 'Contoso' })), ['Contoso\\Web']);
   // The separator and the casing are the provider's, not a value: an item filed
   // under the root by a client that wrote it either way is still unfiled, and a
   // reader comparing raw strings would report every classified item as
   // unclassified — or this one as classified — with nothing red.
-  assert.equal(placementAsks(proposed, issue({ areaPath: 'contoso/' }), TREE, 'abc123').length, 1);
-  assert.equal(placementAsks(proposed, issue({ areaPath: 'Contoso\\Web' }), TREE, 'abc123').length, 0);
+  assert.deepEqual(areas(issue({ areaPath: 'contoso/' })), ['Contoso\\Web']);
+  assert.deepEqual(areas(issue({ areaPath: 'Contoso\\Web' })), []);
   assert.equal(normalizeAreaPath('Contoso/Web'), normalizeAreaPath('contoso\\web\\'));
 });
 
@@ -136,10 +142,75 @@ test('nothing is asked without a tree, on a flat tracker, or against superseded 
   );
   assert.deepEqual(
     placementAsks(proposed, issue(), TREE, 'a-rewritten-ticket'),
-    [],
-    'a verdict about text the ticket no longer has asks nothing until it is appraised again',
+    [{ field: 'parent', proposedParent: null, proposedAreaPath: null }],
+    'a verdict about text the ticket no longer has offers nothing — but the item still hangs off nothing',
   );
-  assert.deepEqual(placementAsks(null, issue(), TREE, 'abc123'), []);
+  assert.deepEqual(placementAsks(null, issue(), TREE, 'abc123'), [
+    { field: 'parent', proposedParent: null, proposedAreaPath: null },
+  ]);
+});
+
+/**
+ * The asymmetry between the two arms, which is the whole of issue #— : the area
+ * path question is the appraiser's proposal and the parent question is the *fact*.
+ *
+ * The reading that made this necessary is silent and common. The candidate
+ * containers reach an appraiser only through `relatedWorkNote`, off a world list
+ * narrowed by tag and assignee — so on a board whose open Features are simply not
+ * in that list the appraiser has nothing to name, names nothing, and the old
+ * proposal gate then asked nothing. An orphan nobody was asked about is
+ * indistinguishable from an item that is properly filed.
+ */
+test('the parent question is the fact, and the area path question is the proposal', () => {
+  const silent = appraisal(); // ran, proposed neither
+  assert.deepEqual(
+    placementAsks(silent, issue(), TREE, 'abc123'),
+    [{ field: 'parent', proposedParent: null, proposedAreaPath: null }],
+    'an appraiser with no container to name does not make the orphan go away',
+  );
+  assert.deepEqual(
+    placementAsks(appraisal({ proposedParent: 345 }), issue(), TREE, 'abc123').map((a) => a.proposedParent),
+    [345],
+    'where there is a proposal it is what the question offers',
+  );
+
+  // The type policy is the gate, and it is the operator's — both halves of it.
+  // Half a policy silently falls back to the built-in defaults, which is a board
+  // whose process template named its types anything else being asked nothing.
+  assert.deepEqual(placementAsks(silent, issue({ issueType: 'Task' }), TREE, 'abc123'), [], 'a Task wanted no Feature');
+  assert.deepEqual(placementAsks(silent, issue({ issueType: 'Feature' }), TREE, 'abc123'), [], 'a container sits atop');
+  assert.deepEqual(placementAsks(silent, issue({ issueType: 'Defect' }), TREE, 'abc123'), [], 'not a default type');
+  assert.deepEqual(
+    placementAsks(silent, issue({ issueType: 'Defect' }), TREE, 'abc123', { parentedTypes: ['defect'] }).map(
+      (a) => a.field,
+    ),
+    ['parent'],
+    "a project's own type names, matched case-insensitively, are asked about like any other",
+  );
+  assert.deepEqual(
+    placementAsks(silent, issue({ issueType: 'Feature' }), TREE, 'abc123', {
+      containerTypes: [],
+      parentedTypes: ['feature'],
+    }).map((a) => a.field),
+    ['parent'],
+    'and `issueContainerTypes: []` turns the container half off, as it does everywhere else',
+  );
+
+  // Still derived, and still ended by the two things that ended it before.
+  const parented = issue({
+    parent: { number: 345, title: 'F', issueType: 'Feature', workItemState: 'Active', state: 'open' },
+  });
+  assert.deepEqual(placementAsks(silent, parented, TREE, 'abc123'), []);
+  assert.deepEqual(
+    placementAsks({ ...silent, parentSettledAt: '2026-08-02T00:00:00.000Z' }, issue(), TREE, 'abc123'),
+    [],
+    'the operator said this goal wants none',
+  );
+  assert.deepEqual(
+    placementAsks(silent, issue({ parent: undefined }), TREE, 'abc123'),
+    [],
+    'and a provider that tracks no hierarchy is never missing a parent',
+  );
 });
 
 test('a settled question stays settled, whichever of the three answers it got', () => {
