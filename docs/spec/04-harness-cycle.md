@@ -4,9 +4,16 @@
 
 ## The heartbeat
 
-`Heartbeat` is deliberately dumb: it knows nothing about dispatch. `start()` sets a `setInterval` at
-`heartbeatIntervalMs`; `stop()` clears it; `trigger()` fires one immediately. Node timers keep the
-process alive, which is what an always-on server wants.
+`Heartbeat` is deliberately dumb: it knows nothing about dispatch, and nothing about what makes a
+fleet busy. `start()` arms a `setTimeout`; each fire re-arms the next one; `stop()` clears it;
+`trigger()` fires one immediately. Node timers keep the process alive, which is what an always-on
+server wants.
+
+**The interval is a thunk, not a number**, and that is the whole of the [adaptive
+cadence](#the-adaptive-cadence). A `setInterval` fixes its period at `start()`, so a harness that
+decided to slow down would have had to stop and restart the timer — and every path that forgot to
+would keep the old period with nothing red. Re-arming with a fresh reading after each fire has no
+such path.
 
 `fire()` holds a `running` flag and returns immediately if a cycle is already in flight, so cycles
 never overlap.
@@ -120,7 +127,100 @@ ending arrives as up to two events and a fleet's endings arrive together, and it
 cycle a bounded number of times — a refusal means the freed slot is still empty, and the blocker (a
 cycle in flight) usually clears in seconds. After ten attempts it gives up and the heartbeat is the
 backstop again, so a recovery hold that stands until somebody answers it is not a busy loop. Both
-values are constants in that module; the cadence configuration is stage 3's.
+values are constants in that module and stay constants: they are mechanism — the width of one burst
+of endings, and how soon to re-ask a blocker that clears in seconds — not a policy anyone deploys
+differently. Neither is a thing an operator can reason about from outside, and every key is a support
+question ([02](02-configuration.md#the-cadence-keys)).
+
+## Hot and cold
+
+Not every entity deserves the same clock, and before this one number governed all of them.
+
+The world read is **change-gated** ([15](15-integrations.md#reading-less-before-retrying-harder)):
+what the last fan-out derived per entity is held beside a change token read off the cheap list
+payload, and a snapshot that finds the token unmoved reuses it and issues no request. That gate is
+never suppressed by anything here. A token that moved is a hydration that would contradict the cheap
+fields fetched on the same pulse, and serving it is how a cache starts lying.
+
+What a lane governs is the other half: the **age backstop**, the bound on reuse for the fields no
+token covers at all — a base branch advancing under a pull request, an administrator reconfiguring a
+branch policy, a cross-reference an issue gained because a pull request elsewhere named it. Those
+change with nothing on any payload moving, so a reading of them is only ever as good as its age.
+
+`src/world/readPlan.ts` classifies every entity in the **previous** reading, once per pulse, from
+what the harness already knows. An entity is **hot** when:
+
+- its last-read CI is not settled — anything short of `passing`/`failing` is a build that will finish
+  with no token moving anywhere, and finishing it usually moves the merge state too;
+- its merge-readiness is in flux — approved (so the harness may be about to merge it), or already
+  reported `behind`/`dirty`, which is the field the base branch advances underneath;
+- **the fleet is on it** — an active task naming its origin (`issue:12`, and anything below it), or
+  working its branch. That covers a just-dispatched issue, whose linked pull request is the next
+  thing to appear on it;
+- **it moved recently** — a `world_event` on that ref inside the cold lane's own interval. An entity
+  something is happening to stays hot until it has been quiet for as long as the slow lane is.
+
+Everything else is cold. Before the first real cycle the plan is `'all'`: the cache holds nothing, so
+there is nothing for a lane to govern. The classification is deliberately generous, because the two
+errors are not the same size — a wrong _hot_ costs one entity's fan-out on one pulse, a wrong _cold_
+costs freshness on something the fleet is about to act on.
+
+**Cold is never invisible.** A cold entity is listed by the cheap payload every pulse, carries its
+title, state, labels and head commit fresh every pulse, and is in the world snapshot the dispatcher
+reasons over every pulse — the whole world is read, always. What it does not get is a per-entity
+fan-out more often than its lane allows. There is no filtering anywhere in this: `ReadPlan` reaches
+the providers as a **cost** hint, and the population that comes back is identical either way.
+
+### Who owns the cold-lane interval
+
+**The lane does, and the cache now owns nothing.** `HydrationCache` used to expire every entry after
+a `MAX_REUSE_MS` of five minutes, and that constant _was_ the de-facto cold lane. Left in place under
+a slower lane it would have defeated it silently — every entity re-hydrating on the constant's
+schedule whatever the plan said, with nothing red — and set faster than the lane it would never have
+fired at all. Two clocks for one decision is the failure either way, so there is one: the caller
+passes the bound its lane gives it (`hydrationMaxAgeMs`) and the cache holds no policy.
+
+The default cold lane is **five minutes: deliberately the number that constant was**, which was
+itself the heartbeat the fleet ran at before any of this existed. So the slowest thing the fleet
+reads is read exactly as often as _everything_ was before: nothing is staler than it used to be, the
+hot handful are five times fresher, and the pulse itself is ten times faster. A longer cold lane
+would be the first blind spot this effort actually introduced, and it would arrive silently — which
+is why it is a number an operator sets deliberately rather than one derived from the heartbeat.
+
+Both bounds are config (`hotReadMaxAgeMs`, `coldReadMaxAgeMs`), and zero is meaningful on either: an
+age bound of zero is always past, so that lane pays its fan-out every pulse.
+
+## The adaptive cadence
+
+The pulse runs at `heartbeatIntervalMs` (30s) while the fleet is **busy**, and
+`idleHeartbeatIntervalMs` (5 minutes) while it is not. `CycleReport.nextIntervalMs` says which the
+harness is on — the one observable that catches a fleet stuck on the slow interval with work queued,
+which has no other symptom.
+
+Busy is decided at the end of each cycle from that cycle's own inputs, so the cadence can never be
+decided against a different pulse than the dispatch was. It is busy when any of these hold:
+
+- a live agent;
+- a queued job;
+- a candidate in the Up next plan the **fleet itself** is holding — dispatching, `waiting` on
+  headroom, `cooldown`, or `capped`. A candidate held `unapproved` does not count: it is waiting on a
+  _person_, and a fleet that polls every thirty seconds because somebody has not clicked yet is a
+  fleet that never goes idle. The click is not a thing any provider read can discover;
+- a build in flight — a pull request whose CI is `pending`. A check going green is the commonest
+  thing an idle-looking fleet is actually waiting for, and it arrives with no token moving anywhere.
+
+An idle fleet still looks, because what ends the idleness is usually outside it: an issue filed, a
+review left, a check that went red on somebody else's push. It just does not have to look every
+thirty seconds.
+
+`idleHeartbeatIntervalMs` below `heartbeatIntervalMs` is read as equal to it rather than refused: a
+slow lane faster than the fast one is a setting with no meaning, not a boot the operator should lose.
+
+The cockpit's countdown draws `heartbeatIntervalMs` — the busy interval — so on an idle fleet the
+"next pulse" ring wraps and sits at due rather than counting a longer wait. That is a deliberate
+non-change: the harness section of the state snapshot is what an operator's deployment _is_ and is
+invalidated by nothing routine, and a live cadence shipped through it would be right only until it
+was not.
 
 ## Ordering
 
@@ -141,7 +241,8 @@ flowchart TD
 
     subgraph BODY ["one cycle"]
         direction TB
-        START --> W["snapshot the world — connector.getState()<br/><i>local: the stored baseline, unread</i>"]
+        START --> PLAN["build the read plan — which entities are hot this pulse<br/><i>local: skipped; there is no read to plan</i>"]
+        PLAN --> W["snapshot the world — connector.getState(plan)<br/><i>local: the stored baseline, unread</i>"]
         W --> DIFF["diff against the last baseline<br/>persist world events, emit world:events, replace the baseline<br/><i>local: skipped, with every other world-facing pass</i>"]
         DIFF --> REC["reconcile plans — before decide, so a part moved to ready<br/>is dispatchable this same cycle"]
         REC --> SEED["tag the harness's own pull requests — once each, so an un-watch sticks"]
@@ -165,7 +266,8 @@ flowchart TD
         RAT --> EXEC["executor.execute(cycleId, plan)"]
     end
 
-    EXEC --> END(["emit cycle:end with the CycleReport"])
+    EXEC --> CAD["set the next interval — busy or idle, from this cycle's own inputs"]
+    CAD --> END(["emit cycle:end with the CycleReport"])
     HELD -.-> NONE(["no cycle:start, no cycle:end — no cycle ran"])
     CO -.-> NONE
     UB -.-> NONE
@@ -363,8 +465,12 @@ What the dispatcher gets to look at (`src/dispatcher/dispatcher.ts`):
 Returned by `runCycle` and carried on `cycle:end`:
 
 ```ts
-{ cycleId, source, readWorld, rationale, summary: { cycleId, executed, deferred, rejected }, at }
+{ cycleId, source, readWorld, nextIntervalMs, rationale, summary: { cycleId, executed, deferred, rejected }, at }
 ```
+
+`nextIntervalMs` is the gap before the next timer cycle as this cycle's outcome left it — the busy
+interval or the idle one ([above](#the-adaptive-cadence)). A refusal reports it as it stands, having
+changed nothing.
 
 `readWorld` is false for a `local` cycle and for all three refusals, where no cycle ran at all. It is
 carried rather than derived from `source` at each reader, so a second world-less source added later

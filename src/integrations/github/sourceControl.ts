@@ -42,6 +42,7 @@ import type {
   GitHubApi,
 } from './githubApi.js';
 import { HydrationCache } from '../hydrationCache.js';
+import { hydrationMaxAgeMs, prReadRef, type ReadPlan } from '../../world/readPlan.js';
 import { githubRefUrl } from './refUrl.js';
 
 /**
@@ -147,7 +148,7 @@ export class GitHubSourceControlIntegration
     this.ciCache = new HydrationCache(opts.now);
   }
 
-  async snapshot(): Promise<WorldSlice> {
+  async snapshot(plan?: ReadPlan): Promise<WorldSlice> {
     try {
       const { api, prAuthor } = this.opts;
       const viewer = await api.viewerLogin();
@@ -163,7 +164,11 @@ export class GitHubSourceControlIntegration
 
       const pullRequests = await Promise.all(
         pulls.map(async (p): Promise<PullRequest> => {
-          const [detail, ci] = await Promise.all([this.pullDetail(p, viewer), this.pullCi(p)]);
+          // One lane per pull request, resolved once and handed to both reads: the
+          // two caches gate on different tokens, and a lane that differed between
+          // them would be a pull request half on each.
+          const maxAgeMs = hydrationMaxAgeMs(plan, prReadRef(p.number));
+          const [detail, ci] = await Promise.all([this.pullDetail(p, viewer, maxAgeMs), this.pullCi(p, maxAgeMs)]);
           const pr: PullRequest = {
             id: `pr_${p.number}`,
             number: p.number,
@@ -234,15 +239,15 @@ export class GitHubSourceControlIntegration
    * one of those bumps `updated_at`. What it does **not** cover is the world
    * moving underneath: a base branch that advances turns `mergeable_state`
    * `behind` or `dirty` without touching this token, which is why the cache
-   * expires entries rather than trusting one forever
-   * (`MAX_REUSE_MS` in {@link HydrationCache}).
+   * expires entries rather than trusting one forever — after `maxAgeMs`, which is
+   * what this pull request's [lane](../../world/readPlan.ts) allows it.
    */
-  private async pullDetail(p: GhPullSummary, viewer: string): Promise<CachedPullDetail> {
+  private async pullDetail(p: GhPullSummary, viewer: string, maxAgeMs: number): Promise<CachedPullDetail> {
     const { api } = this.opts;
     // No token on the payload (an old fixture) means no reuse, ever — the cache
     // must not invent a token, since the only safe reading of "we cannot tell
     // whether it moved" is that it did.
-    const cached = p.updatedAt === undefined ? undefined : this.detailCache.get(p.number);
+    const cached = p.updatedAt === undefined ? undefined : this.detailCache.get(p.number, maxAgeMs);
     if (cached !== undefined && cached.updatedAt === p.updatedAt) return cached;
 
     const [detail, reviews, comments, threads] = await Promise.all([
@@ -278,9 +283,9 @@ export class GitHubSourceControlIntegration
    * all, so anything short of `passing`/`failing` is re-read every pulse. A
    * settled verdict on an unmoved commit is the one reading that cannot change.
    */
-  private async pullCi(p: GhPullSummary): Promise<CachedPullCi> {
+  private async pullCi(p: GhPullSummary, maxAgeMs: number): Promise<CachedPullCi> {
     const { api } = this.opts;
-    const cached = this.ciCache.get(p.number);
+    const cached = this.ciCache.get(p.number, maxAgeMs);
     if (cached !== undefined && cached.headSha === p.headSha && ciSettled(cached.ciStatus)) return cached;
 
     const [status, checks] = await Promise.all([api.getCombinedStatus(p.headSha), api.listCheckRuns(p.headSha)]);

@@ -393,7 +393,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // here so it's durable, mirrored to stderr, and streamed to the cockpit.
   const errors = new ErrorLog(store, opts.errorMirror);
   const integrations = buildIntegrations(config.integrations, { store, config, now, errors });
-  const connector = new CompositeConnector(integrations, now);
+  const connector = new CompositeConnector(integrations, now, {
+    hotMaxAgeMs: config.hotReadMaxAgeMs,
+    coldMaxAgeMs: config.coldReadMaxAgeMs,
+  });
   // The project's area tree, cached so the appraisal tool and the state snapshot can
   // both read it without awaiting. Refreshed from the pulse under its own TTL, and
   // null until the first read lands — which is the same reading a tracker with no
@@ -1149,6 +1152,12 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     clusters,
     pool,
     heartbeatIntervalMs: config.heartbeatIntervalMs,
+    idleHeartbeatIntervalMs: config.idleHeartbeatIntervalMs,
+    // The two lane backstops, handed to the world read each pulse. The composite
+    // connector holds the same pair for the reads taken *outside* the pulse, and
+    // both come from this one config — a second default anywhere would be a second
+    // answer, differing exactly where an operator changed it.
+    readLanes: { hotMaxAgeMs: config.hotReadMaxAgeMs, coldMaxAgeMs: config.coldReadMaxAgeMs },
     errors,
     runtime: runtimeControl,
     prWatchLabel: watchLabel,
@@ -1244,8 +1253,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
 
   // The latency an operator actually feels, closed: nothing used to react to an
   // agent ending, so the slot it freed sat idle until the next beat — up to
-  // `heartbeatIntervalMs` (five minutes on the default deployment) of an idle fleet
-  // with work queued in front of it. What fires here is a **local** cycle: the full
+  // `heartbeatIntervalMs` (five minutes on the deployment of the day) of an idle
+  // fleet with work queued in front of it. What fires here is a **local** cycle: the full
   // decide/execute sequence against the world the last real cycle read, with every
   // world-facing pass skipped, so reacting to an internal event costs a store pass
   // and no provider traffic. → `docs/spec/04-harness-cycle.md#the-local-cycle`

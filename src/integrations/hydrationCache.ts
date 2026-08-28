@@ -34,20 +34,20 @@
  */
 
 /**
- * How long a cached hydration may be reused before the next read is paid for
- * whatever its token says.
+ * The lane, not the cache, owns how long a hydration may be reused.
  *
- * The backstop for the fields **no token covers**. The cheap payloads report
- * what an entity *is*, not everything that could change a reading of it: GitHub
- * does not bump a pull request's `updated_at` when the base branch advances
- * underneath it, and Azure reports nothing when an administrator adds, retires
- * or reconfigures a branch policy. Rather than reuse across such a change
- * indefinitely, every entry expires. Five minutes is chosen to equal the
- * heartbeat the fleet ran at before any of this existed: the worst case after
- * the change is exactly the freshness it had before it, and every pulse faster
- * than that is saved requests rather than a new blind spot.
+ * There used to be a `MAX_REUSE_MS` here — five minutes, the backstop for the
+ * fields **no token covers**: GitHub does not bump a pull request's `updated_at`
+ * when the base branch advances underneath it, and Azure reports nothing when an
+ * administrator adds, retires or reconfigures a branch policy. That backstop still
+ * exists and is still the reason a hit expires at all; what changed is who states
+ * it. One constant for every entity is one clock, and a clock here would silently
+ * defeat a slower lane above it — every entry re-hydrating on the constant's
+ * schedule whatever the lane decided, with nothing red. So the caller passes the
+ * bound its lane gives it ({@link hydrationMaxAgeMs}) and this class holds no
+ * policy at all.
+ * → [04](../../docs/spec/04-harness-cycle.md#hot-and-cold)
  */
-const MAX_REUSE_MS = 5 * 60_000;
 
 /**
  * The most entities held at once. Entries for entities that have left the
@@ -63,11 +63,14 @@ export class HydrationCache<V> {
 
   constructor(private readonly now: () => number = Date.now) {}
 
-  /** The cached hydration, or undefined when absent or past {@link MAX_REUSE_MS}. */
-  get(key: number): V | undefined {
+  /**
+   * The cached hydration, or undefined when absent or older than `maxAgeMs` — the
+   * bound this entity's lane sets, handed in per call rather than held here.
+   */
+  get(key: number, maxAgeMs: number): V | undefined {
     const entry = this.entries.get(key);
     if (entry === undefined) return undefined;
-    if (this.now() - entry.storedAt >= MAX_REUSE_MS) {
+    if (this.now() - entry.storedAt >= maxAgeMs) {
       this.entries.delete(key);
       return undefined;
     }

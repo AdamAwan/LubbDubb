@@ -360,13 +360,16 @@ test('policyEvalsSettled ignores disabled and non-automated policies', () => {
 });
 
 test('a hydration entry expires rather than being reused forever', () => {
+  // The bound is the caller's, not the cache's: it is whatever the entity's lane
+  // allows (`hydrationMaxAgeMs`), which is why it is passed per read.
+  const maxAgeMs = 5 * 60_000;
   let now = 0;
   const cache = new HydrationCache<string>(() => now);
   cache.set(1, 'v');
   now = 4 * 60_000;
-  assert.equal(cache.get(1), 'v');
-  now = 5 * 60_000;
-  assert.equal(cache.get(1), undefined, 'the backstop for what no token covers');
+  assert.equal(cache.get(1, maxAgeMs), 'v');
+  now = maxAgeMs;
+  assert.equal(cache.get(1, maxAgeMs), undefined, 'the backstop for what no token covers');
 });
 
 test('the etag store bounds itself and drops the least recently used', () => {

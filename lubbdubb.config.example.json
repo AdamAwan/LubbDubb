@@ -3,8 +3,17 @@
 
   "// ===== DISPATCH =====": "The pulse, and how much of the fleet it may spend.",
 
-  "// heartbeatIntervalMs": "How often (ms) the heartbeat fires a dispatch cycle. Default 300000 (5 min).",
-  "heartbeatIntervalMs": 300000,
+  "// heartbeatIntervalMs": "How often (ms) the heartbeat fires a dispatch cycle WHILE THE FLEET IS BUSY — a live agent, a queued job, a candidate the fleet itself is holding, or a build in flight. Default 30000 (30s), where it was five minutes before a quiet pulse became cheap. See docs/spec/04-harness-cycle.md#the-adaptive-cadence.",
+  "heartbeatIntervalMs": 30000,
+
+  "// idleHeartbeatIntervalMs": "The gap while none of that holds. An idle fleet still looks — what ends the idleness (an issue filed, a review left) is outside it — it just does not look every 30 seconds. A value below heartbeatIntervalMs is read as equal to it. Default 300000 (5 min).",
+  "idleHeartbeatIntervalMs": 300000,
+
+  "// hotReadMaxAgeMs": "How long a per-entity provider reading is reused for something that is MOVING (a build in flight, an open dispatch against it, merge-readiness in flux, a transition seen recently) when nothing on the cheap list payload says it changed. The backstop for the fields no change token covers at all — a base branch advancing under a pull request, an administrator reconfiguring a branch policy. 0 re-reads every pulse. Default 60000 (1 min).",
+  "hotReadMaxAgeMs": 60000,
+
+  "// coldReadMaxAgeMs": "The same, for everything else. A cold item is still listed, still fresh in its cheap fields and still in the world the dispatcher reasons over EVERY pulse — it is only re-hydrated on this clock. The main lever on what a fast pulse costs the provider; raising it saves requests and buys blind spots on exactly the fields the backstop covers. Default 300000 (5 min), deliberately the backstop every item used to have.",
+  "coldReadMaxAgeMs": 300000,
 
   "// maxConcurrentAgents": "Hard cap on concurrently-running agents; seeds the live runtime control. Adjustable without restart via POST /api/control; a restart reverts to this value. Default 3.",
   "maxConcurrentAgents": 3,

@@ -43,6 +43,7 @@ import type {
 import { azureRefUrl } from './refUrl.js';
 import { policyCheckMode, policyKindOf, type PolicyCheckModes } from './policyKinds.js';
 import { HydrationCache } from '../hydrationCache.js';
+import { hydrationMaxAgeMs, prReadRef, type ReadPlan } from '../../world/readPlan.js';
 
 interface AzureSourceControlOpts {
   /** The Azure DevOps client, already bound to a single organization/project/repository. */
@@ -123,7 +124,7 @@ export class AzureDevOpsSourceControlIntegration
     return organization && project && repository ? azureRefUrl(organization, project, repository, ref) : null;
   }
 
-  async snapshot(): Promise<WorldSlice> {
+  async snapshot(plan?: ReadPlan): Promise<WorldSlice> {
     try {
       const { api, prAuthor } = this.opts;
       const viewer = await api.viewerUniqueName();
@@ -153,7 +154,11 @@ export class AzureDevOpsSourceControlIntegration
             api.listPullThreads(p.pullRequestId),
             api.listPullLabels(p.pullRequestId),
           ]);
-          const policyEvals = await this.policyEvaluations(p, threads);
+          const policyEvals = await this.policyEvaluations(
+            p,
+            threads,
+            hydrationMaxAgeMs(plan, prReadRef(p.pullRequestId)),
+          );
           this.mergeCommits.set(p.pullRequestId, p.lastMergeSourceCommit);
           const pr: PullRequest = {
             id: `pr_${p.pullRequestId}`,
@@ -251,14 +256,15 @@ export class AzureDevOpsSourceControlIntegration
    * work-item-linking policy (its input is a relation written on the work item,
    * which this capability never reads), a merge-strategy policy, an unrecognised
    * policy type, and any policy an administrator adds, retires or reconfigures.
-   * Those are covered only by `HydrationCache`'s age backstop, which is set
-   * to the heartbeat the fleet ran at before any of this existed — so the worst
-   * case for them is the freshness they already had, and every pulse faster than
-   * that is saved requests rather than a new blind spot.
+   * Those are covered only by the age backstop — `maxAgeMs`, which is what this
+   * pull request's [lane](../../world/readPlan.ts) allows it: a minute for one the
+   * fleet is working, ten for one nothing has touched. The backstop is the whole
+   * of their freshness, which is why an operator raising it is raising how long an
+   * administrator's policy change can go unnoticed.
    */
-  private async policyEvaluations(p: AzPull, threads: AzThread[]): Promise<AzPolicyEvaluation[]> {
+  private async policyEvaluations(p: AzPull, threads: AzThread[], maxAgeMs: number): Promise<AzPolicyEvaluation[]> {
     const token = policyReuseToken(p, threads);
-    const hit = this.policyReadings.get(p.pullRequestId);
+    const hit = this.policyReadings.get(p.pullRequestId, maxAgeMs);
     if (hit !== undefined && hit.token === token && policyEvalsSettled(hit.evals)) return hit.evals;
     const evals = await this.opts.api.listPolicyEvaluations(p.pullRequestId);
     this.policyReadings.set(p.pullRequestId, { token, evals });

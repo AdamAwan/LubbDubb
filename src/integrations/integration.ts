@@ -27,6 +27,7 @@ import type { BodyFormat } from '../sink/signOff.js';
 import type { CiEvidenceTarget, CiFailureEvidence } from '../ci/ciEvidence.js';
 import type { AreaPathTree } from '../intake/placement.js';
 import type { TrackerItem, WorldSnapshot } from '../types.js';
+import type { ReadPlan } from '../world/readPlan.js';
 
 /**
  * A modular integration owns exactly one *slice* of the outside world.
@@ -88,8 +89,17 @@ export interface Integration {
   readonly id: string;
   /** Which capability this integration fulfils. Exactly one provider per capability. */
   readonly capability: WorldCapability;
-  /** This integration's slice of the world right now. Called every dispatch cycle. */
-  snapshot(): Promise<WorldSlice>;
+  /**
+   * This integration's slice of the world right now. Called every dispatch cycle.
+   *
+   * `plan` says which entities this read is prepared to pay a per-entity fan-out
+   * for and how stale a hydration it will reuse for the rest — the hot/cold lane
+   * split ([04](../../docs/spec/04-harness-cycle.md#hot-and-cold)). It is a
+   * **cost** hint and never a filter: every entity the provider lists is in the
+   * slice either way, because the dispatcher reasons over the whole world. A
+   * provider with nothing to hydrate ignores it, which is what the fakes do.
+   */
+  snapshot(plan?: ReadPlan): Promise<WorldSlice>;
   /**
    * How this provider renders the prose the harness sends it — what
    * {@link signOff} needs to know to append a sign-off that renders rather than

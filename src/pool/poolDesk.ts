@@ -14,10 +14,10 @@ import type { PoolTransport } from './transport.js';
  * `docs/spec/21-self-update.md#where-the-shutdown-handlers-are-registered` is written
  * about.
  *
- * |                | Attempts when         | With `heartbeatIntervalMs` at its default |
+ * |                | Attempts when         | At the default cadence (30s busy, 5m idle)|
  * | -------------- | --------------------- | ----------------------------------------- |
- * | Claims publish | the document is dirty | the next pulse — up to five minutes       |
- * | Claims poll    | every pulse           | every five minutes                        |
+ * | Claims publish | the document is dirty | the next pulse                            |
+ * | Claims poll    | every pulse           | the same                                  |
  * | Digest publish | an hour since the last| the next pulse after the hour             |
  * | Backstop       | an hour since the last| re-derives **both** documents and compares|
  *

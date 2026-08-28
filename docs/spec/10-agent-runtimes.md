@@ -903,7 +903,8 @@ Both terminal events are also what tells the pulse there is room again. `src/sys
 [local cycle](04-harness-cycle.md#the-local-cycle): `done` is when the row stops counting against the
 cap, `reaped` is when the worktree slot goes back, and neither implies the other in time. Before it,
 nothing reacted to an agent finishing at all — the slot it freed sat idle until the next beat, up to
-`heartbeatIntervalMs` (five minutes on the default deployment) with work queued in front of it.
+`heartbeatIntervalMs` (five minutes on the deployment of the day; 30s since the cadence became
+adaptive, and still a wait for nothing) with work queued in front of it.
 
 It is a **reaction** to a termination and not a termination path: it signals nothing, reaps nothing,
 and every rule on this page about how an agent is ended applies unchanged. The trigger debounces, so a

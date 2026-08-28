@@ -16,6 +16,7 @@ import { DEFAULT_FILING_TYPES } from './ticketTypes.js';
 import { DEFAULT_MCP_ARGS_RETENTION_DAYS } from './store/mcpCalls.js';
 import type { PetPolicy } from './pets/keeper.js';
 import { validateEnvironments, type EnvironmentConfig } from './environments/policy.js';
+import { DEFAULT_READ_LANES } from './world/readPlan.js';
 
 /**
  * Central configuration. Everything the operator can tune lives here.
@@ -24,8 +25,50 @@ import { validateEnvironments, type EnvironmentConfig } from './environments/pol
  * `lubbdubb.config.json` file at the repo root, then these defaults.
  */
 export interface Config {
-  /** How often the heartbeat fires a dispatch cycle. */
+  /**
+   * How often the heartbeat fires a dispatch cycle **while the fleet is doing
+   * something** — an agent running, a queue with work in it, a build in flight.
+   *
+   * Thirty seconds, where it was five minutes before the world read learned to
+   * cost almost nothing on a quiet pulse. It is the near-real-time half of the
+   * cadence; {@link idleHeartbeatIntervalMs} is the other.
+   * → `docs/spec/04-harness-cycle.md#the-adaptive-cadence`
+   */
   heartbeatIntervalMs: number;
+  /**
+   * How often the heartbeat fires when **nothing is moving** — no live agent, no
+   * queued work, no unsettled build.
+   *
+   * An idle fleet still has to look, because the thing that ends the idleness is
+   * usually outside: an issue filed, a review left, a check that went red on
+   * somebody else's push. What it does not have to do is look every thirty
+   * seconds. Never shorter than {@link heartbeatIntervalMs} — a value below it is
+   * read as equal to it, since "slow lane" that is faster than the fast one is a
+   * setting with no meaning rather than an error worth refusing a boot over.
+   */
+  idleHeartbeatIntervalMs: number;
+  /**
+   * How long a **hot** entity's hydration may be reused while its change token
+   * sits still — the backstop for the fields no token covers at all (a base branch
+   * advancing under a pull request; an administrator reconfiguring a branch
+   * policy).
+   *
+   * Hot is "something about this is plausibly moving": a build in flight, an open
+   * dispatch against it, merge-readiness in flux, a transition observed recently.
+   * → `docs/spec/04-harness-cycle.md#hot-and-cold`
+   */
+  hotReadMaxAgeMs: number;
+  /**
+   * The same bound for everything else — the slow lane, and the main lever on what
+   * a faster pulse costs the provider.
+   *
+   * A cold entity is **not** invisible: it is listed every pulse, its cheap fields
+   * are fresh every pulse, and it is in the world the dispatcher reasons over
+   * every pulse. What it does not get is a per-entity fan-out more often than
+   * this. Raising it saves requests and buys blind spots on exactly the fields the
+   * backstop covers; lowering it does the reverse.
+   */
+  coldReadMaxAgeMs: number;
   /** Hard cap on concurrently-running agents. Runtime-adjustable via the control endpoint. */
   maxConcurrentAgents: number;
   /**
@@ -965,7 +1008,13 @@ export interface WhitelistRule {
 }
 
 const DEFAULTS: Config = {
-  heartbeatIntervalMs: 5 * 60 * 1000,
+  // Thirty seconds busy, five minutes idle. The arithmetic behind both — what a
+  // pulse costs each provider on a small and a large fleet — is in
+  // `docs/spec/15-integrations.md#what-the-cadence-costs`.
+  heartbeatIntervalMs: 30 * 1000,
+  idleHeartbeatIntervalMs: 5 * 60 * 1000,
+  hotReadMaxAgeMs: DEFAULT_READ_LANES.hotMaxAgeMs,
+  coldReadMaxAgeMs: DEFAULT_READ_LANES.coldMaxAgeMs,
   maxConcurrentAgents: 3,
   startPaused: false,
   // On: replies go out, and `false` is how an operator asks to be asked. The one

@@ -10,8 +10,9 @@ database, and a set of child processes (one per live agent).
 
 ## The loop
 
-The system is one repeating cycle, driven by a heartbeat (`heartbeatIntervalMs`, default 5 minutes)
-and also triggerable on demand:
+The system is one repeating cycle, driven by a heartbeat (`heartbeatIntervalMs`, default 30s while
+the fleet is busy and `idleHeartbeatIntervalMs`, 5 minutes, while it is not —
+[04](04-harness-cycle.md#the-adaptive-cadence)) and also triggerable on demand:
 
 ```
 snapshot the world  →  diff against the last snapshot  →  reconcile plans

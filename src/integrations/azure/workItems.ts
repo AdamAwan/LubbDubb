@@ -28,6 +28,7 @@ import type {
 import type { AzureDevOpsApi, AzWorkItem, AzWorkItemUpdate } from './azureDevOpsApi.js';
 import { azureRefUrl } from './refUrl.js';
 import { HydrationCache } from '../hydrationCache.js';
+import { hydrationMaxAgeMs, issueReadRef, type ReadPlan } from '../../world/readPlan.js';
 
 interface AzureWorkItemsOpts {
   /** The Azure DevOps client, already bound to a single organization/project. */
@@ -134,7 +135,7 @@ export class AzureDevOpsWorkItemsIntegration
     }));
   }
 
-  async snapshot(): Promise<WorldSlice> {
+  async snapshot(plan?: ReadPlan): Promise<WorldSlice> {
     try {
       const { api, workItemTag, assignedTo, ownershipTag } = this.opts;
       const raw = await api.listOpenWorkItems(workItemTag, assignedTo);
@@ -145,7 +146,9 @@ export class AzureDevOpsWorkItemsIntegration
           // Only pay the per-item revision fetch when the ownership gate is on and
           // the item actually carries the gate tag — others can't be picked up anyway.
           const tracksOwner = viewer !== null && ownershipTag !== undefined && w.tags.includes(ownershipTag);
-          const labelsAddedByViewer = tracksOwner ? await this.viewerAddedTagsFor(w, viewer) : undefined;
+          const labelsAddedByViewer = tracksOwner
+            ? await this.viewerAddedTagsFor(w, viewer, hydrationMaxAgeMs(plan, issueReadRef(w.id)))
+            : undefined;
           return {
             id: `issue_${w.id}`,
             number: w.id,
@@ -203,10 +206,10 @@ export class AzureDevOpsWorkItemsIntegration
    * afresh every pulse, which costs a request and can only be right.
    * → [06](../../../docs/spec/06-issue-pickup.md)
    */
-  private async viewerAddedTagsFor(w: AzWorkItem, viewer: string): Promise<string[]> {
+  private async viewerAddedTagsFor(w: AzWorkItem, viewer: string, maxAgeMs: number): Promise<string[]> {
     const token = `${viewer}\u0000${w.changedAt}`;
     if (w.changedAt !== '') {
-      const hit = this.tagAuthorship.get(w.id);
+      const hit = this.tagAuthorship.get(w.id, maxAgeMs);
       if (hit !== undefined && hit.token === token) return [...hit.tags];
     }
     const tags = [...viewerAddedTags(await this.opts.api.listWorkItemUpdates(w.id), viewer)];

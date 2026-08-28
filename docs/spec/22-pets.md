@@ -472,8 +472,8 @@ across the room without parsing anything, and that is the argument for putting c
 chrome at all rather than only on a page you visit.
 
 Derived from the running-agent count rather than from `heartbeatIntervalMs` directly, because the
-default pulse is five minutes and a bob with a five-minute period is a still image that redraws twice
-an hour. The period is clamped to a range a heart could plausibly beat at.
+pulse is not a period a heart could beat at — five minutes when that was the only interval, and even
+now five minutes whenever the fleet is idle, which is a still image that redraws twice an hour. The period is clamped to a range a heart could plausibly beat at.
 
 `prefers-reduced-motion: reduce` stops all of it, and holds a mythic's sparkle at phase 0.
 

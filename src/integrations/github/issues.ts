@@ -20,6 +20,7 @@ import type {
 } from '../integration.js';
 import type { GhTimelineEvent, GitHubApi } from './githubApi.js';
 import { HydrationCache } from '../hydrationCache.js';
+import { hydrationMaxAgeMs, issueReadRef, type ReadPlan } from '../../world/readPlan.js';
 import { githubRefUrl } from './refUrl.js';
 
 /**
@@ -186,7 +187,7 @@ export class GitHubIssuesIntegration
     return { ok: true, ref: String(ref.id) };
   }
 
-  async snapshot(): Promise<WorldSlice> {
+  async snapshot(plan?: ReadPlan): Promise<WorldSlice> {
     try {
       const { api, ownershipLabel } = this.opts;
       // Fetch every open issue so all of them display in the cockpit; the dispatcher's
@@ -200,7 +201,12 @@ export class GitHubIssuesIntegration
 
       const issues = await Promise.all(
         raw.map(async (i): Promise<Issue> => {
-          const cached = await this.issueTimeline(i.number, i.updatedAt, viewer);
+          const cached = await this.issueTimeline(
+            i.number,
+            i.updatedAt,
+            viewer,
+            hydrationMaxAgeMs(plan, issueReadRef(i.number)),
+          );
           const tracksOwner = viewer !== null && ownershipLabel !== undefined && i.labels.includes(ownershipLabel);
           return {
             id: `issue_${i.number}`,
@@ -247,12 +253,17 @@ export class GitHubIssuesIntegration
    * fleet-wide ([06](../../../docs/spec/06-issue-pickup.md)) — can only go stale
    * behind an event that moves it. What it does not cover is a cross-reference
    * created from *elsewhere* (a pull request naming `#n`), which is why the cache
-   * expires entries rather than trusting one forever
-   * (`MAX_REUSE_MS` in {@link HydrationCache}), and why `linkedPrNumber` is never
-   * more than that far behind.
+   * expires entries rather than trusting one forever — after `maxAgeMs`, which is
+   * what this issue's [lane](../../world/readPlan.ts) allows it, and which is
+   * therefore how far behind `linkedPrNumber` can ever be.
    */
-  private async issueTimeline(number: number, updatedAt: string, viewer: string | null): Promise<CachedIssueTimeline> {
-    const cached = this.timelineCache.get(number);
+  private async issueTimeline(
+    number: number,
+    updatedAt: string,
+    viewer: string | null,
+    maxAgeMs: number,
+  ): Promise<CachedIssueTimeline> {
+    const cached = this.timelineCache.get(number, maxAgeMs);
     if (cached !== undefined && cached.updatedAt === updatedAt) return cached;
 
     const timeline = await this.opts.api.listIssueTimeline(number);

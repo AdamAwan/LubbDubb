@@ -1,4 +1,5 @@
 import type { MergeableState, WorldSnapshot } from '../types.js';
+import type { ReadPlan } from '../world/readPlan.js';
 
 /**
  * The seam between the harness and the outside world.
@@ -11,8 +12,18 @@ import type { MergeableState, WorldSnapshot } from '../types.js';
  * and the outbound mirror lives in `src/sink/actionSink.ts`.
  */
 export interface Connector {
-  /** The world as it is right now. Called at the start of every dispatch cycle. */
-  getState(): Promise<WorldSnapshot>;
+  /**
+   * The world as it is right now. Called at the start of every dispatch cycle.
+   *
+   * `plan` is what the pulse hands down about **cost**: which entities are worth a
+   * per-entity fan-out this pulse, and how stale a hydration is acceptable for the
+   * rest ([04](../../docs/spec/04-harness-cycle.md#hot-and-cold)). Omitted by every
+   * caller outside the pulse — a route, the cockpit's snapshot — which knows
+   * nothing about what the fleet is doing and so must not be the thing that
+   * declares an entity cold; those read on the hot lane's terms. The world that
+   * comes back is the same population either way.
+   */
+  getState(plan?: ReadPlan): Promise<WorldSnapshot>;
 }
 
 /** Events that can be injected into the FakeConnector to simulate the world moving. */

@@ -116,6 +116,27 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'Gap between timer-driven cycles.',
   },
   {
+    path: 'idleHeartbeatIntervalMs',
+    type: 'number',
+    ms: true,
+    access: 'plain',
+    why: 'Gap between cycles while nothing is moving — no live agent, no queued work, no build in flight. Never shorter than the heartbeat itself.',
+  },
+  {
+    path: 'hotReadMaxAgeMs',
+    type: 'number',
+    ms: true,
+    access: 'plain',
+    why: 'How long a per-entity reading is reused for something that is moving (a build in flight, an open dispatch, merge-readiness in flux) when nothing on the cheap list payload says it changed.',
+  },
+  {
+    path: 'coldReadMaxAgeMs',
+    type: 'number',
+    ms: true,
+    access: 'plain',
+    why: 'The same, for everything else. A cold item is still listed and still in the world every pulse; it just is not re-hydrated more often than this. The main lever on what a fast pulse costs the provider.',
+  },
+  {
     path: 'maxConcurrentAgents',
     type: 'number',
     access: 'plain',

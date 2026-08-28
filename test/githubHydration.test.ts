@@ -321,14 +321,74 @@ test('hydration: an entry past its reuse window is re-read even with every token
   let clock = 1_000;
   const scm = new GitHubSourceControlIntegration({ api, now: () => clock });
 
-  await scm.snapshot();
+  // The bound is the lane's, handed in per read — the cache states none of its own
+  // (`src/world/readPlan.ts`).
+  const lane = { hot: 'all' as const, hotMaxAgeMs: 5 * 60_000, coldMaxAgeMs: 10 * 60_000 };
+  await scm.snapshot(lane);
   clock += 60_000;
-  await scm.snapshot();
+  await scm.snapshot(lane);
   assert.deepEqual(tape.getPull, [7], 'inside the window, nothing is re-read');
   clock += 5 * 60_000;
-  await scm.snapshot();
+  await scm.snapshot(lane);
   assert.deepEqual(tape.getPull, [7, 7]);
   assert.deepEqual(tape.listCheckRuns, ['sha7', 'sha7']);
+});
+
+/**
+ * The lane split, where it actually bites: the backstop that re-reads an entity
+ * nothing has moved is the **lane's** number, so two pull requests on one pulse
+ * are re-hydrated on different clocks. → `docs/spec/04-harness-cycle.md#hot-and-cold`
+ */
+test('hydration: the hot lane re-reads on its backstop while the cold one holds', async () => {
+  const script: Script = {
+    pulls: [pull({ number: 7 }), pull({ number: 8, headSha: 'sha8' })],
+    checkRuns: { sha7: green, sha8: green },
+  };
+  const { api, tape } = fakeApi(script);
+  let clock = 1_000;
+  const scm = new GitHubSourceControlIntegration({ api, now: () => clock });
+  // PR 7 is moving; PR 8 is not. Nothing on either token moves for the whole test.
+  const plan = { hot: new Set(['pr:7']), hotMaxAgeMs: 60_000, coldMaxAgeMs: 600_000 };
+
+  await scm.snapshot(plan);
+  assert.deepEqual(tape.getPull, [7, 8], 'the first read hydrates both — there is nothing to reuse');
+
+  clock += 90_000;
+  const second = await scm.snapshot(plan);
+  assert.deepEqual(tape.getPull, [7, 8, 7], 'past its backstop, the hot one is paid for again');
+  assert.equal(
+    second.pullRequests?.length,
+    2,
+    'and the cold one is still in the slice: cold is a slower read, not a missing entity',
+  );
+  assert.deepEqual(
+    second.pullRequests?.map((p) => p.number),
+    [7, 8],
+  );
+
+  clock += 9 * 60_000;
+  await scm.snapshot(plan);
+  assert.deepEqual(tape.getPull, [7, 8, 7, 7, 8], 'the slow lane comes due eventually — cold is never never');
+});
+
+test('hydration: an issue on the slow lane is listed every pulse and hydrated on its own clock', async () => {
+  const script: Script = { issues: [issue({ number: 5 }), issue({ number: 6 })] };
+  const { api, tape } = fakeApi(script);
+  let clock = 1_000;
+  const issues = new GitHubIssuesIntegration({ api, now: () => clock });
+  const plan = { hot: new Set(['issue:5']), hotMaxAgeMs: 60_000, coldMaxAgeMs: 600_000 };
+
+  await issues.snapshot(plan);
+  clock += 90_000;
+  const second = await issues.snapshot(plan);
+
+  assert.deepEqual(tape.listIssueTimeline, [5, 6, 5], 'the hot issue only');
+  assert.equal(tape.listOpenIssues, 2, 'the cheap list is read every pulse either way');
+  assert.deepEqual(
+    second.issues?.map((i) => i.number),
+    [5, 6],
+    'both are in the world the dispatcher reasons over',
+  );
 });
 
 test('hydration: reuse and staleness stay distinct — a hit is clean, a failure is stale', async () => {
