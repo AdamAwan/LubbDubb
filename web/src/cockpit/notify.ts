@@ -1,4 +1,4 @@
-import type { AppState, SetupPayload } from '../types.js';
+import type { AppState, EnvironmentHealthReading, SetupPayload } from '../types.js';
 import { buildNeedsYou, type NeedKind } from '../view/needsYou.js';
 
 /**
@@ -37,7 +37,7 @@ import { buildNeedsYou, type NeedKind } from '../view/needsYou.js';
  */
 
 /** What a notification can be about. Each is independently switchable. */
-type NotifyCategory = 'needsYou' | 'errors' | 'agents';
+type NotifyCategory = 'needsYou' | 'errors' | 'agents' | 'environments';
 
 export interface NotifyPrefs {
   /** The master switch. False until the operator turns it on and the browser grants permission. */
@@ -57,13 +57,18 @@ export const NOTIFY_CATEGORIES: readonly { id: NotifyCategory; label: string; bl
   { id: 'needsYou', label: 'Needs you', blurb: 'A new escalation, plan, permission request or task for you' },
   { id: 'errors', label: 'Errors', blurb: 'A failure recorded by the harness' },
   { id: 'agents', label: 'Agent finished', blurb: 'A run reached an end — frequent on a busy fleet' },
+  {
+    id: 'environments',
+    label: 'Environments',
+    blurb: 'An environment stopped being well, got worse or better, or recovered',
+  },
 ];
 
 const PREFS_KEY = 'lubbdubb.notify';
 
 const DEFAULT_PREFS: NotifyPrefs = {
   enabled: false,
-  categories: { needsYou: true, errors: true, agents: true },
+  categories: { needsYou: true, errors: true, agents: true, environments: true },
 };
 
 /**
@@ -135,6 +140,11 @@ interface NotifySnapshot {
   needsYou: { id: string; kind: NeedKind; title: string }[];
   errors: { id: string; message: string }[];
   agents: { id: string; status: string }[];
+  /**
+   * The health readings, whole rather than reduced to a word: the notification
+   * quotes the check's own reasons, and how long the episode it is ending ran.
+   */
+  environments: EnvironmentHealthReading[];
 }
 
 /** Statuses that mean a run is over. The live three are not endings. */
@@ -178,6 +188,7 @@ export function notifySnapshot(state: AppState, setup: SetupPayload | null = nul
     needsYou: buildNeedsYou(state, setup).map((r) => ({ id: r.id, kind: r.kind, title: r.title })),
     errors: state.errors.map((e) => ({ id: e.id, message: e.message })),
     agents: state.agents.map((a) => ({ id: a.id, status: a.status })),
+    environments: state.environmentHealth ?? [],
   };
 }
 
@@ -230,7 +241,82 @@ export function notifiableChanges(prev: NotifySnapshot | null, next: NotifySnaps
     });
   }
 
+  // An environment is notified on a **change between two readings the cockpit
+  // holds both of**, which is `changed_at`'s own rule read forwards: state or
+  // tier moves it, and a shifting reason list under one tier does not — that is
+  // the same episode still running, and firing on it would be a notification
+  // every interval for as long as the outage lasts.
+  //
+  // An environment absent from `prev` is skipped rather than announced. It is a
+  // first reading — a newly configured environment, or a snapshot that arrived
+  // without the list — and every one of those would otherwise announce itself as
+  // an event on the pulse the cockpit first saw it, `unknown` and healthy alike.
+  const wasRead = new Map(prev.environments.map((e) => [e.environment, e]));
+  for (const env of next.environments) {
+    const was = wasRead.get(env.environment);
+    if (was === undefined) continue;
+    if (was.state === env.state && was.tier === env.tier) continue;
+    items.push({
+      category: 'environments',
+      // Keyed on the reading and not the environment, so the next change stacks
+      // beside this one rather than replacing it: an outage and its all-clear are
+      // two things to have been told.
+      tag: `env:${env.environment}:${env.changedAt}`,
+      title: healthTitle(env),
+      body: healthBody(env, was),
+    });
+  }
+
   return coalesce(items);
+}
+
+/**
+ * What one environment's change is called.
+ *
+ * The three states get three sentences, and `unknown` gets its own rather than
+ * borrowing either neighbour's: a check that could not answer is not an outage,
+ * and telling an operator their environment is down because a credential expired
+ * is the failure the three-valued state exists to prevent.
+ */
+function healthTitle(env: EnvironmentHealthReading): string {
+  if (env.state === 'healthy') return `${env.environment} is well again`;
+  if (env.state === 'unknown') return `${env.environment} did not answer`;
+  return `${env.environment} is not well`;
+}
+
+/**
+ * What it says under the title: the check's own words where it has any, and what
+ * the harness knows where it has none.
+ *
+ * A recovery has no reasons by construction, so it carries the one fact the
+ * reading it replaced can supply — how long the episode ran. It is measured
+ * between the two `changedAt`s rather than against the clock, which keeps this
+ * function pure and gives the same answer however late the cockpit noticed.
+ */
+function healthBody(env: EnvironmentHealthReading, was: EnvironmentHealthReading): string {
+  if (env.state === 'healthy') return `After ${spell(was.changedAt, env.changedAt)} ${SAID[was.state]}`;
+  const said = env.state === 'unknown' ? (env.detail ?? '') : '';
+  const parts = [env.tier === null ? null : TIER_WORD[env.tier], said, ...env.reasons].filter(
+    (part): part is string => part !== null && part !== '',
+  );
+  return parts.length > 0 ? parts.join(' · ') : `The check said ${SAID[env.state]} and gave no reason`;
+}
+
+/** How each state reads inside a sentence about the state it has left or reached. */
+const SAID: Record<EnvironmentHealthReading['state'], string> = {
+  healthy: 'well',
+  unhealthy: 'not well',
+  unknown: 'unanswered',
+};
+
+/** The tier, as the notification's first word. Capitalised because it leads the body. */
+const TIER_WORD: Record<'red' | 'orange', string> = { red: 'Red', orange: 'Orange' };
+
+/** How long an episode ran, at the scale it is read: `2m`, `41m`, `3h 40m`. */
+function spell(fromIso: string, toIso: string): string {
+  const mins = Math.max(0, Math.round((new Date(toIso).getTime() - new Date(fromIso).getTime()) / 60_000));
+  if (mins < 60) return `${mins}m`;
+  return `${Math.floor(mins / 60)}h ${mins % 60}m`;
 }
 
 /** The most subjects a coalesced notification spells out before it counts the rest. */
@@ -241,6 +327,7 @@ const SUMMARY_TITLE: Record<NotifyCategory, (n: number) => string> = {
   needsYou: (n) => `${n} things need you`,
   errors: (n) => `${n} errors recorded`,
   agents: (n) => `${n} runs ended`,
+  environments: (n) => `${n} environments changed`,
 };
 
 /**
