@@ -133,6 +133,7 @@ async function main(): Promise<void> {
     // Beside the heartbeat and for its reason: both are things that start cycles,
     // and a cycle started on the way down dispatches agents nothing will interrupt.
     system.localCycles.stop();
+    system.ingressCycles.stop();
     stopConfigWatch();
     stopProjectConfigWatch();
     // Interrupt (not kill) so the next boot offers this in-flight work for restore.

@@ -899,7 +899,7 @@ touch resources the process pinned, which is why worktree removal hangs off this
 ### An ending is what refills the slot
 
 Both terminal events are also what tells the pulse there is room again. `src/system.ts` subscribes to
-`done` and `reaped` and asks `LocalCycleTrigger` for a
+`done` and `reaped` and asks `CycleTrigger` for a
 [local cycle](04-harness-cycle.md#the-local-cycle): `done` is when the row stops counting against the
 cap, `reaped` is when the worktree slot goes back, and neither implies the other in time. Before it,
 nothing reacted to an agent finishing at all — the slot it freed sat idle until the next beat, up to

@@ -25,7 +25,8 @@ returns a report with `cycleId: 'coalesced'` and a zeroed summary rather than qu
 exist because a cycle can be started two ways: by the timer (through `Heartbeat`) and directly by a
 route calling `harness.runCycle('manual')`.
 
-A cycle's `source` is `'timer'`, `'manual'`, `'boot'` or [`'local'`](#the-local-cycle).
+A cycle's `source` is `'timer'`, `'manual'`, `'boot'`, [`'local'`](#the-local-cycle) or
+[`'ingress'`](30-ingress.md#triggering-a-pulse).
 
 **A coalesced cycle reads no world.** That is what stops a route from using
 `await harness.runCycle('manual')` as its way of making its own write visible: on a busy fleet most
@@ -122,7 +123,7 @@ cycle — there is nothing to decide against, so it returns `cycleId: 'unbaselin
 in the shape of the other two. Synthesizing an empty world instead would read to every rule as a
 tracker that has just gone dark.
 
-`LocalCycleTrigger` (`src/localCycle.ts`) is what asks for one. It debounces by 250 ms, because an
+`CycleTrigger` (`src/cycleTrigger.ts`) is what asks for one. It debounces by 250 ms, because an
 ending arrives as up to two events and a fleet's endings arrive together, and it retries a **refused**
 cycle a bounded number of times — a refusal means the freed slot is still empty, and the blocker (a
 cycle in flight) usually clears in seconds. After ten attempts it gives up and the heartbeat is the
@@ -131,6 +132,11 @@ values are constants in that module and stay constants: they are mechanism — t
 of endings, and how soon to re-ask a blocker that clears in seconds — not a policy anyone deploys
 differently. Neither is a thing an operator can reason about from outside, and every key is a support
 question ([02](02-configuration.md#the-cadence-keys)).
+
+The same class serves the [ingress](30-ingress.md#triggering-a-pulse), with two of its numbers set
+differently, and the difference is the whole reason it takes them: what the ingress fires is a **real**
+cycle, so it carries a floor between fires that this one has no need of. A local cycle reads no world,
+so a burst of them costs a store pass each and there is nothing to ration.
 
 ## Hot and cold
 
@@ -231,7 +237,8 @@ list of them is above, and no step below reads differently for it.
 ```mermaid
 flowchart TD
     T(["Heartbeat timer · POST /api/pulse · boot"]) --> RH{"recovery.pendingCount() > 0?"}
-    L(["an agent ended — LocalCycleTrigger, debounced"]) --> RH
+    L(["an agent ended — CycleTrigger, debounced"]) --> RH
+    IN(["a verified webhook delivery — CycleTrigger, debounced and floored"]) --> RH
     RH -- yes --> HELD(["cycleId: held — no snapshot, no dispatch, no act"])
     RH -- no --> CF{"cycle already in flight?"}
     CF -- yes --> CO(["cycleId: coalesced"])
@@ -490,8 +497,12 @@ reports whose ids are not `cyc_*`.
 - The heartbeat timer.
 - `harness.runCycle('boot')` once at startup.
 - `POST /api/pulse`.
-- **An agent reaching a terminal state** — `done` or `reaped`, through `LocalCycleTrigger`, as a
+- **An agent reaching a terminal state** — `done` or `reaped`, through `CycleTrigger`, as a
   [local cycle](#the-local-cycle), so the slot it freed is refilled in a moment rather than at the next
   beat.
+- **A verified inbound webhook delivery** that named at least one entity — through a second
+  `CycleTrigger`, as a **real** cycle carrying the invalidation the delivery implied
+  ([30](30-ingress.md#triggering-a-pulse)). Only on a deployment that has set a webhook secret; there is
+  no such source on any other.
 - `POST /api/jobs`, `POST /api/findings/:id/promote`, `POST /api/plans/:id/replan`, and each of the
   watch/exclude label toggles — each kicks a cycle so the change takes effect immediately.

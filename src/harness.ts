@@ -294,6 +294,14 @@ interface HarnessDeps {
    * inbox rows, decides no dispatch, and no rule reads what it writes.
    */
   escalations?: { tidyDeadAgents(): unknown[] };
+  /**
+   * What an inbound delivery has said is stale since the last plan was built,
+   * drained into this pulse's read plan. Absent = no ingress, which is every
+   * deployment that has set no webhook secret and every test that does not name one
+   * — and then the plan carries an empty fresh set and the lanes decide alone,
+   * exactly as they did before. → `docs/spec/30-ingress.md#invalidating-precisely`
+   */
+  freshReads?: { drain(): string[] };
 }
 
 /**
@@ -303,8 +311,15 @@ interface HarnessDeps {
  * it cheap enough to fire on something that happened *inside* the harness (an agent
  * finishing) rather than on a clock.
  * → `docs/spec/04-harness-cycle.md#the-local-cycle`
+ *
+ * `ingress` is a real read like the first three, and is named apart from them for
+ * what it says rather than what it does: a verified webhook delivery announced that
+ * something outside moved, so this pulse carries an invalidation the timer's does
+ * not. A local cycle would be no use to it — the thing it came to see is precisely
+ * the world a local cycle does not read.
+ * → `docs/spec/30-ingress.md#triggering-a-pulse`
  */
-type CycleSource = 'timer' | 'manual' | 'boot' | 'local';
+type CycleSource = 'timer' | 'manual' | 'boot' | 'local' | 'ingress';
 
 export interface CycleReport {
   cycleId: string;
@@ -496,6 +511,10 @@ export class Harness extends EventEmitter {
             events: store.listWorldEvents(READ_PLAN_EVENTS),
             now: Date.now(),
             lanes: this.deps.readLanes,
+            // Drained here, on the one path that builds a plan — so a delivery that
+            // arrives while a cycle is in flight is picked up by the next one rather
+            // than by the read that was already underway when it landed.
+            fresh: this.deps.freshReads?.drain(),
           })
         : undefined;
       const world = cached ?? (await this.deps.connector.getState(readPlan));

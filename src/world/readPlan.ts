@@ -41,6 +41,21 @@ export interface ReadPlan {
   hotMaxAgeMs: number;
   /** The same bound for a **cold** one: the slow lane's re-read interval. */
   coldMaxAgeMs: number;
+  /**
+   * The refs an inbound delivery has said are stale — re-read whatever lane they
+   * are on and whatever their change token says.
+   *
+   * This is how event-driven ingress invalidates *precisely* one entity
+   * (`src/ingress/inbox.ts`): a ref here is asked for with an age bound of **zero**,
+   * which is always past, so the hydration cache drops that one entry and hydrates
+   * it again. Nothing else in the cache is touched, and no integration needs a
+   * method to be told.
+   *
+   * Optional, because a read taken outside the pulse — a route, the cockpit's own
+   * snapshot — has no inbox to drain and nothing to invalidate.
+   * → `docs/spec/30-ingress.md#invalidating-precisely`
+   */
+  fresh?: ReadonlySet<string>;
 }
 
 /** The two backstops, as the operator sets them. */
@@ -98,6 +113,11 @@ interface ReadPlanInputs {
   events: WorldEvent[];
   now: number;
   lanes: ReadLanes;
+  /**
+   * What an inbound delivery has invalidated since the last plan was built —
+   * `IngressInbox.drain()`, or nothing at all on a deployment with no ingress.
+   */
+  fresh?: readonly string[];
 }
 
 /**
@@ -127,7 +147,11 @@ interface ReadPlanInputs {
  */
 export function buildReadPlan(input: ReadPlanInputs): ReadPlan {
   const { previous, lanes } = input;
-  if (previous === null) return { hot: 'all', ...lanes };
+  const fresh = new Set(input.fresh ?? []);
+  // `all` is already the strongest lane there is, but the fresh set is stronger
+  // still — it is the one thing that defeats the age backstop rather than widening
+  // it — so it is carried on this arm too.
+  if (previous === null) return { hot: 'all', fresh, ...lanes };
 
   const hot = new Set<string>();
   for (const pr of previous.pullRequests) {
@@ -157,7 +181,7 @@ export function buildReadPlan(input: ReadPlanInputs): ReadPlan {
     hot.add(event.ref);
   }
 
-  return { hot, ...lanes };
+  return { hot, fresh, ...lanes };
 }
 
 /**
@@ -173,6 +197,12 @@ export function buildReadPlan(input: ReadPlanInputs): ReadPlan {
  */
 export function hydrationMaxAgeMs(plan: ReadPlan | undefined, ref: string): number {
   if (plan === undefined) return DEFAULT_READ_LANES.hotMaxAgeMs;
+  // Zero is always past, so the cache drops this entry and re-hydrates it. Asked
+  // before the lanes, because that is what "a webhook said this moved" has to beat:
+  // an entity a delivery names is usually one whose *token has not moved* either —
+  // a review left on a pull request does not touch its `updatedAt` — so anything
+  // short of overriding the reuse entirely would change nothing.
+  if (plan.fresh?.has(ref) === true) return 0;
   if (plan.hot === 'all' || plan.hot.has(ref)) return plan.hotMaxAgeMs;
   return plan.coldMaxAgeMs;
 }

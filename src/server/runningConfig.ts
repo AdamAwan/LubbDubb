@@ -219,7 +219,7 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
       'dbPath',
     ],
   },
-  { title: 'Server', keys: ['port', 'host', 'auth'] },
+  { title: 'Server', keys: ['port', 'host', 'auth', 'ingress'] },
 ];
 
 /**
