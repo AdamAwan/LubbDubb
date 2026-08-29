@@ -4,9 +4,16 @@
 
 ## The heartbeat
 
-`Heartbeat` is deliberately dumb: it knows nothing about dispatch. `start()` sets a `setInterval` at
-`heartbeatIntervalMs`; `stop()` clears it; `trigger()` fires one immediately. Node timers keep the
-process alive, which is what an always-on server wants.
+`Heartbeat` is deliberately dumb: it knows nothing about dispatch, and nothing about what makes a
+fleet busy. `start()` arms a `setTimeout`; each fire re-arms the next one; `stop()` clears it;
+`trigger()` fires one immediately. Node timers keep the process alive, which is what an always-on
+server wants.
+
+**The interval is a thunk, not a number**, and that is the whole of the [adaptive
+cadence](#the-adaptive-cadence). A `setInterval` fixes its period at `start()`, so a harness that
+decided to slow down would have had to stop and restart the timer — and every path that forgot to
+would keep the old period with nothing red. Re-arming with a fresh reading after each fire has no
+such path.
 
 `fire()` holds a `running` flag and returns immediately if a cycle is already in flight, so cycles
 never overlap.
@@ -18,7 +25,8 @@ returns a report with `cycleId: 'coalesced'` and a zeroed summary rather than qu
 exist because a cycle can be started two ways: by the timer (through `Heartbeat`) and directly by a
 route calling `harness.runCycle('manual')`.
 
-A cycle's `source` is `'timer'`, `'manual'` or `'boot'`.
+A cycle's `source` is `'timer'`, `'manual'`, `'boot'`, [`'local'`](#the-local-cycle) or
+[`'ingress'`](30-ingress.md#triggering-a-pulse).
 
 **A coalesced cycle reads no world.** That is what stops a route from using
 `await harness.runCycle('manual')` as its way of making its own write visible: on a busy fleet most
@@ -26,6 +34,10 @@ manual calls land inside a running cycle and return without fetching anything, s
 cockpit is served still describes the world as it was before the write. A route that has changed the
 outside world folds the change onto the baseline itself and then broadcasts — see the watch routes
 ([16](16-http-api.md#why-both-watch-routes-patch-the-baseline)).
+
+The [local cycle](#the-local-cycle) below does not weaken that. It is a third kind of thing rather than
+a manual cycle that skipped its fetch, it says so on its own report, and a route that has changed the
+outside world still has to fold the change onto the baseline itself.
 
 ## The crash-recovery hold
 
@@ -46,22 +58,199 @@ The hold is re-asked every beat, so it lifts by itself the moment the last decis
 un-hold call and no restart. It emits neither `cycle:start` nor `cycle:end`, for the same reason the
 coalesced return does not: no cycle ran.
 
+## The local cycle
+
+`runCycle('local')` runs the whole decide/execute sequence against the **cached baseline world** — the
+snapshot the last real cycle already read and stored — and calls `connector.getState()` not at all.
+
+It exists because most of the latency an operator feels is internal rather than external. An agent
+finishing frees a slot, and nothing about that is a fact any provider holds; before the local cycle
+nothing reacted to it at all, so the slot sat idle for up to a full heartbeat — five minutes on the
+default deployment — with work queued in front of it. A cycle that reads no world is cheap enough to
+fire on an event ([10](10-agent-runtimes.md#an-ending-is-what-refills-the-slot)).
+
+**It is honest about what it is.** `CycleReport.readWorld` is `false`, `source` is `local`, and the
+audit row's rationale is prefixed `[local]` like any other source — so "was this decided against a
+fresh reading" is answerable from the record rather than inferred. A local cycle's world is as fresh
+as the last real read, which since the change-gated hydration may be very fresh indeed; it is still
+not a new read, and nothing here pretends otherwise.
+
+### What runs, and what does not
+
+A local cycle runs **everything derived from the store** — the plan funnel, the verdicts, the fleet,
+the queue, the parks with an ending nobody has to decide, `dispatcher.decide` and `executor.execute` —
+and skips **every pass whose subject is the world snapshot**:
+
+`connector.getState`, `recordWorldChanges`, `plans.reconcile`, `prWatch`, `prWorkItems`, `naming`,
+`branchReaps`, `updates`, `environments`, `notices`, `pool`, `appraisals.announce`,
+`areaPaths.refresh`, `askReviewedElsewhere` and `tickets`.
+
+Each of those already ran against this exact world, on the cycle that read it, and each is idempotent —
+so re-running them can produce provider traffic and never a new verdict. `notices` is skipped for a
+second reason: it is handed the **pair** the diff was taken from, and a local cycle takes no diff, so
+run with `prev === next` it would read every notice as settled by a world that has not moved.
+`recordWorldChanges` is skipped for the other half of its job: re-stamping the baseline onto itself
+would be a write, on every local cycle, asserting the world was read when it was not.
+
+The line is easy to hold in the code: with the executor's one deliberate exception, **every awaited
+call in the body talks to the outside world and every synchronous one does not**, so the guard sits on
+exactly the awaits.
+
+**Why deciding against a cached world is safe.** Every gate that stops the fleet doing a thing twice —
+the tasks, the agents, the recent decisions and their cooldowns, the verdict tables — is read from the
+store, which is fresh. The world contributes the _subject_ of a decision, not the memory of whether it
+has already been taken. And the dispatcher must already be idempotent over an unchanged world, because
+two consecutive real pulses over a settled world are indistinguishable from one real cycle followed by
+a local one: a rule that would misfire here is a rule that already misfires on every quiet beat. What
+a local cycle can therefore reach that the real cycle before it did not is exactly what the _store_
+has changed — a freed slot, an operator's verdict, a queued job.
+
+**What it is not for.** A decision whose correctness needs a _fresh_ provider reading — has this check
+gone green, has this pull request merged, has this ticket been closed — is not one a local cycle can
+improve on, and no such pass runs on one. And a route that has just changed the outside world still
+cannot use a local cycle to make that change visible, for the coalescing paragraph's reason above: it
+folds the change onto the baseline itself.
+
+### The guards, unchanged
+
+Both refusals above are asked before a local cycle exactly as they are before a real one. It must not
+run while `recovery.pendingCount() > 0` — the harness's model of its own fleet is wrong while orphaned
+rows are undecided, and that is no less true for a cycle that read no world — and it must not run
+while `cycleInFlight`, which would be two cycles deciding at once.
+
+It has a third refusal of its own: with **no baseline at all** — a fresh store before its first real
+cycle — there is nothing to decide against, so it returns `cycleId: 'unbaselined'` and emits nothing,
+in the shape of the other two. Synthesizing an empty world instead would read to every rule as a
+tracker that has just gone dark.
+
+`CycleTrigger` (`src/cycleTrigger.ts`) is what asks for one. It debounces by 250 ms, because an
+ending arrives as up to two events and a fleet's endings arrive together, and it retries a **refused**
+cycle a bounded number of times — a refusal means the freed slot is still empty, and the blocker (a
+cycle in flight) usually clears in seconds. After ten attempts it gives up and the heartbeat is the
+backstop again, so a recovery hold that stands until somebody answers it is not a busy loop. Both
+values are constants in that module and stay constants: they are mechanism — the width of one burst
+of endings, and how soon to re-ask a blocker that clears in seconds — not a policy anyone deploys
+differently. Neither is a thing an operator can reason about from outside, and every key is a support
+question ([02](02-configuration.md#the-cadence-keys)).
+
+The same class serves the [ingress](30-ingress.md#triggering-a-pulse), with two of its numbers set
+differently, and the difference is the whole reason it takes them: what the ingress fires is a **real**
+cycle, so it carries a floor between fires that this one has no need of. A local cycle reads no world,
+so a burst of them costs a store pass each and there is nothing to ration.
+
+## Hot and cold
+
+Not every entity deserves the same clock, and before this one number governed all of them.
+
+The world read is **change-gated** ([15](15-integrations.md#reading-less-before-retrying-harder)):
+what the last fan-out derived per entity is held beside a change token read off the cheap list
+payload, and a snapshot that finds the token unmoved reuses it and issues no request. That gate is
+never suppressed by anything here. A token that moved is a hydration that would contradict the cheap
+fields fetched on the same pulse, and serving it is how a cache starts lying.
+
+What a lane governs is the other half: the **age backstop**, the bound on reuse for the fields no
+token covers at all — a base branch advancing under a pull request, an administrator reconfiguring a
+branch policy, a cross-reference an issue gained because a pull request elsewhere named it. Those
+change with nothing on any payload moving, so a reading of them is only ever as good as its age.
+
+`src/world/readPlan.ts` classifies every entity in the **previous** reading, once per pulse, from
+what the harness already knows. An entity is **hot** when:
+
+- its last-read CI is not settled — anything short of `passing`/`failing` is a build that will finish
+  with no token moving anywhere, and finishing it usually moves the merge state too;
+- its merge-readiness is in flux — approved (so the harness may be about to merge it), or already
+  reported `behind`/`dirty`, which is the field the base branch advances underneath;
+- **the fleet is on it** — an active task naming its origin (`issue:12`, and anything below it), or
+  working its branch. That covers a just-dispatched issue, whose linked pull request is the next
+  thing to appear on it;
+- **it moved recently** — a `world_event` on that ref inside the cold lane's own interval. An entity
+  something is happening to stays hot until it has been quiet for as long as the slow lane is.
+
+Everything else is cold. Before the first real cycle the plan is `'all'`: the cache holds nothing, so
+there is nothing for a lane to govern. The classification is deliberately generous, because the two
+errors are not the same size — a wrong _hot_ costs one entity's fan-out on one pulse, a wrong _cold_
+costs freshness on something the fleet is about to act on.
+
+**Cold is never invisible.** A cold entity is listed by the cheap payload every pulse, carries its
+title, state, labels and head commit fresh every pulse, and is in the world snapshot the dispatcher
+reasons over every pulse — the whole world is read, always. What it does not get is a per-entity
+fan-out more often than its lane allows. There is no filtering anywhere in this: `ReadPlan` reaches
+the providers as a **cost** hint, and the population that comes back is identical either way.
+
+### Who owns the cold-lane interval
+
+**The lane does, and the cache now owns nothing.** `HydrationCache` used to expire every entry after
+a `MAX_REUSE_MS` of five minutes, and that constant _was_ the de-facto cold lane. Left in place under
+a slower lane it would have defeated it silently — every entity re-hydrating on the constant's
+schedule whatever the plan said, with nothing red — and set faster than the lane it would never have
+fired at all. Two clocks for one decision is the failure either way, so there is one: the caller
+passes the bound its lane gives it (`hydrationMaxAgeMs`) and the cache holds no policy.
+
+The default cold lane is **five minutes: deliberately the number that constant was**, which was
+itself the heartbeat the fleet ran at before any of this existed. So the slowest thing the fleet
+reads is read exactly as often as _everything_ was before: nothing is staler than it used to be, the
+hot handful are five times fresher, and the pulse itself is ten times faster. A longer cold lane
+would be the first blind spot this effort actually introduced, and it would arrive silently — which
+is why it is a number an operator sets deliberately rather than one derived from the heartbeat.
+
+Both bounds are config (`hotReadMaxAgeMs`, `coldReadMaxAgeMs`), and zero is meaningful on either: an
+age bound of zero is always past, so that lane pays its fan-out every pulse.
+
+## The adaptive cadence
+
+The pulse runs at `heartbeatIntervalMs` (30s) while the fleet is **busy**, and
+`idleHeartbeatIntervalMs` (5 minutes) while it is not. `CycleReport.nextIntervalMs` says which the
+harness is on — the one observable that catches a fleet stuck on the slow interval with work queued,
+which has no other symptom.
+
+Busy is decided at the end of each cycle from that cycle's own inputs, so the cadence can never be
+decided against a different pulse than the dispatch was. It is busy when any of these hold:
+
+- a live agent;
+- a queued job;
+- a candidate in the Up next plan the **fleet itself** is holding — dispatching, `waiting` on
+  headroom, `cooldown`, or `capped`. A candidate held `unapproved` does not count: it is waiting on a
+  _person_, and a fleet that polls every thirty seconds because somebody has not clicked yet is a
+  fleet that never goes idle. The click is not a thing any provider read can discover;
+- a build in flight — a pull request whose CI is `pending`. A check going green is the commonest
+  thing an idle-looking fleet is actually waiting for, and it arrives with no token moving anywhere.
+
+An idle fleet still looks, because what ends the idleness is usually outside it: an issue filed, a
+review left, a check that went red on somebody else's push. It just does not have to look every
+thirty seconds.
+
+`idleHeartbeatIntervalMs` below `heartbeatIntervalMs` is read as equal to it rather than refused: a
+slow lane faster than the fast one is a setting with no meaning, not a boot the operator should lose.
+
+The cockpit's countdown draws `heartbeatIntervalMs` — the busy interval — so on an idle fleet the
+"next pulse" ring wraps and sits at due rather than counting a longer wait. That is a deliberate
+non-change: the harness section of the state snapshot is what an operator's deployment _is_ and is
+invalidated by nothing routine, and a live cadence shipped through it would be right only until it
+was not.
+
 ## Ordering
 
-`runCycle` performs exactly this sequence. The order is load-bearing at five points, noted below.
+`runCycle` performs exactly this sequence. The order is load-bearing at five points, noted below. A
+[local cycle](#the-local-cycle) performs the same sequence with the world-facing passes skipped; the
+list of them is above, and no step below reads differently for it.
 
 ```mermaid
 flowchart TD
     T(["Heartbeat timer · POST /api/pulse · boot"]) --> RH{"recovery.pendingCount() > 0?"}
+    L(["an agent ended — CycleTrigger, debounced"]) --> RH
+    IN(["a verified webhook delivery — CycleTrigger, debounced and floored"]) --> RH
     RH -- yes --> HELD(["cycleId: held — no snapshot, no dispatch, no act"])
     RH -- no --> CF{"cycle already in flight?"}
     CF -- yes --> CO(["cycleId: coalesced"])
-    CF -- no --> START["emit cycle:start with the new cyc_* id"]
+    CF -- no --> BL{"local, and no baseline yet?"}
+    BL -- yes --> UB(["cycleId: unbaselined"])
+    BL -- no --> START["emit cycle:start with the new cyc_* id"]
 
     subgraph BODY ["one cycle"]
         direction TB
-        START --> W["snapshot the world — connector.getState()"]
-        W --> DIFF["diff against the last baseline<br/>persist world events, emit world:events, replace the baseline"]
+        START --> PLAN["build the read plan — which entities are hot this pulse<br/><i>local: skipped; there is no read to plan</i>"]
+        PLAN --> W["snapshot the world — connector.getState(plan)<br/><i>local: the stored baseline, unread</i>"]
+        W --> DIFF["diff against the last baseline<br/>persist world events, emit world:events, replace the baseline<br/><i>local: skipped, with every other world-facing pass</i>"]
         DIFF --> REC["reconcile plans — before decide, so a part moved to ready<br/>is dispatchable this same cycle"]
         REC --> SEED["tag the harness's own pull requests — once each, so an un-watch sticks"]
         SEED --> NAME["rename PRs onto the convention — idempotent bookkeeping"]
@@ -84,7 +273,11 @@ flowchart TD
         RAT --> EXEC["executor.execute(cycleId, plan)"]
     end
 
-    EXEC --> END(["emit cycle:end with the CycleReport"])
+    EXEC --> CAD["set the next interval — busy or idle, from this cycle's own inputs"]
+    CAD --> END(["emit cycle:end with the CycleReport"])
+    HELD -.-> NONE(["no cycle:start, no cycle:end — no cycle ran"])
+    CO -.-> NONE
+    UB -.-> NONE
     BODY -. a throw anywhere .-> ERR["errors.record({ source: 'cycle' })<br/>zeroed summary, the next pulse tries again"]
     ERR --> END
 ```
@@ -279,8 +472,17 @@ What the dispatcher gets to look at (`src/dispatcher/dispatcher.ts`):
 Returned by `runCycle` and carried on `cycle:end`:
 
 ```ts
-{ cycleId, source, rationale, summary: { cycleId, executed, deferred, rejected }, at }
+{ cycleId, source, readWorld, nextIntervalMs, rationale, summary: { cycleId, executed, deferred, rejected }, at }
 ```
+
+`nextIntervalMs` is the gap before the next timer cycle as this cycle's outcome left it — the busy
+interval or the idle one ([above](#the-adaptive-cadence)). A refusal reports it as it stands, having
+changed nothing.
+
+`readWorld` is false for a `local` cycle and for all three refusals, where no cycle ran at all. It is
+carried rather than derived from `source` at each reader, so a second world-less source added later
+cannot be missed by one of them. `cycleRan(report)` answers the other question — the refusals are the
+reports whose ids are not `cyc_*`.
 
 ## Events
 
@@ -295,5 +497,12 @@ Returned by `runCycle` and carried on `cycle:end`:
 - The heartbeat timer.
 - `harness.runCycle('boot')` once at startup.
 - `POST /api/pulse`.
+- **An agent reaching a terminal state** — `done` or `reaped`, through `CycleTrigger`, as a
+  [local cycle](#the-local-cycle), so the slot it freed is refilled in a moment rather than at the next
+  beat.
+- **A verified inbound webhook delivery** that named at least one entity — through a second
+  `CycleTrigger`, as a **real** cycle carrying the invalidation the delivery implied
+  ([30](30-ingress.md#triggering-a-pulse)). Only on a deployment that has set a webhook secret; there is
+  no such source on any other.
 - `POST /api/jobs`, `POST /api/findings/:id/promote`, `POST /api/plans/:id/replan`, and each of the
   watch/exclude label toggles — each kicks a cycle so the change takes effect immediately.

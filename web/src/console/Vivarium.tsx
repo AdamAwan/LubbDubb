@@ -107,8 +107,9 @@ function sizeFor(stage: PetState['pets'][number]['stage']): number {
  * dispatch is paused.
  *
  * Clamped to a range a heart could plausibly beat at rather than derived from
- * `heartbeatIntervalMs` directly — the default pulse is five minutes, and a bob
- * with a five-minute period is a still image that redraws twice an hour.
+ * `heartbeatIntervalMs` directly — the pulse is not one: five minutes whenever the
+ * fleet is idle, and a bob with a five-minute period is a still image that redraws
+ * twice an hour.
  */
 function beatMs(runningAgents: number, paused: boolean): number {
   if (paused) return 0;

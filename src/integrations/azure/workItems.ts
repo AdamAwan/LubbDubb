@@ -27,6 +27,8 @@ import type {
 } from '../integration.js';
 import type { AzureDevOpsApi, AzWorkItem, AzWorkItemUpdate } from './azureDevOpsApi.js';
 import { azureRefUrl } from './refUrl.js';
+import { HydrationCache } from '../hydrationCache.js';
+import { hydrationMaxAgeMs, issueReadRef, type ReadPlan } from '../../world/readPlan.js';
 
 interface AzureWorkItemsOpts {
   /** The Azure DevOps client, already bound to a single organization/project. */
@@ -85,6 +87,16 @@ export class AzureDevOpsWorkItemsIntegration
   readonly bodyFormat = 'html' as const;
 
   private lastGood: Issue[] | null = null;
+  /**
+   * Tag authorship per work item, gated on the revision the answer was derived
+   * from. The one per-item read this provider makes, and the one whose change
+   * token is exact — see {@link viewerAddedTagsFor}.
+   *
+   * Distinct from {@link lastGood} in the way that matters: that is the *failure*
+   * path, replaying a world of unknown age and saying so with `stale: true`; this
+   * is a current answer that cost no request, and never touches that flag.
+   */
+  private readonly tagAuthorship = new HydrationCache<{ token: string; tags: string[] }>();
 
   constructor(private readonly opts: AzureWorkItemsOpts) {}
 
@@ -123,7 +135,7 @@ export class AzureDevOpsWorkItemsIntegration
     }));
   }
 
-  async snapshot(): Promise<WorldSlice> {
+  async snapshot(plan?: ReadPlan): Promise<WorldSlice> {
     try {
       const { api, workItemTag, assignedTo, ownershipTag } = this.opts;
       const raw = await api.listOpenWorkItems(workItemTag, assignedTo);
@@ -135,7 +147,7 @@ export class AzureDevOpsWorkItemsIntegration
           // the item actually carries the gate tag — others can't be picked up anyway.
           const tracksOwner = viewer !== null && ownershipTag !== undefined && w.tags.includes(ownershipTag);
           const labelsAddedByViewer = tracksOwner
-            ? [...viewerAddedTags(await api.listWorkItemUpdates(w.id), viewer)]
+            ? await this.viewerAddedTagsFor(w, viewer, hydrationMaxAgeMs(plan, issueReadRef(w.id)))
             : undefined;
           return {
             id: `issue_${w.id}`,
@@ -156,6 +168,10 @@ export class AzureDevOpsWorkItemsIntegration
           };
         }),
       );
+      // Anything that has left the open set — or been filtered out of it — will
+      // never be asked about again, so its authorship entry is dead weight. Done
+      // after the fan-out so a hit this pulse is not evicted before it is read.
+      this.tagAuthorship.retain(raw.map((w) => w.id));
       this.lastGood = issues;
       return { issues };
     } catch (err) {
@@ -168,6 +184,37 @@ export class AzureDevOpsWorkItemsIntegration
       if (this.lastGood === null) throw err;
       return { issues: this.lastGood, stale: true };
     }
+  }
+
+  /**
+   * The tags **this viewer** added to `w`, from its revision history — the
+   * `labelsAddedByViewer` the dispatcher's ownership gate reads.
+   *
+   * Change-gated on `(viewer, System.ChangedDate)`, which is the rare token that
+   * covers the answer *exactly* rather than approximately. Tag authorship is a
+   * fold over the item's revisions; a revision is the only thing that can add,
+   * remove or re-author a tag; and Azure stamps `System.ChangedDate` on every
+   * revision it accepts. So an item whose `changedAt` has not moved cannot have
+   * a different answer, and the `listWorkItemUpdates` call is pure cost. That
+   * holds for the harness's own writes too: `setWorkItemTag` is a revision, so
+   * the next list read carries a new `changedAt` and the next fold is paid for.
+   *
+   * The care here is not incidental. `labelsAddedByViewer` gates pickup fleet
+   * wide, and a wrong empty answer resolves every issue's labels to `[]` — at
+   * which point nothing is ever picked up and *nothing is red*. So an item Azure
+   * reported without a `changedAt` is never gated and never stored: it is read
+   * afresh every pulse, which costs a request and can only be right.
+   * → [06](../../../docs/spec/06-issue-pickup.md)
+   */
+  private async viewerAddedTagsFor(w: AzWorkItem, viewer: string, maxAgeMs: number): Promise<string[]> {
+    const token = `${viewer}\u0000${w.changedAt}`;
+    if (w.changedAt !== '') {
+      const hit = this.tagAuthorship.get(w.id, maxAgeMs);
+      if (hit !== undefined && hit.token === token) return [...hit.tags];
+    }
+    const tags = [...viewerAddedTags(await this.opts.api.listWorkItemUpdates(w.id), viewer)];
+    if (w.changedAt !== '') this.tagAuthorship.set(w.id, { token, tags });
+    return tags;
   }
 
   /**

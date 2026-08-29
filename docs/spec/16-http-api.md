@@ -24,6 +24,7 @@ is about.
 | `routes/control.ts`     | `/api/pulse`, `/api/errors/clear`, `/api/control`, `/api/prs/:number/watch`                                                                                               |
 | `routes/escalations.ts` | The whole "Needs you" inbox: escalations, proposals, recovery                                                                                                             |
 | `routes/humanTasks.ts`  | Work only a person can do: filing one, and the two ways it settles                                                                                                        |
+| `routes/ingress.ts`     | `/ingress/github` and `/ingress/azure` — the inbound webhook endpoint, its own body parser and its bounds                                                                 |
 | `routes/issues.ts`      | Watch, priority, conclusion, appraisal, delivered, shortfall, dismiss-run                                                                                                 |
 | `routes/jobs.ts`        | `/api/jobs`, `/api/jobs/:id/cancel`, `/api/upnext/order`, `/api/upnext/profile`                                                                                           |
 | `routes/knowledge.ts`   | The whole claim store: writing one down, its observations and disputes, how far an operator says it carries, the three ways it leaves, and the answers to a contradiction |
@@ -101,6 +102,12 @@ Fastify `onRequest` hook as a thin adapter. Three layers:
    rebinding). A present `Origin` that is not loopback is refused whatever it is; an absent one is
    fine, since no non-browser client sends it. Any loopback origin passes, so the Vite dev proxy on
    another port keeps working.
+
+**Three routes are outside the guard, and each authorizes itself.** `/artifacts/:id` and
+`/attachments/:id` are reached by a browser navigation and an `<img src>`, neither of which can carry
+the bearer header; `/ingress/github` and `/ingress/azure` are reached by a webhook provider, which has
+no cockpit token to carry. `test/cockpitAuth.test.ts` walks the whole route table and asserts that
+every route outside `/api` refuses a bare request, which is what makes moving one out there safe.
 
 Origin and host are answered **before** the token, so a leaked credential never turns a rebinding
 attempt back into a way in. The refusal is `403` for those two and `401` for the token.
@@ -336,6 +343,28 @@ living between one and two buckets instead of exactly one.
 
 The path served comes from the **stored row**, never from the request, and is re-confined to
 `attachmentRoot` before it is read — the belt-and-braces the artifact route applies to a flag's ref.
+
+### `POST /ingress/github` · `POST /ingress/azure`
+
+The inbound webhook / service-hook endpoint — **the only unauthenticated, internet-facing route in the
+product**. It is owned in full by [30](30-ingress.md); what belongs here is its shape.
+
+`application/json` only, at most `ingress.maxBodyBytes` (1 MiB, then `413`), at most
+`ingress.requestsPerMinute` a minute across the whole endpoint (600, then `429`) — keyed to the
+endpoint rather than to `req.ip`, because a webhook arrives from a provider's whole address range.
+GitHub deliveries are verified by HMAC-SHA256 over the **raw** body (`X-Hub-Signature-256`); Azure's by
+the basic credential on the request, which authenticates the caller and not the body. Constant-time
+both. `401` for an unverified delivery, `404` when this deployment has no secret for that provider —
+which is what the path answered before the endpoint existed.
+
+A `200` body is `{"accepted": <count>}` and never names the entities, so an unauthenticated caller
+cannot learn which pull requests the fleet is watching by watching the reply change.
+
+**This module registers its own content-type parser**, inside an encapsulated plugin so it applies to
+nothing else, because the signature covers bytes the parsed-body seam does not hand over —
+`JSON.stringify(JSON.parse(x))` is not `x`. The handler is still wrapped in `checked` and still handed
+a validated body; the raw bytes reach it through a module-private `WeakMap` keyed by the request, so
+nothing is asserted about the request and the structural sweep below holds over this module unchanged.
 
 ### `POST /api/pulse`
 

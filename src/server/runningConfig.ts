@@ -123,6 +123,9 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
     title: 'Dispatch',
     keys: [
       'heartbeatIntervalMs',
+      'idleHeartbeatIntervalMs',
+      'hotReadMaxAgeMs',
+      'coldReadMaxAgeMs',
       'maxConcurrentAgents',
       'startPaused',
       'sendPrRepliesWithoutApproval',
@@ -216,7 +219,7 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
       'dbPath',
     ],
   },
-  { title: 'Server', keys: ['port', 'host', 'auth'] },
+  { title: 'Server', keys: ['port', 'host', 'auth', 'ingress'] },
 ];
 
 /**

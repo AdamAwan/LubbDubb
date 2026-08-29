@@ -259,6 +259,8 @@ export class OctokitGitHubApi implements GitHubApi {
       url: p.html_url,
       labels: p.labels.map((l) => (typeof l === 'string' ? l : (l.name ?? ''))).filter((name) => name !== ''),
       assigneeLogins: (p.assignees ?? []).map((a) => a.login).filter((login) => login !== ''),
+      // The snapshot's change token. Free — it is already on this payload.
+      updatedAt: p.updated_at,
     }));
   }
 

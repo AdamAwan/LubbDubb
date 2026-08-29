@@ -130,6 +130,10 @@ async function main(): Promise<void> {
       exitCode === UPGRADE_EXIT_CODE ? '\n[lubbdubb] going down for an upgrade...' : '\n[lubbdubb] shutting down...',
     );
     system.harness.stop();
+    // Beside the heartbeat and for its reason: both are things that start cycles,
+    // and a cycle started on the way down dispatches agents nothing will interrupt.
+    system.localCycles.stop();
+    system.ingressCycles.stop();
     stopConfigWatch();
     stopProjectConfigWatch();
     // Interrupt (not kill) so the next boot offers this in-flight work for restore.

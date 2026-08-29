@@ -18,6 +18,7 @@ import type {
   AzureDevOpsApi,
 } from './azureDevOpsApi.js';
 import { mergeStrategyFor, stripRef } from './sourceControl.js';
+import { AzureEtagCache } from './conditionalRequests.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -329,6 +330,12 @@ export function isRelationAlreadyExists(message: string): boolean {
  */
 export class RestAzureDevOpsApi implements AzureDevOpsApi {
   private viewer: string | null = null;
+  /**
+   * Validators for the GET responses Azure volunteered one for. Opportunistic
+   * and server-driven: see `conditionalRequests.ts` for what it does and does
+   * not cover on this provider.
+   */
+  private readonly etags = new AzureEtagCache();
   /** The bound project's GUID, resolved once — the policy artifactId needs the id, not the name. */
   private projectId: string | null = null;
   /** The bound repository's GUID, resolved once — a work-item artifact link needs the id, not the name. */
@@ -369,6 +376,11 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
 
   private async request<T>(url: string, init: RequestInit = {}): Promise<T> {
     const method = init.method ?? 'GET';
+    // Only a GET is ever validated. A write has no business in a read cache, and
+    // the validator is only offered when the server volunteered one for this
+    // exact URL last time — see `conditionalRequests.ts` for why this layer
+    // makes no claim about which Azure endpoints answer 304.
+    const cached = method === 'GET' ? this.etags.get(url) : undefined;
     let lastError: Error | undefined;
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -390,6 +402,7 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
             Authorization: await this.auth.header(),
             Accept: 'application/json',
             ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+            ...(cached ? { 'If-None-Match': cached.etag } : {}),
             ...init.headers,
           },
         });
@@ -401,6 +414,12 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
 
       const body = await res.text().catch(() => '');
       const contentType = res.headers.get('content-type');
+
+      // The server has just said the reading we hold is still current. That is a
+      // *fresh* answer that cost no transfer, not a degraded one — nothing here
+      // may set anything resembling `stale`. Checked before `res.ok`, which is
+      // false for a 304 and would otherwise turn it into a hard 4xx failure.
+      if (res.status === 304 && cached) return JSON.parse(cached.body) as T;
 
       if (!res.ok) {
         lastError = new Error(
@@ -429,7 +448,13 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
       }
 
       try {
-        return JSON.parse(body) as T;
+        const parsed = JSON.parse(body) as T;
+        // Store only what the server itself offered a validator for, so the next
+        // read of this URL can be asked conditionally. An endpoint that sends no
+        // ETag is never stored and never asked — this layer is a no-op for it.
+        const etag = res.headers.get('etag');
+        if (method === 'GET' && res.status === 200 && etag) this.etags.set(url, etag, body);
+        return parsed;
       } catch {
         // 2xx, not HTML, but unparseable — genuinely malformed; a retry won't help.
         throw new Error(

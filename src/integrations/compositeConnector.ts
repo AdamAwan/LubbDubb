@@ -22,6 +22,7 @@ import type {
   WorkItemStateInput,
 } from '../sink/actionSink.js';
 import type { TrackerItem, WorldSnapshot } from '../types.js';
+import { DEFAULT_READ_LANES, type ReadLanes, type ReadPlan } from '../world/readPlan.js';
 import { signOff } from '../sink/signOff.js';
 import type { CiEvidenceReader, CiEvidenceTarget, CiFailureEvidence } from '../ci/ciEvidence.js';
 import type { AreaPathTree } from '../intake/placement.js';
@@ -65,10 +66,22 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
   constructor(
     private readonly integrations: Integration[],
     private readonly now: () => string = () => new Date().toISOString(),
+    /**
+     * The lane backstops an *unplanned* read uses — a route, or the cockpit's
+     * snapshot. Held here rather than defaulted inside each integration so the
+     * operator's numbers are the only ones in play: a constant down there would be
+     * a second answer to the same question, differing from the config on exactly
+     * the deployments that changed it.
+     */
+    private readonly lanes: ReadLanes = DEFAULT_READ_LANES,
   ) {}
 
-  async getState(): Promise<WorldSnapshot> {
-    const slices = await Promise.all(this.integrations.map(async (i) => ({ id: i.id, slice: await i.snapshot() })));
+  async getState(plan?: ReadPlan): Promise<WorldSnapshot> {
+    // Everything hot, for a caller with no fleet state to classify against. Never
+    // *nothing* hot: a read that declared every entity cold because it did not know
+    // any better would serve the cockpit a world as old as the slow lane.
+    const read: ReadPlan = plan ?? { hot: 'all', ...this.lanes };
+    const slices = await Promise.all(this.integrations.map(async (i) => ({ id: i.id, slice: await i.snapshot(read) })));
     // Named per integration rather than counted, because which half of the world
     // is old changes what a decision made against it is worth: a stale issue list
     // with fresh pull requests is a fleet that will not pick up new work, and the

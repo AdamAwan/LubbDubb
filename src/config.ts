@@ -16,6 +16,7 @@ import { DEFAULT_FILING_TYPES } from './ticketTypes.js';
 import { DEFAULT_MCP_ARGS_RETENTION_DAYS } from './store/mcpCalls.js';
 import type { PetPolicy } from './pets/keeper.js';
 import { validateEnvironments, type EnvironmentConfig } from './environments/policy.js';
+import { DEFAULT_READ_LANES } from './world/readPlan.js';
 
 /**
  * Central configuration. Everything the operator can tune lives here.
@@ -24,8 +25,50 @@ import { validateEnvironments, type EnvironmentConfig } from './environments/pol
  * `lubbdubb.config.json` file at the repo root, then these defaults.
  */
 export interface Config {
-  /** How often the heartbeat fires a dispatch cycle. */
+  /**
+   * How often the heartbeat fires a dispatch cycle **while the fleet is doing
+   * something** — an agent running, a queue with work in it, a build in flight.
+   *
+   * Thirty seconds, where it was five minutes before the world read learned to
+   * cost almost nothing on a quiet pulse. It is the near-real-time half of the
+   * cadence; {@link idleHeartbeatIntervalMs} is the other.
+   * → `docs/spec/04-harness-cycle.md#the-adaptive-cadence`
+   */
   heartbeatIntervalMs: number;
+  /**
+   * How often the heartbeat fires when **nothing is moving** — no live agent, no
+   * queued work, no unsettled build.
+   *
+   * An idle fleet still has to look, because the thing that ends the idleness is
+   * usually outside: an issue filed, a review left, a check that went red on
+   * somebody else's push. What it does not have to do is look every thirty
+   * seconds. Never shorter than {@link heartbeatIntervalMs} — a value below it is
+   * read as equal to it, since "slow lane" that is faster than the fast one is a
+   * setting with no meaning rather than an error worth refusing a boot over.
+   */
+  idleHeartbeatIntervalMs: number;
+  /**
+   * How long a **hot** entity's hydration may be reused while its change token
+   * sits still — the backstop for the fields no token covers at all (a base branch
+   * advancing under a pull request; an administrator reconfiguring a branch
+   * policy).
+   *
+   * Hot is "something about this is plausibly moving": a build in flight, an open
+   * dispatch against it, merge-readiness in flux, a transition observed recently.
+   * → `docs/spec/04-harness-cycle.md#hot-and-cold`
+   */
+  hotReadMaxAgeMs: number;
+  /**
+   * The same bound for everything else — the slow lane, and the main lever on what
+   * a faster pulse costs the provider.
+   *
+   * A cold entity is **not** invisible: it is listed every pulse, its cheap fields
+   * are fresh every pulse, and it is in the world the dispatcher reasons over
+   * every pulse. What it does not get is a per-entity fan-out more often than
+   * this. Raising it saves requests and buys blind spots on exactly the fields the
+   * backstop covers; lowering it does the reverse.
+   */
+  coldReadMaxAgeMs: number;
   /** Hard cap on concurrently-running agents. Runtime-adjustable via the control endpoint. */
   maxConcurrentAgents: number;
   /**
@@ -839,6 +882,8 @@ export interface Config {
   host: string;
   /** Cockpit access control. See `src/server/auth.ts`. */
   auth: AuthConfig;
+  /** Inbound webhook / service-hook ingress. See `src/ingress/ingress.ts`. */
+  ingress: IngressBounds;
 }
 
 /**
@@ -858,6 +903,38 @@ interface AuthConfig {
   enabled: boolean;
   /** Where a minted token is persisted. Relative paths resolve against the launch directory. */
   tokenFile: string;
+}
+
+/**
+ * The bounds on the inbound ingress endpoint — and **only** the bounds.
+ *
+ * There is deliberately no `secret` field and no `enabled` field. The secrets come
+ * from `LUBBDUBB_INGRESS_SECRET` (GitHub's HMAC) and `LUBBDUBB_INGRESS_BASIC`
+ * (Azure's basic credential) for `AuthConfig`'s reason — `lubbdubb.config.json` is
+ * the file an operator pastes into an issue when asking for help — and their
+ * presence *is* the on switch, so there is no boolean that can disagree with them.
+ * A deployment that has set neither answers `404` on the endpoint, which is what it
+ * answered before the feature existed.
+ *
+ * Every number here is inert on such a deployment. That is the right way round: the
+ * page shows an operator what the endpoint will cost before they turn it on.
+ * → `docs/spec/30-ingress.md#turning-it-on`
+ */
+interface IngressBounds {
+  /** How long a burst of deliveries settles before one cycle fires. */
+  debounceMs: number;
+  /**
+   * The floor between two cycles a delivery may cause.
+   *
+   * The one number that decides what an inbound flood can cost this fleet's
+   * provider budget: whoever can post a verified delivery would otherwise decide how
+   * often the harness talks to its provider.
+   */
+  minCycleGapMs: number;
+  /** Deliveries accepted per minute across the whole endpoint, before a `429`. */
+  requestsPerMinute: number;
+  /** Largest delivery body read, before a `413`. Bounds the work an unverified caller buys. */
+  maxBodyBytes: number;
 }
 
 export interface GitHubConfig {
@@ -965,7 +1042,13 @@ export interface WhitelistRule {
 }
 
 const DEFAULTS: Config = {
-  heartbeatIntervalMs: 5 * 60 * 1000,
+  // Thirty seconds busy, five minutes idle. The arithmetic behind both — what a
+  // pulse costs each provider on a small and a large fleet — is in
+  // `docs/spec/15-integrations.md#what-the-cadence-costs`.
+  heartbeatIntervalMs: 30 * 1000,
+  idleHeartbeatIntervalMs: 5 * 60 * 1000,
+  hotReadMaxAgeMs: DEFAULT_READ_LANES.hotMaxAgeMs,
+  coldReadMaxAgeMs: DEFAULT_READ_LANES.coldMaxAgeMs,
   maxConcurrentAgents: 3,
   startPaused: false,
   // On: replies go out, and `false` is how an operator asks to be asked. The one
@@ -1065,6 +1148,14 @@ const DEFAULTS: Config = {
   port: 4300,
   host: '127.0.0.1',
   auth: { enabled: true, tokenFile: '.lubbdubb/cockpit-token' },
+  // A second of debounce rather than the local trigger's quarter, because a burst
+  // here is a person pushing a commit that fires four checks rather than two events
+  // about one agent ending; and a five-second floor, which caps an inbound flood at
+  // twelve real cycles a minute — roughly what a thirty-second heartbeat costs six
+  // times over, and well inside every provider budget the specs work through.
+  // Ten deliveries a second and a mebibyte are both far above what a busy repository
+  // produces and far below what an unbounded endpoint would accept.
+  ingress: { debounceMs: 1_000, minCycleGapMs: 5_000, requestsPerMinute: 600, maxBodyBytes: 1_048_576 },
 };
 
 /**
@@ -1136,6 +1227,7 @@ function mergeConfig(overrides: Partial<Config> = {}): Config {
   merged.review = { ...DEFAULTS.review, ...overrides.review };
   merged.localRun = { ...DEFAULTS.localRun, ...overrides.localRun };
   merged.auth = { ...DEFAULTS.auth, ...overrides.auth };
+  merged.ingress = { ...DEFAULTS.ingress, ...overrides.ingress };
   // The CI check rules are an ordered list, so this is a replace and not a merge:
   // there is no sensible way to deep-merge two orderings, and a caller that sets
   // `ci` means the list it wrote.
@@ -1410,6 +1502,7 @@ export const DEEP_MERGED_BLOCKS = [
   'review',
   'localRun',
   'auth',
+  'ingress',
   'ci',
   'github',
   'azureDevOps',

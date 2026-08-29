@@ -19,7 +19,8 @@ The name is the heartbeat: the server's core is a periodic pulse that drives eve
 
 ## The pulse
 
-One repeating cycle, driven by a heartbeat (`heartbeatIntervalMs`, default 5 minutes) and also
+One repeating cycle, driven by a heartbeat (`heartbeatIntervalMs`, default 30s while the fleet is
+busy; `idleHeartbeatIntervalMs`, 5 minutes, while it is not) and also
 triggerable on demand:
 
 ```
@@ -283,25 +284,25 @@ Every key is optional, and every key, its default and its precedence is in
 [`docs/spec/02-configuration.md`](docs/spec/02-configuration.md). These are the ones that decide
 whether a deployment works at all:
 
-| Key                            | Default                     | Why it matters                                                                                                                             |
-| ------------------------------ | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `repoRoot`                     | the directory you launch in | The git repository worktrees are cut from. Left alone, the harness works on **its own** checkout.                                          |
-| `integrations`                 | all `fake`                  | Which provider serves each capability — `sourceControl`, `issues`, `pool`. `fake` is the mock world the demo and the suite run on.         |
-| `github` / `azureDevOps`       | unset                       | The provider's own target: owner and repo, or organization, project and repository.                                                        |
-| `userId`                       | unset                       | Who you are to the provider. **Pickup reads label authorship**, so without it nothing is ever picked up and nothing says why. → [06][s06]  |
-| `ownWorkOnly`                  | `true`                      | Whether the world arrives filtered to you: your watch tags, your pull requests. A team decision, so it belongs in the project layer.       |
-| `agentMode`                    | `stream`                    | `stream` runs a real model. `raw` is the mock agent — argv over a terminal — and what the example config and the tests use.                |
-| `maxConcurrentAgents`          | `3`                         | The fleet's **one** size knob: the worktree pool is this plus a slack of two, read live, so raising it raises the pool with it.            |
-| `defaultBranch`                | `"main"`                    | The integration branch. Not auto-detected, and a PR targeting anything else is treated as stacked.                                         |
-| `heartbeatIntervalMs`          | `300000`                    | The gap between timer-driven cycles. Everything is also triggerable on demand.                                                             |
-| `labelPrefix`                  | `"lubbdubb"`                | Derives the one `-watch` tag. Everything is opt-in; an empty prefix turns the gate off entirely.                                           |
-| `ci.checks`                    | `[]`                        | Per-check policy: dispatch, dispatch with guidance, ignore, or escalate. Empty means every red check gets an agent. → [02][s02]            |
-| `agentModels`                  | unset                       | Named profiles — a model and the depth it runs at — assigned per dispatch rule. Omitted, no launch carries `--model`.                      |
-| `agentAllowedTools`            | npm/git/gh/node             | What an unattended agent may run without asking. Anything else is routed to you rather than hanging. **Never** set this via `claudeArgs`.  |
-| `sendPrRepliesWithoutApproval` | `true`                      | Send a drafted review reply straight to the thread. `false` is the stricter setting: every draft waits in the inbox.                       |
-| `review.enabled`               | `false`                     | The fleet reads a pull request of its own before a person is asked. With two or more `review.modes`, a triage picks how thoroughly.        |
-| `environments`                 | `[]`                        | Where landed work travels: a command per environment printing the commit it is at, optionally what an arrival opens and what to watch for. |
-| `host` / `port` / `auth`       | `127.0.0.1` / `4300` / on   | Loopback and a bearer token. A host reachable off this machine with `auth.enabled: false` is **refused at load**.                          |
+| Key                            | Default                     | Why it matters                                                                                                                                            |
+| ------------------------------ | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `repoRoot`                     | the directory you launch in | The git repository worktrees are cut from. Left alone, the harness works on **its own** checkout.                                                         |
+| `integrations`                 | all `fake`                  | Which provider serves each capability — `sourceControl`, `issues`, `pool`. `fake` is the mock world the demo and the suite run on.                        |
+| `github` / `azureDevOps`       | unset                       | The provider's own target: owner and repo, or organization, project and repository.                                                                       |
+| `userId`                       | unset                       | Who you are to the provider. **Pickup reads label authorship**, so without it nothing is ever picked up and nothing says why. → [06][s06]                 |
+| `ownWorkOnly`                  | `true`                      | Whether the world arrives filtered to you: your watch tags, your pull requests. A team decision, so it belongs in the project layer.                      |
+| `agentMode`                    | `stream`                    | `stream` runs a real model. `raw` is the mock agent — argv over a terminal — and what the example config and the tests use.                               |
+| `maxConcurrentAgents`          | `3`                         | The fleet's **one** size knob: the worktree pool is this plus a slack of two, read live, so raising it raises the pool with it.                           |
+| `defaultBranch`                | `"main"`                    | The integration branch. Not auto-detected, and a PR targeting anything else is treated as stacked.                                                        |
+| `heartbeatIntervalMs`          | `30000`                     | The gap between timer-driven cycles while the fleet is busy; `idleHeartbeatIntervalMs` (5 min) while it is not. Everything is also triggerable on demand. |
+| `labelPrefix`                  | `"lubbdubb"`                | Derives the one `-watch` tag. Everything is opt-in; an empty prefix turns the gate off entirely.                                                          |
+| `ci.checks`                    | `[]`                        | Per-check policy: dispatch, dispatch with guidance, ignore, or escalate. Empty means every red check gets an agent. → [02][s02]                           |
+| `agentModels`                  | unset                       | Named profiles — a model and the depth it runs at — assigned per dispatch rule. Omitted, no launch carries `--model`.                                     |
+| `agentAllowedTools`            | npm/git/gh/node             | What an unattended agent may run without asking. Anything else is routed to you rather than hanging. **Never** set this via `claudeArgs`.                 |
+| `sendPrRepliesWithoutApproval` | `true`                      | Send a drafted review reply straight to the thread. `false` is the stricter setting: every draft waits in the inbox.                                      |
+| `review.enabled`               | `false`                     | The fleet reads a pull request of its own before a person is asked. With two or more `review.modes`, a triage picks how thoroughly.                       |
+| `environments`                 | `[]`                        | Where landed work travels: a command per environment printing the commit it is at, optionally what an arrival opens and what to watch for.                |
+| `host` / `port` / `auth`       | `127.0.0.1` / `4300` / on   | Loopback and a bearer token. A host reachable off this machine with `auth.enabled: false` is **refused at load**.                                         |
 
 A first real deployment is about six lines:
 

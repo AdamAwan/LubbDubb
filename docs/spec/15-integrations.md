@@ -270,13 +270,13 @@ Four decisions hold it up.
 plan status comment, the appraisal question, the arrival announcement, the PR review reply, the filed
 ticket body and the opened PR body — and every one of them reaches a provider through
 `postPrReply`, `upsertIssueComment`, `createIssue` or `createPullRequest`. Signing there signs the
-surfaces that exist *and* the ones added later. Six call sites each remembering to sign is six that
+surfaces that exist _and_ the ones added later. Six call sites each remembering to sign is six that
 can quietly become five, on a comment that reads perfectly and is attributed to the wrong author.
 Same reasoning as appending to a rendered prompt rather than interpolating into it
 ([05](05-dispatcher.md#prompt-templates)).
 
 **Only prose is signed.** A label, a merge, a title rewrite, a state transition and a branch delete
-are *acts*: they carry no voice for a reader to mistake for a human's, and a footer is not a thing
+are _acts_: they carry no voice for a reader to mistake for a human's, and a footer is not a thing
 you can attach to them anyway.
 
 **It names no account.** The avatar beside the comment already says whose credential it went out
@@ -303,7 +303,7 @@ no second footer.
 
 The line's last clause is drawn from a list of endings, because one fixed ending read a hundred times
 stops being a joke and becomes furniture — and furniture is what a reader's eye learns to skip,
-taking the half of the line that *matters* along with it. Which ending a body gets is **hashed from
+taking the half of the line that _matters_ along with it. Which ending a body gets is **hashed from
 the body**, not drawn at random: the plan status comment and the appraisal question are each one living
 comment edited in place, and a random ending would move under every edit, filling the thread's
 revision history with diffs whose only content is the joke. Hashing spreads endings across comments
@@ -370,6 +370,10 @@ Behaviour worth knowing:
 
 - **`mergeable` is tri-state.** GitHub's `null` means "still computing", so the field is left absent
   rather than asserting not-mergeable.
+- **The per-entity fan-out is change-gated**, against a token read off the list payload that is
+  fetched anyway (`hydrationCache.ts`). A pulse over a world nothing has moved in costs the two list
+  requests and nothing else. A hit is a **current** reading, never a `stale` one — the two mechanisms
+  are unrelated ([below](#reading-less-before-retrying-harder)).
 - **A transient snapshot failure serves the last good slice.** The failure is recorded to the error
   log and the previous PR list (open and closed) is returned, so PRs do not flap in and out of the
   world on one bad response.
@@ -532,11 +536,83 @@ Behaviour worth knowing:
 - **Closed PRs** use `queryTimeRangeType=closed` + `minTime` with `status=all`: one request covering
   completions and abandonments, re-filtered client-side because the range is boundary-inclusive and an
   older API version may ignore the parameters.
+- **The per-entity fan-out is change-gated**, against tokens read off payloads the pulse pays for
+  anyway. On a quiet pulse the work-item side costs its two list requests and nothing else, and each
+  active pull request costs two reads instead of three. A hit is a **current** reading and never a
+  `stale` one — the two mechanisms are unrelated ([below](#reading-less-on-azure)).
 - Auth: `AZURE_DEVOPS_PAT` (Basic) preferred, else the logged-in `az` CLI (Bearer, cached).
   `azCliAccessToken` is the one place `az` is invoked — by `resolveAzureAuth`'s CLI arm, and by
   Setup's credential probe, which must ask exactly what the auth path asks
   ([26](26-setup.md#the-credential-check-asks-both-routes)). `isSignInHtml` detects a sign-in-HTML response,
-  which is retried; only a request that spends *every* attempt reaches the Errors panel.
+  which is retried; only a request that spends _every_ attempt reaches the Errors panel.
+
+### Reading less on Azure
+
+The Azure world read costs one list request plus **three per active pull request** (threads, policy
+evaluations, labels) and **one per owner-tagged work item** (its revision history), plus at most two
+batched hierarchy reads. Nothing about that is free: unlike GitHub there is no conditional-request
+relief to fall back on, so at a thirty-second heartbeat every one of those is a real, billed,
+rate-limited request. Two mechanisms cut it, and they are deliberately different in kind.
+
+- **Change-gated hydration** (`src/integrations/hydrationCache.ts`). What the last fan-out
+  derived is held per entity id beside a **change token** read off the cheap list payload the pulse
+  has already paid for. A caller that finds its token unmoved reuses what it holds and issues
+  nothing. Entries are bounded, dropped for entities that have left the active/open set, and expire
+  on the bound their **lane** gives them — a minute for a pull request something is happening to,
+  five for one nothing is ([04](04-harness-cycle.md#hot-and-cold)). The cache states no window of its
+  own: a constant there and a lane above it would be two clocks for one decision, and the shorter
+  would silently win.
+
+  - **Tag authorship is gated on `(viewer, System.ChangedDate)`**, which covers the answer exactly
+    rather than approximately: `labelsAddedByViewer` is a fold over the work item's revisions, only a
+    revision can change it, and Azure stamps `System.ChangedDate` on every revision it accepts — the
+    harness's own `setWorkItemTag` writes included. So an item whose `changedAt` has not moved cannot
+    fold to a different answer, and `listWorkItemUpdates` is pure cost. The care is not incidental:
+    `labelsAddedByViewer` gates pickup fleet-wide, and a wrong empty answer stops every dispatch with
+    nothing going red ([06](06-issue-pickup.md)). An item Azure reported _without_ a `changedAt` is
+    therefore never gated and never cached — it is read afresh every pulse, which costs a request and
+    can only be right.
+  - **Branch-policy evaluations are gated on two things at once.** The head commit is not a token for
+    them on its own: a build completing changes the evaluation and nothing else, which is precisely
+    the transition the harness exists to notice. So a reading is reused only while it is **settled** —
+    every enabled build/status evaluation has reached a verdict and none is `isExpired` — _and_ the
+    token is unmoved. The token is `lastMergeSourceCommit` + `mergeStatus` + `isDraft` (the build and
+    status policies), the reviewer votes off the same list payload the author filter reads (the
+    reviewer policies), and a fingerprint of the threads fetched a moment earlier (the
+    comment-resolution policy, whose whole input is those threads). Reading the threads first costs
+    one extra round trip on a miss and none on a hit.
+  - **Threads and labels are not gated at all.** Nothing on the cheap payload covers either, and
+    gating a read on a token that does not cover it is how a cache starts lying. They are paid for
+    every pulse.
+  - **What no token covers** is a work-item-linking policy (its input is a relation written on the
+    work item, which the source-control capability never reads), a merge-strategy policy, an
+    unrecognised policy type, and any policy an administrator adds, retires or reconfigures. Those
+    are covered by the age backstop alone, which is why the backstop exists — and why an operator
+    raising `coldReadMaxAgeMs` is raising how long an administrator's policy change goes unnoticed on
+    a quiet pull request.
+
+- **Conditional requests, opportunistically** (`src/integrations/azure/conditionalRequests.ts`).
+  Azure DevOps documents `If-None-Match` on only a narrow slice of its REST surface — the Git
+  **items** and blob reads are the known case — and documents nothing of the kind for the endpoints
+  this world read actually spends its budget on: `pullrequests`, a pull request's `threads`,
+  `policy/evaluations`, `pullRequests/{id}/labels`, `wit/wiql`, `wit/workitems`, or
+  `workItems/{id}/updates`. Behaviour also varies by organization and API version, so a hard-coded
+  list of "endpoints that support it" would be a claim the code cannot keep, and **a cache that
+  silently covers nothing while looking like it covers everything is worse than no cache**. The layer
+  therefore makes no claim: a validator is only ever sent for a URL **the server itself ETagged on
+  the previous response**. An endpoint that sends no `ETag` is never asked a conditional question and
+  costs exactly what it cost before. Expect this to save little on the world read as Azure ships
+  today; it is there so the parts that do validate — and any deployment behind a proxy that adds
+  validators — are picked up without a code change. A `304` is turned back into an ordinary success
+  from the stored body, checked before `res.ok` (which is false for a 304) so the retry loop cannot
+  read it as a hard failure.
+
+**A cache hit is not staleness, and never sets `stale`.** That flag means a read _failed_ and the
+integration is serving `lastGood` — a world of unknown age, which `CompositeConnector` names on
+`staleSources` so a decision taken against it can be discounted ([above](#snapshot-failures)). A hit
+is the opposite: a current reading that cost no request, because the payload fetched this pulse said
+nothing moved. The two paths are kept visibly apart in the code for that reason; conflating them
+would mark a healthy fleet permanently degraded and quietly devalue every decision it takes.
 
 ## Reference links
 
@@ -648,7 +724,7 @@ differs, because the two are absorbing different things.
 
 The GitHub world read costs on the order of one request per open issue plus six per open pull
 request, every pulse. A retry cannot make that fit an hourly budget; only not spending the budget
-can. Three things do that, and they are read in this order.
+can. Four things do that, and they are read in this order.
 
 - **Every GET is conditional** (`etagCache.ts`, installed on the client in `fromToken`). The client
   re-sends the `ETag` of the reading it already holds, and **a `304 Not Modified` does not count
@@ -665,6 +741,43 @@ can. Three things do that, and they are read in this order.
   job log, a whole file fetched once per dispatched CI fix, and holding megabytes to save a request
   nobody repeats is the wrong trade.
 
+- **The per-entity fan-out is skipped entirely when nothing moved.** ETags make an unchanged
+  response free against the _rate limit_; they do not make it free of a round trip, and at a
+  thirty-second heartbeat the six-per-PR fan-out is latency the pulse cannot absorb. So the hydrated
+  `PullRequest` / `Issue` is cached by entity number beside a **change token** read off the list
+  payload (`hydrationCache.ts`), and a snapshot that finds the token unmoved reuses it and issues no
+  request for that entity. A quiet pulse collapses to the two list reads.
+
+  **The token has to cover every field it lets you skip**, and one token does not.
+
+  - `updated_at` gates the reads that answer to something done _to_ the entity — `getPull`,
+    `listPullReviews`, `listPullReviewComments`, the review-thread query, and an issue's timeline.
+    A review, a comment, a label, a push, a retarget all move it.
+  - It does **not** move when a check run completes or a commit status posts, so the two CI reads are
+    gated separately: on `head.sha`, **and** on the cached verdict being terminal. Anything short of
+    `passing`/`failing` — a build queued, running, or that has not reported — is re-read every pulse,
+    because it settles with no token moving at all. A settled verdict on an unmoved commit is the one
+    CI reading that cannot change.
+  - Some fields no token covers: `mergeable_state` turns `behind`/`dirty` because the _base_ branch
+    advanced, and an issue gains a cross-reference because a pull request elsewhere named it —
+    neither touches the entity's own `updated_at`. Rather than reuse those forever, **every entry
+    expires**, on the bound its [lane](04-harness-cycle.md#hot-and-cold) gives it: a minute for an
+    entity something is happening to, five for one nothing is. The cold default is exactly the
+    five-minute backstop every entity used to have, which was itself the heartbeat the fleet ran at
+    before any of this existed — so nothing is staler than it used to be, the hot handful are five
+    times fresher, and everything the faster pulse adds is a read, not a blind spot. The cache is also
+    bounded, and entries for entities that have left the open set are dropped on the next snapshot.
+  - A degraded reading is never cached: when the review-thread GraphQL read fails, the hydration it
+    produced is used for that pulse and thrown away, so the outage is retried on the next one instead
+    of being served as a hit until the token moves.
+
+  **A cache hit is not staleness, and never sets `stale`.** That flag means a read _failed_ and the
+  provider is serving `lastGood` — a world of unknown age, which `CompositeConnector` names on
+  `staleSources` so a decision taken against it can be discounted
+  ([above](#snapshot-failures)). A hit is the opposite: a current reading that cost no request,
+  because GitHub's own list payload said nothing moved. Conflating the two would mark a healthy fleet
+  permanently degraded and quietly devalue every decision it takes.
+
 - **One client per repository, not one per capability.** `sourceControl: github` and `issues: github`
   are two views of one service, so `buildIntegrations` builds the client once and hands it to both
   (`ProviderClients`). Two would be two ETag caches, two `viewerLogin` resolutions — a second
@@ -676,18 +789,110 @@ can. Three things do that, and they are read in this order.
 - **A primary rate limit is refused, not waited out.** `onRateLimit` returns false once GitHub's
   `retryAfter` exceeds `MAX_PRIMARY_LIMIT_WAIT_S` (60s). The primary limit is not the blip
   `MAX_RETRIES` was sized for: its `retryAfter` is time-until-the-hour-window-resets, so it arrives
-  in the hundreds of seconds; the snapshot fans out with `Promise.all`, so *every* request in flight
+  in the hundreds of seconds; the snapshot fans out with `Promise.all`, so _every_ request in flight
   parks for it and the pulse is held; and they then all fire again the instant the window reopens,
   re-exhausting the budget they were waiting on. What the wait buys is already free — the snapshot
   degrades to `lastGood` with `stale: true` and the next pulse tries again. A wait short enough to be
   a window turning over anyway is still absorbed, and the **secondary** limit keeps the full budget,
-  because it is burst-triggered, clears in seconds, and backing off *is* the correct response to it.
+  because it is burst-triggered, clears in seconds, and backing off _is_ the correct response to it.
   The decision is `waitOutRateLimit(retryAfterS, retryCount)` — pure, so the policy is testable
   without a clock or a socket — and both outcomes are recorded, worded by which they are.
 
 The harness's `GITHUB_TOKEN` is inherited by every agent it spawns, so `gh` in an agent's own shell
 draws on the same hourly budget. The fleet's read is whatever its agents leave it, which is the other
 reason the snapshot's cost is worth this much attention.
+
+### What the cadence costs
+
+The default pulse is 30s busy / 5 minutes idle, and the honest question about that is what an hour of
+it spends. The lane split ([04](04-harness-cycle.md#hot-and-cold)) makes the answer depend on the
+_shape_ of the fleet rather than only its size, so here it is per entity, per hour, at the defaults
+(120 pulses in a busy hour; hot backstop 60s, cold 300s).
+
+**GitHub** — 3 list requests a pulse (open pulls, open issues, recently-closed pulls), 6 per pull
+request hydrated (4 detail + 2 CI), 1 per issue hydrated:
+
+| Line item              | Requests/hour, busy                                |
+| ---------------------- | -------------------------------------------------- |
+| The list reads         | 3 × 120 = **360**                                  |
+| Each hot pull request  | 240 (detail) + 240 (CI, while unsettled) ≈ **480** |
+| Each cold pull request | 6 × 12 = **72**                                    |
+| Each hot issue         | 1 × 60 = **60**                                    |
+| Each cold issue        | 1 × 12 = **12**                                    |
+
+- **Small fleet** — 3 open pull requests (1 hot), 20 open issues (3 hot):
+  `360 + 480 + 2×72 + 3×60 + 17×12` ≈ **1,370 requests/hour**.
+- **Large fleet** — 25 open pull requests (6 hot), 200 open issues (15 hot), 5 list pages a pulse:
+  `600 + 6×480 + 19×72 + 15×60 + 185×12` ≈ **7,970 requests/hour**.
+
+The large figure is above the 5,000/hour primary budget as a _request count_ and nowhere near it as a
+_charge_: every GET is conditional, and **a `304` costs nothing against the limit**
+([above](#reading-less-before-retrying-harder)). What is billed is the reads whose content actually
+changed, which on a fleet with six moving pull requests is a few hundred an hour. What the count does
+bound is latency and the **secondary** (burst) limit, which is triggered by concurrency rather than
+by an hourly total — and which the throttling plugin already backs off from.
+
+The comparison that matters is against the two alternatives, on that same large fleet:
+
+- **Naive near-real-time** (every entity re-hydrated every pulse): `600 + 25×6×120 + 200×120` ≈
+  **42,600/hour**. This is the thing the lane split exists to not do; it is five times the figure
+  above and most of it is spent on entities nobody has touched in a fortnight.
+- **One flat five-minute backstop for everything** (stage 1's shape, at a 30s pulse): ≈ **4,800/hour**
+  — cheaper than the lanes, and five times staler on exactly the handful of entities the fleet is
+  acting on. The lane split is that trade, stated: it spends on the six that are moving to buy back
+  the freshness, and takes it off the two hundred that are not.
+
+**Azure DevOps** is the provider this cadence is tightest on, because it has no conditional-request
+relief: every request is paid in full ([above](#reading-less-on-azure)). Per pulse it costs 4 list
+requests, **2 per active pull request that nothing gates** (threads and labels — no token covers
+either), plus a gated policy evaluation per pull request and a gated revision read per owner-tagged
+work item:
+
+- **Small fleet** — 3 active pull requests (1 hot), 20 owner-tagged items (3 hot):
+  `480 + 3×240 + 84 + 384` ≈ **1,670/hour**, or ~140 per five-minute window.
+- **Large fleet** — 25 active pull requests (6 hot), 200 items (15 hot):
+  `480 + 25×240 + 588 + 3,120` ≈ **10,200/hour**, or ~850 per five-minute window — and **6,000 of it
+  is the ungated threads-and-labels pair**, which the lanes do not touch.
+
+So the honest answer is that **the ungated Azure pair is what bounds a fast heartbeat**, and it scales
+with the number of _active_ pull requests and not with the size of the repository: `2 × 3600/H` per
+active pull request per hour. At 30s that is 240 each. A deployment with more than roughly twenty
+concurrently active pull requests on Azure DevOps should raise `heartbeatIntervalMs` — its own
+sliding-window limits are expressed in TSTUs (compute), so request counts are a proxy and the real
+signal is the 429-retry notices in the Errors panel.
+
+The structural fix, deliberately **not** taken here, is to put those two reads on the lane too. It
+would take the large-fleet figure from ~10,200 to ~3,800. It is left because of `labels`: the watch
+tag is what the dispatch gate reads and what `prWatch` **writes**, so an age-reused label list would
+have the harness re-tagging its own pull requests every pulse until the lane came due — an outbound
+write per pulse, which is a worse failure than the reads it saves. Gating `threads` alone is the
+narrower version and is the one to do first.
+
+### Is a per-pulse budget worth building
+
+A budget — N requests a pulse, spent hot lane first, degrading rather than tripping a limit — was
+considered and is not built. Four reasons, in order:
+
+- **The lane split already is the prioritisation.** Hot entities are the ones that get re-read; cold
+  ones already degrade to their last hydration. A budget would be a second mechanism deciding the
+  same question, with a number nobody can set well.
+- **A budget's degradation is invisible where the existing one is not.** A snapshot that gives up
+  mid-fan-out returns entities read at unpredictable, unstated ages. The degradation the harness
+  already has is a failed read serving `lastGood` with `stale: true`, named on `staleSources` and
+  prefixed onto the cycle's rationale — an operator can see it, and a decision taken against it can be
+  discounted. A budget would quietly produce a world nothing marks.
+- **The limit that actually bites is not an hourly total.** GitHub's primary budget is largely
+  protected by `304`s and is refused rather than waited out when it does arrive; the secondary limit
+  is burst-triggered and already backed off from. A per-pulse cap addresses neither directly.
+- **There is nothing to size it against.** The harness does not yet measure its own spend per pulse
+  per provider. A budget set from arithmetic in a document would be a number in production that
+  nobody could tell was wrong.
+
+The trigger for revisiting is concrete: GitHub records a notice on **every** rate-limited attempt,
+recovered or not, precisely because it is the early warning that the read has outgrown its heartbeat.
+Those notices standing in the Errors panel are the signal, and the levers to reach for first are
+`coldReadMaxAgeMs` and `heartbeatIntervalMs` — both config, both now the operator's
+([02](02-configuration.md#the-cadence-keys)).
 
 **CI evidence is deliberately not part of that budget.** The failing output of a red check is fetched
 when a CI-fix agent is actually dispatched — one or two requests per failing check, once, in the

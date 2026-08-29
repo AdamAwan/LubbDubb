@@ -111,6 +111,7 @@ deliberately left unchecked, and why, is in
 | [27](spec/27-knowledge.md)           | Knowledge                  | The one claim store: scope, reach, corroboration, delivery, and the three ways a claim leaves                           |
 | [28](spec/28-cross-fleet-pool.md)    | The cross-fleet pool       | The distance above `fleet`: one namespace per fleet, what a claim carries across, and the shared digest                 |
 | [29](spec/29-post-deploy-watch.md)   | The post-deploy watch      | Whether shipped work behaves: the declaration, the dry run, the window, and the three verdicts                          |
+| [30](spec/30-ingress.md)             | Event-driven ingress       | The inbound webhook endpoint: what it verifies, what one delivery invalidates, and what it does not trust               |
 
 ## Conventions used throughout
 

@@ -896,6 +896,21 @@ exit observed. The two arrive in either order.
 On reap the file-events spool is disposed and the MCP credential is released. Only then is it safe to
 touch resources the process pinned, which is why worktree removal hangs off this event.
 
+### An ending is what refills the slot
+
+Both terminal events are also what tells the pulse there is room again. `src/system.ts` subscribes to
+`done` and `reaped` and asks `CycleTrigger` for a
+[local cycle](04-harness-cycle.md#the-local-cycle): `done` is when the row stops counting against the
+cap, `reaped` is when the worktree slot goes back, and neither implies the other in time. Before it,
+nothing reacted to an agent finishing at all — the slot it freed sat idle until the next beat, up to
+`heartbeatIntervalMs` (five minutes on the deployment of the day; 30s since the cadence became
+adaptive, and still a wait for nothing) with work queued in front of it.
+
+It is a **reaction** to a termination and not a termination path: it signals nothing, reaps nothing,
+and every rule on this page about how an agent is ended applies unchanged. The trigger debounces, so a
+fleet's worth of endings arriving together is one cycle rather than one each, and the cycle it asks for
+reads no world — which is what makes reacting to an internal event affordable.
+
 ### The questions a dead agent leaves behind
 
 An escalation carrying an `agentId` is a question **a process asked** — a park

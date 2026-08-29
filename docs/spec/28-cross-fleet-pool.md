@@ -586,10 +586,10 @@ One desk in the pulse, and the pulse is the clock. Not a timer of its own: a `se
 during a pause, during shutdown and during the upgrade handoff, which is the class of failure
 [21](21-self-update.md#where-the-shutdown-handlers-are-registered) is written about.
 
-|                | Attempts when          | With `heartbeatIntervalMs` at its default  |
-| -------------- | ---------------------- | ------------------------------------------ |
-| Claims publish | the document is dirty  | the next pulse — up to five minutes        |
-| Claims poll    | every pulse            | every five minutes                         |
+|                | Attempts when          | At the default cadence (30s busy, 5 minutes idle) |
+| -------------- | ---------------------- | ------------------------------------------------- |
+| Claims publish | the document is dirty  | the next pulse — 30s busy, up to five minutes idle |
+| Claims poll    | every pulse            | the same                                          |
 | Digest publish | an hour since the last | the next pulse after the hour              |
 | Backstop       | an hour since the last | re-derives **both** documents and compares |
 
@@ -807,8 +807,8 @@ no swallowed catches.
   reason: read as absence, an outage says in the operator's words that nobody else knows anything.
 - **Nothing about the harness stops.** No dispatch is held, no agent waits, no boot fails. A fleet with
   an unreachable pool works exactly as a fleet without one.
-- **There is no backoff.** Retry is the next pulse, which is already a five-minute floor; exponential
-  backoff on top would mostly mean a recovered pool taking an hour to be noticed. What it needs instead
+- **There is no backoff.** Retry is the next pulse — 30s at its fastest, five minutes on an idle
+  fleet; exponential backoff on top would mostly mean a recovered pool taking an hour to be noticed. What it needs instead
   is that a persistently failing pool is _visible_: one error record per failure, and the Knowledge page
   saying when this fleet last published successfully.
 

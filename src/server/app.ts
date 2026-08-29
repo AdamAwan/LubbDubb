@@ -16,6 +16,7 @@ import { register as registerControl } from './routes/control.js';
 import { register as registerEscalations } from './routes/escalations.js';
 import { register as registerFeatures } from './routes/features.js';
 import { register as registerHumanTasks } from './routes/humanTasks.js';
+import { register as registerIngress } from './routes/ingress.js';
 import { register as registerIssues } from './routes/issues.js';
 import { register as registerJobs } from './routes/jobs.js';
 import { register as registerKnowledge } from './routes/knowledge.js';
@@ -52,6 +53,7 @@ const ROUTE_MODULES: RouteModule[] = [
   registerEscalations,
   registerFeatures,
   registerHumanTasks,
+  registerIngress,
   registerIssues,
   registerJobs,
   registerKnowledge,

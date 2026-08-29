@@ -8,6 +8,7 @@ import type { ActionExecutor, ExecutionSummary } from './executor/actionExecutor
 import type { ErrorRecorder } from './errorLog.js';
 import type { RuntimeControl } from './runtimeControl.js';
 import { diffWorlds } from './world/worldDiff.js';
+import { buildReadPlan, type ReadLanes } from './world/readPlan.js';
 import { awaitingReview, isPrWatched } from './prHealth.js';
 
 import { rejectionSignalQuery } from './proposals/proposals.js';
@@ -53,12 +54,33 @@ import type { ReviewProber } from './review/reviewedElsewhere.js';
  */
 const PRIOR_REMEDY_ROWS = 40;
 
+/**
+ * How many recent `world_events` the lane split reads to answer "what has moved
+ * lately".
+ *
+ * Bounded rather than windowed because this is a **cost hint** and not a verdict:
+ * an entity whose transition fell off the end of this list is one the other hot
+ * rules almost certainly already name (the fleet is on it, its build is
+ * unsettled), and the worst case if none of them do is that it is re-read on the
+ * slow lane instead of the fast one. A window with no bound would put an unbounded
+ * read in front of every world fetch to save a handful of requests behind it.
+ */
+const READ_PLAN_EVENTS = 200;
+
 interface HarnessDeps {
   store: Store;
   connector: Connector;
   dispatcher: Dispatcher;
   executor: ActionExecutor;
   heartbeatIntervalMs: number;
+  /**
+   * The pulse while nothing is moving. Never shorter than
+   * {@link HarnessDeps.heartbeatIntervalMs} — clamped rather than refused, since a
+   * slow lane faster than the fast one is a setting with no meaning.
+   */
+  idleHeartbeatIntervalMs: number;
+  /** The hot/cold hydration backstops handed down to the world read each pulse. */
+  readLanes: ReadLanes;
   /** Central error sink: a cycle exception is recorded here, never thrown away. */
   errors: ErrorRecorder;
   /** Live cap + pause flag, read by reference each cycle (never a frozen copy). */
@@ -272,14 +294,72 @@ interface HarnessDeps {
    * inbox rows, decides no dispatch, and no rule reads what it writes.
    */
   escalations?: { tidyDeadAgents(): unknown[] };
+  /**
+   * What an inbound delivery has said is stale since the last plan was built,
+   * drained into this pulse's read plan. Absent = no ingress, which is every
+   * deployment that has set no webhook secret and every test that does not name one
+   * — and then the plan carries an empty fresh set and the lanes decide alone,
+   * exactly as they did before. → `docs/spec/30-ingress.md#invalidating-precisely`
+   */
+  freshReads?: { drain(): string[] };
 }
 
-interface CycleReport {
+/**
+ * Where a cycle came from. `timer`, `manual` and `boot` each begin with a fresh
+ * `connector.getState()`; **`local` does not** — it runs the same decide/execute
+ * sequence against the world the last real cycle already read, which is what makes
+ * it cheap enough to fire on something that happened *inside* the harness (an agent
+ * finishing) rather than on a clock.
+ * → `docs/spec/04-harness-cycle.md#the-local-cycle`
+ *
+ * `ingress` is a real read like the first three, and is named apart from them for
+ * what it says rather than what it does: a verified webhook delivery announced that
+ * something outside moved, so this pulse carries an invalidation the timer's does
+ * not. A local cycle would be no use to it — the thing it came to see is precisely
+ * the world a local cycle does not read.
+ * → `docs/spec/30-ingress.md#triggering-a-pulse`
+ */
+type CycleSource = 'timer' | 'manual' | 'boot' | 'local' | 'ingress';
+
+export interface CycleReport {
   cycleId: string;
-  source: 'timer' | 'manual' | 'boot';
+  source: CycleSource;
+  /**
+   * Whether this cycle read the outside world. False for a `local` cycle, and for
+   * the three refusals below, where no cycle ran at all. Carried explicitly rather
+   * than derived from `source` at each reader, because "was this decided against a
+   * fresh reading" is the question a reader actually has — and a second world-less
+   * source added later must not depend on every one of them remembering to widen a
+   * comparison.
+   */
+  readWorld: boolean;
+  /**
+   * How long the heartbeat will wait before the next timer cycle, as this cycle's
+   * outcome left it — the fast interval while the fleet is doing something, the
+   * idle one while it is not.
+   *
+   * On the report rather than only inside the timer because it is the one
+   * observable that says which cadence the harness is actually running at: a
+   * fleet stuck on the slow interval with work queued is a bug with no other
+   * symptom. A refusal carries the interval as it stands, unchanged by a cycle
+   * that did not run. → `docs/spec/04-harness-cycle.md#the-adaptive-cadence`
+   */
+  nextIntervalMs: number;
   rationale: string;
   summary: ExecutionSummary;
   at: string;
+}
+
+/**
+ * Did a cycle actually run? The three refusals — the recovery hold, the coalescing
+ * guard, and a local cycle with no baseline to decide against — each return a report
+ * with a fixed non-`cyc_` id and emit neither `cycle:start` nor `cycle:end`, so the
+ * id is where the distinction lives. Exported because the local-cycle trigger has to
+ * tell a refusal from a run: a refused local cycle is one whose freed slot is still
+ * unfilled, and it is the only caller that will try again.
+ */
+export function cycleRan(report: CycleReport): boolean {
+  return report.cycleId.startsWith('cyc_');
 }
 
 /**
@@ -311,9 +391,27 @@ export class Harness extends EventEmitter {
 
   constructor(private readonly deps: HarnessDeps) {
     super();
-    this.heartbeat = new Heartbeat(deps.heartbeatIntervalMs, async (source) => {
-      await this.runCycle(source);
-    });
+    this.heartbeat = new Heartbeat(
+      () => this.intervalMs(),
+      async (source) => {
+        await this.runCycle(source);
+      },
+    );
+  }
+
+  /**
+   * The gap before the next timer cycle: the fast interval while the fleet is
+   * doing something, the idle one while it is not.
+   *
+   * Starts busy, so a harness that has not cycled yet takes the fast interval —
+   * boot is the least idle moment there is, and the first cycle's own reading
+   * replaces this immediately.
+   */
+  private busy = true;
+
+  private intervalMs(): number {
+    const { heartbeatIntervalMs, idleHeartbeatIntervalMs } = this.deps;
+    return this.busy ? heartbeatIntervalMs : Math.max(idleHeartbeatIntervalMs, heartbeatIntervalMs);
   }
 
   start(): void {
@@ -324,7 +422,7 @@ export class Harness extends EventEmitter {
     this.heartbeat.stop();
   }
 
-  async runCycle(source: 'timer' | 'manual' | 'boot' = 'manual'): Promise<CycleReport> {
+  async runCycle(source: CycleSource = 'manual'): Promise<CycleReport> {
     // The crash-recovery hold, asked before anything else — including the world
     // fetch, which is the point: while agents orphaned by the last run are
     // undecided, the harness's own model of its fleet is wrong (rows saying
@@ -343,6 +441,8 @@ export class Harness extends EventEmitter {
       return {
         cycleId: 'held',
         source,
+        readWorld: false,
+        nextIntervalMs: this.intervalMs(),
         rationale,
         summary: { cycleId: 'held', executed: 0, deferred: 0, rejected: 0 },
         at: new Date().toISOString(),
@@ -352,44 +452,102 @@ export class Harness extends EventEmitter {
       return {
         cycleId: 'coalesced',
         source,
+        readWorld: false,
+        nextIntervalMs: this.intervalMs(),
         rationale: 'cycle already running',
         summary: { cycleId: 'coalesced', executed: 0, deferred: 0, rejected: 0 },
         at: new Date().toISOString(),
       };
     }
+    // The local cycle's own precondition, in the shape of the two guards above and
+    // for the same reason: there is nothing to decide *against* until a real cycle
+    // has read the world once. Resolved here rather than inside the body so a
+    // refusal emits nothing, exactly as the hold and the coalesce do — and never
+    // synthesized as an empty world, which every rule would read as a tracker that
+    // has just gone dark.
+    const cached = source === 'local' ? (this.prevWorld ?? this.deps.store.getWorldBaseline()) : null;
+    if (source === 'local' && cached === null) {
+      return {
+        cycleId: 'unbaselined',
+        source,
+        readWorld: false,
+        nextIntervalMs: this.intervalMs(),
+        rationale:
+          "no world baseline: a local cycle decides against the last real cycle's reading, and there is none yet",
+        summary: { cycleId: 'unbaselined', executed: 0, deferred: 0, rejected: 0 },
+        at: new Date().toISOString(),
+      };
+    }
+    // Hoisted above the body so the failure path below can report it too: a cycle
+    // that threw still has to say whether it was deciding against a fresh reading.
+    const readWorld = cached === null;
     this.cycleInFlight = true;
     const cycleId = `cyc_${nanoid(8)}`;
     this.emit('cycle:start', { cycleId, source });
     try {
       const { store } = this.deps;
-      const world = await this.deps.connector.getState();
+      // **The whole of what a local cycle changes is here and in the `readWorld`
+      // guards below.** It decides against the snapshot the last real cycle stored,
+      // and skips every pass whose subject is that snapshot: each of those already
+      // ran against this exact world on the cycle that read it, and each is
+      // idempotent, so re-running them can produce provider traffic and never a new
+      // verdict. What is left is everything derived from the *store* — which is what
+      // has moved since, and what a local cycle exists to react to.
+      //
+      // The line is easy to hold: with the executor's one exception, every awaited
+      // call in the body below talks to the outside world, and every synchronous one
+      // does not.
+      // Which entities this read is prepared to pay a per-entity fan-out for, and
+      // how stale a hydration it will reuse for the rest. A **cost** hint and never
+      // a filter: the world that comes back is the same population either way,
+      // because the dispatcher reasons over all of it. Built from the last reading
+      // and the fleet as it stands *before* the desks below run — a task this pulse
+      // creates is one the next pulse's plan names, which is a beat of lag on a
+      // hint and nothing else. → `docs/spec/04-harness-cycle.md#hot-and-cold`
+      const readPlan = readWorld
+        ? buildReadPlan({
+            previous: this.prevWorld ?? store.getWorldBaseline(),
+            tasks: store.listTasks(),
+            events: store.listWorldEvents(READ_PLAN_EVENTS),
+            now: Date.now(),
+            lanes: this.deps.readLanes,
+            // Drained here, on the one path that builds a plan — so a delivery that
+            // arrives while a cycle is in flight is picked up by the next one rather
+            // than by the read that was already underway when it landed.
+            fresh: this.deps.freshReads?.drain(),
+          })
+        : undefined;
+      const world = cached ?? (await this.deps.connector.getState(readPlan));
       // Read before the diff records it, because the notice desk below needs the
       // same *pair* the diff is taken from — and `recordWorldChanges` moves the
       // baseline on. Seeded from the persisted baseline for its reason too: a
       // restart that read null here would go blind to every transition that
       // straddled it.
-      const previousWorld = this.prevWorld ?? store.getWorldBaseline();
-      this.recordWorldChanges(store, world, previousWorld);
+      const previousWorld = readWorld ? (this.prevWorld ?? store.getWorldBaseline()) : world;
+      // No new observation on a local cycle, so nothing to diff and — the important
+      // half — nothing to re-stamp: moving the baseline onto itself would be a write
+      // per local cycle saying the world was read when it was not.
+      if (readWorld) this.recordWorldChanges(store, world, previousWorld);
       // Fold observed reality onto the plan-part rows before anything reads them:
       // the store holds intent, the outside world stays the source of truth, and a
       // part this moves to `ready` is dispatchable in this same cycle.
-      await this.deps.plans?.reconcile(world);
+      if (readWorld) await this.deps.plans?.reconcile(world);
       // The harness's own pull requests, tagged as watched. Before the naming desk
       // only because it belongs with the other per-pulse bookkeeping; a pull request
       // tagged here is worked from the *next* pulse, since the snapshot below was
       // read before the label landed. That lag is the same one the retarget and the
       // reap accept, and it costs nothing on the path that matters: `open_pr` tags a
       // pull request as it creates it, so this is only ever catching the strays.
-      await this.deps.prWatch?.run(world);
+      if (readWorld) await this.deps.prWatch?.run(world);
       // Beside the tagging and on its terms: the tracker link the harness can supply
       // from a row, so the linked-work-items policy is cleared without a dispatch.
       // Idempotent, so a world already linked writes nothing — and the same one-pulse
       // lag applies, since `open_pr` links a pull request as it opens one and this is
       // only ever catching the strays.
-      await this.deps.prWorkItems?.run(world);
+      if (readWorld) await this.deps.prWorkItems?.run(world);
       // Mechanical bookkeeping, like the plan's status comment: idempotent, so a
       // world already on convention writes nothing.
-      await this.deps.naming?.run(world);
+      if (readWorld) await this.deps.naming?.run(world);
       // The same register, one step later in a pull request's life: a merged branch
       // is deleted locally and on the remote. It reads the same snapshot the
       // retarget above was decided from, so a rung the retarget has just moved still
@@ -397,7 +555,7 @@ export class Harness extends EventEmitter {
       // one more pulse. That lag is the safe direction, and deliberately not closed
       // by re-reading the world: reaping a branch an open PR is still based on
       // destroys the stack.
-      await this.deps.branchReaps?.run(world);
+      if (readWorld) await this.deps.branchReaps?.run(world);
       // What the world has made of the operator's standing stack landings: a chain
       // fully merged is finished, and a rung that has gone red since it was
       // authorized stops the chain and surfaces. Before `decide`, so a stopped
@@ -443,7 +601,7 @@ export class Harness extends EventEmitter {
       // nothing downstream reads it. Awaited but never blocking — a check that is
       // not due returns the reading it already has, and one that fails records
       // itself rather than throwing into the cycle.
-      await this.deps.updates?.run();
+      if (readWorld) await this.deps.updates?.run();
       // Record what the world and the store now say happened, after the reconciler
       // so part→PR observations are fresh, and before `decide` so stage 2 can read
       // it. Never deleting is the point: `closedPullRequests` forgets a merge after
@@ -460,7 +618,7 @@ export class Harness extends EventEmitter {
       // which resolves nothing for a pull request whose issue the tracker has
       // already closed. Beside the other bookkeeping and not in the dispatcher for
       // `closeOuts`' reason: it staffs nothing and no rule reads what it writes.
-      await this.deps.environments?.run(world);
+      if (readWorld) await this.deps.environments?.run(world);
       // What the harness has seen for itself that the fleet would otherwise pay to
       // rediscover: a check that went red and green on one commit, a check red on a
       // branch other pull requests are based on — and the notices a green reading
@@ -473,7 +631,11 @@ export class Harness extends EventEmitter {
       // is one they are still told. Beside the other bookkeeping and not in the
       // dispatcher for `closeOuts`' reason — it staffs nobody, holds nothing, and
       // no rule reads a fact.
-      this.deps.notices?.run(previousWorld, world);
+      // Skipped on a local cycle, and not for the provider-traffic reason the
+      // others are: it is handed the *pair* the diff was taken from, and a local
+      // cycle takes no diff. Run with `previousWorld === world` it would read every
+      // notice as settled by a world that has not moved.
+      if (readWorld) this.deps.notices?.run(previousWorld, world);
       // What became of the documentation pull requests an operator opened for a
       // claim — and, for the ones that landed, the claim leaving every prompt
       // because the repository now says it.
@@ -506,7 +668,7 @@ export class Harness extends EventEmitter {
       // a fetch that fails leaves the last-known-good mirror in place, and a publish
       // that fails leaves the document dirty for the next pulse. A fleet with an
       // unreachable pool works exactly as a fleet without one.
-      await this.deps.pool?.run();
+      if (readWorld) await this.deps.pool?.run();
       // An agent parked because the *account* ran out is resumed once the window
       // `claude` named has turned over — the one park with a known end, so the
       // ordinary case needs no operator (issue #318). Beside the other bookkeeping
@@ -615,13 +777,13 @@ export class Harness extends EventEmitter {
       // After the read above so it judges the same verdicts the dispatcher will, and
       // before `decide` only because everything else on the pulse is — it changes no
       // decision, and a failure is recorded rather than thrown.
-      await this.deps.appraisals?.announce(world, appraisalSignals);
+      if (readWorld) await this.deps.appraisals?.announce(world, appraisalSignals);
       // The area tree, if its own TTL says it is stale — otherwise a no-op. Here
       // rather than on a timer of its own for the reason every other periodic read
       // is on the pulse: a timer keeps firing across a drain and an upgrade
       // handoff. A failure is recorded inside and never thrown, so a provider that
       // will not answer costs the placement question and nothing else.
-      await this.deps.areaPaths?.refresh();
+      if (readWorld) await this.deps.areaPaths?.refresh();
       // Which goals already have a write-up — origins only. Rule `issue-retro` reads this to
       // know whether to dispatch one; the Goal Floor's retention (below) reads it
       // as one of the signals that a goal is finished.
@@ -677,7 +839,8 @@ export class Harness extends EventEmitter {
       const profileOverrides = store.listProfileOverrides();
       // While paused, advertise zero headroom so the dispatcher plans no new
       // dispatches; the executor also hard-defers them (belt and braces).
-      const headroom = this.deps.runtime.paused ? 0 : Math.max(0, this.deps.runtime.cap - store.countLiveAgents());
+      const liveAgents = store.countLiveAgents();
+      const headroom = this.deps.runtime.paused ? 0 : Math.max(0, this.deps.runtime.cap - liveAgents);
 
       // A PR without the watch tag is one nobody opted in — the harness's own are
       // tagged as they are opened (`src/prWatch.ts`), so what is left here is
@@ -728,7 +891,7 @@ export class Harness extends EventEmitter {
       // this pulse, which is what keeps the cost to the handful of pulses between a
       // pull request appearing and its review landing rather than one spawn per open
       // pull request for ever. → `src/review/reviewedElsewhere.ts`
-      await this.askReviewedElsewhere(store, dispatchWorld);
+      if (readWorld) await this.askReviewedElsewhere(store, dispatchWorld);
 
       const plan = await this.deps.dispatcher.decide({
         world: dispatchWorld,
@@ -792,6 +955,33 @@ export class Harness extends EventEmitter {
       });
 
       this.lastPlan = plan.upcoming ? { cycleId, at: world.takenAt, items: plan.upcoming } : null;
+
+      // What the next wait is going to be. Busy is "there is something whose next
+      // state this fleet is waiting on": an agent running, work queued behind it,
+      // a queued job, or a build in flight — the last because a check going green
+      // is the commonest thing an idle-looking fleet is actually waiting for, and
+      // it arrives with no token moving anywhere. Everything else is idle, and an
+      // idle fleet still looks: what ends the idleness (an issue filed, a review
+      // left) is outside, it just does not need looking at every thirty seconds.
+      //
+      // Read from this cycle's own inputs rather than taken separately, so the
+      // cadence can never be decided against a different pulse than the dispatch
+      // was.
+      //
+      // A queued candidate counts only when the thing holding it is the fleet
+      // itself — headroom, a cooldown, a plan's own concurrency cap, or nothing at
+      // all. A candidate held `unapproved` is waiting on a **person**, and a fleet
+      // that polls every thirty seconds because somebody has not clicked yet is a
+      // fleet that never goes idle: the click is not a thing any provider read can
+      // discover, and the pulse is not what delivers it.
+      const working = (plan.upcoming ?? []).some(
+        (item) => item.status !== 'unapproved' && item.status !== 'superseded',
+      );
+      this.busy =
+        liveAgents > 0 ||
+        queuedJobs.length > 0 ||
+        working ||
+        world.pullRequests.some((pr) => pr.ciStatus === 'pending');
 
       // Keep the override set from lingering: an origin still tracked this pulse
       // (queued/waiting/held in the plan, or staffed by an active task) has its
@@ -870,8 +1060,16 @@ export class Harness extends EventEmitter {
       // deployment starts; behind it, it costs a boot's latency and nothing else.
       // It records its own failures and never throws — a tracker that refused us
       // must not cost the cycle it happened in.
-      await this.deps.tickets?.run();
-      const report: CycleReport = { cycleId, source, rationale: plan.rationale, summary, at: new Date().toISOString() };
+      if (readWorld) await this.deps.tickets?.run();
+      const report: CycleReport = {
+        cycleId,
+        source,
+        readWorld,
+        nextIntervalMs: this.intervalMs(),
+        rationale: plan.rationale,
+        summary,
+        at: new Date().toISOString(),
+      };
       this.emit('cycle:end', report);
       return report;
     } catch (err) {
@@ -886,6 +1084,8 @@ export class Harness extends EventEmitter {
       const report: CycleReport = {
         cycleId,
         source,
+        readWorld,
+        nextIntervalMs: this.intervalMs(),
         rationale: `cycle failed: ${(err as Error).message}`,
         summary: { cycleId, executed: 0, deferred: 0, rejected: 0 },
         at: new Date().toISOString(),

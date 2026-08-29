@@ -116,6 +116,27 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'Gap between timer-driven cycles.',
   },
   {
+    path: 'idleHeartbeatIntervalMs',
+    type: 'number',
+    ms: true,
+    access: 'plain',
+    why: 'Gap between cycles while nothing is moving — no live agent, no queued work, no build in flight. Never shorter than the heartbeat itself.',
+  },
+  {
+    path: 'hotReadMaxAgeMs',
+    type: 'number',
+    ms: true,
+    access: 'plain',
+    why: 'How long a per-entity reading is reused for something that is moving (a build in flight, an open dispatch, merge-readiness in flux) when nothing on the cheap list payload says it changed.',
+  },
+  {
+    path: 'coldReadMaxAgeMs',
+    type: 'number',
+    ms: true,
+    access: 'plain',
+    why: 'The same, for everything else. A cold item is still listed and still in the world every pulse; it just is not re-hydrated more often than this. The main lever on what a fast pulse costs the provider.',
+  },
+  {
     path: 'maxConcurrentAgents',
     type: 'number',
     access: 'plain',
@@ -704,6 +725,37 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     type: 'string',
     access: 'advanced',
     why: 'Where a minted token is persisted. Ignored when LUBBDUBB_TOKEN is set.',
+  },
+  // The inbound ingress. No secret and no on switch here: both live in the
+  // environment (LUBBDUBB_INGRESS_SECRET / LUBBDUBB_INGRESS_BASIC), and setting one
+  // is what turns the endpoint on. These four are the bounds it runs under, drawn
+  // whether or not it is on so an operator can see what it will cost first.
+  // → `docs/spec/30-ingress.md#turning-it-on`
+  {
+    path: 'ingress.debounceMs',
+    type: 'number',
+    ms: true,
+    access: 'advanced',
+    why: 'How long a burst of webhook deliveries settles before one cycle fires.',
+  },
+  {
+    path: 'ingress.minCycleGapMs',
+    type: 'number',
+    ms: true,
+    access: 'advanced',
+    why: 'Floor between two cycles a delivery may cause. The one lever on what an inbound flood can spend of this fleet’s provider budget.',
+  },
+  {
+    path: 'ingress.requestsPerMinute',
+    type: 'number',
+    access: 'advanced',
+    why: 'Deliveries accepted per minute across the whole endpoint before a 429. Keyed to the endpoint, not the caller: a webhook arrives from a whole address range.',
+  },
+  {
+    path: 'ingress.maxBodyBytes',
+    type: 'number',
+    access: 'advanced',
+    why: 'Largest delivery body read before a 413. Bounds the work an unverified caller can buy.',
   },
 ];
 

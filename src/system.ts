@@ -76,6 +76,9 @@ import { featureRecords } from './summaries/featureRecord.js';
 import { resolveModelTag } from './modelLabels.js';
 import { orderedProfiles } from './agents/modelPolicy.js';
 import { Harness } from './harness.js';
+import { CycleTrigger } from './cycleTrigger.js';
+import { Ingress, resolveIngressSecrets, type IngressSecrets } from './ingress/ingress.js';
+import { IngressInbox } from './ingress/inbox.js';
 import { RuntimeControl } from './runtimeControl.js';
 import { PetKeeper } from './pets/keeper.js';
 import { LocalRunner } from './localRun/runner.js';
@@ -122,6 +125,26 @@ export interface System {
   executor: ActionExecutor;
   dispatcher: Dispatcher;
   harness: Harness;
+  /**
+   * Fires a local cycle when an agent ends, so the slot it just freed is filled in
+   * seconds rather than at the next heartbeat. Exposed for one reason: `main.ts`
+   * has to stop it on the way down, beside the heartbeat and for the same reason —
+   * a cycle is a thing that starts agents.
+   * → `docs/spec/04-harness-cycle.md#the-local-cycle`
+   */
+  localCycles: CycleTrigger;
+  /**
+   * Verifies inbound webhook deliveries, invalidates exactly what they name, and
+   * asks for a real cycle. Exposed for the route module that fronts it — and for
+   * `main.ts`, which stops its trigger on the way down beside the heartbeat's.
+   * → `docs/spec/30-ingress.md`
+   */
+  ingress: Ingress;
+  /**
+   * The ingress's own cycle trigger. Separate from {@link localCycles} because what
+   * it fires is a **real** cycle, so it carries a floor that one has no need of.
+   */
+  ingressCycles: CycleTrigger;
   /**
    * Writes the durable work graph each pulse. Exposed because the record outlives
    * the world's memory of it — the routes and tests that read the graph back have
@@ -333,6 +356,15 @@ interface BuildOptions {
   /** Override where recorded errors are mirrored (tests silence the default stderr echo). */
   errorMirror?: (entry: ErrorLogEntry) => void;
   /**
+   * The inbound ingress secrets, for a test that drives the endpoint. Without it
+   * they come from `LUBBDUBB_INGRESS_SECRET` / `LUBBDUBB_INGRESS_BASIC` in the
+   * environment — so a test asserting the endpoint's behaviour would pass or fail
+   * by whether the operator running the suite happens to have a webhook wired up.
+   * The same hazard `configFile` and `projectConfigFile` carry, and the same fix.
+   * → `docs/spec/30-ingress.md#turning-it-on`
+   */
+  ingressSecrets?: IngressSecrets;
+  /**
    * Override the config file the write route targets (tests point it at a temp
    * file). Without it a test that saves config rewrites the `lubbdubb.config.json`
    * of whatever checkout the suite is running in — see {@link System.configFile}.
@@ -383,8 +415,16 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // The one error-recording path: everything that catches a failure routes it
   // here so it's durable, mirrored to stderr, and streamed to the cockpit.
   const errors = new ErrorLog(store, opts.errorMirror);
+  // Built here, well above the harness, because the two ends of the ingress are
+  // wired at opposite ends of this file: the pulse drains the inbox, and the route
+  // that fills it needs a harness that does not exist yet. The inbox is the seam
+  // between them and holds nothing but refs.
+  const ingressInbox = new IngressInbox();
   const integrations = buildIntegrations(config.integrations, { store, config, now, errors });
-  const connector = new CompositeConnector(integrations, now);
+  const connector = new CompositeConnector(integrations, now, {
+    hotMaxAgeMs: config.hotReadMaxAgeMs,
+    coldMaxAgeMs: config.coldReadMaxAgeMs,
+  });
   // The project's area tree, cached so the appraisal tool and the state snapshot can
   // both read it without awaiting. Refreshed from the pulse under its own TTL, and
   // null until the first read lands — which is the same reading a tracker with no
@@ -1140,6 +1180,12 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     clusters,
     pool,
     heartbeatIntervalMs: config.heartbeatIntervalMs,
+    idleHeartbeatIntervalMs: config.idleHeartbeatIntervalMs,
+    // The two lane backstops, handed to the world read each pulse. The composite
+    // connector holds the same pair for the reads taken *outside* the pulse, and
+    // both come from this one config — a second default anywhere would be a second
+    // answer, differing exactly where an operator changed it.
+    readLanes: { hotMaxAgeMs: config.hotReadMaxAgeMs, coldMaxAgeMs: config.coldReadMaxAgeMs },
     errors,
     runtime: runtimeControl,
     prWatchLabel: watchLabel,
@@ -1151,6 +1197,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
         ? { labelPrefix: config.labelPrefix, models: config.agentModels }
         : undefined,
     upNextOverrideTtlMs: config.upNextOverrideTtlMs,
+    freshReads: ingressInbox,
   });
 
   // Auto-escalate any non-whitelisted waiting agent so it surfaces in the inbox.
@@ -1233,6 +1280,52 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     });
   });
 
+  // The latency an operator actually feels, closed: nothing used to react to an
+  // agent ending, so the slot it freed sat idle until the next beat — up to
+  // `heartbeatIntervalMs` (five minutes on the deployment of the day) of an idle
+  // fleet with work queued in front of it. What fires here is a **local** cycle: the full
+  // decide/execute sequence against the world the last real cycle read, with every
+  // world-facing pass skipped, so reacting to an internal event costs a store pass
+  // and no provider traffic. → `docs/spec/04-harness-cycle.md#the-local-cycle`
+  //
+  // Wired here rather than inside `Harness` because it is the composition root that
+  // knows both halves: the harness has no handle on the fleet, and `AgentManager`
+  // must stay ignorant of the pulse. Both terminal events, deliberately — `done` is
+  // when the row stops counting against the cap, `reaped` is when its worktree slot
+  // goes back, and neither implies the other in time. The trigger's debounce folds
+  // the pair (and a whole fleet's worth of them) into one cycle.
+  //
+  // A reaction to a termination, not a termination path: it signals nothing, reaps
+  // nothing, and cannot run while a real cycle is in flight.
+  const localCycles = new CycleTrigger({
+    run: () => harness.runCycle('local'),
+    ready: () => store.open,
+    errors,
+  });
+  agents.on('done', () => localCycles.request());
+  agents.on('reaped', () => localCycles.request());
+
+  // The ingress's half of the same wiring, and the same reason it is here: the
+  // route knows nothing about the harness and the harness knows nothing about the
+  // port. What differs is the cycle — a **real** one, because a delivery announces
+  // something in the outside world and a local cycle is defined by not reading it —
+  // and so a floor on how often that may happen, which is the only thing standing
+  // between a verified flood and this fleet's provider budget.
+  // → `docs/spec/30-ingress.md#what-a-delivery-is-allowed-to-cost`
+  const ingressCycles = new CycleTrigger({
+    run: () => harness.runCycle('ingress'),
+    ready: () => store.open,
+    errors,
+    debounceMs: config.ingress.debounceMs,
+    minGapMs: config.ingress.minCycleGapMs,
+  });
+  const ingress = new Ingress({
+    secrets: opts.ingressSecrets ?? resolveIngressSecrets(),
+    inbox: ingressInbox,
+    trigger: ingressCycles,
+    errors,
+  });
+
   // The vivarium reads what the operator has already done and writes only its own
   // five tables. Wired to the pulse's own event rather than into `Harness` — it
   // decides nothing, so `harness.ts` has no reason to know it exists, and the
@@ -1300,6 +1393,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     executor,
     dispatcher,
     harness,
+    localCycles,
+    ingress,
+    ingressCycles,
     graph,
     tickets,
     pool,

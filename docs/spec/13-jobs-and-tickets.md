@@ -265,9 +265,10 @@ is the normal case for a laptop, not an edge case:
 A failing schedule fails only itself: each firing is recorded through `errors.record` and the loop
 carries on, because the alternative is one bad row taking the pulse that would have fixed it.
 
-**The granularity is the pulse, not the minute.** `heartbeatIntervalMs` defaults to five minutes, so a
-`0 9 * * *` schedule fires at the first pulse at or after 09:00 — never before it, and by default up
-to five minutes after. A recurrence is a "some time this morning" instrument, and an operator who
+**The granularity is the pulse, not the minute.** A `0 9 * * *` schedule fires at the first pulse at
+or after 09:00 — never before it, and by default up to `idleHeartbeatIntervalMs` after, since a fleet
+with nothing to do is exactly the state a 09:00 firing arrives in (five minutes, as it was when that
+was the only interval; 30s once anything is running). A recurrence is a "some time this morning" instrument, and an operator who
 needs the minute lowers the heartbeat. A **paused fleet** is the same shape from the other side: the
 firing still queues, headroom is zero so nothing spawns, and the in-flight rule then holds every later
 slot behind it — so a week of pause is one job waiting, not two thousand.

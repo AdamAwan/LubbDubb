@@ -1,4 +1,5 @@
 import type { Connector, InjectableEvent } from './connector.js';
+import type { ReadPlan } from '../world/readPlan.js';
 import type {
   ActionSink,
   BranchDeleteInput,
@@ -51,8 +52,8 @@ export class FakeConnector implements Connector, ActionSink {
     this.composite = new CompositeConnector([this.github, this.issues], now);
   }
 
-  getState(): Promise<WorldSnapshot> {
-    return this.composite.getState();
+  getState(plan?: ReadPlan): Promise<WorldSnapshot> {
+    return this.composite.getState(plan);
   }
 
   postPrReply(input: PrReplyInput): Promise<SendResult> {

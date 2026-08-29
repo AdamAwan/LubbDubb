@@ -19,7 +19,27 @@ import type {
   WorldSlice,
 } from '../integration.js';
 import type { GhTimelineEvent, GitHubApi } from './githubApi.js';
+import { HydrationCache } from '../hydrationCache.js';
+import { hydrationMaxAgeMs, issueReadRef, type ReadPlan } from '../../world/readPlan.js';
 import { githubRefUrl } from './refUrl.js';
+
+/**
+ * What the per-issue timeline read yields, held against the `updated_at` the
+ * list payload reported when it was read. Everything else on an {@link Issue} —
+ * title, body, labels, state, url — comes off the list payload, which is fetched
+ * every pulse and so is never cached.
+ *
+ * `viewerOwnedLabels` is stored **unfiltered** by the issue's current labels: the
+ * labels are fresh every pulse, so the intersection is taken at use rather than
+ * baked in, and a cached ownership reading can never resurrect a label the issue
+ * no longer carries.
+ */
+interface CachedIssueTimeline {
+  /** The token this hydration is valid for. */
+  updatedAt: string;
+  linkedPrNumber: number | null;
+  viewerOwnedLabels: string[];
+}
 
 interface GitHubIssuesOpts {
   /** The GitHub client, already bound to a single owner/repo. */
@@ -36,6 +56,8 @@ interface GitHubIssuesOpts {
    * don't track authorship (the timeline is still read for linked-PR detection).
    */
   ownershipLabel?: string;
+  /** Injectable clock, so the hydration cache's expiry is testable without waiting for it. */
+  now?: () => number;
 }
 
 /**
@@ -59,7 +81,17 @@ export class GitHubIssuesIntegration
 
   private lastGood: Issue[] | null = null;
 
-  constructor(private readonly opts: GitHubIssuesOpts) {}
+  /**
+   * Change-gated hydration of the per-issue timeline read, keyed by issue number.
+   * **Not** a degradation path: a hit is a *current* reading GitHub's own list
+   * payload says has not moved, so it never sets `stale`, which means the read
+   * failed. → {@link HydrationCache}
+   */
+  private readonly timelineCache: HydrationCache<CachedIssueTimeline>;
+
+  constructor(private readonly opts: GitHubIssuesOpts) {
+    this.timelineCache = new HydrationCache(opts.now);
+  }
 
   resolveRefUrl(ref: string): string | null {
     const { owner, repo } = this.opts;
@@ -155,7 +187,7 @@ export class GitHubIssuesIntegration
     return { ok: true, ref: String(ref.id) };
   }
 
-  async snapshot(): Promise<WorldSlice> {
+  async snapshot(plan?: ReadPlan): Promise<WorldSlice> {
     try {
       const { api, ownershipLabel } = this.opts;
       // Fetch every open issue so all of them display in the cockpit; the dispatcher's
@@ -169,7 +201,12 @@ export class GitHubIssuesIntegration
 
       const issues = await Promise.all(
         raw.map(async (i): Promise<Issue> => {
-          const timeline = await api.listIssueTimeline(i.number);
+          const cached = await this.issueTimeline(
+            i.number,
+            i.updatedAt,
+            viewer,
+            hydrationMaxAgeMs(plan, issueReadRef(i.number)),
+          );
           const tracksOwner = viewer !== null && ownershipLabel !== undefined && i.labels.includes(ownershipLabel);
           return {
             id: `issue_${i.number}`,
@@ -177,13 +214,21 @@ export class GitHubIssuesIntegration
             title: i.title,
             body: i.body,
             labels: i.labels,
-            ...(tracksOwner ? { labelsAddedByViewer: viewerAddedLabels(timeline, viewer, i.labels) } : {}),
+            // Intersected with *this pulse's* labels, never the ones the timeline
+            // was read beside: the gate that decides whether anything is picked up
+            // must not be able to name a label the issue has since lost.
+            ...(tracksOwner
+              ? { labelsAddedByViewer: i.labels.filter((l) => cached.viewerOwnedLabels.includes(l)) }
+              : {}),
             state: normalizeState(i.state),
-            linkedPrNumber: linkedPrFromTimeline(timeline),
+            linkedPrNumber: cached.linkedPrNumber,
             url: i.url,
           };
         }),
       );
+
+      // An issue that has left the open set is never hydrated again from here.
+      this.timelineCache.retain(raw.map((i) => i.number));
 
       this.lastGood = issues;
       return { issues };
@@ -197,6 +242,41 @@ export class GitHubIssuesIntegration
       if (this.lastGood === null) throw err;
       return { issues: this.lastGood, stale: true };
     }
+  }
+
+  /**
+   * The issue's timeline read, or the last one when GitHub's `updated_at` says
+   * nothing has happened to the issue since.
+   *
+   * The token covers what the timeline is read *for*: a label added or removed
+   * and a comment all bump `updated_at`, so tag authorship — which gates pickup
+   * fleet-wide ([06](../../../docs/spec/06-issue-pickup.md)) — can only go stale
+   * behind an event that moves it. What it does not cover is a cross-reference
+   * created from *elsewhere* (a pull request naming `#n`), which is why the cache
+   * expires entries rather than trusting one forever — after `maxAgeMs`, which is
+   * what this issue's [lane](../../world/readPlan.ts) allows it, and which is
+   * therefore how far behind `linkedPrNumber` can ever be.
+   */
+  private async issueTimeline(
+    number: number,
+    updatedAt: string,
+    viewer: string | null,
+    maxAgeMs: number,
+  ): Promise<CachedIssueTimeline> {
+    const cached = this.timelineCache.get(number, maxAgeMs);
+    if (cached !== undefined && cached.updatedAt === updatedAt) return cached;
+
+    const timeline = await this.opts.api.listIssueTimeline(number);
+    const fresh: CachedIssueTimeline = {
+      updatedAt,
+      linkedPrNumber: linkedPrFromTimeline(timeline),
+      // Resolved whether or not the gate is on: turning `ownershipLabel` on is a
+      // restart, so there is no run in which this is computed too late, and it
+      // costs nothing but the fold over events already in hand.
+      viewerOwnedLabels: viewer === null ? [] : labelsOwnedBy(timeline, viewer),
+    };
+    this.timelineCache.set(number, fresh);
+    return fresh;
   }
 }
 
@@ -212,13 +292,26 @@ function normalizeState(state: string): IssueState {
  * leak a since-removed label. Pure — unit-testable without the network.
  */
 export function viewerAddedLabels(events: GhTimelineEvent[], viewer: string, currentLabels: string[]): string[] {
+  const owned = labelsOwnedBy(events, viewer);
+  return currentLabels.filter((l) => owned.includes(l));
+}
+
+/**
+ * The labels whose most recent `labeled` event names `viewer`, with no filter
+ * against what the issue carries now.
+ *
+ * Split out of {@link viewerAddedLabels} because the two halves have different
+ * lifetimes: this one is derived from the timeline and cached with it, while the
+ * current-label filter reads a list payload fetched every pulse.
+ */
+function labelsOwnedBy(events: GhTimelineEvent[], viewer: string): string[] {
   const owner = new Map<string, string>();
   for (const ev of events) {
     if (ev.label === null) continue;
     if (ev.event === 'labeled') owner.set(ev.label, ev.actorLogin ?? '');
     else if (ev.event === 'unlabeled') owner.delete(ev.label);
   }
-  return currentLabels.filter((l) => owner.get(l) === viewer);
+  return [...owner.entries()].filter(([, actor]) => actor === viewer).map(([label]) => label);
 }
 
 /**

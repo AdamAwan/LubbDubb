@@ -78,6 +78,10 @@ test('every API route declared under routes/ refuses an unauthenticated request'
     worktrees: new FakeWorktreeManager(),
     backend: new FakePtyBackend(),
     errorMirror: () => {},
+    // No ingress secrets, stated rather than inherited: without this the ingress
+    // routes below are configured or not according to whether whoever runs the suite
+    // happens to have a webhook wired up in their own environment.
+    ingressSecrets: {},
   });
   const { app } = await buildApp(system);
 
@@ -90,6 +94,19 @@ test('every API route declared under routes/ refuses an unauthenticated request'
     // prefix guard does *not* apply — but each must still refuse a bare request,
     // which is what makes moving them out of `/api` safe. Asserted here so neither
     // can silently become reachable.
+    // The third and newest route outside `/api`, and the only **inbound** one: a
+    // webhook provider can no more present a cockpit token than a navigation can, so
+    // the ingress endpoint authorizes each delivery itself — GitHub's HMAC over the
+    // raw body, Azure's basic credential — against a secret that comes from the
+    // environment. This system has neither, and a deployment with neither has no
+    // ingress at all: `404`, which is what this path answered before the endpoint
+    // existed. `test/ingress.test.ts` holds the configured case, where an unsigned
+    // delivery is refused `401`. → `docs/spec/30-ingress.md`
+    if (route.url.startsWith('/ingress/')) {
+      const res = await app.inject({ method: route.method, url: route.url, payload: {} });
+      assert.equal(res.statusCode, 404, `${route.url} must answer 404 with no ingress secret configured`);
+      continue;
+    }
     if (route.url.startsWith('/artifacts/') || route.url.startsWith('/attachments/')) {
       const res = await app.inject({ method: route.method, url: route.url });
       assert.equal(res.statusCode, 401, `${route.url} must refuse a request carrying no capability`);
