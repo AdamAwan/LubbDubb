@@ -43,19 +43,20 @@ const NPM = process.platform === 'win32' ? 'npm.cmd' : 'npm';
  * the working tree moving between the click and the exit; it just must not be the
  * case that *silently* does something.
  *
- * A failure at any step leaves the old build in place and starts it again. That is
- * the recoverable direction: the fleet comes back on the code it went down on, and
- * the reason is on screen.
+ * A failure at the pull leaves the old build in place and starts it again — the
+ * recoverable direction, the fleet comes back on the code it went down on. Past the
+ * pull the source has already moved and there is no way back to it here, so the
+ * relaunch says loudly which half it got, and the reason is always on screen.
  */
-function applyUpdate(): boolean {
+function applyUpdate(): Outcome {
   // Recorded *before* the pull: it is the only baseline that can answer what the
   // pull changed, and asking afterwards would compare HEAD with itself.
   const before = currentHead();
-  if (!step('git pull --ff-only', 'git', ['pull', '--ff-only'])) return false;
+  if (!step('git pull --ff-only', 'git', ['pull', '--ff-only'])) return 'unchanged';
   // The dependency tree, and only when the lockfile actually moved — `npm ci` is a
   // full delete-and-rebuild of two native modules, which would otherwise be a
   // minute added to every upgrade that touched no dependency.
-  if (lockfileChanged(before) && !step('npm ci', NPM, ['ci'])) return false;
+  if (lockfileChanged(before) && !step('npm ci', NPM, ['ci'])) return 'source-moved';
   // **Unconditional, unlike the install above.** The server needs no build step —
   // tsx runs it from source — but the cockpit does, `web/dist` is gitignored, and
   // the server serves whatever is there on an `existsSync` check with no version
@@ -70,16 +71,50 @@ function applyUpdate(): boolean {
   // would be a second opinion about what Vite reads, and being wrong about it is
   // silent. Seconds on an operation that already stopped the fleet is the right
   // trade for never being wrong here.
-  return step('npm run web:build', NPM, ['run', 'web:build']);
+  if (step('npm run web:build', NPM, ['run', 'web:build'])) return 'applied';
+  // The one retry in here, and it is not optimism about a flake. Nearly every way this
+  // step fails on a machine that was serving a moment ago is `node_modules` not matching
+  // the tree that was just pulled — a dev dependency the bundle newly needs, a native
+  // module built against another Node, an install the *previous* upgrade left half
+  // applied — and all of them are the install the lockfile gate above decided to skip.
+  // Running it now costs a minute on the one path that is already broken, and the
+  // alternative is coming back on a cockpit bundle nothing says is stale.
+  console.log('[serve] the cockpit build failed — reinstalling dependencies and trying it once more');
+  if (!step('npm ci', NPM, ['ci'])) return 'source-moved';
+  return step('npm run web:build', NPM, ['run', 'web:build']) ? 'applied' : 'source-moved';
 }
+
+/**
+ * How far the update got, because "it failed" is two different situations to come back
+ * from and only one of them is the recoverable one the spec promises.
+ *
+ * `unchanged` is the pull refusing: the checkout is on the commit it went down on, so
+ * the relaunch is genuinely the previous build. Past that the source **has** moved, and
+ * saying "unchanged" there is a lie the operator acts on — the fleet comes back running
+ * new server code behind whatever `web/dist` happened to be lying around, which is the
+ * stale-cockpit failure this feature exists to avoid.
+ */
+type Outcome = 'applied' | 'source-moved' | 'unchanged';
 
 /** One command, with its failure reported in the terms the operator will act on. */
 function step(label: string, command: string, args: string[]): boolean {
   console.log(`[serve] ${label}`);
   const run: SpawnSyncReturns<Buffer> = spawnSync(command, args, { stdio: 'inherit' });
   if (run.status === 0) return true;
-  console.error(`[serve] ${label} failed (${run.status ?? run.signal}); starting the previous build again`);
+  // `spawnSync` reports a command that never *started* — npm off the PATH, a fork the
+  // kernel refused, the OOM killer — as a null status **and** a null signal, with the
+  // reason only on `error`. Dropped, it prints as `failed (null)`: the operator is told
+  // an upgrade failed and given nothing whatsoever to act on, which is the state this
+  // line was in.
+  console.error(`[serve] ${label} failed (${describeFailure(run)})`);
   return false;
+}
+
+/** Why the command did not succeed, in whichever of the three ways `spawnSync` says it. */
+function describeFailure(run: SpawnSyncReturns<Buffer>): string {
+  if (run.error) return run.error.message;
+  if (run.signal) return `killed by ${run.signal}`;
+  return `exit ${run.status ?? 'unknown'}`;
 }
 
 /**
@@ -138,7 +173,15 @@ async function main(): Promise<void> {
       process.exit(code ?? 0);
     }
     console.log('[serve] the cockpit asked for an upgrade — applying it now');
-    if (!applyUpdate()) console.log('[serve] the build is unchanged');
+    const outcome = applyUpdate();
+    if (outcome === 'unchanged') console.log('[serve] the update was not applied; the build is unchanged');
+    if (outcome === 'source-moved') {
+      console.error(
+        '[serve] the update was pulled but the cockpit bundle could not be rebuilt — the server is ' +
+          'restarting on the new code with the PREVIOUS cockpit. Run `npm ci && npm run web:build` here ' +
+          'and restart once the reason above is fixed.',
+      );
+    }
     console.log('[serve] restarting');
   }
 }

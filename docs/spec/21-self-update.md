@@ -161,8 +161,21 @@ unrelated reason coming back with its agents auto-restored is a loop nobody is w
 `npm run serve` under systemd, NSSM or a terminal behaves exactly as `npm run start:server` does,
 except that the cockpit can replace it.
 
-A failed `pull` or `ci` starts the **previous** build again and says so. That is the recoverable
-direction: the fleet comes back on the code it went down on.
+A failed `pull` starts the **previous** build again and says so. That is the recoverable direction:
+the fleet comes back on the code it went down on.
+
+Past the pull there is no previous build to come back to — the checkout is already on the new commit —
+so the two halves are reported apart. A failed cockpit build reruns `npm ci` and tries the build once
+more, because on a machine that was serving a minute ago the overwhelmingly likely reason is
+`node_modules` not matching the tree that was just pulled, and that is exactly the install the
+lockfile gate decided to skip. If it still fails the relaunch happens anyway, saying in as many words
+that the server is coming back on the new code behind the **previous** cockpit and what to run — the
+stale bundle is only survivable while something says it is there.
+
+Every failure names its reason. A command that never started — npm off the `PATH`, a fork the kernel
+refused, the OOM killer — reports a null status _and_ a null signal, with the cause only on `error`;
+read off status alone it prints as `failed (null)`, which tells the operator an upgrade failed and
+gives them nothing to act on.
 
 ### An unsupervised deployment
 
