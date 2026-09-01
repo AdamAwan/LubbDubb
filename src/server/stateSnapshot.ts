@@ -587,6 +587,38 @@ export function buildStateSections(
     canPlace: connector.canPlaceWorkItem(),
     types: { containerTypes: config.issueContainerTypes, parentedTypes: config.issueParentedTypes },
   };
+  /**
+   * The retained runs, each marked `stale` — the one field a live issue never
+   * carries (`wire.Issue.stale`). A goal whose ticket left the open set is not
+   * removed from the cockpit: its run, plan, pull requests, spend and notes are the
+   * harness's own record and are as current as anyone's. What is stale is the
+   * tracker's copy, and the marking says so — from when the harness last saw the
+   * item live (`updated_at`, which only a live pulse refreshes), and what the
+   * tracker's own word for it is now, read off the ticket mirror where there is one.
+   */
+  const retainedRuns = () => {
+    const retained = retainedRunIssues(issueRuns, world.issues);
+    const mirrored = new Map(store.readTrackerItems(retained.map((i) => i.number)).map((t) => [t.number, t]));
+    return retained.flatMap((issue) => {
+      // Every stub above was rebuilt from a run row, so this cannot miss; the
+      // guard is for the type, not a case.
+      const run = runByOrigin.get(issueConclusionOrigin(issue.number));
+      if (run === undefined) return [];
+      const ticket = mirrored.get(issue.number);
+      return [
+        {
+          ...enrichIssue(issue),
+          stale: {
+            lastSeenAt: run.updatedAt,
+            tracker: ticket
+              ? { state: ticket.state, workItemState: ticket.workItemState, changedAt: ticket.changedAt }
+              : null,
+          },
+        },
+      ];
+    });
+  };
+
   const enrichIssue = (issue: Issue) => {
     const origin = issueConclusionOrigin(issue.number);
     const run = runByOrigin.get(origin);
@@ -862,7 +894,7 @@ export function buildStateSections(
     // disagree about what a goal's records say. Dismissed and still-present runs
     // are not here: the former is over, the latter already rides the world list
     // above (with its `run` field).
-    retainedRuns: retainedRunIssues(issueRuns, world.issues).map(enrichIssue),
+    retainedRuns: retainedRuns(),
     // Chains of stacked pull requests, derived from the world rather than stored:
     // a plan *adopts* a stack, so a chain a human opened by hand is drawn on the
     // same terms as one a plan produced. The unfiltered open list, for the reason

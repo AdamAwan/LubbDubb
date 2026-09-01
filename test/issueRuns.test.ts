@@ -616,6 +616,7 @@ test("the snapshot marks a live goal's run and rebuilds a forgotten one", async 
     pickup: { status: string; reasons: string[] };
     run?: { dismissed: boolean };
     retrospective?: { summary: string };
+    stale?: { lastSeenAt: string; tracker: unknown };
   }[];
   const one = forgotten.find((i) => i.number === 99);
   assert.ok(one, 'a forgotten run is rebuilt so its report stays reachable');
@@ -628,6 +629,68 @@ test("the snapshot marks a live goal's run and rebuilds a forgotten one", async 
   assert.equal(one!.pickup.status, 'retained');
   assert.deepEqual(one!.pickup.reasons, ['closed; run kept until you dismiss it']);
   assert.equal(one!.retrospective?.summary, 'It shipped in two parts.', 'its report rides the rebuilt issue');
+  // Marked stale rather than dropped: the tracker's copy is dated to the last
+  // pulse the run row was refreshed by a live issue, and with no mirror the
+  // tracker's own word is not claimed. A live issue carries no marking at all.
+  assert.equal(one!.stale?.lastSeenAt, store.listIssueRuns().find((r) => r.issueNumber === 99)!.updatedAt);
+  assert.equal(one!.stale?.tracker, null, 'no mirror, so no reading of what the tracker says now');
+  assert.equal((present as { stale?: unknown }).stale, undefined, 'a live issue is never marked stale');
+
+  await app.close();
+  store.close();
+});
+
+/**
+ * With a ticket mirror the marking carries the tracker's own word — which is the
+ * operator's real question about a goal that left the world: not "is this copy
+ * old" but "what did someone do to the ticket". Azure keeps reporting a
+ * `Resolved` item on the history sweep; the open set never sees it again.
+ */
+test('a retained run says what the tracker now calls the item, off the mirror', async () => {
+  const system = build();
+  const { store } = system;
+  store.recordIssueRun({
+    originRef: 'issue:99',
+    issueNumber: 99,
+    title: 'Forgotten goal',
+    body: '',
+    labels: ['lubbdubb-watch'],
+    linkedPrNumber: 41,
+    workItemState: 'Doing',
+    complete: false,
+  });
+  store.recordSweep('2026-01-01T00:00:00.000Z', [
+    {
+      number: 99,
+      title: 'Forgotten goal',
+      labels: ['lubbdubb-watch'],
+      state: 'closed',
+      workItemState: 'Resolved',
+      url: null,
+      createdAt: '2026-01-02T00:00:00.000Z',
+      changedAt: '2026-01-09T00:00:00.000Z',
+    },
+  ]);
+
+  const built = await buildApp(system);
+  const app = built.app;
+  const body = (await app.inject({ method: 'GET', url: '/api/state' })).json();
+  const one = (
+    body.retainedRuns as {
+      number: number;
+      workItemState?: string;
+      stale?: { tracker: { state: string; workItemState: string | null; changedAt: string } | null };
+    }[]
+  ).find((i) => i.number === 99);
+  assert.ok(one);
+  // The harness's copy stays what the goal last was when live — it is what the
+  // dispatcher's stub reads too — and the marking is where the tracker's word goes.
+  assert.equal(one!.workItemState, 'Doing');
+  assert.deepEqual(one!.stale?.tracker, {
+    state: 'closed',
+    workItemState: 'Resolved',
+    changedAt: '2026-01-09T00:00:00.000Z',
+  });
 
   await app.close();
   store.close();

@@ -348,6 +348,10 @@ function Header({
           <i className={`cn-chip cn-type ${issueTypeTone(issue.issueType)}`}>{issue.issueType}</i>
         )}
         <StateChip state={issue.workItemState ?? issue.state} colours={config.stateColours} />
+        {/* Beside the state chip, which on a retained run is the harness's copy and
+            not the tracker's word: this is the chip that says so, and what the
+            tracker says instead. */}
+        {issue.stale !== undefined && <StaleChip stale={issue.stale} now={view.now} />}
       </div>
       {/* The verdicts, and nothing else. The counters that used to share this row —
           how long it has run, how many agents, what it cost, how many parts had
@@ -1315,6 +1319,44 @@ function courtTone(pr: OpenPullRequest): string {
  * row. One threshold, in one place — the same reason the chip below was shared
  * before the rack drew the court itself.
  */
+/**
+ * The tracker has stopped returning this goal, and this is the one place that
+ * says so (`wire.Issue.stale`). Drawn on a retained run wherever the goal is
+ * listed or opened, and never on a live issue — the field is absent there.
+ *
+ * Two readings, and it draws whichever the deployment can give. With a ticket
+ * mirror, the tracker's own word — `Resolved`, `Closed`, or open with the watch
+ * tag gone — because that is the operator's actual question: not "is this stale"
+ * but "what happened to it". Without one, only that the item left and when the
+ * harness last saw it. The title spells out what the marking covers and what it
+ * does not: the tracker's fields are the harness's copy, everything else on the
+ * goal is the harness's own record and current.
+ *
+ * @public drawn on the overview's goal rows as well as the page header
+ */
+export function StaleChip({ stale, now }: { stale: NonNullable<Issue['stale']>; now: number }): JSX.Element {
+  const seen = relTime(stale.lastSeenAt, now);
+  const kept = "Its plan, pull requests, agents, spend and notes are the harness's own record and are current.";
+  if (stale.tracker === null)
+    return (
+      <i
+        className="cn-chip cn-stale"
+        title={`The tracker no longer returns this item — closed, resolved, or its watch tag removed. The title, description, labels and state shown are the harness's copy from ${seen}. ${kept}`}
+      >
+        left tracker · seen {seen}
+      </i>
+    );
+  const word = stale.tracker.workItemState ?? stale.tracker.state;
+  return (
+    <i
+      className="cn-chip cn-stale"
+      title={`The tracker stopped returning this item and now says ${word} (changed ${relTime(stale.tracker.changedAt, now)}). The title, description and labels shown are the harness's copy from ${seen}. ${kept}`}
+    >
+      tracker: {word} · seen {seen}
+    </i>
+  );
+}
+
 export function waitedFor(sinceIso: string, now: number): string {
   const hours = Math.floor(Math.max(0, now - Date.parse(sinceIso)) / 3_600_000);
   return hours >= 24 ? `${Math.floor(hours / 24)}d` : `${hours}h`;

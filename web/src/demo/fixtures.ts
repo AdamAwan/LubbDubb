@@ -588,13 +588,13 @@ export function buildDemoState(): DemoSeed {
        * dispatches it. A fixture set where six goals are all "eligible" under a
        * cap of three is a world the dispatcher could never have produced.
        *
-       * Twelve of the fourteen are reachable by clicking: the backlog lists every
-       * *open* item, in one of its four groups. `done` (#352) and `retained`
-       * (#357) are the two that are not, because no surface lists a closed goal —
-       * they are carried anyway, since both are readings the wire ships and the
-       * goal page draws (a retained run is drawn there with the dismissal that
-       * ends it), and a demo world with no closed goal in it would be the only
-       * world the cockpit ever sees that has none.
+       * Thirteen of the fourteen are reachable by clicking: the backlog lists every
+       * *open* item, in one of its four groups, and the overview lists the retained
+       * run (#357, carried in `retainedRuns` below, marked stale). `done` (#352)
+       * is the one that is not, because no surface lists a closed goal the harness
+       * holds no run for — it is carried anyway, since it is a reading the wire
+       * ships and the goal page draws, and a demo world with no closed goal in it
+       * would be the only world the cockpit ever sees that has none.
        */
       issues: [
         // A three-row slice of a work-item tree, which is the one thing a
@@ -938,28 +938,6 @@ export function buildDemoState(): DemoSeed {
           state: 'closed',
           linkedPrNumber: null,
           pickup: { eligible: false, status: 'done', reasons: ['closed'] },
-        }),
-        // Closed in the tracker, and the harness is still holding its run: the
-        // state that separates "the ticket is shut" from "the work is over". The
-        // only way out is the operator's dismissal, which is why it is a queue row
-        // and not a chip.
-        demoIssue({
-          id: 'iss-357',
-          number: 357,
-          title: 'The reconciler re-opens gaps that a merge already closed',
-          body: 'Merging a proposal resolves its gap, and the next reconciliation pass re-opens it because the questions are still logged against the old document path.',
-          labels: ['bug', 'lubbdubb-watch'],
-          state: 'closed',
-          linkedPrNumber: null,
-          pickup: { eligible: false, status: 'retained', reasons: ['closed; run kept until you dismiss it'] },
-          run: { startedAt: ago(400), completedAt: ago(120), outcome: 'judged' as const, dismissed: false },
-          conclusion: {
-            verdict: 'done' as const,
-            by: 'assessor' as const,
-            note: 'Reconciliation keys on the proposal id now, not the path.',
-            at: ago(120),
-          },
-          spend: demoSpend(357, 5.51, 3),
         }),
         // Nobody opted it in. Listed, with its health, and never touched — the
         // absent tag as a state rather than an absence.
@@ -1950,8 +1928,8 @@ export function buildDemoState(): DemoSeed {
       },
     ],
     // Every list `/api/state` always ships, empty here because the demo has no
-    // story for them: an orphan-free boot, no goal retained past its issue, and
-    // no agent that surfaced an artifact or wrote a file. Present rather than
+    // story for them: an orphan-free boot, and no agent that surfaced an artifact
+    // or wrote a file. Present rather than
     // omitted because the wire sends them unconditionally — a demo that left them
     // out was a payload the real cockpit never receives.
     recovery: [],
@@ -1978,7 +1956,38 @@ export function buildDemoState(): DemoSeed {
       },
       intent: { state: 'idle', targetSha: null, requestedAt: null, pausedByDrain: false },
     },
-    retainedRuns: [],
+    // Left the tracker's open set — moved to Resolved in Azure — while the
+    // harness still holds its run: the state that separates "the ticket is
+    // shut" from "the work is over". Beside `world.issues` rather than in it,
+    // which is where a real deployment carries a retained run, and marked
+    // `stale` — the tracker's copy is from the last pulse it was live, the
+    // run, conclusion and spend are the harness's own. The only way out is the
+    // operator's dismissal, which is why it is a queue row and not a chip.
+    retainedRuns: [
+      demoIssue({
+        id: 'iss-357',
+        number: 357,
+        title: 'The reconciler re-opens gaps that a merge already closed',
+        body: 'Merging a proposal resolves its gap, and the next reconciliation pass re-opens it because the questions are still logged against the old document path.',
+        labels: ['bug', 'lubbdubb-watch'],
+        state: 'closed',
+        workItemState: 'Doing',
+        linkedPrNumber: null,
+        pickup: { eligible: false, status: 'retained', reasons: ['closed; run kept until you dismiss it'] },
+        run: { startedAt: ago(400), completedAt: ago(120), outcome: 'judged' as const, dismissed: false },
+        conclusion: {
+          verdict: 'done' as const,
+          by: 'assessor' as const,
+          note: 'Reconciliation keys on the proposal id now, not the path.',
+          at: ago(120),
+        },
+        spend: demoSpend(357, 5.51, 3),
+        stale: {
+          lastSeenAt: ago(95),
+          tracker: { state: 'closed', workItemState: 'Resolved', changedAt: ago(90) },
+        },
+      }),
+    ],
     flags: [],
     artifactUrls: {},
     // The demo has no attachments: their bytes live on a disk the demo does not
