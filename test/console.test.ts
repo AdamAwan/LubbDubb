@@ -131,6 +131,39 @@ test('console.css reaches no form control through .cn', () => {
 });
 
 /**
+ * The why marker's bubble, which is positioned against the **row** rather than
+ * against the 16px marker so that it cannot leave the card whatever the marker's
+ * position in the row — and stays positioned against the row past its own cap.
+ *
+ * `left` + `right` + `max-width` is an over-constrained absolutely positioned box,
+ * and CSS resolves that by dropping the `right` offset: the bubble silently stopped
+ * spanning the row on every card wider than the cap and hugged the row's left edge
+ * instead, 420px of it under the *title* rather than under the marker it explains.
+ * An auto inline margin is what is not dropped — the slack goes to the margins and
+ * the two edges keep the box between them.
+ *
+ * Asserted here because nothing else in `npm run check` reads a stylesheet, and the
+ * failure has nothing to show for itself: the sheet is valid, both offsets are
+ * written down, and only a wide card renders the difference.
+ * → docs/spec/17-cockpit.md#the-row-grammar
+ */
+test('the why bubble is held between the row’s two edges, cap and all', () => {
+  const css = readFileSync(fileURLToPath(new URL('../web/src/console/console.css', import.meta.url)), 'utf8');
+  const rule = /^\.cn-why-tip\s*\{([^}]*)\}/m.exec(css)?.[1];
+  assert.ok(rule !== undefined, 'console.css no longer declares .cn-why-tip');
+  for (const edge of ['left:', 'right:']) {
+    assert.match(rule, new RegExp(`\\b${edge}`), `the bubble drops ${edge.slice(0, -1)} and anchors to the marker`);
+  }
+  if (/\bmax-width:/.test(rule)) {
+    assert.match(
+      rule,
+      /margin-inline:\s*auto|margin-left:\s*auto/,
+      'a capped box with both offsets is over-constrained: without an auto inline margin CSS drops `right`',
+    );
+  }
+});
+
+/**
  * The Usage chip (docs/spec/17-cockpit.md#the-usage-chip). Four things about it are
  * load-bearing and not one of them shows in a screenshot of the resting state.
  *

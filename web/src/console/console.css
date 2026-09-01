@@ -2988,7 +2988,17 @@ button.cn-grow {
   color: var(--cn-fg);
 }
 /* Two edges rather than a width: the bubble is the width of the row it explains,
-   so it cannot leave the card whatever the marker's position in the row. */
+   so it cannot leave the card whatever the marker's position in the row.
+
+   `margin-inline: auto` is what keeps that true past the cap. Both offsets and a
+   `max-width` is an over-constrained box, and CSS resolves that by dropping one
+   offset — `right`, in a left-to-right reader — so the bubble stopped spanning
+   the row the moment the row was wider than the cap and hugged its left edge
+   instead: 420px under the *title*, three columns away from the marker it
+   belongs to, on every card wider than 446px. An auto margin is the one thing
+   that is not dropped: the slack goes to the margins, and the box stays where
+   the two edges put it. The failure is silent twice over — nothing errors, the
+   sheet is valid, and both edges are still written down right here. */
 .cn-why-tip {
   display: none;
   position: absolute;
@@ -2997,6 +3007,7 @@ button.cn-grow {
   top: calc(100% - 4px);
   z-index: 40;
   max-width: 420px;
+  margin-inline: auto;
   padding: 9px 11px;
   background: var(--cn-bg);
   border: 1px solid var(--cn-line-hi);

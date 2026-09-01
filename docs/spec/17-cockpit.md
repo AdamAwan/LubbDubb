@@ -1632,6 +1632,17 @@ being forgotten:
   `button`, so it answers to the keyboard; a reason only a pointer can reach is a reason half the
   operators do not have.
 
+  **The bubble is positioned against the row, not against the marker**, and it stays that way past
+  its own measure cap. Anchored to a 16px button it leaves the card on every row whose marker sits
+  near an edge, and a tooltip clipped by its own panel is a reason nobody can read — so it is pinned
+  to the row's two edges and capped at a readable measure between them. The cap is where that went
+  wrong once: `left` and `right` together with a `max-width` is an over-constrained box, which CSS
+  resolves by **dropping the `right` offset**, so on every card wider than the cap the bubble stopped
+  spanning the row and hugged its left edge — 420px of explanation under the *title*, columns away
+  from the marker it belongs to. `margin-inline: auto` is what a browser will not drop: the slack
+  goes to the margins and the box stays between the two edges. Neither the sheet nor a narrow card
+  shows the difference, so `test/console.test.ts` pins it.
+
   A bare `?` says only _there is something to know here_, so a column of them tells an operator
   scanning a card nothing until they hover every row. Where a card has a word for what is going on —
   the Fleet card does — the marker wears it and the sentence is the detail behind it. The word is
