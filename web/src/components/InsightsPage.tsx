@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type JSX, type RefObject } from 'react';
 import type {
-  AllowanceInsights,
+  AllowancePayload,
   InsightsWindow,
   InsightsWindowView,
   McpInsights,
@@ -115,7 +115,7 @@ export function InsightsPage({
   const [remedies, setRemedies] = useState<RemedyInsights | null>(null);
   const [trend, setTrend] = useState<Fetched<SpendTrend>>({ state: 'loading', data: null });
   const [mcp, setMcp] = useState<Fetched<McpInsights>>(PENDING);
-  const [allowance, setAllowance] = useState<Fetched<AllowanceInsights>>(PENDING);
+  const [allowance, setAllowance] = useState<Fetched<AllowancePayload>>(PENDING);
   // The trend is fetched on its tab's first visit *for a given window* rather
   // than with the rest, for the reason the settings modal mounts its tabs
   // lazily: it reaches eight windows of world events on top of the same agent
@@ -214,7 +214,7 @@ export function InsightsPage({
     setAllowance(PENDING);
     api
       .getAllowance(chosen)
-      .then((res) => live && setAllowance({ state: 'ready', data: res.allowance }))
+      .then((res) => live && setAllowance({ state: 'ready', data: res }))
       .catch(() => live && setAllowance({ state: 'failed', data: null }));
     return () => {
       live = false;
@@ -449,7 +449,7 @@ function Body({
   remedies: RemedyInsights | null;
   trend: Fetched<SpendTrend>;
   mcp: Fetched<McpInsights>;
-  allowance: Fetched<AllowanceInsights>;
+  allowance: Fetched<AllowancePayload>;
   pool: Fetched<PoolInsightsPayload>;
   poolProject: string | null;
   actions: CockpitActions;
@@ -478,7 +478,7 @@ function Body({
     // here would say the account has not moved, which is the reading an operator
     // is least able to afford being wrong about.
     if (allowance.data === null) return <p className="empty">Could not read the allowance.</p>;
-    return <AllowanceTab allowance={allowance.data} />;
+    return <AllowanceTab payload={allowance.data} />;
   }
 
   if (view === 'mcp') {

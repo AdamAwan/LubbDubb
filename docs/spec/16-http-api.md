@@ -1116,9 +1116,17 @@ apart, and agreement by construction is the only kind that holds.
 ### `GET /api/allowance`
 
 The account's usage percentage over time: the readings inside the window, the agent runs beside them,
-the rise apportioned to the goals that spent it, and the weekly burn-down. Returns `{ allowance }` —
-see [18](18-observability.md#the-allowance) for why a per-goal percentage is apportioned rather than
-measured, why the split is per interval, and why a fall is a reset while a gap is not.
+the rise apportioned to the goals that spent it, and the weekly burn-down. Returns
+`{ allowance, refUrls }` — see [18](18-observability.md#the-allowance) for why a per-goal percentage is
+apportioned rather than measured, why the split is per interval, and why a fall is a reset while a gap
+is not.
+
+**`refUrls` is resolved off the connector here, not read from the snapshot's map**, for
+`/api/tickets`' reason and one sharper: `/api/state`'s map is built from the *world*, and a goal that
+spent inside a five-hour window has very often closed since — that is exactly the row whose title the
+tab draws as `no longer on the tracker`. Without the route's own map the cockpit renders that goal's
+number as plain text, which is a row that reads correctly and is a dead end
+([17](17-cockpit.md#links)).
 
 **Takes the same `?window=`**, which the readings, the lanes and the apportionment are all cut by. The
 burn-down is the exception and has to be: it is always about the *seven-day* window, so its readings
