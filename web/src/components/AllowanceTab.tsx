@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 import type {
   AllowanceApportionment,
+  AllowanceGoal,
   AllowanceInsights,
   AllowanceLane,
   AllowanceProjection,
@@ -71,7 +72,7 @@ export function AllowanceTab({ allowance }: { allowance: AllowanceInsights }): J
       <div className="sp-cols">
         <section className="sp-col">
           <p className="sp-sub">Where it went</p>
-          <GoalBar allowance={allowance} />
+          <GoalBar apportionment={apportionment} />
           <Method allowance={allowance} />
         </section>
         <section className="sp-col">
@@ -318,8 +319,8 @@ function laneTitle(lane: AllowanceLane, now: number): string {
  * width rather than folded into the goals — dividing it among them is the one
  * thing the readings cannot support.
  */
-function GoalBar({ allowance }: { allowance: AllowanceInsights }): JSX.Element {
-  const { goals, observedPoints, unattributedPoints } = allowance.apportionment;
+function GoalBar({ apportionment }: { apportionment: AllowanceApportionment }): JSX.Element {
+  const { goals, observedPoints, unattributedPoints } = apportionment;
   const total = observedPoints ?? 0;
   return (
     <>
@@ -471,7 +472,7 @@ function verdict(p: AllowanceProjection): string {
  * important row here, so it renders as that sentence rather than as a symbol —
  * `pointsPerLanded` is null rather than `Infinity` on the wire for exactly this.
  */
-function Goals({ goals, unattributed }: { goals: AllowanceApportionment['goals']; unattributed: number }): JSX.Element {
+function Goals({ goals, unattributed }: { goals: readonly AllowanceGoal[]; unattributed: number }): JSX.Element {
   return (
     <table className="sp-tbl">
       <thead>
