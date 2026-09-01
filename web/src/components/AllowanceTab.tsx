@@ -130,16 +130,18 @@ function Headline({ allowance, now }: { allowance: AllowanceInsights; now: numbe
   );
 }
 
-/** Geometry. Two stacked panels on one x axis, which is the timeline's whole argument. */
-const T = { left: 44, right: 596, top: 12, bottom: 112, laneTop: 146, laneHeight: 13, laneGap: 3 };
-/** How many lanes are drawn before the rest are folded into a count. */
-const MAX_LANES = 8;
-/** The right edge a lane's label may run to — the viewBox, less a hair of margin. */
-const LANE_LABEL_RIGHT = 616;
-/** One character of the lane label, in user units: mono, so an advance is a constant. */
-const LANE_CH = 4.8;
-/** Below this, a label is a truncation rather than a name, and the tooltip serves better. */
-const LANE_LABEL_MIN = 9;
+/**
+ * Geometry. Two stacked panels on one x axis, which is the timeline's whole
+ * argument — and a named gutter down the left, which is what makes the lower
+ * panel readable without a pointer.
+ */
+const T = { left: 168, right: 962, top: 26, bottom: 196, laneTop: 244, laneHeight: 20, laneGap: 8 };
+/** The viewBox this chart is laid out in. Wider than the page's others: it has a gutter to pay for. */
+const VIEW = 1000;
+/** How many goal rows are drawn before the rest are folded into a count. */
+const MAX_ROWS = 8;
+/** One character of gutter text, in user units: mono, so an advance is a constant. */
+const ROW_CH = 6.6;
 
 /**
  * The percentage over the window, with the agent runs beneath it.
@@ -150,22 +152,29 @@ const LANE_LABEL_MIN = 9;
  * The apportionment below is where a number per goal is offered, and it is
  * labelled as apportioned there.
  *
+ * **A row is a goal, not a run.** Two dispatches onto one goal are two bars in
+ * one row, which is what lets the row carry a name in the gutter — and a name in
+ * a gutter is the only kind a reader gets without hovering. Rows come in the
+ * apportionment's order, so the table at the foot of the tab reads as the same
+ * list twice rather than two orders to reconcile.
+ *
  * Two things are deliberately *not* joined. A reset (the window refilling) breaks
  * the line rather than drawing a cliff, which would read as the fleet having
  * given something back. A gap — the fleet idle, so no reading arrived — is drawn
- * dashed: the rise across it is real and counted, and what is unknown is what
- * happened inside it.
+ * as a shaded column through both panels and a dashed connector: the rise across
+ * it is real and counted, and what is unknown is what happened inside it.
  */
 function Timeline({ allowance, now }: { allowance: AllowanceInsights; now: number }): JSX.Element {
   const { readings } = allowance;
   const startMs = Date.parse(allowance.window.startsAt);
-  const endMs = now;
-  const span = Math.max(1, endMs - startMs);
+  const span = Math.max(1, now - startMs);
   const x = (iso: string): number => T.left + ((Date.parse(iso) - startMs) / span) * (T.right - T.left);
   const y = (pct: number): number => T.bottom - (pct / 100) * (T.bottom - T.top);
 
-  const lanes = allowance.lanes.slice(0, MAX_LANES);
-  const height = T.laneTop + Math.max(1, lanes.length) * (T.laneHeight + T.laneGap) + 6;
+  const allRows = laneRows(allowance);
+  const rows = allRows.slice(0, MAX_ROWS);
+  const laneBottom = T.laneTop + Math.max(1, rows.length) * (T.laneHeight + T.laneGap);
+  const height = laneBottom + 8;
 
   // Each unbroken run of readings is its own path: a break is a reset or a gap,
   // and a single path through them would draw a line across a discontinuity the
@@ -177,47 +186,87 @@ function Timeline({ allowance, now }: { allowance: AllowanceInsights; now: numbe
     if (open === undefined || reading.afterReset || reading.afterGap) segments.push([reading]);
     else open.push(reading);
   }
+  const last = readings.filter((r) => r.fiveHour !== null).at(-1) ?? null;
 
   return (
-    <div className="sp-graph sp-well">
+    <div className="sp-graph al-wide sp-well">
       <svg
-        viewBox={`0 0 620 ${height}`}
+        viewBox={`0 0 ${VIEW} ${height}`}
         role="img"
-        aria-label={`Account five-hour window over ${allowance.window.label.toLowerCase()}, with ${lanes.length} agent runs beneath`}
+        aria-label={`Account five-hour window over ${allowance.window.label.toLowerCase()}, with ${rows.length} goals' agent runs beneath`}
       >
-        <g stroke="var(--border-lo)" strokeWidth="1">
-          {[0, 0.5, 1].map((f) => (
-            <path key={f} d={`M${T.left} ${T.top + f * (T.bottom - T.top)}H${T.right}`} />
+        {/* A grid rather than three rules: the lanes below are read off the same x,
+            so a reader tracing a run up to the line needs something to trace along. */}
+        <g className="al-grid">
+          {[0, 25, 50, 75, 100].map((pct) => (
+            <path key={pct} d={`M${T.left} ${y(pct)}H${T.right}`} />
+          ))}
+          {TICKS.map((f) => (
+            <path key={f} d={`M${T.left + f * (T.right - T.left)} ${T.top}V${T.bottom}`} />
           ))}
         </g>
+        {/* 100% is not the top of a scale, it is where the fleet stops — so it is
+            drawn in the alarm vocabulary rather than as the last gridline. */}
+        <path className="al-park" d={`M${T.left} ${y(100)}H${T.right}`} />
+        <text className="al-park-label" x={T.left + 8} y={y(100) + 14}>
+          PARKS THE FLEET
+        </text>
         <g className="sp-axis" textAnchor="end">
-          {[0, 50, 100].map((pct) => (
-            <text key={pct} x={T.left - 7} y={y(pct) + 3}>
+          {[0, 25, 50, 75, 100].map((pct) => (
+            <text key={pct} x={T.left - 12} y={y(pct) + 4}>
               {pct}%
             </text>
           ))}
         </g>
         {/* A timeline with no time on it asks the reader to take the lanes'
-            alignment on trust. Three marks rather than a full axis: the readings
-            carry their own instants on hover, and what the eye needs here is
-            where the window opened, its middle, and now. */}
-        <g className="sp-axis">
-          <text x={T.left} y={T.bottom + 14} textAnchor="start">
-            {relAge(allowance.window.startsAt, now)}
-          </text>
-          <text x={(T.left + T.right) / 2} y={T.bottom + 14} textAnchor="middle">
-            {relAge(new Date(startMs + span / 2).toISOString(), now)}
-          </text>
-          <text x={T.right} y={T.bottom + 14} textAnchor="end">
-            now
-          </text>
+            alignment on trust. Ages rather than clock times, since every other
+            span on the tab is one. */}
+        <g className="sp-axis" textAnchor="middle">
+          {TICKS.map((f) => (
+            <text key={f} x={T.left + f * (T.right - T.left)} y={T.bottom + 20}>
+              {f === 1 ? 'now' : relAge(new Date(startMs + f * span).toISOString(), now)}
+            </text>
+          ))}
         </g>
+        <text className="al-cap" x={T.left} y={14}>
+          ACCOUNT · FIVE-HOUR WINDOW USED
+        </text>
+        <text className="al-cap" x={0} y={T.laneTop - 12}>
+          AGENTS RUNNING
+        </text>
+
+        {/* What the harness did not watch, drawn as one column through both panels:
+            the rise across it is counted, and the shading says only that nothing
+            was there to see it happen. */}
+        {readings.map((reading, i) => {
+          const previous = readings[i - 1];
+          if (!reading.afterGap || previous === undefined) return null;
+          const from = x(previous.at);
+          const width = x(reading.at) - from;
+          return (
+            <g key={`idle-${reading.at}`}>
+              <rect className="al-idle" x={from} y={T.top} width={width} height={laneBottom - T.top} />
+              {width > 150 && (
+                <text className="al-idle-label" x={from + width / 2} y={T.top + 14} textAnchor="middle">
+                  FLEET IDLE · NO READINGS
+                </text>
+              )}
+              {previous.fiveHour !== null && reading.fiveHour !== null && (
+                <path
+                  className="al-gap"
+                  d={`M${from} ${y(previous.fiveHour)}L${x(reading.at)} ${y(reading.fiveHour)}`}
+                />
+              )}
+            </g>
+          );
+        })}
 
         {segments.map((segment, i) => (
           <g key={segment[0]?.at ?? i}>
+            <path className="al-area" d={`${stepPath(segment, x, y)}V${T.bottom}H${x(segment[0]?.at ?? '')}Z`} />
             <path className="al-line" d={stepPath(segment, x, y)} />
             {segment.map((reading) => (
-              <circle key={reading.at} className="al-dot" cx={x(reading.at)} cy={y(reading.fiveHour ?? 0)} r="1.8">
+              <circle key={reading.at} className="al-dot" cx={x(reading.at)} cy={y(reading.fiveHour ?? 0)} r="3">
                 <title>
                   {`${fmtPoints(reading.fiveHour ?? 0)} used · ${relTime(reading.at, now)}`}
                   {reading.afterReset ? ' · the window reset just before this' : ''}
@@ -227,69 +276,104 @@ function Timeline({ allowance, now }: { allowance: AllowanceInsights; now: numbe
             ))}
           </g>
         ))}
-        {/* What the harness does not know, drawn as not knowing it: the rise across
-            an idle stretch happened and is counted, and the dashes say only that
-            nothing watched it happen. */}
-        {readings.map((reading, i) => {
-          const previous = readings[i - 1];
-          if (!reading.afterGap || previous === undefined) return null;
-          if (previous.fiveHour === null || reading.fiveHour === null) return null;
+        {/* Where it stands now, said in the chart rather than only in the tile
+            above it: the last dot is the one figure a reader came for. */}
+        {last !== null && last.fiveHour !== null && (
+          <g>
+            <circle className="al-dot al-now" cx={x(last.at)} cy={y(last.fiveHour)} r="5" />
+            <text className="al-endpoint" x={x(last.at) - 14} y={y(last.fiveHour) + 36} textAnchor="end">
+              {fmtPoints(last.fiveHour)}
+            </text>
+          </g>
+        )}
+
+        {rows.map((row, i) => {
+          const top = T.laneTop + i * (T.laneHeight + T.laneGap);
           return (
-            <path
-              key={`gap-${reading.at}`}
-              className="al-gap"
-              d={`M${x(previous.at)} ${y(previous.fiveHour)}L${x(reading.at)} ${y(reading.fiveHour)}`}
-            />
+            <g key={row.key}>
+              <rect className="al-lane-row" x={T.left} y={top} width={T.right - T.left} height={T.laneHeight} />
+              <text
+                className={row.slot === null ? 'al-lane-name al-lane-name-none' : 'al-lane-name'}
+                x={T.left - 12}
+                y={top + T.laneHeight / 2}
+                textAnchor="end"
+                dominantBaseline="central"
+              >
+                {clip(row.label, Math.floor((T.left - 16) / ROW_CH))}
+              </text>
+              {row.lanes.map((lane) => {
+                const from = Math.max(T.left, x(lane.startedAt));
+                // A run still going is drawn to now, which is where its money still is.
+                const to = Math.min(T.right, x(lane.endedAt ?? new Date(now).toISOString()));
+                return (
+                  <rect
+                    key={lane.agentId}
+                    className={lane.measured ? 'al-lane' : 'al-lane al-lane-unmeasured'}
+                    x={from}
+                    y={top + 3}
+                    width={Math.max(4, to - from)}
+                    height={T.laneHeight - 6}
+                    rx="3"
+                    fill={laneFill(lane)}
+                  >
+                    <title>{laneTitle(lane, now)}</title>
+                  </rect>
+                );
+              })}
+            </g>
           );
         })}
-
-        <g>
-          {lanes.map((lane, i) => {
-            const top = T.laneTop + i * (T.laneHeight + T.laneGap);
-            const from = x(lane.startedAt);
-            // A run still going is drawn to now, which is where its money still is.
-            const to = x(lane.endedAt ?? new Date(now).toISOString());
-            const left = Math.max(T.left, from);
-            const width = Math.max(2, Math.min(T.right, to) - left);
-            const label = laneLabel(lane, left, width);
-            return (
-              <g key={lane.agentId}>
-                <rect
-                  className={lane.measured ? 'al-lane' : 'al-lane al-lane-unmeasured'}
-                  x={left}
-                  y={top}
-                  width={width}
-                  height={T.laneHeight - 2}
-                  rx="2"
-                  fill={laneFill(lane)}
-                >
-                  <title>{laneTitle(lane, now)}</title>
-                </rect>
-                {label !== null && (
-                  <text
-                    className={label.inside ? 'al-lane-label al-lane-label-in' : 'al-lane-label'}
-                    x={label.x}
-                    y={top + (T.laneHeight - 2) / 2}
-                    textAnchor={label.anchor}
-                    dominantBaseline="central"
-                  >
-                    {label.text}
-                  </text>
-                )}
-              </g>
-            );
-          })}
-        </g>
       </svg>
       <p className="sp-note">
-        {lanes.length === allowance.lanes.length
-          ? `${lanes.length} run${lanes.length === 1 ? '' : 's'} in this window, one lane each. `
-          : `The ${MAX_LANES} most recent of ${allowance.lanes.length} runs. `}
-        Each bar is one agent run, named beside it and coloured by the goal it reached; hover one for the whole of it.
-        Which agents were running while it climbed — not which of them caused it.
+        {rows.length === allRows.length
+          ? `${allowance.lanes.length} run${allowance.lanes.length === 1 ? '' : 's'} in this window, one row per goal. `
+          : `The ${MAX_ROWS} goals of ${allRows.length} that spent most. `}
+        Hover a bar for the run behind it. Which agents were running while it climbed — not which of them caused it.
       </p>
     </div>
   );
+}
+
+/** Where the grid stands and the axis is labelled, as fractions of the window. */
+const TICKS = [0, 0.25, 0.5, 0.75, 1];
+
+/** One row of the lane band: a goal, and every run of the window that reached it. */
+type LaneRow = { key: string; label: string; slot: number | null; lanes: AllowanceLane[] };
+
+/**
+ * The window's runs, gathered into one row per goal.
+ *
+ * Ordered by the apportionment rather than by when a run started, so the band and
+ * the table at the foot of the tab are the same list in the same order — a reader
+ * who has just read one is not re-learning the other. Goals the apportionment
+ * does not carry (a run that spent nothing measurable) follow, and the runs that
+ * reached no goal at all share the last row: they are an absence, and an absence
+ * is one row however many agents are in it.
+ */
+function laneRows(allowance: AllowanceInsights): LaneRow[] {
+  const rows = new Map<string, LaneRow>();
+  const keyOf = (issue: number | null): string => (issue === null ? 'none' : `#${issue}`);
+  for (const goal of allowance.apportionment.goals)
+    rows.set(keyOf(goal.issueNumber), {
+      key: keyOf(goal.issueNumber),
+      label: `#${goal.issueNumber} ${goal.title ?? ''}`.trim(),
+      slot: goal.slot,
+      lanes: [],
+    });
+  for (const lane of allowance.lanes) {
+    const key = keyOf(lane.issueNumber);
+    const row = rows.get(key) ?? {
+      key,
+      label: lane.issueNumber === null ? 'no goal' : `#${lane.issueNumber} ${lane.title ?? ''}`.trim(),
+      slot: lane.issueNumber === null ? null : lane.slot,
+      lanes: [],
+    };
+    row.lanes.push(lane);
+    rows.set(key, row);
+  }
+  // A goal with no run in this window is a row of empty track, which says nothing
+  // the table does not; the band is about what ran.
+  return [...rows.values()].filter((row) => row.lanes.length > 0);
 }
 
 /**
@@ -319,36 +403,6 @@ function laneFill(lane: AllowanceLane): string {
   if (!lane.measured) return 'var(--al-unmeasured)';
   if (lane.slot === null) return 'var(--al-unattributed)';
   return `var(--al-goal-${lane.slot})`;
-}
-
-/**
- * Where a lane's name goes, and how much of it fits.
- *
- * A bar on its own says an agent ran for that long and nothing else — the name is
- * in a tooltip, which is no name at all on a screenshot, a touch screen or a
- * reader that does not hover. So every lane is named on the glass: beside the bar
- * where there is room to its right, and inside its end where there is not, which
- * is the case for a run still going (its bar reaches now, and now is the axis's
- * right edge). A bar too small for either keeps the tooltip alone rather than a
- * two-character stub.
- */
-function laneLabel(
-  lane: AllowanceLane,
-  left: number,
-  width: number,
-): { text: string; x: number; anchor: 'start' | 'end'; inside: boolean } | null {
-  const name = (
-    lane.issueNumber === null ? (lane.title ?? lane.agentId) : `#${lane.issueNumber} ${lane.title ?? ''}`
-  ).trim();
-  const outside = Math.floor((LANE_LABEL_RIGHT - (left + width) - 5) / LANE_CH);
-  const inside = Math.floor((width - 8) / LANE_CH);
-  // Whichever holds more of the name, not whichever is tried first: a run still
-  // going has no room beside it and plenty within it, and a short early run the
-  // reverse.
-  if (outside >= inside && outside >= LANE_LABEL_MIN)
-    return { text: clip(name, outside), x: left + width + 5, anchor: 'start', inside: false };
-  if (inside >= LANE_LABEL_MIN) return { text: clip(name, inside), x: left + width - 4, anchor: 'end', inside: true };
-  return null;
 }
 
 /** As many characters as were asked for, with the cut marked rather than silent. */
@@ -454,14 +508,24 @@ function Projection({ allowance }: { allowance: AllowanceInsights }): JSX.Elemen
   return (
     <div className="sp-graph sp-well">
       <svg viewBox={`0 0 620 ${P.bottom + 28}`} role="img" aria-label={verdict(p)}>
-        <g stroke="var(--border-lo)" strokeWidth="1">
-          {[0, 100].map((pct) => (
+        <g className="al-grid">
+          {[0, 25, 50, 75, 100].map((pct) => (
             <path key={pct} d={`M${P.left} ${y(pct)}H${P.right}`} />
           ))}
         </g>
+        {/* The floor is not the bottom of a scale either: below it the fleet is
+            parked, so the last stretch of headroom is drawn in the same alarm
+            vocabulary the timeline's 100% line is. */}
+        <rect className="al-parked" x={P.left} y={y(12)} width={P.right - P.left} height={P.bottom - y(12)} />
+        <text className="al-park-label" x={P.left + 8} y={P.bottom - 5}>
+          PARKED
+        </text>
         <g className="sp-axis" textAnchor="end">
           <text x={P.left - 7} y={y(100) + 3}>
             full
+          </text>
+          <text x={P.left - 7} y={y(50) + 3}>
+            50%
           </text>
           <text x={P.left - 7} y={y(0) + 3}>
             spent

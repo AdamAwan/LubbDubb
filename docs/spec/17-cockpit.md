@@ -1638,7 +1638,7 @@ being forgotten:
   to the row's two edges and capped at a readable measure between them. The cap is where that went
   wrong once: `left` and `right` together with a `max-width` is an over-constrained box, which CSS
   resolves by **dropping the `right` offset**, so on every card wider than the cap the bubble stopped
-  spanning the row and hugged its left edge — 420px of explanation under the *title*, columns away
+  spanning the row and hugged its left edge — 420px of explanation under the _title_, columns away
   from the marker it belongs to. `margin-inline: auto` is what a browser will not drop: the slack
   goes to the margins and the box stays between the two edges. Neither the sheet nor a narrow card
   shows the difference, so `test/console.test.ts` pins it.
@@ -1851,6 +1851,7 @@ card is the drift `PanelRowModel` exists to end, one level up.
   world event on its issue ref — so an arrival written as one would lift the delivery park on the goal
   it announced and hand the work straight back to the fleet.
   → [24](24-environments.md#in-the-cockpit)
+
 - **Environments** — one row per environment that declares a `health` command: the word its own check
   answered, how long it has been that word, when it was last read, and the check's own reasons behind
   the row's marker. Here rather than on a goal page because health is a fact about the environment and
@@ -3331,12 +3332,12 @@ in every engine. Gating on visibility alone therefore suppressed the case the fe
 suppressed it silently: a notification that never fires is indistinguishable from a fleet with nothing
 to say. Both halves are asserted in `test/notify.test.ts` against a stubbed engine.
 
-|            |                                                                                                                                                                                                                                           |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Stored     | `localStorage` under `lubbdubb.notify`, beside the token — a property of this browser, so two people on one deployment can want different things. Not `Place`: the address bar holds where you are, and this is not somewhere you can be. |
-| Categories | `needsYou`, `errors`, `agents`, `environments`, each independently switchable. `environments` fires on a health reading's change of state or tier ([24](24-environments.md#being-told)). `agents` is described in the panel as frequent rather than quietly defaulted off — switchable is the answer to noise, not a default nobody finds.                          |
-| Permission | Requested only from the button, never a mount effect: every engine requires a user gesture and some refuse silently. `enabled` is written only once the browser has actually granted, so a switch can never read on and do nothing.       |
-| Suppressed | Only while the cockpit is **both** `document.visibilityState === 'visible'` **and** `document.hasFocus()`. A notification for a row you are looking at is noise, and the point is to reach you when you are elsewhere.                    |
+|            |                                                                                                                                                                                                                                                                                                                                            |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Stored     | `localStorage` under `lubbdubb.notify`, beside the token — a property of this browser, so two people on one deployment can want different things. Not `Place`: the address bar holds where you are, and this is not somewhere you can be.                                                                                                  |
+| Categories | `needsYou`, `errors`, `agents`, `environments`, each independently switchable. `environments` fires on a health reading's change of state or tier ([24](24-environments.md#being-told)). `agents` is described in the panel as frequent rather than quietly defaulted off — switchable is the answer to noise, not a default nobody finds. |
+| Permission | Requested only from the button, never a mount effect: every engine requires a user gesture and some refuse silently. `enabled` is written only once the browser has actually granted, so a switch can never read on and do nothing.                                                                                                        |
+| Suppressed | Only while the cockpit is **both** `document.visibilityState === 'visible'` **and** `document.hasFocus()`. A notification for a row you are looking at is noise, and the point is to reach you when you are elsewhere.                                                                                                                     |
 
 #### Proving it works
 
@@ -3779,20 +3780,36 @@ operator asks them:
 
 **The lanes are the timeline's whole argument.** They let a reader see which agents were running while
 the line climbed without the chart ever claiming that the tallest one caused it — adjacency drawn
-honestly, which is all the readings can support. A number *per goal* is offered one panel down, where
+honestly, which is all the readings can support. A number _per goal_ is offered one panel down, where
 it is labelled as apportioned. A run that reported no usage still gets a lane and is drawn muted: it
 was running, which is the only thing a lane claims, and it moved the account by nothing this harness
 can see.
 
-**Every lane is named on the glass, and both burn-down instants are dated.** A bar carrying its name
-only in a tooltip is a bar with no name at all on a screenshot, a touch screen or a reader that does
-not hover — which is what the lane band and the weekly line both were. So a lane's goal and title are
-drawn beside it, or inside its right end where there is no room beside it (a run still going reaches
-now, and now is the axis's right edge); a bar too small to hold a name keeps the tooltip alone rather
-than a two-character stub. The weekly burn-down draws `now` under its first point and the span to
-exhaustion under its last, and the span to the reset beside the reset line — dropped when the two
+**A lane row is a goal, and it is named in a gutter.** Two dispatches onto one goal are two bars in
+one row, which is what lets the row carry a name down the left — and a name in a gutter is the only
+kind a reader gets without a pointer, which a screenshot, a touch screen and a reader who does not
+hover all are. The rows come in the apportionment's order, so the band and the table at the foot of
+the tab are the same list twice rather than two orders to reconcile; a goal with no run in the window
+is not a row, because the band is about what ran. The runs that reached no goal share the last row —
+an absence is one row however many agents are in it. This is why the timeline is laid out in a
+1000-unit viewBox where the rest of the page uses 620, and drawn at `.al-wide` rather than
+`.sp-graph`'s bound: it spends its first sixth naming rows, and scaled down to the narrower bound its
+axis text would arrive smaller than anything else on the panel.
+
+**The plot is a grid, and its two edges are states rather than scale ends.** A reader tracing a run up
+to the line needs something to trace along, so the window is ruled at quarters both ways and the x
+axis labelled in ages. 100% is where the fleet stops, so it is drawn in the alarm vocabulary and says
+so; on the weekly burn-down the same is true of the floor, which carries a red zone marked `PARKED`.
+The last reading takes a larger dot and its percentage beside it — the one figure a reader came for,
+said in the chart rather than only in the tile above it — and a faint area under the line is what
+makes a step chart read as consumption rather than as a path.
+
+**An idle stretch is a column, not just a dashed segment.** It is shaded through both panels, so the
+lanes and the line agree about where the harness was not watching, and captioned in place when it is
+wide enough to hold the words. The burn-down draws `now` under its first point and the span to
+exhaustion under its last, with the span to the reset beside the reset line — dropped when the two
 marks are close enough to read as one figure disagreeing with itself, since the verdict sentence
-below carries both either way. Spans rather than clock times, for the sentence's reason.
+below carries both either way. Spans rather than clock times, for that sentence's reason.
 
 **Two discontinuities are drawn as discontinuities.** A reset breaks the line rather than drawing a
 cliff, which would read as the fleet having given something back. A gap — the fleet idle, so no reading
@@ -3807,7 +3824,7 @@ goal colours are slots (`issueNumber % 5`), so a colour is stable for a goal acr
 says nothing about which goal it is; the table below is the legend, exactly as it is on Economics.
 
 **Nothing here is derived in the browser**, Economics' rule and for its reason: the reset test, the gap
-threshold and the apportionment are statements about what the readings *mean*, and a cockpit free to
+threshold and the apportionment are statements about what the readings _mean_, and a cockpit free to
 compute its own would draw a line the server's own totals disagree with. What the cockpit owns is
 presentation — the colours, which live in the stylesheet as `--al-*` on `.al`, aliases of themeable
 tokens in the way `--sp-*` are.

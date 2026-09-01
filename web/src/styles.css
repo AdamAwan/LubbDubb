@@ -4378,19 +4378,88 @@ select:disabled {
   opacity: 0.5;
 }
 
-/* A lane's name, drawn on the glass rather than left to a tooltip. Beside the bar
-   it sits on the panel and reads as axis text; inside the bar it sits on a goal
-   colour, all of which are mid-bright in both themes — so it takes the ink those
-   fills are lit for, exactly as a filled chip does. */
-.al .al-lane-label {
-  font-family: var(--font-mono);
-  font-size: 8px;
-  fill: var(--muted);
-  letter-spacing: 0.02em;
+/* The lane band's track and its name in the gutter. A name on the glass rather
+   than in a tooltip, which is no name at all on a screenshot, a touch screen, or
+   to a reader who does not hover — and a track behind it so a row with one short
+   run still reads as a row rather than as a mark floating in the panel. */
+.al .al-lane-row {
+  fill: var(--veil);
 }
 
-.al .al-lane-label-in {
-  fill: var(--on-light);
+.al .al-lane-name {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  fill: var(--text);
+}
+
+/* The runs that reached no goal are an absence, and the row says so the way the
+   bar does — fainter, not another voice. */
+.al .al-lane-name-none {
+  fill: var(--grey);
+}
+
+/* The chart's own captions, in the panel-heading vocabulary rather than the
+   axis's: they name a panel, they do not measure one. */
+.al .al-cap {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  fill: var(--muted);
+}
+
+.al .al-grid {
+  stroke: var(--border-lo);
+  stroke-width: 1;
+  fill: none;
+}
+
+/* 100% is where the fleet stops, so it is drawn in the alarm vocabulary rather
+   than as the last gridline. */
+.al .al-park {
+  stroke: var(--red);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+  opacity: 0.7;
+  fill: none;
+}
+
+.al .al-park-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  fill: var(--red);
+}
+
+/* The stretch nothing watched, shaded through both panels so the lanes and the
+   line agree about where it was. */
+.al .al-idle {
+  fill: var(--veil);
+}
+
+.al .al-parked {
+  fill: var(--red);
+  opacity: 0.07;
+}
+
+.al .al-idle-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  fill: var(--grey);
+}
+
+/* Weight under the line, not a second reading: the fill is what makes a step
+   chart read as consumption rather than as a path. */
+.al .al-area {
+  fill: var(--accent);
+  opacity: 0.07;
+  stroke: none;
+}
+
+.al .al-endpoint {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  fill: var(--accent);
 }
 
 /* The hatch is the point — see the block note. `repeating-linear-gradient` rather
@@ -4527,6 +4596,15 @@ select:disabled {
      would otherwise be drawn at twice their size. */
   max-width: 800px;
 }
+/* The allowance timeline is laid out in a 1000-unit viewBox rather than 620,
+   because it spends the first sixth of its width naming the lane rows. Drawn at
+   `.sp-graph`'s bound it would be scaled to four fifths and arrive with axis text
+   smaller than anything else on the panel; this is the same 1:1 rule as the bound
+   above, applied to a wider box. */
+.al-wide {
+  max-width: 1000px;
+}
+
 .sp-graph svg {
   width: 100%;
   height: auto;
