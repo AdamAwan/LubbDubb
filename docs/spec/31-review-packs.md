@@ -38,6 +38,7 @@ Two properties do the work, and neither is presentation:
 | A gate                    | Nothing here blocks a merge. A pack is made because somebody asked for one, and an artefact that may never exist cannot be a precondition for anything. A false claim is shown, loudly. → [What a false claim does](#what-a-false-claim-does) |
 | A commit message          | A commit message is one narrative for the whole change. A pack is several, one per idea, each with its own walk and its own verdicts — and it carries code, which a message cannot.                            |
 | An always-on cost         | Three roles, and only one of them runs inside the work. → [Cost](#cost)                                                                                                                                        |
+| A page the harness owns   | What the three agents produce is a JSON document. The cockpit and a skill in the repository are both renderings of it, and neither is ever read back. → [A pack is data](#a-pack-is-data-and-rendering-is-downstream) |
 
 ## The three roles
 
@@ -281,10 +282,48 @@ There is no mechanism for clearing a false claim, because there is nothing holdi
 re-run against the fixed code and the new pack replaces the old one, exactly as any other
 regeneration does.
 
+## A pack is data, and rendering is downstream
+
+**What the three agents produce is a JSON document, not a page.** Every surface is a pure function of
+it, and nothing ever reads a rendering back — the rule [28](28-cross-fleet-pool.md#the-human-readable-companion)
+already states about its own markdown companion, for the reason it gives: a second grammar for one
+fact is free to disagree with the first, and it disagrees silently.
+
+One shape, three consumers:
+
+| Consumer          | Reads it as                             | Can                                   |
+| ----------------- | --------------------------------------- | ------------------------------------- |
+| The cockpit       | a wire type over HTTP                   | render, and take the reviewer's marks |
+| _render_pack_     | a file, through a skill in the repo     | render, read-only                     |
+| The store         | the document as written                 | neither                               |
+
+The split is worth more than distribution. **Re-rendering is free; re-authoring is not.** With the
+pack stored as data, the page can be redesigned fifty times against packs that already exist, without
+spending an agent run — so presentation iterates at the speed of a stylesheet rather than the speed of
+the fleet.
+
+### The document carries its schema version
+
+The renderer outside the harness will drift from the harness that wrote the document — a skill in the
+repository travels with a checkout, and a checkout is older than the deployment more often than not.
+
+So a pack states its `schema`, and **a renderer that does not know that version refuses loudly rather
+than rendering what it recognises.** Dropping unknown fields is the tempting behaviour and the wrong
+one: a page silently missing its false-claim banner because the skill was a version behind is exactly
+the failure the whole subsystem exists to catch, reproduced by the thing that reports it.
+
+### What a reviewer does is not part of the pack
+
+Attention overrides, an idea marked read, a reviewer disagreeing with a verdict — these live in their
+own table, keyed to the pack and the idea, **never written back into the document**.
+
+The pack is immutable output for one head sha. The moment it is also a mutable record of what somebody
+did to it, regenerating against a new head throws away their marks — and regeneration is the ordinary
+case, not the exception. Held beside it, the marks survive a pack being rewritten under them.
+
 ## Reading it
 
-One surface, in the cockpit, one page per pull request. Three layers, and the ordering is the part
-that matters:
+Two renderings, and the layering is the same in both because the layering *is* the product.
 
 1. **The whole change on one screen.** The ideas as one line each, their attention labels, and the
    count of false claims above them. A reader who stops here has the useful part: where the time
@@ -297,37 +336,86 @@ Layer 2 is code and not prose deliberately. A pack whose middle layer was the au
 would be a surface people approve from without reading the change, which is worse than the review it
 replaces. The prose is support; it is never the thing in the middle.
 
-The page's position — which pull request, which idea is open — is `Place` state and lives in the
-query string, not a `useState` in `useCockpit`: a surface held outside it is stepped over by the back
-button and dropped by a reload, both silently. → [17](17-cockpit.md#the-address-bar)
+**The cockpit rendering** is one page per pull request, and is the only one that takes input: the
+reviewer's marks, per [What a reviewer does](#what-a-reviewer-does-is-not-part-of-the-pack). Its
+position — which pull request, which idea is open — is `Place` state and lives in the query string,
+not a `useState` in `useCockpit`: a surface held outside it is stepped over by the back button and
+dropped by a reload, both silently. → [17](17-cockpit.md#the-address-bar)
 
 Every reference to a goal, a pull request or an issue is drawn with `<Ref to={ref}/>`
 (`web/src/components/refs.tsx`), never as text. → [17](17-cockpit.md#links)
 
+**The standalone rendering** is a single self-contained HTML file produced by a skill that lives in
+the repository, from the pack document alone. It is read-only, it has no harness behind it, and it is
+for the reviewer who has the project checked out and no LubbDubb — which is most reviewers on most
+teams. That it needs the repository to render is a property rather than a limitation: whoever can
+produce the page can already read the source it quotes.
+
+## Sharing a pack
+
+A pack is written locally. **Publishing one is a second, deliberate act**, and the two are separate
+controls on the page.
+
+That is the opposite of [28](28-cross-fleet-pool.md#data-classification)'s `keepLocal`, and
+deliberately: a claim is one sentence, so publishing by default and withholding the rare one is the
+cheap arrangement. A pack quotes diff hunks and file contents, is written per pull request, and is
+rewritten every time a head moves — publishing those by default puts the fleet's source, in volume,
+into a repository that never forgets. Which is the objection
+[28](28-cross-fleet-pool.md#what-it-is-not) raises against mirroring the store, arriving from a
+different direction.
+
+**A shared pack rides the pool's transport and nothing else about it.** `PoolTransport` in the
+provider registry already solves one-writer-per-namespace, unreachability and the commit hygiene; a
+pack is a third kind of document in the fleet's own namespace, beside `claims.json` and
+`digest.json`. It is **not** a claim: no corroboration, no vouch, no contradiction, no lifetime, and
+nothing about it is ever injected into an agent's prompt. → [27](27-knowledge.md)
+
+Two consequences that are easy to miss:
+
+- **The secret backstop matters more here than it does for a claim.** A pattern check written for one
+  English sentence is being pointed at diff hunks, where a token in a test fixture or an internal
+  hostname in a config default is exactly the thing that hides. It refuses and never rewrites, as it
+  does for claims — and it will refuse a legitimate share sometimes, which is the correct direction
+  to fail in and should surprise nobody when it happens.
+- **Packs need a prune and claims do not.** A claim is durable; a pack is disposable and
+  regenerable, and the pack for a merged pull request is dead weight in a repository everybody
+  clones. Sharing without a retention rule grows the substrate without bound, which is a cost paid by
+  every fleet that pulls it rather than the one that published.
+
+**What a pack does produce for the knowledge store is a lesson, not a row.** When the checker keeps
+catching the same class of thing across packs — a colour that was never registered, a column without
+its migration — that is a fleet-scoped fact in one sentence, and it goes through
+[27](27-knowledge.md)'s existing intake as one. The pack is not knowledge; a pack can produce
+knowledge.
+
 ## Where it lives
 
-Two tables, in a new module under `src/store/` — the only directory that touches SQLite, one module
+Three tables, in a new module under `src/store/` — the only directory that touches SQLite, one module
 per group of related tables, taking a `StoreContext`, with `Store` delegating under the same method
 names. → [14](14-persistence.md#shape)
 
-| Table                     | Holds                                                                    |
-| ------------------------- | ------------------------------------------------------------------------ |
-| _review_witness_entries_  | one row per fork, appended during the work, never updated                |
-| _review_packs_            | one row per (pull request, head sha): the pack and its verdicts          |
+| Table                    | Holds                                                                        |
+| ------------------------ | ---------------------------------------------------------------------------- |
+| _review_witness_entries_ | one row per fork, appended during the work, never updated                    |
+| _review_packs_           | one row per (pull request, head sha): the pack document and its verdicts     |
+| _review_marks_           | what a reviewer did to a pack — overrides, ideas read — keyed to pack and idea |
 
 The pack is one document rather than a table per level. It is written whole and read whole, and
 nothing queries inside it — three normalised tables would buy nothing and cost a join on every read.
 The head sha it was written against is a column rather than a field, because staleness is decided by
 comparing it to the pull request's head on every load. The witness log is separate because it is
-appended to over time by a different party.
+appended to over time by a different party, and the marks are separate because they outlive the
+document they were made against.
 
-Both tables are new, so neither needs a `ColumnMigrations` entry; a table being new **once** does not
-keep it exempt, and the first column added to either afterwards needs an additive `ALTER TABLE`
-guarded by a `PRAGMA table_info` check. → [14](14-persistence.md#migrations)
+All three tables are new, so none needs a `ColumnMigrations` entry; a table being new **once** does
+not keep it exempt, and the first column added to any of them afterwards needs an additive
+`ALTER TABLE` guarded by a `PRAGMA table_info` check. → [14](14-persistence.md#migrations)
 
 The shapes the routes ship live in `src/wire.ts`, and a wire type either **is** the domain type or
 `extends` it — never a re-declaration and never widened. `test/wireContract.test.ts` asserts that
-`src/wire.ts` is the only server module anything under `web/src/` names.
+`src/wire.ts` is the only server module anything under `web/src/` names. The pack document is the
+clearest case there is: the cockpit, the skill and the store read one shape, so there is one
+declaration of it.
 
 Routes go in a new module under `src/server/routes/` with an entry in `app.ts`'s `ROUTE_MODULES`, and
 every handler is wrapped in `checked(schemas, handler)` rather than reading the request itself.
@@ -389,6 +477,17 @@ independent evidence. The pattern is surfaced to the operator instead: reviewers
 pack is about a change. Coupling them would put a row on the bench for every pull request whose pack
 found something, which early on is most of them.
 
+**The pack is a document and every surface renders it.** Posting a rendered pack onto the pull
+request was considered and rejected: it is the cheapest distribution there is — the tracker's own
+permissions are already the right audience, and `ActionSink`'s `upsertIssueComment` reaches GitHub and
+Azure DevOps alike — but a comment cannot fold reliably across providers, cannot take a reviewer's
+marks at all, and a flat wall of prose and diff is the thing this subsystem exists to replace. Paying
+the product to save the plumbing is the wrong trade when the plumbing is a JSON file.
+→ [A pack is data](#a-pack-is-data-and-rendering-is-downstream)
+
+**Sharing is a separate act from asking.** Publishing rides the pool's transport into the fleet's own
+namespace, never its claims arm, and never by default. → [Sharing a pack](#sharing-a-pack)
+
 ## What is still open
 
 **`plumbing` will rot.** It is the honest answer to hunks that carry nothing to review, and it is also
@@ -399,3 +498,13 @@ first thing that needs tightening, and watch the ratio of plumbing hunks to owne
 **Whether the wait is tolerable.** Asking for a pack and waiting lands at the worst moment — somebody
 has just sat down to review. If that turns out to drive people away from asking, the fix is
 pre-generating for a narrower set of pull requests, never making everyone pay for every one.
+
+**What prunes a shared pack.** A pack for a merged pull request is dead weight in a substrate every
+fleet clones, and nothing here says who removes it or when. The candidates are a retention window, a
+prune on merge, and keeping only the newest pack per pull request — the last is the most obviously
+right and the least obviously sufficient, since a reviewer part-way through an older one loses it.
+
+**Whether a reviewer's marks should travel.** They are held beside the pack rather than in it, which
+means they are local by construction. Whether a shared pack should carry the fact that somebody
+already read an idea, or arrive clean for each reader, is not decided — and the answer probably
+differs for a teammate and for an outside reviewer.
