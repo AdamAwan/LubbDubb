@@ -3392,6 +3392,9 @@ function demoWindow(now: number, days: number): InsightsWindowView {
     startsAt: new Date(now - days * dayMs).toISOString(),
     bucketMs: dayMs,
     buckets: days,
+    // The demo never draws the session window: it authors a week of figures, and
+    // an anchor here would claim they were taken over an account window nobody read.
+    session: null,
   };
 }
 

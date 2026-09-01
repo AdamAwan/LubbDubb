@@ -677,17 +677,38 @@ export function usageReading(usage: CockpitView['state']['usage'], now: number):
  * half of one sentence — what the fleet is allowed to run, and what the account has
  * left to run it on.
  *
- * A reading and not a way-in: there is no usage panel, and a chevron promises one.
+ * **A way-in now, and the only reading here whose destination is a whole page.**
+ * It was a plain reading for as long as the honest answer to "spent on what?" was
+ * nothing — the chip could give a percentage and the page had no span that matched
+ * it. The `session` window is that span: the same five hours the account is
+ * metering, anchored to the reset this chip already reads
+ * ([18](../../../docs/spec/18-observability.md#the-window)). A gauge that can stop
+ * the whole fleet and cannot be asked what spent it is the state this replaces, so
+ * the chevron is owed rather than promised.
+ *
+ * It carries the same title either way: the click is an *addition* to the reading,
+ * and an operator who has always glanced at the numbers and moved on loses nothing.
  *
  * The slots are `<i>` and their labels `<em>`, deliberately: `.cn-read span` is a
  * *descendant* rule and would letter a wrapping `<span>` as a second chip label —
  * uppercase, faint and 11px — which is the reading's own name, not a window's.
  */
-function Usage({ view }: { view: CockpitView }): JSX.Element {
+function Usage({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const reading = usageReading(view.state.usage, view.now);
   const tone = reading.tone === 'quiet' ? 'cn-quiet' : reading.tone === 'plain' ? '' : `cn-usage-${reading.tone}`;
+  const title = `${reading.title} Open for what spent it.`;
   return (
-    <div className={`cn-read ${tone}`} title={reading.title}>
+    <button
+      type="button"
+      className={`cn-read cn-act ${tone}`}
+      // Economics, because "where did it go" is a question about money and that is
+      // the tab that splits it. The window is the point of the trip: landing on the
+      // page's own default would answer for a week, which is a different question
+      // with a bigger number — and the number is what an operator would remember.
+      onClick={() => actions.openInsights({ insightsView: 'economics', insightsWindow: 'session' })}
+      title={title}
+      aria-label={title}
+    >
       <span>Usage</span>
       {reading.cost === null ? (
         <i className="cn-usage-pair">
@@ -705,7 +726,8 @@ function Usage({ view }: { view: CockpitView }): JSX.Element {
           shape on every ordinary glance and grows the caveat exactly when the figures
           have stopped being current. */}
       {reading.age !== null && <i className="cn-usage-age">{reading.age}</i>}
-    </div>
+      <i className="cn-chev">›</i>
+    </button>
   );
 }
 
@@ -776,7 +798,7 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
       </div>
 
       <div className="cn-reads">
-        <Usage view={view} />
+        <Usage view={view} actions={actions} />
         <Read
           label="Faults"
           value={`${faultCount}`}

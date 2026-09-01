@@ -119,3 +119,56 @@ test('the trend draws eight periods of the chosen window', async () => {
   assert.equal(trend.buckets[0]?.partial, false);
   await app.close();
 });
+
+test('the session window is anchored off the store\u2019s own reading, on every route', async () => {
+  const system = build();
+  // Two hours to go, so the account\u2019s window opened three hours ago — a start
+  // no route could arrive at by subtracting anything from `now`, which is what
+  // makes this the assertion that a route passed the reading down rather than
+  // resolving the key alone.
+  const resetsAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+  system.store.recordRateLimits({
+    fiveHour: { usedPercentage: 74, resetsAt },
+    sevenDay: { usedPercentage: 31, resetsAt: null },
+    capturedAt: new Date().toISOString(),
+  });
+  const { app } = await buildApp(system);
+  for (const url of ROUTES) {
+    const res = await app.inject({ method: 'GET', url: `${url}?window=session` });
+    assert.equal(res.statusCode, 200, url);
+    const body = res.json() as SpendPayload | ReliabilityPayload | SpendTrendPayload;
+    const window = 'trend' in body ? body.trend.window : body.insights.window;
+    assert.equal(window.key, 'session', url);
+    assert.equal(window.label, '5h session', url);
+    assert.equal(window.session?.kind, 'anchored', `${url} must anchor off the stored reading`);
+    if (window.session?.kind === 'anchored') {
+      assert.equal(window.session.resetsAt, resetsAt, url);
+      assert.equal(window.session.usedPercentage, 74, url);
+      // Three hours back, not five: a route that dropped the reading would answer
+      // for the last five hours here and label it as the account\u2019s window.
+      assert.equal(
+        Date.parse(window.session.startsAt),
+        Date.parse(resetsAt) - 5 * 60 * 60 * 1000,
+        `${url} must open where the account says the window did`,
+      );
+      assert.equal(window.since, window.session.startsAt, url);
+    }
+  }
+  await app.close();
+});
+
+test('a deployment that has never reported a window still answers, and says it is not the account\u2019s', async () => {
+  const { app } = await buildApp(build());
+  for (const url of ROUTES) {
+    const res = await app.inject({ method: 'GET', url: `${url}?window=session` });
+    assert.equal(res.statusCode, 200, url);
+    const body = res.json() as SpendPayload | ReliabilityPayload | SpendTrendPayload;
+    const window = 'trend' in body ? body.trend.window : body.insights.window;
+    // The reading is still worth having — a PTY or API-key deployment has no
+    // windows at all — but the label must not claim it is the account\u2019s.
+    assert.equal(window.session?.kind, 'unreported', url);
+    assert.equal(window.label, 'Last 5h', url);
+    assert.notEqual(window.since, null, url);
+  }
+  await app.close();
+});

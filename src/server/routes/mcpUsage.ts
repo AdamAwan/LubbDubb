@@ -36,7 +36,7 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
     '/api/mcp/usage',
     checked({ query: InsightsQuery }, async ({ query }) => {
       const now = Date.now();
-      const window = resolveWindow(query.window, now);
+      const window = resolveWindow(query.window, now, store.readRateLimits());
       const since = sinceOrEpoch(window.since);
       return {
         insights: buildMcpInsights({

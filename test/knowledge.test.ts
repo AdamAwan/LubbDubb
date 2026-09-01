@@ -1692,7 +1692,7 @@ function run(overrides: Partial<Parameters<typeof knowledgeBlockCost>[0][number]
 }
 
 test('the block is priced at the fleet’s own rate, on every turn rather than once per launch', () => {
-  const window = resolveWindow('7d', PRICING_NOW);
+  const window = resolveWindow('7d', PRICING_NOW, null);
   const cost = knowledgeBlockCost([run({ numTurns: 40 }), run({ numTurns: 60 })], 4_000, window);
   assert.equal(cost.blockTokens, 4_000 / KNOWLEDGE_CHARS_PER_TOKEN);
   assert.equal(cost.launches, 2);
@@ -1712,7 +1712,7 @@ test('the block is priced at the fleet’s own rate, on every turn rather than o
 });
 
 test('a run outside the window is not counted, and one that reported nothing is unmeasured rather than free', () => {
-  const window = resolveWindow('24h', PRICING_NOW);
+  const window = resolveWindow('24h', PRICING_NOW, null);
   const cost = knowledgeBlockCost(
     [
       run(),
@@ -1730,7 +1730,7 @@ test('a run outside the window is not counted, and one that reported nothing is 
 });
 
 test('a window nothing measured cannot be priced, and answers null rather than zero', () => {
-  const window = resolveWindow('6h', PRICING_NOW);
+  const window = resolveWindow('6h', PRICING_NOW, null);
   const cost = knowledgeBlockCost([run({ costUsd: null, inputTokens: null, numTurns: null })], 4_000, window);
   // Null is unmeasured and never free — `Agent.costUsd`'s own convention. A `$0.00`
   // here would be the one figure on the page that is a lie, and it would read as

@@ -111,7 +111,7 @@ function build(over: Partial<Parameters<typeof buildMcpInsights>[0]> = {}) {
     lastCallByTool: new Map(),
     callsEverByAgent,
     claudeArgs: [],
-    window: resolveWindow('7d', NOW),
+    window: resolveWindow('7d', NOW, null),
     now: NOW,
     ...over,
   });
@@ -476,7 +476,7 @@ test('no per-tool figure on one channel is taken from the other', () => {
       lastCallByTool: last,
       callsEverByAgent: store.countMcpCallsByAgent(),
       claudeArgs: [],
-      window: resolveWindow('7d', NOW),
+      window: resolveWindow('7d', NOW, null),
       now: NOW,
     });
     const rows = insights.tools.filter((t) => t.tool === 'validation_report');
@@ -653,14 +653,14 @@ test('a run that straddles the window start is not a silent run', () => {
 
   const insights = (window: InsightsWindow) =>
     buildMcpInsights({
-      calls: store.listMcpCallsSince(sinceOrEpoch(resolveWindow(window, now).since)),
+      calls: store.listMcpCallsSince(sinceOrEpoch(resolveWindow(window, now, null).since)),
       agents: store.listAgents(),
       tasks: [task('task_long', 'issue:12'), task('task_mute', 'issue:13')],
       namedInPrompts: new Map(),
       lastCallByTool: store.lastMcpCallByTool(),
       callsEverByAgent: store.countMcpCallsByAgent(),
       claudeArgs: [],
-      window: resolveWindow(window, now),
+      window: resolveWindow(window, now, null),
       now,
     });
 

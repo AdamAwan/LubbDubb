@@ -2614,8 +2614,18 @@ through the token layer (`--cn-amber-*`, `--cn-red-*`), so a theme switch takes 
 rule, so a wrapping `<span>` is lettered as a second chip label — uppercase, faint, 11px — and that face
 is the reading's own name, not a window's.
 
-It carries no chevron and opens nothing: there is no usage panel, and by the chevron rule above, a
-reading that opens something and one that does not are different promises.
+**It is the one reading here whose way-in is a whole page.** It carried no chevron for as long as the
+honest answer to "spent on what?" was nothing: the chip could give a percentage, and no surface had a
+span that matched it — by the chevron rule above, promising a destination there would have been
+promising an answer. `5h session` is that span, anchored to the same reset this chip reads
+([18](18-observability.md#the-session-window)), so the chevron is now owed rather than promised. It
+opens Insights on Economics over that window, because "where did it go" is a question about money and
+that is the tab that splits it; landing on the page's own default would answer for a week, which is a
+different question with a bigger number — and the number is the half an operator would remember.
+
+The title is the same either way, with one clause added. The click is an **addition** to the reading:
+an operator who has always glanced at the figures and moved on loses nothing, and a gauge that can park
+the whole fleet is no longer one that cannot be asked what spent it.
 
 ### The Build gauge
 
@@ -3672,8 +3682,8 @@ One control, **above the tabs rather than inside one**, because it is page state
 the window, and every reading under it obeys the same one. That is the whole argument for the five
 sharing a surface.
 
-Five windows — `6h`, `24h`, `7d`, `30d` and `All` — resolved server-side by `resolveWindow`
-(`src/insightsWindow.ts`) and shipped back on every payload
+Six windows — `5h session`, `6h`, `24h`, `7d`, `30d` and `All` — resolved server-side by
+`resolveWindow` (`src/insightsWindow.ts`) and shipped back on every payload
 ([18](18-observability.md#the-window)). **The page draws the window it was handed, never the one it
 asked with**: a caption derived from the key is free to disagree with the buckets the server actually
 cut, and the caption is the half a reader would believe. The resolution is stated beside the control —
@@ -3688,7 +3698,23 @@ by side on one surface described different stretches of the fleet's life with no
 `7d` gives eight weeks, `24h` gives eight days ([18](18-observability.md#the-spend-trend)). That is what
 keeps one control meaningful on a tab that is inherently about change, and it has a second payoff — the
 comparison a headline draws against "the previous window" is literally the last two bars of that chart,
-rather than a second notion of "before" for a reader to reconcile.
+rather than a second notion of "before" for a reader to reconcile. `5h session` is the exception that
+holds the rule: its periods are whole five-hour windows on the account's own reset boundaries, because
+an eight-bar comparison between arbitrary fractions of a window is a comparison between nothing
+([18](18-observability.md#the-session-window)).
+
+**`5h session` leads the six**, because it is the only one an operator arrives at with a question
+already formed: the [usage chip](#the-usage-chip) said the five hours are nearly spent, and this is the
+one span that can say on what. It is also the only window not measured from `now` — it is anchored to
+the account's own reset — so the page draws a line under the control saying which five hours these are.
+Three sentences for three cases: the window the account named, and the two the harness could not anchor
+to, where the control's own label reads `Last 5h` instead. The anchor is the server's, taken off the
+payload like every other caption here; the page has no reading to draw it from and must not acquire one.
+
+That note carries the one thing the split beneath it cannot say for itself: **the limit meters something
+this harness cannot see, and the breakdown is money.** The account's percentage is drawn beside it — the
+one the fold anchored on, not the chip's — precisely because an operator will make the comparison
+whether or not it is offered, and a stated pair is better than an inferred one.
 
 ### Economics
 

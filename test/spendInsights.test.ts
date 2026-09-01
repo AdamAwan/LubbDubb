@@ -146,7 +146,7 @@ function build(
     runs: over.runs ?? [],
     costDeltas: over.costDeltas ?? [],
     mergeEvents: over.mergeEvents ?? [],
-    window: resolveWindow(key, NOW),
+    window: resolveWindow(key, NOW, null),
     now: NOW,
   });
 }
