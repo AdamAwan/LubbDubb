@@ -35,7 +35,7 @@ Two properties do the work, and neither is presentation:
 | A replacement for reading | The pack's job is to make the code readable in the right order, not to stand in for it. A surface that answers well enough to approve from is a regression, and the shape in [Reading it](#reading-it) resists it. |
 | A summariser              | A summary is unfalsifiable. Every sentence a pack ships is a claim with a verdict beside it, or it is a gist attached to code the reader can see.                                                              |
 | A dispatch input          | Same rule as the rest of the lenses: nothing under `src/dispatcher/` may import this. A pack is a read-only view assembled after the work. → [05](05-dispatcher.md)                                            |
-| A quality gate on code    | The gate in [What blocks](#what-blocks) holds on the pack being **honest**, never on the change being good. A false claim blocks; an ugly function does not.                                                    |
+| A gate                    | Nothing here blocks a merge. A pack is made because somebody asked for one, and an artefact that may never exist cannot be a precondition for anything. A false claim is shown, loudly. → [What a false claim does](#what-a-false-claim-does) |
 | A commit message          | A commit message is one narrative for the whole change. A pack is several, one per idea, each with its own walk and its own verdicts — and it carries code, which a message cannot.                            |
 | An always-on cost         | Three roles, and only one of them runs inside the work. → [Cost](#cost)                                                                                                                                        |
 
@@ -198,9 +198,16 @@ The label is written by the **checker**, never the author. How much scrutiny a c
 exactly the judgement not to take from the party that produced it. `split` is the checker's opinion
 that an idea is unrelated to the rest of the pull request and could be its own.
 
-A reviewer may override a label, and the override is recorded. A pattern of reviewers upgrading
-`skim` to `read` is the signal that the checker is systematically underselling risk, and is worth
-more than any single pack.
+A reviewer may override a label, and the override is recorded — but it is **never shown to the
+checker on a later pack**. Given the overrides it would calibrate to what reviewers like rather than
+to what is risky, and a label that has learned to agree with its reader has stopped being evidence.
+
+The overrides are surfaced to the operator instead. A pattern of reviewers upgrading `skim` to `read`
+says the checker is systematically underselling risk, which is worth more than any single pack and is
+fixed by changing its prompt — a thing a person does, deliberately, once.
+
+With nothing blocking, this label is the main thing steering where a reviewer spends their attention.
+That makes its independence load-bearing rather than tidy.
 
 ## The check
 
@@ -223,39 +230,65 @@ into `true` is a lie. It is surfaced to the person, whose call it is.
 disagrees with, reassign an anchor, or open a code change — all three would make it an author, and
 there would again be nobody checking.
 
-## What blocks
+## When a pack is made
 
-A pack has a **gate status**, and it holds on the pack being honest rather than on the change being
-good.
+**On request, and never automatically.** A reviewer asks for one from the pull request's page and
+waits while it is written. The fleet opens more pull requests than anybody reads, and a pack nobody
+opens is two agent runs spent on nothing — so the cost is paid by the person who chose to pay it, at
+the moment they chose to.
 
-Blocks:
+The wait is the trade, and it falls at the worst possible moment: somebody has just sat down to
+review and is told to hold on. That is accepted rather than solved. If it turns out to be intolerable
+in practice, the answer is to pre-generate for a narrower set of pull requests, not to make everyone
+pay for every one.
 
-- any claim with verdict `false`
-- a hunk with no owning idea
-- a pack whose head no longer matches the pull request's head, once one is required
+A pack is written against one head sha and stays written against it. When the head moves the pack is
+marked **stale**, says how far behind it is, and **is still shown**. It is not regenerated underneath
+a reader: a pack that re-flows mid-read costs the reader their place and tells them nothing about
+what changed since they started, which is worse than being told it is old. Taking the new one is one
+click, and it is the reader's to make.
 
-Does not block:
+### Pull requests nobody witnessed
 
-- `cant_tell` verdicts — those are for the reviewer
-- an empty witness log — honest, and the pack says so
-- attention labels, or a reviewer disagreeing with one
+A pack is offered for a human-authored pull request too, and the harness says plainly that there is
+no witness log: every claim comes out `inferred`, and the pack's header states it rather than leaving
+a reader to notice the absence of `witnessed` beside anything.
 
-A block is released by a **new pack over a new head** — the author re-runs against the fixed code —
-or by an **operator override**, which is recorded with its reason and shown on the pack from then on.
-Hand-editing a claim to make it true is not a release, and the shape of the store makes it awkward on
-purpose.
+What is lost is the rejected alternatives, which are the best thing here. What survives is the idea
+grouping, the `region` anchors and the whole of the check — which is most of the value, and more than
+that pull request had before.
 
-Where the harness holds its own merge gate ([07](07-pull-requests.md)), a blocked pack holds it too.
-It never blocks a person: an operator who wants to merge past a red pack can, and the override says
-who and why.
+## What a false claim does
+
+**Nothing blocks.** There is no gate, no merge coupling, and no override record, because there is
+nothing to override. A pack reports; a person decides.
+
+That is a deliberate trade and it has an obvious cost: an advisory finding is a finding somebody can
+scroll past, and the checker's best output is exactly the thing that must not be scrolled past. The
+answer is prominence rather than a lock, and it is a requirement on the surface rather than a hope:
+
+- The pack's header states the count of false claims, and it is the first thing on the page.
+- A reader cannot reach the ideas without passing it — it sits above them, not in a sidebar.
+- The idea that carries a false claim is marked in its collapsed row, so the mark survives a reader
+  who never opens anything.
+- The claim itself is shown at the top of that idea, with the checker's evidence, not folded away
+  with the supporting notes.
+
+If those four are not true the decision to stay advisory is not being honoured, whatever the spec
+says.
+
+There is no mechanism for clearing a false claim, because there is nothing holding. The author is
+re-run against the fixed code and the new pack replaces the old one, exactly as any other
+regeneration does.
 
 ## Reading it
 
 One surface, in the cockpit, one page per pull request. Three layers, and the ordering is the part
 that matters:
 
-1. **The whole change on one screen.** The ideas as one line each, their attention labels, the gate.
-   A reader who stops here has the useful part: where the time goes, and whether anything is wrong.
+1. **The whole change on one screen.** The ideas as one line each, their attention labels, and the
+   count of false claims above them. A reader who stops here has the useful part: where the time
+   goes, and whether anything is wrong.
 2. **The code.** Opening an idea shows the walk — every anchor, with its actual code, in reasoning
    order. This is the layer the reader is meant to spend time in.
 3. **The reasoning.** Under each anchor, folded away, the note and the witness entry behind it.
@@ -280,11 +313,13 @@ names. → [14](14-persistence.md#shape)
 | Table                     | Holds                                                                    |
 | ------------------------- | ------------------------------------------------------------------------ |
 | _review_witness_entries_  | one row per fork, appended during the work, never updated                |
-| _review_packs_            | one row per (pull request, head sha): the pack, its verdicts, its gate   |
+| _review_packs_            | one row per (pull request, head sha): the pack and its verdicts          |
 
-The pack is one document rather than a table per level. It is written whole, read whole, and its only
-queried field is the gate status — three normalised tables would buy nothing and cost a join on every
-read. The witness log is separate because it is appended to over time by a different party.
+The pack is one document rather than a table per level. It is written whole and read whole, and
+nothing queries inside it — three normalised tables would buy nothing and cost a join on every read.
+The head sha it was written against is a column rather than a field, because staleness is decided by
+comparing it to the pull request's head on every load. The witness log is separate because it is
+appended to over time by a different party.
 
 Both tables are new, so neither needs a `ColumnMigrations` entry; a table being new **once** does not
 keep it exempt, and the first column added to either afterwards needs an additive `ALTER TABLE`
@@ -305,35 +340,62 @@ that overrode it into a harness that will not boot. → [05](05-dispatcher.md#pr
 
 ## Cost
 
-Three roles, and only the witness runs inside the work — it is a handful of tool calls on a session
-already running, and it is the cheap one.
+Three roles, and only the witness runs inside the work — a handful of tool calls on a session already
+running, on every dispatch whether a pack is ever asked for or not. It is the cheap one, and it is the
+one that must be paid up front: a log cannot be written after the fact, which is the whole point of it.
 
-The author is one agent over the diff, the log and the tree. The checker is one agent, and its work
-divides: each claim is verified independently, so the pass parallelises to whatever headroom allows
-and its wall-clock is roughly one claim, not fourteen.
+The other two are paid **per request, not per pull request**. The author is one agent over the diff,
+the log and the tree. The checker is one agent whose work divides — each claim is verified
+independently, so the pass parallelises to whatever headroom allows and its wall-clock is roughly one
+claim rather than fourteen.
 
-So a pack is about two extra agent runs per pull request. The thing it is spent against is a person's
-review hour, which is both more expensive and the fleet's actual bottleneck — but it is spent per
-pull request, and a fleet opening twenty a day is spending it forty times. Whether that trade holds
-is a deployment's to make, which is why [Open questions](#open-questions) puts the trigger first.
+So the standing cost of the subsystem is the witness alone, and a pack is two agent runs spent
+deliberately, against a person's review hour. A fleet opening twenty pull requests a day and reviewing
+four pays for four.
 
-## Open questions
+## What was decided, and why
 
-These are unsettled, and each changes what gets built.
+Six questions were open when this document was first written. They are settled here rather than
+deleted, because each one has a losing option that will look attractive again later.
 
-1. **What triggers a pack.** Every pull request the fleet opens, only those a human is about to
-   review, or on request? Always-on is simplest and pays the cost on packs nobody opens.
-2. **Regeneration.** A pack is written against one head. Does a push regenerate it — losing a
-   reviewer's place mid-read — or does the pack go stale and say so until asked?
-3. **Human-authored pull requests.** No witness log exists. The author can still produce a pack from
-   the diff and the tree, and the `region` anchors still work. Is a log-less pack worth the run?
-4. **Blocking.** Does a red pack hold the harness's own merge gate, or only display? This document
-   assumes it holds; that is an assumption, not a settled decision.
-5. **The author checking the log.** Nothing verifies that the author quoted the witness faithfully.
-   The mitigation here is to render the cited entry verbatim beside the claim and let the reader see
-   both. A fourth agent would be the alternative, and is probably not worth it.
-6. **Feedback.** Reviewer overrides of `attention` are recorded. Should the checker see them on later
-   packs — which would let it calibrate, and also let it learn to say what reviewers like?
-7. **Relationship to the validation bench.** [20](20-validation.md) already asks for evidence about a
-   delivered goal. A pack is evidence about a change. Whether the two are one surface or two is
-   unresolved, and doing it wrong duplicates a bench row for every pull request.
+**Packs are made on request, never automatically.** Always-on is simpler to build and pays two agent
+runs for every pull request nobody opens. The fleet's output already exceeds what anybody reads, so
+the default would be waste by construction. → [When a pack is made](#when-a-pack-is-made)
+
+**Nothing blocks.** A pack that only exists when asked for cannot be a precondition for merging —
+requiring one would make packs mandatory through the back door and undo the trigger decision. So the
+pack reports and a person decides, and the risk that creates is answered with prominence rather than
+a lock. → [What a false claim does](#what-a-false-claim-does)
+
+**A stale pack is shown, not regenerated.** Regenerating under a reader costs them their place and
+tells them nothing about what moved. → [When a pack is made](#when-a-pack-is-made)
+
+**Human-authored pull requests get a pack, and are told the log is missing.** Every claim comes out
+`inferred`. Less than a witnessed pack, more than that pull request had.
+→ [Pull requests nobody witnessed](#pull-requests-nobody-witnessed)
+
+**Nothing audits the author's quotation of the log, by design.** A `witnessed` claim cites its entry
+and the entry is rendered verbatim beside it, so a reader sees both halves. A fourth agent auditing
+the third was the alternative; the regress has to stop somewhere, and it stops at the reader.
+→ [Provenance](#provenance)
+
+**Attention overrides are recorded and never fed back to the checker.** Shown the overrides, it would
+calibrate to what reviewers like rather than to what is risky, and the label would stop being
+independent evidence. The pattern is surfaced to the operator instead: reviewers steadily upgrading
+`skim` to `read` means the checker's prompt is wrong, and that is a change a person makes.
+→ [Attention](#attention)
+
+**A pack files nothing on the validation bench.** [20](20-validation.md) is about a delivered goal; a
+pack is about a change. Coupling them would put a row on the bench for every pull request whose pack
+found something, which early on is most of them.
+
+## What is still open
+
+**`plumbing` will rot.** It is the honest answer to hunks that carry nothing to review, and it is also
+where an author will put anything it cannot be bothered to explain. The checker verifying that those
+hunks are semantically empty is the defence, and it is not obviously enough. Expect this to be the
+first thing that needs tightening, and watch the ratio of plumbing hunks to owned ones as the signal.
+
+**Whether the wait is tolerable.** Asking for a pack and waiting lands at the worst moment — somebody
+has just sat down to review. If that turns out to drive people away from asking, the fix is
+pre-generating for a narrower set of pull requests, never making everyone pay for every one.
