@@ -32,13 +32,14 @@ Two properties do the work, and neither is presentation:
 | Not                       | Because                                                                                                                                                                                                       |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | A code reviewer           | Nothing here forms an opinion about whether the change is good. It states what the change does, follows it through the tree, and marks its own statements true or false. The judgement stays with a person.  |
+| The fleet review          | [07](07-pull-requests.md#the-fleet-review)'s `pr-review` reads the same diff, and a deployment with both on pays two readings of it. That is deliberate: the review is one round, policy-mandated on the deployments that run it, and its charter is the project's; folding a pack into it would put a second job in that agent's context. Neither reads the other's output. |
 | A replacement for reading | The pack's job is to make the code readable in the right order, not to stand in for it. A surface that answers well enough to approve from is a regression, and the shape in [Reading it](#reading-it) resists it. |
 | A summariser              | A summary is unfalsifiable. Every sentence a pack ships is a claim with a verdict beside it, or it is a gist attached to code the reader can see.                                                              |
 | A dispatch input          | Same rule as the rest of the lenses: nothing under `src/dispatcher/` may import this. A pack is a read-only view assembled after the work. → [05](05-dispatcher.md)                                            |
 | A gate                    | Nothing here blocks a merge. A pack is made because somebody asked for one, and an artefact that may never exist cannot be a precondition for anything. A false claim is shown, loudly. → [What a false claim does](#what-a-false-claim-does) |
 | A commit message          | A commit message is one narrative for the whole change. A pack is several, one per idea, each with its own walk and its own verdicts — and it carries code, which a message cannot.                            |
 | An always-on cost         | Three roles, and only one of them runs inside the work. → [Cost](#cost)                                                                                                                                        |
-| A page the harness owns   | What the three agents produce is a JSON document. The cockpit and a skill in the repository are both renderings of it, and neither is ever read back. → [A pack is data](#a-pack-is-data-and-rendering-is-downstream) |
+| A page the harness owns   | What the three agents produce is a JSON document. The cockpit and the shared HTML companion are both renderings of it, and neither is ever read back. → [A pack is data](#a-pack-is-data-and-rendering-is-downstream) |
 
 ## The three roles
 
@@ -50,7 +51,7 @@ own output.
 | ----------- | ------------------ | --------------------------------------------- | --------------------------------------------- |
 | **Witness** | inside the work    | everything — it _is_ the working agent        | the witness log, as it goes                   |
 | **Author**  | after the work     | the witness log, the diff, the tree           | the pack: ideas, claims, anchors              |
-| **Checker** | after the pack     | the diff, the tree, the claims — **not** the log, **not** the author's prose | a verdict and its evidence per claim |
+| **Checker** | after the pack     | the diff, the tree, each idea's one-line claim and anchor list, the claims — **not** the log, **not** the notes | a verdict and its evidence per claim; per idea an attention label and its cue; the finding for each false claim; the reading order |
 
 Three things follow that are easy to lose and expensive to re-derive:
 
@@ -66,44 +67,70 @@ subsystem catches, and it is free once both halves are in hand.
 
 **The checker never sees the story it is testing.** It is handed claims as bare sentences and the
 tree, and asked whether each holds. Given the author's reasoning it would be persuaded by it, which
-is the failure mode the third role exists to avoid.
+is the failure mode the third role exists to avoid. What it _is_ handed is the skeleton of each idea —
+its one-line claim and the ordered anchors, without their notes — because the
+[attention label](#attention) is a judgement about an idea, and `split` is a judgement about how the
+ideas relate. A checker shown only a flat list of sentences could not write either.
 
 ## The witness log
 
 The working agent records **forks**, not commentary. A fork is a moment where the change could
-reasonably have gone another way. One line at the fork is cheap; recovering it afterwards is
-impossible.
+reasonably have gone another way. One line at the fork is cheap; recovering it afterwards costs
+more than the pack ([below](#the-witness-log)).
 
-It writes through a tool on the fleet's MCP channel, _record_decision_, alongside the existing tools
-in `src/mcp/tools/`. Adding it means the three-way agreement in [11](11-mcp-tools.md#launch-flags) —
-the server id, `MCP_TOOL_NAMES`, and the `mcp__lubbdubb__*` grant — and `test/mcpChannel.test.ts`
-asserts all three against each other.
+**The witness log is the scratchpad.** The pad ([11](11-mcp-tools.md#the-tools), `scratch_append`) is
+already an append-only, attributed, per-goal record that survives worktree reuse and re-dispatch and is
+replayed to the next agent on the goal — which is every property the log needs, and a second store
+with the same properties would be the pad again under another name. A fork is a pad entry that
+carries a _decision_ argument beside its note; an entry without one is an ordinary note. No new tool,
+so the three-way agreement in [11](11-mcp-tools.md#launch-flags) is untouched; the tool's schema grows
+one optional object, and `scratch_entries` grows one column — an existing table, so it needs its
+`ColumnMigrations` entry ([14](14-persistence.md#migrations)).
 
-An entry carries:
+**The pad grows a second family for the agents the issue pad refuses.** `padOriginFor` resolves only
+`issue:<n>` subtrees, and refuses a `pr:<n>:*` origin on purpose: `linkedPrNumber` is sticky, so
+reaching an issue's pad through a pull request would let an agent write onto a goal it was not sent
+to. But the CI-fix and review-comment agents are `pr:<n>:*` origins, and they are exactly the agents
+whose pushes move a head — a pack for the third head of a pull request is mostly their forks. So a
+`pr:<n>:*` origin resolves to a pad of its own, `pr:<n>`, that no issue agent reads and no issue agent
+can reach. The author is handed both: the goal's pad, by the pull request's linked goal, and the pull
+request's own. A desk agent on a pull request — the triage, the fleet reviewer — may write there too,
+and rarely has reason to.
+
+An entry's `decision` carries:
 
 | Field      | What                                                                          |
 | ---------- | ----------------------------------------------------------------------------- |
-| `at`       | when, from the harness clock, not the agent's belief about the time           |
 | `chose`    | one line: what the change does here                                           |
 | `because`  | one line: why                                                                 |
 | `rejected` | zero or more alternatives, each with the reason it was not taken              |
 | `paths`    | the files the fork touches, where the agent can say                           |
 
-`rejected` is the field that justifies the subsystem. _Why not derive it from the span?_ is the
-question a reviewer asks most often and the one a diff can never answer, because the road not taken
-leaves no trace in the tree. Everything else in an entry can be inferred later at some cost; a
-rejected alternative cannot be inferred at all.
+The pad supplies `createdAt` from the harness clock, and attribution from the credential.
 
-Three rules hold the log honest, and all three are properties of the tool rather than instructions in
+`rejected` is the field that justifies recording forks at all. _Why not derive it from the span?_ is
+the question a reviewer asks most often and the one a diff can never answer, because the road not
+taken leaves no trace in the tree. The agent's transcript holds it, in principle — the harness keeps
+every one ([10](10-agent-runtimes.md)) — but a transcript is the whole run, tool output included, and
+reading one to find three forks costs more than the pack. The entry is the fork already found.
+
+**A rejected alternative is never a claim.** It is an intention, and the checker's answer to an
+intention is `cant_tell` by construction ([The check](#the-check)). So it reaches the pack as
+provenance — the entry, verbatim, beside the claim it informed — and never as a sentence with a
+verdict. That is the honest shape: the most useful line in the log is also the one line nothing can
+check, and the pack says which it is.
+
+Three rules hold the log honest, and all three are properties of the pad rather than instructions in
 a prompt:
 
-- **Append-only.** The tool offers no edit and no delete. A later entry may supersede an earlier one
+- **Append-only.** The pad offers no edit and no delete. A later entry may supersede an earlier one
   and says so; the earlier one stays.
 - **No prose ceiling to fill.** An agent with nothing to record writes nothing. An empty log is an
   honest outcome and the author says the pack was written without one, rather than the witness
   padding to look thorough.
-- **It never renders to a human.** The log is an input to the author and evidence beside a claim
-  ([Provenance](#provenance)). It is not a surface, and it is not written to be read.
+- **It is read where the pad is read.** In the notepad modal, and replayed into the next agent on the
+  goal like every other pad note. Neither is a rendering of the pack: a fork is a fact about one
+  moment, and the pack is what the author makes of all of them.
 
 The instruction to use it is **appended** to the rendered execution prompt, never interpolated into
 it — an operator's overridden template never learned the placeholder, and interpolation drops it
@@ -121,9 +148,15 @@ sorting everything alphabetically by path.
 | Field       | What                                                                                              |
 | ----------- | ------------------------------------------------------------------------------------------------- |
 | `claim`     | one sentence, falsifiable, stating what this idea does                                            |
+| `title`     | the same thing said the way a colleague would say it across a desk — what changed and why it matters, no identifiers ([The page](#the-page)) |
+| `cue`       | one short line under the title: why this idea has the attention it has, and where its risk is     |
 | `anchors`   | ordered — the walk, in the order the reasoning ran, not the order the files sort in                |
 | `claims`    | the checkable statements this idea rests on ([Claims](#claims))                                    |
 | `attention` | how much scrutiny it needs, set by the **checker** ([Attention](#attention))                       |
+
+`claim` is for the checker; `title` and `cue` are for the person. The author writes the first two,
+the checker writes the cue after it has labelled the idea, because the cue says why the label is what
+it is.
 
 An idea's walk crosses files freely and is expected to: a change in this repo is naturally vertical —
 domain type, wire type, store module, route, cockpit, spec, test — and reviewing those six files
@@ -146,6 +179,12 @@ repo cannot otherwise review, and it is worth building even if nothing else here
 
 Every anchor carries a `gist` (one line, always shown) and may carry a `note` (the reasoning, folded
 away). The gist belongs to the code; the note is support and is never required to understand it.
+It may also carry a `caption` — the one-line label on the code block itself, saying what the block
+is ("new function", "existing code, unchanged — shown because you need it", "two places, 250 lines
+apart") — and a `mark`, one of `key` (the stop the idea turns on), `false` (the stop a false claim is
+about) or `disputed` (the stop where the witness and the code disagree). A note states its
+provenance the way a claim does: written by the witness at the time, and stamped with when, or added
+by the author afterwards. The page shows which, because the reader weighs them differently.
 
 ### Coverage
 
@@ -197,7 +236,9 @@ Each idea carries a label saying how hard to look: **read**, **decide**, **skim*
 
 The label is written by the **checker**, never the author. How much scrutiny a change deserves is
 exactly the judgement not to take from the party that produced it. `split` is the checker's opinion
-that an idea is unrelated to the rest of the pull request and could be its own.
+that an idea is unrelated to the rest of the pull request and could be its own. Both are judgements
+about ideas, which is why the checker is handed each idea's claim and anchor list and not only a flat
+list of sentences ([The three roles](#the-three-roles)).
 
 A reviewer may override a label, and the override is recorded — but it is **never shown to the
 checker on a later pack**. Given the overrides it would calibrate to what reviewers like rather than
@@ -212,8 +253,8 @@ That makes its independence load-bearing rather than tidy.
 
 ## The check
 
-The checker is handed the claims as bare sentences, the diff, and the tree at the pull request's
-head. It is not given the witness log, the author's notes, or the ideas' prose. It answers one
+The checker is handed the claims as bare sentences, each idea's claim and anchor list, the diff, and
+the tree at the pull request's head. It is not given the witness log or the notes. It answers one
 question per claim and writes down how it answered.
 
 | Verdict     | When                                                                                                      |
@@ -233,27 +274,38 @@ there would again be nobody checking.
 
 ## When a pack is made
 
-**On request, and never automatically.** A reviewer asks for one from the pull request's page and
-waits while it is written. The fleet opens more pull requests than anybody reads, and a pack nobody
-opens is two agent runs spent on nothing — so the cost is paid by the person who chose to pay it, at
-the moment they chose to.
+**On request, and never automatically.** A reviewer asks for one from the pull request's row on its
+goal's page ([Reading it](#reading-it)) and waits while it is written. The fleet opens more pull
+requests than anybody reads, and a pack nobody opens is two agent runs spent on nothing — so the cost
+is paid by the person who chose to pay it, at the moment they chose to.
 
 The wait is the trade, and it falls at the worst possible moment: somebody has just sat down to
-review and is told to hold on. That is accepted rather than solved. If it turns out to be intolerable
-in practice, the answer is to pre-generate for a narrower set of pull requests, not to make everyone
-pay for every one.
+review and is told to hold on. That is accepted rather than solved.
 
-A pack is written against one head sha and stays written against it. When the head moves the pack is
-marked **stale**, says how far behind it is, and **is still shown**. It is not regenerated underneath
-a reader: a pack that re-flows mid-read costs the reader their place and tells them nothing about
-what changed since they started, which is worse than being told it is old. Taking the new one is one
-click, and it is the reader's to make.
+**Once, and the reader decides when again.** A pack is written against one head sha and stays written
+against it. When the head moves the pack is marked **stale**, says how far behind it is, and **is
+still shown**. Nothing regenerates it: not the push, not the next pulse, and not a reader opening it.
+A pull request rarely changes direction enough after its first pack for a second to be worth two
+agent runs, and the reader is the only party who can tell when it has. Asking again is the same
+control as asking the first time, and the new pack replaces the old. The witness log has kept
+growing in the meantime — the CI-fix and comment agents write to the pull request's own pad — so the
+second pack is written from a fuller log, not the first pack.
+
+It is not regenerated underneath a reader for the same reason it is not regenerated at all: a pack
+that re-flows mid-read costs the reader their place and tells them nothing about what changed since
+they started, which is worse than being told it is old.
 
 ### Pull requests nobody witnessed
 
 A pack is offered for a human-authored pull request too, and the harness says plainly that there is
 no witness log: every claim comes out `inferred`, and the pack's header states it rather than leaving
 a reader to notice the absence of `witnessed` beside anything.
+
+Offered where every pack is — on the pull request's row on a goal's page. There is no pull request
+page in the cockpit ([17](17-cockpit.md#links)), so a human-authored pull request gets a pack only
+where the harness has linked it to a goal (`ownsPr`, [17](17-cockpit.md#the-pull-requests-and-the-tail)).
+One the provider has not linked has no row to carry the control, and gets none. That is the honest
+limit of the surface rather than a rule about authorship.
 
 What is lost is the rejected alternatives, which are the best thing here. What survives is the idea
 grouping, the `region` anchors and the whole of the check — which is most of the value, and more than
@@ -291,35 +343,46 @@ fact is free to disagree with the first, and it disagrees silently.
 
 One shape, three consumers:
 
-| Consumer          | Reads it as                             | Can                                   |
-| ----------------- | --------------------------------------- | ------------------------------------- |
-| The cockpit       | a wire type over HTTP                   | render, and take the reviewer's marks |
-| _render_pack_     | a file, through a skill in the repo     | render, read-only                     |
-| The store         | the document as written                 | neither                               |
+| Consumer           | Reads it as                                      | Can                                   |
+| ------------------ | ------------------------------------------------ | ------------------------------------- |
+| The cockpit        | a wire type over HTTP                            | render, and take the reviewer's marks |
+| The HTML companion | the document, through a pure function at publish | render, read-only                     |
+| The store          | the document as written                          | neither                               |
 
 The split is worth more than distribution. **Re-rendering is free; re-authoring is not.** With the
 pack stored as data, the page can be redesigned fifty times against packs that already exist, without
 spending an agent run — so presentation iterates at the speed of a stylesheet rather than the speed of
 the fleet.
 
+### The document carries its code
+
+**Every anchor embeds the lines it points at** — the hunk, or the region of the unchanged file — as
+they stood at the head sha. A pack is therefore complete on its own: the companion renders with no
+repository behind it, and the cockpit draws code it has no route to read, because the harness has
+no file-at-a-commit route and the cockpit no diff viewer, and neither is worth building for this. The
+cost is stated under [Sharing a pack](#sharing-a-pack): a pack _is_ source, in volume.
+
 ### The document carries its schema version
 
-The renderer outside the harness will drift from the harness that wrote the document — a skill in the
-repository travels with a checkout, and a checkout is older than the deployment more often than not.
-
-So a pack states its `schema`, and **a renderer that does not know that version refuses loudly rather
-than rendering what it recognises.** Dropping unknown fields is the tempting behaviour and the wrong
-one: a page silently missing its false-claim banner because the skill was a version behind is exactly
-the failure the whole subsystem exists to catch, reproduced by the thing that reports it.
+A pack another fleet published was written by a harness on a different build, and a cockpit will
+be handed one older or newer than itself. So a pack states its `schema`, and **a renderer that does
+not know that version refuses loudly rather than rendering what it recognises.** Dropping unknown
+fields is the tempting behaviour and the wrong one: a page silently missing its false-claim banner
+because the renderer was a version behind is exactly the failure the whole subsystem exists to catch,
+reproduced by the thing that reports it.
 
 ### What a reviewer does is not part of the pack
 
 Attention overrides, an idea marked read, a reviewer disagreeing with a verdict — these live in their
-own table, keyed to the pack and the idea, **never written back into the document**.
+own table, **never written back into the document**.
 
 The pack is immutable output for one head sha. The moment it is also a mutable record of what somebody
-did to it, regenerating against a new head throws away their marks — and regeneration is the ordinary
-case, not the exception. Held beside it, the marks survive a pack being rewritten under them.
+did to it, regenerating against a new head throws away their marks. Held beside it, the marks survive
+a pack being rewritten under them — **keyed to what survives a rewrite**, which is the code and not
+the idea: an idea's id is minted by the author on every run, so a mark keyed to it points at nothing
+in the next pack. A mark on an idea is stored against the hunks that idea owns (path and range at the
+head sha), and the next pack draws it on whichever idea owns the same hunks. A hunk the next head
+rewrote loses its mark, honestly: the thing that was read is gone.
 
 ## Reading it
 
@@ -336,85 +399,141 @@ Layer 2 is code and not prose deliberately. A pack whose middle layer was the au
 would be a surface people approve from without reading the change, which is worse than the review it
 replaces. The prose is support; it is never the thing in the middle.
 
-**The cockpit rendering** is one page per pull request, and is the only one that takes input: the
-reviewer's marks, per [What a reviewer does](#what-a-reviewer-does-is-not-part-of-the-pack). Its
-position — which pull request, which idea is open — is `Place` state and lives in the query string,
-not a `useState` in `useCockpit`: a surface held outside it is stepped over by the back button and
-dropped by a reload, both silently. → [17](17-cockpit.md#the-address-bar)
+### The page
+
+This is the output format, and both renderings draw it. It is written for the person, in their
+words: the sentences on it say what changed and what could go wrong the way a colleague would, and
+the identifiers live in the code blocks, not the prose. Top to bottom:
+
+1. **Masthead.** A kicker naming the pull request and its head; a `headline` that says what the
+   change does in one plain sentence; a `summary` paragraph in the same register, with the one thing
+   the reader most needs in bold; and a facts line — ideas, files, changes and whether every one is
+   owned, the claim counts by verdict, and an `estimatedMinutes`. Both prose fields are the author's.
+2. **The gate.** A red band, first thing after the masthead and above the ideas, with the count of
+   false claims and one sentence saying what is wrong and which idea it touches, linking to the
+   finding below. Absent when nothing is false. This is the surface that honours
+   [What a false claim does](#what-a-false-claim-does).
+3. **The ideas.** A rule reading "The _n_ ideas — open one to see the code", an open-all control, and
+   then one row per idea: its number, its attention label as a chip, its `title`, and a metadata
+   line — steps, changes, and a red flag naming a false claim or a disputed one. Under the title,
+   the `cue`. The row is collapsed; the marks on it survive a reader who opens nothing. The numbers
+   carry the reading order the checker chose, which is why they are numbers.
+4. **The walk.** Opening an idea shows the anchors as numbered steps down a rule. Each step is the
+   path and line, a tag — _changed +n −m_, _not in this PR_ drawn dashed, _the important bit_,
+   _claim is false_, _witness disagrees_ — the gist in one sentence, the code block with its
+   `caption` and diff lines coloured, and beneath it the folded reasoning: one fold per note, each
+   stamped _witness · hh:mm_ or _added afterwards_. A fold with a false or disputed claim behind it
+   is open by default. A deliberate absence reads "Should this have changed? No — here's the proof."
+5. **The claims.** Under the walk, "What the author claims · checked by a second agent": one line per
+   claim with its verdict as a chip, its evidence in the sentence, and a `cant_tell` ending with
+   "You decide."
+6. **The finding.** After the ideas, a boxed section per false claim: a plain headline, the two
+   pieces of code that disagree shown together with captions, the consequence worked out — a table
+   where numbers make it concrete — and a closing paragraph that says how serious it is and whose
+   call it is. Written by the checker from its evidence; the page's most important prose.
+7. **Where to spend the time.** A numbered list, one entry per idea, in the order the checker says to
+   read them, each with the reason. This is `attention` made actionable.
+8. **The colophon.** Folded: how the pack was made, what the dashed boxes mean, and what is fake if
+   anything is — the sentence a demo owes and a real pack states as "nothing".
+
+The document carries every field this needs and the renderer invents none: `headline`, `summary`,
+`estimatedMinutes` and the reading `order` are fields of the pack, `title` and `cue` of the idea,
+`caption` and `mark` of the anchor. A renderer that finds a field missing draws the gap, so a pack
+without a cue shows a row with no cue — the author's omission, visible, rather than a renderer's
+guess.
+
+The reference for the shape is the pack for #684, kept at
+[`examples/review-pack-684.html`](examples/review-pack-684.html) as the target the first build is
+measured against. It is a hand-made demo — its colophon says what in it is invented — and a pack the
+harness writes is expected to render to the same page.
+
+**The cockpit rendering** opens over the goal page, from the control on the pull request's row
+([17](17-cockpit.md#the-pull-requests-and-the-tail)) — there is no pull request page to put it on —
+and is the only one that takes input: the reviewer's marks, per
+[What a reviewer does](#what-a-reviewer-does-is-not-part-of-the-pack). Its position — which pull
+request's pack, which idea is open — is `Place` state and lives in the query string, not a
+`useState` in `useCockpit`: a surface held outside it is stepped over by the back button and dropped
+by a reload, both silently. → [17](17-cockpit.md#the-address-bar)
 
 Every reference to a goal, a pull request or an issue is drawn with `<Ref to={ref}/>`
 (`web/src/components/refs.tsx`), never as text. → [17](17-cockpit.md#links)
 
-**The standalone rendering** is a single self-contained HTML file produced by a skill that lives in
-the repository, from the pack document alone. It is read-only, it has no harness behind it, and it is
-for the reviewer who has the project checked out and no LubbDubb — which is most reviewers on most
-teams. That it needs the repository to render is a property rather than a limitation: whoever can
-produce the page can already read the source it quotes.
+**The HTML companion** is a single self-contained file, rendered by the harness from the pack document
+alone when a pack is [shared](#sharing-a-pack), the way [28](28-cross-fleet-pool.md#the-human-readable-companion)
+renders its markdown beside `claims.json`: a pure function of the document, written beside it, never
+read back. It is read-only, it has no harness behind it, and it is for the reviewer who has no
+LubbDubb — which is most reviewers on most teams. It needs nothing checked out, because the document
+[carries its code](#the-document-carries-its-code). A skill in the repository was the earlier shape
+and is rejected for the reason [20](20-validation.md#the-skill) keeps its skill out of the checkout:
+a copy that travels with a checkout is the stale one, and this renderer's one job is to not be.
 
 ## Sharing a pack
 
 A pack is written locally. **Publishing one is a second, deliberate act**, and the two are separate
-controls on the page.
+controls on the page. The person shares the pack when they are happy with the pull request and with
+the pack, and nothing shares one for them.
 
 That is the opposite of [28](28-cross-fleet-pool.md#data-classification)'s `keepLocal`, and
 deliberately: a claim is one sentence, so publishing by default and withholding the rare one is the
-cheap arrangement. A pack quotes diff hunks and file contents, is written per pull request, and is
-rewritten every time a head moves — publishing those by default puts the fleet's source, in volume,
-into a repository that never forgets. Which is the objection
+cheap arrangement. A pack [carries its code](#the-document-carries-its-code), is written per pull
+request, and may be written again per head — publishing those by default puts the fleet's source, in
+volume, into a repository that never forgets. Which is the objection
 [28](28-cross-fleet-pool.md#what-it-is-not) raises against mirroring the store, arriving from a
-different direction.
+different direction. 28 also argues that a second click means nothing is ever published; that is
+accepted here, with open eyes, because a pack unshared costs nobody anything and a pack shared by
+default costs the fleet its source.
 
 **A shared pack rides the pool's transport and nothing else about it.** `PoolTransport` in the
 provider registry already solves one-writer-per-namespace, unreachability and the commit hygiene; a
 pack is a third kind of document in the fleet's own namespace, beside `claims.json` and
-`digest.json`. It is **not** a claim: no corroboration, no vouch, no contradiction, no lifetime, and
-nothing about it is ever injected into an agent's prompt. → [27](27-knowledge.md)
+`digest.json`, with an HTML companion beside it the way the other two have a markdown one. It is
+**not** a claim: no corroboration, no vouch, no contradiction, no lifetime, and nothing about it is
+ever injected into an agent's prompt. → [27](27-knowledge.md)
 
 Two consequences that are easy to miss:
 
 - **The secret backstop matters more here than it does for a claim.** A pattern check written for one
-  English sentence is being pointed at diff hunks, where a token in a test fixture or an internal
-  hostname in a config default is exactly the thing that hides. It refuses and never rewrites, as it
-  does for claims — and it will refuse a legitimate share sometimes, which is the correct direction
-  to fail in and should surprise nobody when it happens.
-- **Packs need a prune and claims do not.** A claim is durable; a pack is disposable and
-  regenerable, and the pack for a merged pull request is dead weight in a repository everybody
-  clones. Sharing without a retention rule grows the substrate without bound, which is a cost paid by
-  every fleet that pulls it rather than the one that published.
-
-**What a pack does produce for the knowledge store is a lesson, not a row.** When the checker keeps
-catching the same class of thing across packs — a colour that was never registered, a column without
-its migration — that is a fleet-scoped fact in one sentence, and it goes through
-[27](27-knowledge.md)'s existing intake as one. The pack is not knowledge; a pack can produce
-knowledge.
+  English sentence is being pointed at the code the anchors embed, where a token in a test fixture or
+  an internal hostname in a config default is exactly the thing that hides. It runs over every
+  embedded line, not only the sentences. It refuses and never rewrites, as it does for claims — and it
+  will refuse a legitimate share sometimes, which is the correct direction to fail in and should
+  surprise nobody when it happens.
+- **A shared pack is pruned; the local one is kept.** A claim is durable; a pack is disposable, and
+  the pack for a merged pull request is dead weight in a repository everybody clones. The fleet that
+  published it removes it from its namespace on the publish after the pull request has been closed
+  for `closedPrWindowMs` — the same clock that drops the pull request out of the world the cockpit
+  draws ([07](07-pull-requests.md)), so a shared pack outlives its pull request's row by nothing. The
+  local row is untouched: it is the fleet's own record, and the cost of keeping it is the fleet's.
 
 ## Where it lives
 
-Three tables, in a new module under `src/store/` — the only directory that touches SQLite, one module
+Two tables, in a new module under `src/store/` — the only directory that touches SQLite, one module
 per group of related tables, taking a `StoreContext`, with `Store` delegating under the same method
-names. → [14](14-persistence.md#shape)
+names — and one column on a table another module owns. → [14](14-persistence.md#shape)
 
-| Table                    | Holds                                                                        |
-| ------------------------ | ---------------------------------------------------------------------------- |
-| _review_witness_entries_ | one row per fork, appended during the work, never updated                    |
-| _review_packs_           | one row per (pull request, head sha): the pack document and its verdicts     |
-| _review_marks_           | what a reviewer did to a pack — overrides, ideas read — keyed to pack and idea |
+| Table             | Holds                                                                                        |
+| ----------------- | -------------------------------------------------------------------------------------------- |
+| `scratch_entries` | the witness log: a `decision` column on the pad's own rows, null on an ordinary note          |
+| _review_packs_    | one row per (pull request, head sha): the pack document and its verdicts                     |
+| _review_marks_    | what a reviewer did to a pack — overrides, ideas read — keyed to pack and the hunks an idea owns |
 
 The pack is one document rather than a table per level. It is written whole and read whole, and
 nothing queries inside it — three normalised tables would buy nothing and cost a join on every read.
 The head sha it was written against is a column rather than a field, because staleness is decided by
-comparing it to the pull request's head on every load. The witness log is separate because it is
-appended to over time by a different party, and the marks are separate because they outlive the
-document they were made against.
+comparing it to the pull request's head on every load. The witness log lives on the pad because it
+_is_ pad entries, appended over time by the working agents; the marks are separate because they
+outlive the document they were made against.
 
-All three tables are new, so none needs a `ColumnMigrations` entry; a table being new **once** does
-not keep it exempt, and the first column added to any of them afterwards needs an additive
-`ALTER TABLE` guarded by a `PRAGMA table_info` check. → [14](14-persistence.md#migrations)
+`scratch_entries` exists, so the `decision` column needs its `ColumnMigrations` entry in the pad's
+own store module, or every database from before it has no column and every fork is silently a note.
+The two pack tables are new, so neither needs one; a table being new **once** does not keep it
+exempt, and the first column added to either afterwards needs an additive `ALTER TABLE` guarded by a
+`PRAGMA table_info` check. → [14](14-persistence.md#migrations)
 
 The shapes the routes ship live in `src/wire.ts`, and a wire type either **is** the domain type or
 `extends` it — never a re-declaration and never widened. `test/wireContract.test.ts` asserts that
 `src/wire.ts` is the only server module anything under `web/src/` names. The pack document is the
-clearest case there is: the cockpit, the skill and the store read one shape, so there is one
+clearest case there is: the cockpit, the companion and the store read one shape, so there is one
 declaration of it.
 
 Routes go in a new module under `src/server/routes/` with an entry in `app.ts`'s `ROUTE_MODULES`, and
@@ -428,27 +547,55 @@ that overrode it into a harness that will not boot. → [05](05-dispatcher.md#pr
 
 ## Cost
 
-Three roles, and only the witness runs inside the work — a handful of tool calls on a session already
-running, on every dispatch whether a pack is ever asked for or not. It is the cheap one, and it is the
-one that must be paid up front: a log cannot be written after the fact, which is the whole point of it.
+Three roles, and only the witness runs inside the work — a handful of pad writes on a session already
+running, on every dispatch whether a pack is ever asked for or not, plus the paragraph appended to
+every execution prompt that says to make them. It is the cheap one, and it is the one that must be
+paid up front: a log cannot be written after the fact, which is the whole point of it.
 
 The other two are paid **per request, not per pull request**. The author is one agent over the diff,
-the log and the tree. The checker is one agent whose work divides — each claim is verified
-independently, so the pass parallelises to whatever headroom allows and its wall-clock is roughly one
-claim rather than fourteen.
+the log and the tree. The checker is one agent over the claims, in series, on a read-only checkout of
+the head — the shape [07](07-pull-requests.md#the-reviewers-checkout) already uses. One agent per
+claim was considered and rejected: every spawn outside the dispatcher is invisible to the fleet cap,
+and every one of them wants a slot in a pool bounded at the cap plus slack
+([09](09-execution.md#exhaustion)), so fourteen claims in parallel is fourteen checkouts thrashing one
+branch's slot. The wait is the checker reading fourteen claims one after another, and that is the
+wait [When a pack is made](#when-a-pack-is-made) accepts.
 
 So the standing cost of the subsystem is the witness alone, and a pack is two agent runs spent
-deliberately, against a person's review hour. A fleet opening twenty pull requests a day and reviewing
-four pays for four.
+deliberately, against a person's review hour. A fleet opening twenty pull requests a day and asking
+for four packs pays for four.
 
 ## What was decided, and why
 
-Six questions were open when this document was first written. They are settled here rather than
-deleted, because each one has a losing option that will look attractive again later.
+These were open when this document was first written, or were argued against after it was. They are
+settled here rather than deleted, because each one has a losing option that will look attractive
+again later.
 
-**Packs are made on request, never automatically.** Always-on is simpler to build and pays two agent
-runs for every pull request nobody opens. The fleet's output already exceeds what anybody reads, so
-the default would be waste by construction. → [When a pack is made](#when-a-pack-is-made)
+**Packs are made on request, never automatically, and made once.** Always-on is simpler to build and
+pays two agent runs for every pull request nobody opens. The fleet's output already exceeds what
+anybody reads, so the default would be waste by construction. Regenerating on every push is the same
+waste per pull request: a change rarely turns direction enough after its first pack, and the reader
+is the one party who can tell when it has. → [When a pack is made](#when-a-pack-is-made)
+
+**It is not the fleet review, and does not share its agent.** `pr-review` is one round, its charter is
+the project's, and on the deployments that run it a policy requires it. A reviewer that also wrote a
+pack would carry two jobs in one context and answer to two prompts. Two readings of one diff is the
+cost, taken knowingly. → [What it is not](#what-it-is-not)
+
+**The witness log is the scratchpad, not a tool of its own.** The pad already has every property the
+log needs, and a second append-only per-goal record would be the pad again. What the pad lacked was
+a place for the agents that work a pull request's concerns, which are refused by the issue pad on
+purpose — so the pad grows a `pr:<n>` family rather than the log growing a store.
+→ [The witness log](#the-witness-log)
+
+**The checker reads claims in series, on one checkout.** One agent per claim would parallelise the
+wait away, and would do it by spawning outside the cap into a worktree pool bounded by it.
+→ [Cost](#cost)
+
+**The document embeds the code its anchors point at.** The alternative — anchors as paths and ranges,
+resolved at render — needs a file-at-a-commit route and a diff viewer the cockpit does not have, and
+leaves the companion unable to render without a checkout. The cost is that a shared pack is source,
+which is why sharing is a person's act. → [The document carries its code](#the-document-carries-its-code)
 
 **Nothing blocks.** A pack that only exists when asked for cannot be a precondition for merging —
 requiring one would make packs mandatory through the back door and undo the trigger decision. So the
@@ -458,9 +605,14 @@ a lock. → [What a false claim does](#what-a-false-claim-does)
 **A stale pack is shown, not regenerated.** Regenerating under a reader costs them their place and
 tells them nothing about what moved. → [When a pack is made](#when-a-pack-is-made)
 
-**Human-authored pull requests get a pack, and are told the log is missing.** Every claim comes out
-`inferred`. Less than a witnessed pack, more than that pull request had.
+**Human-authored pull requests get a pack where they have a goal, and are told the log is missing.**
+Every claim comes out `inferred`. Less than a witnessed pack, more than that pull request had. A pull
+request linked to no goal has no row in the cockpit to ask from, and gets none.
 → [Pull requests nobody witnessed](#pull-requests-nobody-witnessed)
+
+**Attention is the checker's, and the checker is shown the ideas' skeleton to write it.** A label is a
+judgement about an idea and `split` about how ideas relate, which a flat list of sentences cannot
+support. The notes and the log stay withheld. → [Attention](#attention)
 
 **Nothing audits the author's quotation of the log, by design.** A `witnessed` claim cites its entry
 and the entry is rendered verbatim beside it, so a reader sees both halves. A fourth agent auditing
@@ -482,27 +634,39 @@ request was considered and rejected: it is the cheapest distribution there is �
 permissions are already the right audience, and `ActionSink`'s `upsertIssueComment` reaches GitHub and
 Azure DevOps alike — but a comment cannot fold reliably across providers, cannot take a reviewer's
 marks at all, and a flat wall of prose and diff is the thing this subsystem exists to replace. Paying
-the product to save the plumbing is the wrong trade when the plumbing is a JSON file.
-→ [A pack is data](#a-pack-is-data-and-rendering-is-downstream)
+the product to save the plumbing is the wrong trade when the plumbing is a JSON file. A renderer
+shipped as a skill in the repository was the second shape and is rejected too: a checkout's copy is
+the stale one. The standalone rendering is the harness's own companion file, written beside the
+shared document. → [A pack is data](#a-pack-is-data-and-rendering-is-downstream)
 
-**Sharing is a separate act from asking.** Publishing rides the pool's transport into the fleet's own
-namespace, never its claims arm, and never by default. → [Sharing a pack](#sharing-a-pack)
+**Sharing is a separate act from asking, and a person's.** Publishing rides the pool's transport into
+the fleet's own namespace, never its claims arm, and never by default. A shared pack is pruned on the
+pull request's own retention clock; the local one is kept. → [Sharing a pack](#sharing-a-pack)
+
+**A pack produces no knowledge.** "The checker keeps catching the same class of thing" was the
+argument for a lesson path into [27](27-knowledge.md), and it names an aggregator across packs that
+nothing is specified to be and that could not live in `src/dispatcher/`. Nobody needs it; the
+paragraph is gone.
 
 ## What is still open
 
 **`plumbing` will rot.** It is the honest answer to hunks that carry nothing to review, and it is also
 where an author will put anything it cannot be bothered to explain. The checker verifying that those
-hunks are semantically empty is the defence, and it is not obviously enough. Expect this to be the
-first thing that needs tightening, and watch the ratio of plumbing hunks to owned ones as the signal.
+hunks are semantically empty is the defence, and it is not obviously enough — and by the check's own
+rule "semantically empty" is a judgement, so the honest verdict on a plumbing claim is often
+`cant_tell`. Expect this to be the first thing that needs tightening, and watch the ratio of plumbing
+hunks to owned ones as the signal; nothing here yet defines the counter.
 
 **Whether the wait is tolerable.** Asking for a pack and waiting lands at the worst moment — somebody
-has just sat down to review. If that turns out to drive people away from asking, the fix is
-pre-generating for a narrower set of pull requests, never making everyone pay for every one.
+has just sat down to review — and the checker reading in series is most of the wait. If that turns
+out to drive people away from asking, the fix is pre-generating for a narrower set of pull requests,
+never making everyone pay for every one.
 
-**What prunes a shared pack.** A pack for a merged pull request is dead weight in a substrate every
-fleet clones, and nothing here says who removes it or when. The candidates are a retention window, a
-prune on merge, and keeping only the newest pack per pull request — the last is the most obviously
-right and the least obviously sufficient, since a reviewer part-way through an older one loses it.
+**Whether prominence works.** [What a false claim does](#what-a-false-claim-does) makes four
+requirements on the surface, and all four are checkable — as the order things are drawn in. None
+measures the thing they stand in for, which is whether a false claim gets read. The one number that
+would is how often a pull request merges with a false claim nobody marked, and recording it means a
+mark that says _seen_ on a false claim, which is a mark this document has not yet added.
 
 **Whether a reviewer's marks should travel.** They are held beside the pack rather than in it, which
 means they are local by construction. Whether a shared pack should carry the fact that somebody

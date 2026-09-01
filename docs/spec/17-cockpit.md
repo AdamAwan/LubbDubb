@@ -1443,6 +1443,12 @@ the open list, and a goal whose work has landed would otherwise draw an empty ca
 ([03](03-world-model.md)); the closed list is retention-windowed, so what it holds is what the harness
 still remembers.
 
+**Not yet built:** the row is also where a [review pack](31-review-packs.md#reading-it) is asked for
+and opened. There is no pull request page to put that on, so a pull request with no goal row — one
+the provider never linked — has no way to ask for one, which [31](31-review-packs.md#pull-requests-nobody-witnessed)
+states as the surface's limit. The control opens the pack over this page, and which pack and which
+idea are open is `Place` state ([the address bar](#the-address-bar)).
+
 Whose court a PR is in is `attention.status`, and which check is red is `ciVerdict`; both are quoted,
 never re-read. The chip prints the server's own word with `attention.reasons` in its title, and the
 ladder is one dot per check the policy classified — failing, not-ours, muted — with **no check name
