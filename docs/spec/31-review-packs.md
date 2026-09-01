@@ -51,7 +51,7 @@ own output.
 | ----------- | ------------------ | --------------------------------------------- | --------------------------------------------- |
 | **Witness** | inside the work    | everything — it _is_ the working agent        | the witness log, as it goes                   |
 | **Author**  | after the work     | the witness log, the diff, the tree           | the pack: ideas, claims, anchors              |
-| **Checker** | after the pack     | the diff, the tree, each idea's one-line claim and anchor list, the claims — **not** the log, **not** the notes | a verdict and its evidence per claim, and an attention label per idea |
+| **Checker** | after the pack     | the diff, the tree, each idea's one-line claim and anchor list, the claims — **not** the log, **not** the notes | a verdict and its evidence per claim; per idea an attention label and its cue; the finding for each false claim; the reading order |
 
 Three things follow that are easy to lose and expensive to re-derive:
 
@@ -148,9 +148,15 @@ sorting everything alphabetically by path.
 | Field       | What                                                                                              |
 | ----------- | ------------------------------------------------------------------------------------------------- |
 | `claim`     | one sentence, falsifiable, stating what this idea does                                            |
+| `title`     | the same thing said the way a colleague would say it across a desk — what changed and why it matters, no identifiers ([The page](#the-page)) |
+| `cue`       | one short line under the title: why this idea has the attention it has, and where its risk is     |
 | `anchors`   | ordered — the walk, in the order the reasoning ran, not the order the files sort in                |
 | `claims`    | the checkable statements this idea rests on ([Claims](#claims))                                    |
 | `attention` | how much scrutiny it needs, set by the **checker** ([Attention](#attention))                       |
+
+`claim` is for the checker; `title` and `cue` are for the person. The author writes the first two,
+the checker writes the cue after it has labelled the idea, because the cue says why the label is what
+it is.
 
 An idea's walk crosses files freely and is expected to: a change in this repo is naturally vertical —
 domain type, wire type, store module, route, cockpit, spec, test — and reviewing those six files
@@ -173,6 +179,12 @@ repo cannot otherwise review, and it is worth building even if nothing else here
 
 Every anchor carries a `gist` (one line, always shown) and may carry a `note` (the reasoning, folded
 away). The gist belongs to the code; the note is support and is never required to understand it.
+It may also carry a `caption` — the one-line label on the code block itself, saying what the block
+is ("new function", "existing code, unchanged — shown because you need it", "two places, 250 lines
+apart") — and a `mark`, one of `key` (the stop the idea turns on), `false` (the stop a false claim is
+about) or `disputed` (the stop where the witness and the code disagree). A note states its
+provenance the way a claim does: written by the witness at the time, and stamped with when, or added
+by the author afterwards. The page shows which, because the reader weighs them differently.
 
 ### Coverage
 
@@ -386,6 +398,54 @@ Two renderings, and the layering is the same in both because the layering *is* t
 Layer 2 is code and not prose deliberately. A pack whose middle layer was the author's narrative
 would be a surface people approve from without reading the change, which is worse than the review it
 replaces. The prose is support; it is never the thing in the middle.
+
+### The page
+
+This is the output format, and both renderings draw it. It is written for the person, in their
+words: the sentences on it say what changed and what could go wrong the way a colleague would, and
+the identifiers live in the code blocks, not the prose. Top to bottom:
+
+1. **Masthead.** A kicker naming the pull request and its head; a `headline` that says what the
+   change does in one plain sentence; a `summary` paragraph in the same register, with the one thing
+   the reader most needs in bold; and a facts line — ideas, files, changes and whether every one is
+   owned, the claim counts by verdict, and an `estimatedMinutes`. Both prose fields are the author's.
+2. **The gate.** A red band, first thing after the masthead and above the ideas, with the count of
+   false claims and one sentence saying what is wrong and which idea it touches, linking to the
+   finding below. Absent when nothing is false. This is the surface that honours
+   [What a false claim does](#what-a-false-claim-does).
+3. **The ideas.** A rule reading "The _n_ ideas — open one to see the code", an open-all control, and
+   then one row per idea: its number, its attention label as a chip, its `title`, and a metadata
+   line — steps, changes, and a red flag naming a false claim or a disputed one. Under the title,
+   the `cue`. The row is collapsed; the marks on it survive a reader who opens nothing. The numbers
+   carry the reading order the checker chose, which is why they are numbers.
+4. **The walk.** Opening an idea shows the anchors as numbered steps down a rule. Each step is the
+   path and line, a tag — _changed +n −m_, _not in this PR_ drawn dashed, _the important bit_,
+   _claim is false_, _witness disagrees_ — the gist in one sentence, the code block with its
+   `caption` and diff lines coloured, and beneath it the folded reasoning: one fold per note, each
+   stamped _witness · hh:mm_ or _added afterwards_. A fold with a false or disputed claim behind it
+   is open by default. A deliberate absence reads "Should this have changed? No — here's the proof."
+5. **The claims.** Under the walk, "What the author claims · checked by a second agent": one line per
+   claim with its verdict as a chip, its evidence in the sentence, and a `cant_tell` ending with
+   "You decide."
+6. **The finding.** After the ideas, a boxed section per false claim: a plain headline, the two
+   pieces of code that disagree shown together with captions, the consequence worked out — a table
+   where numbers make it concrete — and a closing paragraph that says how serious it is and whose
+   call it is. Written by the checker from its evidence; the page's most important prose.
+7. **Where to spend the time.** A numbered list, one entry per idea, in the order the checker says to
+   read them, each with the reason. This is `attention` made actionable.
+8. **The colophon.** Folded: how the pack was made, what the dashed boxes mean, and what is fake if
+   anything is — the sentence a demo owes and a real pack states as "nothing".
+
+The document carries every field this needs and the renderer invents none: `headline`, `summary`,
+`estimatedMinutes` and the reading `order` are fields of the pack, `title` and `cue` of the idea,
+`caption` and `mark` of the anchor. A renderer that finds a field missing draws the gap, so a pack
+without a cue shows a row with no cue — the author's omission, visible, rather than a renderer's
+guess.
+
+The reference for the shape is the pack for #684, kept at
+[`examples/review-pack-684.html`](examples/review-pack-684.html) as the target the first build is
+measured against. It is a hand-made demo — its colophon says what in it is invented — and a pack the
+harness writes is expected to render to the same page.
 
 **The cockpit rendering** opens over the goal page, from the control on the pull request's row
 ([17](17-cockpit.md#the-pull-requests-and-the-tail)) — there is no pull request page to put it on —
