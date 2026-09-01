@@ -4378,13 +4378,26 @@ select:disabled {
   opacity: 0.5;
 }
 
+/* A lane's name, drawn on the glass rather than left to a tooltip. Beside the bar
+   it sits on the panel and reads as axis text; inside the bar it sits on a goal
+   colour, all of which are mid-bright in both themes — so it takes the ink those
+   fills are lit for, exactly as a filled chip does. */
+.al .al-lane-label {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  fill: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+.al .al-lane-label-in {
+  fill: var(--on-light);
+}
+
 /* The hatch is the point — see the block note. `repeating-linear-gradient` rather
    than an SVG pattern because this is a `<span>` in the bar and a `<span>` in the
    table, and one declaration serves both. */
 .al .al-residual {
-  background:
-    repeating-linear-gradient(45deg, var(--al-unattributed) 0 2px, transparent 2px 5px),
-    var(--well);
+  background: repeating-linear-gradient(45deg, var(--al-unattributed) 0 2px, transparent 2px 5px), var(--well);
 }
 
 .al .al-swatch {

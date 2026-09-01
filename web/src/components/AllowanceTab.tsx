@@ -134,6 +134,12 @@ function Headline({ allowance, now }: { allowance: AllowanceInsights; now: numbe
 const T = { left: 44, right: 596, top: 12, bottom: 112, laneTop: 146, laneHeight: 13, laneGap: 3 };
 /** How many lanes are drawn before the rest are folded into a count. */
 const MAX_LANES = 8;
+/** The right edge a lane's label may run to — the viewBox, less a hair of margin. */
+const LANE_LABEL_RIGHT = 616;
+/** One character of the lane label, in user units: mono, so an advance is a constant. */
+const LANE_CH = 4.8;
+/** Below this, a label is a truncation rather than a name, and the tooltip serves better. */
+const LANE_LABEL_MIN = 9;
 
 /**
  * The percentage over the window, with the agent runs beneath it.
@@ -243,19 +249,34 @@ function Timeline({ allowance, now }: { allowance: AllowanceInsights; now: numbe
             const from = x(lane.startedAt);
             // A run still going is drawn to now, which is where its money still is.
             const to = x(lane.endedAt ?? new Date(now).toISOString());
+            const left = Math.max(T.left, from);
+            const width = Math.max(2, Math.min(T.right, to) - left);
+            const label = laneLabel(lane, left, width);
             return (
-              <rect
-                key={lane.agentId}
-                className={lane.measured ? 'al-lane' : 'al-lane al-lane-unmeasured'}
-                x={Math.max(T.left, from)}
-                y={top}
-                width={Math.max(2, Math.min(T.right, to) - Math.max(T.left, from))}
-                height={T.laneHeight - 2}
-                rx="2"
-                fill={laneFill(lane)}
-              >
-                <title>{laneTitle(lane, now)}</title>
-              </rect>
+              <g key={lane.agentId}>
+                <rect
+                  className={lane.measured ? 'al-lane' : 'al-lane al-lane-unmeasured'}
+                  x={left}
+                  y={top}
+                  width={width}
+                  height={T.laneHeight - 2}
+                  rx="2"
+                  fill={laneFill(lane)}
+                >
+                  <title>{laneTitle(lane, now)}</title>
+                </rect>
+                {label !== null && (
+                  <text
+                    className={label.inside ? 'al-lane-label al-lane-label-in' : 'al-lane-label'}
+                    x={label.x}
+                    y={top + (T.laneHeight - 2) / 2}
+                    textAnchor={label.anchor}
+                    dominantBaseline="central"
+                  >
+                    {label.text}
+                  </text>
+                )}
+              </g>
             );
           })}
         </g>
@@ -264,6 +285,7 @@ function Timeline({ allowance, now }: { allowance: AllowanceInsights; now: numbe
         {lanes.length === allowance.lanes.length
           ? `${lanes.length} run${lanes.length === 1 ? '' : 's'} in this window, one lane each. `
           : `The ${MAX_LANES} most recent of ${allowance.lanes.length} runs. `}
+        Each bar is one agent run, named beside it and coloured by the goal it reached; hover one for the whole of it.
         Which agents were running while it climbed — not which of them caused it.
       </p>
     </div>
@@ -297,6 +319,41 @@ function laneFill(lane: AllowanceLane): string {
   if (!lane.measured) return 'var(--al-unmeasured)';
   if (lane.slot === null) return 'var(--al-unattributed)';
   return `var(--al-goal-${lane.slot})`;
+}
+
+/**
+ * Where a lane's name goes, and how much of it fits.
+ *
+ * A bar on its own says an agent ran for that long and nothing else — the name is
+ * in a tooltip, which is no name at all on a screenshot, a touch screen or a
+ * reader that does not hover. So every lane is named on the glass: beside the bar
+ * where there is room to its right, and inside its end where there is not, which
+ * is the case for a run still going (its bar reaches now, and now is the axis's
+ * right edge). A bar too small for either keeps the tooltip alone rather than a
+ * two-character stub.
+ */
+function laneLabel(
+  lane: AllowanceLane,
+  left: number,
+  width: number,
+): { text: string; x: number; anchor: 'start' | 'end'; inside: boolean } | null {
+  const name = (
+    lane.issueNumber === null ? (lane.title ?? lane.agentId) : `#${lane.issueNumber} ${lane.title ?? ''}`
+  ).trim();
+  const outside = Math.floor((LANE_LABEL_RIGHT - (left + width) - 5) / LANE_CH);
+  const inside = Math.floor((width - 8) / LANE_CH);
+  // Whichever holds more of the name, not whichever is tried first: a run still
+  // going has no room beside it and plenty within it, and a short early run the
+  // reverse.
+  if (outside >= inside && outside >= LANE_LABEL_MIN)
+    return { text: clip(name, outside), x: left + width + 5, anchor: 'start', inside: false };
+  if (inside >= LANE_LABEL_MIN) return { text: clip(name, inside), x: left + width - 4, anchor: 'end', inside: true };
+  return null;
+}
+
+/** As many characters as were asked for, with the cut marked rather than silent. */
+function clip(text: string, chars: number): string {
+  return text.length <= chars ? text : `${text.slice(0, Math.max(1, chars - 1)).trimEnd()}\u2026`;
 }
 
 function laneTitle(lane: AllowanceLane, now: number): string {
@@ -433,6 +490,24 @@ function Projection({ allowance }: { allowance: AllowanceInsights }): JSX.Elemen
         {p.exhaustsAt !== null && p.beforeReset === true && (
           <circle className="al-spent" cx={x(Date.parse(p.exhaustsAt))} cy={y(0)} r="3.5" />
         )}
+        {/* The line runs between two instants and drawing neither of them leaves a
+            slope with no scale under it — a reader cannot tell a week from an
+            afternoon. Spans rather than clock times, for `verdict`'s reason. */}
+        <g className="sp-axis">
+          <text x={P.left} y={P.bottom + 15} textAnchor="start">
+            now
+          </text>
+          {p.exhaustsAt !== null && (
+            <text x={mark(x(Date.parse(p.exhaustsAt)))} y={P.bottom + 15} textAnchor="middle">
+              out in {fmtDuration(Date.parse(p.exhaustsAt) - startMs)}
+            </text>
+          )}
+          {p.resetsAt !== null && farApart(x(Date.parse(p.resetsAt)), p.exhaustsAt, x) && (
+            <text x={x(Date.parse(p.resetsAt)) - 5} y={P.top + 12} textAnchor="end">
+              in {fmtDuration(Date.parse(p.resetsAt) - startMs)}
+            </text>
+          )}
+        </g>
       </svg>
       <p className={p.beforeReset === true ? 'sp-note al-warn' : 'sp-note'}>{verdict(p)}</p>
       <p className="sp-note">
@@ -443,6 +518,24 @@ function Projection({ allowance }: { allowance: AllowanceInsights }): JSX.Elemen
       </p>
     </div>
   );
+}
+
+/** Kept off the left edge, where a centred label would collide with `now`. */
+function mark(at: number): number {
+  return Math.max(P.left + 46, at);
+}
+
+/**
+ * True when the reset line has room for its own span beside the exhaustion mark.
+ *
+ * The two are often within a day of each other, which is the whole of what the
+ * verdict below is about — and two spans a few pixels apart read as one figure
+ * disagreeing with itself. The sentence carries both either way, so the chart
+ * drops the second rather than crowding it.
+ */
+function farApart(resetX: number, exhaustsAt: string | null, x: (ms: number) => number): boolean {
+  if (exhaustsAt === null) return true;
+  return Math.abs(resetX - x(Date.parse(exhaustsAt))) > 80;
 }
 
 /**

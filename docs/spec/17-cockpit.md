@@ -3784,6 +3784,16 @@ it is labelled as apportioned. A run that reported no usage still gets a lane an
 was running, which is the only thing a lane claims, and it moved the account by nothing this harness
 can see.
 
+**Every lane is named on the glass, and both burn-down instants are dated.** A bar carrying its name
+only in a tooltip is a bar with no name at all on a screenshot, a touch screen or a reader that does
+not hover — which is what the lane band and the weekly line both were. So a lane's goal and title are
+drawn beside it, or inside its right end where there is no room beside it (a run still going reaches
+now, and now is the axis's right edge); a bar too small to hold a name keeps the tooltip alone rather
+than a two-character stub. The weekly burn-down draws `now` under its first point and the span to
+exhaustion under its last, and the span to the reset beside the reset line — dropped when the two
+marks are close enough to read as one figure disagreeing with itself, since the verdict sentence
+below carries both either way. Spans rather than clock times, for the sentence's reason.
+
 **Two discontinuities are drawn as discontinuities.** A reset breaks the line rather than drawing a
 cliff, which would read as the fleet having given something back. A gap — the fleet idle, so no reading
 arrived — is drawn dashed rather than solid: the rise across it is real and counted
