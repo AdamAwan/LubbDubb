@@ -11,6 +11,7 @@ import { authRefusalHint, createAuthThrottle, describeAuthAttempt, guardRequest,
 import { debugLog } from '../debug.js';
 import type { RouteModule } from './routes/context.js';
 import { register as registerAgents } from './routes/agents.js';
+import { register as registerAllowance } from './routes/allowance.js';
 import { artifactSignerFor, attachmentSignerFor, register as registerArtifacts } from './routes/artifacts.js';
 import { register as registerControl } from './routes/control.js';
 import { register as registerEscalations } from './routes/escalations.js';
@@ -48,6 +49,7 @@ import { register as registerWork } from './routes/work.js';
 const ROUTE_MODULES: RouteModule[] = [
   registerState,
   registerAgents,
+  registerAllowance,
   registerArtifacts,
   registerControl,
   registerEscalations,

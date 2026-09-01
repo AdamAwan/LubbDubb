@@ -64,6 +64,7 @@ import type { ConfigChange } from './configApply.js';
 import type { ReliabilityInsights, RunTally } from './reliabilityInsights.js';
 import type { RemedyInsights } from './remedyInsights.js';
 import type { KnowledgeCost } from './knowledge/cost.js';
+import type { AllowanceInsights } from './allowanceInsights.js';
 import type { SpendInsights } from './spendInsights.js';
 import type { McpInsights } from './mcpInsights.js';
 import type { SpendTrend } from './spendTrend.js';
@@ -2044,6 +2045,20 @@ export interface SpendPayload {
 }
 
 /**
+ * `/api/allowance` — the account's usage percentage over time, the agent runs
+ * beside it, its apportionment to the goals that spent it, and the weekly
+ * burn-down.
+ *
+ * A route of its own rather than a field on {@link SpendPayload}, for
+ * {@link SpendTrendPayload}'s reason: it walks the readings history on top of the
+ * same all-time agent walk, and the tab an operator never opens should cost
+ * nothing. Fetched on the Allowance tab's first visit for a given window.
+ */
+export interface AllowancePayload {
+  allowance: AllowanceInsights;
+}
+
+/**
  * `/api/spend/trend` — the same money on a week axis, cohorted by the goals that
  * closed. Fetched on the trend tab's *first visit* rather than with the
  * breakdown: it reads two months of world events on top of the same all-time
@@ -2313,6 +2328,14 @@ export type { PoolStatus } from './pool/poolDesk.js';
 export type { PoolRollup, PoolRollupRow } from './pool/aggregate.js';
 /** What `POST /api/issues/:number/dismiss-run` stopped on its way out. */
 export type { RunClearOut } from './floor/endRun.js';
+export type {
+  AllowanceApportionment,
+  AllowanceGoal,
+  AllowanceInsights,
+  AllowanceLane,
+  AllowanceProjection,
+  AllowanceReading,
+} from './allowanceInsights.js';
 export type { SpendGoal, SpendInsights, SpendPhase, SpendPhaseTotal, SpendRun } from './spendInsights.js';
 export type {
   McpChannelUsage,

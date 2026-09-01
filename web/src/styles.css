@@ -4296,6 +4296,119 @@ select:disabled {
   --sp-other: var(--grey);
 }
 
+/* ============================ allowance ============================
+
+   The Allowance tab, which is the spend panel's own conventions applied to a
+   percentage instead of to money — so it rides `.sp` for its tiles, tables and
+   wells and adds only what is its own.
+
+   **A goal's colour is its slot, not its identity.** The palette has five voices
+   and a window can hold more goals than that, so the component picks a slot by
+   `issueNumber % 5` — which means the colour is stable for a goal across every
+   redraw of the tab and says nothing about which goal it is. The legend is the
+   table, exactly as it is on Economics: the swatch is a lookup into the bar above
+   it, never a name.
+
+   **The residual is drawn as a different *kind* of thing, not a sixth voice.**
+   Hatched rather than filled, because "the account moved and no agent of ours was
+   spending" is not another goal — a solid segment beside the goals invites
+   reading it as one, which is the single misreading this tab can cause. */
+
+.al {
+  --al-goal-0: var(--blue);
+  --al-goal-1: var(--amber);
+  --al-goal-2: var(--violet);
+  --al-goal-3: var(--green);
+  /* The fifth voice, and the palette's distinguishable hues are spent — so it is
+     mixed rather than written as a literal, which is what keeps it following the
+     theme an operator picked. `--sp-local` is the same decision. */
+  --al-goal-4: color-mix(in srgb, var(--blue) 45%, var(--violet));
+  /* Neither of these is a voice. A run that reached no goal and a run that
+     reported nothing are both *absences*, and they read as grey for that reason —
+     the second fainter, because it did not even spend. */
+  --al-unattributed: var(--grey);
+  --al-unmeasured: color-mix(in srgb, var(--grey) 45%, var(--well));
+}
+
+.al .al-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+
+.al .al-dot {
+  fill: var(--well);
+  stroke: var(--accent);
+  stroke-width: 1.4;
+}
+
+.al .al-now {
+  fill: var(--accent);
+  stroke: var(--well);
+}
+
+.al .al-spent {
+  fill: var(--red);
+  stroke: var(--well);
+  stroke-width: 1.4;
+}
+
+/* An inference, drawn as one: the rise across an idle stretch happened, and what
+   is unknown is what happened inside it. */
+.al .al-gap,
+.al .al-projection {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.6;
+  stroke-dasharray: 2 4;
+  opacity: 0.6;
+}
+
+.al .al-reset {
+  stroke: var(--muted);
+  stroke-width: 1;
+}
+
+.al .al-lane {
+  opacity: 0.85;
+}
+
+.al .al-lane-unmeasured {
+  opacity: 0.5;
+}
+
+/* The hatch is the point — see the block note. `repeating-linear-gradient` rather
+   than an SVG pattern because this is a `<span>` in the bar and a `<span>` in the
+   table, and one declaration serves both. */
+.al .al-residual {
+  background:
+    repeating-linear-gradient(45deg, var(--al-unattributed) 0 2px, transparent 2px 5px),
+    var(--well);
+}
+
+.al .al-swatch {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  margin-right: 7px;
+  vertical-align: baseline;
+}
+
+.al .al-title {
+  color: var(--muted);
+  margin-left: 7px;
+}
+
+.al .al-warn {
+  color: var(--red);
+}
+
+.al .al-residual-row td {
+  color: var(--muted);
+}
+
 /* --- the headline figures --- */
 
 .sp-tiles {

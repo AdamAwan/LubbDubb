@@ -175,8 +175,15 @@ export function rollUpIssueSpend(input: SpendInput): SpendRollup {
   return { byIssue, unattributedCostUsd, attribution, localRunAttribution };
 }
 
-/** The goal an origin's spend belongs to: by name if it can be, by lineage otherwise. */
-function issueBehind(originRef: string | null, parentOf: ReadonlyMap<string, string | null>): number | null {
+/**
+ * The goal an origin's spend belongs to: by name if it can be, by lineage otherwise.
+ *
+ * Exported for `buildAllowanceInsights`, which charges a *merge* to a goal and
+ * must do it by the same walk the money takes — a per-landed figure whose
+ * numerator and denominator disagreed about which goal a pull request belongs to
+ * would be a ratio between two different goals.
+ */
+export function issueBehind(originRef: string | null, parentOf: ReadonlyMap<string, string | null>): number | null {
   let ref = originRef === null ? null : (prNodeRefOf(originRef) ?? originRef);
   for (let hop = 0; ref !== null && hop < MAX_HOPS; hop++) {
     const named = ISSUE_SUBTREE.exec(ref);

@@ -3604,10 +3604,13 @@ version of the other two. The output graph drew a cost row; the yield panel drew
 spend trend drew a completion rate off a second server builder, one click from the first. That is the
 shape of a wrong seam.
 
-**One page, one window, seven readings of it — six of them windowed.**
+**One page, one window, eight readings of it — seven of them windowed.**
 
 - **Economics** — is the fleet worth what it costs? The ratio headline, the phase split, the timeline,
   the goals and the costliest runs.
+- **Allowance** — what has the account got left, and what spent it? The percentage over time with the
+  agent runs beneath it, the apportionment, the weekly burn-down and allowance per landed change. See
+  [below](#allowance).
 - **Reliability** — did it finish, and did it go green? Outcomes, the CI timeline, the reddest pull
   requests, the phase health and the repeats.
 - **Causes** — what keeps sending the fleet back? The guard split, both cause tables, and Lately.
@@ -3757,6 +3760,47 @@ literal — a hex at a use site is a swatch that stays put when somebody switche
 because a fetch that failed must not render as a fleet that has spent nothing. `$0.00` is a real answer
 here (a fresh harness, or one run entirely on the mock runtime), so it cannot also be the failure mode. The
 all-unmeasured case gets its own sentence rather than a table of zeroes: **unmeasured is not free**.
+
+### Allowance
+
+`web/src/components/AllowanceTab.tsx`. The usage chip on the top bar says how much of the five hours is
+gone and can say nothing else, because `account_rate_limits` keeps one row and overwrites it on every
+turn. This tab is the series behind that number
+([14](14-persistence.md#the-accounts-usage-windows-and-their-history)) drawn four ways, in the order an
+operator asks them:
+
+1. **The timeline** — the percentage over the window, with every agent that ran beneath it on the same
+   x axis.
+2. **Where it went** — the same rise apportioned to the goals that were spending while it happened,
+   with the remainder carried rather than divided.
+3. **The week** — whether the current pace reaches the weekly limit before the limit resets.
+4. **Per landed change** — the Economics tab's one sentence, re-denominated in percentage of the
+   account rather than in dollars.
+
+**The lanes are the timeline's whole argument.** They let a reader see which agents were running while
+the line climbed without the chart ever claiming that the tallest one caused it — adjacency drawn
+honestly, which is all the readings can support. A number *per goal* is offered one panel down, where
+it is labelled as apportioned. A run that reported no usage still gets a lane and is drawn muted: it
+was running, which is the only thing a lane claims, and it moved the account by nothing this harness
+can see.
+
+**Two discontinuities are drawn as discontinuities.** A reset breaks the line rather than drawing a
+cliff, which would read as the fleet having given something back. A gap — the fleet idle, so no reading
+arrived — is drawn dashed rather than solid: the rise across it is real and counted
+([18](18-observability.md#a-fall-is-a-reset-a-gap-is-not)), and what is unknown is what happened inside
+it. Joining either with a plain line is a chart asserting something the readings do not say.
+
+**The residual is a different kind of thing, not a sixth goal.** It is hatched rather than filled,
+because "the account moved and no agent of ours was spending" is not another goal — a solid segment
+beside the goals invites reading it as one, which is the single misreading this tab can cause. The
+goal colours are slots (`issueNumber % 5`), so a colour is stable for a goal across every redraw and
+says nothing about which goal it is; the table below is the legend, exactly as it is on Economics.
+
+**Nothing here is derived in the browser**, Economics' rule and for its reason: the reset test, the gap
+threshold and the apportionment are statements about what the readings *mean*, and a cockpit free to
+compute its own would draw a line the server's own totals disagree with. What the cockpit owns is
+presentation — the colours, which live in the stylesheet as `--al-*` on `.al`, aliases of themeable
+tokens in the way `--sp-*` are.
 
 ### Reliability
 

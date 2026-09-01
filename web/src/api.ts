@@ -15,6 +15,7 @@ import type {
 // or re-nested key is a compile error here instead of an empty panel.
 import type {
   AgentFilesPayload,
+  AllowancePayload,
   GoalAgentsPayload,
   AgentTranscript,
   CiPolicyPayload,
@@ -238,6 +239,13 @@ const realApi = {
   // the tab an operator never opens should cost nothing.
   getSpendTrend: (window: InsightsWindow) =>
     authFetch(`/api/spend/trend?window=${window}`).then((r) => json<SpendTrendPayload>(r)),
+  // The allowance as a series, fetched on the Allowance tab's first visit for
+  // `getSpendTrend`'s reason: it walks the readings history on top of the same
+  // agent walk. Same window as everything else on the page — the apportionment is
+  // a percentage laid over the money the Economics tab prices, and the two are
+  // only comparable over one stretch.
+  getAllowance: (window: InsightsWindow) =>
+    authFetch(`/api/allowance?window=${window}`).then((r) => json<AllowancePayload>(r)),
   // What the spending bought. Same stance and the same window as the breakdown:
   // the two are read a tab apart and must describe one stretch of the fleet's
   // life, which they did not when one fold was all-time and the other a fortnight.

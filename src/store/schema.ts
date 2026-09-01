@@ -1528,6 +1528,26 @@ CREATE TABLE IF NOT EXISTS account_rate_limits (
   captured_at               TEXT NOT NULL
 );
 
+-- The same readings, kept rather than overwritten — the account's usage windows
+-- as a series instead of a single latest figure (issue #431).
+--
+-- account_rate_limits above answers "how much is spent right now", which is all
+-- the usage chip ever needed, and it answers it by throwing the previous reading
+-- away on every turn. A percentage over *time* — and any attribution of it to the
+-- work that spent it — has to be read off rows nothing overwrites, so the same
+-- reading lands twice: once on the row above, once here.
+--
+-- captured_at is the primary key rather than a surrogate id, because two agents
+-- reporting the identical instant are reporting one reading of one account. The
+-- windows are independently nullable here for the same reason they are above.
+CREATE TABLE IF NOT EXISTS rate_limit_readings (
+  captured_at               TEXT PRIMARY KEY,
+  five_hour_used_percentage REAL,
+  five_hour_resets_at       TEXT,
+  seven_day_used_percentage REAL,
+  seven_day_resets_at       TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
 CREATE INDEX IF NOT EXISTS idx_job_attachments_target ON job_attachments(target_ref);

@@ -8,6 +8,7 @@
 // `VITE_DEMO` branch in api.ts is statically false there, so Rollup drops it.
 import type {
   AgentFilesPayload,
+  AllowanceInsights,
   GoalAgentsPayload,
   AgentTranscript,
   ConfigChange,
@@ -2989,6 +2990,156 @@ function buildDemoRemedies(): RemedyInsights {
  * four verdicts, and a demo that showed only healthy traffic would not explain
  * what the tab is for.
  */
+/**
+ * The allowance reading, authored for `buildDemoSpend`'s reason and one sharper:
+ * the demo's store holds no rate-limit readings at all — nothing has taken a turn
+ * against a real account — so a folded payload would draw the empty state, and
+ * the empty state is precisely what a deployment on API-key auth sees. A demo
+ * that showed it would teach a reader that the tab is broken.
+ *
+ * The shape is the one the fold produces, including the parts that are awkward:
+ * an idle stretch with no readings in it, a residual the goals cannot be charged,
+ * and a goal that spent and landed nothing.
+ */
+function buildDemoAllowance(): AllowanceInsights {
+  const now = Date.now();
+  const ago = (mins: number): string => new Date(now - mins * 60_000).toISOString();
+  // Minutes back, and the percentage then. The hole between 118 and 51 is the
+  // fleet idle: no agent took a turn, so no reading arrived — and the account
+  // still moved four points, which is the operator's own session.
+  const points: [number, number][] = [
+    [295, 41],
+    [280, 43],
+    [262, 46],
+    [248, 47],
+    [230, 51],
+    [212, 55],
+    [209, 56],
+    [191, 59],
+    [178, 61],
+    [160, 66],
+    [156, 67],
+    [139, 70],
+    [120, 74],
+    [118, 75],
+    [51, 79],
+    [35, 83],
+    [17, 88],
+    [3, 91],
+  ];
+  const readings = points.map(([mins, used], i) => ({
+    at: ago(mins),
+    fiveHour: used,
+    sevenDay: 62 + i * 0.4,
+    afterGap: mins === 51,
+    afterReset: false,
+  }));
+
+  // The slots are the ones `assignSlots` hands out for these four goals in this
+  // order — 412 and 417 both want slot 2, so the later takes the next free one.
+  const slotOf = new Map([
+    [412, 2],
+    [420, 0],
+    [398, 3],
+    [417, 4],
+  ]);
+  const lane = (agentId: string, title: string, issueNumber: number | null, from: number, to: number | null) => ({
+    agentId,
+    title,
+    issueNumber,
+    slot: issueNumber === null ? null : (slotOf.get(issueNumber) ?? null),
+    startedAt: ago(from),
+    endedAt: to === null ? null : ago(to),
+    measured: issueNumber !== null,
+  });
+
+  return {
+    generatedAt: new Date(now).toISOString(),
+    window: {
+      key: 'session',
+      label: 'the account’s five-hour window',
+      bucketLabel: '15m',
+      since: ago(300),
+      startsAt: ago(300),
+      bucketMs: 900_000,
+      buckets: 20,
+      session: {
+        kind: 'anchored',
+        startsAt: ago(300),
+        resetsAt: new Date(now + 5 * 60_000).toISOString(),
+        usedPercentage: 91,
+        capturedAt: ago(3),
+      },
+    },
+    readings,
+    lanes: [
+      lane('agent-al-1', 'Land the arrival comment', 420, 48, 2),
+      lane('agent-al-2', 'Take the worktree lease off the pool bound', 417, 40, 10),
+      lane('agent-al-3', 'Appraise #398', 398, 160, 118),
+      lane('agent-al-4', 'Plan the pool desk', 412, 293, 235),
+      lane('agent-al-5', 'Review comments on #412', 412, 200, 145),
+      lane('agent-al-6', 'Mirror the tracker', null, 265, 250),
+    ],
+    apportionment: {
+      observedPoints: 50,
+      attributedPoints: 44,
+      unattributedPoints: 6,
+      pointsPerUsd: 1.72,
+      goals: [
+        {
+          issueNumber: 412,
+          originRef: 'issue:412',
+          slot: slotOf.get(412) ?? 0,
+          title: 'Publish this fleet’s claims to the pool',
+          costUsd: 8.14,
+          points: 14,
+          landed: 2,
+          pointsPerLanded: 7,
+        },
+        {
+          issueNumber: 420,
+          originRef: 'issue:420',
+          slot: slotOf.get(420) ?? 0,
+          title: 'Comment on the ticket when the work arrives',
+          costUsd: 6.98,
+          points: 12,
+          landed: 0,
+          pointsPerLanded: null,
+        },
+        {
+          issueNumber: 398,
+          originRef: 'issue:398',
+          slot: slotOf.get(398) ?? 0,
+          title: 'One exclusion matrix for the issue verdicts',
+          costUsd: 6.1,
+          points: 10.5,
+          landed: 1,
+          pointsPerLanded: 10.5,
+        },
+        {
+          issueNumber: 417,
+          originRef: 'issue:417',
+          slot: slotOf.get(417) ?? 0,
+          title: 'Read the pool bound off the agent cap',
+          costUsd: 4.36,
+          points: 7.5,
+          landed: 3,
+          pointsPerLanded: 2.5,
+        },
+      ],
+    },
+    projection: {
+      usedPercentage: 69,
+      capturedAt: ago(3),
+      resetsAt: new Date(now + 34 * 3_600_000).toISOString(),
+      ratePerHour: 1.1,
+      exhaustsAt: new Date(now + 28 * 3_600_000).toISOString(),
+      beforeReset: true,
+      fittedFrom: 14,
+    },
+  };
+}
+
 function buildDemoMcp(): McpInsights {
   const now = Date.now();
   const ago = (mins: number): string => new Date(now - mins * 60_000).toISOString();
@@ -4058,6 +4209,10 @@ export const demoApi = {
   // dropped, so a demo folding the browser's empty store would teach a reader to
   // read a working channel as a broken one.
   getMcpUsage: () => Promise.resolve({ insights: buildDemoMcp() }),
+  // The allowance, authored for the same reason as the rest and one sharper still:
+  // the demo has no account behind it, so a folded payload would draw the exact
+  // empty state a deployment on API-key auth sees.
+  getAllowance: () => Promise.resolve({ allowance: buildDemoAllowance() }),
   // The demo runs one fleet against one project and has no pool behind it, so both
   // pool reads answer *nothing published* rather than inventing other people's
   // fleets. An invented one would be the demo asserting a cross-company reading
