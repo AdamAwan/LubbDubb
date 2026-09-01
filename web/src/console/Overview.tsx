@@ -15,7 +15,7 @@ import { buildGoalPage, buildGoalTrack, furthestEnvironment, goalOfPr, type Goal
 import { AsyncButton } from '../components/AsyncButton.js';
 import { elapsed, fmtUsd, relTime } from '../components/util.js';
 import { Ref, RefText, refLabel } from '../components/refs.js';
-import { CiLadder, waitedFor } from './GoalPage.js';
+import { CiLadder, StaleChip, waitedFor } from './GoalPage.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
 import { PanelRows, type PanelRowModel } from './PanelRow.js';
 import { AgentOnIt } from '../components/AgentOnIt.js';
@@ -453,7 +453,16 @@ const IN_FLIGHT = new Set(['active', 'has_pr', 'planning', 'delivered']);
  * non-zero.
  */
 function GoalsInFlight({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
-  const goals = view.state.world.issues.filter((issue) => IN_FLIGHT.has(issue.pickup.status));
+  // The retained runs ride the same list, marked rather than dropped: a goal whose
+  // ticket left the tracker's open set — resolved, closed, or its watch tag gone —
+  // still has a run the harness holds, pull requests it is watching and money on
+  // it, and a list that lost the row the moment the tracker did was how a goal
+  // with all of that went unfindable except by address. `stale` is the marking,
+  // and it is the only difference between these rows and the live ones.
+  const goals = [
+    ...view.state.world.issues.filter((issue) => IN_FLIGHT.has(issue.pickup.status)),
+    ...(view.state.retainedRuns ?? []),
+  ];
   // Beside the count and not folded into it, for the fleet card's reason: these
   // goals are in flight *and* missing from the backlog, so a single larger number
   // would be the wrong reading of both. Zero draws nothing — the ordinary case on
@@ -534,6 +543,8 @@ function goalRow(issue: Issue, view: CockpitView, actions: CockpitActions): Pane
             has no furthest anything, and a chip claiming one would be the boolean
             rollup the reach fold exists to refuse. */}
         {furthest !== null && <i className="cn-chip cn-ok">{furthest}</i>}
+        {/* A retained run: the tracker's copy is stale, the harness's record is not. */}
+        {issue.stale !== undefined && <StaleChip stale={issue.stale} now={view.now} />}
         {/* Not a `<Ref>` and not a button: the row's title already opens this goal,
             and a second destination inside a row that is itself a control is the
             one thing the link rule forbids outright. The way to fix it is the band

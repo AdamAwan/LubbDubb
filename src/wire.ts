@@ -189,6 +189,26 @@ export interface Issue extends WorldIssue {
   /** What the harness is doing with this item — or why it is leaving it alone. */
   pickup: IssuePickupStatus;
   /**
+   * Set on a **retained run** and on nothing else — the one thing that tells a
+   * goal the tracker has stopped returning from a live one, on the wire
+   * (`docs/spec/03-world-model.md`). The tracker's fields above (title, body,
+   * labels, `workItemState`) are the harness's copy from `lastSeenAt`, the last
+   * pulse the item was in the open set, and may no longer be what the tracker
+   * says. Every other reading on this object — the run, the plan, the pull
+   * requests, the spend, the pad, the instructions — is the harness's own record
+   * and is as current as any live goal's.
+   *
+   * `tracker` is the ticket mirror's reading of the item's own word since —
+   * `Resolved`, `Closed`, or still open with the watch tag gone — and when the
+   * tracker last changed it. Null where the deployment keeps no mirror, or the
+   * item closed before the mirror's floor: the cockpit then says only that the
+   * item left, not why.
+   */
+  stale?: {
+    lastSeenAt: string;
+    tracker: { state: IssueState; workItemState: string | null; changedAt: string } | null;
+  };
+  /**
    * Whether anyone has said this issue is finished. `undeclared` is a value and
    * not the absence of one — see `resolveIssueConclusion`.
    */

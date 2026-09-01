@@ -342,6 +342,22 @@ export class TicketStore {
   }
 
   /**
+   * The mirror's rows for these numbers only — what the tracker last said about
+   * an item the world no longer carries, read for the retained runs' `stale`
+   * marking (`stateSnapshot`). Keyed rather than the whole list because the
+   * snapshot is rebuilt on every dirty broadcast and a retained run is a handful of
+   * rows out of a month of history. A number the mirror does not hold is simply
+   * absent: a deployment with no mirror, or an item closed before the anchor.
+   */
+  readTrackerItems(numbers: readonly number[]): MirroredTicket[] {
+    if (numbers.length === 0) return [];
+    const rows = this.ctx.db
+      .prepare(`SELECT * FROM tracker_items WHERE number IN (${numbers.map(() => '?').join(',')})`)
+      .all(...numbers) as TrackerItemRow[];
+    return rows.map(rowToTicket);
+  }
+
+  /**
    * Fold a label change the provider has just taken onto the mirrored rows —
    * `WorldStore.patchWorldLabels`' half of the same click, for the surface
    * that reads this table instead of the baseline.

@@ -1541,6 +1541,9 @@ export class Store {
   listTrackerItems(): MirroredTicket[] {
     return this.tickets.listTrackerItems();
   }
+  readTrackerItems(numbers: readonly number[]): MirroredTicket[] {
+    return this.tickets.readTrackerItems(numbers);
+  }
   patchTicketLabels(patch: TicketLabelPatch): void {
     this.tickets.patchTicketLabels(patch);
   }

@@ -2081,6 +2081,13 @@ button.cn-grow {
   border-color: var(--cn-green-line);
   color: var(--cn-green);
 }
+/* A retained run's marking: the tracker's copy of this goal is stale. Dashed and
+   in the dim ink rather than a warning colour — it is a fact about a source, not a
+   fault, and the amber families are spoken for by things that want an answer. */
+.cn-chip.cn-stale {
+  border-style: dashed;
+  color: var(--cn-fg-dim);
+}
 
 /* The goal header's type chip, tinted by the same families the tickets list uses —
    one vocabulary of colour across the two surfaces, so a Bug is the same red on

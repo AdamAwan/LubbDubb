@@ -879,6 +879,19 @@ indistinguishable from a goal that exists and has nothing on it, and only one of
 drawing. A **retained run** is found too (`retainedRuns`), so a goal whose ticket the tracker has
 stopped returning still has a page to be dismissed from.
 
+**A retained run is marked stale, never removed.** The overview's goals-in-flight list draws the
+retained runs beside the live goals, and the page header and the row both carry `StaleChip`: the tracker
+stopped returning this item, and — where the ticket mirror has a row — what the tracker now calls it
+(`tracker: Resolved · seen 3h ago`). The chip's title says exactly what the marking covers: the title,
+description, labels and state are the harness's copy from the last pulse the item was live, and the
+run, plan, pull requests, agents, spend and notes are the harness's own record and current. It exists
+because an Azure item moved to `Resolved`, or one whose watch tag was removed, used to vanish from every
+list in the cockpit the moment it left the open set, with its pull requests still open and its money
+still on the table — reachable only by address. The header's state chip on such a goal is the harness's
+copy, which is why the stale chip sits beside it. The marking rides only on `retainedRuns`
+([03](03-world-model.md#issue)); a live issue never carries it, and the dispatcher's union of the same
+stubs is untouched.
+
 **A null page is drawn as a null page, not as the tab underneath.** Returning null is the right answer
 and falling through to the tab body was the other half of that decision left unmade: the address bar
 said `goal=issue:412` while the screen went on showing the list, so the click read as a control that
@@ -4857,9 +4870,10 @@ teaches an operator that the rest are a bug on the day they first appear. The ro
 stated in a comment above the `issues` array, and the arithmetic around it has to hold as well: the cap
 is 3 with two agents live, so exactly one goal is `eligible` and the rest of the ready ones are
 `blocked` — a world with six eligible goals under a cap of three is one the dispatcher could not have
-produced. Eleven of the thirteen are reachable by clicking, through the tickets tab's watch filter; `done`
-and `retained` are carried without being listed anywhere, because no surface lists a closed goal — both
-are still readings the wire ships and the goal page draws.
+produced. Eleven of the thirteen are reachable by clicking, through the Twelve of the thirteen are reachable by clicking — eleven through the tickets tab's watch filter,
+and `retained` from the overview, which lists the retained runs beside the goals in flight; `done` is
+carried without being listed anywhere, because no surface lists a closed goal the harness holds no run
+for — it is still a reading the wire ships and the goal page draws.
 
 **Every state a check can be in has a check in the fixtures.** Goal #395 carries ten, for the reason
 the pickup roll-call carries thirteen: `passed`, `failed`, `waived`, `deferred` and `unrun` are each
