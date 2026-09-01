@@ -89,7 +89,7 @@ function build(
     tasks: over.tasks ?? [],
     ciEvents: over.ciEvents ?? [],
     usageEvents: over.usageEvents ?? [],
-    window: resolveWindow(key, NOW),
+    window: resolveWindow(key, NOW, null),
     now: NOW,
   });
 }

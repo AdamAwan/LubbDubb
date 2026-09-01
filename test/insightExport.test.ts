@@ -40,6 +40,7 @@ const WINDOW = {
   startsAt: '2026-08-06T09:00:00.000Z',
   bucketMs: 6 * 60 * 60 * 1000,
   buckets: 28,
+  session: null,
 } as const;
 
 /** The rows of a named section, up to the blank line that ends it. */

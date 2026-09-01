@@ -120,7 +120,7 @@ function build(over: {
     // A weekly period, so the axis is the eight weeks these fixtures were
     // written against — the span is a parameter now and a test that named none
     // would assert whatever the default happened to be.
-    window: resolveWindow('7d', NOW),
+    window: resolveWindow('7d', NOW, null),
     now: NOW,
   });
 }

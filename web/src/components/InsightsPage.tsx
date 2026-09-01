@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type JSX, type RefObject } from 'react';
 import type {
   InsightsWindow,
+  InsightsWindowView,
   McpInsights,
   PoolInsightsPayload,
   ReliabilityInsights,
@@ -73,6 +74,10 @@ const TABS: readonly { id: InsightsView; label: string; note: string }[] = [
  * rather than a button the page offers and the route refuses.
  */
 const WINDOWS: readonly { key: InsightsWindow; label: string }[] = [
+  // First, and first for a reason: it is the only window here an operator arrives
+  // at with a question already formed — the usage chip said the five hours are
+  // nearly spent, and this is the one span that can say on what.
+  { key: 'session', label: '5h session' },
   { key: '6h', label: '6h' },
   { key: '24h', label: '24h' },
   { key: '7d', label: '7d' },
@@ -240,7 +245,7 @@ export function InsightsPage({
               className={w.key === chosen ? 'on' : ''}
               onClick={() => actions.openInsights({ insightsWindow: w.key })}
             >
-              {w.label}
+              {windowButtonLabel(w, chosen, resolved)}
             </button>
           ))}
         </div>
@@ -249,6 +254,8 @@ export function InsightsPage({
             whose bucket count is not its span in days. */}
         <span className="insights-meta">{resolved === null ? 'reading…' : resolved.bucketLabel}</span>
       </div>
+
+      {resolved?.session && <SessionNote session={resolved.session} window={resolved} now={Date.now()} />}
 
       <div className="insights-tabs" role="tablist" aria-label="Insights">
         {TABS.map((t) => (
@@ -282,6 +289,109 @@ export function InsightsPage({
       </div>
     </div>
   );
+}
+
+/**
+ * What one window button says.
+ *
+ * The server's own label wherever it has answered for that button, because for
+ * `session` the two deliberately differ: where the account's window could not be
+ * anchored to, the reading is still given and the control must stop calling it
+ * the session ({@link SessionNote} says why in full). A note under a button that
+ * still reads `5h session` is a caveat a reader has already skimmed past — the
+ * lettering is the half they take the span's name from, which is the same reason
+ * every caption on this page is drawn from the payload rather than from the key
+ * it was asked with.
+ *
+ * The static label everywhere else, and that is not a fallback: only the chosen
+ * window has a payload, so the other five have nothing to draw from — and for all
+ * of them the two strings agree anyway.
+ */
+export function windowButtonLabel(
+  window: { key: InsightsWindow; label: string },
+  chosen: InsightsWindow,
+  resolved: InsightsWindowView | null,
+): string {
+  return window.key === chosen && resolved?.key === window.key ? resolved.label : window.label;
+}
+
+/**
+ * What the session window was anchored to — the sentence the split under it
+ * cannot say for itself.
+ *
+ * Two things have to be said here and neither is optional.
+ *
+ * **Which five hours these are.** The account's window is not the last five
+ * hours: it opened when the last one reset, which can be four hours and fifty
+ * minutes ago. A breakdown that silently answered for the wrong span would be
+ * plausible, unmarked, and the whole reason an operator came here. So the three
+ * cases the anchor can be in are three different sentences — and where the
+ * harness could not anchor, the control's own label changes with them
+ * (`resolveSession`), because a caption is not enough on its own.
+ *
+ * **That the split is money and the limit is not.** The account meters something
+ * Anthropic does not publish and this harness cannot see; cost is the only dated
+ * per-run measure it holds. The two move together and are not the same quantity,
+ * and an operator reading `$4.10` against `86%` will divide them unless told not
+ * to. The percentage is drawn beside the split for exactly that reason — the
+ * comparison is going to be made, so it is better made against the reading the
+ * fold actually anchored on than against a chip read at some other moment.
+ */
+function SessionNote({
+  session,
+  window: view,
+  now,
+}: {
+  session: NonNullable<InsightsWindowView['session']>;
+  window: InsightsWindowView;
+  now: number;
+}): JSX.Element {
+  if (session.kind === 'unreported')
+    return (
+      <p className="insights-anchor is-loose">
+        <b>The last five hours</b>, not the account&apos;s five-hour window — no agent on this deployment has ever
+        reported one. API-key auth carries no windows at all, and a stream agent has to take a turn before the first
+        reading arrives. The split below is over {stamp(view.since, now)} to now.
+      </p>
+    );
+  if (session.kind === 'stale')
+    return (
+      <p className="insights-anchor is-loose">
+        <b>The last five hours</b>, not the account&apos;s five-hour window. The newest reading — taken{' '}
+        {stamp(session.capturedAt, now)} — names a reset at {stamp(session.resetsAt, now)}, which this harness cannot
+        anchor to: the window has turned over since an agent last took a turn, and nothing observed where the new one
+        began. The split below is over {stamp(view.since, now)} to now.
+      </p>
+    );
+  return (
+    <p className="insights-anchor">
+      <b>The account&apos;s five-hour window</b>, opened {stamp(session.startsAt, now)} and resetting{' '}
+      {stamp(session.resetsAt, now)}.
+      {session.usedPercentage === null ? null : (
+        <>
+          {' '}
+          The account reported it <b>{Math.round(session.usedPercentage)}% spent</b> as of{' '}
+          {stamp(session.capturedAt, now)}.
+        </>
+      )}{' '}
+      What the limit meters is not published and this harness cannot see it — the split below is <b>cost</b>, which is
+      the only dated per-run measure it holds. The two move together; they are not the same quantity, and the shares
+      below are the honest half of the pair.
+    </p>
+  );
+}
+
+/** An instant as this page states one: the clock time, and how long ago or away it is. */
+function stamp(iso: string | null, now: number): string {
+  if (iso === null) return 'the start of the window';
+  const at = new Date(iso);
+  const ms = at.getTime() - now;
+  if (Number.isNaN(ms)) return iso;
+  const mins = Math.round(Math.abs(ms) / 60_000);
+  const rel = mins < 1 ? 'just now' : mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`;
+  const clock = at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (mins < 1) return `${clock} (just now)`;
+  return ms < 0 ? `${clock} (${rel} ago)` : `${clock} (in ${rel})`;
 }
 
 /**

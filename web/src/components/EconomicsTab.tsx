@@ -1,6 +1,6 @@
 import type { JSX } from 'react';
 import type { SpendGoal, SpendInsights, SpendPhase, SpendPhaseTotal, SpendRun, SpendTrend } from '../types.js';
-import { fmtTokens, fmtUsd, relTime } from './util.js';
+import { fmtTokens, fmtUsd, relAge, relTime } from './util.js';
 import { fmtShare, localPhaseCostUsd, share, PLOT } from './insightsFormat.js';
 import { Ref } from './refs.js';
 import { toCsv } from './Downloads.js';
@@ -457,27 +457,44 @@ function PhaseKey({ phases, total }: { phases: readonly SpendPhaseTotal[]; total
  * Daily spend, as bars rather than the production graph's lines.
  *
  * Bars because these are *totals over a period* and not samples of a rate: a line
- * between two days implies the money moved smoothly between them, which is
+ * between two buckets implies the money moved smoothly between them, which is
  * exactly what a fleet that ran for one afternoon did not do.
  *
- * The buckets roll — the last one is the last 24 hours, not "today" — because a
- * calendar day needs a timezone the harness has no opinion about. The axis says
- * `now` for that reason rather than a date.
+ * The buckets roll — the last one ends now, not at midnight — because a calendar
+ * day needs a timezone the harness has no opinion about. The axis says `now` for
+ * that reason rather than a date.
+ *
+ * **Both ends come off the shipped window, never off the bucket count.** They
+ * were `${buckets.length}d ago` and "the 24h from …" back when the timeline was
+ * daily and nothing else, and they stayed literal through the window control: a
+ * `6h` window is twelve half-hour buckets, and it was captioned `12d ago` under a
+ * graph covering six hours. That is precisely the failure the window is shipped
+ * back to prevent — a caption free to disagree with the buckets the server cut,
+ * in the half a reader believes — and it read as merely odd until the session
+ * window put "20d ago" beside a line naming the exact five hours.
  */
 function Timeline({ insights }: { insights: SpendInsights }): JSX.Element {
   const { buckets } = insights.timeline;
-  const days = buckets.length;
+  const count = buckets.length;
+  // Dated against the payload's own clock rather than the browser's, so the axis
+  // and the figures above it are one reading even on a page left open.
+  const opened = relAge(insights.window.startsAt, Date.parse(insights.generatedAt));
+  const each = fmtSpan(insights.window.bucketMs);
   const peak = Math.max(...buckets.map((b) => b.costUsd), 0);
   // A flat zero window would divide by nothing and draw full-height bars; the
   // floor of one cent keeps an empty fortnight empty.
   const top = Math.max(peak, 0.01);
-  const width = (PLOT.right - PLOT.left) / days;
+  const width = (PLOT.right - PLOT.left) / count;
   const height = PLOT.bottom - PLOT.top;
   const total = buckets.reduce((a, b) => a + b.costUsd, 0);
 
   return (
     <div className="sp-graph sp-well">
-      <svg viewBox="0 0 620 176" role="img" aria-label={`Daily spend over ${days} days, ${fmtUsd(total)} in total`}>
+      <svg
+        viewBox="0 0 620 176"
+        role="img"
+        aria-label={`Spend from ${opened} to now in ${each} buckets, ${fmtUsd(total)} in total`}
+      >
         <g stroke="var(--border-lo)" strokeWidth="1">
           {[0, 0.5, 1].map((f) => (
             <path key={f} d={`M${PLOT.left} ${PLOT.top + f * height}H${PLOT.right}`} />
@@ -500,15 +517,15 @@ function Timeline({ insights }: { insights: SpendInsights }): JSX.Element {
               width={Math.max(1, width - 3)}
               height={Math.max(b.costUsd > 0 ? 1 : 0, h)}
               fill="var(--accent)"
-              opacity={i === days - 1 ? 1 : 0.72}
+              opacity={i === count - 1 ? 1 : 0.72}
             >
-              <title>{`${fmtUsd(b.costUsd)} — the 24h from ${new Date(b.startsAt).toLocaleString()}`}</title>
+              <title>{`${fmtUsd(b.costUsd)} — the ${each} from ${new Date(b.startsAt).toLocaleString()}`}</title>
             </rect>
           );
         })}
         <g className="sp-axis" textAnchor="middle">
           <text x={PLOT.left + width / 2} y="170">
-            {days}d ago
+            {opened}
           </text>
           <text x={PLOT.right - width / 2} y="170">
             now
@@ -517,6 +534,20 @@ function Timeline({ insights }: { insights: SpendInsights }): JSX.Element {
       </svg>
     </div>
   );
+}
+
+/**
+ * A bucket's width as a reader says it: `30m`, `6h`, `1d`.
+ *
+ * Off the window's `bucketMs` rather than its `bucketLabel`, which is a caption
+ * for the time bar ("6h buckets") and reads wrongly inside a sentence about one
+ * of them.
+ */
+function fmtSpan(ms: number): string {
+  const minutes = Math.max(1, Math.round(ms / 60_000));
+  if (minutes < 60) return `${minutes}m`;
+  const hours = minutes / 60;
+  return hours < 24 ? `${Math.round(hours)}h` : `${Math.round(hours / 24)}d`;
 }
 
 /** The phase split inside one goal, as a bar the width of its share of the fleet. */

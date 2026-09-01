@@ -229,7 +229,7 @@ const INSIGHTS_VIEWS: readonly InsightsView[] = ['economics', 'reliability', 'ca
  * here into a type error rather than a window the page offers and the route
  * refuses.
  */
-const INSIGHTS_WINDOWS: readonly InsightsWindow[] = ['6h', '24h', '7d', '30d', 'all'];
+const INSIGHTS_WINDOWS: readonly InsightsWindow[] = ['session', '6h', '24h', '7d', '30d', 'all'];
 const DEFAULT_INSIGHTS_WINDOW: InsightsWindow = '7d';
 
 /** The cockpit with nothing open: the overview, which is what a bare URL means. */

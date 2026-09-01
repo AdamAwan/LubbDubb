@@ -276,15 +276,16 @@ spend totals. Two figures side by side on one surface described different stretc
 and nothing said so. A number moving in one panel could not be read against a number in another, which
 is what made the whole set feel inert.
 
-Five windows, each with the resolution it is drawn at:
+Six windows, each with the resolution it is drawn at:
 
-| Key   | Span      | Timeline     |
-| ----- | --------- | ------------ |
-| `6h`  | 6 hours   | 12 × 30m     |
-| `24h` | 24 hours  | 24 × 1h      |
-| `7d`  | 7 days    | 28 × 6h      |
-| `30d` | 30 days   | 30 × 1d      |
-| `all` | unbounded | 26, computed |
+| Key       | Span                    | Timeline     |
+| --------- | ----------------------- | ------------ |
+| `session` | the account's 5h window | 20, computed |
+| `6h`      | 6 hours                 | 12 × 30m     |
+| `24h`     | 24 hours                | 24 × 1h      |
+| `7d`      | 7 days                  | 28 × 6h      |
+| `30d`     | 30 days                 | 30 × 1d      |
+| `all`     | unbounded               | 26, computed |
 
 **The bucket count is stated rather than derived** from `span / bucket`, because the two must agree and
 a derived count hides the disagreement: a span that is not a whole number of buckets silently draws a
@@ -321,6 +322,68 @@ it had spent — and the Economics tab, short-circuiting on `measuredRuns === 0`
 this window" over a working fleet. A local run is the case that meets this normally: it is held open for
 as long as somebody is looking at it ([23](23-local-runs.md#what-it-costs)), so outliving the window is
 what it does.
+
+### The session window
+
+`session` is the one window here that is **not measured from `now`**. The other five are spans an
+operator picked; this one is a stretch the *account* is keeping, and the question it exists to answer —
+where did the five hours go — is only answerable against the account's own boundaries. A window that
+resets in ninety minutes opened three and a half hours ago, and a breakdown of the last five hours is
+a breakdown of a different five hours: overlapping, plausible, and not the one the limit is being
+applied to.
+
+So it is anchored to the five-hour reset the CLI reports, off `account_rate_limits`
+([10](10-agent-runtimes.md#the-account-usage-windows)) — the one datum in this module the harness did
+not compute and cannot recompute. `sessionAnchor` is three-valued for
+[the reach verdict's reason](24-environments.md#the-three-verdicts): a deployment that has never
+reported a window (`unreported` — API-key auth, PTY, no turn taken yet) and one whose last reading has
+since expired (`stale`) are different facts, and folded together they become "the last five hours"
+wearing the account's name.
+
+**A reading is usable only while the reset it names is still ahead and no further off than a window is
+long.** Both halves are one check because both are the same failure: a `resetsAt` in the past means the
+window turned over since an agent last took a turn and nothing observed where the new one began; one
+further off than five hours cannot be describing a five-hour window at all. Anchoring on either would
+open the window at an instant nothing reported, and the split beneath it would be as plausible as it
+was wrong.
+
+**Where it cannot anchor, the reading is still given and the _label_ changes.** `Last 5h` rather than
+`5h session`, on the control itself as well as in the caption — the rows are still the ones worth
+looking at, and a caption alone is not enough to stop a reader taking the window's name off the button
+they pressed. `resolveSession` owns that pairing, so the fallback span and the fallback lettering
+cannot be applied separately.
+
+**The span is what has elapsed, never the whole five hours.** The unspent part of a window holds
+nothing by construction, and drawing it puts empty buckets on the right of every timeline — read as a
+fleet that stopped, which is precisely the sentence this page exists to let an operator make correctly.
+The elapsed part is cut into twenty buckets with a thirty-minute floor, on `all`'s reasoning at the
+other end of the scale: a window that reset four minutes ago is four minutes of history, and twenty
+buckets of it is a graph of twelve-second bars.
+
+**The trend's period is a whole window, and its axis ends at the reset.** `ResolvedWindow.period` states
+one period and where the last one closes, rather than leaving the trend to derive it from `spanMs`:
+for every other key the two are the same number, and for this one they must not be. Derived, the tab
+would draw eight bars of whatever fraction of a window the page happened to be opened in — bars whose
+width moved with the clock, compared against each other as though it had not. Ending at the reset
+rather than at `now` puts each bar on the account's own boundaries, which is the only division of them
+the limit was ever applied over.
+
+**The anchor rides on `InsightsWindowView`**, so the page states which of the three cases it drew, when
+the window opened, when it resets, and what percentage the account reported *as the fold measured it*.
+That last is not the top bar's figure and must not be taken from it: the chip is the freshest reading
+whenever it was read, and this is the one the rows underneath were actually anchored on.
+
+**What the limit meters is not what the split measures.** The account's percentage is a quantity
+Anthropic does not publish and this harness cannot see; cost is the only dated per-run measure it
+holds. The two move together and are not the same thing, and an operator reading `$4.10` beside `86%`
+will divide them unless told not to — so the page says so, in the same caption, every time. The
+percentage is drawn there anyway for exactly that reason: the comparison is going to be made, and it
+is better made against the reading the fold anchored on than against a chip read at some other moment.
+
+**`limits` is a required argument to `resolveWindow`**, not an optional one, though five of the six keys
+ignore it. A route that forgot it would still answer `?window=session` — over a rolling five hours,
+labelled as the account's, with nothing red. A caller that genuinely has no reading passes `null` and
+says so; `defaultWindow` is that caller, because the default is never `session`.
 
 **A reading with no control of its own takes the window the page opens on** (`defaultWindow`). The
 Knowledge page's cost figure ([27](27-knowledge.md#what-it-costs)) is the caller: it draws one number,

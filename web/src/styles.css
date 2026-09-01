@@ -7856,6 +7856,31 @@ select:disabled {
   background: var(--accent-fill);
 }
 
+/* What the session window was anchored to. Drawn between the control and the
+   tabs because it qualifies the whole page rather than one reading of it — the
+   same reason the time bar is above the tabs and not inside one. The loose
+   variant is the two cases the harness could not anchor: a warning tint, because
+   a span that is not the account's window while the control is asking about the
+   account's window is the one thing here a reader must not skim past. */
+.insights-anchor {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--muted);
+  border: 1px solid var(--border-lo);
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+  background: var(--well);
+}
+.insights-anchor b {
+  color: var(--text);
+  font-weight: 600;
+}
+.insights-anchor.is-loose {
+  border-left-color: var(--amber);
+}
+
 .insights-tabs {
   display: flex;
   gap: 2px;

@@ -33,7 +33,7 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
     '/api/spend',
     checked({ query: InsightsQuery }, async ({ query }) => {
       const now = Date.now();
-      const window = resolveWindow(query.window, now);
+      const window = resolveWindow(query.window, now, store.readRateLimits());
       const since = sinceOrEpoch(window.since);
       return {
         insights: buildSpendInsights({
@@ -86,7 +86,7 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
     '/api/spend/trend',
     checked({ query: InsightsQuery }, async ({ query }) => {
       const now = Date.now();
-      const window = resolveWindow(query.window, now);
+      const window = resolveWindow(query.window, now, store.readRateLimits());
       const since = sinceOrEpoch(trendSince(window));
       const world = store.getWorldBaseline();
       const agents = store.listAgents();
