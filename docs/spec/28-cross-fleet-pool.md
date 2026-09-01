@@ -834,6 +834,28 @@ back button steps over ([17](17-cockpit.md#the-address-bar)). Every colour it dr
 on `:root` with an entry in `web/src/cockpit/tokens.ts`, and every reference on it is drawn with
 `<Ref to={ref}/>` — except that a pooled claim's origin has no ref to draw, and its fleet is text.
 
+## A third document rides this, and is not a claim
+
+**Not yet built**, and specified in [31](31-review-packs.md#sharing-a-pack) rather than here — but it
+lands in this fleet's namespace, so it is named where a reader of this document would look for it.
+
+A **review pack** is the restatement of one change for a human reviewer: ideas, claims about the code,
+and the diff hunks they point at. A shared one is published as a third kind of document beside
+`claims.json` and `digest.json`, in `<path>/fleets/<fleetId>/`, over the same `PoolTransport`, under
+the same one-writer-per-namespace rule.
+
+**It rides the transport and nothing else.** It is not a claim and takes none of the claims arm: no
+corroboration, no vouch, no contradiction, no lifetime, no reach, and nothing about it is ever
+injected into a prompt or read by a rule. Two differences from a claim are worth stating here, because
+both cut against the arrangements above:
+
+- **Publishing is opt-in per pack**, the inverse of `keepLocal`. A claim is one sentence, so the cheap
+  arrangement is to publish and withhold the rare one; a pack quotes source, in volume, and is
+  rewritten whenever a head moves.
+- **Packs are pruned and claims are not.** A claim is durable. A pack for a merged pull request is
+  dead weight in a substrate every fleet clones, and the cost of keeping it is paid by whoever pulls
+  rather than by whoever published.
+
 ## What nothing does
 
 - **No rule, desk or gate reads a pooled claim.** [27](27-knowledge.md#what-nothing-does)'s stance,

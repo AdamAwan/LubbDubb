@@ -112,6 +112,7 @@ deliberately left unchecked, and why, is in
 | [28](spec/28-cross-fleet-pool.md)    | The cross-fleet pool       | The distance above `fleet`: one namespace per fleet, what a claim carries across, and the shared digest                 |
 | [29](spec/29-post-deploy-watch.md)   | The post-deploy watch      | Whether shipped work behaves: the declaration, the dry run, the window, and the three verdicts                          |
 | [30](spec/30-ingress.md)             | Event-driven ingress       | The inbound webhook endpoint: what it verifies, what one delivery invalidates, and what it does not trust               |
+| [31](spec/31-review-packs.md)        | Review packs               | How a change is restated for a human: the witness log, the ideas, the claims, and the check                             |
 
 ## Conventions used throughout
 
