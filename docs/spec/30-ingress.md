@@ -175,6 +175,8 @@ that set, **before** it consults the lanes:
 - Nothing else in the cache is touched. Not the whole cache, not the entity's neighbours, not a
   fan-out for anything the delivery did not name.
 - No integration grows a method, and no code path exists that could drop the whole cache by mistake.
+- The ingress is not the set's only writer — the fleet's own finished work marks refs into it too
+  ([04](04-harness-cycle.md#the-fresh-set)). Nothing here is special-cased for either: a ref is a ref.
 - The `fresh` set beats the lane rather than widening it, and it has to: an entity a delivery names is
   usually one whose **change token has not moved** — a review left on a pull request does not touch its
   `updatedAt` — so anything short of overriding the reuse entirely would change nothing at all.

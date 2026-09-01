@@ -634,6 +634,28 @@ Notify de-duplication reads `recentDecisions`: `notifiedOriginsByAgent` collects
 pairs from **executed** `respond_to_agent` decisions, so a persistent signal is not re-notified every
 cycle. It is best-effort over the recent window — a note that ages out simply gets sent again.
 
+## A reading behind the fleet decides nothing
+
+The PR concerns are the rules whose "is this still outstanding" is a **world** fact rather than a
+stored verdict: `pr-review-comment` reads `comment.handled`, `pr-ci-failing` the check runs,
+`pr-base-update` `mergeableState`. An agent working the branch is what changes all three, and it
+changes them _out there_, where only a fresh read brings them back.
+
+So before any concern is gathered, the pass asks `StageContext.readingBehindFleet(pr.number)`: did a
+task on this pull request — its branch, or one of its concern origins — reach a terminal _after_ the
+world being decided against was read? If so the pull request is skipped whole, because what is stale is
+the reading and not one field of it.
+
+Without it, an agent that answers three review threads and exits is followed a quarter of a second
+later by a [local cycle](04-harness-cycle.md#the-local-cycle) deciding against the reading from before
+it replied — three threads still unhandled, the branch free again — and a second agent is dispatched to
+answer the same three comments. The re-dispatch cooldown below hides that only for agent runs shorter
+than its gap, which is why it surfaced on the long ones.
+
+It costs at most one cycle on one entity: the same fact puts that entity on the next real read's
+`fresh` set ([04](04-harness-cycle.md#the-fresh-set)), so the pulse after it decides on a reading that
+contains the agent's work. Nothing is queued in the meantime — a stale reading is not a busy fleet.
+
 ## `work-item-in-progress` — the item is being worked
 
 Opt-in: it fires only when the operator set **both** `issueInProgressState` and a non-empty

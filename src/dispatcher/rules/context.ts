@@ -85,6 +85,28 @@ export interface StageContext {
    */
   openPrs: PullRequest[];
   /**
+   * Is this pull request's reading older than the fleet's own last act on it — an
+   * agent that worked its branch, or its concern, and has since finished?
+   *
+   * **The PR concerns are the rules whose "have we done this already" gate lives
+   * in the world rather than in the store**, which is the one case a decision
+   * taken against a cached reading gets wrong. `pr-review-comment` asks
+   * `comment.handled`, which GitHub answers from the thread's resolution and the
+   * newest reply's author; `pr-ci-failing` asks the check runs; `pr-base-update`
+   * asks `mergeableState`. All three are facts an agent changes *out there* and
+   * that only a fresh read can bring back — so between an agent finishing and the
+   * next real read, the reading still describes the work it just did as
+   * outstanding, and the concern re-dispatches for it. That window used to be
+   * empty because every dispatch followed a world read; the local cycle
+   * ([04](docs/spec/04-harness-cycle.md#the-local-cycle)) is what opened it.
+   *
+   * True holds this pull request's concerns for one cycle. Nothing is lost: the
+   * same fact puts the entity on the next real read's `fresh` set, so the pulse
+   * after this one decides on a reading that includes the agent's work.
+   * → `refsFinishedSince` in `src/world/readPlan.ts`
+   */
+  readingBehindFleet: (prNumber: number) => boolean;
+  /**
    * The plan funnel's memory, keyed on `issue:<n>`, read by the work-item, plan
    * and pickup rules alike so none of them can hold a different opinion about an
    * issue. Empty with the funnel off.

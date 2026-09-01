@@ -23,6 +23,7 @@ import { appraisalHold } from '../intake/appraisal.js';
 import { resolveModelTag } from '../modelLabels.js';
 import { pinnedProfileFor } from '../profilePin.js';
 import { resolveAgentProfile } from '../agents/modelPolicy.js';
+import { prReadRef, refsFinishedSince } from '../world/readPlan.js';
 import { DEFAULT_VALIDATION, type ValidationPolicy } from '../validation/policy.js';
 import { PromptTemplates, defaultPromptTemplates } from './promptTemplates.js';
 import {
@@ -386,6 +387,11 @@ export class RuleDispatcher implements Dispatcher {
       ? [...ctx.world.pullRequests, ...ctx.unwatchedPrs]
       : ctx.world.pullRequests;
 
+    // The entities whose reading predates the fleet's own last act on them — built
+    // over `openPrs` rather than the dispatch view, so the answer for one pull
+    // request does not depend on whether another is watched.
+    const behind = refsFinishedSince(ctx.tasks, openPrs, now);
+
     // Standing `delivered` verdicts, keyed on the `issue:<n>` origin. Unlike a
     // conclusion this one gates: an assessed issue is parked until the world moves
     // or the operator says otherwise. Asked through the same pure `deliveryHold`
@@ -497,6 +503,7 @@ export class RuleDispatcher implements Dispatcher {
       // the half `notified` cannot see, since a dispatch is not a note.
       dispatchedSignals: dispatchedSignalsByBranch(ctx.recentDecisions),
       openPrs,
+      readingBehindFleet: (prNumber: number) => behind.has(prReadRef(prNumber)),
       plansByOrigin,
       // Standing "is this issue finished" verdicts, keyed on the same `issue:<n>`
       // origin. Empty until someone declares one, which resolves every issue to
