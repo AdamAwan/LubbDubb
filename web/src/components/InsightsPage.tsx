@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type JSX, type RefObject } from 'react';
 import type {
+  AllowanceInsights,
   InsightsWindow,
   InsightsWindowView,
   McpInsights,
@@ -12,6 +13,7 @@ import type {
 import type { CockpitActions, InsightsView } from '../cockpit/actions.js';
 import { api } from '../api.js';
 import { Downloads } from './Downloads.js';
+import { AllowanceTab } from './AllowanceTab.js';
 import { EconomicsTab, spendCsv } from './EconomicsTab.js';
 import { ReliabilityTab, reliabilityCsv } from './ReliabilityTab.js';
 import { CausesTab } from './CausesTab.js';
@@ -57,6 +59,7 @@ import { PoolTab } from './PoolTab.js';
 /** The tabs, in reading order, with the sentence each one answers. */
 const TABS: readonly { id: InsightsView; label: string; note: string }[] = [
   { id: 'economics', label: 'Economics', note: 'what it cost, what it landed, what leaked' },
+  { id: 'allowance', label: 'Allowance', note: 'what the account has left, and what spent it' },
   { id: 'reliability', label: 'Reliability', note: 'did it finish, and did it go green' },
   { id: 'causes', label: 'Causes', note: 'what keeps sending the fleet back' },
   { id: 'trend', label: 'Trend', note: 'whether what you changed is working' },
@@ -112,6 +115,7 @@ export function InsightsPage({
   const [remedies, setRemedies] = useState<RemedyInsights | null>(null);
   const [trend, setTrend] = useState<Fetched<SpendTrend>>({ state: 'loading', data: null });
   const [mcp, setMcp] = useState<Fetched<McpInsights>>(PENDING);
+  const [allowance, setAllowance] = useState<Fetched<AllowanceInsights>>(PENDING);
   // The trend is fetched on its tab's first visit *for a given window* rather
   // than with the rest, for the reason the settings modal mounts its tabs
   // lazily: it reaches eight windows of world events on top of the same agent
@@ -125,6 +129,10 @@ export function InsightsPage({
   // window, which is the one read in the harness that touches `tasks.prompt` in
   // bulk. Same ref-per-window shape, because a window change invalidates it.
   const mcpFetchedFor = useRef<InsightsWindow | null>(null);
+  // The Allowance tab's own, on the same terms and keyed the same way: it walks
+  // the readings history on top of the same agent walk, and a window change
+  // invalidates it for the reason every other keyed fetch here is keyed.
+  const allowanceFetchedFor = useRef<InsightsWindow | null>(null);
   // The pool tab's own, and the one that does **not** hang off the window: the
   // digest's bucket is a UTC day and its retention is ninety of them, so the page's
   // five spans are not the question anybody asks of it. It is keyed on the project
@@ -142,6 +150,8 @@ export function InsightsPage({
     setTrend(PENDING);
     mcpFetchedFor.current = null;
     setMcp(PENDING);
+    allowanceFetchedFor.current = null;
+    setAllowance(PENDING);
     api
       .getSpend(chosen)
       .then((res) => live && setSpend({ state: 'ready', data: res.insights }))
@@ -190,6 +200,22 @@ export function InsightsPage({
       .getMcpUsage(chosen)
       .then((res) => live && setMcp({ state: 'ready', data: res.insights }))
       .catch(() => live && setMcp({ state: 'failed', data: null }));
+    return () => {
+      live = false;
+    };
+  }, [view, chosen]);
+
+  // The Allowance tab's own, on the same terms and hanging off the *place* for
+  // the trend's reason — a shared `?view=allowance` link is a first visit too.
+  useEffect(() => {
+    if (view !== 'allowance' || allowanceFetchedFor.current === chosen) return;
+    allowanceFetchedFor.current = chosen;
+    let live = true;
+    setAllowance(PENDING);
+    api
+      .getAllowance(chosen)
+      .then((res) => live && setAllowance({ state: 'ready', data: res.allowance }))
+      .catch(() => live && setAllowance({ state: 'failed', data: null }));
     return () => {
       live = false;
     };
@@ -281,6 +307,7 @@ export function InsightsPage({
           remedies={remedies}
           trend={trend}
           mcp={mcp}
+          allowance={allowance}
           pool={pool}
           poolProject={poolProject}
           actions={actions}
@@ -410,6 +437,7 @@ function Body({
   remedies,
   trend,
   mcp,
+  allowance,
   pool,
   poolProject,
   actions,
@@ -421,6 +449,7 @@ function Body({
   remedies: RemedyInsights | null;
   trend: Fetched<SpendTrend>;
   mcp: Fetched<McpInsights>;
+  allowance: Fetched<AllowanceInsights>;
   pool: Fetched<PoolInsightsPayload>;
   poolProject: string | null;
   actions: CockpitActions;
@@ -441,6 +470,15 @@ function Body({
     // came back for no reason.
     if (remedies === null) return <p className="empty">No causes were reported for this window.</p>;
     return <CausesTab remedies={remedies} windowLabel={windowLabel.toLowerCase()} />;
+  }
+
+  if (view === 'allowance') {
+    if (allowance.state === 'loading') return <p className="empty">Reading the allowance…</p>;
+    // A failed fetch is its own answer and never an empty one: a tab drawn empty
+    // here would say the account has not moved, which is the reading an operator
+    // is least able to afford being wrong about.
+    if (allowance.data === null) return <p className="empty">Could not read the allowance.</p>;
+    return <AllowanceTab allowance={allowance.data} />;
   }
 
   if (view === 'mcp') {

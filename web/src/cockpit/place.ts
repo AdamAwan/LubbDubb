@@ -218,7 +218,16 @@ export interface Place {
  * stale `?tab=features` to the overview on a deployment with no board.
  */
 const TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'knowledge', 'features', 'insights', 'pets', 'config'];
-const INSIGHTS_VIEWS: readonly InsightsView[] = ['economics', 'reliability', 'causes', 'trend', 'mix', 'mcp', 'pool'];
+const INSIGHTS_VIEWS: readonly InsightsView[] = [
+  'economics',
+  'allowance',
+  'reliability',
+  'causes',
+  'trend',
+  'mix',
+  'mcp',
+  'pool',
+];
 /**
  * The windows the time bar offers, and what a bare Insights URL means.
  *

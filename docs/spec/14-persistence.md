@@ -32,7 +32,7 @@ unchanged, so no call site anywhere knows.
 | `graph.ts`            | `work_nodes`, `work_item_filings`, `work_item_ignores`                          |
 | `bugFilings.ts`       | `issue_bug_filings`                                                             |
 | `floor.ts`            | `floor_completions`                                                             |
-| `rateLimits.ts`       | `account_rate_limits`                                                           |
+| `rateLimits.ts`       | `account_rate_limits`, `rate_limit_readings`                                     |
 
 Four properties, all asserted structurally in `test/storeModules.test.ts` rather than intended:
 
@@ -1244,6 +1244,31 @@ cycle is in flight, which is most drops on a busy fleet.
 
 `getConnectorState(key)`, `setConnectorState(key, value)`, `recordConnectorEvent(kind, payload)` — used
 by the fake providers so an injected world survives a restart.
+
+### The account's usage windows, and their history
+
+`recordRateLimits(limits)` writes the same reading **twice**, and the difference between the two
+writes is the whole of why there are two tables.
+
+`account_rate_limits` is one row, pinned to `id = 1`, and answers *how much is spent right now* — the
+usage chip's question and nothing else. Its upsert carries a `WHERE excluded.captured_at >` guard:
+several agents report interleaved, and a reading emitted behind a slow turn can reach the store after
+a newer one, so last-write-wins would walk the chip **backwards** to a plausible number nothing marks
+as wrong.
+
+`rate_limit_readings` is the same figures appended, keyed on `captured_at`, and answers *when it went*
+— read by `listRateLimitReadingsSince(since)`, oldest first, for the Allowance tab
+([18](18-observability.md#the-allowance)). **It deliberately has no freshest-wins guard.** The row
+above is a statement about now; the series is a statement about then, and a late reading describes a
+moment that happened whatever order it reached the store in. Inheriting the chip's guard here would
+silently drop exactly the readings a busy fleet produces most of — the ones from agents whose turns
+overlap — and the graph would thin out precisely where the account was moving fastest, which is the
+stretch it exists to draw. Two agents reporting the identical instant are reporting one reading of one
+account, so the key conflict is ignored rather than replaced: there is nothing to choose between them.
+
+The history is kept unpruned. A row is five columns per agent turn, which is a few thousand a day on
+a busy fleet and nothing SQLite notices — and a retention sweep would be a boot-time behaviour whose
+failure mode is deleting the readings an operator went looking for.
 
 ## Durability rules
 

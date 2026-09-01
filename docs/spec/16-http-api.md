@@ -33,6 +33,7 @@ is about.
 | `routes/watches.ts`     | The post-deploy watch's two operator verbs: ruling on a check an agent declared, and extending a window                                                                   |
 | `routes/schedules.ts`   | Recurring briefs: write, edit, run now, delete                                                                                                                            |
 | `routes/spend.ts`       | `/api/spend` and `/api/spend/trend` — the breakdown behind the cost indicators, and its trend                                                                             |
+| `routes/allowance.ts`   | `/api/allowance` — the account's usage percentage over time, and the work that spent it                                                                                   |
 | `routes/readings.ts`    | `/api/retrospectives/:ref`, `/api/scratchpads/:ref`                                                                                                                       |
 | `routes/reliability.ts` | `/api/reliability` — run outcomes, CI health, and why the fleet came back                                                                                                 |
 | `routes/mcpUsage.ts`    | `/api/mcp/usage` — which MCP tools the fleet reached for, and which it never did                                                                                          |
@@ -1111,6 +1112,25 @@ never opens should cost nothing. The closures are the mirror's and not `world_ev
 the tab has anything to draw — see [18](18-observability.md#the-spend-trend). Its goals come
 from `buildSpendGoals`, the fold `/api/spend` ships — the two tabs state one goal's cost a click
 apart, and agreement by construction is the only kind that holds.
+
+### `GET /api/allowance`
+
+The account's usage percentage over time: the readings inside the window, the agent runs beside them,
+the rise apportioned to the goals that spent it, and the weekly burn-down. Returns `{ allowance }` —
+see [18](18-observability.md#the-allowance) for why a per-goal percentage is apportioned rather than
+measured, why the split is per interval, and why a fall is a reset while a gap is not.
+
+**Takes the same `?window=`**, which the readings, the lanes and the apportionment are all cut by. The
+burn-down is the exception and has to be: it is always about the *seven-day* window, so its readings
+come from a fixed three-day lookback rather than from the page's span — an operator on the five-hour
+session still needs to know whether the week reaches its reset, and a projection that narrowed with the
+control would answer a question about the week with a figure about the afternoon.
+
+Fetched on the Allowance tab's **first visit for a given window**, for `/api/spend/trend`'s reason: it
+walks the readings history on top of the same all-time agent walk. Its goals come from
+`buildSpendGoals` — the fold `/api/spend` ships — because the apportionment is a percentage laid over
+the same money the Economics tab prices, and two answers to one goal's cost a click apart is the
+disagreement a reader attributes to the data.
 
 ### `GET /api/reliability`
 

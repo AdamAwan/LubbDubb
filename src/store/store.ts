@@ -1010,6 +1010,9 @@ export class Store {
   readRateLimits(): AccountRateLimits | null {
     return this.rateLimits.readRateLimits();
   }
+  listRateLimitReadingsSince(since: string): AccountRateLimits[] {
+    return this.rateLimits.listRateLimitReadingsSince(since);
+  }
 
   // -- The harness's own build ----------------------------------------------
 

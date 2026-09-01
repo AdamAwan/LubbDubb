@@ -138,7 +138,9 @@ Two sources that must not be conflated, both off the stream transport.
   timestamped `usage_events` row.
 - **The account's usage windows** — every stream agent's `rate_limit_event` carries them, and they
   land in `account_rate_limits` as one row for the fleet
-  ([10](10-agent-runtimes.md#the-account-usage-windows)).
+  ([10](10-agent-runtimes.md#the-account-usage-windows)) **and** in `rate_limit_readings` as a series
+  ([14](14-persistence.md#the-accounts-usage-windows-and-their-history)). The chip reads the row; [the
+  allowance](#the-allowance) reads the series.
 
 `raw`, the mock runtime, reports neither: it runs no model, so there is nothing to price.
 
@@ -627,6 +629,79 @@ the goal. That is a large part of the argument for cohorting goals rather than b
 **Fetched on the tab's first visit**, not with the breakdown: it reads two months of world events and
 the closed end of the ticket mirror on top of the same all-time agent walk, and a tab an operator
 never opens should cost nothing.
+
+## The allowance
+
+`src/allowanceInsights.ts`, `GET /api/allowance`, the Insights page's Allowance tab
+([17](17-cockpit.md#allowance)). The chip says how much of the five hours is gone and can say nothing
+else, because `account_rate_limits` keeps one row and overwrites it on every turn. This is the series
+behind that number, drawn four ways: the percentage over the window with the agent runs beneath it,
+the same rise apportioned to the goals that spent it, the weekly burn-down, and allowance per landed
+change.
+
+**A percentage is apportioned, never measured, and the two words are not interchangeable.** A goal's
+*cost* is measured — every dollar has an agent's name on it. The account's percentage has no name on
+it at all: it is one global counter moved by every agent at once and by the operator's own Claude Code
+on the same credential, and no event says which turn moved it. Every per-goal figure on this reading
+is therefore a share, and the surfaces that draw it say so. A tab that printed an apportioned
+percentage in the same voice as a measured dollar would be the one misreading this whole reading can
+cause.
+
+### Attribution is per interval, never per window
+
+The rise is taken between **consecutive readings**, so the unit of attribution is the few minutes
+between two turns rather than the whole span. Each interval's rise is split between the goals whose
+agents reported cost inside *that* interval, by their share of it.
+
+Per window instead — one division of the total by each goal's share of the window's spend — is the
+obvious shape and is wrong twice. It absorbs a model-mix shift silently, because the points-per-dollar
+rate is not constant across a window in which the fleet changed what it was running. And it charges a
+goal that ran for ten minutes of a five-hour window for the other four hours and fifty, in exact
+proportion to its spend, which is a number that looks entirely reasonable and describes nothing.
+
+### An interval with no fleet spend attributes nothing
+
+If nothing measured went out inside an interval, the whole of its rise is unattributed. That is the
+operator's own session on the same account, or an agent the harness cannot see, and it is carried as
+`unattributedPoints` rather than divided among whichever goals happen to be in the window — the same
+decision `unattributedCostUsd` makes about the same kind of remainder
+([the spend breakdown](#the-spend-breakdown)).
+
+A local run's money is in the interval's **denominator** and never in a goal's share: it moved the
+account, so leaving it out would inflate the goals around it, but its dated deltas carry no run id
+([14](14-persistence.md)) so it can name no goal. Its share lands in the residual.
+
+`pointsPerUsd` — the window's rise over its measured spend — is shipped beside the split because it is
+the calibration the split rests on and is worth reading on its own: it moves with the model mix, and a
+figure that drifts is telling an operator that something outside the fleet is eating the account.
+
+### A fall is a reset; a gap is not
+
+The five-hour window refills four or five times a day, and a refill is a **fall** in the percentage. A
+delta taken blind nets those falls against the rises and reports a fleet that spent almost nothing —
+the most plausible-looking wrong number this fold can produce. Every fall therefore contributes zero
+and the window's total is the sum of its segments, which is what "spent in this window" means when the
+allowance refilled inside it.
+
+A **gap** is the opposite case and is treated the opposite way. A reading arrives only when an agent
+takes a turn, so an idle fleet produces none while the real window keeps moving. The rise across such
+a gap is *counted* — it happened — and attributes to nobody, which is exactly how the operator's own
+session shows up. What the gap changes is the drawing: `afterGap` tells the cockpit not to join two
+readings an hour apart with a line claiming to know what happened between them.
+
+### The burn-down is always about the week
+
+The projection answers whether the current pace reaches the weekly limit before the limit resets, and
+it is built over the seven-day window whatever span the page is on — an operator who cuts the cap
+because of it cuts it for the week, not for the afternoon. Its rate is fitted over the last two days
+rather than the whole seven, and **from the most recent reset onwards** where there is one: a quiet
+Monday folded into the average is how a fleet that has been flat out since Thursday reports days of
+headroom it does not have, and a fit taken across a refill averages a spent allowance against a fresh
+one.
+
+A flat or falling fit names no exhaustion at all. A rate of nearly zero arriving in four hundred hours
+is a date that is worse than no date: it renders, and it is read. `fittedFrom` ships with the verdict
+so the cockpit can say how few readings it is standing on.
 
 ## The burn watch
 
