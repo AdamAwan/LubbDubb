@@ -4212,7 +4212,25 @@ export const demoApi = {
   // The allowance, authored for the same reason as the rest and one sharper still:
   // the demo has no account behind it, so a folded payload would draw the exact
   // empty state a deployment on API-key auth sees.
-  getAllowance: () => Promise.resolve({ allowance: buildDemoAllowance() }),
+  getAllowance: async () => {
+    const allowance = buildDemoAllowance();
+    // The map the route resolves off the connector, resolved here the way a
+    // provider resolves one — from the number, not from the world. Half these
+    // goals have closed and left the world, which is exactly the case the
+    // route's own map exists for: looked up in the snapshot's they would be
+    // plain text, and a demo whose goal numbers are dead ends teaches a reader
+    // that the tab's rows are dead ends.
+    const state = await getServer().getState();
+    // Off an issue URL the world already carries rather than the `#412` key,
+    // which a pull request answers to as readily as an issue does — the demo's
+    // does, and a goal row pointed at a pull request is a confident wrong link.
+    const tracker = Object.values(state.refUrls).find((url) => /\/issues\/\d+$/.test(url)) ?? null;
+    const refUrls: Record<string, string> = {};
+    if (tracker !== null)
+      for (const goal of allowance.apportionment.goals)
+        refUrls[goal.originRef] = tracker.replace(/\d+$/, String(goal.issueNumber));
+    return { allowance, refUrls };
+  },
   // The demo runs one fleet against one project and has no pool behind it, so both
   // pool reads answer *nothing published* rather than inventing other people's
   // fleets. An invented one would be the demo asserting a cross-company reading

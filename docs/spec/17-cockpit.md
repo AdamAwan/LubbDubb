@@ -3788,13 +3788,31 @@ can see.
 **A lane row is a goal, and it is named in a gutter.** Two dispatches onto one goal are two bars in
 one row, which is what lets the row carry a name down the left — and a name in a gutter is the only
 kind a reader gets without a pointer, which a screenshot, a touch screen and a reader who does not
-hover all are. The rows come in the apportionment's order, so the band and the table at the foot of
+hover all are. The name is a `<Ref>`, so the row is a way *to* the goal rather than a mention of it
+([links](#links)). The rows come in the apportionment's order, so the band and the table at the foot of
 the tab are the same list twice rather than two orders to reconcile; a goal with no run in the window
 is not a row, because the band is about what ran. The runs that reached no goal share the last row —
 an absence is one row however many agents are in it. This is why the timeline is laid out in a
 1000-unit viewBox where the rest of the page uses 620, and drawn at `.al-wide` rather than
-`.sp-graph`'s bound: it spends its first sixth naming rows, and scaled down to the narrower bound its
+`.sp-graph`'s bound: it spends its first fifth naming rows, and scaled down to the narrower bound its
 axis text would arrive smaller than anything else on the panel.
+
+**The band is HTML and the plot is SVG, laid out on one set of fractions.** The band is a gutter and
+some bars on a linear time axis, which the document draws as well as a viewBox does — both are
+percentages of the same box, so a bar still stands under the stretch of line it ran during. Drawing it
+in the document buys the two things SVG was costing. A gutter cell can hold a link, which an SVG
+`<text>` cannot: the goal numbers down the left were the tab's dead ends. And the hover can be the
+cockpit's own element rather than the browser's `<title>` tooltip, which arrives a second late, cannot
+be styled, is unreachable from the keyboard and never arrives at all on a touch screen — the chart said
+`hover a bar` and, for a reader who tried it, nothing happened.
+
+**The readout is one element for the plot and the band together**, because a pointer is in one place
+and the thing under it is either a reading or a run. The whole plot is the reading's hover target and
+it answers with the **nearest** reading, marked on the line where it stands — a dot is three units
+across, and a chart that asks a pointer to find one has no hover at all. A lane bar is focusable for
+the same reason its readout exists: focus is how a reader without a pointer reaches it. It is not a
+control, though — there is nowhere in the cockpit to send a click from a finished run, and the goal's
+own way through is the `<Ref>` in the gutter beside it.
 
 **The plot is a grid, and its two edges are states rather than scale ends.** A reader tracing a run up
 to the line needs something to trace along, so the window is ruled at quarters both ways and the x
@@ -3828,6 +3846,12 @@ threshold and the apportionment are statements about what the readings _mean_, a
 compute its own would draw a line the server's own totals disagree with. What the cockpit owns is
 presentation — the colours, which live in the stylesheet as `--al-*` on `.al`, aliases of themeable
 tokens in the way `--sp-*` are.
+
+**The tab merges the route's own `refUrls` over the shell's** (`RefLinksExtended`), the Tickets tab's
+arrangement and for a reason this tab feels hardest: a goal that spent inside a five-hour window has
+usually closed, so the snapshot's map — built from the world — does not carry it, and the row whose
+title reads `no longer on the tracker` is precisely the one an operator most wants to open. Unmerged,
+every goal number on the tab renders as plain text ([16](16-http-api.md#get-apiallowance)).
 
 ### Reliability
 

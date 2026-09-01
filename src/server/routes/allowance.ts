@@ -41,7 +41,7 @@ const PROJECTION_LOOKBACK_MS = 3 * 24 * 3_600_000;
  * kind that holds. → [18](../../../docs/spec/18-observability.md#the-allowance)
  */
 export function register(app: FastifyInstance, { system }: RouteContext): void {
-  const { store } = system;
+  const { store, connector } = system;
 
   app.get(
     '/api/allowance',
@@ -67,37 +67,56 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
         runs: store.listIssueRuns(),
       });
       const readings = store.listRateLimitReadingsSince(since);
-      return {
-        allowance: buildAllowanceInsights({
-          readings,
-          weekReadings: store.listRateLimitReadingsSince(new Date(now - PROJECTION_LOOKBACK_MS).toISOString()),
-          // The agents' own deltas say **whose**, which is what an interval split
-          // needs; the merged list is the interval's denominator, and the
-          // difference between them is exactly the local runs.
-          usageEvents: store.listUsageEventsSince(since),
-          costDeltas: store.listCostDeltasSince(since),
-          agents,
-          tasks,
-          nodes,
-          goals: rollup.goals,
-          attribution: rollup.attribution,
-          mergeEvents: store.listWorldEventsOfKindsSince(since, ['pr_merged']),
-          // The timeline is cut off the readings the fold actually holds, so an
-          // `all` window describes the history this deployment has rather than
-          // drawing empty buckets in front of it.
-          window: windowView(
+      const allowance = buildAllowanceInsights({
+        readings,
+        weekReadings: store.listRateLimitReadingsSince(new Date(now - PROJECTION_LOOKBACK_MS).toISOString()),
+        // The agents' own deltas say **whose**, which is what an interval split
+        // needs; the merged list is the interval's denominator, and the
+        // difference between them is exactly the local runs.
+        usageEvents: store.listUsageEventsSince(since),
+        costDeltas: store.listCostDeltasSince(since),
+        agents,
+        tasks,
+        nodes,
+        goals: rollup.goals,
+        attribution: rollup.attribution,
+        mergeEvents: store.listWorldEventsOfKindsSince(since, ['pr_merged']),
+        // The timeline is cut off the readings the fold actually holds, so an
+        // `all` window describes the history this deployment has rather than
+        // drawing empty buckets in front of it.
+        window: windowView(
+          window,
+          timelineSpan(
             window,
-            timelineSpan(
-              window,
-              readings.reduce<number | null>((oldest, reading) => {
-                const at = Date.parse(reading.capturedAt);
-                return Number.isNaN(at) ? oldest : oldest === null || at < oldest ? at : oldest;
-              }, null),
-            ),
+            readings.reduce<number | null>((oldest, reading) => {
+              const at = Date.parse(reading.capturedAt);
+              return Number.isNaN(at) ? oldest : oldest === null || at < oldest ? at : oldest;
+            }, null),
           ),
-          now,
-        }),
-      } satisfies AllowancePayload;
+        ),
+        now,
+      });
+
+      // Resolved off the connector rather than read from the snapshot's map, for
+      // the Tickets tab's reason — and here it is not an optimisation but the
+      // whole link: a goal that spent inside this window has usually closed, so
+      // the world no longer carries it and the cockpit has no page to open. The
+      // tracker is then the only destination there is, and without this the row
+      // draws its number as plain text.
+      const refUrls: Record<string, string> = {};
+      for (const goal of allowance.apportionment.goals) {
+        const url = connector.resolveRefUrl(goal.originRef);
+        if (url) refUrls[goal.originRef] = url;
+      }
+      for (const lane of allowance.lanes) {
+        if (lane.issueNumber === null) continue;
+        const ref = `issue:${lane.issueNumber}`;
+        if (ref in refUrls) continue;
+        const url = connector.resolveRefUrl(ref);
+        if (url) refUrls[ref] = url;
+      }
+
+      return { allowance, refUrls } satisfies AllowancePayload;
     }),
   );
 }

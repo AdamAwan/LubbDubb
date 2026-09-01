@@ -2056,6 +2056,18 @@ export interface SpendPayload {
  */
 export interface AllowancePayload {
   allowance: AllowanceInsights;
+  /**
+   * Tracker URLs for the goals this window names, resolved off the connector
+   * rather than read from the snapshot's map.
+   *
+   * `refUrls` in `/api/state` is built from the *world*, and a goal that spent
+   * inside this window has very often left it — which is exactly the row whose
+   * title reads `no longer on the tracker`. Without these the tab draws that
+   * goal's number as plain text: a correct-looking row that is a dead end, which
+   * is the cockpit's most repeated bug. The `TicketsPayload` and
+   * `FeatureBoardPayload` fields of this name exist for the same reason.
+   */
+  refUrls: Record<string, string>;
 }
 
 /**

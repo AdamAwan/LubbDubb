@@ -4371,31 +4371,133 @@ select:disabled {
 }
 
 .al .al-lane {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
   opacity: 0.85;
+  cursor: default;
 }
 
 .al .al-lane-unmeasured {
   opacity: 0.5;
 }
 
-/* The lane band's track and its name in the gutter. A name on the glass rather
-   than in a tooltip, which is no name at all on a screenshot, a touch screen, or
-   to a reader who does not hover — and a track behind it so a row with one short
-   run still reads as a row rather than as a mark floating in the panel. */
-.al .al-lane-row {
-  fill: var(--veil);
+/* Focusable because focus is how a reader without a pointer reaches the readout —
+   so the focus ring has to be visible against a bar of any colour. */
+.al .al-lane:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  opacity: 1;
 }
 
-.al .al-lane-name {
+.al .al-lane:hover {
+  opacity: 1;
+}
+
+/* The reading the readout is about, marked on the line: a readout that names a
+   moment and does not say which one is a second reading to reconcile. */
+.al .al-mark path {
+  stroke: var(--accent);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+  fill: none;
+}
+
+.al .al-mark circle {
+  fill: var(--accent);
+  stroke: var(--well);
+  stroke-width: 1.4;
+}
+
+/* The chart's one readout, for the plot and the band together: a pointer is in
+   one place, and the thing under it is either a reading or a run. It never takes
+   the pointer — a tooltip that can be hovered is a tooltip that flickers. */
+.al .al-tip {
+  position: absolute;
+  z-index: 2;
+  transform: translate(-50%, calc(-100% - 10px));
+  max-width: 280px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  pointer-events: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  box-shadow: 0 4px 14px var(--shadow);
+}
+
+.al .al-tip span + span {
+  color: var(--muted);
+}
+
+/* --- the lane band ---
+
+   HTML rather than SVG, laid out in percentages of the same box the plot is drawn
+   in, so a bar still stands under the stretch of line it ran during. Two things
+   it buys and SVG was costing: a gutter that can hold a `<Ref>`, and a readout
+   that is the cockpit's own element rather than the browser's `<title>` tooltip —
+   which arrives a second late, cannot be styled, and never arrives at all on a
+   touch screen. */
+
+.al .al-chart {
+  position: relative;
+}
+
+/* The band's caption is HTML, so it takes `--muted` as a colour where the plot's
+   captions take it as a fill; the rest of the vocabulary is `.al-cap`'s. */
+.al .al-band-cap {
+  margin: 10px 0 6px;
+  color: var(--muted);
+}
+
+.al .al-band {
+  display: grid;
+  align-items: center;
+  row-gap: 8px;
+}
+
+/* A name on the glass rather than in a readout, which is no name at all on a
+   screenshot, a touch screen, or to a reader who does not hover. */
+.al .al-row-name {
   font-family: var(--font-mono);
   font-size: 11.5px;
-  fill: var(--text);
+  color: var(--text);
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 12px;
 }
 
 /* The runs that reached no goal are an absence, and the row says so the way the
    bar does — fainter, not another voice. */
-.al .al-lane-name-none {
-  fill: var(--grey);
+.al .al-row-name-none {
+  color: var(--grey);
+}
+
+/* A track behind the bars, so a row with one short run still reads as a row
+   rather than as a mark floating in the panel. */
+.al .al-track {
+  position: relative;
+  height: 20px;
+  border-radius: 3px;
+  background: var(--veil);
+}
+
+.al .al-idle-stripe {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--veil);
 }
 
 /* The chart's own captions, in the panel-heading vocabulary rather than the
