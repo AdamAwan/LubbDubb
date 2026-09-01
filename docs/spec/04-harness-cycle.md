@@ -96,14 +96,45 @@ The line is easy to hold in the code: with the executor's one deliberate excepti
 call in the body talks to the outside world and every synchronous one does not**, so the guard sits on
 exactly the awaits.
 
-**Why deciding against a cached world is safe.** Every gate that stops the fleet doing a thing twice —
-the tasks, the agents, the recent decisions and their cooldowns, the verdict tables — is read from the
-store, which is fresh. The world contributes the _subject_ of a decision, not the memory of whether it
-has already been taken. And the dispatcher must already be idempotent over an unchanged world, because
-two consecutive real pulses over a settled world are indistinguishable from one real cycle followed by
-a local one: a rule that would misfire here is a rule that already misfires on every quiet beat. What
-a local cycle can therefore reach that the real cycle before it did not is exactly what the _store_
-has changed — a freed slot, an operator's verdict, a queued job.
+**Why deciding against a cached world is mostly safe.** Almost every gate that stops the fleet doing a
+thing twice — the tasks, the agents, the recent decisions and their cooldowns, the verdict tables — is
+read from the store, which is fresh. There the world contributes the _subject_ of a decision, not the
+memory of whether it has already been taken. And the dispatcher must already be idempotent over an
+unchanged world, because two consecutive real pulses over a settled world are indistinguishable from
+one real cycle followed by a local one: a rule that would misfire there is a rule that already
+misfires on every quiet beat. What a local cycle can therefore reach that the real cycle before it did
+not is exactly what the _store_ has changed — a freed slot, an operator's verdict, a queued job.
+
+### Where the world _is_ the memory
+
+The exception is the [pull-request concerns](05-dispatcher.md), and it is worth stating plainly
+because this document once claimed there was none. `pr-review-comment` asks whether a review thread is
+`handled`, which the provider answers from the thread's resolution and the author of its newest reply;
+`pr-ci-failing` asks the check runs; `pr-base-update` asks `mergeableState`. Those are not descriptions
+of a subject the store remembers a verdict about — **they are the memory**, they live out there, and
+an agent working the branch is what changes them.
+
+So the window a local cycle opened is precisely: an agent answers three review threads, exits, and a
+quarter of a second later the fleet decides against a reading taken before it replied — in which those
+three threads are still outstanding and the branch is now free. It dispatched a second agent to answer
+the same three comments. Nothing was red; the run was a real agent doing real, redundant work, and the
+attempt cooldown only hid it for runs shorter than its gap.
+
+Two things hold it, both derived from `refsFinishedSince` (`src/world/readPlan.ts`) — the entities a
+task reached a terminal on _after_ a given reading was taken:
+
+- **The dispatcher does not act on such a reading.** `StageContext.readingBehindFleet` answers it per
+  pull request and the concern pass skips that pull request whole — the reading is what is stale, not
+  one field of it. It costs one cycle, on one entity, and only ever the cycle straight after an agent
+  ended on it.
+- **The next real read replaces it.** The same refs go on the read plan's `fresh` set, which defeats
+  the change-gated reuse rather than merely bounding it. That half is not optional: **resolving a
+  review thread moves no `updated_at`**, so the one fact that retires the concern is invisible to the
+  token the hydration cache gates on, and without it the next _real_ cycle reuses the same hydration
+  and reaches the same wrong answer.
+
+Both are self-clearing and neither is remembered anywhere: a real read moves `takenAt` past the task's
+`updatedAt` and the entity drops out on its own, so a restart loses nothing.
 
 **What it is not for.** A decision whose correctness needs a _fresh_ provider reading — has this check
 gone green, has this pull request merged, has this ticket been closed — is not one a local cycle can
@@ -176,6 +207,26 @@ title, state, labels and head commit fresh every pulse, and is in the world snap
 reasons over every pulse — the whole world is read, always. What it does not get is a per-entity
 fan-out more often than its lane allows. There is no filtering anywhere in this: `ReadPlan` reaches
 the providers as a **cost** hint, and the population that comes back is identical either way.
+
+### The fresh set
+
+Above both lanes sits `ReadPlan.fresh`: the refs this read must re-hydrate whatever their change token
+says and whatever lane they are on. It is asked before the lanes and answers an age bound of zero,
+which is always past, so the cache drops exactly those entries and re-reads them.
+
+It has two writers, and they name the same kind of fact — *something happened to this entity that its
+change token does not report*:
+
+- **An inbound delivery**, drained from the `IngressInbox` ([30](30-ingress.md#invalidating-precisely)).
+- **The fleet's own finished work** — the entities a task reached a terminal on since the last reading
+  (`refsFinishedSince`). An agent that answers a review thread changes the field the concern is gated
+  on, and **resolving a thread moves no `updated_at`**, so the token cannot report it. Without this the
+  real cycle after an agent ends reuses the hydration that describes that agent's work as still to do.
+  → [Where the world _is_ the memory](#where-the-world-is-the-memory)
+
+Both beat the lane rather than widening it, for the same reason: an entity either of them names is
+usually one whose token has not moved, so anything short of overriding the reuse entirely would change
+nothing at all.
 
 ### Who owns the cold-lane interval
 

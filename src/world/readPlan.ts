@@ -153,6 +153,13 @@ export function buildReadPlan(input: ReadPlanInputs): ReadPlan {
   // it — so it is carried on this arm too.
   if (previous === null) return { hot: 'all', fresh, ...lanes };
 
+  // The fleet's own work is an invalidation exactly as a delivery is, and a
+  // stronger one: an agent that answered a review thread changed the very field
+  // the concern is gated on, and changed it in a way no change token reports. On
+  // `fresh` rather than merely hot, because the hot lane is a *bound on reuse* and
+  // what is needed here is no reuse at all. → {@link refsFinishedSince}
+  for (const ref of refsFinishedSince(input.tasks, previous.pullRequests, previous.takenAt)) fresh.add(ref);
+
   const hot = new Set<string>();
   for (const pr of previous.pullRequests) {
     if (pr.ciStatus !== 'passing' && pr.ciStatus !== 'failing') hot.add(prReadRef(pr.number));
@@ -205,4 +212,60 @@ export function hydrationMaxAgeMs(plan: ReadPlan | undefined, ref: string): numb
   if (plan.fresh?.has(ref) === true) return 0;
   if (plan.hot === 'all' || plan.hot.has(ref)) return plan.hotMaxAgeMs;
   return plan.coldMaxAgeMs;
+}
+
+/**
+ * The entities the fleet **itself** finished work on since a given reading was
+ * taken — a pull request whose review-comment agent has just exited, an issue
+ * whose planner has.
+ *
+ * Two callers, and they are the two halves of one rule: *never judge an entity by
+ * a reading older than the fleet's own last act on it.*
+ *
+ * - {@link buildReadPlan} puts these on the `fresh` set, so the next real read
+ *   re-hydrates them whatever their change token says. It has to be told, because
+ *   the token cannot tell it: **resolving a review thread moves no `updated_at`**,
+ *   and the agent's own reply may not either, so the one fact that would retire
+ *   the concern is the one fact the gate cannot see.
+ * - The dispatcher asks the same question of the world it is deciding against, and
+ *   holds the pull-request concerns off an entity whose answer is yes
+ *   ({@link StageContext.readingBehindFleet}).
+ *
+ * **Terminal tasks only.** A task still active holds its own origin and branch —
+ * that is what `isActiveTask` is for, and the dispatcher's own de-dup — so
+ * including one would say "behind the fleet" about every entity being worked right
+ * now, which is every entity the fleet is on.
+ *
+ * Self-clearing, and that is why it is derived rather than remembered: a real read
+ * moves `takenAt` past the task's `updatedAt` and the entity drops out on its own.
+ * A restart loses nothing for the same reason — the rows outlive the process.
+ */
+export function refsFinishedSince(
+  tasks: readonly TaskSummary[],
+  pullRequests: readonly { number: number; branch: string }[],
+  since: string,
+): ReadonlySet<string> {
+  const refs = new Set<string>();
+  const at = Date.parse(since);
+  // An unparseable reading is not evidence that anything is behind it. Refusing to
+  // guess costs a pulse of latency; guessing the other way holds every concern.
+  if (Number.isNaN(at)) return refs;
+
+  const branches = new Set<string>();
+  for (const task of tasks) {
+    if (isActiveTask(task)) continue;
+    const ended = Date.parse(task.updatedAt);
+    if (Number.isNaN(ended) || ended <= at) continue;
+    if (task.branch) branches.add(task.branch);
+    // The same root the read plan names an entity by: a task's origin is finer
+    // than an entity (`pr:42:comments`, `issue:12:plan`), and what was read is the
+    // entity. A root naming nothing the world reads through — a job, a plan — is
+    // simply never matched by either caller.
+    const origin = task.originRef;
+    if (origin !== null) refs.add(origin.split(':').slice(0, 2).join(':'));
+  }
+  // A code agent names its pull request by the branch it worked, not by an origin:
+  // the comment concern's origin is `pr:<n>:comments`, but a part's is its issue.
+  for (const pr of pullRequests) if (branches.has(pr.branch)) refs.add(prReadRef(pr.number));
+  return refs;
 }

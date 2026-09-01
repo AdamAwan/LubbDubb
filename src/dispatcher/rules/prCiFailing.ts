@@ -69,6 +69,14 @@ export function prCiFailing(s: StageContext): void {
   const prCandidates: Array<{ pr: PullRequest; top: PrConcern; urgent: boolean }> = [];
   for (const pr of ctx.world.pullRequests) {
     if (pr.merged) continue; // a merged PR is done — never act on it.
+    // Every concern below reads its "is this still outstanding" off the world —
+    // `handled`, the check runs, `mergeableState` — so a reading older than the
+    // agent that just worked this branch describes that agent's own work as work
+    // still to do, and the concern dispatches a second agent to do it again. Skip
+    // the pull request whole rather than per concern: what is stale is the reading,
+    // not one field of it. One cycle at most, and the next real read is already
+    // committed to re-hydrating this entity. → {@link StageContext.readingBehindFleet}
+    if (s.readingBehindFleet(pr.number)) continue;
 
     // Every concern that would, on its own, warrant a code agent on this
     // branch, ordered by urgency: review comments > CI > base-update.
