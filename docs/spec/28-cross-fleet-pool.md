@@ -840,21 +840,28 @@ on `:root` with an entry in `web/src/cockpit/tokens.ts`, and every reference on 
 lands in this fleet's namespace, so it is named where a reader of this document would look for it.
 
 A **review pack** is the restatement of one change for a human reviewer: ideas, claims about the code,
-and the diff hunks they point at. A shared one is published as a third kind of document beside
+and the code they point at, embedded. A shared one is published as a third kind of document beside
 `claims.json` and `digest.json`, in `<path>/fleets/<fleetId>/`, over the same `PoolTransport`, under
-the same one-writer-per-namespace rule.
+the same one-writer-per-namespace rule — with an HTML companion beside it, rendered the way
+[the markdown companion](#the-human-readable-companion) is: a pure function of the document, written
+together with it, never read back. The companion is the whole of the standalone rendering, for a
+reviewer with no harness.
 
 **It rides the transport and nothing else.** It is not a claim and takes none of the claims arm: no
 corroboration, no vouch, no contradiction, no lifetime, no reach, and nothing about it is ever
 injected into a prompt or read by a rule. Two differences from a claim are worth stating here, because
 both cut against the arrangements above:
 
-- **Publishing is opt-in per pack**, the inverse of `keepLocal`. A claim is one sentence, so the cheap
-  arrangement is to publish and withhold the rare one; a pack quotes source, in volume, and is
-  rewritten whenever a head moves.
-- **Packs are pruned and claims are not.** A claim is durable. A pack for a merged pull request is
-  dead weight in a substrate every fleet clones, and the cost of keeping it is paid by whoever pulls
-  rather than by whoever published.
+- **Publishing is a person's act, per pack**, the inverse of `keepLocal`. A claim is one sentence, so
+  the cheap arrangement is to publish and withhold the rare one; a pack is source, in volume. The
+  argument above that a second click means nothing is ever published is accepted as the likely
+  outcome, and taken: a pack unshared costs nobody anything. The secret backstop runs over every
+  embedded line, not only the sentences.
+- **Shared packs are pruned and claims are not.** A claim is durable. A pack for a merged pull request
+  is dead weight in a substrate every fleet clones, and the cost of keeping it is paid by whoever
+  pulls rather than by whoever published. The publishing fleet drops it from its namespace once the
+  pull request has been closed for `closedPrWindowMs`, the clock that drops the pull request from the
+  world; the fleet's own local row is kept.
 
 ## What nothing does
 

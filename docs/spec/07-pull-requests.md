@@ -719,6 +719,12 @@ that, so what a person approves is a change something has already argued with.
 It is a first pass, not the last word. A human approval is still what rule `pr-merge-ready` requires,
 unchanged.
 
+**It is not a review pack, and does not write one.** [31](31-review-packs.md) restates a change as
+checked claims for the person reading it, on request, and reads the same diff this rule does. The two
+are kept apart on purpose: this review is one round, its charter is the project's, and on the
+deployments that run it a policy requires it — so its agent carries one job, and a pack is asked for
+separately. Neither reads the other's output.
+
 ### When it runs
 
 **On the pulse the pull request appears**, and it leads the PR concerns for it. A review's value
