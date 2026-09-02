@@ -8,6 +8,7 @@ import { loadConfig, type Config } from '../src/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import type { WorldSnapshot } from '../src/types.js';
+import { isActiveTask } from '../src/tasks.js';
 
 /**
  * The **manual** cycle: the one a route runs because an operator just said
@@ -141,5 +142,46 @@ test('a harness on its way down does not fire a trailing cycle into a closing st
   await inFlight;
   await tick(100);
   assert.equal(system.store.listTasks().length, 0, 'nothing is dispatched after the harness is stopped');
+  system.store.close();
+});
+
+test('the trailing cycle puts no second agent on work already in flight', async () => {
+  const system = build();
+  system.connector.inject({ kind: 'new_issue', number: 905, title: 'Already in hand' });
+  await system.harness.runCycle('manual');
+  const before = system.store.listTasks();
+  assert.ok(before.length > 0, 'the goal is staffed');
+
+  // The operator says "more work" while that agent is still running, and says it
+  // inside a cycle — so the trailing cycle is the one that answers them. What it
+  // must not do is put a second agent on work already in hand. The executor's two
+  // gates are store reads (`findActiveTaskByOrigin`, `findActiveTaskByBranch`) and
+  // `recordDispatchTask` writes the row synchronously, before its agent is ever
+  // spawned — so a cycle that starts the instant another ends reads every row the
+  // one before it wrote. Back-to-back is not a new shape either: the local trigger
+  // has always fired one a quarter-second after an agent ends.
+  const release = gateAfterRead(system);
+  const inFlight = system.harness.runCycle('timer');
+  await tick(20);
+  assert.equal((await system.harness.runCycle('manual')).cycleId, 'coalesced');
+
+  release();
+  await inFlight;
+  await tick(150);
+
+  // Stated as the invariant rather than as a count, because more work being
+  // *started* is the point of the trailing cycle — a goal's appraisal and its plan
+  // are two dispatches on two branches, and both are correct. What would be wrong
+  // is two agents on one of them.
+  const active = system.store.listTasks().filter(isActiveTask);
+  const origins = active.map((t) => t.originRef).filter((o): o is string => o !== null);
+  assert.equal(new Set(origins).size, origins.length, 'no origin is staffed twice');
+  const branches = active.map((t) => t.branch);
+  assert.equal(new Set(branches).size, branches.length, 'and no two agents share a worktree branch');
+  for (const t of before)
+    assert.ok(
+      active.some((a) => a.id === t.id),
+      'the agent that was already running is untouched',
+    );
   system.store.close();
 });
