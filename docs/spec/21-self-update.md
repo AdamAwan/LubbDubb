@@ -33,7 +33,7 @@ There is deliberately no key that points the watch at an arbitrary directory.
 | `upstream`         | The remote's tip for `selfUpdate.branch`, as `ls-remote` reports it.        |
 | `behind` / `ahead` | Commits each side carries that the other does not.                          |
 | `commits`          | What is waiting, newest first, capped at ten.                               |
-| `dirty`            | Uncommitted changes in the install directory.                               |
+| `dirty`            | Uncommitted changes to **tracked** files in the install directory.          |
 | `unavailable`      | Why no reading could be taken, in the operator's words, or null.            |
 
 **A failed reading is a value, not a throw.** A tarball install, an air-gapped machine and a checkout
@@ -70,8 +70,18 @@ words — "why is the button off" is the whole of what an operator asks a screen
 | -------------- | --------------------------------------------------------------------------------- |
 | `unavailable`  | No reading was taken, so there is nothing to know.                                |
 | `behind === 0` | The build is current.                                                             |
-| `dirty`        | A pull over uncommitted changes is not safe.                                      |
+| `dirty`        | A pull over uncommitted changes to tracked files is not safe.                     |
 | `ahead > 0`    | The update is not a fast-forward, and the supervisor applies it with `--ff-only`. |
+
+`dirty` is read with `status --porcelain --untracked-files=no`, and the flag is load-bearing. The
+supervisor applies an update with `pull --ff-only`, which an untracked file does not stand in the way
+of — so counting one would take the upgrade button away, permanently and with no way back, over a
+note an operator left in the install directory or a path a newer build writes that this checkout's
+older `.gitignore` never learned. That falls hardest on the deployment furthest behind, which is the
+one collecting stray files and the one that most needs the button. (It also kept the *reading* off a
+checkout with enough untracked files to overrun the pipe, which surfaced as "could not read the
+install directory".) An untracked file the incoming commits would overwrite still refuses — but it
+refuses in the supervisor, which leaves the old build in place and starts it again.
 
 `ahead > 0` is a **refusal rather than a warning** deliberately. Offering a button that will fail in a
 process the operator is no longer watching is worse than not offering it.

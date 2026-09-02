@@ -159,6 +159,14 @@ export interface PullRequest {
   /** Unresolved review comments waiting on the author. */
   unresolvedComments: PrComment[];
   /**
+   * The same threads with their replies and their state kept — what the cockpit
+   * draws, where {@link unresolvedComments} is what the rules read. Absent means
+   * the provider does not report threads (or the row predates this field), and is
+   * drawn as such rather than as a pull request nobody has reviewed.
+   * → `docs/spec/07-pull-requests.md#review-threads`
+   */
+  reviewThreads?: PrReviewThread[];
+  /**
    * Merge-readiness signals, tracked by the PR-monitoring connector so the
    * harness can drive a PR the last mile to merged. All absent = unknown/false.
    */
@@ -291,6 +299,74 @@ export interface PrComment {
   body: string;
   /** True once the harness has handled (drafted a reply / fixed) this comment. */
   handled: boolean;
+}
+
+/**
+ * Where a review thread stands — the same three-way answer the fleet acts on,
+ * said out loud instead of folded into {@link PrComment.handled}.
+ *
+ * `handled` is one bit for two very different situations, and an operator reading
+ * a count of it cannot tell them apart: a thread the reviewer closed is finished,
+ * and a thread the fleet answered is *waiting on the reviewer* — the first needs
+ * nobody, the second may need the reviewer nudged. Both are "handled" to the
+ * dispatcher, which is right for dispatch and wrong for a person, so the two are
+ * separated here and folded back where the rule reads them.
+ *
+ * `reopened` is the operator's own verdict and outranks the provider's: it says
+ * *this is not settled, come back to it*, and the fleet reads it exactly as it
+ * reads an unanswered thread. → `docs/spec/07-pull-requests.md#review-threads`
+ */
+export type PrThreadState = 'open' | 'answered' | 'resolved' | 'reopened';
+
+/** One message in a review thread — the root, or a reply under it. */
+export interface PrThreadMessage {
+  id: string;
+  author: string;
+  body: string;
+  /** The harness wrote this one, resolved by the provider against `config.userId`. */
+  ours: boolean;
+}
+
+/**
+ * A review thread as the world carries it: the conversation, and where it stands.
+ *
+ * Beside {@link PullRequest.unresolvedComments} rather than instead of it, and
+ * that is deliberate. The comment list is what every dispatch rule reads and its
+ * shape is load-bearing there — one entry per thread, `handled` folding the four
+ * states above into the one bit a rule needs. This is the same threads with the
+ * replies and the state kept, for the surfaces that show a person what is
+ * actually going on. The two are built from one derivation in each provider, so
+ * they cannot come to disagree.
+ *
+ * **Optional**, because a provider that cannot report replies leaves it unset —
+ * which the cockpit draws as *this provider does not say*, never as a pull request
+ * with no review on it. → `docs/spec/07-pull-requests.md#review-threads`
+ */
+export interface PrReviewThread {
+  /**
+   * The thread's id — the **same** id the matching {@link PrComment} carries, and
+   * the one a reply is threaded under. One thread, one id, whoever is asking.
+   */
+  id: string;
+  author: string;
+  body: string;
+  state: PrThreadState;
+  /** The replies under the root, oldest first. Empty on a thread nobody answered. */
+  replies: PrThreadMessage[];
+  /**
+   * The file the thread hangs on, where the provider reports one. Absent on a
+   * thread that is not attached to the diff at all — a review's summary comment —
+   * and on a provider that does not say.
+   */
+  path?: string;
+  /** The line in {@link path} the thread was left on, where the provider reports one. */
+  line?: number;
+  /**
+   * When the operator reopened it (ISO). Only ever set on a `reopened` thread, and
+   * it is what tells a reopen apart from a thread nobody has answered yet — the
+   * two read identically to the dispatcher and mean different things to a person.
+   */
+  reopenedAt?: string;
 }
 
 /**
@@ -1046,6 +1122,57 @@ export interface GoalPriority {
  * same row back to `running`.
  */
 export type AgentStatus = 'starting' | 'running' | 'waiting' | 'done' | 'killed' | 'interrupted' | 'failed' | 'crashed';
+
+/**
+ * What the executor is doing with an action it has picked up but not yet turned
+ * into anything the fleet can see.
+ *
+ * The steps are the awaited ones and only those. `ActionExecutor.execute` walks
+ * the plan strictly serially, so an action holds the loop for as long as its own
+ * awaits take, and every other action in the plan waits behind it with nothing
+ * anywhere saying so — which is the whole reason this type exists. The
+ * synchronous steps between them never yield, so no reader can observe one and
+ * none is named.
+ *
+ * - `picked-up` — the action is in hand and the executor has not reached an
+ *   awaited step. The step every action starts on, and the one nothing ever
+ *   sees for an action whose body does not await.
+ * - `ci-evidence` — reading the failing output of the checks a CI dispatch
+ *   answers, out of the provider.
+ * - `slot-handover` — the worktree pool, handing a slot over
+ *   ([09](../docs/spec/09-execution.md#handing-a-slot-over)). The `git clean -ffdx`
+ *   and cold checkout, which on a large target repository is the minutes-long one.
+ * - `authorizing` — asking whether an outbound act (a merge, a review reply) is
+ *   already authorized, which reaches the tracker.
+ */
+export type ReadyingStep = 'picked-up' | 'ci-evidence' | 'slot-handover' | 'authorizing';
+
+/**
+ * One action the executor is working on right now — in flight, and **not an
+ * agent**: it holds no slot the cap counts, has no transcript, and there is
+ * nothing to kill or inject into.
+ *
+ * In memory only, and deliberately (see {@link file://./executor/readying.ts}).
+ * The record's whole lifetime is one stack frame of `ActionExecutor.execute`, so
+ * a persisted row would outlive the process that could clear it and every crash
+ * would leave a phantom the cockpit draws forever.
+ */
+export interface ReadyingAction {
+  /** The row's key: the cycle it belongs to and the action's place in that plan. */
+  id: string;
+  /** The cycle whose plan this action came from. */
+  cycleId: string;
+  /** What the action is, in the words the dispatcher gave it. */
+  title: string;
+  /** What it is for, as `issue:<n>` / `pr:<n>:<concern>` / `job:<id>`, or null for an action naming none. */
+  originRef: string | null;
+  /** The branch a slot is being handed to, where the action names one. */
+  branch: string | null;
+  /** What the executor is doing with it now. */
+  step: ReadyingStep;
+  /** When the executor picked the action up — the only elapsed time the row has. */
+  startedAt: string;
+}
 
 export interface Agent {
   id: string;

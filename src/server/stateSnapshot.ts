@@ -39,6 +39,7 @@ import { placementAsks, truncateAreaPaths, type AreaPathTree, type PlacementType
 import { buildStacks } from '../stacks/stack.js';
 import { landedCount, landingFor, landingReadiness } from '../stacks/landing.js';
 import { prHealth, prState } from '../prHealth.js';
+import { applyThreadReopens } from '../prThreads.js';
 import { prAttentionStatus, type PrAttentionContext } from '../prAttention.js';
 import {
   effectivePickupStates,
@@ -81,6 +82,7 @@ import { isActiveTask } from '../tasks.js';
 import { validationResourcePath } from '../validation/resources.js';
 import { withLiveClaim } from '../validation/desktop.js';
 import { watchLabelFor } from '../watchLabels.js';
+import { candidateParents } from '../issueRelations.js';
 import { allGoalReach } from '../environments/reach.js';
 import { environmentGateHold } from '../environments/arrival.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
@@ -180,9 +182,17 @@ export function buildStateSections(
   want: ReadonlySet<StateSection>,
   opts?: SnapshotOpts,
 ): Partial<CockpitState> {
-  const { store, connector, config, runtimeControl, harness, recovery, updates, agents: fleet } = system;
+  const { store, connector, config, runtimeControl, harness, recovery, updates, readying, agents: fleet } = system;
   const watchLabel = watchLabelFor(config.labelPrefix);
-  const baseline = store.getWorldBaseline();
+  // The stored reading with the operator's reopened review threads folded over
+  // it — the same fold, over the same marks, that the harness lays on the world it
+  // decides against. Applied here rather than persisted into the baseline so the
+  // record of what the provider said stays intact, and applied on *every* build so
+  // a reopen is visible on the next poll rather than on the next pulse: `runCycle`
+  // coalesces, so a click that lands during a cycle is followed by no world read.
+  // → `docs/spec/07-pull-requests.md#reopening-a-thread`
+  const stored = store.getWorldBaseline();
+  const baseline = stored === null ? null : applyThreadReopens(stored, store.prThreadReopens());
   const world: WorldSnapshot = baseline ?? {
     takenAt: new Date().toISOString(),
     pullRequests: [],
@@ -888,6 +898,14 @@ export function buildStateSections(
       // the first would make a `done` verdict silently veto an item the operator
       // had deliberately moved back to a pickup state.
       issues: world.issues.map(enrichIssue),
+      // The containers a goal with no parent could be hung off — the *same*
+      // `candidateParents` an agent's orphan note is written from, so the
+      // suggestion the fleet is offered and the list the operator picks from are
+      // one reading. Derived here because the browser cannot: most of this list is
+      // the parents of other items, and a picker filtering `issues` by container
+      // type alone finds nothing on an Azure board narrowed by tag and assignee —
+      // a missing-parent warning with no answer under it.
+      parentCandidates: candidateParents(world.issues, config.issueContainerTypes),
     },
     // Runs whose issue the tracker no longer returns (issues #203, #234) — closed
     // by hand, or the watch tag removed. Rebuilt from the run's own snapshot by
@@ -1010,6 +1028,7 @@ export function buildStateSections(
     | 'tasks'
     | 'agents'
     | 'endedAgents'
+    | 'readying'
     | 'parkedOnLimit'
     | 'stallParks'
     | 'flags'
@@ -1028,6 +1047,12 @@ export function buildStateSections(
     tasks: history().tasks,
     agents: history().agents,
     endedAgents: history().ended,
+    // And what the executor is working on that is not one of those rows yet. Read
+    // straight off the board rather than through `once` — it is a copy of a map the
+    // same process is holding, not a query — and read *here* rather than derived
+    // from anything on the wire, because nothing on the wire knows: the record
+    // exists only in this process, for the length of one await.
+    readying: readying.list(),
     // Which of those rows are parked on a spent account limit rather than on a
     // question. Asked of the fleet, not derived from the rows: both parks are
     // `waiting` with a reason, and a cockpit that told them apart by reading the

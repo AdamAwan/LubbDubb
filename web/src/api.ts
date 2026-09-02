@@ -484,6 +484,13 @@ const realApi = {
     post<{ ok: true }>(`/api/issues/${issueNumber}/environment-gate`, { released, note }),
   // Take one back. Withdrawing the last one clears the `more_work` it wrote with
   // it, so the goal is not bounced back to pickup for words nobody will read.
+  /**
+   * Put a review thread back in front of the fleet, or take the ask back. A store
+   * mark and never a write to the provider — the reviewer's thread on GitHub is
+   * left exactly as they left it.
+   */
+  reopenPrThread: (prNumber: number, threadId: string, reopened: boolean) =>
+    post<{ ok: true }>(`/api/prs/${prNumber}/threads/${encodeURIComponent(threadId)}/reopen`, { reopened }),
   withdrawInstruction: (issueNumber: number, id: string) =>
     authFetch(`/api/issues/${issueNumber}/instruction/${id}`, { method: 'DELETE' }).then((r) =>
       json<{ ok: true; standing: number }>(r),

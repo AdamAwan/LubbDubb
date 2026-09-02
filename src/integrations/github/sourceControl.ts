@@ -11,7 +11,8 @@ import type {
   PrTitleInput,
   SendResult,
 } from '../../sink/actionSink.js';
-import type { CiCheck, CiStatus, MergeableState, PrComment, PullRequest } from '../../types.js';
+import type { CiCheck, CiStatus, MergeableState, PrReviewThread, PullRequest } from '../../types.js';
+import { threadComments, threadState } from '../../prThreads.js';
 import { EVIDENCE_LOG_TAIL_LINES, type CiEvidenceTarget, type CiFailureEvidence } from '../../ci/ciEvidence.js';
 import type {
   BranchDeleteCapable,
@@ -57,7 +58,7 @@ interface CachedPullDetail {
   updatedAt: string;
   approved: boolean;
   viewerApproved: boolean;
-  unresolvedComments: PrComment[];
+  reviewThreads: PrReviewThread[];
   mergeable: boolean | null;
   mergeableState: MergeableState;
   merged: boolean;
@@ -180,7 +181,8 @@ export class GitHubSourceControlIntegration
             headSha: p.headSha,
             ciStatus: ci.ciStatus,
             ciChecks: ci.ciChecks,
-            unresolvedComments: detail.unresolvedComments,
+            unresolvedComments: threadComments(detail.reviewThreads),
+            reviewThreads: detail.reviewThreads,
             approved: detail.approved,
             mergeableState: detail.mergeableState,
             merged: detail.merged,
@@ -260,7 +262,7 @@ export class GitHubSourceControlIntegration
       updatedAt: p.updatedAt ?? '',
       approved: computeApproved(reviews),
       viewerApproved: viewerApproved(reviews, viewer),
-      unresolvedComments: buildUnresolvedComments(comments, viewer, threads ?? []),
+      reviewThreads: buildReviewThreads(comments, viewer, threads ?? []),
       mergeable: detail.mergeable,
       mergeableState: normalizeMergeState(detail.mergeableState),
       merged: detail.merged,
@@ -355,7 +357,7 @@ export class GitHubSourceControlIntegration
   /**
    * Mark a review thread resolved. The `commentId` is the thread's root comment —
    * the same id `postPrReply` threads under and the same id
-   * {@link buildUnresolvedComments} keys a `PrComment` on — so the caller needs no
+   * {@link buildReviewThreads} keys a thread on — so the caller needs no
    * second identifier, and `ok: false` means the pull request carries no such
    * thread.
    */
@@ -654,8 +656,12 @@ export function computeApproved(reviews: GhReview[]): boolean {
 }
 
 /**
- * Group review comments into threads (by `in_reply_to_id`) and surface one
- * {@link PrComment} per thread, keyed on the thread root.
+ * Group review comments into threads (by `in_reply_to_id`) and say where each
+ * one stands — the provider's whole reading of a pull request's review.
+ *
+ * The one derivation: `unresolvedComments` is {@link threadComments} over what
+ * this returns, so the list the rules dispatch on and the threads the cockpit
+ * draws are the same threads read once.
  *
  * Two arms, in this order — the same shape as the Azure provider's, which is the
  * point: both trackers have a real resolution verdict, so both read it.
@@ -686,28 +692,50 @@ export function computeApproved(reviews: GhReview[]): boolean {
  * agent dispatched for a comment already dealt with is visible and cheap, where a
  * dropped review is neither.
  */
-export function buildUnresolvedComments(
+export function buildReviewThreads(
   comments: GhReviewComment[],
   viewerLogin: string,
   threads: GhReviewThread[] = [],
-): PrComment[] {
+): PrReviewThread[] {
   const resolved = new Set(threads.filter((t) => t.isResolved).map((t) => t.rootCommentId));
   const roots: GhReviewComment[] = [];
-  const latestReplyByRoot = new Map<number, GhReviewComment>();
+  const repliesByRoot = new Map<number, GhReviewComment[]>();
   for (const c of comments) {
     if (c.inReplyToId === null) {
       roots.push(c);
       continue;
     }
-    // Comments arrive in creation order, so the last write per root is the latest.
-    latestReplyByRoot.set(c.inReplyToId, c);
+    // Comments arrive in creation order, so the list per root is oldest-first and
+    // its last entry is the newest reply.
+    repliesByRoot.set(c.inReplyToId, [...(repliesByRoot.get(c.inReplyToId) ?? []), c]);
   }
-  return roots.map((root) => ({
-    id: String(root.id),
-    author: root.authorLogin,
-    body: root.body,
-    // Resolution first; failing that, a thread with no reply of ours is
-    // unanswered, whoever wrote it.
-    handled: resolved.has(root.id) || latestReplyByRoot.get(root.id)?.authorLogin === viewerLogin,
-  }));
+  return roots.map((root) => {
+    const replies = repliesByRoot.get(root.id) ?? [];
+    const thread: PrReviewThread = {
+      id: String(root.id),
+      author: root.authorLogin,
+      body: root.body,
+      // Resolution first; failing that, a thread with no reply of ours is
+      // unanswered, whoever wrote it.
+      state: threadState({
+        resolved: resolved.has(root.id),
+        answered: replies[replies.length - 1]?.authorLogin === viewerLogin,
+      }),
+      replies: replies.map((r) => ({
+        id: String(r.id),
+        author: r.authorLogin,
+        body: r.body,
+        // The same position test arm 2 rests on, and it is sound for its reason:
+        // the harness only ever posts *replies*, so a reply from the viewer is the
+        // harness's however the token's identity is shared.
+        ours: r.authorLogin === viewerLogin,
+      })),
+    };
+    // Where the thread hangs, when GitHub reported it. Absent rather than
+    // guessed: a review's own summary comment is attached to no line, and a
+    // fixture from before this field carries neither.
+    if (root.path !== undefined) thread.path = root.path;
+    if (root.line !== undefined && root.line !== null) thread.line = root.line;
+    return thread;
+  });
 }

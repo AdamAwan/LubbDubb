@@ -117,6 +117,16 @@ export interface PanelRowModel {
   /** A row that no dispatch cut — the desk run's dashed edge and hollow lamp. */
   desk?: boolean;
   /**
+   * A row the harness is working on that is not an agent yet — the same dashed
+   * edge and hollow lamp, in its own tint.
+   *
+   * Its own flag rather than a second meaning for {@link desk}, because the two
+   * say opposite things about who is doing the work: a desk run is somebody at
+   * their keyboard and this is the harness itself, and a shared class would have
+   * left one of them wearing the other's colour.
+   */
+  readying?: boolean;
+  /**
    * Work is happening on this row **right now** — an agent on the branch, not a
    * verdict about it.
    *
@@ -369,6 +379,7 @@ function rowClass(row: PanelRowModel, base: string): string {
     base,
     row.spent === true ? 'cn-spent' : '',
     row.desk === true ? 'cn-desk' : '',
+    row.readying === true ? 'cn-readying' : '',
     row.live === true ? 'cn-live' : '',
     row.className ?? '',
   ]

@@ -397,6 +397,7 @@ once.
 | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `tab`                                | `tickets` / `knowledge` / `insights`; the overview is the absent value. `backlog` and `work` are aliases for `tickets`, and `?panel=knowledge` for `knowledge`, so links to a deleted tab or a promoted panel still land                                                                                                                                                                                 |
 | `goal`                               | the open goal page, as `issue:<n>`                                                                                                                                                                                                                                                                                                                                                                       |
+| `pr`                                 | the open [pull request page](#the-pull-request-page), by number. It outranks `goal`, which it is drawn over and whose row the crumb leads back to; a value that is not a positive integer is nowhere                                                                                                                       |
 | `panel`                              | `knowledge` / `faults` / `launch` / `build` / `record` / `localRun` / `setup` / `pets`                                                                                                                                                                                                                                                                                                                   |
 | `ask`                                | the queue row a `{ ask }` panel is showing                                                                                                                                                                                                                                                                                                                                                               |
 | `agent`                              | the open drawer's agent                                                                                                                                                                                                                                                                                                                                                                                  |
@@ -532,9 +533,19 @@ One row per open question rather than one per goal, because the two are answered
 different writes. Its verdict is **three** buttons where the profile gate has two, and the third is
 what the shape needs: nothing here blocks, so without an explicit "it wants none" a goal that
 legitimately has no parent would sit on the rail for ever — the two blocking gates get their third
-answer free, because somebody has to clear them. The alternatives are offered rather than typed: the
-containers from `world.issues` under `config.containerTypes`, and the area nodes from
-`config.areaPaths`, which is the tracker's own tree read by the harness.
+answer free, because somebody has to clear them. The alternatives are offered rather than typed:
+`world.parentCandidates` — the same `candidateParents` the appraiser's own orphan note is written
+from, derived server-side and shipped whole — and the area nodes from `config.areaPaths`, which is the
+tracker's own tree read by the harness.
+
+**The container list is shipped, never re-derived in the browser.** It was `world.issues` filtered by
+`config.containerTypes`, which is one half of `candidateParents` and the half that is almost always
+empty: an Azure item list is narrowed by tag and assignee, so an open Feature is usually visible only
+as some _other_ item's parent, and `world.issues` carries it nowhere. `ParentPicker` draws no select at
+all where its list is empty — correct in itself, and here it meant the deployments that raise the
+missing-parent warning were the deployments with no way to answer it: "Not applicable" was the only
+button under a warning about filing (issue #683). Nothing was red. The question was drawn, every button
+worked, and the one answer that resolves the fact was simply not there.
 
 **The proposed parent is drawn as a `<Ref>` beside the button and never inside one** — the rule
 ([links](#links)), and here also the point: verifying the suggestion has to be as cheap as accepting
@@ -1237,7 +1248,7 @@ _open_, and an orphan with none open is either a goal nobody proposed anything f
 answer was "it wants none".
 
 **The three answers are `ParentPicker`, shared with the rail's band.** One write to one tracker field,
-put in two places. The goal page therefore draws the `placement:parent:` row _only_ through this
+put in two places, offering the one `world.parentCandidates` list the server derives. The goal page therefore draws the `placement:parent:` row _only_ through this
 warning and filters it out of its own bands — one question, once, per page. The rail keeps its row,
 and the ask panel still answers it for an operator working down the queue rather than down a page. The
 area-path half of `placement` is untouched: a different question, with a different answer.
@@ -1446,20 +1457,16 @@ the open list, and a goal whose work has landed would otherwise draw an empty ca
 ([03](03-world-model.md)); the closed list is retention-windowed, so what it holds is what the harness
 still remembers.
 
-**The row is also where a [review pack](31-review-packs.md#reading-it) is asked for and opened.**
-There is no pull request page to put that on, so a pull request with no goal row — one the provider
-never linked — has no way to ask for one, which [31](31-review-packs.md#pull-requests-nobody-witnessed)
-states as the surface's limit. The control is `ReviewPackControl` (`web/src/components/`), embedded
-on every open and closed row rather than drawn here, because it has an async flow of its own: the
-pack is not on the snapshot, so the control reads `GET /api/prs/:number/review-pack` itself on mount,
-again when the row's head moves, and on a short clock while an author or a checker is on the pull
-request. It draws the states between asking and reading — _Review pack_ to ask; _writing_;
-_checking_; _checked_; _unchecked_ where the checker never finished; _stale · n behind_ or
-_unknown behind_; _pull request gone_ where the read's `head` is null, never folded into current —
-and an _Open pack_ button beside any pack it has. A closed row keeps the way in and loses the ask,
-since the desk refuses to write a pack for one. Opening goes through the seam, `viewReviewPack`,
-because which pack and which idea are open is `Place` state ([the address bar](#the-address-bar));
-the page is [the review pack](#the-review-pack), over this one.
+**The pull request's name is the way onto [its own page](#the-pull-request-page)**, with the
+provider reference beside it — never inside it, since one click cannot have two destinations and the
+provider is a different place from the cockpit's page for the same pull request. The
+[review pack](31-review-packs.md#reading-it) is asked for and opened there rather than on this row,
+which is where it sat while there was no pull request page to put it on.
+
+One number does come back to the row: how many review threads the fleet still owes an answer, as
+_n on us_. It is drawn only when there is one — a chip reading `0` on every settled pull request is
+furniture — and never at all where the provider reports no threads, since a chip there would be a
+claim about a review the harness cannot see ([07](07-pull-requests.md#review-threads)).
 
 Whose court a PR is in is `attention.status`, and which check is red is `ciVerdict`; both are quoted,
 never re-read. The chip prints the server's own word with `attention.reasons` in its title, and the
@@ -1614,6 +1621,69 @@ design's stated arm was that this becomes its own route, and this takes that arm
 half-built.** A per-goal activity list is a route away, and the derivation is already here to draw it
 from.
 
+## The pull request page
+
+One rung further in than the goal page: **a selected pull request outranks a selected goal, which
+outranks the nav**. It is reached from a goal's pull-request row, and the crumb at its head names the
+goal it was reached from — or the tab, on a pull request no ticket owns, which the harness works and
+which therefore reaches this page too. Leaving it (`selectPr(null)`) lands on the goal underneath,
+which the place never cleared. `web/src/console/PrPage.tsx` draws it; `web/src/view/prPage.ts`
+derives what it draws.
+
+**It has no route of its own.** Every reading on it is one the harness has already made and already
+ships on the snapshot — the threads and their state, the checks, `attention`, `health`, `ciVerdict`,
+the tasks dispatched onto the branch. A second read would be a second answer to a question
+`/api/state` has answered, and the three verdicts in particular are quoted rather than re-derived,
+for the reason the goal page quotes them.
+
+What it draws:
+
+- **The masthead** — number, title, branch → base, head, author; then the state chips: open/merged/
+  closed, the CI ladder, approval, `mergeableState`, how many threads are on the fleet, and whose
+  court it is. The provider reference sits at the far end of that line, because everything else on it
+  is a reading taken inside the cockpit. The [review pack](31-review-packs.md#reading-it) control
+  rides the masthead: a pack is a reading of _this diff_, which is what the masthead is about.
+- **The review threads**, which is what the page is for — see below.
+- **The checks**, in the CI policy's own three categories: what the harness will fix, what it will
+  put to a person, what it has been told to leave alone. No check name is written in this repository;
+  every one comes off `ciVerdict`. Where the provider reported no detail, the card says whether it was
+  withheld by policy or never reported — neither is a clean bill of health.
+- **What is holding it up**, from `health.reasons`, and nothing at all when nothing is. A card
+  reading "healthy" on every green pull request would be furniture.
+- **Work on this branch** — every dispatch onto it, newest first, each a way into the run. Joined by
+  **branch**, which is the only join that is true of a pull request: a goal's other pull requests are
+  worked on their own branches.
+
+### The threads, and the one control
+
+Each thread is drawn as the conversation it is: the root, the replies under it, a rail beside them,
+and a mark on any reply the harness wrote. That mark matters more than it looks — on a
+single-operator deployment the fleet posts under the operator's own credential, so the name alone
+cannot say "the fleet has already answered this", which is the fact a reader needs before doing
+anything about it.
+
+The state is a chip whose title says what the state _means_, and the two states that are still work
+tint the row, so "what is still on us" reads off the shape of the list before any chip is read.
+Threads are ordered by what is owed — reopened, open, answered, resolved — and within a state the
+provider's own order stands, which is the order the review was written in. A resolved thread is drawn
+back rather than hidden: it is the record of what was asked.
+
+**Absent and empty are different answers and are said differently.** A provider that reports no
+threads gets a sentence saying so; a pull request nobody has commented on gets a different one.
+Folding the two would claim nobody reviewed a change the harness simply cannot see the review of.
+
+The one thing the page _does_ is [reopen a thread](07-pull-requests.md#reopening-a-thread) — put it
+back in front of the fleet, so the harness reads it as unanswered and comes back to it. It is offered
+on `answered` and `resolved` threads and on nothing else: an open thread is already work, so a control
+claiming to reopen it would be a button that changes nothing. On a reopened thread the same control
+takes the ask back, which is the only way out of a mark set by mistake. Both are absent on a pull
+request that has left the open set, since nothing acts on one.
+
+There is deliberately **no reply and no resolve here**. A reply the harness sends is signed by the
+harness and written by an agent that read the diff; a box on this page would be the operator posting
+through the fleet's identity with none of that behind it. Answering a reviewer is the fleet's job, and
+this page's job is to say when it has not done it well enough.
+
 ## The overview
 
 What the situation area shows when no goal is selected: six cards, rows rather than pictures, in
@@ -1688,7 +1758,8 @@ being forgotten:
   row names how it ended where that is not `done` — `failed`, `crashed`, `killed`, `stopped`. The desk
   run wears `at a keyboard` here rather than a chip of its own, in its violet: the hollow lamp, the
   dashed edge and this word are one signal, and it is the same question the column answers on every
-  other row.
+  other row. A [readying row](#work-that-is-not-an-agent-yet) wears its step there, in its own tint,
+  for the same reason.
 
   **The Pull requests card's word is the court itself** — `you`, `harness`, `elsewhere`, `stalled`,
   `settled`, `unwatched`, `prAttentionStatus`'s own arms, quoted rather than re-read. The card drew
@@ -1916,6 +1987,42 @@ resolution — most six-hour stretches have one merge in them or none — under 
 routinely drew _nothing in the first half to compare against_, which is a card whose whole content is
 an admission it cannot answer yet. The reading it was pointing at is on [Insights](#insights), over a
 window the operator chooses, and the nav carries the way there.
+
+### Work that is not an agent yet
+
+The harness spends minutes turning a planned dispatch into a running agent, and the Fleet card draws
+that window as a row of its own: one per action `ActionExecutor.execute` currently has in hand,
+straight off the readying board it publishes
+([09](09-execution.md#what-is-being-readied)) as `state.readying`.
+
+Without it the card was wrong in the one way an operator acts on. A cycle planning three appraisals
+with full headroom starts them minutes apart, because the executor's loop is serial and each dispatch
+waits on the worktree pool; in between, the Up next queue said all three had been dispatched and this
+card showed one agent. The reading an operator took from that — _three to do, one picked up_ — was the
+only one available.
+
+**It is drawn as not-an-agent, in [the keyboard entry](#the-keyboard-entry)'s grammar**, because it is
+making the same distinction: a **`div`, not a button** (there is no transcript to open, nothing to kill
+and nothing to inject into — there is no process yet), a **hollow lamp**, a **dashed left edge**, and
+**no cost column**, where a `$0.00` would read as a cheap agent rather than as no agent. What differs
+is the tint: `--cn-readying`, a mix of the console accent and the faint ink, rather than the desk run's
+violet. The two rows differ in exactly what an operator is reading them for — a desk run is somebody at
+their own keyboard and will never take a fleet slot, while this is the harness itself, on its way to
+taking one — and one colour for both would have merged them.
+
+The state column carries the step (`handing a slot over`, `reading CI output`, `authorizing`,
+`picked up`) in the same slot every other row wears its state, in the tint. The words are
+[09](09-execution.md#handing-a-slot-over)'s own; the hover behind them says what that step waits on and
+the two things a glance cannot — that it holds no slot the cap counts *yet*, and that it leaves the
+list on its own, when the agent starts or when the dispatch fails.
+
+**It takes no slot and is not counted as one.** `view.live` excludes it, exactly as it excludes a desk
+run, so the header's `N out` and the cap readout are untouched; the count is stated beside them as
+`· 2 being readied`. Folding it in would make the number move twice for one dispatch — once when the
+executor picked the action up and again when the agent appeared.
+
+Its place in the list is the sentence the card reads as: the agents that are out, then what is being
+sent, then what nobody sent at all.
 
 ### The keyboard entry
 

@@ -279,6 +279,22 @@ export interface CockpitActions {
   }): void;
   /** Open a goal's page, or return to the overview with null. */
   selectGoal(ref: string | null): void;
+  /**
+   * Open a pull request's page, or leave it with null — landing back on the goal
+   * the crumb names, which is where the place underneath it already was.
+   * → `docs/spec/17-cockpit.md#the-pull-request-page`
+   */
+  selectPr(prNumber: number | null): void;
+  /**
+   * Put a review thread back in front of the fleet, or take the ask back.
+   *
+   * The one thing the pull-request page *does*. It is not a reply and it is not a
+   * write to the provider: it says *this is not settled* to the harness, which
+   * reads the thread as unanswered again and dispatches for it. The mark is spent
+   * by the fleet's next reply into that thread.
+   * → `docs/spec/07-pull-requests.md#reopening-a-thread`
+   */
+  reopenThread(prNumber: number, threadId: string, reopened: boolean): Promise<void>;
   /** Bring a full-surface panel in front, or dismiss it with null. */
   openPanel(panel: ConsolePanel): void;
   /**

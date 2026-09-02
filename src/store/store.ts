@@ -52,6 +52,8 @@ import { ReviewWaitStore } from './reviewWaits.js';
 import { PrReviewStore } from './prReviews.js';
 import { PrReviewRouteStore, PR_REVIEW_ROUTE_COLUMNS } from './prReviewRoutes.js';
 import { PrReviewExternalStore } from './prReviewExternals.js';
+import { PrThreadReopenStore } from './prThreadReopens.js';
+import type { PrThreadReopen } from '../prThreads.js';
 import { DecisionStore, DECISION_COLUMNS } from './decisions.js';
 import { WorldStore, type WorldLabelPatch } from './world.js';
 import { ErrorStore } from './errors.js';
@@ -233,6 +235,7 @@ export class Store {
   private readonly prReviews: PrReviewStore;
   private readonly prReviewRoutes: PrReviewRouteStore;
   private readonly prReviewExternals: PrReviewExternalStore;
+  private readonly threadReopens: PrThreadReopenStore;
   private readonly decisions: DecisionStore;
   private readonly world: WorldStore;
   private readonly errors: ErrorStore;
@@ -408,6 +411,7 @@ export class Store {
     this.prReviews = new PrReviewStore(ctx);
     this.prReviewRoutes = new PrReviewRouteStore(ctx);
     this.prReviewExternals = new PrReviewExternalStore(ctx);
+    this.threadReopens = new PrThreadReopenStore(ctx);
     this.decisions = new DecisionStore(ctx);
     this.world = new WorldStore(ctx);
     this.errors = new ErrorStore(ctx);
@@ -1408,8 +1412,8 @@ export class Store {
   markLocalRunInterrupted(id: string, at: string | null): void {
     this.localRuns.markLocalRunInterrupted(id, at);
   }
-  markLocalRunSeen(id: string): void {
-    this.localRuns.markLocalRunSeen(id);
+  markLocalRunSeen(id: string, at: string): void {
+    this.localRuns.markLocalRunSeen(id, at);
   }
   setLocalRunStatus(id: string, status: LocalRunStatus, note?: string): void {
     this.localRuns.setLocalRunStatus(id, status, note);
@@ -1471,6 +1475,12 @@ export class Store {
   }
   prsReviewedElsewhere(): ReadonlySet<number> {
     return this.prReviewExternals.prsReviewedElsewhere();
+  }
+  setPrThreadReopened(prNumber: number, threadId: string, reopened: boolean): void {
+    this.threadReopens.setPrThreadReopened(prNumber, threadId, reopened);
+  }
+  prThreadReopens(): PrThreadReopen[] {
+    return this.threadReopens.prThreadReopens();
   }
 
   // -- Decisions (audit) ---------------------------------------------------

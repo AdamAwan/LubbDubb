@@ -44,7 +44,11 @@ export interface BuildStanding {
   ahead: number;
   /** What is waiting, newest first, capped at {@link MAX_COMMITS}. */
   commits: UpstreamCommit[];
-  /** Uncommitted changes in the install directory. A pull over these is not safe. */
+  /**
+   * Uncommitted changes to *tracked* files in the install directory. A pull over
+   * these is not safe — and untracked ones are deliberately not counted, because
+   * a pull over those is. See {@link readBuildStanding}.
+   */
   dirty: boolean;
   /** The branch the install directory is on, or null when detached. */
   branch: string | null;
@@ -126,9 +130,11 @@ export async function readBuildStanding(opts: {
   remote: string;
   branch: string;
   now: () => string;
+  /** The install directory, for the test that stands in a checkout it controls. */
+  root?: string;
 }): Promise<BuildStanding> {
   const at = opts.now();
-  const root = installRoot();
+  const root = opts.root ?? installRoot();
   if (!root) return noReading('LubbDubb is not running from a git checkout, so it cannot see its own updates', at);
 
   let head: string;
@@ -139,7 +145,17 @@ export async function readBuildStanding(opts: {
     // `--quiet` exits 1 on a detached HEAD rather than printing garbage, and a
     // detached build is a legitimate thing to be running — it just has no branch.
     branch = await gitOrNull(root, ['symbolic-ref', '--quiet', '--short', 'HEAD']);
-    dirty = (await runGit(root, ['status', '--porcelain'])).stdout.trim().length > 0;
+    // `--untracked-files=no`, and the flag is the whole point of the line. The
+    // supervisor applies an update with `pull --ff-only`, which an untracked file
+    // does not stand in the way of — but a bare `--porcelain` lists them, so one
+    // stray file in the install directory (an operator's note, a dropped log, a
+    // path a newer build writes that this checkout's older `.gitignore` never
+    // learned) reads as "uncommitted changes" and takes the upgrade button away
+    // for good. That is worst on exactly the deployment that most needs it: the
+    // longer a build goes untouched, the more it has picked up. It also kept the
+    // *reading* itself off a checkout with enough untracked files to overrun the
+    // pipe, which came back as "could not read the install directory".
+    dirty = (await runGit(root, ['status', '--porcelain', '--untracked-files=no'])).stdout.trim().length > 0;
   } catch (err) {
     return noReading(`could not read the install directory: ${(err as Error).message}`, at);
   }

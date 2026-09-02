@@ -55,6 +55,12 @@ test('every place round-trips through the query string', () => {
     at({ plan: 'plan-395' }),
     at({ retro: 'issue:142' }),
     at({ scratchpad: 'issue:142' }),
+    at({ goal: 'issue:142', pr: 706 }),
+    // The ladder, all three rungs at once: a pull request's page, over the goal it
+    // was reached from, over the tab the goal was reached from. Stepping back has
+    // to restore all three, which is the whole reason the pull request is a field
+    // beside the goal rather than a value of it.
+    at({ tab: 'tickets', goal: 'issue:142', pr: 706, agent: 'agent-7' }),
     at({ goal: 'issue:142', reviewPack: 684 }),
     at({ goal: 'issue:142', reviewPack: 684, reviewIdea: 'idea_V1StGXR8-Z5jdHi6' }),
     at({ goal: 'issue:142', reviewPack: 684, reviewIdea: 'all' }),
@@ -159,6 +165,17 @@ test('an idea is carried only under a pack, and a pack is a positive integer', (
 // The backlog tab was folded into tickets (#351). An unknown tab resolves to the
 // overview, so without the alias every bookmark and shared link to it would land
 // somewhere else with nothing saying so.
+test('a pull request page is a positive integer, or it is nowhere', () => {
+  // The one input to the cockpit an operator can type. `?pr=main` is a place that
+  // does not exist, and the answer to that is the page underneath it — never a
+  // page drawn for NaN.
+  assert.deepEqual(readPlace('?pr=main'), NOWHERE);
+  assert.deepEqual(readPlace('?pr=0'), NOWHERE);
+  assert.deepEqual(readPlace('?pr=-3'), NOWHERE);
+  assert.equal(readPlace('?pr=706').pr, 706);
+  assert.equal(readPlace('?goal=issue:142&pr=706').goal, 'issue:142', 'the goal underneath survives');
+});
+
 test('a link to the deleted backlog tab lands on the tickets tab', () => {
   assert.equal(readPlace('?tab=backlog').tab, 'tickets');
   assert.equal(readPlace('?tab=backlog&collapsed=3').collapsed[0], 3, 'and keeps the rest of the place');

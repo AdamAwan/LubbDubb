@@ -20,9 +20,9 @@ import { pastTheFunnel } from './support/plans.js';
  * The **read-only checkout** (issue #396): what the three dispatches that only read
  * the repository take a worktree slot as.
  *
- * `issue-appraisal`, `issue-assess` and `validate-check` each dispatch a code agent that
- * is told in its prompt not to commit or push anything, and each used to mint a
- * branch cut from the default one to do it in. That branch never got a pull request,
+ * `issue-appraisal`, `issue-assess`, `validate-check` and `validation-failed` each
+ * dispatch a code agent that is told in its prompt not to commit or push anything, and
+ * each used to mint a branch cut from the default one to do it in. That branch never got a pull request,
  * so `reapableBranches` — which only ever deletes the branch of a **merged** one —
  * never collected it: one ref per appraisal, per assessment and per check, for the life
  * of the deployment, with nothing anywhere reading as wrong.
@@ -122,6 +122,7 @@ function delivered(): IssueDelivery {
   };
 }
 
+/** A check nobody has run, and the same check after somebody ran it and it failed. */
 function handedOverCheck(): ValidationCheck {
   return {
     originRef: 'issue:12',
@@ -164,7 +165,7 @@ function dispatchFor(
   return action as unknown as { branch: string; base?: string | null; readOnly?: boolean };
 }
 
-test('all three read-only rules ask for the same shape, and none keeps a private arrangement', async () => {
+test('every read-only rule asks for the same shape, and none keeps a private arrangement', async () => {
   // The appraisal: nothing has been started, so the goal is all there is to judge.
   const appraisal = await new RuleDispatcher().decide(ctx());
   // The assessor: work has been done and nothing is in flight.
@@ -176,10 +177,22 @@ test('all three read-only rules ask for the same shape, and none keeps a private
     ctx({ plans: [plan()], deliveries: [delivered()], validationChecks: [handedOverCheck()] }),
   );
 
+  // A check somebody ran against the delivered goal and recorded as failed.
+  const failed = await new RuleDispatcher().decide(
+    ctx({
+      plans: [plan()],
+      deliveries: [delivered()],
+      validationChecks: [
+        { ...handedOverCheck(), actor: 'human', state: 'failed', resultNote: 'the columns shift', resultAt: NOW },
+      ],
+    }),
+  );
+
   for (const [origin, actions] of [
     ['issue:12:appraisal', appraisal.actions],
     ['issue:12:assess', assess.actions],
     ['issue:12:validate:csv-opens', validate.actions],
+    ['issue:12:validate-failure:csv-opens', failed.actions],
   ] as const) {
     const dispatch = dispatchFor(actions, origin);
     assert.equal(dispatch.readOnly, true, `${origin} needs a repository, not a branch of its own`);

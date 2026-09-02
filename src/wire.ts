@@ -94,6 +94,7 @@ import type {
   HumanTask,
   IssueConclusionVerdict,
   IssueInstruction,
+  IssueRelative,
   IssueRunOutcome,
   IssueState,
   IssueSpend,
@@ -126,6 +127,7 @@ import type {
   Proposal,
   PrState,
   PullRequest as WorldPullRequest,
+  ReadyingAction,
   Retrospective,
   ReviewAttention,
   ReviewMark,
@@ -374,6 +376,22 @@ export interface CockpitWorld extends WorldSnapshot {
   /** Absent when the retention window is disabled or the baseline predates it. */
   closedPullRequests?: PullRequest[];
   issues: Issue[];
+  /**
+   * The open containers a goal with no parent could be hung off — `candidateParents`'
+   * answer over the whole world, one list per snapshot rather than one per goal.
+   *
+   * Shipped rather than re-derived because the browser cannot derive it. The list
+   * is the union of two things: the container-typed items in `issues`, and the
+   * **parents of other items** — and on Azure, where the item list is narrowed by
+   * tag and assignee, it is almost entirely the second. A picker filtering `issues`
+   * by type alone therefore offers nothing on the deployments that raise the
+   * question, which is a warning with no way to answer it.
+   *
+   * Empty on a tracker with no hierarchy, and on a world whose items name no open
+   * container. `ParentPicker` draws no list at all in that case rather than an
+   * empty select.
+   */
+  parentCandidates: IssueRelative[];
 }
 
 // ---------------------------------------------------------------------------
@@ -1256,6 +1274,22 @@ export interface CockpitState {
    * and nothing about the number would look wrong.
    */
   endedAgents: number;
+  /**
+   * Actions the executor is working on that have not become agents yet — a
+   * dispatch waiting on the worktree pool to hand a slot over, an outbound act
+   * waiting on the authorization read.
+   *
+   * On the fleet section because the fleet card is where it is drawn and because
+   * it moves on the fleet's clock, but it is **not** part of any fleet count: the
+   * cap counts agents, and these are not agents. Empty on every snapshot taken
+   * between cycles, which is nearly all of them — the list is non-empty only while
+   * `ActionExecutor.execute` is inside an await.
+   *
+   * In-memory server-side and shipped whole rather than as a count, because the
+   * reading an operator opens the card for is *which* work is being readied and
+   * for how long. → `docs/spec/09-execution.md#what-is-being-readied`
+   */
+  readying: ReadyingAction[];
   /**
    * The ids of agents parked because the *account's* usage limit is spent, rather
    * than because they asked anything (issue #318). They are ordinary `waiting` rows
@@ -2431,6 +2465,9 @@ export type {
   PlanPart,
   PlanPartInput,
   PlanRevision,
+  PrReviewThread,
+  PrThreadMessage,
+  PrThreadState,
   Pet,
   PetActionKind,
   PetFlaw,
@@ -2440,6 +2477,8 @@ export type {
   PetWallet,
   FeatureSummary,
   Proposal,
+  ReadyingAction,
+  ReadyingStep,
   Retrospective,
   ReviewAnchor,
   ReviewAttention,

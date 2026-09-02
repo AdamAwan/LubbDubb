@@ -71,6 +71,16 @@
   --cn-violet-fill: color-mix(in srgb, var(--cn-violet) 5%, var(--cn-panel));
   --cn-violet-line: color-mix(in srgb, var(--cn-violet) 24%, var(--cn-panel));
 
+  /* The harness readying an action into an agent: the fleet's own accent, pulled
+     most of the way to the faint ink. Derived rather than a fourteenth core
+     colour, so every preset answers it by answering the two it is mixed from —
+     and the mix *is* the reading. This is the accent's work, not a separate kind
+     of thing the way a desk run's violet is, but it is not out yet, so it does not
+     get the accent's full voice. */
+  --cn-readying: color-mix(in srgb, var(--cn-accent) 45%, var(--cn-fg-faint));
+  --cn-readying-fill: color-mix(in srgb, var(--cn-readying) 6%, var(--cn-panel));
+  --cn-readying-line: color-mix(in srgb, var(--cn-readying) 26%, var(--cn-panel));
+
   /* Four inks that are not a tint of the hue they belong to. `--cn-blue-ink` is
      the plainest case: it leans cyan where `--cn-accent` leans violet, so no
      amount of accent mixed into the foreground reaches it. A preset answers these
@@ -2038,6 +2048,22 @@ button.cn-grow {
   background: transparent;
   border: 1.5px solid var(--cn-violet);
 }
+/* The harness readying an action, and the same grammar the desk run wears, for the
+   same reason: this is in flight and it is not an agent. Hollow where an agent's
+   lamp is filled — there is no process to report a status — and its own tint,
+   because it is not a desk run either: nobody is at a keyboard, the harness is
+   working. */
+.cn-lamp.cn-readying-lamp {
+  background: transparent;
+  border: 1.5px solid var(--cn-readying);
+}
+/* Dashed for the desk row's reason — no dispatch cut this — and `default` because
+   there is nothing to click: no transcript, no kill, no inject. */
+.cn-row.cn-readying {
+  cursor: default;
+  border-left: 2px dashed var(--cn-readying);
+  padding-left: 11px;
+}
 /* The dashed edge is the same grammar the lamp uses — nothing cut this row from
    a dispatch. `default` rather than the row's inherited pointer, because there
    is nothing to click: no transcript, no kill, no inject. */
@@ -2087,6 +2113,31 @@ button.cn-grow {
   border-color: var(--cn-green-line);
   color: var(--cn-green);
 }
+/* The three unnamed tones, for chips whose subject is not a court or a run: a
+   thread waiting on us, one waiting on the reviewer, a check the harness will fix
+   and one it has been told to leave alone. They take the same four token families
+   the named chips above take — there is one amber and one blue on this console —
+   and exist only so a surface that is not about courts does not have to borrow a
+   court's word for its colour. */
+.cn-chip.cn-warn {
+  background: var(--cn-amber-fill);
+  border-color: var(--cn-amber-line);
+  color: var(--cn-amber-ink);
+}
+.cn-chip.cn-info {
+  background: var(--cn-blue-fill);
+  border-color: var(--cn-blue-line);
+  color: var(--cn-blue-ink);
+}
+.cn-chip.cn-bad {
+  background: var(--cn-red-fill);
+  border-color: var(--cn-red-line);
+  color: var(--cn-red-ink);
+}
+.cn-chip.cn-mute {
+  color: var(--cn-fg-faint);
+}
+
 /* A retained run's marking: the tracker's copy of this goal is stale. Dashed and
    in the dim ink rather than a warning colour — it is a fact about a source, not a
    fault, and the amber families are spoken for by things that want an answer. */
@@ -2985,6 +3036,14 @@ button.cn-grow {
   border-color: var(--cn-line);
   color: var(--cn-fg-dim);
 }
+/* A readying row keeps its tint the same way and for the same reason: the hollow
+   lamp, the dashed edge and the word are one signal, and the neutral grey would be
+   the part of it that stopped saying so. */
+.cn-readying .cn-why-chip {
+  background: var(--cn-readying-fill);
+  border-color: var(--cn-readying-line);
+  color: var(--cn-readying);
+}
 /* A desk run keeps its violet wherever it is drawn: the hollow lamp, the dashed
    edge and this word are one signal — nothing dispatched this row — and a state
    chip in the neutral grey would be the only part of it that stopped saying so. */
@@ -3145,4 +3204,167 @@ button.cn-grow {
   .cn-frow.cn-live::after {
     animation: none;
   }
+}
+
+/* ---------- the pull request's page ----------
+   It reuses the goal page's own vocabulary — `cn-goal` for the page gap, `cn-card`
+   for every zone, `cn-gcols` for the split — so the two pages are the same page
+   with different contents, which is what makes the crumb between them read as one
+   move rather than two surfaces. What is below is only what a pull request has and
+   a goal does not: a masthead of provider readings, and a threaded conversation. */
+.cn-prhead {
+  padding: 13px 15px;
+  gap: 9px;
+}
+.cn-prtitle {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+.cn-prnum {
+  font: 600 15px/1.2 var(--cn-mono);
+  color: var(--cn-fg-faint);
+}
+.cn-prtitle h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  text-wrap: balance;
+  min-width: 0;
+}
+.cn-prbranch {
+  font: 11.5px/1.5 var(--cn-mono);
+  color: var(--cn-fg-faint);
+  overflow-wrap: anywhere;
+}
+.cn-prchips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+/* The refs sit at the far end of the chip row: they leave the cockpit, and every
+   other thing on the line is a reading taken inside it. */
+.cn-prchips .cn-refs {
+  margin-left: auto;
+}
+.cn-prpack {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* A pull request's name, drawn as the way onto its page. Styled as the name it is
+   rather than as a button: the row already carries chips and a reference, and a
+   second thing shaped like a control would make the name compete with them. */
+.cn-prlink {
+  display: block;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--cn-fg);
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.cn-prlink:hover {
+  color: var(--cn-blue-ink);
+}
+
+/* ---------- review threads ---------- */
+.cn-threads {
+  display: flex;
+  flex-direction: column;
+}
+.cn-thread {
+  border-bottom: 1px solid var(--cn-line-soft);
+  padding: 9px 13px 11px;
+}
+.cn-thread:last-child {
+  border-bottom: 0;
+}
+/* The two states that are still work carry a tint of the ground, so "what is on
+   us" reads off the shape of the list before any chip is read. A resolved thread
+   is drawn back rather than hidden — it is the record of what was asked. */
+.cn-thread.cn-th-open,
+.cn-thread.cn-th-reopened {
+  background: var(--cn-amber-bg);
+}
+.cn-thread.cn-th-resolved .cn-thtext,
+.cn-thread.cn-th-resolved .cn-thwho {
+  color: var(--cn-fg-faint);
+}
+.cn-throw {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+/* Where the thread hangs. A path is the one thing here that can be longer than the
+   column, so it scrolls inside itself rather than pushing the controls off the row. */
+.cn-thwhere {
+  font: 11px/1 var(--cn-mono);
+  color: var(--cn-fg-dim);
+  background: var(--cn-track);
+  border-radius: 4px;
+  padding: 3px 6px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cn-throw .cn-tgl {
+  margin-left: auto;
+}
+.cn-thmsg {
+  display: flex;
+  gap: 9px;
+  padding: 4px 0 0 3px;
+}
+/* The rail is the thread's shape: one line down the side of every message, tinted
+   where the harness is the one speaking. */
+.cn-thrail {
+  width: 2px;
+  border-radius: 2px;
+  background: var(--cn-line-hi);
+  flex: none;
+}
+.cn-thours .cn-thrail {
+  background: var(--cn-violet);
+}
+.cn-thbody {
+  min-width: 0;
+}
+.cn-thwho {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--cn-fg-dim);
+}
+.cn-thmark {
+  font: 600 9.5px/1 var(--cn-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--cn-violet);
+  border: 1px solid var(--cn-violet-line);
+  background: var(--cn-violet-fill);
+  padding: 2px 4px;
+  border-radius: 3px;
+  margin-left: 6px;
+}
+.cn-thtext {
+  font-size: 12.5px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.cn-thtext p {
+  margin: 3px 0;
+}
+.cn-thtext pre {
+  overflow-x: auto;
 }

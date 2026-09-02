@@ -333,6 +333,12 @@ export class OctokitGitHubApi implements GitHubApi {
       authorLogin: c.user?.login ?? '',
       body: c.body,
       inReplyToId: c.in_reply_to_id ?? null,
+      path: c.path,
+      // `line` is null on a comment whose lines the diff has since moved past;
+      // `original_line` is where it was left, which is the honest answer for a
+      // surface that only names the place. Neither is a fallback for the other
+      // being *absent* — an outdated thread genuinely has no current line.
+      line: c.line ?? c.original_line ?? null,
     }));
   }
 

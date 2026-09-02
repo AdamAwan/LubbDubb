@@ -601,7 +601,9 @@ ${RESUME_RULES}`);
    */
   noteAlive(): void {
     if (this.runId === null) return;
-    this.deps.store.markLocalRunSeen(this.runId);
+    // This runner's clock, never the store's: `staleness` measures the stamp against
+    // the same clock, and a window compared across two of them is not a window.
+    this.deps.store.markLocalRunSeen(this.runId, new Date((this.deps.now ?? Date.now)()).toISOString());
   }
 
   /**

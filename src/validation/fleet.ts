@@ -86,3 +86,51 @@ export function checkBriefing(check: ValidationCheck): string {
   }
   return lines.join('\n');
 }
+
+/**
+ * `issue:<n>:validate-failure:<checkId>` — the origin a *diagnosis* of a failed
+ * check is dispatched on, and deliberately not {@link validateOrigin}.
+ *
+ * Its own origin because it is its own budget. A check that was handed to the
+ * fleet, run, and came back `failed` has already spent attempts against the run
+ * origin; sharing it would let a check that took three tries to run get no
+ * diagnosis at all, and a diagnosis that cannot settle would eat the attempts of
+ * a re-run nobody has asked for yet.
+ *
+ * It is also the shape that keeps `validation_report` refusing this agent:
+ * {@link validateOriginParts} matches `:validate:` alone, so a diagnosing agent
+ * is told — structurally, not by a sentence in a prompt — that the reading
+ * belongs to whoever took it. That refusal is the whole reason the segment is a
+ * different word rather than a suffix on the same one.
+ */
+export function validationFailureOrigin(issueNumber: number, checkId: string): string {
+  return `issue:${issueNumber}:validate-failure:${checkId}`;
+}
+
+/**
+ * `validate-failure/issue/<n>/<checkId>` — its own namespace, {@link
+ * validateBranch}'s reason: git stores refs as files, so a diagnosis branch
+ * beneath `validate/issue/<n>/<checkId>` could not coexist with the run's own.
+ */
+export function validationFailureBranch(issueNumber: number, checkId: string): string {
+  return `validate-failure/issue/${issueNumber}/${checkId}`;
+}
+
+/**
+ * The check, plus the reading that is being diagnosed, **appended** to the
+ * rendered prompt for {@link checkBriefing}'s reason.
+ *
+ * The note is the half the agent cannot work without: the procedure says what
+ * was meant to happen and the reading is the only account of what did. Quoted
+ * rather than summarised, and attributed — "an agent says this failed" and "I ran
+ * it and it failed" are different facts, and the second is the one that cannot be
+ * argued with.
+ */
+export function failureBriefing(check: ValidationCheck): string {
+  const who = check.resultBy === 'agent' ? 'An agent' : check.resultBy === 'operator' ? 'A person' : 'Somebody';
+  const note = check.resultNote ?? '(no account was recorded — the row says only that it failed)';
+  return (
+    checkBriefing(check) +
+    `\n### What was reported\n\n${who} ran it and recorded **failed**:\n\n> ${note.replace(/\n/g, '\n> ')}\n`
+  );
+}

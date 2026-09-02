@@ -628,10 +628,7 @@ test('a force close is dated by the pulse, and its run still comes back', async 
 });
 
 test('a force close long enough ago is not brought back, and the note says what it knows', async () => {
-  // Anchored to the real clock, because `noteAlive` stamps `last_seen_at` through the
-  // store's own clock and only the runner's is injected here: a fixed date read as
-  // "five hours later" the day it was written and as "in the past" every day after.
-  const at = Date.now();
+  const at = Date.parse('2026-09-02T09:00:00.000Z');
   const first = build({ resumeInstruction: 'Run /dev-environment continue.', now: () => at });
   await first.runner.start('issue:284');
   first.runner.noteAlive();

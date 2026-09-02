@@ -149,9 +149,16 @@ export class LocalRunStore {
    * actually holding the run may date it. A boot that declined to bring a live row
    * back must not stamp it on its way past, or the row it just refused would look
    * freshly held to the boot after that.
+   *
+   * **The stamp is passed in, exactly as {@link markLocalRunInterrupted}'s is**, and
+   * for the same reason: the only reader of this column is the runner's resume window,
+   * which measures it against the *runner's* clock. Stamped from the store's clock
+   * instead, the two agree only as long as nobody injects one — so the age a boot
+   * refuses a run on was the difference between two different clocks, and a test that
+   * moved time forward five hours read whatever the wall clock made of it.
    */
-  markLocalRunSeen(id: string): void {
-    this.ctx.db.prepare(`UPDATE local_runs SET last_seen_at = ? WHERE id = ?`).run(this.ctx.now(), id);
+  markLocalRunSeen(id: string, at: string): void {
+    this.ctx.db.prepare(`UPDATE local_runs SET last_seen_at = ? WHERE id = ?`).run(at, id);
   }
 
   /**

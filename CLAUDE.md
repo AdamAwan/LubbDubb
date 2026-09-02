@@ -75,6 +75,11 @@ EXISTS` never alters an existing table, so a column without an `ensureColumns` e
   `DELETE`.** Which verdict tables may coexist is declared once in `src/store/verdicts.ts`; a writer
   that clears its siblings itself silently reintroduces the pairwise drift the matrix replaced.
   → [14](docs/spec/14-persistence.md#issue-verdicts-and-the-exclusion-matrix)
+- **A failed validation check must never be recorded as a shortfall.** A shortfall clears the goal's
+  **delivery** row, and the delivery is what parks the goal: writing one un-parks it, settles the
+  close-out obligation and declines the validation bench row — the reading deleting the rows it was
+  reported into, with delivered work handed back to the fleet. Rule `validation-failed` is the
+  consumer, on its own origin. → [20](docs/spec/20-validation.md#when-a-check-fails)
 
 ### Tests
 
@@ -120,6 +125,10 @@ EXISTS` never alters an existing table, so a column without an `ensureColumns` e
 
 ### Dispatch
 
+- **A new `issue:<n>:…` dispatch origin is classified in `src/issueOrigins.ts`.** Left out, it reads
+  as `unrecognised`: it stops expanding under a goal's priority flag, and its spend files under
+  "other" rather than the phase it belongs to. Neither is red.
+  → [05](docs/spec/05-dispatcher.md#marking-a-goal-a-priority), [18](docs/spec/18-observability.md)
 - **A new agent-dispatch rule must route through the candidate list.** An inline `raw.push` of a
   `dispatch_*` action bypasses both the headroom cut and the Up next queue. Adding a rule is a
   `DISPATCH_PIPELINE` entry in the position it should run, and a module under

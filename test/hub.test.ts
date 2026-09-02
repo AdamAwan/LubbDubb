@@ -14,11 +14,13 @@ function fakeSystem(): {
   localRun: EventEmitter;
   localRunWatch: EventEmitter;
   errors: EventEmitter;
+  readying: EventEmitter;
 } {
   const agents = new EventEmitter();
   const localRun = new EventEmitter();
   const localRunWatch = new EventEmitter();
   const errors = new EventEmitter();
+  const readying = new EventEmitter();
   const system = {
     harness: new EventEmitter(),
     agents,
@@ -26,10 +28,11 @@ function fakeSystem(): {
     errors,
     localRun,
     localRunWatch,
+    readying,
     reviewPacks: new EventEmitter(),
     reviewPackChecker: new EventEmitter(),
   } as unknown as System;
-  return { system, agents, localRun, localRunWatch, errors };
+  return { system, agents, localRun, localRunWatch, errors, readying };
 }
 
 /** Fake ws socket that captures everything sent to it. */
@@ -167,7 +170,7 @@ test('the watch’s readings ride the local run’s coalescer, not a second one'
  * pickup verdict on every goal and the runway band with it.
  */
 test('a dirty is scoped only where the signal provably touches one section', () => {
-  const { system, agents, errors } = fakeSystem();
+  const { system, agents, errors, readying } = fakeSystem();
   const hub = new Hub(system);
   const { socket, sent } = fakeSocket();
   hub.add(socket);
@@ -190,6 +193,13 @@ test('a dirty is scoped only where the signal provably touches one section', () 
   );
   assert.deepEqual(
     dirtyFor(() => agents.emit('progress', {})),
+    [['fleet']],
+  );
+  // The executor picking an action up, moving it on, or letting it go: the rows
+  // ride the fleet section, and nothing an action being readied does can move a
+  // goal's verdict — it has not started.
+  assert.deepEqual(
+    dirtyFor(() => readying.emit('changed')),
     [['fleet']],
   );
   // A conclusion and a retrospective are readings folded per goal.
