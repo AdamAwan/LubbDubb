@@ -61,15 +61,16 @@ An obstacle is identified by a **key**: a fact about the world, not a sentence a
 | `cmd` | The command that failed | nothing — [suggestion-only](#signature-and-cmd-do-not-bind) |
 
 **A key resolves to exactly one obstacle**, which is what makes deduplication an index lookup rather
-than a judgement. The uniqueness constraint is on `(kind, value)` in _src/store/obstacles.ts_, and the
-claim is made inside the synchronous write `CLAUDE.md` already guarantees: insert the keys, read back
+than a judgement. The uniqueness constraint is on `value` in _src/store/obstacles.ts_, and the claim
+is made inside the synchronous write `CLAUDE.md` already guarantees: insert the keys, read back
 which obstacle won, attach the loser's report to the winner. Two agents reporting in the same
 millisecond cannot both create a row, and neither waits.
 
-**The key is the identity; the kind is a label.** Two agents may reasonably disagree about whether
-something is a flaking test or a broken check, and if the kind were part of the match key that
-disagreement would split one obstacle into two — the prose problem rebuilt with a smaller vocabulary.
-Matching is on the key alone.
+**The value is the identity; the kind is a column beside it.** Two agents may reasonably disagree
+about whether something is a flaking test or a broken check, and if the kind were part of the index
+that disagreement would split one obstacle into two — the prose problem rebuilt with a smaller
+vocabulary. `check:test (windows)` and `test:test (windows)` are one key. The kind is recorded
+because it says what was checked against what, and it is read by nothing that matches.
 
 **An obstacle may hold several keys.** A check name and a signature and a path are three ways into
 one thing, and a report carrying any of them joins.
@@ -81,7 +82,10 @@ new failure is already owned. That failure is silent — the swallowed report is
 nobody fixes it, and nothing is red.
 
 So a `check` key **never binds on its own**. It must co-occur with a `test` or a `path` key to resolve
-an obstacle; a report carrying only a check name joins on containment or files fresh.
+an obstacle. A report carrying only a check name **files fresh**, and the prose matcher
+(`claimsMatch`, `src/claims.ts`) is run over the new row against the existing ones — its hits land in
+`near[]` as suggestions and bind nothing. That is the matcher this whole document replaces, kept
+where a wrong answer is a line an agent may ignore rather than a report swallowed.
 _test/obstacleMatch.test.ts_ holds that, because it is the guard the rest of the design leans on.
 
 A `signature` does not rescue a bare `check`, and that is the pair of rules meeting rather than one of
@@ -205,12 +209,15 @@ than looking like a fresh problem every time.
 
 This is the invariant the previous store did not have, and it is asserted rather than intended.
 `sighted` decays to `dormant`. `standing` gets an owner on the pulse. `owned` resolves when the owner
-lands. `resolved` and `dormant` are terminal. The only state whose exit is a person is `muted`, and a
-person put it there.
+lands. `resolved` and `dormant` are terminal in the sense that matters — nothing further is owed of
+anyone, and the row moves again only if the world re-reports it. The one state whose exit is a person
+is `muted`, and a person put it there.
 
 _test/obstacleLifecycle.test.ts_ enumerates the states and **fails when one is added without an
-automatic exit**. A queue that only a human empties is exactly how the last attempt died, and a
-convention would not have caught it.
+automatic exit**. It carves out `muted` by name, not by predicate: a second entry in that carve-out
+is the failure it exists to catch, and a rule loose enough to admit one would have admitted every
+state the previous store filled up with. A queue that only a human empties is exactly how the last
+attempt died, and a convention would not have caught it.
 
 ## The intake
 
@@ -223,7 +230,7 @@ asking *what do I do with this* should keep finding one door.
 | `why_not_mine` | Free text, required, unvalidated. |
 | `keys` | Optional; goes through the three gates above. |
 | `fix_makes_it_go_away` | Present and true → an obstacle. False → a note. |
-| `until` | Optional clock for something the agent believes transient. |
+| `until` | Optional clock for something the agent believes transient. Read only by [the backstop](#how-an-obstacle-ends). |
 
 `originRef`, `goalRef`, `branch` and the agent id come from the credential and are never arguments —
 the rule every other write in the tool channel already follows ([11](11-mcp-tools.md)).
@@ -360,9 +367,11 @@ allowance on it.
 - **The owner landing**, read off the existing landing sweep and never off the merge itself. The merge
   SHA has a `closedPrWindowMs` shelf life, so a hook on the transition loses the landing to any restart
   that straddles it ([24](24-environments.md#recording-a-landing)).
-- **A clock, as a backstop and never as the mechanism.** A timer alone either drops an obstacle while it
-  is still true, and the fleet rediscovers it, or keeps one alive after the fix landed, which teaches
-  every agent to disbelieve a check that is now genuinely broken. Both silent.
+- **A clock, as a backstop and never as the mechanism.** The intake's `until` seeds it and nothing
+  else reads that field: it expires a row that no condition and no owner ever settled, and it cannot
+  resolve one early. A timer alone either drops an obstacle while it is still true, and the fleet
+  rediscovers it, or keeps one alive after the fix landed, which teaches every agent to disbelieve a
+  check that is now genuinely broken. Both silent.
 - **Decay.** No report for `obstacleDormantMs` and no owner → `dormant`. The keys survive, so a
   re-report reopens rather than refiles.
 - **A note ends by being written into the repository.** A `standing` note gets a documentation change;
@@ -427,10 +436,11 @@ One thing, and it is the one the rest of this document rests on: **whether agent
 all.**
 
 It cannot be settled by argument, because it is a fact about running agents rather than a decision
-about a design — which is why it is here and why the other three questions this document opened with
-are not. Two things make it answerable rather than merely risky. The ask is appended to **every**
-dispatch unconditionally, so the [bootstrap trap](#what-went-wrong-last-time) — an intake nobody was
-told about — cannot recur. And the call rate is a figure on the page from the first day, so the
+about a design. Everything else this document leaves open it decides one way and says why — that is
+what the rest of these sections are — and this is the one that no amount of deciding settles. Two
+things make it answerable rather than merely risky. The ask is appended to **every** dispatch
+unconditionally, so the [bootstrap trap](#what-went-wrong-last-time) — an intake nobody was told
+about — cannot recur. And the call rate is a figure on the page from the first day, so the
 answer arrives as a number in a week rather than as an impression in a quarter.
 
 If the number is near zero, nothing further in this document is worth building, and that is the
