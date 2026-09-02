@@ -1924,12 +1924,12 @@ card is the drift `PanelRowModel` exists to end, one level up.
   source can take.
 - **Pull requests** — every open PR with its court in the state column, its CI ladder, and the watch
   eye pinned left of the title. The **row's name opens
-  [its page](#the-pull-request-page)**, and the refs beside it carry **both destinations**: the
-  cockpit's page again as a `<Ref>`, and the provider's as a `<PrOut>`. Two tokens for one pull
-  request rather than a choice between them, because the row raises two questions and each answers
-  one — what the harness makes of it (the threads it owes an answer, the checks, the work on the
-  branch) and what the diff says. Which is which is the [marks'](#how-a-reference-is-drawn) job: the
-  filled box stays in the cockpit, the dashed one with the arrow leaves.
+  [its page](#the-pull-request-page)**, and the ref beside it carries **both destinations on one
+  token** ([both doors](#a-reference-carries-both-its-doors)): the number opens the cockpit's page,
+  the arm opens the provider's. The row raises two questions and each answers one — what the harness
+  makes of it (the threads it owes an answer, the checks, the work on the branch) and what the diff
+  says — but they are two doors onto one pull request, and drawn as two separate tokens they read as
+  a repeat of the same number, which is what this card did until the arm existed.
   An **unwatched** PR stays in the list, with its health, and is drawn **spent** — the same dimming a
   closed PR and an unwatched goal take, off `attention.status === 'unwatched'` rather than a
   second reading of the labels. The chip alone left the one row nothing will happen on sitting at the
@@ -1938,9 +1938,11 @@ card is the drift `PanelRowModel` exists to end, one level up.
   the button is normally an **un-watch**: the way to stop a runaway agent's pull request.
   A PR is joined to its goal through **`goalOfPr`** — the server's own three-way match (a part's
   `prNumber`, the tracker's `linkedPrNumber`, the branch convention), read backwards — and the goal is
-  drawn as a way onto its page. Through the parts alone it was drawn for almost no PR at all: a goal
+  drawn as a way onto its page, behind the word **`delivers`** — two bare refs state that the row names
+  two things and nothing about how they are joined, and on this card the joining is the row's whole
+  reason for existing. Through the parts alone the goal was drawn for almost no PR at all: a goal
   the funnel failed open on has no parts and its PR is on the flat `issue/<n>` branch. A PR no ticket owns
-  resolves to nothing and draws nothing, which is honest about what is known. The toggle is **disabled rather than absent** with no watch label configured: the gate
+  resolves to nothing and draws nothing — the word goes with it — which is honest about what is known. The toggle is **disabled rather than absent** with no watch label configured: the gate
   being off is a fact about the deployment worth seeing, and a control that comes and goes with a
   config key reads as a bug in the page. The merged count is drawn only where the snapshot carries a
   closed list at all — absent means the retention window is off, which is not the claim "none merged".
@@ -4779,20 +4781,21 @@ sites pass a value they are already holding rather than re-deriving a number.
 
 **The destination is the ref's own business, not the call site's.** `<Ref to={ref} />` decides:
 
-- A **goal opens its page in the cockpit**. That is the richer of the two destinations — the plan, the
-  asks, the pull requests and the ticket's own `Open ticket ↗` are all on it — and it is the one no
-  other route from a row that merely mentions the goal can reach. A part ref resolves to its goal; the
-  part has no page of its own.
+- A **goal opens its page in the cockpit, and its ticket on the tracker** — both, as
+  [two doors on one token](#a-reference-carries-both-its-doors). The page is the richer of the two —
+  the plan, the asks, the pull requests are all on it — and it is the one no other route from a row
+  that merely mentions the goal can reach; the tracker holds the story as it was written, which the
+  page can only summarise. A part ref resolves to its goal; the part has no page of its own.
 - A **goal the world does not carry links to the tracker instead**. Whether a ref has a page is
   `goalIssue`'s answer, handed to the provider as `hasGoal`, for the reason the queue rail asks it
   rather than guessing: `buildGoalPage` returns null for a ref the snapshot dropped, the console draws
   the tab behind it, and a link onto one is a click that appears to do nothing.
-- A **pull request opens [its page](#the-pull-request-page)** on the same terms, and for the same
-  reason: the review threads, the checks and the work on its branch are all there, and no other route
-  from a row that merely names it reaches them. Whether the cockpit has one is `hasPrPage`'s answer,
-  handed to the provider as `hasPr`.
+- A **pull request opens [its page](#the-pull-request-page) and the provider's**, the same two doors
+  and for the same reason: the review threads, the checks and the work on its branch are all in the
+  cockpit, the diff is not. Whether the cockpit has one is `hasPrPage`'s answer, handed to the
+  provider as `hasPr`.
 - A **pull request the world does not carry links to the provider instead** — a closed one on a
-  deployment retaining none. `#412` and `pr:412` are both tried against `refUrls`; which of the two
+  deployment retaining none. `pr:412` and `#412` are both tried against `refUrls`; which of the two
   the snapshot happens to carry is not a row's business.
 - **Anything the provider could not resolve renders as plain text.** A ref the provider could not
   resolve is absent from the map, which is what the `fake` provider produces, and a link that goes
@@ -4808,11 +4811,6 @@ page carries — and exists for the same reason, since a ref onto a pull request
 opens its page rather than the provider's. Two keys, most-trusted first: `pr:<n>` is unambiguous where
 `#<n>` is shared with an issue of the same number.
 
-`<PrOut number={…} />` is the same destination as a **token**, for a row that offers both — the
-overview's pull-request rack draws it beside the `<Ref>`. Absent rather than inert where the provider
-resolved nothing, unlike `<PrLink>`: it sits beside a token that did resolve, so an unavailable second
-one reads as a broken link rather than as a stated fact.
-
 `<TicketLink number={…} url={…} />` is the fourth, and the destination `<Ref>` deliberately does not
 offer: a ref onto a goal the world carries opens its **page**, so the goal header's `Open ticket ↗`
 needs a control of its own. Three keys are tried, in the order of how much each can be trusted — the
@@ -4822,10 +4820,25 @@ which is this module's job; written into the page instead, the next surface that
 its own third ordering, and `#<n>` first is the one that opens a pull request on a tracker where issue
 412 and PR 412 both exist.
 
-`refLabel(ref)` is the third, and **the only place a ref becomes text** (`#212` from any of its forms).
-It was written three times over, and the fourth surface that wrote it printed the label with no link on
-it — which is the bug exactly: shortening a ref by hand is how a surface ends up naming a thing instead
-of pointing at it. `test/refLinks.test.ts` pins that nothing else strips a ref down to a number.
+`refLabel(ref)` is the third, and **the only place a ref becomes text** — `#212` for a goal from any of
+its forms, `PR 412` for a pull request. It was written three times over, and the fourth surface that
+wrote it printed the label with no link on it — which is the bug exactly: shortening a ref by hand is
+how a surface ends up naming a thing instead of pointing at it. `test/refLinks.test.ts` pins that
+nothing else strips a ref down to a number.
+
+**The family is in the name because the marks cannot carry it.** The three marks below say where a
+reference *goes*; none of them says what it *is*. So the rack drew `#412` for a pull request and `#212`
+for the goal it delivers as the same token in the same slot, and the one question that pair raises —
+which of these is the ticket? — was answered by clicking one to find out. A goal keeps the tracker's
+own `#`, which is what every tracker, commit message and operator already calls it; a pull request says
+`PR`. Nothing has to be taught and no fourth mark is spent, which is the trade: a notch, a tint or a
+second glyph would each have cost a legend, on a row that already carries lamps, chips and hairline
+rules.
+
+The `PR` belongs in `refLabel` and not in the token that draws it, for the reason the function exists:
+two call sites had already written `` `PR ${refLabel(ref)}` `` by hand, which is the same
+fourth-surface bug one step along — the rows that said `PR` were the rows somebody remembered to make
+say it. Both now pass a bare `<Ref>`.
 
 ### How a reference is drawn
 
@@ -4916,6 +4929,40 @@ provider cannot map, is simply omitted and renders plain.
 
 **A decision's subject ref is derived on the server and shipped on the row**, not re-derived in the
 browser from the action bag — [16](16-http-api.md#the-state-snapshot) has why.
+
+### A reference carries both its doors
+
+A goal and a pull request each exist in **two places**, and the two answer different questions: *what
+does the harness make of this* is the cockpit's page, *what does the tracker or the diff actually say*
+is the provider's. A `<Ref>` used to offer only the first, which made the provider somewhere you had to
+go and find — and the one row that minded fixed it locally, by drawing a **second token with the same
+number in it**. The overview's pull-request rack therefore read `#412` `#412` `#212`: two of the three
+a repeat, and all three the same mark.
+
+So it is **one token with two hit targets**, drawn by `RefDoors`: the number is the filled box that
+stays here, the arm is the arrow that leaves, and the dashed border between them is the joint. No new
+mark — the same three the vocabulary already has, arranged so a pair reads as one thing. The two halves
+share an outer edge (the button gives up its right border), so it is one shape at rest and two targets
+under the cursor, and the arm takes the same `:focus-visible` ring as the token, being the next tab
+stop along.
+
+**The arm is absent, not inert, where the provider resolved nothing.** It stands against a token that
+*did* resolve, so a dead second target reads as a broken link where a missing one reads as a token with
+one door — which is what it is. That is the opposite of `<TicketLink>`'s rule, and deliberately: a
+page's lone control saying "no address for this" is a stated fact; a row's second target saying it, on
+every row, is noise.
+
+Which key each arm resolves against is the same judgement `<TicketLink>` makes and matters for the same
+reason. A goal's arm tries `issue:<n>` then `#<n>`, a pull request's `pr:<n>` then `#<n>`: `#<n>` is
+**shared**, and `buildRefUrls` walks the pull requests before the issues, so on a tracker where issue
+412 and PR 412 both exist `#412` is the pull request's address. A goal's arm that tried it first opened
+the wrong thing on exactly the deployments busy enough to have both.
+
+**`cn-rel` is the other half of the rack's fix.** Two references side by side state that a row names two
+things and nothing about how they are joined, and on the rack and the fleet row the joining *is* the
+row — a pull request is there because of the goal it is delivering. So the row says it: `PR 412
+delivers #212`. The word is muted and carries no box, because anything in that slot wearing a box is
+read as a way somewhere, and this is not one.
 
 ## Agent-authored prose
 

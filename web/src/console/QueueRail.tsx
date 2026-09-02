@@ -394,7 +394,7 @@ function Row({
           <div className="cn-qin">{body}</div>
         </button>
         <span className="cn-refs">
-          <Ref to={prRef} label={`PR ${refLabel(prRef)}`} />
+          <Ref to={prRef} />
         </span>
       </div>
     );
