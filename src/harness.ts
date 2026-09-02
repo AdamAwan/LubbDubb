@@ -377,6 +377,26 @@ interface HarnessEvents {
 export class Harness extends EventEmitter {
   private readonly heartbeat: Heartbeat;
   private cycleInFlight = false;
+  /**
+   * An operator's cycle that arrived while one was already running, waiting for it
+   * to end — the trailing edge of the coalescing guard below.
+   *
+   * Every other out-of-band source owns a `CycleTrigger` (`src/cycleTrigger.ts`), which retries a
+   * refusal a second later; `manual` is the one that does not, because it is a route
+   * awaiting a report inline. So a refused `manual` used to be simply *lost*, and
+   * the write behind it — "more work" on a goal, a watch, an unblock — waited for
+   * the next heartbeat: thirty seconds on a busy fleet, five minutes on an idle one,
+   * which is the shape issue #688 reports as "sometimes it just doesn't pick it up".
+   * A cycle in flight is not rare, either: it is most of a real pulse's duration on
+   * anything that talks to a provider.
+   *
+   * One flag rather than a queue, for the guard's own reason: what the operator
+   * needs is a cycle that starts *after* their write, and one does for any number of
+   * refusals.
+   */
+  private pendingManual = false;
+  /** Stopped, so a trailing cycle is never fired into a store on its way closed. */
+  private stopped = false;
   // Last snapshot we diffed against. Seeded from the persisted baseline on the
   // first cycle so a restart doesn't re-emit the whole world as "new".
   private prevWorld: WorldSnapshot | null = null;
@@ -419,6 +439,8 @@ export class Harness extends EventEmitter {
   }
 
   stop(): void {
+    this.stopped = true;
+    this.pendingManual = false;
     this.heartbeat.stop();
   }
 
@@ -449,6 +471,12 @@ export class Harness extends EventEmitter {
       };
     }
     if (this.cycleInFlight) {
+      // Refused, and remembered. The cycle already running read the world before
+      // this call's write landed, so it cannot be the cycle that answers it — see
+      // {@link Harness.pendingManual}. Only `manual`: `local` and `ingress` are
+      // fired by triggers that retry a refusal themselves, and queueing a second
+      // retry behind those would be two.
+      if (source === 'manual') this.pendingManual = true;
       return {
         cycleId: 'coalesced',
         source,
@@ -1094,6 +1122,16 @@ export class Harness extends EventEmitter {
       return report;
     } finally {
       this.cycleInFlight = false;
+      // The trailing edge of the coalescing guard. Fired and not awaited, because
+      // the route that asked for it has long since had its `coalesced` report back
+      // — what it is owed is a cycle that starts after its write, not a response
+      // held open for two of them. `runCycle` records its own failures and returns
+      // rather than throwing, so there is nothing here for a rejection to escape
+      // through; `stopped` is what keeps it out of a store on its way closed.
+      if (this.pendingManual && !this.stopped) {
+        this.pendingManual = false;
+        void this.runCycle('manual');
+      }
     }
   }
 

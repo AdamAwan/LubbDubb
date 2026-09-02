@@ -28,6 +28,28 @@ route calling `harness.runCycle('manual')`.
 A cycle's `source` is `'timer'`, `'manual'`, `'boot'`, [`'local'`](#the-local-cycle) or
 [`'ingress'`](30-ingress.md#triggering-a-pulse).
 
+### The trailing edge
+
+**A refused `manual` cycle is run again as soon as the one in flight ends.** `runCycle` sets a
+`pendingManual` flag on the refusal and, in the same `finally` that clears `cycleInFlight`, fires one
+more `manual` cycle — not awaited, since the route that asked has already had its `coalesced` report
+back and what it is owed is a cycle that _starts after its write_, not a response held open for two
+of them.
+
+Without it the operator's request was simply lost. `local` and `ingress` each own a `CycleTrigger`
+(`src/cycleTrigger.ts`) that retries a refusal a second later; `manual` is the one source with no
+trigger, because it is a route awaiting a report inline — so a "more work", a watch or an unblock that
+landed inside a running cycle waited for the next heartbeat, thirty seconds on a busy fleet and five
+minutes on an idle one, with nothing anywhere saying why. A cycle being in flight is not the rare
+case, either: it is most of a real pulse's duration on any deployment that talks to a provider. That
+is issue #688 — "it seems to be a bit flaky regarding if more work gets picked up".
+
+One flag rather than a queue, for the coalescing guard's own reason: what the operator needs is a
+cycle that begins after their write, and one cycle is that for any number of refusals. It is cleared
+by `stop()`, so nothing is fired into a store on its way closed — `main.ts` stops the harness first
+and closes the store last. A `held` refusal queues nothing: the recovery hold stands until a person
+answers it, and the heartbeat re-asks.
+
 **A coalesced cycle reads no world.** That is what stops a route from using
 `await harness.runCycle('manual')` as its way of making its own write visible: on a busy fleet most
 manual calls land inside a running cycle and return without fetching anything, so the baseline the
@@ -293,6 +315,7 @@ flowchart TD
     RH -- yes --> HELD(["cycleId: held — no snapshot, no dispatch, no act"])
     RH -- no --> CF{"cycle already in flight?"}
     CF -- yes --> CO(["cycleId: coalesced"])
+    CO -. "manual only" .-> PEND["pendingManual — one more cycle<br/>the moment the flight ends"]
     CF -- no --> BL{"local, and no baseline yet?"}
     BL -- yes --> UB(["cycleId: unbaselined"])
     BL -- no --> START["emit cycle:start with the new cyc_* id"]
@@ -441,6 +464,8 @@ flowchart TD
     `` `[${source}] ${plan.rationale}` ``, so even an idle cycle leaves an audit row.
 16. **`executor.execute(cycleId, plan)`**.
 17. **Emit `cycle:end`** with the report.
+18. **Clear `cycleInFlight`**, and fire the [trailing `manual` cycle](#the-trailing-edge) if one was
+    refused while this one ran.
 
 ## Failure handling
 
