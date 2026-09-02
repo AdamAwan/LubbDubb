@@ -33,6 +33,16 @@ const SUPERVISOR_ENV = 'LUBBDUBB_SUPERVISOR';
 const NPM = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
 /**
+ * Windows only: `npm.cmd` is a batch file, and since the CVE-2024-27980 fix (Node
+ * 18.20.2 / 20.12.2 / 22) `spawn` **refuses** to run one without a shell — it fails
+ * `EINVAL` before the command exists, so every `npm` step here dies instantly and the
+ * upgrade always lands on `source-moved` with the previous cockpit. Only `npm` needs
+ * this; `git` is a real executable. Every argument passed under it is a literal from
+ * this file, never operator input, so there is nothing for `cmd.exe` to reinterpret.
+ */
+const NPM_SPAWN_OPTIONS = { shell: process.platform === 'win32' } as const;
+
+/**
  * The update, applied between two dead processes.
  *
  * `--ff-only` is the whole safety argument: it refuses rather than merges, so a
@@ -56,7 +66,7 @@ function applyUpdate(): Outcome {
   // The dependency tree, and only when the lockfile actually moved — `npm ci` is a
   // full delete-and-rebuild of two native modules, which would otherwise be a
   // minute added to every upgrade that touched no dependency.
-  if (lockfileChanged(before) && !step('npm ci', NPM, ['ci'])) return 'source-moved';
+  if (lockfileChanged(before) && !step('npm ci', NPM, ['ci'], NPM_SPAWN_OPTIONS)) return 'source-moved';
   // **Unconditional, unlike the install above.** The server needs no build step —
   // tsx runs it from source — but the cockpit does, `web/dist` is gitignored, and
   // the server serves whatever is there on an `existsSync` check with no version
@@ -71,7 +81,7 @@ function applyUpdate(): Outcome {
   // would be a second opinion about what Vite reads, and being wrong about it is
   // silent. Seconds on an operation that already stopped the fleet is the right
   // trade for never being wrong here.
-  if (step('npm run web:build', NPM, ['run', 'web:build'])) return 'applied';
+  if (step('npm run web:build', NPM, ['run', 'web:build'], NPM_SPAWN_OPTIONS)) return 'applied';
   // The one retry in here, and it is not optimism about a flake. Nearly every way this
   // step fails on a machine that was serving a moment ago is `node_modules` not matching
   // the tree that was just pulled — a dev dependency the bundle newly needs, a native
@@ -80,8 +90,8 @@ function applyUpdate(): Outcome {
   // Running it now costs a minute on the one path that is already broken, and the
   // alternative is coming back on a cockpit bundle nothing says is stale.
   console.log('[serve] the cockpit build failed — reinstalling dependencies and trying it once more');
-  if (!step('npm ci', NPM, ['ci'])) return 'source-moved';
-  return step('npm run web:build', NPM, ['run', 'web:build']) ? 'applied' : 'source-moved';
+  if (!step('npm ci', NPM, ['ci'], NPM_SPAWN_OPTIONS)) return 'source-moved';
+  return step('npm run web:build', NPM, ['run', 'web:build'], NPM_SPAWN_OPTIONS) ? 'applied' : 'source-moved';
 }
 
 /**
@@ -96,10 +106,13 @@ function applyUpdate(): Outcome {
  */
 type Outcome = 'applied' | 'source-moved' | 'unchanged';
 
+/** What a step needs beyond `stdio: 'inherit'` — today only the Windows shell above. */
+type StepOptions = { shell?: boolean };
+
 /** One command, with its failure reported in the terms the operator will act on. */
-function step(label: string, command: string, args: string[]): boolean {
+function step(label: string, command: string, args: string[], options: StepOptions = {}): boolean {
   console.log(`[serve] ${label}`);
-  const run: SpawnSyncReturns<Buffer> = spawnSync(command, args, { stdio: 'inherit' });
+  const run: SpawnSyncReturns<Buffer> = spawnSync(command, args, { stdio: 'inherit', ...options });
   if (run.status === 0) return true;
   // `spawnSync` reports a command that never *started* — npm off the PATH, a fork the
   // kernel refused, the OOM killer — as a null status **and** a null signal, with the

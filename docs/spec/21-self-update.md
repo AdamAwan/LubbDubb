@@ -147,6 +147,13 @@ _previous_ cockpit with nothing anywhere saying so, which is the one failure thi
 introduce: the reason they upgraded is usually something they expect to see. Gating it on `web/`
 having changed would be a second opinion about what Vite reads, and being wrong about it is silent.
 
+On Windows the `npm` steps are spawned **through a shell**. `npm` there is `npm.cmd`, a batch file,
+and since Node's CVE-2024-27980 fix `spawn` refuses to run one without `shell: true` — it fails
+`EINVAL` before the command starts. Without it every upgrade on Windows fails both `npm` steps
+instantly and comes back `source-moved` on the previous cockpit, which is exactly the failure above.
+Only `npm` gets the shell (`git` is a real executable), and every argument under it is a literal in
+`scripts/serve.ts`, never operator input.
+
 75 is `EX_TEMPFAIL`, as close as the conventional codes come to "nothing is wrong, run me again", and
 well clear of the range a crashing Node process picks from. The code is its own module because two
 copies of it would fail silently in the worst way: a server that exits for an upgrade the supervisor
