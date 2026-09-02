@@ -1,5 +1,9 @@
 # 27 — Knowledge
 
+**This document describes running code, and [32](32-obstacles.md) is what replaces it.** That one is
+unbuilt in full; the change that lands the last of it deletes this document. Until then this is what
+the harness does, and a discrepancy between it and the code is still a bug in one of the two.
+
 Hundreds of agents work this repository and each one starts knowing nothing about it. What they learn
 — that `knip` runs every rule at `error`, that a route handler never reads the request, that
 `test (windows)` has been timing out at the install step all afternoon — is learned again, at full
