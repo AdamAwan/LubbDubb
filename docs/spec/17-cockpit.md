@@ -254,6 +254,43 @@ outranks the nav's tab, whichever it is. Selecting a goal is what a queue row do
 move the nav — so with a tab winning, clicking an ask would land the operator on a triage list, or on
 a reading, instead of on the ask.
 
+### Nesting
+
+The ladder is three rungs — **tab, goal, pull request** — and it is a real containment rather than a
+render order: a goal is drawn over the tab that *lists* it, and a pull request over the goal it was
+reached from. `Place` holds all three at once precisely so that stepping out of one restores the one
+underneath, and the **crumb at the head of the situation area draws every rung**, each above the last
+a control (`Crumb`, `ConsoleRoot.tsx`).
+
+**A goal and a pull request hang off the tabs that list work, and off nothing else** — Overview,
+Tickets and the feature board. Everything else the nav offers is a reading or a settings page, and
+neither contains a goal.
+
+That has to be *enforced*, because nothing that opens a goal moves the nav. The queue rail is drawn
+on every tab, and a `<Ref>` opens a goal or a pull request from wherever it is drawn — so the tab an
+operator happens to have last clicked is not evidence of where they came from. Left alone it read as
+one anyway: an operator on Insights who clicked a rail row got a goal page whose way out said
+_‹ Insights_, and a pull request under it whose trail led back there. No reading on that page contains
+that goal. The trail led somewhere the operator had never been, and it looked exactly like navigation
+that works.
+
+So `homeTab` (`place.ts`) narrows the tab to one that could have led there, and it is applied at
+**both** ways in: `selectGoal` and `selectPr` carry it on a click, and `readPlace` applies it to a
+link, so a saved or hand-edited `?tab=insights&goal=412` cannot land on the lying shape either. The
+fallback is the overview — the tab every deployment has, since the board is behind a flag, and the one
+the queue rail belongs to, which is where most such selections actually come from.
+
+The crumb and the rule are one change rather than two: **drawing the whole ladder is what makes a
+wrong foot visible, and narrowing the foot is what makes drawing it worth doing.** The crumb was a
+single back button labelled with the rung beneath it, which on a pull request drew two of three rungs
+and left the tab the page hung off entirely off screen — so the label being wrong was a thing only the
+click revealed.
+
+What is _not_ nesting: **Insights' readings, the Knowledge tab's layouts and the config sections are
+facets of one page, not pages under it.** Each is on `Place` — they are places, and a link to one has
+to work — but the strip that switches them is the navigation, and a crumb over it would offer a parent
+that is the page you are already on. A back control that goes nowhere is worse than none.
+
 The **nav** is four tabs: Overview, Tickets, Knowledge and Insights. Every button clears _both_ pieces
 of state, because a nav click means "go here" and either half left standing would land somewhere else.
 
@@ -395,9 +432,9 @@ once.
 
 | Parameter                            | Carries                                                                                                                                                                                                                                                                                                                                                                                                  |
 | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tab`                                | `tickets` / `knowledge` / `insights`; the overview is the absent value. `backlog` and `work` are aliases for `tickets`, and `?panel=knowledge` for `knowledge`, so links to a deleted tab or a promoted panel still land                                                                                                                                                                                 |
-| `goal`                               | the open goal page, as `issue:<n>`                                                                                                                                                                                                                                                                                                                                                                       |
-| `pr`                                 | the open [pull request page](#the-pull-request-page), by number. It outranks `goal`, which it is drawn over and whose row the crumb leads back to; a value that is not a positive integer is nowhere                                                                                                                       |
+| `tab`                                | `tickets` / `knowledge` / `insights`; the overview is the absent value. `backlog` and `work` are aliases for `tickets`, and `?panel=knowledge` for `knowledge`, so links to a deleted tab or a promoted panel still land. Narrowed by `homeTab` whenever `goal` or `pr` is set — a link naming one of those is a place one rung in, and the tab is the rung under it → [nesting](#nesting)             |
+| `goal`                               | the open goal page, as `issue:<n>`. It outranks `tab`, which it is drawn over and which the crumb's first rung names                                                                                                                                                                                                                                                                                    |
+| `pr`                                 | the open [pull request page](#the-pull-request-page), by number. It outranks `goal`, which it is drawn over and which is the crumb's second rung; a value that is not a positive integer is nowhere                                                                                                                        |
 | `panel`                              | `knowledge` / `faults` / `launch` / `build` / `record` / `localRun` / `setup` / `pets`                                                                                                                                                                                                                                                                                                                   |
 | `ask`                                | the queue row a `{ ask }` panel is showing                                                                                                                                                                                                                                                                                                                                                               |
 | `agent`                              | the open drawer's agent                                                                                                                                                                                                                                                                                                                                                                                  |
@@ -1628,10 +1665,13 @@ from.
 One rung further in than the goal page: **a selected pull request outranks a selected goal, which
 outranks the nav**. It is reached from a goal's pull-request row, from the overview's pull-request
 rack — whose row name is the way onto it — and from any `<Ref>` that names the pull request at all
-([links](#links)), and the crumb at its head names the
-goal it was reached from — or the tab, on a pull request no ticket owns, which the harness works and
-which therefore reaches this page too. Leaving it (`selectPr(null)`) lands on the goal underneath,
-which the place never cleared. `web/src/console/PrPage.tsx` draws it; `web/src/view/prPage.ts`
+([links](#links)), and the crumb at its head draws the
+whole ladder — the tab, then the goal it was reached from, then the pull request. On one no ticket
+owns, which the harness works and which therefore reaches this page too, the middle rung is simply
+absent: the trail is as deep as the place is, never padded to a fixed shape. Leaving it
+(`selectPr(null)`) lands on the goal underneath, which the place never cleared; and because a `<Ref>`
+reaches this page from anywhere at all, the tab it hangs off is narrowed to one that lists pull
+requests on the way in → [nesting](#nesting). `web/src/console/PrPage.tsx` draws it; `web/src/view/prPage.ts`
 derives what it draws.
 
 **It has no route of its own.** Every reading on it is one the harness has already made and already

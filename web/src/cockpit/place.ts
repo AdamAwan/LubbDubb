@@ -245,6 +245,49 @@ export interface Place {
  * stale `?tab=features` to the overview on a deployment with no board.
  */
 const TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'knowledge', 'features', 'insights', 'pets', 'config'];
+
+/**
+ * The tabs a goal or a pull request can hang off — the ones that *list* work.
+ *
+ * `tab` is what the crumb at the head of the situation area names, and until this
+ * existed it named wherever the nav happened to be last rather than where the
+ * entity was reached from. Nothing that opens a goal moves the nav — the queue
+ * rail is drawn on every tab, and a `<Ref>` opens a page from anywhere — so an
+ * operator reading Insights who clicked a rail row got a goal page whose way out
+ * said *Insights*, and a pull request under it whose trail led back there. That
+ * is a crumb the surface cannot honour: no reading on Insights contains that
+ * goal, so the trail leads to a page the operator never came from.
+ *
+ * The fix is to make the relation a real one rather than to relabel it. A goal
+ * and a pull request are children of the surfaces that list them, and of nothing
+ * else, so a selection made from anywhere else moves the nav to
+ * {@link DEFAULT_HOME} and the crumb tells the truth. Applied on the way in as
+ * well as at the call sites, so a hand-edited or saved `?tab=insights&goal=…`
+ * cannot land on the lying shape either.
+ * → `docs/spec/17-cockpit.md#nesting`
+ */
+const HOME_TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'features'];
+
+/**
+ * Where a goal or a pull request hangs when it was not reached from a tab that
+ * lists one. The overview rather than the tickets tab, because it is the tab
+ * every deployment has — the feature board is behind a flag and a provider with a
+ * hierarchy — and because it is the surface the queue rail belongs to, which is
+ * where most such selections actually come from.
+ */
+const DEFAULT_HOME: ConsoleTab = 'overview';
+
+/**
+ * The tab a goal or pull request opened from `tab` belongs under.
+ *
+ * Identity on the three that list work, {@link DEFAULT_HOME} on everything else.
+ * Exported because the same answer has to be given twice — once by `readPlace`
+ * for a link, once by `selectGoal` / `selectPr` for a click — and two copies of
+ * it is one edit away from the address bar and the crumb disagreeing.
+ */
+export function homeTab(tab: ConsoleTab): ConsoleTab {
+  return HOME_TABS.includes(tab) ? tab : DEFAULT_HOME;
+}
 const INSIGHTS_VIEWS: readonly InsightsView[] = [
   'economics',
   'allowance',
@@ -431,18 +474,26 @@ export function readPlace(search: string): Place {
   const tab = param(query, 'tab');
   const panel = param(query, 'panel');
   const ask = param(query, 'ask');
+  const goal = param(query, 'goal');
+  const pr = readPrNumber(param(query, 'pr'));
+  // `?settings=1` opened the modal this page replaced, so it is honoured as a
+  // way in for `?tab=backlog`'s reason: a bookmark that lands somewhere else
+  // with nothing saying so is a bug report.
+  const named: ConsoleTab = query.has('settings')
+    ? 'config'
+    : (TABS.find((t) => t === tab) ??
+      (tab !== null ? TAB_ALIASES[tab] : undefined) ??
+      (panel !== null ? PANEL_ALIASES[panel] : undefined) ??
+      'overview');
   return {
-    // `?settings=1` opened the modal this page replaced, so it is honoured as a
-    // way in for `?tab=backlog`'s reason: a bookmark that lands somewhere else
-    // with nothing saying so is a bug report.
-    tab: query.has('settings')
-      ? 'config'
-      : (TABS.find((t) => t === tab) ??
-        (tab !== null ? TAB_ALIASES[tab] : undefined) ??
-        (panel !== null ? PANEL_ALIASES[panel] : undefined) ??
-        'overview'),
-    goal: param(query, 'goal'),
-    pr: readPrNumber(param(query, 'pr')),
+    // A place naming a goal or a pull request is a place one rung in, and the tab
+    // is what the crumb calls the rung underneath — so it is narrowed to a tab
+    // that could have led there. Applied here and not only at the call sites
+    // because a link is the other way in, and a saved `?tab=insights&goal=…`
+    // draws exactly the trail-to-nowhere the rule exists to rule out.
+    tab: goal !== null || pr !== null ? homeTab(named) : named,
+    goal,
+    pr,
     // The ask panel carries its row, so it is its own parameter rather than a
     // prefix on `panel` — an id is opaque and free to contain whatever the
     // harness minted, including the separator a prefix would have to split on.

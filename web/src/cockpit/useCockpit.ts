@@ -6,6 +6,7 @@ import type { AppliedFix } from '../view/needsYou.js';
 import { useNow } from '../hooks.js';
 import { buildViewModel, type CockpitView } from '../view/viewModel.js';
 import { useNavigation } from './useNavigation.js';
+import { homeTab } from './place.js';
 import type { CockpitActions } from './actions.js';
 import { fireNotifications, loadNotifyPrefs, notifiableChanges, notifySnapshot } from './notify.js';
 import { goalPrNumbers } from '../view/goalPage.js';
@@ -346,10 +347,18 @@ export function useCockpit(): CockpitStatus {
       // One `go` for both halves: the tab and the window are one place, and two
       // calls would push two history entries for a single change of question.
       openInsights: (where) => go({ tab: 'insights', goal: null, ...where }),
-      selectGoal: (ref) => go({ goal: ref, pr: null }),
+      // The tab comes with it, narrowed to one that could have led here. Nothing
+      // that opens a goal moves the nav — the rail is on every tab and a `<Ref>`
+      // opens one from anywhere — so left alone the crumb names wherever the nav
+      // last was, and a goal opened while reading Insights draws a way out that
+      // leads to a page it is not on. → `homeTab`
+      selectGoal: (ref) =>
+        go((current) => (ref === null ? { goal: null, pr: null } : { goal: ref, pr: null, tab: homeTab(current.tab) })),
       // The goal underneath is left where it was: it is what the crumb names and
-      // what leaving the page lands on.
-      selectPr: (prNumber) => go({ pr: prNumber }),
+      // what leaving the page lands on. The tab travels for `selectGoal`'s reason
+      // — a pull request is reached by a `<Ref>` from anywhere at all.
+      selectPr: (prNumber) =>
+        go((current) => (prNumber === null ? { pr: null } : { pr: prNumber, tab: homeTab(current.tab) })),
       reopenThread: (prNumber, threadId, reopened) => then(api.reopenPrThread(prNumber, threadId, reopened)),
       openPanel: (panel) => go({ panel }),
       openTab: (next) => go({ tab: next }),

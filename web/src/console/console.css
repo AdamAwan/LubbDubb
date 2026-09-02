@@ -942,9 +942,22 @@
   line-height: 1.55;
   color: var(--cn-fg-dim);
 }
+/* One rung and the slash after it, kept together so a trail wrapping breaks
+   between rungs rather than orphaning a separator at the head of a line. */
+.cn-crumbstep {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+/* The mark that says *out*, drawn once at the head of the trail rather than on
+   each rung. It sits outside the buttons' hit targets, so the first label still
+   lands on the situation area's own left edge. */
+.cn-crumbback {
+  color: var(--cn-fg-faint);
+  margin-right: -3px;
+}
 .cn-crumb button {
-  padding: 3px 8px 3px 5px;
-  margin-left: -5px; /* the label sits on the situation area's own left edge */
+  padding: 3px 8px;
   border-radius: var(--cn-r-sm);
   color: var(--cn-fg-faint);
 }
@@ -1751,12 +1764,6 @@ a.cn-tgl {
   border-radius: 4px;
   padding: 2px 6px;
   white-space: nowrap;
-}
-.cn-crumbs {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
 }
 .cn-pill {
   padding: 4px 10px;

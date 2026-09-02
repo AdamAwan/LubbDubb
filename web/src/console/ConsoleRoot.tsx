@@ -86,10 +86,13 @@ export function ConsoleRoot({ view, actions }: { view: CockpitView; actions: Coc
         <PrPage page={view.prPage} view={view} actions={actions} />
       </>
     ) : view.selectedPr !== null ? (
-      <PrGone number={view.selectedPr} tab={view.tab} actions={actions} />
+      <PrGone number={view.selectedPr} goalRef={view.selectedGoal} tab={view.tab} actions={actions} />
     ) : view.goalPage !== null ? (
       <>
-        <Crumb goal={view.goalPage.issue} tab={view.tab} actions={actions} />
+        <Crumb
+          trail={[tabStep(view.tab, actions)]}
+          here={`#${view.goalPage.issue.number} ${view.goalPage.issue.title}`}
+        />
         <GoalPage page={view.goalPage} view={view} actions={actions} />
       </>
     ) : view.selectedGoal !== null ? (
@@ -301,13 +304,7 @@ function GoalGone({ ref_, tab, actions }: { ref_: string; tab: ConsoleTab; actio
   const number = /^issue:(\d+)$/.exec(ref_)?.[1] ?? null;
   return (
     <>
-      <nav className="cn-crumb">
-        <button type="button" onClick={() => actions.selectGoal(null)}>
-          ‹ {TAB_LABEL[tab]}
-        </button>
-        <span className="cn-crumbsep">/</span>
-        <span className="cn-crumbnow">{number === null ? ref_ : `#${number}`}</span>
-      </nav>
+      <Crumb trail={[tabStep(tab, actions)]} here={number === null ? ref_ : `#${number}`} />
       <section className="cn-gone">
         <h2>{number === null ? ref_ : `#${number}`} is not in the current world</h2>
         <p>
@@ -331,13 +328,17 @@ function GoalGone({ ref_, tab, actions }: { ref_: string; tab: ConsoleTab; actio
  */
 function PrCrumb({ page, tab, actions }: { page: PrPageView; tab: ConsoleTab; actions: CockpitActions }): JSX.Element {
   return (
-    <nav className="cn-crumb">
-      <button type="button" onClick={() => actions.selectPr(null)}>
-        ‹ {page.goal !== null ? `#${page.goal.number} ${page.goal.title}` : TAB_LABEL[tab]}
-      </button>
-      <span className="cn-crumbsep">/</span>
-      <span className="cn-crumbnow">PR #{page.pr.number}</span>
-    </nav>
+    <Crumb
+      trail={[
+        tabStep(tab, actions),
+        // The rung between, and only when there is one. `selectPr(null)` alone is
+        // the whole of the way there — the goal underneath was never cleared.
+        ...(page.goal !== null
+          ? [{ label: `#${page.goal.number} ${page.goal.title}`, go: () => actions.selectPr(null) }]
+          : []),
+      ]}
+      here={`PR #${page.pr.number}`}
+    />
   );
 }
 
@@ -348,16 +349,32 @@ function PrCrumb({ page, tab, actions }: { page: PrPageView; tab: ConsoleTab; ac
  * something the screen does not show is a click that reads as doing nothing. The
  * provider is where the answer actually is, so the reference is the offer.
  */
-function PrGone({ number, tab, actions }: { number: number; tab: ConsoleTab; actions: CockpitActions }): JSX.Element {
+function PrGone({
+  number,
+  goalRef,
+  tab,
+  actions,
+}: {
+  number: number;
+  goalRef: string | null;
+  tab: ConsoleTab;
+  actions: CockpitActions;
+}): JSX.Element {
   return (
     <>
-      <nav className="cn-crumb">
-        <button type="button" onClick={() => actions.selectPr(null)}>
-          ‹ {TAB_LABEL[tab]}
-        </button>
-        <span className="cn-crumbsep">/</span>
-        <span className="cn-crumbnow">PR #{number}</span>
-      </nav>
+      <Crumb
+        trail={[
+          tabStep(tab, actions),
+          // The goal is still on the *place* even though the pull request over it
+          // is not in the world, so the rung it was reached through is still real
+          // and is still drawn — off the ref rather than off a page, since the goal
+          // may be gone from the world too and the ref is what the place holds.
+          // Dropping it would make a stale link the one case where the trail is
+          // shorter than the ladder.
+          ...(goalRef !== null ? [{ label: goalLabel(goalRef), go: () => actions.selectPr(null) }] : []),
+        ]}
+        here={`PR #${number}`}
+      />
       <section className="cn-gone">
         <h2>PR #{number} is not in the current world</h2>
         <p>
@@ -372,24 +389,74 @@ function PrGone({ number, tab, actions }: { number: number; tab: ConsoleTab; act
   );
 }
 
-function Crumb({
-  goal,
-  tab,
-  actions,
-}: {
-  goal: { number: number; title: string };
-  tab: ConsoleTab;
-  actions: CockpitActions;
-}): JSX.Element {
+/** One rung on the trail: what it is called, and what standing on it again does. */
+interface CrumbStep {
+  label: string;
+  go: () => void;
+}
+
+/**
+ * The tab the situation area is drawn over — the foot of every trail.
+ *
+ * `selectGoal(null)` clears the pull request with it, so one call is the whole of
+ * the way out from either rung. The tab is never *set* here: it is already a tab
+ * that could have led to what is drawn, narrowed by `homeTab` at the moment of
+ * selection and again on the way in from the address bar.
+ * → `docs/spec/17-cockpit.md#nesting`
+ */
+function tabStep(tab: ConsoleTab, actions: CockpitActions): CrumbStep {
+  return { label: TAB_LABEL[tab], go: () => actions.selectGoal(null) };
+}
+
+/**
+ * What a goal is called on a trail when all that is to hand is its ref — the
+ * number, or the ref itself where it is not one the harness minted. `GoalGone`
+ * makes the same fallback for the same reason: a ref drawn as itself is still a
+ * rung an operator can stand on, where an empty one is a trail with a hole in it.
+ */
+function goalLabel(ref: string): string {
+  return `#${/^issue:(\d+)$/.exec(ref)?.[1] ?? ref}`;
+}
+
+/**
+ * The trail out of whatever the situation area drew over the tab.
+ *
+ * **A trail, and not the one back button it was.** The ladder is three rungs deep
+ * — tab, goal, pull request — and a single control labelled with the rung beneath
+ * it drew two of them, which left the tab a page was hanging off entirely absent
+ * from a pull request's page. That is the half of the failure a reader *sees*; the
+ * half they act on is that the one label was `TAB_LABEL[tab]`, and nothing that
+ * opens a goal or a pull request moved the nav, so it named wherever the nav
+ * happened to be last. A goal opened from the queue rail — which is drawn on every
+ * tab — while reading Insights offered *‹ Insights* as the way out of it, and a
+ * pull request under it a trail leading back there. No reading on that page
+ * contains that goal: the trail led somewhere the operator had not been.
+ *
+ * Both halves are fixed here and in `homeTab`, and they are one fix rather than
+ * two: drawing the whole ladder is what makes a wrong foot visible, and narrowing
+ * the foot to a tab that lists work is what makes drawing it worth doing.
+ *
+ * Every rung but the last is a control, because a trail whose middle is inert is a
+ * list of words that looks like navigation.
+ */
+function Crumb({ trail, here }: { trail: readonly CrumbStep[]; here: string }): JSX.Element {
   return (
-    <nav className="cn-crumb">
-      <button type="button" onClick={() => actions.selectGoal(null)}>
-        ‹ {TAB_LABEL[tab]}
-      </button>
-      <span className="cn-crumbsep">/</span>
-      <span className="cn-crumbnow">
-        #{goal.number} {goal.title}
+    <nav className="cn-crumb" aria-label="Breadcrumb">
+      {/* The mark that says *out*, once, at the head — not on each rung. On every
+          one it reads as a separator competing with the slash; on the last rung it
+          would point out of the page you are on. */}
+      <span className="cn-crumbback" aria-hidden="true">
+        ‹
       </span>
+      {trail.map((step) => (
+        <span key={step.label} className="cn-crumbstep">
+          <button type="button" onClick={step.go}>
+            {step.label}
+          </button>
+          <span className="cn-crumbsep">/</span>
+        </span>
+      ))}
+      <span className="cn-crumbnow">{here}</span>
     </nav>
   );
 }

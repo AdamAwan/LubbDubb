@@ -138,8 +138,34 @@ test('an empty parameter is an absent one', () => {
 // The push in `useNavigation` is skipped when the query is unchanged, so two
 // spellings of one place would be a history entry that goes nowhere.
 test('a place has exactly one spelling', () => {
-  const place = at({ tab: 'insights', goal: 'issue:142', insightsView: 'trend' });
+  // The tab is one that *lists* goals, because a goal under any other one is not a
+  // place at all — see the nesting test below, which is the round trip's other half.
+  const place = at({ tab: 'tickets', goal: 'issue:142', insightsView: 'trend' });
   assert.equal(placeQuery(readPlace(placeQuery(place))), placeQuery(place));
+});
+
+/**
+ * A goal and a pull request hang off the tabs that list work, and off nothing else.
+ *
+ * The tab is what the crumb at the head of the situation area names, and a link
+ * is one of the two ways into a place that names both — so the narrowing that
+ * `selectGoal` does on a click has to happen here as well, or a saved
+ * `?tab=insights&goal=…` draws a way out leading to a page that does not contain
+ * the goal. → `docs/spec/17-cockpit.md#nesting`
+ */
+test('a goal or a pull request is read under a tab that could have led to it', () => {
+  for (const tab of ['insights', 'knowledge', 'pets', 'config']) {
+    assert.equal(readPlace(`?tab=${tab}&goal=issue:142`).tab, 'overview', `${tab} does not list goals`);
+    assert.equal(readPlace(`?tab=${tab}&pr=706`).tab, 'overview', `${tab} does not list pull requests`);
+  }
+  // The three that do list work are left exactly as the link spelled them: the
+  // operator really can have reached a goal from any of them.
+  for (const tab of ['overview', 'tickets', 'features']) {
+    assert.equal(readPlace(`?tab=${tab}&goal=issue:142`).tab, tab, `${tab} lists goals`);
+  }
+  // And the narrowing is conditional on there being something one rung in. A link
+  // to Insights itself is a link to Insights.
+  assert.equal(readPlace('?tab=insights').tab, 'insights');
 });
 
 // The ask panel carries an opaque id, and the goal ref carries a colon.
