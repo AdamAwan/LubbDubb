@@ -2361,6 +2361,201 @@ export interface Retrospective {
 }
 
 /**
+ * A **review pack**: one pull request's change restated as a handful of ideas,
+ * each followed through every file it touched, with every sentence a claim the
+ * checker marked true, false or undecidable.
+ * → `docs/spec/31-review-packs.md#the-pack`
+ *
+ * **A document, not a row.** It is written whole by the author, annotated whole by
+ * the checker, and read whole by every renderer; nothing queries inside it. So it
+ * carries its own `schema`, the pull request and head it was written against, and
+ * the code its anchors point at — a pack is complete without a repository behind
+ * it, which is what lets the HTML companion render one with no harness.
+ *
+ * The checker's fields — `order`, each idea's `attention` and `cue`, each claim's
+ * `verdict` and `evidence` — are null (or empty, for the list) on a pack the
+ * checker has not yet read, and a renderer draws the gap rather than guessing.
+ */
+export interface ReviewPack {
+  /**
+   * The document's shape version, compared by every reader against the one it
+   * knows: a renderer handed a version it does not know refuses loudly rather than
+   * drawing what it recognises, because a page silently missing its false-claim
+   * banner is the failure this subsystem exists to catch. A number rather than a
+   * literal type, so that comparison can be written.
+   */
+  schema: number;
+  prNumber: number;
+  /** The commit the pack was written against; staleness is decided against the pull request's head on every load. */
+  headSha: string;
+  /** What the change does, in one plain sentence — the author's. */
+  headline: string;
+  /** A paragraph in the same register, the one thing the reader most needs in bold — the author's. */
+  summary: string;
+  /** How long the author expects the read to take. */
+  estimatedMinutes: number;
+  /** Idea ids in the order the checker says to read them. Empty until the checker has run. */
+  order: string[];
+  ideas: ReviewIdea[];
+  /**
+   * Whether a witness log existed when the pack was written. False on a pull
+   * request nobody witnessed, where every claim comes out `inferred` and the
+   * header says so rather than leaving the reader to notice.
+   */
+  witnessed: boolean;
+  /** The colophon's "what is fake" sentence — what a demo owes, and what a real pack states as "nothing". */
+  fake: string;
+}
+
+/**
+ * An idea: one falsifiable claim plus an ordered walk of anchors. The unit a
+ * change is actually made in, and the unit a diff destroys by sorting everything
+ * by path. → `docs/spec/31-review-packs.md#an-idea`
+ */
+export interface ReviewIdea {
+  /**
+   * Minted by the author on every run, so nothing durable is keyed to it — a
+   * reviewer's marks ride on the hunks an idea owns ({@link ReviewMark}). The one
+   * reserved id is `plumbing`: the idea that owns hunks carrying nothing to
+   * review, declared like any other so the checker can verify they are empty.
+   */
+  id: string;
+  /** One sentence, falsifiable, stating what this idea does — for the checker. */
+  claim: string;
+  /** The same thing said across a desk, no identifiers — for the person. */
+  title: string;
+  /** One short line under the title: why the attention label is what it is. The checker's; null until it has run. */
+  cue: string | null;
+  /** The walk, in the order the reasoning ran — never the order the files sort in. */
+  anchors: ReviewAnchor[];
+  /** The checkable statements this idea rests on. */
+  claims: ReviewClaim[];
+  /** How hard to look. The checker's, never the author's; null until it has run. */
+  attention: ReviewAttention | null;
+}
+
+/**
+ * How much scrutiny an idea needs. `split` is the checker's opinion that the idea
+ * is unrelated to the rest of the pull request and could be its own.
+ */
+export type ReviewAttention = 'read' | 'decide' | 'skim' | 'split';
+
+/**
+ * A place in the tree the walk stops at, with one line saying why. A `hunk` is a
+ * range of the diff; a `region` is a range of a file the diff does not touch —
+ * context the change cannot be judged without, or a deliberate absence: the file
+ * a reader would expect to have changed, shown unchanged.
+ * → `docs/spec/31-review-packs.md#an-anchor`
+ */
+export interface ReviewAnchor {
+  kind: 'hunk' | 'region';
+  /** Where the lines are, at the pack's head sha. */
+  range: ReviewRange;
+  /**
+   * The lines as they stood at the head sha, embedded so the pack renders with no
+   * repository behind it. A hunk's lines carry their diff prefixes; a region's are
+   * plain.
+   */
+  code: string[];
+  /** One line, always shown: why the walk stops here. */
+  gist: string;
+  /** The reasoning, folded away; never required to understand the code. */
+  note: ReviewNote | null;
+  /** The one-line label on the code block itself, saying what the block is. */
+  caption: string | null;
+  /** Why this stop stands out, where it does. */
+  mark: ReviewAnchorMark | null;
+}
+
+/**
+ * A range of one file at a head sha: what an anchor points at, and what a
+ * reviewer's mark is keyed to. `start` and `end` are 1-based and inclusive.
+ */
+export interface ReviewRange {
+  path: string;
+  start: number;
+  end: number;
+}
+
+/**
+ * `key`: the stop the idea turns on. `false`: the stop a false claim is about.
+ * `disputed`: the stop where the witness and the code disagree.
+ */
+export type ReviewAnchorMark = 'key' | 'false' | 'disputed';
+
+/**
+ * A note states its provenance the way a claim does, because a reader weighs the
+ * two differently: written by the witness at the time — citing the pad entry and
+ * stamped with when — or added by the author afterwards.
+ */
+export type ReviewNote = { by: 'witness'; text: string; entryId: string; at: string } | { by: 'author'; text: string };
+
+/**
+ * A sentence that can be shown false, with where it came from and what the
+ * checker made of it. → `docs/spec/31-review-packs.md#claims`
+ */
+export interface ReviewClaim {
+  text: string;
+  provenance: ReviewProvenance;
+  /** The checker's answer; null until it has run. */
+  verdict: ReviewVerdict | null;
+  /** What the checker did to decide — the search, the test, the file it read. Null until it has run. */
+  evidence: string | null;
+}
+
+/**
+ * Where a claim came from, structurally rather than decoratively. A `witnessed`
+ * claim cites the pad entry (`scr_…`) and the entry is rendered verbatim beside
+ * it — the pack stores the id, never a copy. `disputed` cites the entry the code
+ * disagrees with; the claim states what the code does. `inferred` is the author's
+ * own reading, where the witness said nothing.
+ * → `docs/spec/31-review-packs.md#provenance`
+ */
+export type ReviewProvenance =
+  | { kind: 'witnessed'; entryId: string }
+  | { kind: 'inferred' }
+  | { kind: 'disputed'; entryId: string };
+
+/** `cant_tell` is a first-class answer: not decidable from this repository. */
+export type ReviewVerdict = 'true' | 'false' | 'cant_tell';
+
+/**
+ * A pack as the store holds it: the document, and when it was written. The pull
+ * request and head sha are inside the document; the row copies them out as
+ * columns because staleness is decided against the pull request's head on every
+ * load, and that read must not open the document to do it.
+ */
+export interface ReviewPackRecord {
+  pack: ReviewPack;
+  writtenAt: string;
+}
+
+/**
+ * What a reviewer did to a pack — an attention override, an idea marked read —
+ * held beside the document and never written into it, so a pack rewritten
+ * against a new head does not throw their marks away.
+ *
+ * **Keyed to a hunk, never an idea.** An idea's id is minted on every run, so a
+ * mark on one would point at nothing in the next pack. A mark on an idea is
+ * recorded against every hunk that idea owns, and the next pack draws it on
+ * whichever idea owns the same hunks. A hunk the next head rewrote loses its
+ * mark, honestly: the thing that was read is gone.
+ * → `docs/spec/31-review-packs.md#what-a-reviewer-does-is-not-part-of-the-pack`
+ */
+export interface ReviewMark {
+  prNumber: number;
+  /** The hunk the mark rides on: path and range at the head it was made against. */
+  hunk: ReviewRange;
+  /** The head the reviewer was looking at when they marked it. */
+  headSha: string;
+  /** The reviewer's label, or null where they left the checker's standing. */
+  attention: ReviewAttention | null;
+  /** Whether the reviewer marked the owning idea read. */
+  read: boolean;
+  markedAt: string;
+}
+
+/**
  * What a developer would tell a product owner about one Feature — the account rule
  * `feature-summary` dispatches an agent to write, and the one thing on the feature
  * board that is prose rather than a fold.

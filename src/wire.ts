@@ -123,6 +123,8 @@ import type {
   PrState,
   PullRequest as WorldPullRequest,
   Retrospective,
+  ReviewMark,
+  ReviewPackRecord,
   ScratchEntry,
   ShortfallAuthor,
   ShortfallCause,
@@ -2053,6 +2055,20 @@ export interface RetrospectivePayload {
 export interface ScratchpadPayload {
   padRef: string;
   entries: ScratchEntry[];
+}
+
+/**
+ * A pull request's current review pack with what the reviewer did to it — the
+ * one shape the cockpit renders and takes marks against. The document is the
+ * domain type unchanged, because the cockpit, the companion and the store read
+ * one shape and there is one declaration of it
+ * (`docs/spec/31-review-packs.md#a-pack-is-data-and-rendering-is-downstream`).
+ * The route that ships it is not yet built; the shape is declared with the
+ * document so the two cannot drift apart.
+ */
+export interface ReviewPackPayload extends ReviewPackRecord {
+  /** Every mark on the pull request, keyed to hunks; the renderer draws each on whichever idea owns them. */
+  marks: ReviewMark[];
 }
 
 /**
