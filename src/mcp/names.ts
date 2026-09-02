@@ -269,11 +269,52 @@ export const ALLOWED_MCP_TOOLS: string[] = MCP_TOOL_NAMES.map((name) => `mcp__${
  * is not a field on `validation_read` is that `validation_read` refuses a goal
  * with no checks, which is exactly the goal somebody most often wants to look at.
  *
+ * **The fleet half is twelve tools and it is a different job from the rest.** Every
+ * other name here is about one goal: read its plan, argue with it, take one of its
+ * checks. `fleet_status`, `attention_read` and `agent_read` are about the *harness*
+ * — what it is running, what it is waiting on a person for, what one agent is
+ * actually doing — and `fleet_control`, `queue_control`, `escalation_answer` and
+ * `goal_control` are the four verbs an operator reaches for between goals: change
+ * the cap or pause, re-order or drop from the queue, answer the thing in "Needs
+ * you", and start or stop the fleet working a ticket.
+ *
+ * They exist because the cockpit was the only way to do any of it, and the cockpit
+ * is a browser tab on one machine. An operator who wants their own agent watching
+ * the fleet — noticing a park at 2am, answering a question, lowering the cap when
+ * the account's window is nearly spent — had no surface to do it through that was
+ * not the bearer token and forty hand-rolled endpoints.
+ *
+ * **Five of them act rather than steer, and they are named as such.**
+ * `proposal_read` / `proposal_decide` settle an act the harness proposed — which
+ * for a `merge` or a `reply_draft` publishes something that cannot be taken back;
+ * `recovery_decide` rules on a run a crash orphaned; `job_create` puts work in
+ * (filed as a watched ticket where a tracker is configured, so the funnel still
+ * decides when it runs); `agent_control` types into, interrupts, completes or
+ * stops a live agent. The channel is the operator's own hands at a distance, and
+ * these are what "run it from anywhere" actually needs.
+ *
+ * What none of them is, is the *fleet's* surface: no tool here concludes a goal,
+ * writes a plan document, opens a pull request or reports a validation reading on
+ * work it did itself. Those stay behind the origin an agent was dispatched on.
+ * → `docs/spec/11-mcp-tools.md#watching-and-steering-the-fleet`
+ *
  * No `ALLOWED_MCP_TOOLS` equivalent: the fleet's grants exist because nobody is
  * at the prompt to approve a call. Here somebody is, and it is their own machine.
  */
 export const DESKTOP_TOOL_NAMES = [
   'goal_read',
+  'fleet_status',
+  'fleet_control',
+  'attention_read',
+  'escalation_answer',
+  'agent_read',
+  'queue_control',
+  'goal_control',
+  'proposal_read',
+  'proposal_decide',
+  'recovery_decide',
+  'job_create',
+  'agent_control',
   'validation_read',
   'validation_claim',
   'validation_report',

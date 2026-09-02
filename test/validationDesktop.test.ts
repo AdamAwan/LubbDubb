@@ -14,6 +14,7 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { McpDesktopServer } from '../src/mcp/desktop.js';
+import { desktopDeps } from './support/desktop.js';
 import { DESKTOP_TOOL_NAMES, MCP_TOOL_NAMES } from '../src/mcp/names.js';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
@@ -96,17 +97,12 @@ async function desk(
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-cred-'));
   const socketPath = over.socketPath ?? throwawaySocketPath();
   const server = new McpDesktopServer({
-    store: system.store,
+    ...desktopDeps(system),
     claimMinutes: over.claimMinutes ?? 60,
-    validationRoot: '/srv/validation',
     environments,
-    localRun: () => system.localRun,
-    localRunWatch: () => system.localRunWatch,
     now: over.now ?? ((): string => new Date().toISOString()),
     socketPath,
     credentialPath: join(dir, 'desktop.json'),
-    proposals: () => system.proposals,
-    runCycle: () => system.harness.runCycle('manual').then(() => undefined),
   });
   assert.ok(await server.listen(), 'the desktop channel starts on a throwaway path');
   return { server, dir, socketPath };
@@ -236,17 +232,10 @@ test('two harnesses do not fight over the stable socket', async () => {
   const system = build();
   const { server, dir, socketPath } = await desk(system);
   const second = new McpDesktopServer({
-    store: system.store,
-    claimMinutes: 60,
-    validationRoot: '/srv/validation',
-    environments: [],
-    localRun: () => system.localRun,
-    localRunWatch: () => system.localRunWatch,
+    ...desktopDeps(system),
     now: () => NOW,
     socketPath,
     credentialPath: join(dir, 'second.json'),
-    proposals: () => system.proposals,
-    runCycle: () => system.harness.runCycle('manual').then(() => undefined),
   });
   try {
     // The fleet socket carries a pid and unlinks whatever it finds. This one is

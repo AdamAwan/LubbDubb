@@ -1,14 +1,10 @@
 import { allGoalReach } from '../environments/reach.js';
-import type { EnvironmentConfig } from '../environments/policy.js';
 import { validatePlanDocument } from '../plans/planDocument.js';
-import type { PrRefStyle } from '../prRef.js';
 import { ingestPlanDocument } from '../plans/planIngest.js';
 import { proposePlanAmendment } from '../plans/planAmendment.js';
 import { issueOrigin } from '../plans/planning.js';
 import { acceptanceCriteria, currentPlanSummary, planIssueNumber } from '../plans/parts.js';
 import { planProposalRef } from '../proposals/proposals.js';
-import type { ProposalDesk } from '../proposals/proposalDesk.js';
-import type { Store } from '../store/store.js';
 import type { LocalRunner } from '../localRun/runner.js';
 import type { LocalRunWatch } from '../localRun/watch.js';
 import { localRunIsLive } from '../store/localRuns.js';
@@ -26,98 +22,21 @@ import { checkBriefing } from '../validation/fleet.js';
 import { amendedReportReason, amendedSinceRunBegan, handbackReason, validateReport } from '../validation/report.js';
 import { validationGoalDir } from '../validation/resources.js';
 import { liveChecks } from '../validation/verdict.js';
+import { proposalDecide, proposalRead, recoveryDecide } from './desktopInbox.js';
+import {
+  agentRead,
+  attentionRead,
+  escalationAnswer,
+  fleetControl,
+  fleetStatus,
+  goalControl,
+  queueControl,
+} from './desktopOps.js';
+import { agentControl, jobCreate } from './desktopWork.js';
+import type { DesktopSession, DesktopToolDeps, DesktopToolFactory } from './desktopContext.js';
 import { DESKTOP_TOOL_NAMES, type DesktopToolName } from './names.js';
 import { PLAN_DOCUMENT_SCHEMA } from './planDocumentSchema.js';
 import { toolError, toolJson, type McpTool, type ToolCallResult } from './protocol.js';
-
-/**
- * The six tools the operator's own Claude Code gets, and **only** these six.
- *
- * Narrowed by construction rather than by a filter over the fleet's set: there is
- * no code path from a desktop connection to `conclude_work`, `open_pr` or any of
- * the rest, because this module never reaches `buildTools` and the desktop server
- * never reaches anything else. That matters more here than it does for the fleet,
- * because this credential is long-lived, sits in the operator's home directory,
- * and is held by a session nobody dispatched — the blast radius of a filter that
- * stopped filtering would be the whole harness.
- *
- * Read a plan, argue with it, amend it; get the application up, take one check,
- * report what you saw. That is the entire surface.
- *
- * **`plan_amend` is not `plan_submit`.** They carry the same document and share
- * the schema as one export rather than two literals — but the names differ on
- * purpose, because `validation_report` living on both channels is the trap this
- * repo has already been caught by once: an edit to "the plan tool" that silently
- * reaches only one side. What differs here is who may write and what settles
- * afterwards — the fleet's is fenced by the origin it was dispatched on, and this
- * one by the plan's own status, which decides between the two settlements it has:
- * a rewrite through `ingestPlanDocument` on `awaiting_approval`, and a proposal
- * on a plan that is already running.
- */
-export interface DesktopToolDeps {
-  store: Store;
-  /** `validation.desktopClaimMinutes`. */
-  claimMinutes: number;
-  /** `config.validationRoot` — where a goal's fixtures live, which the session has to be told. */
-  validationRoot: string;
-  /**
-   * `config.environments` — the deployments a goal's merged work travels to, in
-   * the order the operator declared them.
-   *
-   * Here because "is it on hallway yet" is one of the questions {@link goalRead}
-   * exists to answer, and the answer is a fold over the operator's own list: an
-   * environment nobody configured is not a place work can have failed to reach.
-   * Empty is the honest answer on a deployment that configured none, and the tool
-   * says so rather than drawing a verdict about nowhere.
-   */
-  environments: EnvironmentConfig[];
-  /**
-   * How the configured provider links a pull request in prose, so the plan
-   * rendering here names a part's pull request the way the operator's own
-   * session can follow it. Omitted means `#`, which is right everywhere but
-   * Azure DevOps. → `src/prRef.ts`
-   */
-  prRefStyle?: PrRefStyle;
-  /**
-   * The machine's one dev environment, lazily — the runner is built after this
-   * server in `system.ts`, the same thunk `proposals` uses for the same reason.
-   *
-   * A handle on the runner rather than a copy of what to run: this channel and the
-   * cockpit's panel both start a run, and they must be starting *the same thing*.
-   * The tool used to render an instruction and let the session act on it, which
-   * meant two definitions of what running meant and a harness that could not stop
-   * what it had told somebody to start.
-   */
-  localRun(): LocalRunner;
-  /**
-   * The run's readings — ports and freshness — lazily, for the runner's reason: the
-   * watch is built beside it, after this server.
-   */
-  localRunWatch(): LocalRunWatch;
-  /**
-   * The proposal desk, lazily — an amendment has to withdraw the card the
-   * operator would otherwise approve, and the desk is constructed after this
-   * server in `system.ts`. Same thunk the fleet deps use for `filing`.
-   */
-  proposals(): ProposalDesk;
-  /** A manual cycle, lazily and for the same reason: it is what puts the fresh card up. */
-  runCycle(): Promise<void>;
-  now(): string;
-}
-
-/**
- * What one desktop connection holds. Per-connection, not per-credential: two
- * terminals share one token, and a claim that belonged to the credential would
- * let the second report a reading against the first one's check.
- */
-export interface DesktopSession {
-  /** The label claims are taken under, as it appears in the cockpit. */
-  label: string;
-  /** The check this connection claimed, or null. Set by `validation_claim`. */
-  held: { originRef: string; checkId: string; claimedAt: string | null } | null;
-}
-
-type DesktopToolFactory = (deps: DesktopToolDeps, session: DesktopSession) => Omit<McpTool, 'name'>;
 
 /** The goal's validation plan, or the reason there isn't one to work from. */
 function planFor(
@@ -938,6 +857,18 @@ const GOAL_READ_NEXT =
 
 const DESKTOP_TOOLS: Record<DesktopToolName, DesktopToolFactory> = {
   goal_read: goalRead,
+  fleet_status: fleetStatus,
+  fleet_control: fleetControl,
+  attention_read: attentionRead,
+  escalation_answer: escalationAnswer,
+  agent_read: agentRead,
+  queue_control: queueControl,
+  goal_control: goalControl,
+  proposal_read: proposalRead,
+  proposal_decide: proposalDecide,
+  recovery_decide: recoveryDecide,
+  job_create: jobCreate,
+  agent_control: agentControl,
   validation_read: validationRead,
   validation_claim: validationClaim,
   validation_report: validationReport,

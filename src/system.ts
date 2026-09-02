@@ -750,6 +750,27 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     // this channel and the cockpit's panel must start *the same* run.
     localRun: (): LocalRunner => localRun,
     localRunWatch: (): LocalRunWatch => localRunWatch,
+    // The fleet half of the channel (`src/mcp/desktopOps.ts`). `runtimeControl` is
+    // handed over **by reference** rather than snapshotted: it is the live cap and
+    // pause the executor reads on every dispatch, and a copy taken here would be a
+    // second opinion about how big the fleet is. The rest are thunks for
+    // `proposals`' reason — the harness, the two desks and the recovery board are
+    // all constructed below this server.
+    runtimeControl,
+    harness: () => harness,
+    escalations: () => escalations,
+    permissions: () => permissions,
+    recovery: () => recovery,
+    agents: () => agents,
+    filing: () => filing,
+    // By reference, never a copy: `labelPrefix` is live-applied, so a brief filed
+    // against a snapshot of it would carry a tag the gate no longer reads.
+    briefConfig: () => config,
+    renderTicketBody: (vars) => prompts.render('brief-ticket-body', vars),
+    profileNames: () => orderedProfiles(config.agentModels).map((p) => p.name),
+    connector,
+    labelPrefix: config.labelPrefix,
+    issueContainerTypes: config.issueContainerTypes,
     // Lazy for the fleet deps' reason a few lines above: `plan_amend` withdraws
     // the superseded approval card and puts the fresh one up, and both the desk
     // and the harness are built below this.

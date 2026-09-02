@@ -2819,7 +2819,7 @@ export interface McpChannelPayload {
   credentialPath: string;
   /** The `/lubbdubb` skill the harness rewrites on every start. */
   skillPath: string;
-  /** The three tools the desktop channel advertises, in the order `tools/list` gives them. */
+  /** The tools the desktop channel advertises, in the order `tools/list` gives them. */
   tools: { name: string; description: string }[];
 }
 

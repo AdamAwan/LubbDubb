@@ -706,8 +706,11 @@ deciding whether to re-run a check before closing a goal is deciding on exactly 
 
 ### The skill
 
-`/lubbdubb 284:C`, `/lubbdubb discuss 284`, `/lubbdubb run 284`, `/lubbdubb ask 284 …` — four jobs
-told apart by the argument, one file. The fourth is the only one that settles nothing:
+`/lubbdubb 284:C`, `/lubbdubb discuss 284`, `/lubbdubb run 284`, `/lubbdubb ask 284 …`,
+`/lubbdubb fleet` — five jobs told apart by the argument, one file. The fifth is about the harness
+rather than about a goal and is
+[owned by 11](11-mcp-tools.md#watching-and-steering-the-fleet); its section here is only that a
+question with no goal number in it is that job. The fourth settles nothing:
 [`goal_read`](11-mcp-tools.md#answering-a-question-about-a-goal) hands back the harness's record of a
 goal and the skill says what to do with it. Its longest section is about the one way a session with
 the repository open gets a question about a run wrong — reconstructing a plausible history from the
