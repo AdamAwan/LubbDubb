@@ -819,6 +819,43 @@ test('a pull request outranks the goal it was reached from, and the crumb leads 
   assert.ok(!html.includes('>Pull requests<'), 'the goal page underneath is replaced, not stacked with');
 });
 
+/**
+ * The crumb is the ladder, not a back button.
+ *
+ * Three rungs deep — tab, goal, pull request — and the trail draws all three, so
+ * the tab a page is hanging off is on screen rather than inferred from the one
+ * label the old crumb had room for. That is the half a reader sees; `homeTab` is
+ * the half that makes it true. → `docs/spec/17-cockpit.md#nesting`
+ */
+test('the crumb draws every rung of the ladder, not just the one beneath', () => {
+  const view = prView(412);
+  const html = decode(render(view));
+  const crumb = /<nav class="cn-crumb"[^>]*>([\s\S]*?)<\/nav>/.exec(html)?.[1];
+  assert.ok(crumb, 'the pull request page draws a crumb');
+  assert.ok(crumb.includes('Overview'), 'the tab the page hangs off is on the trail');
+  const goal = view.prPage?.goal;
+  assert.ok(goal, 'the fixture opens the pull request over a goal');
+  assert.ok(crumb.includes(`#${goal.number}`), 'and so is the goal it was reached from');
+  assert.ok(crumb.includes('PR #412'), 'with the page itself as the last rung');
+  // Every rung but the last is a control: a trail whose middle is inert is a list
+  // of words that looks like navigation.
+  assert.equal((crumb.match(/<button/g) ?? []).length, 2, 'both rungs above are controls');
+  assert.ok(/cn-crumbnow[^>]*>PR #412/.test(crumb), 'and the page you are on is not one');
+});
+
+/**
+ * A goal has one rung under it and a tab has none, so the trail is exactly as
+ * deep as the place is. A fixed two-rung crumb drew the tab as the goal's parent
+ * *and* as a pull request's, which is how the middle rung came to be missing.
+ */
+test('a goal page draws one rung and a tab draws no crumb at all', () => {
+  const goal = decode(render(goalView()));
+  const crumb = /<nav class="cn-crumb"[^>]*>([\s\S]*?)<\/nav>/.exec(goal)?.[1];
+  assert.ok(crumb, 'a goal page draws a crumb');
+  assert.equal((crumb.match(/<button/g) ?? []).length, 1, 'one rung above a goal: the tab');
+  assert.ok(!render(view()).includes('cn-crumb'), 'a tab is the foot of the ladder and has no trail');
+});
+
 test('a thread is drawn with its state, its conversation and where it hangs', () => {
   const html = decode(render(prView(412)));
   for (const state of ['open', 'answered', 'resolved']) {
