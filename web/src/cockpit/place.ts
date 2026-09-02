@@ -242,6 +242,7 @@ const INSIGHTS_VIEWS: readonly InsightsView[] = [
   'trend',
   'mix',
   'mcp',
+  'review',
   'pool',
 ];
 /**

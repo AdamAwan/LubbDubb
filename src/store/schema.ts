@@ -602,6 +602,7 @@ CREATE TABLE IF NOT EXISTS review_marks (
   head_sha   TEXT NOT NULL,           -- the head the reviewer was looking at
   attention  TEXT,                    -- the reviewer's override; null where the checker's label stands
   read       INTEGER NOT NULL,        -- 0/1
+  seen       INTEGER NOT NULL DEFAULT 0, -- 0/1: the reader took the finding on this idea's false claim
   marked_at  TEXT NOT NULL,
   PRIMARY KEY (pr_number, path, start_line, end_line)
 );
@@ -618,6 +619,7 @@ CREATE TABLE IF NOT EXISTS review_pack_shares (
   head_sha     TEXT NOT NULL,         -- the pack that was shared, not just the pull request
   requested_at TEXT NOT NULL,
   published_at TEXT,                  -- null while the next pool pulse has not carried it
+  withdrawn_at TEXT,                  -- somebody unshared it; the next pulse unpublishes and the row goes
   refusal      TEXT                   -- the secret backstop's reason, naming the line; null when nothing matched
 );
 

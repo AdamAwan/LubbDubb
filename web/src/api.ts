@@ -42,6 +42,7 @@ import type {
   ConfigSavePayload,
   ConfigPreviewPayload,
   ReviewAttention,
+  ReviewCalibrationPayload,
   ReviewMarksPayload,
   ReviewPackAbsence,
   ReviewPackPayload,
@@ -263,8 +264,17 @@ const realApi = {
    * → docs/spec/31-review-packs.md#sharing-a-pack
    */
   shareReviewPack: (prNumber: number) => post<ReviewPackSharing>(`/api/prs/${prNumber}/review-pack/share`),
+  unshareReviewPack: (prNumber: number) => post<ReviewPackSharing>(`/api/prs/${prNumber}/review-pack/unshare`),
   markReviewIdeaRead: (prNumber: number, ideaId: string, read: boolean) =>
     post<ReviewMarksPayload>(`/api/prs/${prNumber}/review-pack/ideas/${encodeURIComponent(ideaId)}/read`, { read }),
+  /**
+   * The operator's reading over every pack — the overrides, the plumbing ratio
+   * and whether false claims get read. Obeys the Insights page's window.
+   */
+  getReviewCalibration: (window: InsightsWindow) =>
+    authFetch(`/api/review-calibration?window=${window}`).then((r) => json<ReviewCalibrationPayload>(r)),
+  markReviewFindingSeen: (prNumber: number, ideaId: string, seen: boolean) =>
+    post<ReviewMarksPayload>(`/api/prs/${prNumber}/review-pack/ideas/${encodeURIComponent(ideaId)}/seen`, { seen }),
   overrideReviewAttention: (prNumber: number, ideaId: string, attention: ReviewAttention | null) =>
     post<ReviewMarksPayload>(`/api/prs/${prNumber}/review-pack/ideas/${encodeURIComponent(ideaId)}/attention`, {
       attention,

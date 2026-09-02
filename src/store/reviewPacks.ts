@@ -21,15 +21,22 @@ import type { StoreContext } from './context.js';
 export const REVIEW_PACK_SCHEMA = 1;
 
 /**
- * All three tables are new, so none has a column to migrate — and a table being
- * new *once* does not keep it exempt. Declared empty so the first column added to
- * any of them is noticed here rather than read back as `undefined` on every
- * database from before it.
+ * A table being new **once** does not keep it exempt, which is what these two
+ * entries are: `review_marks.seen` and `review_pack_shares.withdrawn_at` were
+ * added after their tables shipped, and `CREATE TABLE IF NOT EXISTS` never alters
+ * an existing table — so without them every database from before this build reads
+ * both columns back as `undefined`.
+ *
+ * Neither owes a backfill. `seen` is 0 on every existing row and 0 is what those
+ * rows mean: nobody had a finding to take, because there was no control to take it
+ * with. `withdrawn_at` null means *not withdrawn*, which is true of every share
+ * that predates the withdrawal.
+ * → `docs/spec/14-persistence.md#migrations`
  */
 export const REVIEW_PACK_COLUMNS: ColumnMigrations = {
   review_packs: {},
-  review_marks: {},
-  review_pack_shares: {},
+  review_marks: { seen: 'INTEGER NOT NULL DEFAULT 0' },
+  review_pack_shares: { withdrawn_at: 'TEXT' },
 };
 
 /**
@@ -103,6 +110,19 @@ export class ReviewPackStore {
   }
 
   /**
+   * Each pull request's **current** pack — the newest written, one per pull
+   * request. What a mark is laid over, because that is the pack the page draws it
+   * on: a mark is keyed to a hunk and the idea that owns that hunk now is the idea
+   * the reviewer's label is about now.
+   */
+  listCurrentReviewPacks(): ReviewPackRecord[] {
+    const numbers = this.ctx.db.prepare(`SELECT DISTINCT pr_number FROM review_packs`).all() as { pr_number: number }[];
+    return numbers
+      .map((r) => this.getCurrentReviewPack(r.pr_number))
+      .filter((record): record is ReviewPackRecord => record !== null);
+  }
+
+  /**
    * The pack written against one head, or null. What a share publishes: a share
    * is of the pack somebody read, not of whatever the pull request has by the
    * time the pool's clock comes round.
@@ -134,6 +154,26 @@ export class ReviewPackStore {
       )
       .run(input.prNumber, input.headSha, requestedAt, input.refusal ?? null);
     return this.getReviewPackShare(input.prNumber)!;
+  }
+
+  /**
+   * Somebody unshared it. The row is **kept and stamped** rather than deleted,
+   * because the copy in the namespace is still there and only the pool's own arm
+   * may take it out — a route that did the network write would make the click wait
+   * on a push to another continent
+   * (`docs/spec/28-cross-fleet-pool.md#the-publish-is-never-inside-a-route-handler`).
+   * The arm unpublishes and deletes the row; a withdrawal of a share that never
+   * landed has nothing in the namespace and is deleted here.
+   */
+  withdrawReviewPackShare(prNumber: number): ReviewPackShare | null {
+    const share = this.getReviewPackShare(prNumber);
+    if (share === null) return null;
+    if (share.publishedAt === null) {
+      this.deleteReviewPackShare(prNumber);
+      return null;
+    }
+    this.ctx.db.prepare(`UPDATE review_pack_shares SET withdrawn_at=? WHERE pr_number=?`).run(this.ctx.now(), prNumber);
+    return this.getReviewPackShare(prNumber);
   }
 
   /** The transport took it. Stamped after the publish, never before: the row says what is in the pool. */
@@ -202,6 +242,36 @@ export class ReviewPackStore {
     return this.upsertMarks(input.prNumber, input.headSha, input.hunks, { attention: input.attention });
   }
 
+  /**
+   * The reader took the finding on this idea's false claim — the third column, and
+   * the only one that is about the checker's output rather than the author's.
+   *
+   * It is what makes the four prominence requirements measurable: without it the
+   * page can be checked for drawing the gate first and nothing can say whether a
+   * pull request merged with a false claim nobody read.
+   * → `docs/spec/31-review-packs.md#whether-prominence-works`
+   */
+  markReviewFindingSeen(input: {
+    prNumber: number;
+    headSha: string;
+    hunks: ReviewRange[];
+    seen: boolean;
+  }): ReviewMark[] {
+    return this.upsertMarks(input.prNumber, input.headSha, input.hunks, { seen: input.seen ? 1 : 0 });
+  }
+
+  /**
+   * Every mark on every pull request — what the calibration reading folds. One
+   * read rather than one per pull request: the table is one row per hunk somebody
+   * touched, and the reading is over all of them.
+   */
+  listAllReviewMarks(): ReviewMark[] {
+    const rows = this.ctx.db
+      .prepare(`SELECT * FROM review_marks ORDER BY pr_number ASC, path ASC, start_line ASC, end_line ASC`)
+      .all() as MarkRow[];
+    return rows.map(rowToMark);
+  }
+
   /** Every mark on the pull request, whichever head each was made against. */
   listReviewMarks(prNumber: number): ReviewMark[] {
     const rows = this.ctx.db
@@ -220,17 +290,20 @@ export class ReviewPackStore {
     prNumber: number,
     headSha: string,
     hunks: ReviewRange[],
-    patch: { read: number } | { attention: ReviewAttention | null },
+    patch: { read: number } | { attention: ReviewAttention | null } | { seen: number },
   ): ReviewMark[] {
     const markedAt = this.ctx.now();
-    const isRead = 'read' in patch;
+    // Which column this write is about. The other two keep what they had, which is
+    // the whole reason the three live on one row: a reader taking a finding must
+    // not clear their own override, and a rewrite must not lose either.
+    const column = 'read' in patch ? 'read' : 'seen' in patch ? 'seen' : 'attention';
     const write = this.ctx.db.prepare(
-      `INSERT INTO review_marks (pr_number, path, start_line, end_line, head_sha, attention, read, marked_at)
-       VALUES (@prNumber, @path, @start, @end, @headSha, @attention, @read, @markedAt)
+      `INSERT INTO review_marks (pr_number, path, start_line, end_line, head_sha, attention, read, seen, marked_at)
+       VALUES (@prNumber, @path, @start, @end, @headSha, @attention, @read, @seen, @markedAt)
        ON CONFLICT(pr_number, path, start_line, end_line) DO UPDATE SET
          head_sha = excluded.head_sha,
          marked_at = excluded.marked_at,
-         ${isRead ? 'read = excluded.read' : 'attention = excluded.attention'}`,
+         ${column} = excluded.${column}`,
     );
     const read = this.ctx.db.prepare(
       `SELECT * FROM review_marks WHERE pr_number=? AND path=? AND start_line=? AND end_line=?`,
@@ -243,8 +316,9 @@ export class ReviewPackStore {
           start: hunk.start,
           end: hunk.end,
           headSha,
-          attention: isRead ? null : patch.attention,
-          read: isRead ? patch.read : 0,
+          attention: 'attention' in patch ? patch.attention : null,
+          read: 'read' in patch ? patch.read : 0,
+          seen: 'seen' in patch ? patch.seen : 0,
           markedAt,
         });
         return rowToMark(read.get(prNumber, hunk.path, hunk.start, hunk.end) as MarkRow);
@@ -262,6 +336,7 @@ interface ShareRow {
   head_sha: string;
   requested_at: string;
   published_at: string | null;
+  withdrawn_at: string | null;
   refusal: string | null;
 }
 function rowToShare(r: ShareRow): ReviewPackShare {
@@ -270,6 +345,7 @@ function rowToShare(r: ShareRow): ReviewPackShare {
     headSha: r.head_sha,
     requestedAt: r.requested_at,
     publishedAt: r.published_at,
+    withdrawnAt: r.withdrawn_at ?? null,
     refusal: r.refusal,
   };
 }
@@ -281,6 +357,7 @@ interface MarkRow {
   head_sha: string;
   attention: string | null;
   read: number;
+  seen: number;
   marked_at: string;
 }
 
@@ -299,6 +376,7 @@ function rowToMark(r: MarkRow): ReviewMark {
     // later build knew must not arrive as one this one will switch on.
     attention: REVIEW_ATTENTIONS.find((a) => a === r.attention) ?? null,
     read: r.read === 1,
+    seen: r.seen === 1,
     markedAt: r.marked_at,
   };
 }

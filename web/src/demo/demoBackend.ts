@@ -47,6 +47,7 @@ import type {
   CiSubject,
   PromptTemplateView,
   ReliabilityInsights,
+  ReviewCalibration,
   RemedyCause,
   RemedyInsights,
   RemedyRow,
@@ -2262,6 +2263,29 @@ function getServer(): DemoServer {
  * The demo's retrospective: written after the goal was delivered, and deliberately
  * about the *process* rather than the diff — that is what the station is for.
  */
+/**
+ * The Review tab's reading, with nothing in it. No pull request in the demo has
+ * a pack and nothing can write one, so the honest population is empty — and the
+ * tab says so rather than drawing an authored pattern of overrides that would
+ * teach a reader the harness has an opinion it does not have.
+ */
+const DEMO_REVIEW_CALIBRATION: ReviewCalibration = {
+  window: {
+    key: 'all',
+    label: 'All time',
+    bucketLabel: 'one bar a day',
+    since: null,
+    startsAt: new Date(Date.now() - 30 * 86_400_000).toISOString(),
+    bucketMs: 86_400_000,
+    buckets: 30,
+    session: null,
+  },
+  packs: 0,
+  overrides: { labelled: 0, overridden: 0, upgrades: 0, downgrades: 0, sideways: 0, pairs: [] },
+  plumbing: { hunks: 0, plumbingHunks: 0, ratio: null, worst: [] },
+  prominence: { packsWithFalse: 0, falseClaims: 0, ideas: 0, seen: 0, mergedUnseen: [] },
+};
+
 const DEMO_RETROSPECTIVE = {
   originRef: 'issue:364',
   summary: 'Delivered in one PR, but two agents were spent chasing a red base that was never ours.',
@@ -4213,7 +4237,12 @@ export const demoApi = {
   getReviewPack: (): Promise<ReviewPackReading> => Promise.resolve({ kind: 'none', writing: false }),
   requestReviewPack: () => Promise.reject(new Error('the demo has no fleet to write a review pack')),
   shareReviewPack: () => Promise.reject(new Error('the demo has no pool to share a review pack into')),
+  unshareReviewPack: () => Promise.reject(new Error('the demo has no pool to unshare a review pack from')),
+  // No pack in the demo, so nothing to fold: an empty population, which the tab
+  // draws as itself rather than as a fleet whose checker nobody has overridden.
+  getReviewCalibration: () => Promise.resolve({ calibration: DEMO_REVIEW_CALIBRATION }),
   markReviewIdeaRead: () => Promise.reject(new Error('the demo has no review pack to mark')),
+  markReviewFindingSeen: () => Promise.reject(new Error('the demo has no review pack to mark')),
   overrideReviewAttention: () => Promise.reject(new Error('the demo has no review pack to mark')),
   // The spend breakdown, authored above. The real route derives it from every
   // agent the store holds; the demo's world is built fresh in the browser each

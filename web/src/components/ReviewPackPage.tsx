@@ -64,6 +64,12 @@ interface ReviewPackPageProps {
   openIdea: string | null;
   onOpenIdea: (id: string | null) => void;
   onRead: (ideaId: string, read: boolean) => Promise<void>;
+  /**
+   * The reader took the finding on this idea's false claim. Offered under the
+   * finding and nowhere else — it is a statement about the checker's output, not
+   * about the walk. → docs/spec/31-review-packs.md#whether-prominence-works
+   */
+  onSeen: (ideaId: string, seen: boolean) => Promise<void>;
   onAttention: (ideaId: string, attention: ReviewAttention | null) => Promise<void>;
   /** Ask for a new pack — the same control as the first ask, from the pull request's row. */
   onAsk: () => Promise<void>;
@@ -74,6 +80,12 @@ interface ReviewPackPageProps {
    * default. → docs/spec/31-review-packs.md#sharing-a-pack
    */
   onShare: () => Promise<void>;
+  /**
+   * Take a shared pack back out of the pool. The inverse of the share and drawn
+   * beside it: a pack shared by mistake leaves on the next pool pulse rather than
+   * waiting weeks for the prune. → docs/spec/31-review-packs.md#unsharing-a-pack
+   */
+  onUnshare: () => Promise<void>;
   /**
    * What the last share was refused for, in the route's own words — held by the
    * shell, because this page is a pure function of the payload and the refusal is
@@ -125,6 +137,7 @@ export function ReviewPackPage(props: ReviewPackPageProps): JSX.Element {
         sharing={payload.sharing}
         headSha={pack.headSha}
         onShare={props.onShare}
+        onUnshare={props.onUnshare}
         refused={props.shareRefusal}
         onRefused={props.onShareRefused}
       />
@@ -136,7 +149,7 @@ export function ReviewPackPage(props: ReviewPackPageProps): JSX.Element {
           <IdeaRow
             key={entry.idea.id}
             entry={entry}
-            marks={laid.get(entry.idea.id) ?? { read: false, attention: null }}
+            marks={laid.get(entry.idea.id) ?? { read: false, attention: null, seen: false }}
             entries={props.entries}
             open={ideaOpen(props.openIdea, entry.idea.id)}
             onOpen={(open) => props.onOpenIdea(open ? entry.idea.id : null)}
@@ -152,7 +165,14 @@ export function ReviewPackPage(props: ReviewPackPageProps): JSX.Element {
             <span>{wrong.length === 1 ? 'The one problem' : `The ${wrong.length} problems`}</span>
           </div>
           {wrong.map((item, i) => (
-            <Finding key={`${item.idea.id}:${item.claimNumber}`} item={item} index={i + 1} refUrls={props.refUrls} />
+            <Finding
+              key={`${item.idea.id}:${item.claimNumber}`}
+              item={item}
+              index={i + 1}
+              refUrls={props.refUrls}
+              seen={(laid.get(item.idea.id) ?? { seen: false }).seen}
+              onSeen={(seen) => props.onSeen(item.idea.id, seen)}
+            />
           ))}
         </>
       )}
@@ -232,9 +252,9 @@ function Masthead({ payload, onAsk }: ReviewPackPageProps): JSX.Element {
 /**
  * The share control: the second act, drawn as one.
  *
- * Five states and none of them is a default — no pool to publish to, nobody has
- * shared it, asked for and waiting on the pool's own clock, in the pool, and
- * refused by the secret backstop. The refusal is drawn in full rather than
+ * Six states and none of them is a default — no pool to publish to, nobody has
+ * shared it, asked for and waiting on the pool's own clock, in the pool, taken
+ * back out and waiting on the same clock, and refused by the secret backstop. The refusal is drawn in full rather than
  * flashed, because it **names the line** it stopped on and that is the whole of
  * what the person can act on; nothing was rewritten and nothing left the machine.
  * → docs/spec/31-review-packs.md#sharing-a-pack
@@ -243,12 +263,14 @@ function Share({
   sharing,
   headSha,
   onShare,
+  onUnshare,
   refused,
   onRefused,
 }: {
   sharing: ReviewPackSharing;
   headSha: string;
   onShare: () => Promise<void>;
+  onUnshare: () => Promise<void>;
   /** The route's own words for the last refused click, held by the shell. */
   refused: string | null;
   onRefused: (message: string) => void;
@@ -266,6 +288,11 @@ function Share({
       {label}
     </AsyncButton>
   );
+  const unshare = (
+    <AsyncButton className="ghost small" onClick={onUnshare} onRefused={onRefused} pendingLabel="unsharing…">
+      Unshare
+    </AsyncButton>
+  );
   const refusal = refused ?? share?.refusal ?? null;
   return (
     <div className="rp-share">
@@ -279,15 +306,25 @@ function Share({
         </>
       )}
       {share !== null && share.refusal === null && share.publishedAt === null && (
-        <span className="rp-share-waiting">
-          Shared — waiting for the next pool publish. It goes out on the pool&rsquo;s own clock, never on the click.
-        </span>
+        <>
+          <span className="rp-share-waiting">
+            Shared — waiting for the next pool publish. It goes out on the pool&rsquo;s own clock, never on the click.
+          </span>
+          {unshare}
+        </>
       )}
-      {share !== null && share.publishedAt !== null && (
+      {share !== null && share.publishedAt !== null && share.withdrawnAt === null && (
         <>
           <span className="rp-share-live">In the pool since {new Date(share.publishedAt).toLocaleString()}.</span>
           {share.headSha !== headSha && button('Share this pack instead')}
+          {unshare}
         </>
+      )}
+      {share !== null && share.withdrawnAt !== null && (
+        <span className="rp-share-waiting">
+          Unshared — waiting for the next pool publish to take it out. It leaves on the pool&rsquo;s own clock, never on
+          the click.
+        </span>
       )}
       {share !== null && share.refusal !== null && share.publishedAt === null && button('Try again')}
       {refusal !== null && (
@@ -748,10 +785,15 @@ function Finding({
   item,
   index,
   refUrls,
+  seen,
+  onSeen,
 }: {
   item: FalseClaim;
   index: number;
   refUrls: Record<string, string>;
+  /** Whether the reader has taken this one, laid off the hunks the idea owns. */
+  seen: boolean;
+  onSeen: (seen: boolean) => Promise<void>;
 }): JSX.Element {
   const finding: ReviewFinding | null = item.claim.finding;
   const step = finding?.step ?? null;
@@ -790,6 +832,26 @@ function Finding({
           <div className="rp-finding-body">{renderMarkdown(finding.body, refUrls)}</div>
         </>
       )}
+      {/*
+        The one mark that is about the checker's output rather than the author's,
+        and the only measure of whether prominence works: a pull request that
+        merged with this unticked is a false claim nobody read. Nothing blocks on
+        it — it is a reader saying they have taken it, not an approval.
+      */}
+      <div className="rp-finding-seen">
+        <AsyncButton
+          className={seen ? 'ghost small' : 'primary small'}
+          onClick={() => onSeen(!seen)}
+          pendingLabel="marking…"
+        >
+          {seen ? 'Taken — undo' : 'I have taken this'}
+        </AsyncButton>
+        <span className="rp-finding-seen-note">
+          {seen
+            ? 'Marked as read. Nothing here blocks a merge; this only records that somebody saw it.'
+            : 'Nothing here blocks a merge. Marking it is how the harness can tell a finding that was read from one that was not.'}
+        </span>
+      </div>
     </section>
   );
 }

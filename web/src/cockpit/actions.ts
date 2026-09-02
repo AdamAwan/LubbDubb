@@ -88,7 +88,16 @@ export type ConsoleTab = 'overview' | 'tickets' | 'knowledge' | 'features' | 'in
  * sends someone a link to, and a tab held in component state works right up
  * until the back button steps over it or a reload drops it.
  */
-export type InsightsView = 'economics' | 'allowance' | 'reliability' | 'causes' | 'trend' | 'mix' | 'mcp' | 'pool';
+export type InsightsView =
+  | 'economics'
+  | 'allowance'
+  | 'reliability'
+  | 'causes'
+  | 'trend'
+  | 'mix'
+  | 'mcp'
+  | 'review'
+  | 'pool';
 
 /**
  * Every mutation the cockpit can perform, pre-bound and refetching on completion.
