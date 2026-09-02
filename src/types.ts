@@ -159,6 +159,14 @@ export interface PullRequest {
   /** Unresolved review comments waiting on the author. */
   unresolvedComments: PrComment[];
   /**
+   * The same threads with their replies and their state kept — what the cockpit
+   * draws, where {@link unresolvedComments} is what the rules read. Absent means
+   * the provider does not report threads (or the row predates this field), and is
+   * drawn as such rather than as a pull request nobody has reviewed.
+   * → `docs/spec/07-pull-requests.md#review-threads`
+   */
+  reviewThreads?: PrReviewThread[];
+  /**
    * Merge-readiness signals, tracked by the PR-monitoring connector so the
    * harness can drive a PR the last mile to merged. All absent = unknown/false.
    */
@@ -291,6 +299,74 @@ export interface PrComment {
   body: string;
   /** True once the harness has handled (drafted a reply / fixed) this comment. */
   handled: boolean;
+}
+
+/**
+ * Where a review thread stands — the same three-way answer the fleet acts on,
+ * said out loud instead of folded into {@link PrComment.handled}.
+ *
+ * `handled` is one bit for two very different situations, and an operator reading
+ * a count of it cannot tell them apart: a thread the reviewer closed is finished,
+ * and a thread the fleet answered is *waiting on the reviewer* — the first needs
+ * nobody, the second may need the reviewer nudged. Both are "handled" to the
+ * dispatcher, which is right for dispatch and wrong for a person, so the two are
+ * separated here and folded back where the rule reads them.
+ *
+ * `reopened` is the operator's own verdict and outranks the provider's: it says
+ * *this is not settled, come back to it*, and the fleet reads it exactly as it
+ * reads an unanswered thread. → `docs/spec/07-pull-requests.md#review-threads`
+ */
+export type PrThreadState = 'open' | 'answered' | 'resolved' | 'reopened';
+
+/** One message in a review thread — the root, or a reply under it. */
+export interface PrThreadMessage {
+  id: string;
+  author: string;
+  body: string;
+  /** The harness wrote this one, resolved by the provider against `config.userId`. */
+  ours: boolean;
+}
+
+/**
+ * A review thread as the world carries it: the conversation, and where it stands.
+ *
+ * Beside {@link PullRequest.unresolvedComments} rather than instead of it, and
+ * that is deliberate. The comment list is what every dispatch rule reads and its
+ * shape is load-bearing there — one entry per thread, `handled` folding the four
+ * states above into the one bit a rule needs. This is the same threads with the
+ * replies and the state kept, for the surfaces that show a person what is
+ * actually going on. The two are built from one derivation in each provider, so
+ * they cannot come to disagree.
+ *
+ * **Optional**, because a provider that cannot report replies leaves it unset —
+ * which the cockpit draws as *this provider does not say*, never as a pull request
+ * with no review on it. → `docs/spec/07-pull-requests.md#review-threads`
+ */
+export interface PrReviewThread {
+  /**
+   * The thread's id — the **same** id the matching {@link PrComment} carries, and
+   * the one a reply is threaded under. One thread, one id, whoever is asking.
+   */
+  id: string;
+  author: string;
+  body: string;
+  state: PrThreadState;
+  /** The replies under the root, oldest first. Empty on a thread nobody answered. */
+  replies: PrThreadMessage[];
+  /**
+   * The file the thread hangs on, where the provider reports one. Absent on a
+   * thread that is not attached to the diff at all — a review's summary comment —
+   * and on a provider that does not say.
+   */
+  path?: string;
+  /** The line in {@link path} the thread was left on, where the provider reports one. */
+  line?: number;
+  /**
+   * When the operator reopened it (ISO). Only ever set on a `reopened` thread, and
+   * it is what tells a reopen apart from a thread nobody has answered yet — the
+   * two read identically to the dispatcher and mean different things to a person.
+   */
+  reopenedAt?: string;
 }
 
 /**

@@ -37,6 +37,7 @@ import { placementAsks, truncateAreaPaths, type AreaPathTree, type PlacementType
 import { buildStacks } from '../stacks/stack.js';
 import { landedCount, landingFor, landingReadiness } from '../stacks/landing.js';
 import { prHealth, prState } from '../prHealth.js';
+import { applyThreadReopens } from '../prThreads.js';
 import { prAttentionStatus, type PrAttentionContext } from '../prAttention.js';
 import {
   effectivePickupStates,
@@ -180,7 +181,15 @@ export function buildStateSections(
 ): Partial<CockpitState> {
   const { store, connector, config, runtimeControl, harness, recovery, updates, agents: fleet } = system;
   const watchLabel = watchLabelFor(config.labelPrefix);
-  const baseline = store.getWorldBaseline();
+  // The stored reading with the operator's reopened review threads folded over
+  // it — the same fold, over the same marks, that the harness lays on the world it
+  // decides against. Applied here rather than persisted into the baseline so the
+  // record of what the provider said stays intact, and applied on *every* build so
+  // a reopen is visible on the next poll rather than on the next pulse: `runCycle`
+  // coalesces, so a click that lands during a cycle is followed by no world read.
+  // → `docs/spec/07-pull-requests.md#reopening-a-thread`
+  const stored = store.getWorldBaseline();
+  const baseline = stored === null ? null : applyThreadReopens(stored, store.prThreadReopens());
   const world: WorldSnapshot = baseline ?? {
     takenAt: new Date().toISOString(),
     pullRequests: [],

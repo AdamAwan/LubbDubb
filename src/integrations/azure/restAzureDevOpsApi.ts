@@ -163,6 +163,8 @@ interface RawClosedPull {
 interface RawThread {
   id: number;
   status?: string | null;
+  /** Where the thread hangs in the diff. Absent on a thread attached to no file. */
+  threadContext?: { filePath?: string; rightFileStart?: { line?: number }; leftFileStart?: { line?: number } } | null;
   comments?: Array<{
     id: number;
     author?: { uniqueName?: string };
@@ -560,6 +562,11 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     return data.value.map((t) => ({
       id: t.id,
       status: t.status ?? null,
+      // Azure leads with the right-hand side, which is the line as the change
+      // leaves it — the one a reader opening the file would look at. A thread on
+      // a deleted line has only the left, and one on no file has neither.
+      filePath: t.threadContext?.filePath ?? null,
+      line: t.threadContext?.rightFileStart?.line ?? t.threadContext?.leftFileStart?.line ?? null,
       comments: (t.comments ?? []).map((c) => ({
         id: c.id,
         authorUniqueName: c.author?.uniqueName ?? '',

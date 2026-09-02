@@ -12,7 +12,8 @@ import type {
   PrTitleInput,
   SendResult,
 } from '../../sink/actionSink.js';
-import type { CiCheck, CiStatus, MergeableState, PrComment, PullRequest, ViewerAssignment } from '../../types.js';
+import type { CiCheck, CiStatus, MergeableState, PrReviewThread, PullRequest, ViewerAssignment } from '../../types.js';
+import { threadComments, threadState } from '../../prThreads.js';
 import { EVIDENCE_LOG_TAIL_LINES, type CiEvidenceTarget, type CiFailureEvidence } from '../../ci/ciEvidence.js';
 import type {
   BranchDeleteCapable,
@@ -160,6 +161,7 @@ export class AzureDevOpsSourceControlIntegration
             hydrationMaxAgeMs(plan, prReadRef(p.pullRequestId)),
           );
           this.mergeCommits.set(p.pullRequestId, p.lastMergeSourceCommit);
+          const reviewThreads = buildReviewThreads(threads, viewer);
           const pr: PullRequest = {
             id: `pr_${p.pullRequestId}`,
             number: p.pullRequestId,
@@ -175,7 +177,8 @@ export class AzureDevOpsSourceControlIntegration
             ciStatus: aggregatePolicyCiStatus(policyEvals),
             ciChecks: listPolicyCiChecks(policyEvals, this.opts.policyChecks),
             ciChecksWithheld: policyCiDetailWithheld(policyEvals, this.opts.policyChecks),
-            unresolvedComments: buildUnresolvedComments(threads, viewer),
+            unresolvedComments: threadComments(reviewThreads),
+            reviewThreads,
             approved: computeApproved(p.reviewers.map((r) => r.vote)),
             mergeableState: normalizeMergeState(p.mergeStatus, p.isDraft),
             merged: false, // active PRs only; a completed PR drops out of the list
@@ -769,38 +772,62 @@ export function computeApproved(votes: number[]): boolean {
 }
 
 /**
- * Surface one {@link PrComment} per PR comment thread, keyed on the thread id. A
- * thread is `handled` once Azure marks it resolved (fixed/closed/wontFix/byDesign)
- * *or* the harness authored the latest **reply** in it — the network-native
- * analogue of the fake's `markCommentHandled`, so the deterministic loop settles
- * one poll after a reply is posted. System comments (status changes, etc.) are
- * ignored.
+ * Surface one {@link PrReviewThread} per PR comment thread, keyed on the thread
+ * id — the provider's whole reading of a pull request's review, from which
+ * `unresolvedComments` is derived by {@link threadComments} rather than built
+ * beside it.
+ *
+ * A thread is `resolved` once Azure marks it so (fixed/closed/wontFix/byDesign)
+ * and `answered` when the harness authored the latest **reply** in it — the
+ * network-native analogue of the fake's `markCommentHandled`, so the
+ * deterministic loop settles one poll after a reply is posted. Both fold to
+ * `handled` for the rules; they are kept apart because "the reviewer closed this"
+ * and "we answered and nobody has come back" are different news for a person.
+ * System comments (status changes, etc.) are ignored.
  *
  * The reply arm reads the thread's *position*, not merely its latest author, for
  * the reason spelled out on the GitHub side: `viewer` is whoever the harness
  * authenticates as, which on a single-operator deployment is the operator, so an
  * unanswered thread they opened themselves read as already handled and their
  * review was dropped before any rule saw it. A one-comment thread has no reply and
- * is therefore never settled by this arm, whoever wrote it.
+ * is therefore never `answered` by this arm, whoever wrote it — and for the same
+ * reason a reply's `ours` is the position rather than an identity test.
  *
  * Azure's own `resolved` status is unaffected and stays the primary arm — it is a
  * real verdict from the reviewer rather than an inference about who spoke last.
  */
-export function buildUnresolvedComments(threads: AzThread[], viewer: string): PrComment[] {
+export function buildReviewThreads(threads: AzThread[], viewer: string): PrReviewThread[] {
   const RESOLVED: ReadonlySet<string> = new Set(['fixed', 'closed', 'wontFix', 'byDesign']);
-  const out: PrComment[] = [];
+  const out: PrReviewThread[] = [];
   for (const thread of threads) {
     const comments = thread.comments.filter((c) => c.commentType !== 'system');
     const root = comments[0];
     if (!root) continue; // a purely-system thread carries no reviewer signal
-    const lastReply = comments.length > 1 ? comments[comments.length - 1]! : null;
-    const resolved = thread.status !== null && RESOLVED.has(thread.status);
-    out.push({
+    const replies = comments.slice(1);
+    const lastReply = replies.length > 0 ? replies[replies.length - 1]! : null;
+    const built: PrReviewThread = {
       id: String(thread.id),
       author: root.authorUniqueName,
       body: root.content,
-      handled: resolved || lastReply?.authorUniqueName === viewer,
-    });
+      state: threadState({
+        resolved: thread.status !== null && RESOLVED.has(thread.status),
+        answered: lastReply?.authorUniqueName === viewer,
+      }),
+      replies: replies.map((c) => ({
+        id: String(c.id),
+        author: c.authorUniqueName,
+        body: c.content,
+        // Whoever the credential is: the harness only ever *replies*, so a reply
+        // from the viewer is the harness's even where the token is the operator's
+        // own — the same position argument the state's second arm rests on.
+        ours: c.authorUniqueName === viewer,
+      })),
+    };
+    // Where the thread hangs, when Azure reported it — a thread on the pull
+    // request rather than on the diff carries neither, and is drawn as such.
+    if (thread.filePath !== undefined && thread.filePath !== null) built.path = thread.filePath.replace(/^\//, '');
+    if (thread.line !== undefined && thread.line !== null) built.line = thread.line;
+    out.push(built);
   }
   return out;
 }

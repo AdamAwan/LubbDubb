@@ -370,6 +370,45 @@ export function buildDemoState(): DemoSeed {
               handled: false,
             },
           ],
+          // The same threads the comment list folds — three states, because a demo
+          // showing only open ones cannot show what the page is for: which of a
+          // review is still owed, which is with the reviewer, and which is done.
+          reviewThreads: [
+            {
+              id: 'c-1',
+              author: 'reviewer',
+              body: 'Can the budget be per-flow rather than one global number? Our runbook flow needs a bigger window than the FAQ one.',
+              state: 'open',
+              replies: [],
+              path: 'src/context/budget.ts',
+              line: 88,
+            },
+            {
+              id: 'c-3',
+              author: 'reviewer',
+              body: 'Why is the ranker reading the budget at all? It only needs the cut.',
+              state: 'answered',
+              replies: [
+                {
+                  id: 'c-3-r1',
+                  author: 'lubbdubb',
+                  body: 'It reads it to size the section window before ranking — the cut alone would drop the tail it needs.',
+                  ours: true,
+                },
+              ],
+              path: 'src/context/rank.ts',
+              line: 140,
+            },
+            {
+              id: 'c-4',
+              author: 'maintainer',
+              body: 'Assert the budget is honoured at the boundary, not inside the loop.',
+              state: 'resolved',
+              replies: [{ id: 'c-4-r1', author: 'lubbdubb', body: 'Moved the assertion out.', ours: true }],
+              path: 'test/budget.test.ts',
+              line: 31,
+            },
+          ],
           approved: false,
           mergeable: true,
           baseBranch: 'main',
@@ -388,6 +427,20 @@ export function buildDemoState(): DemoSeed {
           branch: 'feature/embed-cache',
           ciStatus: 'passing',
           unresolvedComments: [],
+          // A pull request whose review is finished: threads reported, none of them
+          // owed. Told apart from the pull request below, whose provider reports no
+          // threads at all — the page says which of the two it is looking at.
+          reviewThreads: [
+            {
+              id: 'c-5',
+              author: 'reviewer',
+              body: 'Does the cache survive a re-index of one section?',
+              state: 'resolved',
+              replies: [{ id: 'c-5-r1', author: 'lubbdubb', body: 'Yes — the key is the section digest.', ours: true }],
+              path: 'src/index/embedCache.ts',
+              line: 24,
+            },
+          ],
           approved: true,
           mergeable: true,
           baseBranch: 'main',
@@ -404,6 +457,15 @@ export function buildDemoState(): DemoSeed {
           ciStatus: 'passing',
           unresolvedComments: [
             { id: 'c-2', author: 'maintainer', body: 'Rebase on main — this is behind.', handled: false },
+          ],
+          reviewThreads: [
+            {
+              id: 'c-2',
+              author: 'maintainer',
+              body: 'Rebase on main — this is behind.',
+              state: 'open',
+              replies: [],
+            },
           ],
           approved: false,
           mergeable: false,

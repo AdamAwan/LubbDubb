@@ -397,6 +397,7 @@ once.
 | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `tab`                                | `tickets` / `knowledge` / `insights`; the overview is the absent value. `backlog` and `work` are aliases for `tickets`, and `?panel=knowledge` for `knowledge`, so links to a deleted tab or a promoted panel still land                                                                                                                                                                                 |
 | `goal`                               | the open goal page, as `issue:<n>`                                                                                                                                                                                                                                                                                                                                                                       |
+| `pr`                                 | the open [pull request page](#the-pull-request-page), by number. It outranks `goal`, which it is drawn over and whose row the crumb leads back to; a value that is not a positive integer is nowhere                                                                                                                       |
 | `panel`                              | `knowledge` / `faults` / `launch` / `build` / `record` / `localRun` / `setup` / `pets`                                                                                                                                                                                                                                                                                                                   |
 | `ask`                                | the queue row a `{ ask }` panel is showing                                                                                                                                                                                                                                                                                                                                                               |
 | `agent`                              | the open drawer's agent                                                                                                                                                                                                                                                                                                                                                                                  |
@@ -1446,20 +1447,16 @@ the open list, and a goal whose work has landed would otherwise draw an empty ca
 ([03](03-world-model.md)); the closed list is retention-windowed, so what it holds is what the harness
 still remembers.
 
-**The row is also where a [review pack](31-review-packs.md#reading-it) is asked for and opened.**
-There is no pull request page to put that on, so a pull request with no goal row — one the provider
-never linked — has no way to ask for one, which [31](31-review-packs.md#pull-requests-nobody-witnessed)
-states as the surface's limit. The control is `ReviewPackControl` (`web/src/components/`), embedded
-on every open and closed row rather than drawn here, because it has an async flow of its own: the
-pack is not on the snapshot, so the control reads `GET /api/prs/:number/review-pack` itself on mount,
-again when the row's head moves, and on a short clock while an author or a checker is on the pull
-request. It draws the states between asking and reading — _Review pack_ to ask; _writing_;
-_checking_; _checked_; _unchecked_ where the checker never finished; _stale · n behind_ or
-_unknown behind_; _pull request gone_ where the read's `head` is null, never folded into current —
-and an _Open pack_ button beside any pack it has. A closed row keeps the way in and loses the ask,
-since the desk refuses to write a pack for one. Opening goes through the seam, `viewReviewPack`,
-because which pack and which idea are open is `Place` state ([the address bar](#the-address-bar));
-the page is [the review pack](#the-review-pack), over this one.
+**The pull request's name is the way onto [its own page](#the-pull-request-page)**, with the
+provider reference beside it — never inside it, since one click cannot have two destinations and the
+provider is a different place from the cockpit's page for the same pull request. The
+[review pack](31-review-packs.md#reading-it) is asked for and opened there rather than on this row,
+which is where it sat while there was no pull request page to put it on.
+
+One number does come back to the row: how many review threads the fleet still owes an answer, as
+_n on us_. It is drawn only when there is one — a chip reading `0` on every settled pull request is
+furniture — and never at all where the provider reports no threads, since a chip there would be a
+claim about a review the harness cannot see ([07](07-pull-requests.md#review-threads)).
 
 Whose court a PR is in is `attention.status`, and which check is red is `ciVerdict`; both are quoted,
 never re-read. The chip prints the server's own word with `attention.reasons` in its title, and the
@@ -1613,6 +1610,69 @@ list is a handful of dispatches at best and empty for any goal not touched in th
 design's stated arm was that this becomes its own route, and this takes that arm: **deferred, not
 half-built.** A per-goal activity list is a route away, and the derivation is already here to draw it
 from.
+
+## The pull request page
+
+One rung further in than the goal page: **a selected pull request outranks a selected goal, which
+outranks the nav**. It is reached from a goal's pull-request row, and the crumb at its head names the
+goal it was reached from — or the tab, on a pull request no ticket owns, which the harness works and
+which therefore reaches this page too. Leaving it (`selectPr(null)`) lands on the goal underneath,
+which the place never cleared. `web/src/console/PrPage.tsx` draws it; `web/src/view/prPage.ts`
+derives what it draws.
+
+**It has no route of its own.** Every reading on it is one the harness has already made and already
+ships on the snapshot — the threads and their state, the checks, `attention`, `health`, `ciVerdict`,
+the tasks dispatched onto the branch. A second read would be a second answer to a question
+`/api/state` has answered, and the three verdicts in particular are quoted rather than re-derived,
+for the reason the goal page quotes them.
+
+What it draws:
+
+- **The masthead** — number, title, branch → base, head, author; then the state chips: open/merged/
+  closed, the CI ladder, approval, `mergeableState`, how many threads are on the fleet, and whose
+  court it is. The provider reference sits at the far end of that line, because everything else on it
+  is a reading taken inside the cockpit. The [review pack](31-review-packs.md#reading-it) control
+  rides the masthead: a pack is a reading of _this diff_, which is what the masthead is about.
+- **The review threads**, which is what the page is for — see below.
+- **The checks**, in the CI policy's own three categories: what the harness will fix, what it will
+  put to a person, what it has been told to leave alone. No check name is written in this repository;
+  every one comes off `ciVerdict`. Where the provider reported no detail, the card says whether it was
+  withheld by policy or never reported — neither is a clean bill of health.
+- **What is holding it up**, from `health.reasons`, and nothing at all when nothing is. A card
+  reading "healthy" on every green pull request would be furniture.
+- **Work on this branch** — every dispatch onto it, newest first, each a way into the run. Joined by
+  **branch**, which is the only join that is true of a pull request: a goal's other pull requests are
+  worked on their own branches.
+
+### The threads, and the one control
+
+Each thread is drawn as the conversation it is: the root, the replies under it, a rail beside them,
+and a mark on any reply the harness wrote. That mark matters more than it looks — on a
+single-operator deployment the fleet posts under the operator's own credential, so the name alone
+cannot say "the fleet has already answered this", which is the fact a reader needs before doing
+anything about it.
+
+The state is a chip whose title says what the state _means_, and the two states that are still work
+tint the row, so "what is still on us" reads off the shape of the list before any chip is read.
+Threads are ordered by what is owed — reopened, open, answered, resolved — and within a state the
+provider's own order stands, which is the order the review was written in. A resolved thread is drawn
+back rather than hidden: it is the record of what was asked.
+
+**Absent and empty are different answers and are said differently.** A provider that reports no
+threads gets a sentence saying so; a pull request nobody has commented on gets a different one.
+Folding the two would claim nobody reviewed a change the harness simply cannot see the review of.
+
+The one thing the page _does_ is [reopen a thread](07-pull-requests.md#reopening-a-thread) — put it
+back in front of the fleet, so the harness reads it as unanswered and comes back to it. It is offered
+on `answered` and `resolved` threads and on nothing else: an open thread is already work, so a control
+claiming to reopen it would be a button that changes nothing. On a reopened thread the same control
+takes the ask back, which is the only way out of a mark set by mistake. Both are absent on a pull
+request that has left the open set, since nothing acts on one.
+
+There is deliberately **no reply and no resolve here**. A reply the harness sends is signed by the
+harness and written by an agent that read the diff; a box on this page would be the operator posting
+through the fleet's identity with none of that behind it. Answering a reviewer is the fleet's job, and
+this page's job is to say when it has not done it well enough.
 
 ## The overview
 

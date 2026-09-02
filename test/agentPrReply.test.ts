@@ -207,6 +207,39 @@ test('on the default the reply goes out, and the row says which authority sent i
   system.store.close();
 });
 
+test("the reply the fleet sends spends the operator's reopen of that thread", async () => {
+  const sink = countingSink();
+  const system = build(sink);
+  const agent = reviewAgent(system);
+  // The operator put this thread back to the fleet. The mark is what makes the
+  // thread read as unanswered, so it has to end the moment the fleet answers —
+  // left standing it would hold the thread open against every later reading and
+  // rule `pr-review-comment` would dispatch for it every pulse, forever.
+  // → docs/spec/07-pull-requests.md#reopening-a-thread
+  system.store.setPrThreadReopened(42, 'c-1', true);
+
+  await callReply(system, agent, { body: 'Answered properly this time.', thread: 'c-1' });
+  assert.equal(sink.replies.length, 1);
+  assert.deepEqual(system.store.prThreadReopens(), [], 'the ask was answered, so the ask is over');
+  system.store.close();
+});
+
+test('a reopen on another thread survives a reply to this one', async () => {
+  const sink = countingSink();
+  const system = build(sink);
+  const agent = reviewAgent(system);
+  system.store.setPrThreadReopened(42, 'c-1', true);
+  system.store.setPrThreadReopened(42, 'c-2', true);
+
+  await callReply(system, agent, { body: 'This one is done.', thread: 'c-1' });
+  assert.deepEqual(
+    system.store.prThreadReopens().map((r) => r.threadId),
+    ['c-2'],
+    'one reply answers one thread — the rest of the review is still owed',
+  );
+  system.store.close();
+});
+
 test('auto-send never overrides a rejection the operator already gave', async () => {
   const sink = countingSink();
   const system = build(sink);

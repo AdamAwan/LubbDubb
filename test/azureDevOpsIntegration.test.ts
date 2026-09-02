@@ -1,10 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { threadComments } from '../src/prThreads.js';
+import type { PrComment } from '../src/types.js';
 import { Store } from '../src/store/store.js';
 import {
   AzureDevOpsSourceControlIntegration,
   aggregatePolicyCiStatus,
-  buildUnresolvedComments,
+  buildReviewThreads,
   computeApproved,
   listPolicyCiChecks,
   mergeStrategyFor,
@@ -292,6 +294,10 @@ function pull(over: Partial<AzPull> = {}): AzPull {
 // --------------------------------------------------------------------------
 // Pure helpers
 // --------------------------------------------------------------------------
+
+/** The comment list as the provider now ships it: the threads, folded — see the GitHub twin. */
+const buildUnresolvedComments = (threads: AzThread[], viewer: string): PrComment[] =>
+  threadComments(buildReviewThreads(threads, viewer));
 
 test('stripRef removes the refs/heads/ prefix', () => {
   assert.equal(stripRef('refs/heads/feat/widget'), 'feat/widget');

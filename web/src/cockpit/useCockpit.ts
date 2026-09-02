@@ -346,7 +346,11 @@ export function useCockpit(): CockpitStatus {
       // One `go` for both halves: the tab and the window are one place, and two
       // calls would push two history entries for a single change of question.
       openInsights: (where) => go({ tab: 'insights', goal: null, ...where }),
-      selectGoal: (ref) => go({ goal: ref }),
+      selectGoal: (ref) => go({ goal: ref, pr: null }),
+      // The goal underneath is left where it was: it is what the crumb names and
+      // what leaving the page lands on.
+      selectPr: (prNumber) => go({ pr: prNumber }),
+      reopenThread: (prNumber, threadId, reopened) => then(api.reopenPrThread(prNumber, threadId, reopened)),
       openPanel: (panel) => go({ panel }),
       openTab: (next) => go({ tab: next }),
       // One `go` for however many of the three moved: they are one place, and two
@@ -510,6 +514,7 @@ export function useCockpit(): CockpitStatus {
       insightsWindow: place.insightsWindow,
       poolProject: place.poolProject,
       selectedGoal: place.goal,
+      selectedPr: place.pr,
       goalAgents,
       consolePanel: place.panel,
       tab: place.tab,

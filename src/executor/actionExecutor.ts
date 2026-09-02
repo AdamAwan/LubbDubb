@@ -813,6 +813,13 @@ export class ActionExecutor {
         commentId: act.commentId,
         body: act.body,
       });
+      // The operator's reopen is spent the moment the fleet answers it, and this
+      // is the only place a reply the harness sends goes out. Without the clear
+      // the mark would hold the thread open against every later reading, and the
+      // rule would dispatch for it every pulse for as long as the pull request
+      // lived. A no-op on a thread nobody reopened.
+      // → `docs/spec/07-pull-requests.md#reopening-a-thread`
+      if (act.commentId !== null) this.deps.store.setPrThreadReopened(act.prNumber, act.commentId, false);
       const resolution = await this.resolveAnswered(act);
       return audit(
         'executed',

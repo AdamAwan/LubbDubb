@@ -18,6 +18,8 @@ import { buildNeedsYou } from './needsYou.js';
 import type { AppliedFix, NeedRow } from './needsYou.js';
 import { buildGoalPage, goalOfOrigin } from './goalPage.js';
 import type { GoalPageView } from './goalPage.js';
+import { buildPrPage } from './prPage.js';
+import type { PrPageView } from './prPage.js';
 import type { ConfigTab, ConsolePanel, ConsoleTab, InsightsView } from '../cockpit/actions.js';
 
 /**
@@ -86,6 +88,14 @@ export interface CockpitView {
   selectedGoal: string | null;
   /** That goal's page, or null when none is selected or the ref is not in the world. */
   goalPage: GoalPageView | null;
+  /**
+   * The pull request whose page is open, by number — **it outranks the selected
+   * goal**, which outranks the tab. Reached from a goal and drawn over it, with the
+   * crumb naming the goal underneath.
+   */
+  selectedPr: number | null;
+  /** That pull request's page, or null when none is open or the world does not carry it. */
+  prPage: PrPageView | null;
   /** Which full-surface panel is in front, or null. */
   consolePanel: ConsolePanel;
   /** Where the nav is. A selected goal outranks it, so this is not what is drawn. */
@@ -335,6 +345,11 @@ interface ViewInputs {
   poolProject?: string | null;
   /** The goal whose page is open, as `issue:<n>`. */
   selectedGoal: string | null;
+  /**
+   * The pull request whose page is open, by number — it outranks the goal.
+   * Optional for `collapsed`'s reason: nothing open is what a bare URL means.
+   */
+  selectedPr?: number | null;
   /** Which full-surface panel is in front. */
   consolePanel: ConsolePanel;
   /** Where the nav is. */
@@ -390,6 +405,8 @@ export function buildViewModel(input: ViewInputs): CockpitView {
   const goalPage = input.selectedGoal
     ? buildGoalPage(state, input.selectedGoal, needsYou, input.goalAgents ?? null)
     : null;
+  const selectedPr = input.selectedPr ?? null;
+  const prPage = selectedPr === null ? null : buildPrPage(state, selectedPr);
 
   return {
     state,
@@ -413,6 +430,8 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     needsYou,
     selectedGoal: input.selectedGoal,
     goalPage,
+    selectedPr,
+    prPage,
     consolePanel: input.consolePanel,
     tab: input.tab,
     insightsView: input.insightsView,

@@ -36,7 +36,6 @@ import { WorkRecord } from '../components/WorkRecord.js';
 import { NeedsBand } from './NeedsBand.js';
 import { OrphanBand } from './OrphanBand.js';
 import { AgentOnIt } from '../components/AgentOnIt.js';
-import { ReviewPackControl } from '../components/ReviewPackControl.js';
 
 /**
  * Where each of the track's stages jumps to. Anchors, not refs — one element on
@@ -1029,45 +1028,61 @@ function PullRequests({
           // at full weight says the opposite.
           <div className={`cn-row ${pr.attention.status === 'unwatched' ? 'cn-spent' : ''}`} key={pr.number}>
             <span className="cn-grow">
-              <b className="cn-name">
-                <Ref to={`pr:${pr.number}`} /> {pr.title}
-              </b>
+              {/* The name is the way onto the pull request's page and the reference
+                  sits beside it, never inside it: one click cannot have two
+                  destinations, and the provider is a different place from the
+                  cockpit's own page for the same pull request.
+                  → docs/spec/17-cockpit.md#links */}
+              <button type="button" className="cn-prlink" onClick={() => actions.selectPr(pr.number)}>
+                #{pr.number} {pr.title}
+              </button>
               <span className="cn-sub">{pr.branch}</span>
             </span>
+            <ThreadChip pr={pr} />
             <CiLadder pr={pr} />
             <CourtChip pr={pr} now={view.now} />
-            {/* The row is where a review pack is asked for and opened — there is no
-                pull request page to put it on. Embedded, not redrawn: the control
-                reads the pack's route itself, which console markup may not. */}
-            <ReviewPackControl
-              prNumber={pr.number}
-              headSha={pr.headSha ?? null}
-              canAsk
-              onOpen={() => actions.viewReviewPack(pr.number)}
-            />
+            <span className="cn-refs">
+              <Ref to={`pr:${pr.number}`} />
+            </span>
           </div>
         ))}
         {closed.map((pr) => (
           <div className="cn-row cn-spent" key={pr.number}>
             <span className="cn-grow">
-              <b className="cn-name">
-                <Ref to={`pr:${pr.number}`} /> {pr.title}
-              </b>
+              <button type="button" className="cn-prlink" onClick={() => actions.selectPr(pr.number)}>
+                #{pr.number} {pr.title}
+              </button>
               <span className="cn-sub">{pr.branch}</span>
             </span>
+            <ThreadChip pr={pr} />
             <i className={`cn-chip ${pr.merged ? 'cn-ok' : ''}`}>{pr.merged ? 'merged' : 'closed'}</i>
-            {/* A closed pull request cannot be asked about — the desk refuses one —
-                but the pack it already has stays readable. */}
-            <ReviewPackControl
-              prNumber={pr.number}
-              headSha={pr.headSha ?? null}
-              canAsk={false}
-              onOpen={() => actions.viewReviewPack(pr.number)}
-            />
+            <span className="cn-refs">
+              <Ref to={`pr:${pr.number}`} />
+            </span>
           </div>
         ))}
       </div>
     </section>
+  );
+}
+
+/**
+ * How much of the review is still on the fleet, on the row — the one number from
+ * the pull request's page worth carrying back to the goal, because it is the one
+ * that says whether anybody is waiting.
+ *
+ * Nothing at all when the provider reports no threads, and nothing when none is
+ * outstanding: a chip reading `0` on every settled pull request is furniture, and
+ * one drawn where the reading is *absent* would be a claim about a review the
+ * harness cannot see. → docs/spec/07-pull-requests.md#review-threads
+ */
+function ThreadChip({ pr }: { pr: PullRequest }): JSX.Element | null {
+  const waiting = (pr.reviewThreads ?? []).filter((t) => t.state === 'open' || t.state === 'reopened').length;
+  if (waiting === 0) return null;
+  return (
+    <i className="cn-chip cn-warn" title="Review threads the fleet has not answered">
+      {waiting} on us
+    </i>
   );
 }
 
@@ -1407,7 +1422,15 @@ export function waitedFor(sinceIso: string, now: number): string {
  * or filed at any age — the harness has no more idea than you do how to make a
  * review happen faster.
  */
-function CourtChip({ pr, now }: { pr: OpenPullRequest; now: number }): JSX.Element {
+/**
+ * Whose court a pull request is in, with how long it has been waiting where that
+ * arm means it.
+ *
+ * Exported for the pull-request page for `CiLadder`'s reason: the chip is a
+ * reading of `attention`, and a second one written beside it would be a second
+ * opinion about a verdict the server already took.
+ */
+export function CourtChip({ pr, now }: { pr: OpenPullRequest; now: number }): JSX.Element {
   const since = pr.attention.reviewWaitingSince;
   const waited = since !== undefined ? waitedFor(since, now) : null;
   return (

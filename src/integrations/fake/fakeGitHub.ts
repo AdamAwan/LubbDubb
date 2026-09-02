@@ -12,7 +12,8 @@ import type {
   PrTitleInput,
   SendResult,
 } from '../../sink/actionSink.js';
-import type { PullRequest } from '../../types.js';
+import type { PrThreadState, PullRequest } from '../../types.js';
+import { threadComments } from '../../prThreads.js';
 import type {
   BranchDeleteCapable,
   WorldCapability,
@@ -103,14 +104,15 @@ export class FakeGitHubIntegration
           });
           break;
         case 'pr_comment':
-          mutatePr(world, event.prNumber, (pr) =>
-            pr.unresolvedComments.push({
-              id: `c_${nanoid(6)}`,
-              author: event.author,
-              body: event.body,
-              handled: false,
-            }),
-          );
+          mutatePr(world, event.prNumber, (pr) => {
+            const threads = pr.reviewThreads ?? [];
+            threads.push({ id: `c_${nanoid(6)}`, author: event.author, body: event.body, state: 'open', replies: [] });
+            // Threads are the fake's storage and the comment list is derived from
+            // them, exactly as it is in both real providers — so a test driving the
+            // fake exercises the same fold the harness ships.
+            pr.reviewThreads = threads;
+            pr.unresolvedComments = threadComments(threads);
+          });
           break;
         case 'pr_closed': {
           // The one place the fake models a PR *leaving* the world. `mergePr` above
@@ -146,6 +148,7 @@ export class FakeGitHubIntegration
               baseBranch: event.baseBranch ?? this.defaultBranch,
               ciStatus: 'pending',
               unresolvedComments: [],
+              reviewThreads: [],
               approved: false,
               // No `mergeable` yet — GitHub reports null while computing, and a
               // firm false would wrongly trip the conflict rule on a fresh PR.
@@ -167,29 +170,22 @@ export class FakeGitHubIntegration
    * here instead.
    */
   async postPrReply(input: PrReplyInput): Promise<SendResult> {
-    if (input.commentId) this.markCommentHandled(input.prNumber, input.commentId);
+    if (input.commentId) this.markCommentHandled(input.prNumber, input.commentId, input.body);
     const ref = `fake-reply_${nanoid(6)}`;
     return { ok: true, ref };
   }
 
   /**
-   * The outbound side of resolving a review thread: the fake world has no
-   * resolution flag of its own, so `handled` — the one thing every reader of a
-   * thread asks — is what it sets, exactly as a reply does. A thread the world
+   * The outbound side of resolving a review thread — the reviewer's own verdict,
+   * which the fake now records as one: `resolved` rather than the `answered` a
+   * reply leaves behind. The two were one flag while `handled` was the only thing
+   * a thread carried, and a fake that still folded them would be the one place
+   * the operator's reopen could not tell what it was undoing. A thread the world
    * does not carry is `ok: false`, the same stale-reading answer the real
    * providers give.
    */
   async resolvePrThread(input: PrThreadResolveInput): Promise<SendResult> {
-    let found = false;
-    this.world.mutate((world) => {
-      mutatePr(world, input.prNumber, (pr) => {
-        const c = pr.unresolvedComments.find((x) => x.id === input.commentId);
-        if (c) {
-          c.handled = true;
-          found = true;
-        }
-      });
-    });
+    const found = this.setThreadState(input.prNumber, input.commentId, 'resolved');
     return { ok: found, ref: found ? `fake-resolve_${nanoid(6)}` : undefined };
   }
 
@@ -236,6 +232,7 @@ export class FakeGitHubIntegration
         baseBranch: input.base,
         ciStatus: 'pending',
         unresolvedComments: [],
+        reviewThreads: [],
         approved: false,
         mergeableState: 'unknown',
         merged: false,
@@ -288,14 +285,38 @@ export class FakeGitHubIntegration
     return Promise.resolve({ ok: true, ref: input.branch });
   }
 
-  /** Reflect harness progress back so the deterministic dispatcher stops re-triggering. */
-  markCommentHandled(prNumber: number, commentId: string): void {
+  /**
+   * Reflect harness progress back so the deterministic dispatcher stops
+   * re-triggering: the thread is `answered` — the fleet spoke last and the
+   * reviewer has not come back — and the reply is written into it when one was
+   * given, so a surface drawing the conversation draws what was actually said.
+   */
+  markCommentHandled(prNumber: number, commentId: string, body?: string): void {
+    this.setThreadState(prNumber, commentId, 'answered', body);
+  }
+
+  /**
+   * Move one thread, and re-derive the comment list from the threads — the single
+   * fold, here as in both real providers. Answers whether the world carried the
+   * thread at all.
+   */
+  private setThreadState(prNumber: number, commentId: string, state: PrThreadState, reply?: string): boolean {
+    let found = false;
     this.world.mutate((world) => {
       mutatePr(world, prNumber, (pr) => {
-        const c = pr.unresolvedComments.find((x) => x.id === commentId);
-        if (c) c.handled = true;
+        const threads = pr.reviewThreads ?? [];
+        const thread = threads.find((t) => t.id === commentId);
+        if (!thread) return;
+        found = true;
+        thread.state = state;
+        if (reply !== undefined) {
+          thread.replies.push({ id: `r_${nanoid(6)}`, author: 'lubbdubb', body: reply, ours: true });
+        }
+        pr.reviewThreads = threads;
+        pr.unresolvedComments = threadComments(threads);
       });
     });
+    return found;
   }
 }
 

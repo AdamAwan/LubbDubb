@@ -775,6 +775,70 @@ function goalView(
 }
 
 /**
+ * A pull request's page, opened over the goal the demo's threads hang on.
+ *
+ * `selectedPr` alone would draw it over the tab; the goal is set beside it because
+ * that is how it is actually reached, and the crumb naming the goal is half of what
+ * makes the page a rung of the ladder rather than a fourth destination.
+ */
+function prView(prNumber: number, ref: string = 'issue:412'): CockpitView {
+  const state = buildDemoState().state;
+  return buildViewModel({
+    state,
+    now: Date.now(),
+    connected: true,
+    demo: true,
+    setup: null,
+    selected: null,
+    liveOutput: new Map(),
+    tails: new Map(),
+    lastPulseAt: Date.now(),
+    viewingPlan: null,
+    viewingRetro: null,
+    hatching: null,
+    viewingScratchpad: null,
+    insightsView: 'economics',
+    insightsWindow: '7d',
+    selectedGoal: ref,
+    selectedPr: prNumber,
+    consolePanel: null,
+    tab: 'overview',
+  });
+}
+
+test('a pull request outranks the goal it was reached from, and the crumb leads back to it', () => {
+  const html = decode(render(prView(412)));
+  assert.ok(html.includes('PR #412'), 'the crumb names where you are');
+  assert.ok(html.includes('Review threads'), 'and the page draws the review');
+  // The goal page is *not* also drawn: one situation area, one page, and the ladder
+  // decides which. Its pull-request card is the giveaway — it heads "Pull requests",
+  // which the pull request's own page never does.
+  assert.ok(!html.includes('>Pull requests<'), 'the goal page underneath is replaced, not stacked with');
+});
+
+test('a thread is drawn with its state, its conversation and where it hangs', () => {
+  const html = decode(render(prView(412)));
+  for (const state of ['open', 'answered', 'resolved']) {
+    assert.ok(html.includes(`cn-th-${state}`), `the demo's ${state} thread must be drawn as one`);
+  }
+  // The reply, and the mark that says who wrote it: on a single-operator
+  // deployment the fleet posts under the operator's own credential, so the name
+  // alone cannot say the fleet has already answered — which is the fact a reader
+  // needs before reopening anything.
+  assert.ok(html.includes('the cut alone would drop the tail it needs'), 'a reply is part of the thread');
+  assert.ok(html.includes('cn-thmark'), 'and a reply the fleet wrote says so');
+  assert.ok(html.includes('src/context/rank.ts'), 'a thread names the place it hangs');
+});
+
+test('a pull request the world has lost is said so, rather than falling through to the goal', () => {
+  // The address bar naming something the screen does not show is a click that
+  // reads as doing nothing — the same reason a missing goal gets its own screen.
+  const html = decode(render(prView(9999)));
+  assert.ok(html.includes('is not in the current world'), 'the page says what happened');
+  assert.ok(!html.includes('Review threads'), 'and draws no page for a pull request it does not have');
+});
+
+/**
  * The record on the goal page (the work tab's history, moved to where it is read).
  *
  * Asserted on the *page* rather than on the component, because the whole change is

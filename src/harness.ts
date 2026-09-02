@@ -35,6 +35,7 @@ import type { EnvironmentDesk } from './environments/environmentDesk.js';
 import type { ScheduleDesk } from './schedules/scheduleDesk.js';
 import type { WorkGraphRecorder } from './graph/workGraphRecorder.js';
 import type { Action, WorldEvent, WorldSnapshot } from './types.js';
+import { applyThreadReopens } from './prThreads.js';
 import type { UpcomingPlan } from './wire.js';
 import { isActiveTask } from './tasks.js';
 import type { StackLandingDesk } from './stacks/landingDesk.js';
@@ -562,17 +563,30 @@ export class Harness extends EventEmitter {
             fresh: this.deps.freshReads?.drain(),
           })
         : undefined;
-      const world = cached ?? (await this.deps.connector.getState(readPlan));
+      const observed = cached ?? (await this.deps.connector.getState(readPlan));
       // Read before the diff records it, because the notice desk below needs the
       // same *pair* the diff is taken from — and `recordWorldChanges` moves the
       // baseline on. Seeded from the persisted baseline for its reason too: a
       // restart that read null here would go blind to every transition that
       // straddled it.
-      const previousWorld = readWorld ? (this.prevWorld ?? store.getWorldBaseline()) : world;
+      const previousWorld = readWorld ? (this.prevWorld ?? store.getWorldBaseline()) : observed;
       // No new observation on a local cycle, so nothing to diff and — the important
       // half — nothing to re-stamp: moving the baseline onto itself would be a write
       // per local cycle saying the world was read when it was not.
-      if (readWorld) this.recordWorldChanges(store, world, previousWorld);
+      // The baseline is the **provider's own reading**, kept as it was read: it is
+      // the record the next diff is taken against, and folding the operator's
+      // overrides into it would leave the harness unable to say what the provider
+      // last said — so taking a reopen back could not put the thread's real state
+      // back either.
+      if (readWorld) this.recordWorldChanges(store, observed, previousWorld);
+      // The operator's reopened review threads, laid over that reading before
+      // anything decides against it — so every desk, the dispatcher and the
+      // attention court below see one world. The cockpit applies the same fold
+      // over the same marks when it serves the snapshot (`stateSnapshot.ts`), which
+      // is what keeps a reopen visible between pulses: `runCycle` coalesces while a
+      // cycle is in flight, so a click that lands during one is followed by no
+      // world read at all. → `docs/spec/07-pull-requests.md#reopening-a-thread`
+      const world = applyThreadReopens(observed, store.prThreadReopens());
       // Fold observed reality onto the plan-part rows before anything reads them:
       // the store holds intent, the outside world stays the source of truth, and a
       // part this moves to `ready` is dispatchable in this same cycle.

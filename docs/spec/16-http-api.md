@@ -440,6 +440,25 @@ It also records a `pr_watch_seeds` row, in **both** directions: the seeding desk
 ([07](07-pull-requests.md#watching)) must not answer for a pull request a person has answered for, or
 un-watching one the harness opened would be undone on the next pulse.
 
+### `POST /api/prs/:number/threads/:threadId/reopen`
+
+Body `{reopened: boolean}`. Puts one review thread back in front of the fleet, or takes the ask back
+([07](07-pull-requests.md#reopening-a-thread)). `:threadId` is the thread's root comment id — the same
+id a `PrComment` carries and a reply threads under.
+
+A store mark and **nothing else**: no write to the provider, and no write to the world baseline. The
+snapshot folds the marks over the stored world as it serves it, so the change is on the next
+`/api/state` whether or not a cycle has run — which matters, because `runCycle` coalesces and a click
+that lands during a cycle is followed by no world read at all. Writing it into the baseline instead
+would cost the harness its record of what the provider said, and with it any way to put the thread
+back.
+
+404 on a pull request the world does not carry, and on a thread that pull request does not carry:
+reporting either as done would leave the operator believing the fleet had been asked for something it
+will never see. **No cycle is run** — the reopened thread is picked up by rule `pr-review-comment` on
+the next pulse under its own steam, and a pulse per click would buy a beat of latency at the cost of a
+provider read per click.
+
 ### `POST /api/prs/:number/review-pack`
 
 Ask for a review pack for the pull request ([31](31-review-packs.md#when-a-pack-is-made)). **`202`,

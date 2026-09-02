@@ -657,6 +657,33 @@ class DemoServer {
   }
 
   /**
+   * Put a review thread back in front of the fleet, or take the ask back — the
+   * demo's mirror of the store mark, applied straight to the thread it names.
+   *
+   * The demo has no provider to remember what the thread said before, so taking a
+   * reopen back reads the thread's own conversation: a thread the fleet replied to
+   * is `answered` again, and one nobody has answered is `open`. That is the same
+   * fold the real providers make, decided from the same evidence.
+   */
+  async reopenPrThread(prNumber: number, threadId: string, reopened: boolean): Promise<{ ok: true }> {
+    const pr = this.state.world.pullRequests.find((p) => p.number === prNumber);
+    const thread = pr?.reviewThreads?.find((t) => t.id === threadId);
+    if (pr && thread) {
+      thread.state = reopened ? 'reopened' : thread.replies.some((r) => r.ours) ? 'answered' : 'open';
+      if (reopened) thread.reopenedAt = new Date().toISOString();
+      else delete thread.reopenedAt;
+      pr.unresolvedComments = (pr.reviewThreads ?? []).map((t) => ({
+        id: t.id,
+        author: t.author,
+        body: t.body,
+        handled: t.state === 'answered' || t.state === 'resolved',
+      }));
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
+  /**
    * Override the goal appraisal — the demo mirror of the escape hatch a blocking gate
    * has to have. `null` deletes the row rather than storing a third verdict, so
    * "nobody has decided" keeps one representation here too.
@@ -4470,6 +4497,8 @@ export const demoApi = {
   releaseEnvironmentGate: (issueNumber: number, released: boolean, note?: string) =>
     getServer().releaseEnvironmentGate(issueNumber, released, note),
   withdrawInstruction: (issueNumber: number, id: string) => getServer().withdrawInstruction(issueNumber, id),
+  reopenPrThread: (prNumber: number, threadId: string, reopened: boolean) =>
+    getServer().reopenPrThread(prNumber, threadId, reopened),
   dismissRun: (issueNumber: number, note?: string) => getServer().dismissRun(issueNumber, note),
   replan: (planId: string) => getServer().replan(planId),
   ruleWatchProposal: (issueNumber: number, checkId: string, accept: boolean) =>
