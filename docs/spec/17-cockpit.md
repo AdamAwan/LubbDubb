@@ -532,9 +532,19 @@ One row per open question rather than one per goal, because the two are answered
 different writes. Its verdict is **three** buttons where the profile gate has two, and the third is
 what the shape needs: nothing here blocks, so without an explicit "it wants none" a goal that
 legitimately has no parent would sit on the rail for ever — the two blocking gates get their third
-answer free, because somebody has to clear them. The alternatives are offered rather than typed: the
-containers from `world.issues` under `config.containerTypes`, and the area nodes from
-`config.areaPaths`, which is the tracker's own tree read by the harness.
+answer free, because somebody has to clear them. The alternatives are offered rather than typed:
+`world.parentCandidates` — the same `candidateParents` the appraiser's own orphan note is written
+from, derived server-side and shipped whole — and the area nodes from `config.areaPaths`, which is the
+tracker's own tree read by the harness.
+
+**The container list is shipped, never re-derived in the browser.** It was `world.issues` filtered by
+`config.containerTypes`, which is one half of `candidateParents` and the half that is almost always
+empty: an Azure item list is narrowed by tag and assignee, so an open Feature is usually visible only
+as some _other_ item's parent, and `world.issues` carries it nowhere. `ParentPicker` draws no select at
+all where its list is empty — correct in itself, and here it meant the deployments that raise the
+missing-parent warning were the deployments with no way to answer it: "Not applicable" was the only
+button under a warning about filing (issue #683). Nothing was red. The question was drawn, every button
+worked, and the one answer that resolves the fact was simply not there.
 
 **The proposed parent is drawn as a `<Ref>` beside the button and never inside one** — the rule
 ([links](#links)), and here also the point: verifying the suggestion has to be as cheap as accepting
@@ -1237,7 +1247,7 @@ _open_, and an orphan with none open is either a goal nobody proposed anything f
 answer was "it wants none".
 
 **The three answers are `ParentPicker`, shared with the rail's band.** One write to one tracker field,
-put in two places. The goal page therefore draws the `placement:parent:` row _only_ through this
+put in two places, offering the one `world.parentCandidates` list the server derives. The goal page therefore draws the `placement:parent:` row _only_ through this
 warning and filters it out of its own bands — one question, once, per page. The rail keeps its row,
 and the ask panel still answers it for an operator working down the queue rather than down a page. The
 area-path half of `placement` is untouched: a different question, with a different answer.
