@@ -584,6 +584,49 @@ with who gave it up, because `handbackReason` has already opened it with "An age
 session" — and the `by` on that sentence exists precisely because the two mean different things to
 the person reading the row.
 
+## When a check fails
+
+A `failed` reading used to be a dead end. It wrote its note, flipped the goal's verdict to `flagged`,
+put a row on the bench and waited for a person — the one verdict in the harness that says the
+delivered thing does not work, and the only one that scheduled nothing. Every other negative verdict
+has a consumer: an assessment that says the goal was not reached reaches `issue-shortfall`, a red
+build reaches `pr-ci-failing`. Somebody ran the procedure, watched it fail, wrote down what they saw,
+and the fleet did not look.
+
+Rule `validation-failed` ([05](05-dispatcher.md#validation-failed--looking-into-a-failed-check)) is
+what looks. One **read-only** code agent on the default branch — where the delivered work is —
+briefed with the procedure, what a pass looks like, and the reading with its note and who took it.
+
+**It is deliberately not wired through a shortfall**, which is the obvious shape and the one that
+must not be built: `VERDICT_EXCLUSIONS` has a shortfall clear the goal's **delivery**
+([14](14-persistence.md#issue-verdicts-and-the-exclusion-matrix)), and the delivery is what parks the
+goal. Recording a failed check as one would un-park it, settle its close-out obligation and decline
+the validation bench row as "the goal went back into production" — the reading deleting the rows it
+was reported into, and delivered work handed back to the fleet. The two verdicts answer different
+questions: a shortfall says the work is not finished, and a failed check says the finished work does
+not do what somebody checked it for.
+
+**The diagnosis is the deliverable, and it fixes nothing.** What a failed check needs first is an
+account of why, and the three endings an agent can honestly reach already have doors: `escalate` for
+a real defect, which is a decision about delivered work and a person's to take; `validation_amend`
+for a check that describes something that no longer exists; `raise` for what the next agent should
+not have to work out again. Nothing here opens a pull request, files a ticket or schedules work —
+validation's standing promise is that it blocks nothing, and a rule that answered a failed check by
+putting a change into the world on its own authority would be the same overreach in the other
+direction.
+
+**It cannot record a reading, and that is structural.** `validation_report` resolves which check it
+is reporting on from the dispatch origin, and `issue:<n>:validate-failure:<checkId>` is not a shape
+it parses — so an agent that could not reproduce the failure and concludes the check "actually
+passes" is refused by the tool rather than by a sentence in a prompt. The reading belongs to whoever
+took it: they ran the procedure and this agent did not.
+
+**Each reading gets its own attempt budget.** A failed check stands until somebody records something
+else against it, so a cooldown window over the check's whole life would give it one budget for ever:
+a goal that failed, was fixed, was re-run and failed again would meet a spent attempt cap and get no
+second look, exactly where a repeat failure is worth most. The window is narrowed to decisions after
+`resultAt` — `plannerVerdict`'s adjustment, against the same failure ([08](08-planning.md)).
+
 ## The desktop channel
 
 A check that needs a browser, a login and a real environment is a check the fleet cannot run — and
@@ -947,7 +990,10 @@ the caller in the server's own words), `test/validationAmend.test.ts` (the
 tool: who may amend, that an amendment withdraws nothing by omission, what a rewording costs, and
 the band), `test/validationFleet.test.ts` (the hand-over: the rule's gates and its position in
 the pipeline, who may report, what a hand-back does not write, and what withdraws a hand-over),
-`test/validationReady.test.ts` (the bench row: what files it, that a check with the fleet does not and
+`test/validationFailed.test.ts` (the diagnosis: that only a `failed`
+check gets one, that it is read-only on the default branch in its own namespace, that the dispatch
+clears no verdict — the goal stays delivered and parked — that each reading gets its own attempt
+budget, and that the agent it sends is refused a reading), `test/validationReady.test.ts` (the bench row: what files it, that a check with the fleet does not and
 a hand-back does, that a settled row is never written over, and that the results settle it), and
 `test/validationDesktop.test.ts` (the desktop channel: that no fleet tool is reachable from it, the
 credential's mode, that a second harness cannot take the stable socket, one claim at a time, the

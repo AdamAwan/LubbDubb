@@ -35,6 +35,7 @@ type PromptId =
   | 'issue-retro'
   | 'feature-summary'
   | 'validation-check'
+  | 'validation-failed'
   | 'local-run'
   | 'pr-ci-fix'
   | 'pr-ci-gate'
@@ -474,6 +475,20 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       '**Do not report "passed" from evidence you did not gather.** A green build, a merged pull request, code that looks correct and a test suite that already covers it are none of them this check: it exists precisely because those had all happened and somebody still wanted the thing exercised. If you did not carry out the procedure, the answer is "handback".\n\n' +
       'If the check describes something that no longer exists — a screen that moved, a command that was renamed — call validation_amend to correct its wording rather than failing it, and then report against what you did.',
     doc: "Sent to a code agent when an operator has handed a validation check to the fleet and the goal is parked as delivered (rule `validate-check`). The check's own procedure, expectation and resources are *appended* to the rendered prompt rather than interpolated, so an override that never learned about them cannot silently drop the half the agent cannot act without. Placeholders: {number} {title} {letter} {root}.",
+  },
+  'validation-failed': {
+    placeholders: ['number', 'title', 'letter', 'root'],
+    template:
+      'Issue #{number} ("{title}") was delivered, and check {letter} of its validation plan was run against it and came back **failed**. Somebody followed the procedure and did not see what it says to expect. Find out why.\n\n' +
+      'The check and what was reported are appended below. Start there, and start by reproducing it: you are in a read-only checkout of the default branch, which is the delivered state the check was run against. Nothing here is to be committed or pushed, and you are not fixing anything on this branch.\n\n' +
+      'Anything the check needs that is not in the repository lives under {root}. It is named there, not pathed, so look for the names the check lists.\n\n' +
+      'There are three honest endings, and each has its own door:\n\n' +
+      '- **It is a real defect in what was delivered.** Say what it is and where it lives, then call escalate with the diagnosis: this is a decision about delivered work and it belongs to a person, not to an agent that has just read the code.\n' +
+      '- **The check is wrong** — it names a screen that moved, a command that was renamed, a flag that never existed. Call validation_amend to correct its wording. Do not amend a check you merely could not get to pass; a check you disagree with is not a check that is wrong.\n' +
+      '- **The failure is real and is not about this goal** — the fixture, the environment, a dependency, a service that was down. Say so plainly, and raise what the next agent should not have to work out again.\n\n' +
+      '**You cannot record a result on this check, and you should not try.** The reading belongs to whoever took it: they ran the procedure and you did not. Your job is the account of why it failed, not a second opinion on whether it did — and if what you find is that it passes now, that is a sentence for the person who will re-run it, not a reading of your own.\n\n' +
+      '**Do not conclude from the code alone.** A green build, a passing test suite and code that looks correct are none of them this check — it exists precisely because those had all happened and it failed anyway. If you cannot reproduce the failure, say that, and say what you tried.',
+    doc: "Sent to a code agent when a validation check on a delivered goal was recorded as `failed` (rule `validation-failed`). The check's own procedure and expectation, and the reading being diagnosed with its note and who took it, are *appended* to the rendered prompt rather than interpolated, so an override that never learned about them cannot silently drop the halves the agent cannot start without. The agent is in a read-only checkout and fixes nothing: it diagnoses, and escalates, amends the check or raises what it learned. Placeholders: {number} {title} {letter} {root}.",
   },
   'local-run': {
     placeholders: [],

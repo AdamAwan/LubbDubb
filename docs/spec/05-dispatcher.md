@@ -418,6 +418,10 @@ is no second list to keep in step with it. What each stage contributes:
     or a red build — that would make the one feature that gates nothing the reason something else did
     not run. Below the cut it queues as `waiting` like anything else, which is how a hand-over that
     the fleet has no room for stays visible instead of looking like a button that did nothing.
+11. **Failed validation checks** (`validation-failed`), directly below the run and for its reason. A
+    check waiting to be run is work nobody has done; this is a second opinion on work somebody has,
+    so it goes below — and below everything else for `validate-check`'s reason, which is the same
+    promise.
 
 A superseded candidate is **queued, not dropped** — with the superseding rule named in its `reason`,
 and attributed to the rule that proposed it rather than to whatever held it.
@@ -1066,6 +1070,35 @@ override that predates the rule would silently drop a new `{token}`.
 The agent answers with `validation_report` ([11](11-mcp-tools.md)), whose third arm — `handback` —
 returns the check to the operator without recording a reading. See
 [20](20-validation.md#the-hand-over) for why there are three answers rather than two.
+
+## `validation-failed` — looking into a failed check
+
+`validation-failed` puts a code agent on a validation check somebody ran against the delivered goal
+and recorded as `failed`. Why a failure is worth an agent at all — and why it is not a shortfall — is
+[20](20-validation.md#when-a-check-fails); the dispatcher's half is:
+
+- A **code** agent in a **read-only checkout** of `defaultBranch`
+  ([09](09-execution.md#the-read-only-checkout)), leased under
+  `validate-failure/issue/<n>/<checkId>`, origin `issue:<n>:validate-failure:<checkId>`. Its own
+  namespace for `validate/issue/<n>/<checkId>`'s hard reason — git stores refs as files — and its own
+  origin because it is its own budget: a check that took three tries to run would otherwise get no
+  diagnosis, and a diagnosis that cannot settle would eat the attempts of a re-run nobody has asked
+  for yet.
+- The **origin shape is load-bearing beyond the budget.** `validation_report` parses `:validate:`
+  alone, so this agent is refused a reading structurally rather than by a sentence in its prompt.
+- Fires on the same gates as `validate-check` — a goal **parked as delivered**, no live desktop claim
+  — plus the state itself: `failed`, and live. A withdrawn check is not asked about, and the other
+  four states are somebody's settled answer or `validate-check`'s business.
+- **One dispatch per reading.** The cooldown window is narrowed to decisions stamped after the
+  check's `resultAt`, `plannerVerdict`'s adjustment: a `failed` row stands until somebody records
+  something else, so an unnarrowed window would spend one budget across the check's whole life.
+- **Fails open and silent**, `validate-check`'s rule: a crashed or capped agent leaves the check
+  exactly as it was, with no escalation. The check is `failed`, the goal is flagged and the close-out
+  line quotes the note — a second inbox item would ask the same person the same question twice.
+
+The check's procedure and expectation, and the reading being diagnosed — its note and who took it —
+are **appended** to the rendered `validation-failed` prompt rather than interpolated, the two halves
+the agent cannot start without.
 
 ## `feature-summary` — where a Feature is
 
