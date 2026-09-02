@@ -154,7 +154,7 @@ function payload(over: Partial<ReviewPackPayload> = {}): ReviewPackPayload {
 
 const noop = async (): Promise<void> => {};
 
-function render(p: ReviewPackPayload, openIdea: string | null = null): string {
+function render(p: ReviewPackPayload, openIdea: string | null = null, askRefusal: string | null = null): string {
   return renderToStaticMarkup(
     createElement(RefLinks, {
       refUrls: { 'pr:7': 'https://example.test/pull/7' },
@@ -174,6 +174,8 @@ function render(p: ReviewPackPayload, openIdea: string | null = null): string {
         onUnshare: noop,
         shareRefusal: null,
         onShareRefused: () => undefined,
+        askRefusal,
+        onAskRefused: () => undefined,
         refUrls: {},
       }),
     }),
@@ -374,6 +376,21 @@ test('a stale pack says how far behind, an unfetched head says unknown, and a go
   const gone = render(payload({ head: null, stale: null }));
   assert.match(gone, /pull request gone/);
   assert.doesNotMatch(gone, /class="chip small ok">current/);
+});
+
+/**
+ * A refused ask is drawn, not flashed. The desk refuses one for four reasons a
+ * reader can act on and records none of them in the error log — a refusal is not
+ * a failure — so the page is the only place the sentence can land.
+ * → docs/spec/31-review-packs.md#when-a-pack-is-made
+ */
+test('a refused ask is drawn beside the ask that was refused, and nowhere when nothing was refused', () => {
+  const refusal = 'dispatch is paused; resume it to ask for a pack';
+  const unchecked = payload({ pack: { ...checkedPack(), order: [] }, checking: false });
+  assert.match(render(unchecked, null, refusal), /class="rp-refusal">dispatch is paused/);
+  assert.doesNotMatch(render(unchecked), /class="rp-refusal"/);
+  const stale = payload({ stale: { headSha: 'b'.repeat(40), commitsBehind: 3 } });
+  assert.match(render(stale, null, refusal), /class="rp-refusal">dispatch is paused/);
 });
 
 test('a pack of a schema this build does not know is refused whole', () => {

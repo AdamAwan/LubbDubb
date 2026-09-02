@@ -55,6 +55,10 @@ export function ReviewPackModal({
   // reason names the line it stopped on, which is the whole of what the person
   // can act on. Held here rather than in the page, which is pure.
   const [shareRefusal, setShareRefusal] = useState<string | null>(null);
+  // The last refused ask, in the same terms and for the same reason: the desk
+  // refuses one for four reasons a reader can act on, and none of them is written
+  // to the error log — a refusal is not a failure.
+  const [askRefusal, setAskRefusal] = useState<string | null>(null);
   const live = useRef(true);
 
   const load = useCallback(async () => {
@@ -114,8 +118,15 @@ export function ReviewPackModal({
   }, [busy, load]);
 
   const ask = useCallback(async () => {
-    await api.requestReviewPack(prNumber);
-    await load();
+    setAskRefusal(null);
+    try {
+      await api.requestReviewPack(prNumber);
+    } finally {
+      // Re-read either way: a refused ask usually names state that moved under the
+      // page — an author already on the pull request, a checker on its pack — and
+      // the read is what draws it.
+      await load();
+    }
   }, [prNumber, load]);
 
   const share = useCallback(async () => {
@@ -170,7 +181,13 @@ export function ReviewPackModal({
         {reading === 'loading' && <p className="empty">Loading the pack…</p>}
         {reading === 'failed' && <p className="empty">Could not load the pack. The harness may be unreachable.</p>}
         {reading !== 'loading' && reading !== 'failed' && reading.kind === 'none' && (
-          <NoPack prNumber={prNumber} writing={reading.writing} onAsk={ask} />
+          <NoPack
+            prNumber={prNumber}
+            writing={reading.writing}
+            onAsk={ask}
+            refused={askRefusal}
+            onRefused={setAskRefusal}
+          />
         )}
         {reading !== 'loading' && reading !== 'failed' && reading.kind === 'pack' && (
           <ReviewPackPage
@@ -187,6 +204,8 @@ export function ReviewPackModal({
             onUnshare={unshare}
             shareRefusal={shareRefusal}
             onShareRefused={setShareRefusal}
+            askRefusal={askRefusal}
+            onAskRefused={setAskRefusal}
             refUrls={refUrls}
           />
         )}
@@ -205,7 +224,20 @@ function pendingShare(sharing: ReviewPackSharing): boolean {
 }
 
 /** No pack yet: on its way, or never asked for — two different sentences, and only the second offers the ask. */
-function NoPack({ prNumber, writing, onAsk }: { prNumber: number; writing: boolean; onAsk: () => Promise<void> }) {
+function NoPack({
+  prNumber,
+  writing,
+  onAsk,
+  refused,
+  onRefused,
+}: {
+  prNumber: number;
+  writing: boolean;
+  onAsk: () => Promise<void>;
+  /** Why the last ask was refused, in the route's own words. */
+  refused: string | null;
+  onRefused: (message: string) => void;
+}) {
   if (writing) {
     return (
       <div className="rp rp-none">
@@ -223,9 +255,10 @@ function NoPack({ prNumber, writing, onAsk }: { prNumber: number; writing: boole
         Nobody has asked for a pack on #{prNumber}. Asking spends two agent runs — an author and a checker — and the
         pack arrives here when the first has finished.
       </p>
-      <AsyncButton className="primary small" onClick={onAsk} pendingLabel="asking…">
+      <AsyncButton className="primary small" onClick={onAsk} onRefused={onRefused} pendingLabel="asking…">
         Ask for a review pack
       </AsyncButton>
+      {refused !== null && <p className="rp-refusal">{refused}</p>}
     </div>
   );
 }

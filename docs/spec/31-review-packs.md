@@ -414,8 +414,11 @@ time out on every proxy between the cockpit and the port. The pack arrives later
 `GET /api/prs/:number/review-pack` is how a reader learns it has: until then the read is a 404 that
 says whether one is being written. The desk refuses, in the order a reader would blame them, a pull
 request that is not open (404), a head the provider did not report, an author already on the pull
-request, and a paused fleet (409 each). A second ask while one is being written is refused rather
-than queued — the reader is the one party who can tell when a new pack is worth two agent runs — and
+request, a pack already being checked, and a paused fleet (409 each). **Each refusal is drawn where
+the ask was clicked, in the route's own words**: a refusal is not a failure, so nothing is written
+to the error log for one, and a status code the cockpit kept to itself reached the reader as a
+button that did nothing — with four reasons they could have acted on. A second ask while one is
+being written is refused rather than queued — the reader is the one party who can tell when a new pack is worth two agent runs — and
 the ask on a new head, once the first author has finished, is the same call.
 
 **The author is spawned outside the dispatcher.** It is not a rule: a pack is made when a person
@@ -733,6 +736,15 @@ request the world no longer carries — and reads them off the route itself, bec
 on the snapshot. A closed pull request's row keeps the way in to a pack it has and loses the ask,
 since the desk refuses to write one for it. Both the control and the page re-read on a short clock
 only while an author or a checker is on the pull request.
+
+**A refused ask is drawn beside the ask that was refused**, wherever it is drawn — the row control,
+the empty page, the stale line, the unchecked band — held by the shell (`ReviewPackModal`) exactly
+as the share's refusal is, because the page is a pure function of the payload and a refusal is about
+a click. It is drawn and not flashed for the reason the share's is: the sentence *is* the whole of
+what the reader can act on, and the four reasons the desk gives
+([When a pack is made](#when-a-pack-is-made)) each have a different next move. Every ask also
+**re-reads the pack afterwards, refused or not** — a refusal usually names state that moved under
+the surface, and the re-read is what turns the button into the chip that says so.
 
 Every reference to a goal, a pull request or an issue is drawn with `<Ref to={ref}/>`
 (`web/src/components/refs.tsx`), never as text. → [17](17-cockpit.md#links)
