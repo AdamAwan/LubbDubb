@@ -9418,6 +9418,23 @@ select:disabled {
   font-size: 16px;
   font-weight: 500;
 }
+/* The one mark that measures whether prominence works: the reader saying they
+   took the finding. It sits at the foot of the finding and nowhere else — it is
+   a statement about the checker's output, not about the walk. */
+.rp-finding-seen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.rp-finding-seen-note {
+  flex: 1 1 280px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
 .rp-finding-where {
   margin: 0 0 10px;
   color: var(--muted);
@@ -9474,4 +9491,84 @@ select:disabled {
 .rp-colophon-meta {
   font-family: var(--font-mono);
   font-size: 11px;
+}
+
+/* Review calibration — the Insights tab that reads the packs rather than any one
+   pull request. Three blocks, one question: is this subsystem's output drifting?
+   → docs/spec/31-review-packs.md#the-operators-reading */
+.rc {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.rc-lede {
+  margin: 0;
+  color: var(--muted);
+}
+.rc-block {
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  border-radius: var(--r-sm);
+  padding: 12px 14px;
+}
+.rc-block h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 500;
+}
+.rc-note {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.rc-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  margin-bottom: 12px;
+}
+.rc-figure {
+  display: flex;
+  flex-direction: column;
+}
+.rc-figure-v {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.rc-figure-l {
+  color: var(--muted);
+  font-size: 12px;
+}
+/* The figure the operator is meant to act on, when it is the one saying act. */
+.rc-figure.is-loud .rc-figure-v {
+  color: var(--amber);
+}
+.rc-table {
+  border-collapse: collapse;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  width: 100%;
+}
+.rc-table th,
+.rc-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 4px 10px 4px 0;
+  text-align: left;
+}
+.rc-table th {
+  color: var(--muted);
+  font-weight: 400;
+}
+.rc-table .num {
+  text-align: right;
+}
+.rc-none {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.rc-verdict {
+  margin: 10px 0 0;
+  color: var(--text);
+  font-size: 12.5px;
 }

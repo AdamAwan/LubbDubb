@@ -62,6 +62,7 @@ import type { ControlState } from './runtimeControl.js';
 import type { RunningConfigGroup } from './server/runningConfig.js';
 import type { ConfigChange } from './configApply.js';
 import type { ReliabilityInsights, RunTally } from './reliabilityInsights.js';
+import type { ReviewCalibration } from './reviewPacks/calibration.js';
 import type { RemedyInsights } from './remedyInsights.js';
 import type { KnowledgeCost } from './knowledge/cost.js';
 import type { AllowanceInsights } from './allowanceInsights.js';
@@ -2144,12 +2145,33 @@ export interface ReviewAttentionBody {
 }
 
 /**
- * What both mark routes answer with: every mark on the pull request after the
- * write, exactly as the read ships them — so the page re-lays them over the
+ * `POST /api/prs/:number/review-pack/ideas/:id/seen` — a reviewer taking the
+ * finding on an idea's false claim, or putting it back. The third mark, keyed
+ * exactly as the other two are: to the hunks the idea owns, never to its id.
+ * → `docs/spec/31-review-packs.md#whether-prominence-works`
+ */
+export interface ReviewSeenBody {
+  seen: boolean;
+}
+
+/**
+ * What the three mark routes answer with: every mark on the pull request after
+ * the write, exactly as the read ships them — so the page re-lays them over the
  * ideas from one shape rather than patching a local copy.
  */
 export interface ReviewMarksPayload {
   marks: ReviewMark[];
+}
+
+/**
+ * `GET /api/review-calibration` — what the packs say about the agents that wrote
+ * them: the overrides, the plumbing ratio and whether false claims get read.
+ * The Insights page's Review tab, and the only reading that aggregates across
+ * packs. Never shown to the checker and never fed back into a prompt.
+ * → `docs/spec/31-review-packs.md#the-operators-reading`
+ */
+export interface ReviewCalibrationPayload {
+  calibration: ReviewCalibration;
 }
 
 /**
@@ -2450,6 +2472,14 @@ export type {
   RunRepeat,
   RunTally,
 } from './reliabilityInsights.js';
+export type {
+  ReviewCalibration,
+  ReviewOverridePair,
+  ReviewOverrideReading,
+  ReviewPlumbingPack,
+  ReviewPlumbingReading,
+  ReviewProminenceReading,
+} from './reviewPacks/calibration.js';
 export type { RemedyCauseTotal, RemedyInsights, RemedyKindHealth, RemedyRow } from './remedyInsights.js';
 export type { RemedyCause, RemedyGuard, RemedyKind } from './types.js';
 export type { McpChannel } from './types.js';

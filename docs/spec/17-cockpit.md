@@ -401,8 +401,8 @@ once.
 | `ask`                                | the queue row a `{ ask }` panel is showing                                                                                                                                                                                                                                                                                                                                                               |
 | `agent`                              | the open drawer's agent                                                                                                                                                                                                                                                                                                                                                                                  |
 | `plan` / `retro` / `pad`             | the plan sheet, the retrospective, the notepad                                                                                                                                                                                                                                                                                                                                                           |
-| `pack`                               | the pull request whose [review pack](#the-review-pack) is open over the goal page, by number                                                                                                                                                                                                                                                                                                         |
-| `idea`                               | which idea of that pack is unfolded, by the id the author minted, or `all` for the open-all control. Carried only under `pack`: a fold on a page that is not open is not a place                                                                                                                                                                                                                       |
+| `pack`                               | the pull request whose [review pack](#the-review-pack) is open over the goal page, by number                                                                                                                                                                                                                                                                                                             |
+| `idea`                               | which idea of that pack is unfolded, by the id the author minted, or `all` for the open-all control. Carried only under `pack`: a fold on a page that is not open is not a place                                                                                                                                                                                                                         |
 | `fact`                               | the claim whose provenance is open on the Knowledge tab, by fact id                                                                                                                                                                                                                                                                                                                                      |
 | `kn`                                 | the Knowledge tab's layout: `list` for the nine headings, `table` for one sortable row per claim; `queue` — one claim at a time — is the absent value. Not `view`, which the Tickets tab and Insights already share → [27](27-knowledge.md#the-queue-is-the-page)                                                                                                                                        |
 | `q`                                  | which claim the Knowledge queue is standing on, by fact id. On `Place` and not a `useState` for the usual reason: a reload has to land on the card the operator was ruling on, and the back button has to step back through the ones behind it → [27](27-knowledge.md#the-queue-is-the-page)                                                                                                             |
@@ -3661,7 +3661,7 @@ version of the other two. The output graph drew a cost row; the yield panel drew
 spend trend drew a completion rate off a second server builder, one click from the first. That is the
 shape of a wrong seam.
 
-**One page, one window, eight readings of it — seven of them windowed.**
+**One page, one window, nine readings of it — eight of them windowed.**
 
 - **Economics** — is the fleet worth what it costs? The ratio headline, the phase split, the timeline,
   the goals and the costliest runs.
@@ -3676,6 +3676,13 @@ shape of a wrong seam.
 - **MCP** — which tools the fleet reaches for, and which it never does. The odd one out, and
   deliberately: every other tab is a reading about work the harness did, and this is a reading about a
   **channel**. See [below](#mcp).
+- **Review** — what the [review packs](31-review-packs.md#the-operators-reading) say about the agents
+  that write them: where reviewers overrode the checker's attention label and which way, the ratio of
+  `plumbing` hunks to owned ones, and how often a pull request merged with a false claim nobody marked
+  as read. The one tab whose subject is the harness's own output rather than the fleet's work — and
+  **never shown to the checker**, because a label that has learned to agree with its reader has stopped
+  being evidence. Fetched on the tab's first visit for a window, like Trend and MCP: it folds every pack
+  against every mark.
 - **Pool** — what the whole [cross-fleet pool](28-cross-fleet-pool.md) spent, across fleets. The one tab
   that ignores the window bar, and it has to: the digest's bucket is a UTC day and its retention is
   ninety of them, so the page's five spans are not a question anybody asks of it. What it takes instead
@@ -3844,7 +3851,7 @@ can see.
 **A lane row is a goal, and it is named in a gutter.** Two dispatches onto one goal are two bars in
 one row, which is what lets the row carry a name down the left — and a name in a gutter is the only
 kind a reader gets without a pointer, which a screenshot, a touch screen and a reader who does not
-hover all are. The name is a `<Ref>`, so the row is a way *to* the goal rather than a mention of it
+hover all are. The name is a `<Ref>`, so the row is a way _to_ the goal rather than a mention of it
 ([links](#links)). The rows come in the apportionment's order, so the band and the table at the foot of
 the tab are the same list twice rather than two orders to reconcile; a goal with no run in the window
 is not a row, because the band is about what ran. The runs that reached no goal share the last row —
@@ -4559,7 +4566,20 @@ top of its idea, before the walk — the finding boxes, where to spend the time,
 A pack whose `schema` this build does not know is refused whole at the top, never drawn as far as it
 is recognised. What a reviewer does rides the marks routes ([16](16-http-api.md#post-apiprsnumberreview-packideasidread))
 and the rows the write returns replace what the page holds, laid over the ideas by `layMarks`
-(`web/src/view/reviewPack.ts`): read only when every hunk the idea owns says so.
+(`web/src/view/reviewPack.ts`): read only when every hunk the idea owns says so, and the same for
+`seen`.
+
+**Three marks, and the third is under a finding.** Read and the attention override sit in the idea's
+own row; _I have taken this_ sits at the foot of each finding box and nowhere else, because it is a
+statement about the checker's output rather than about the walk, and it is the one number that says
+whether [prominence](31-review-packs.md#whether-prominence-works) works. Nothing about it blocks
+anything — the sentence beside it says so, since a control at the end of a red box otherwise reads as
+an approval.
+
+**Sharing has an inverse, drawn beside it.** The share control's six states include _unshared, waiting
+for the next pool publish to take it out_: the withdrawal is recorded at once and the copy leaves on
+the pool's own clock, so the modal's short re-read clock covers it exactly as it covers a share
+waiting to go out ([31](31-review-packs.md#unsharing-a-pack)).
 
 **Colour is a verdict or a mark the document states, never decoration.** The four attention labels
 and the three verdicts take the shared family's hues — `--red` for read and false, `--amber` for

@@ -1,13 +1,14 @@
 # 31 — Review packs
 
-**Built**, with one thing outstanding. [The witness log](#the-witness-log), [the pack document](#the-pack),
+**Built.** [The witness log](#the-witness-log), [the pack document](#the-pack),
 [the author](#when-a-pack-is-made), [coverage](#coverage), [the check](#the-check) and its
-[attention labels](#attention), the five routes, the two prompt ids,
-[the cockpit rendering](#reading-it), [the HTML companion](#reading-it) and
-[sharing a pack](#sharing-a-pack) — the publish, the secret backstop over every embedded line, and
-the prune — are running code. What is not: the attention overrides are recorded and taken, and
-**not yet surfaced to the operator** ([Attention](#attention)). Every path a section names is italic
-while that section is unbuilt, and the marker comes off it in the change that makes it true.
+[attention labels](#attention), the eight routes, the two prompt ids,
+[the cockpit rendering](#reading-it), [the HTML companion](#reading-it),
+[sharing a pack](#sharing-a-pack) and [unsharing one](#unsharing-a-pack) — the publish, the secret
+backstop over every embedded line, the prune and the withdrawal — and
+[the operator's reading](#the-operators-reading) over all of them are running code. Every path a
+section names is italic while that section is unbuilt, and the marker comes off it in the change that
+makes it true.
 
 A diff is what is left over after the thinking. The reasoning that produced it — what was considered,
 what was rejected, which file was deliberately not touched — is thrown away at the moment of commit,
@@ -35,17 +36,17 @@ Two properties do the work, and neither is presentation:
 
 ## What it is not
 
-| Not                       | Because                                                                                                                                                                                                       |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A code reviewer           | Nothing here forms an opinion about whether the change is good. It states what the change does, follows it through the tree, and marks its own statements true or false. The judgement stays with a person.  |
+| Not                       | Because                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A code reviewer           | Nothing here forms an opinion about whether the change is good. It states what the change does, follows it through the tree, and marks its own statements true or false. The judgement stays with a person.                                                                                                                                                                  |
 | The fleet review          | [07](07-pull-requests.md#the-fleet-review)'s `pr-review` reads the same diff, and a deployment with both on pays two readings of it. That is deliberate: the review is one round, policy-mandated on the deployments that run it, and its charter is the project's; folding a pack into it would put a second job in that agent's context. Neither reads the other's output. |
-| A replacement for reading | The pack's job is to make the code readable in the right order, not to stand in for it. A surface that answers well enough to approve from is a regression, and the shape in [Reading it](#reading-it) resists it. |
-| A summariser              | A summary is unfalsifiable. Every sentence a pack ships is a claim with a verdict beside it, or it is a gist attached to code the reader can see.                                                              |
-| A dispatch input          | Same rule as the rest of the lenses: nothing under `src/dispatcher/` may import this. A pack is a read-only view assembled after the work. → [05](05-dispatcher.md)                                            |
-| A gate                    | Nothing here blocks a merge. A pack is made because somebody asked for one, and an artefact that may never exist cannot be a precondition for anything. A false claim is shown, loudly. → [What a false claim does](#what-a-false-claim-does) |
-| A commit message          | A commit message is one narrative for the whole change. A pack is several, one per idea, each with its own walk and its own verdicts — and it carries code, which a message cannot.                            |
-| An always-on cost         | Three roles, and only one of them runs inside the work. → [Cost](#cost)                                                                                                                                        |
-| A page the harness owns   | What the three agents produce is a JSON document. The cockpit and the shared HTML companion are both renderings of it, and neither is ever read back. → [A pack is data](#a-pack-is-data-and-rendering-is-downstream) |
+| A replacement for reading | The pack's job is to make the code readable in the right order, not to stand in for it. A surface that answers well enough to approve from is a regression, and the shape in [Reading it](#reading-it) resists it.                                                                                                                                                           |
+| A summariser              | A summary is unfalsifiable. Every sentence a pack ships is a claim with a verdict beside it, or it is a gist attached to code the reader can see.                                                                                                                                                                                                                            |
+| A dispatch input          | Same rule as the rest of the lenses: nothing under `src/dispatcher/` may import this. A pack is a read-only view assembled after the work. → [05](05-dispatcher.md)                                                                                                                                                                                                          |
+| A gate                    | Nothing here blocks a merge. A pack is made because somebody asked for one, and an artefact that may never exist cannot be a precondition for anything. A false claim is shown, loudly. → [What a false claim does](#what-a-false-claim-does)                                                                                                                                |
+| A commit message          | A commit message is one narrative for the whole change. A pack is several, one per idea, each with its own walk and its own verdicts — and it carries code, which a message cannot.                                                                                                                                                                                          |
+| An always-on cost         | Three roles, and only one of them runs inside the work. → [Cost](#cost)                                                                                                                                                                                                                                                                                                      |
+| A page the harness owns   | What the three agents produce is a JSON document. The cockpit and the shared HTML companion are both renderings of it, and neither is ever read back. → [A pack is data](#a-pack-is-data-and-rendering-is-downstream)                                                                                                                                                        |
 
 ## The three roles
 
@@ -53,11 +54,11 @@ The pack is produced by three agents that see deliberately different things. The
 whole design: each one only has to distrust the one before it, and none is ever asked to check its
 own output.
 
-| Role        | Runs               | Sees                                          | Writes                                        |
-| ----------- | ------------------ | --------------------------------------------- | --------------------------------------------- |
-| **Witness** | inside the work    | everything — it _is_ the working agent        | the witness log, as it goes                   |
-| **Author**  | after the work     | the witness log, the diff, the tree           | the pack: ideas, claims, anchors              |
-| **Checker** | after the pack     | the diff, the tree, each idea's one-line claim and anchor list, the claims — **not** the log, **not** the notes | a verdict and its evidence per claim; per idea an attention label and its cue; the finding for each false claim; the reading order |
+| Role        | Runs            | Sees                                                                                                            | Writes                                                                                                                             |
+| ----------- | --------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| **Witness** | inside the work | everything — it _is_ the working agent                                                                          | the witness log, as it goes                                                                                                        |
+| **Author**  | after the work  | the witness log, the diff, the tree                                                                             | the pack: ideas, claims, anchors                                                                                                   |
+| **Checker** | after the pack  | the diff, the tree, each idea's one-line claim and anchor list, the claims — **not** the log, **not** the notes | a verdict and its evidence per claim; per idea an attention label and its cue; the finding for each false claim; the reading order |
 
 Three things follow that are easy to lose and expensive to re-derive:
 
@@ -118,12 +119,12 @@ both pads, is the first reader that needs either.
 
 An entry's `decision` carries:
 
-| Field      | What                                                                          |
-| ---------- | ----------------------------------------------------------------------------- |
-| `chose`    | one line: what the change does here                                           |
-| `because`  | one line: why                                                                 |
-| `rejected` | zero or more alternatives, each with the reason it was not taken              |
-| `paths`    | the files the fork touches, where the agent can say                           |
+| Field      | What                                                             |
+| ---------- | ---------------------------------------------------------------- |
+| `chose`    | one line: what the change does here                              |
+| `because`  | one line: why                                                    |
+| `rejected` | zero or more alternatives, each with the reason it was not taken |
+| `paths`    | the files the fork touches, where the agent can say              |
 
 `chose` and `because` are required inside the object and every line is collapsed to one; `rejected`
 and `paths` may be empty and come back empty rather than missing, so a reader never has to ask which
@@ -182,15 +183,15 @@ An **idea** is a claim plus an ordered walk of anchors. It is the unit the whole
 produce, because it is the unit a change is actually made in — and the unit a diff destroys by
 sorting everything alphabetically by path.
 
-| Field       | What                                                                                              |
-| ----------- | ------------------------------------------------------------------------------------------------- |
+| Field       | What                                                                                                                                                                                     |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `id`        | minted by the author on every run, so nothing durable is keyed to it ([marks](#what-a-reviewer-does-is-not-part-of-the-pack)); the one reserved id is `plumbing` ([Coverage](#coverage)) |
-| `claim`     | one sentence, falsifiable, stating what this idea does                                            |
-| `title`     | the same thing said the way a colleague would say it across a desk — what changed and why it matters, no identifiers ([The page](#the-page)) |
-| `cue`       | one short line under the title: why this idea has the attention it has, and where its risk is     |
-| `anchors`   | ordered — the walk, in the order the reasoning ran, not the order the files sort in                |
-| `claims`    | the checkable statements this idea rests on ([Claims](#claims))                                    |
-| `attention` | how much scrutiny it needs, set by the **checker** ([Attention](#attention))                       |
+| `claim`     | one sentence, falsifiable, stating what this idea does                                                                                                                                   |
+| `title`     | the same thing said the way a colleague would say it across a desk — what changed and why it matters, no identifiers ([The page](#the-page))                                             |
+| `cue`       | one short line under the title: why this idea has the attention it has, and where its risk is                                                                                            |
+| `anchors`   | ordered — the walk, in the order the reasoning ran, not the order the files sort in                                                                                                      |
+| `claims`    | the checkable statements this idea rests on ([Claims](#claims))                                                                                                                          |
+| `attention` | how much scrutiny it needs, set by the **checker** ([Attention](#attention))                                                                                                             |
 
 `claim` is for the checker; `title` and `cue` are for the person. The author writes the first two,
 the checker writes the cue after it has labelled the idea, because the cue says why the label is what
@@ -205,10 +206,10 @@ separately is how a whole class of the sharp edges gets missed.
 An anchor is a place in the tree the walk stops at, with one line saying why it stops there. Two
 kinds, and the second is the point:
 
-| Kind     | What                                                | Drawn                    |
-| -------- | --------------------------------------------------- | ------------------------ |
-| `hunk`   | a range of the diff                                 | solid                    |
-| `region` | a range of a file **not in the diff**               | dashed                   |
+| Kind     | What                                  | Drawn  |
+| -------- | ------------------------------------- | ------ |
+| `hunk`   | a range of the diff                   | solid  |
+| `region` | a range of a file **not in the diff** | dashed |
 
 A `region` anchor is either **context** — code the change cannot be judged without, which the pull
 request does not contain — or a **deliberate absence**: the file a reader would expect to have
@@ -264,12 +265,12 @@ Two escape valves, because the invariant is otherwise false in practice:
 A claim is a sentence that can be shown false. "This is cleaner" is not a claim. "These are the only
 two callers" is.
 
-| Field        | What                                                                        |
-| ------------ | --------------------------------------------------------------------------- |
-| `text`       | the sentence                                                                |
-| `provenance` | where it came from ([Provenance](#provenance))                              |
-| `verdict`    | `true`, `false` or `cant_tell`, written by the checker; null until it has   |
-| `evidence`   | what the checker did to decide — the search, the test, the file it read; null until it has |
+| Field        | What                                                                                                                                                                                                       |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `text`       | the sentence                                                                                                                                                                                               |
+| `provenance` | where it came from ([Provenance](#provenance))                                                                                                                                                             |
+| `verdict`    | `true`, `false` or `cant_tell`, written by the checker; null until it has                                                                                                                                  |
+| `evidence`   | what the checker did to decide — the search, the test, the file it read; null until it has                                                                                                                 |
 | `finding`    | on a `false` claim and on nothing else: what is wrong and what follows ([What a false claim does](#what-a-false-claim-does)); null until it has, and null on every claim that held or could not be decided |
 
 ### Provenance
@@ -278,11 +279,11 @@ Every claim states where it came from, and this is structural rather than decora
 traceable to something the witness wrote at the time is worth more than one the author reconstructed
 from the diff, and a reader must be able to tell which they are looking at.
 
-| Provenance  | Means                                                                                                        |
-| ----------- | ------------------------------------------------------------------------------------------------------------ |
+| Provenance  | Means                                                                                                              |
+| ----------- | ------------------------------------------------------------------------------------------------------------------ |
 | `witnessed` | traceable to a witness entry, which it cites by id (`entryId`, a `scr_…`) — the entry is shown beside it, verbatim |
-| `inferred`  | the author's reading of the code; the witness said nothing about this. Cites nothing                         |
-| `disputed`  | a witness entry and the code disagree. The claim states what the code does; the entry it cites is shown beside it |
+| `inferred`  | the author's reading of the code; the witness said nothing about this. Cites nothing                               |
+| `disputed`  | a witness entry and the code disagree. The claim states what the code does; the entry it cites is shown beside it  |
 
 The provenance is a discriminated union rather than a label beside an optional id, so a `witnessed`
 claim without an entry to show is a shape the type refuses rather than a row the page draws with a
@@ -297,8 +298,8 @@ surfaced as one.
 ### Attention
 
 _Built_ — stage 4, with the checker; the overrides are recorded and, since stage 5, taken from the
-page ([marks](#what-a-reviewer-does-is-not-part-of-the-pack)). Their surfacing to the operator,
-below, is not yet built.
+page ([marks](#what-a-reviewer-does-is-not-part-of-the-pack)); since stage 7 they are surfaced to the
+operator ([The operator's reading](#the-operators-reading)).
 
 Each idea carries a label saying how hard to look: **read**, **decide**, **skim** or **split**.
 
@@ -312,9 +313,10 @@ A reviewer may override a label, and the override is recorded — but it is **ne
 checker on a later pack**. Given the overrides it would calibrate to what reviewers like rather than
 to what is risky, and a label that has learned to agree with its reader has stopped being evidence.
 
-The overrides are surfaced to the operator instead — _not yet built_. A pattern of reviewers upgrading
-`skim` to `read` says the checker is systematically underselling risk, which is worth more than any
-single pack and is fixed by changing its prompt — a thing a person does, deliberately, once.
+The overrides are surfaced to the operator instead, on
+[the operator's reading](#the-operators-reading). A pattern of reviewers upgrading `skim` to `read`
+says the checker is systematically underselling risk, which is worth more than any single pack and is
+fixed by changing its prompt — a thing a person does, deliberately, once.
 
 With nothing blocking, this label is the main thing steering where a reviewer spends their attention.
 That makes its independence load-bearing rather than tidy.
@@ -328,11 +330,11 @@ The checker is handed the claims as bare sentences, each idea's claim and anchor
 the tree at the pull request's head. It is not given the witness log or the notes. It answers one
 question per claim and writes down how it answered.
 
-| Verdict     | When                                                                                                      |
-| ----------- | --------------------------------------------------------------------------------------------------------- |
-| `true`      | reproduced against the tree. The evidence names what was run or read                                      |
-| `false`     | the tree contradicts it. The evidence names the contradiction                                             |
-| `cant_tell` | not decidable from this repository: a claim about the outside world, a product judgement, an intention    |
+| Verdict     | When                                                                                                   |
+| ----------- | ------------------------------------------------------------------------------------------------------ |
+| `true`      | reproduced against the tree. The evidence names what was run or read                                   |
+| `false`     | the tree contradicts it. The evidence names the contradiction                                          |
+| `cant_tell` | not decidable from this repository: a claim about the outside world, a product judgement, an intention |
 
 `cant_tell` is a first-class answer and not a failure. A pack that claims something about how a
 vendor meters usage, or about what an operator would find confusing, is making a claim a codebase
@@ -368,6 +370,7 @@ rather than either.
 
 **What it is handed** is the rendered `review-pack-check` template and then, **appended** and never
 interpolated: the diff's hunk count with the instruction to read it in the checkout (`git diff
+
 <base>...HEAD`); the skeleton — per idea its id, its one-line `claim`, its anchors as numbered bare
 ranges tagged _changed_ or _not in the diff_, and its claims by number; and the note naming
 `review_pack_check`. Not the `title`, `gist`, `caption`, `note`, `headline`, `summary`, provenance or
@@ -597,16 +600,25 @@ rewrote loses its mark, honestly: the thing that was read is gone.
 A mark (`ReviewMark`) is one row per hunk, keyed on the pull request and the hunk — path, start,
 end — and **not** on the head sha, which it records but is not keyed by: keyed to a head, a mark
 would die with the pack it was made against, which is the one thing the table exists to prevent. The
-two things a reviewer can do — read an idea, override its label — are two columns on that one row,
-`read` and `attention`, and each write names only its own column so the other keeps what it had.
-`Store.markReviewIdeaRead` and `Store.overrideReviewAttention` take the hunks an idea owns and write
-them all in one transaction; `listReviewMarks` hands back every mark on the pull request, whichever
-head each was made against, for the renderer to lay over whichever ideas own those hunks now.
+three things a reviewer can do — read an idea, override its label, take the finding on its false
+claim — are three columns on that one row, `read`, `attention` and `seen`, and **each write names
+only its own column** so the other two keep what they had. `Store.markReviewIdeaRead`,
+`Store.overrideReviewAttention` and `Store.markReviewFindingSeen` take the hunks an idea owns and
+write them all in one transaction; `listReviewMarks` hands back every mark on the pull request,
+whichever head each was made against, for the renderer to lay over whichever ideas own those hunks
+now.
 
-**The page writes them through two routes** — _built_, stage 5 —
-`POST /api/prs/:number/review-pack/ideas/:id/read` with `{read}` and
-`…/ideas/:id/attention` with `{attention}` (a label or null to clear), both in
-`src/server/routes/reviewPacks.ts` under `checked(...)`. Each resolves the idea in the **current**
+`seen` is the odd one of the three and is the reason [prominence](#whether-prominence-works) is
+measurable at all: it is a statement about the **checker's** output rather than the author's, and it
+is keyed the same way as the other two on purpose — to the hunks the idea owns, never to an idea id,
+which the next pack mints afresh. It is offered on the page **under a finding and nowhere else**, and
+the route does not second-guess that by refusing an idea with no false claim: the mark rides on
+hunks, and which ideas carry a finding is the renderer's rule to keep.
+
+**The page writes them through three routes** — _built_, stages 5 and 7 —
+`POST /api/prs/:number/review-pack/ideas/:id/read` with `{read}`,
+`…/ideas/:id/attention` with `{attention}` (a label or null to clear), and `…/ideas/:id/seen` with
+`{seen}`, all three in `src/server/routes/reviewPacks.ts` under `checked(...)`. Each resolves the idea in the **current**
 pack, takes the hunks it owns — the `hunk` anchors; a `region` is a reference, and a mark riding on
 one would land on the idea that owns that hunk — and writes at the pack's head. Refused when there
 is no pack or no such idea in the current one (404: the pack was rewritten under the page), and when
@@ -615,8 +627,8 @@ click that wrote nothing would read as taken. Both answer with every mark on the
 shape the read ships, so the page re-lays them from one shape rather than patching a copy.
 
 **Laying them back is a rule, not a lookup.** `layMarks` (`web/src/view/reviewPack.ts`) reads an
-idea as _read_ only when **every** hunk it owns carries a read mark, and as overridden only when
-every hunk agrees on one label. Across a rewrite that is the honest reading: the next pack may fold
+idea as _read_ only when **every** hunk it owns carries a read mark, as _seen_ only when every hunk
+it owns is, and as overridden only when every hunk agrees on one label. Across a rewrite that is the honest reading: the next pack may fold
 two ideas into one, and calling the union read because half of it was is the lie the per-hunk key
 exists to avoid. An idea owning no hunk can carry no mark and reads unread.
 → [16](16-http-api.md#post-apiprsnumberreview-packideasidread)
@@ -628,7 +640,7 @@ draws the page, `ReviewPackModal.tsx` fetches it and takes the marks, `ReviewPac
 control on the row, and `web/src/view/reviewPack.ts` holds the derivations; `test/reviewPackPage.test.ts`
 holds it.
 
-Two renderings, and the layering is the same in both because the layering *is* the product.
+Two renderings, and the layering is the same in both because the layering _is_ the product.
 
 1. **The whole change on one screen.** The ideas as one line each, their attention labels, and the
    count of false claims above them. A reader who stops here has the useful part: where the time
@@ -829,6 +841,84 @@ Two consequences that are easy to miss:
   long gone_. A prune that fails leaves the share row standing and the next pulse tries again — a pack
   left in the pool because one push failed is the thing pruning exists to prevent.
 
+## Unsharing a pack
+
+_Built_ — stage 7. `PoolDesk.unshareReviewPack` records the withdrawal and the packs arm carries it
+out (`src/pool/poolDesk.ts`); the route is `POST /api/prs/:number/review-pack/unshare` and the
+control is beside the share on the page; `test/reviewPackCalibration.test.ts` holds it.
+
+A pack shared by mistake used to wait for [the prune](#sharing-a-pack), which is `closedPrWindowMs`
+after the pull request closes — weeks, in a substrate everybody clones. **The inverse of the share is
+one act**: one route, one control, and the copy is gone on the next pulse.
+
+**Immediate in the only sense a route may be.** The ask is recorded at once and the network write is
+the pool's, exactly as the publish is
+([28](28-cross-fleet-pool.md#the-publish-is-never-inside-a-route-handler)) — a route that pushed to
+another continent would report a network failure as a failure of the click, and the failure that
+matters here is the one where the pack _stays_ in the pool. So the row is stamped `withdrawnAt` and
+the arm takes the same path a prune takes: `unpublish`, then the row goes. A withdrawal that throws
+leaves the row standing and the next pulse tries again, which is the prune's rule for the prune's
+reason.
+
+Three consequences worth stating:
+
+- **The row is kept and stamped rather than deleted**, because the copy is still in the namespace and
+  the row is the only thing that would tell the arm to remove it. The one exception is a share the
+  pool never carried — nothing landed, so nothing needs a commit to say so, and the row goes at once.
+- **Unsharing something nobody shared is not an error.** The caller wanted the pack out of the pool,
+  and it is. A 409 there would be the control reporting success as failure.
+- **The local `review_packs` row is untouched**, as it is on a prune: it is the fleet's own record,
+  and the cost of keeping it is the fleet's. What a withdrawal takes back is the copy, never the pack.
+
+## The operator's reading
+
+_Built_ — stage 7. `src/reviewPacks/calibration.ts` is the lens, `GET /api/review-calibration` the
+route (in the review packs' own route module, which owns the group), and
+`web/src/components/ReviewCalibrationTab.tsx` the **Review** tab on
+[Insights](17-cockpit.md#insights); `test/reviewPackCalibration.test.ts` holds it.
+
+Three readings, on one surface, because they are three answers to one question: **is this subsystem's
+own output drifting?** Nothing on it is about a particular pull request, and the action each points at
+is the same one — a person changing a prompt, once, deliberately.
+
+| Reading                | The signal                                                      | What it says to do                                                                                           |
+| ---------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| **The overrides**      | reviewers relabelling ideas, and which way                      | a pattern of upgrades means the checker is underselling risk: change `review-pack-check`                     |
+| **The plumbing ratio** | plumbing hunks over owned ones                                  | a rising share is an author explaining less, not a repository with more renames: change `review-pack-author` |
+| **Prominence**         | pull requests that merged with a false claim nobody marked seen | either the finding was wrong, or [the page](#the-page) is not loud enough                                    |
+
+**It is never shown to the checker, and it reaches no prompt.** That is the whole reason the
+overrides are worth recording: given them the checker would calibrate to what reviewers like rather
+than to what is risky, and a label that has learned to agree with its reader has stopped being
+evidence ([Attention](#attention)). This is a page a person reads.
+
+**On Insights rather than Knowledge.** [27](27-knowledge.md) is what the fleet is _told_, and a pack
+produces none ([What was decided](#what-was-decided-and-why)) — a reading of packs filed there would
+draw a feedback path this subsystem deliberately does not have. Insights is where an operator reads
+whether the harness is working, which is exactly what these three are. It obeys that page's window
+like every other tab there, and it is fetched on the tab's first visit for a window rather than with
+the page: it folds every pack against every mark, which nothing on the top bar needs.
+
+**Derived, never stored**, and over one population: each pull request's **current** pack written in
+the window — one pack per pull request, so a pull request asked three times is not counted three
+times, and the pack counted is the one the page draws. Every mark on that pull request is laid over it
+whenever it was made, by the rule [`layMarks`](#what-a-reviewer-does-is-not-part-of-the-pack) lays
+them: an idea is overridden only when every hunk it owns agrees on one label, and seen only when every
+hunk it owns is. That rule is stated twice — once server-side and once in the cockpit — for
+`KNOWN_REVIEW_PACK_SCHEMA`'s reason: `web/src/` may name no server module but `src/wire.ts`, which
+carries no runtime.
+
+Two details that are easy to get wrong:
+
+- **`read`, `decide` and `skim` are a ladder and `split` is not.** `split` is a judgement about how
+  ideas relate rather than about how hard to look, so a move onto or off it is counted as its own
+  figure rather than folded into an upgrade — which would make the one number the operator acts on
+  say something it does not mean.
+- **The merge is read off the durable work graph, never off the world.** A closed pull request drops
+  out of the world after `closedPrWindowMs`, and _the harness stopped carrying it_ must not read as
+  _it never merged_. The plumbing ratio is null and never zero on an empty population, for the same
+  shape of reason.
+
 ## Where it lives
 
 Three tables, in `src/store/reviewPacks.ts` — under `src/store/`, the only directory that touches
@@ -836,12 +926,12 @@ SQLite, one module per group of related tables, taking a `StoreContext`, with `S
 under the same method names — and one column on a table another module owns.
 → [14](14-persistence.md#shape)
 
-| Table             | Holds                                                                                        |
-| ----------------- | -------------------------------------------------------------------------------------------- |
-| `scratch_entries` | the witness log: a `decision` column on the pad's own rows, null on an ordinary note          |
-| `review_packs`    | one row per (pull request, head sha): the pack document as JSON, and when it was written      |
-| `review_marks`    | what a reviewer did to a pack — overrides, ideas read — one row per hunk an idea owns, keyed on the pull request and the hunk |
-| `review_pack_shares` | whether a pull request's pack is in the pool: one row per pull request, written only when somebody shares one, deleted when it is pruned |
+| Table                | Holds                                                                                                                                         |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scratch_entries`    | the witness log: a `decision` column on the pad's own rows, null on an ordinary note                                                          |
+| `review_packs`       | one row per (pull request, head sha): the pack document as JSON, and when it was written                                                      |
+| `review_marks`       | what a reviewer did to a pack — overrides, ideas read, findings taken — one row per hunk an idea owns, keyed on the pull request and the hunk |
+| `review_pack_shares` | whether a pull request's pack is in the pool: one row per pull request, written only when somebody shares one, deleted when it is pruned      |
 
 The pack is one document rather than a table per level. It is written whole and read whole, and
 nothing queries inside it — three normalised tables would buy nothing and cost a join on every read.
@@ -857,16 +947,20 @@ because they outlive the document they were made against.
 
 No row is the ordinary state for a share, and the honest one: sharing is a second, deliberate act, so
 a pull request nobody shared has nothing to say. The row carries the head it shared — a share is of
-one pack, not of a pull request — and the ask and the publish as two stamps, because the publish
-happens on the pool's clock rather than in the route. Deleting it on the prune leaves the
-`review_packs` row alone.
+one pack, not of a pull request — and the ask, the publish and the withdrawal as three stamps,
+because all three happen on the pool's clock rather than in the route. Deleting it on the prune, or
+on the withdrawal the pulse carries out, leaves the `review_packs` row alone.
 
 `scratch_entries` exists, so the `decision` column needs its `ColumnMigrations` entry in the pad's
 own store module, or every database from before it has no column and every fork is silently a note.
-The three pack tables are new, so none needs one — `REVIEW_PACK_COLUMNS` declares all three empty so
-the first column added to any of them is noticed there rather than read back as `undefined`; a table
-being new **once** does not keep it exempt, and that first column needs an additive `ALTER TABLE`
-guarded by a `PRAGMA table_info` check. → [14](14-persistence.md#migrations)
+The three pack tables were new **once**, which never kept them exempt — and stage 7 is where that
+came due: `review_marks.seen` and `review_pack_shares.withdrawn_at` are columns on tables that had
+already shipped, so each has its `REVIEW_PACK_COLUMNS` entry and each arrives by an additive
+`ALTER TABLE` guarded by a `PRAGMA table_info` check. Neither owes a backfill: `seen` is 0 on every
+existing row and 0 is what those rows mean — nobody had a finding to take, because there was no
+control to take it with — and a null `withdrawn_at` means _not withdrawn_, which is true of every
+share that predates the withdrawal. → [14](14-persistence.md#migrations),
+[14](14-persistence.md#when-a-null-means-something)
 
 The shapes the routes ship live in `src/wire.ts`, and a wire type either **is** the domain type or
 `extends` it — never a re-declaration and never widened. `test/wireContract.test.ts` asserts that
@@ -880,11 +974,15 @@ The routes are `src/server/routes/reviewPacks.ts`, with its entry in `app.ts`'s 
 and every handler is wrapped in `checked(schemas, handler)` rather than reading the request itself:
 the ask and the read under [When a pack is made](#when-a-pack-is-made), both on
 `/api/prs/:number/review-pack`; the share under [Sharing a pack](#sharing-a-pack), on
-`…/review-pack/share`, whose answer — `ReviewPackSharing`, the same shape the read ships as
-`sharing` — is declared beside the payload; and the two mark routes under
+`…/review-pack/share`, and its inverse on `…/review-pack/unshare`
+([Unsharing a pack](#unsharing-a-pack)), whose answer — `ReviewPackSharing`, the same shape the read
+ships as `sharing` — is declared beside the payload; the three mark routes under
 [What a reviewer does](#what-a-reviewer-does-is-not-part-of-the-pack) beneath it, whose body
-shapes — `ReviewReadBody`, `ReviewAttentionBody` — and answer — `ReviewMarksPayload` — are declared
-in `src/wire.ts` beside the payload. → [16](16-http-api.md#post-apiprsnumberreview-pack)
+shapes — `ReviewReadBody`, `ReviewAttentionBody`, `ReviewSeenBody` — and answer —
+`ReviewMarksPayload` — are declared in `src/wire.ts` beside the payload; and
+`GET /api/review-calibration` ([The operator's reading](#the-operators-reading)), which is in this
+module because the packs are the group that owns the reading rather than because it is an insights
+route. → [16](16-http-api.md#post-apiprsnumberreview-pack)
 
 Two prompt ids, registered like any other: `review-pack-author` and `review-pack-check`, both
 built. A `PromptId` is never deleted once it exists — it is marked `retired: true`, because
@@ -1015,14 +1113,32 @@ argument for a lesson path into [27](27-knowledge.md), and it names an aggregato
 nothing is specified to be and that could not live in `src/dispatcher/`. Nobody needs it; the
 paragraph is gone.
 
+**The three cross-pack readings are one surface, on Insights.** They were open questions separately
+and are one answer together: the overrides, the plumbing ratio and prominence all say the same kind
+of thing — the subsystem's own agents are drifting — and they point at the same act, a person editing
+one of two prompts. Filing them on [Knowledge](27-knowledge.md) was the alternative and would have
+drawn a feedback path into the fleet that this subsystem refuses to have.
+→ [The operator's reading](#the-operators-reading)
+
+**`seen` is a third column on the mark row, not a table of its own.** It is keyed to the hunks an
+idea owns exactly as the other two are, because it survives a rewrite for the same reason and dies
+with a rewritten hunk for the same reason. A separate table would be the same key twice.
+→ [What a reviewer does](#what-a-reviewer-does-is-not-part-of-the-pack)
+
+**Unsharing is the share's inverse and rides the same arm.** Deleting the local row and letting the
+prune find nothing was the cheap alternative, and it leaves the copy in the pool forever. The row is
+stamped instead, and the pulse that publishes is the pulse that withdraws.
+→ [Unsharing a pack](#unsharing-a-pack)
+
 ## What is still open
 
-**`plumbing` will rot.** It is the honest answer to hunks that carry nothing to review, and it is also
-where an author will put anything it cannot be bothered to explain. The checker verifying that those
-hunks are semantically empty is the defence, and it is not obviously enough — and by the check's own
-rule "semantically empty" is a judgement, so the honest verdict on a plumbing claim is often
-`cant_tell`. Expect this to be the first thing that needs tightening, and watch the ratio of plumbing
-hunks to owned ones as the signal; nothing here yet defines the counter.
+**Whether `plumbing` rots, now that the ratio is counted.** It is the honest answer to hunks that
+carry nothing to review, and it is also where an author will put anything it cannot be bothered to
+explain. The checker verifying that those hunks are semantically empty is the defence, and it is not
+obviously enough — and by the check's own rule "semantically empty" is a judgement, so the honest
+verdict on a plumbing claim is often `cant_tell`. The signal is now drawn
+([the ratio](#the-operators-reading)); what is still open is the threshold, which nothing here states
+because nobody has watched it long enough to know one.
 
 **Whether the wait is tolerable.** Asking for a pack and waiting lands at the worst moment — somebody
 has just sat down to review — and the checker reading in series is most of the wait. If that turns
@@ -1032,8 +1148,13 @@ never making everyone pay for every one.
 **Whether prominence works.** [What a false claim does](#what-a-false-claim-does) makes four
 requirements on the surface, and all four are checkable — as the order things are drawn in. None
 measures the thing they stand in for, which is whether a false claim gets read. The one number that
-would is how often a pull request merges with a false claim nobody marked, and recording it means a
-mark that says _seen_ on a false claim, which is a mark this document has not yet added.
+does is now recorded and counted: the [`seen` mark](#what-a-reviewer-does-is-not-part-of-the-pack)
+and the pull requests that merged without one
+([the reading](#the-operators-reading)). What is open is the reading itself — a merge with an unread
+finding is ambiguous between _the page is not loud enough_ and _the reader looked and disagreed_, and
+nothing distinguishes them. A control that recorded disagreement would, and it would also be a
+verdict on the checker's verdict, which is a fourth role this subsystem has argued itself out of
+twice.
 
 **Whether a reviewer's marks should travel.** They are held beside the pack rather than in it, which
 means they are local by construction. Whether a shared pack should carry the fact that somebody

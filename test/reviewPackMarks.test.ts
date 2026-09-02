@@ -171,9 +171,13 @@ test('a mark rides the hunks an idea owns, each column its own, and the read lay
   const got = await app.inject({ method: 'GET', url: '/api/prs/7/review-pack' });
   const payload = got.json() as ReviewPackPayload;
   const laid = layMarks(payload.pack, payload.marks);
-  assert.deepEqual(laid.get(idea!.id), { read: true, attention: 'decide' });
-  assert.deepEqual(laid.get('plumbing'), { read: false, attention: null });
-  assert.deepEqual(laid.get(contextOnly!.id), { read: false, attention: null }, 'a walk of regions can carry no mark');
+  assert.deepEqual(laid.get(idea!.id), { read: true, attention: 'decide', seen: false });
+  assert.deepEqual(laid.get('plumbing'), { read: false, attention: null, seen: false });
+  assert.deepEqual(
+    laid.get(contextOnly!.id),
+    { read: false, attention: null, seen: false },
+    'a walk of regions can carry no mark',
+  );
 
   // Clearing the override, and unreading, each leave the other column alone.
   const clear = await app.inject({
@@ -261,7 +265,11 @@ test('a mark survives the pack being rewritten and lands on whichever idea owns 
   const payload = got.json() as ReviewPackPayload;
   assert.equal(payload.pack.ideas[0]!.title, 'The same import, retold');
   assert.equal(payload.marks.length, 1, 'the mark is still there, keyed to the hunk');
-  assert.deepEqual(layMarks(payload.pack, payload.marks).get(rewritten.id), { read: true, attention: null });
+  assert.deepEqual(layMarks(payload.pack, payload.marks).get(rewritten.id), {
+    read: true,
+    attention: null,
+    seen: false,
+  });
   await app.close();
   system.store.close();
 });

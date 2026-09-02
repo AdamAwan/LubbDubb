@@ -28,6 +28,13 @@ export interface IdeaMarks {
   read: boolean;
   /** The reviewer's label over the checker's, or null where the checker's stands. */
   attention: ReviewAttention | null;
+  /**
+   * Whether the reader took the finding on this idea's false claim. Drawn under
+   * the finding, and counted: a pull request that merged with this unset is a
+   * false claim nobody read.
+   * → docs/spec/31-review-packs.md#whether-prominence-works
+   */
+  seen: boolean;
 }
 
 /** The hunks an idea owns — the `hunk` anchors; a `region` is a reference, not ownership. */
@@ -41,8 +48,9 @@ const hunkKey = (r: ReviewRange): string => `${r.path}:${r.start}-${r.end}`;
  * Lay the reviewer's marks over the ideas that own the hunks they ride on.
  *
  * A mark is keyed to a hunk and never an idea, so this is where the two meet:
- * an idea is **read** only when every hunk it owns carries a read mark, and wears
- * an override only when every hunk it owns agrees on one. Both are the honest
+ * an idea is **read** only when every hunk it owns carries a read mark, is **seen**
+ * only when every hunk it owns is, and wears an override only when every hunk it
+ * owns agrees on one. Both are the honest
  * reading across a rewrite — the next pack may fold two ideas into one, and
  * calling the union read because half of it was is the lie the per-hunk key
  * exists to avoid. A hunk the new head rewrote has no mark, so the idea that owns
@@ -57,10 +65,11 @@ export function layMarks(pack: ReviewPack, marks: readonly ReviewMark[]): Map<st
     const hunks = ownedHunks(idea);
     const own = hunks.map((h) => byHunk.get(hunkKey(h)) ?? null);
     const read = hunks.length > 0 && own.every((m) => m !== null && m.read);
+    const seen = hunks.length > 0 && own.every((m) => m !== null && m.seen);
     const first = own[0]?.attention ?? null;
     const attention =
       hunks.length > 0 && first !== null && own.every((m) => m !== null && m.attention === first) ? first : null;
-    laid.set(idea.id, { read, attention });
+    laid.set(idea.id, { read, attention, seen });
   }
   return laid;
 }

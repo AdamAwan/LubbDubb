@@ -18,7 +18,7 @@ const AGENT_POLL_MS = 4000;
  * A pull request's review pack, over the goal page — the one rendering that
  * takes input. Fetched on open (`GET /api/prs/:number/review-pack`), never off
  * the snapshot: a pack carries its code, and one per pull request on every poll
- * would pay for the feature in bandwidth. The reviewer's two marks ride their own
+ * would pay for the feature in bandwidth. The reviewer's three marks ride their own
  * routes and the marks the write returns replace what the page holds, so the
  * page re-lays them from one shape rather than patching a copy.
  *
@@ -124,9 +124,25 @@ export function ReviewPackModal({
     await load();
   }, [prNumber, load]);
 
+  // The inverse, and it re-reads for the same reason: the row goes to "waiting to
+  // leave" at once and the copy is gone on the pool's next pulse, which arrives
+  // through the same read on the same short clock.
+  const unshare = useCallback(async () => {
+    setShareRefusal(null);
+    await api.unshareReviewPack(prNumber);
+    await load();
+  }, [prNumber, load]);
+
   const onRead = useCallback(
     async (ideaId: string, read: boolean) => {
       const next = await api.markReviewIdeaRead(prNumber, ideaId, read);
+      if (live.current) setMarks(next.marks);
+    },
+    [prNumber],
+  );
+  const onSeen = useCallback(
+    async (ideaId: string, seen: boolean) => {
+      const next = await api.markReviewFindingSeen(prNumber, ideaId, seen);
       if (live.current) setMarks(next.marks);
     },
     [prNumber],
@@ -164,9 +180,11 @@ export function ReviewPackModal({
             openIdea={openIdea}
             onOpenIdea={onOpenIdea}
             onRead={onRead}
+            onSeen={onSeen}
             onAttention={onAttention}
             onAsk={ask}
             onShare={share}
+            onUnshare={unshare}
             shareRefusal={shareRefusal}
             onShareRefused={setShareRefusal}
             refUrls={refUrls}
@@ -177,9 +195,13 @@ export function ReviewPackModal({
   );
 }
 
-/** A share the pool has not carried yet — what the short clock above is for. */
+/** A share or a withdrawal the pool's next pulse has still to carry out — what the short clock above is for. */
 function pendingShare(sharing: ReviewPackSharing): boolean {
-  return sharing.share !== null && sharing.share.publishedAt === null && sharing.share.refusal === null;
+  const share = sharing.share;
+  if (share === null) return false;
+  // Two waits, both on the pool's own clock: a share the next pulse will publish,
+  // and a withdrawal the next pulse will take back out.
+  return share.withdrawnAt !== null || (share.publishedAt === null && share.refusal === null);
 }
 
 /** No pack yet: on its way, or never asked for — two different sentences, and only the second offers the ask. */

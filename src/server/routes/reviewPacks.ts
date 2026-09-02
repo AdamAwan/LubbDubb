@@ -4,12 +4,16 @@ import { REVIEW_ATTENTIONS } from '../../store/reviewPacks.js';
 import type { ReviewAttention, ReviewIdea, ReviewRange } from '../../types.js';
 import type {
   ReviewAttentionBody,
+  ReviewCalibrationPayload,
   ReviewMarksPayload,
   ReviewPackAbsence,
   ReviewPackPayload,
   ReviewPackSharing,
   ReviewReadBody,
+  ReviewSeenBody,
 } from '../../wire.js';
+import { buildReviewCalibration } from '../../reviewPacks/calibration.js';
+import { InsightsQuery, resolveWindow, timelineSpan, windowView } from '../../insightsWindow.js';
 import { checked, PrNumberParams, requiredBoolean } from '../validation.js';
 import type { RouteContext } from './context.js';
 
@@ -18,6 +22,10 @@ const IdeaParams = PrNumberParams.extend({ id: z.string().min(1, 'idea id is req
 
 const ReadBody: z.ZodType<ReviewReadBody, z.ZodTypeDef, unknown> = z.object({
   read: requiredBoolean('read must be true or false'),
+});
+
+const SeenBody: z.ZodType<ReviewSeenBody, z.ZodTypeDef, unknown> = z.object({
+  seen: requiredBoolean('seen must be true or false'),
 });
 
 const AttentionBody: z.ZodType<ReviewAttentionBody, z.ZodTypeDef, unknown> = z.object({
@@ -139,7 +147,68 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
   );
 
   /**
-   * A reviewer's two marks on an idea, each its own column on the same rows. The
+   * Take a shared pack back out of the pool — the inverse of the share, and the
+   * same shape: `202`, because the removal is the pool's own arm's and never a
+   * route handler's. A pack shared by mistake is out on the next pulse rather
+   * than at the prune, which is weeks away.
+   *
+   * Unsharing something nobody shared is answered as done: the caller wanted it
+   * out of the pool, and it is. → `docs/spec/31-review-packs.md#unsharing-a-pack`
+   */
+  app.post(
+    '/api/prs/:number/review-pack/unshare',
+    checked({ params: PrNumberParams }, async ({ params, reply }) => {
+      if (!system.pool) {
+        return reply.code(409).send({ error: 'this deployment publishes to no pool, so nothing is shared' });
+      }
+      system.pool.unshareReviewPack(params.number);
+      return reply.code(202).send(sharing(params.number) satisfies ReviewPackSharing);
+    }),
+  );
+
+  /**
+   * What the packs say about the agents that wrote them — the overrides, the
+   * plumbing ratio and whether false claims get read. **The operator's reading and
+   * nobody else's**: it is never shown to the checker, because a label that has
+   * learned to agree with its reader has stopped being evidence, and nothing here
+   * reaches a prompt.
+   *
+   * It lives in this module because the review packs are the group that owns it,
+   * and it obeys the Insights page's window like every other reading there.
+   * → `docs/spec/31-review-packs.md#the-operators-reading`, `docs/spec/16-http-api.md`
+   */
+  app.get(
+    '/api/review-calibration',
+    checked({ query: InsightsQuery }, async ({ query }) => {
+      const now = Date.now();
+      const window = resolveWindow(query.window, now, store.readRateLimits());
+      const packs = store.listCurrentReviewPacks();
+      const earliest = packs.reduce<number | null>(
+        (oldest, record) => Math.min(oldest ?? Infinity, new Date(record.writtenAt).getTime()),
+        null,
+      );
+      return {
+        calibration: buildReviewCalibration({
+          packs,
+          marks: store.listAllReviewMarks(),
+          // The durable record of a merge, not the world's: the world drops a
+          // closed pull request after `closedPrWindowMs`, and a merge that fell
+          // out of it must not read as a pull request that never merged.
+          merged: new Set(
+            store
+              .listWorkNodes()
+              .filter((node) => node.status === 'merged' && node.ref.startsWith('pr:'))
+              .map((node) => Number(node.ref.slice('pr:'.length)))
+              .filter((n) => Number.isInteger(n)),
+          ),
+          window: windowView(window, timelineSpan(window, earliest)),
+        }),
+      } satisfies ReviewCalibrationPayload;
+    }),
+  );
+
+  /**
+   * A reviewer's three marks on an idea, each its own column on the same rows. The
    * idea is resolved in the **current** pack and the write is keyed to the hunks
    * it owns at that pack's head — so a mark survives the pack being rewritten,
    * and lands on whichever idea owns those hunks next time. Refused when there is
@@ -185,6 +254,32 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
         headSha: target.headSha,
         hunks: target.hunks,
         read: body.read,
+      });
+      return { marks: store.listReviewMarks(params.number) } satisfies ReviewMarksPayload;
+    }),
+  );
+
+  /**
+   * The reader took the finding on this idea's false claim. The third mark, and
+   * the one that measures the four surface requirements *What a false claim does*
+   * makes: a pull request that merged while this was unset is a false claim
+   * nobody read, which is the number those requirements stand in for.
+   * → `docs/spec/31-review-packs.md#whether-prominence-works`
+   *
+   * Not refused on an idea with no false claim: the mark rides on hunks and the
+   * page only offers it under a finding, and a route that second-guessed the
+   * document would be the renderer's rule stated twice.
+   */
+  app.post(
+    '/api/prs/:number/review-pack/ideas/:id/seen',
+    checked({ params: IdeaParams, body: SeenBody }, async ({ params, body, reply }) => {
+      const target = resolve(params);
+      if (!target.ok) return reply.code(target.status).send({ error: target.error });
+      store.markReviewFindingSeen({
+        prNumber: target.prNumber,
+        headSha: target.headSha,
+        hunks: target.hunks,
+        seen: body.seen,
       });
       return { marks: store.listReviewMarks(params.number) } satisfies ReviewMarksPayload;
     }),

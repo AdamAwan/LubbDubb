@@ -16,37 +16,37 @@ cockpit's frequent state polling is never throttled.
 static SPA, and a list of route modules it mounts in order. Everything else lives beside the thing it
 is about.
 
-| Module                  | Holds                                                                                                                                                                     |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `routes/state.ts`       | `/api/state`, `/api/prompts`, `/api/config`, `/api/ci-policy`, `/api/mcp`, `/api/health`                                                                                  |
-| `routes/agents.ts`      | One agent's transcript and the files it wrote, and respond / kill / complete / interrupt / extend a stall park                                                            |
-| `routes/artifacts.ts`   | `/artifacts/:id` and `/attachments/:id`, their capability signers, and the path confinement                                                                               |
-| `routes/control.ts`     | `/api/pulse`, `/api/errors/clear`, `/api/control`, `/api/prs/:number/watch`                                                                                               |
-| `routes/escalations.ts` | The whole "Needs you" inbox: escalations, proposals, recovery                                                                                                             |
-| `routes/humanTasks.ts`  | Work only a person can do: filing one, and the two ways it settles                                                                                                        |
-| `routes/ingress.ts`     | `/ingress/github` and `/ingress/azure` — the inbound webhook endpoint, its own body parser and its bounds                                                                 |
-| `routes/issues.ts`      | Watch, priority, conclusion, appraisal, delivered, shortfall, dismiss-run                                                                                                 |
-| `routes/jobs.ts`        | `/api/jobs`, `/api/jobs/:id/cancel`, `/api/upnext/order`, `/api/upnext/profile`                                                                                           |
-| `routes/knowledge.ts`   | The whole claim store: writing one down, its observations and disputes, how far an operator says it carries, the three ways it leaves, and the answers to a contradiction |
-| `routes/plans.ts`       | Plan history, replan, acceptance ticks, part model pins                                                                                                                   |
-| `routes/validation.ts`  | One validation check's current reading — result, defer, waive, reset — and who runs it                                                                                    |
-| `routes/watches.ts`     | The post-deploy watch's two operator verbs: ruling on a check an agent declared, and extending a window                                                                   |
-| `routes/schedules.ts`   | Recurring briefs: write, edit, run now, delete                                                                                                                            |
-| `routes/spend.ts`       | `/api/spend` and `/api/spend/trend` — the breakdown behind the cost indicators, and its trend                                                                             |
-| `routes/allowance.ts`   | `/api/allowance` — the account's usage percentage over time, and the work that spent it                                                                                   |
-| `routes/readings.ts`    | `/api/retrospectives/:ref`, `/api/scratchpads/:ref`                                                                                                                       |
-| `routes/reviewPacks.ts` | `/api/prs/:number/review-pack` — asking for a review pack, reading the one a pull request has, sharing it into the pool, and the reviewer's two marks on an idea ([31](31-review-packs.md))          |
-| `routes/reliability.ts` | `/api/reliability` — run outcomes, CI health, and why the fleet came back                                                                                                 |
-| `routes/mcpUsage.ts`    | `/api/mcp/usage` — which MCP tools the fleet reached for, and which it never did                                                                                          |
-| `routes/pool.ts`        | `/api/pool`, `/api/pool/insights` and the pool's one write — the cross-fleet pool ([28](28-cross-fleet-pool.md))                                                          |
-| `routes/work.ts`        | The work graph and its ignore / file verdicts                                                                                                                             |
-| `routes/tickets.ts`     | Every item the tracker has returned since the harness first swept, and the filters over it                                                                                |
-| `routes/localRun.ts`    | The machine's one dev environment: start it on a goal, stop it, read what is holding it up                                                                                |
-| `routes/stacks.ts`      | The one verdict on a whole chain of stacked pull requests: land it, or call that off                                                                                      |
-| `routes/upgrade.ts`     | Asking the harness to take a build, and the interrupt that overrides its refusal                                                                                          |
-| `routes/pets.ts`        | The vivarium: opening a shell, feeding, naming, standing and blending                                                                                                     |
-| `routes/setup.ts`       | The first-run surface's two reads, before there is a deployment to configure                                                                                              |
-| `stateSnapshot.ts`      | `buildStateSnapshot` and the readings it folds                                                                                                                            |
+| Module                  | Holds                                                                                                                                                                                                                                           |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `routes/state.ts`       | `/api/state`, `/api/prompts`, `/api/config`, `/api/ci-policy`, `/api/mcp`, `/api/health`                                                                                                                                                        |
+| `routes/agents.ts`      | One agent's transcript and the files it wrote, and respond / kill / complete / interrupt / extend a stall park                                                                                                                                  |
+| `routes/artifacts.ts`   | `/artifacts/:id` and `/attachments/:id`, their capability signers, and the path confinement                                                                                                                                                     |
+| `routes/control.ts`     | `/api/pulse`, `/api/errors/clear`, `/api/control`, `/api/prs/:number/watch`                                                                                                                                                                     |
+| `routes/escalations.ts` | The whole "Needs you" inbox: escalations, proposals, recovery                                                                                                                                                                                   |
+| `routes/humanTasks.ts`  | Work only a person can do: filing one, and the two ways it settles                                                                                                                                                                              |
+| `routes/ingress.ts`     | `/ingress/github` and `/ingress/azure` — the inbound webhook endpoint, its own body parser and its bounds                                                                                                                                       |
+| `routes/issues.ts`      | Watch, priority, conclusion, appraisal, delivered, shortfall, dismiss-run                                                                                                                                                                       |
+| `routes/jobs.ts`        | `/api/jobs`, `/api/jobs/:id/cancel`, `/api/upnext/order`, `/api/upnext/profile`                                                                                                                                                                 |
+| `routes/knowledge.ts`   | The whole claim store: writing one down, its observations and disputes, how far an operator says it carries, the three ways it leaves, and the answers to a contradiction                                                                       |
+| `routes/plans.ts`       | Plan history, replan, acceptance ticks, part model pins                                                                                                                                                                                         |
+| `routes/validation.ts`  | One validation check's current reading — result, defer, waive, reset — and who runs it                                                                                                                                                          |
+| `routes/watches.ts`     | The post-deploy watch's two operator verbs: ruling on a check an agent declared, and extending a window                                                                                                                                         |
+| `routes/schedules.ts`   | Recurring briefs: write, edit, run now, delete                                                                                                                                                                                                  |
+| `routes/spend.ts`       | `/api/spend` and `/api/spend/trend` — the breakdown behind the cost indicators, and its trend                                                                                                                                                   |
+| `routes/allowance.ts`   | `/api/allowance` — the account's usage percentage over time, and the work that spent it                                                                                                                                                         |
+| `routes/readings.ts`    | `/api/retrospectives/:ref`, `/api/scratchpads/:ref`                                                                                                                                                                                             |
+| `routes/reviewPacks.ts` | `/api/prs/:number/review-pack` — asking for a review pack, reading the one a pull request has, sharing it into the pool and taking it back out, the reviewer's three marks on an idea, and `/api/review-calibration` ([31](31-review-packs.md)) |
+| `routes/reliability.ts` | `/api/reliability` — run outcomes, CI health, and why the fleet came back                                                                                                                                                                       |
+| `routes/mcpUsage.ts`    | `/api/mcp/usage` — which MCP tools the fleet reached for, and which it never did                                                                                                                                                                |
+| `routes/pool.ts`        | `/api/pool`, `/api/pool/insights` and the pool's one write — the cross-fleet pool ([28](28-cross-fleet-pool.md))                                                                                                                                |
+| `routes/work.ts`        | The work graph and its ignore / file verdicts                                                                                                                                                                                                   |
+| `routes/tickets.ts`     | Every item the tracker has returned since the harness first swept, and the filters over it                                                                                                                                                      |
+| `routes/localRun.ts`    | The machine's one dev environment: start it on a goal, stop it, read what is holding it up                                                                                                                                                      |
+| `routes/stacks.ts`      | The one verdict on a whole chain of stacked pull requests: land it, or call that off                                                                                                                                                            |
+| `routes/upgrade.ts`     | Asking the harness to take a build, and the interrupt that overrides its refusal                                                                                                                                                                |
+| `routes/pets.ts`        | The vivarium: opening a shell, feeding, naming, standing and blending                                                                                                                                                                           |
+| `routes/setup.ts`       | The first-run surface's two reads, before there is a deployment to configure                                                                                                                                                                    |
+| `stateSnapshot.ts`      | `buildStateSnapshot` and the readings it folds                                                                                                                                                                                                  |
 
 Each module exports one `register(app, ctx)` — the `RouteModule` type in `routes/context.ts` — and
 takes a `RouteContext` of `{system, hub, artifactKey, artifactSigner}`. It is the facade shape
@@ -494,8 +494,29 @@ runs over every embedded line, not only the sentences, it refuses and never rewr
 with somebody to tell writes no row: nothing was published and nothing was changed.
 
 Asking again on a newer pack replaces the share, and the pool holds one document per pull request.
-There is no unshare route: a shared pack is pruned when its pull request has been closed for
-`closedPrWindowMs`.
+
+### `POST /api/prs/:number/review-pack/unshare`
+
+Take a shared pack back out of the pool — the inverse of the share, and the same shape: **`202`**
+with the `ReviewPackSharing`, because the removal is the pool's own arm's and never a route
+handler's ([31](31-review-packs.md#unsharing-a-pack)). The row is stamped `withdrawnAt` and the next
+pulse calls the transport's `unpublish` and deletes it; a share the pool never carried has nothing to
+remove and the row goes at once. Without it a pack shared by mistake waits for the prune, which is
+`closedPrWindowMs` after the pull request closes.
+
+Refused: 400 on a non-integer number; 409 for a deployment with no pool. Unsharing something nobody
+shared is **not** refused — the caller wanted it out of the pool, and it is.
+
+### `GET /api/review-calibration`
+
+What the review packs say about the agents that write them: the attention overrides, the plumbing
+ratio, and whether false claims get read ([31](31-review-packs.md#the-operators-reading)). Takes the
+Insights page's `window` (`InsightsQuery`) and answers `{calibration}`
+(`ReviewCalibrationPayload`). Folded over each pull request's **current** pack written in the window,
+with every mark on that pull request laid over it by the rule the page lays them by.
+
+It is in this module because the review packs are the group that owns the reading, not because it is
+an insights route. **It is never shown to the checker and reaches no prompt.**
 
 ### `POST /api/prs/:number/review-pack/ideas/:id/read`
 
@@ -516,7 +537,16 @@ ride on and a click that wrote nothing would read as taken.
 Body `{attention: 'read' | 'decide' | 'skim' | 'split' | null}` (`ReviewAttentionBody`) — the
 reviewer's label over the checker's, or null to clear it. The same rows, the same key and the same
 refusals as the read mark, writing only the `attention` column. The override is recorded and drawn;
-it is never shown to the checker on a later pack, and its surfacing to the operator is not yet built.
+it is never shown to the checker on a later pack, and it is surfaced to the operator at
+`GET /api/review-calibration`.
+
+### `POST /api/prs/:number/review-pack/ideas/:id/seen`
+
+Body `{seen: boolean}` (`ReviewSeenBody`) — the reader taking the finding on this idea's false claim,
+or putting it back. The same rows, the same key and the same refusals as the other two marks, writing
+only the `seen` column ([31](31-review-packs.md#whether-prominence-works)). It is offered on the page
+under a finding and nowhere else; the route does not second-guess that by refusing an idea with no
+false claim, since the mark rides on hunks and the document's shape is the renderer's rule to keep.
 
 ### `POST /api/issues/:number/watch`
 
@@ -1201,7 +1231,7 @@ apportioned rather than measured, why the split is per interval, and why a fall 
 is not.
 
 **`refUrls` is resolved off the connector here, not read from the snapshot's map**, for
-`/api/tickets`' reason and one sharper: `/api/state`'s map is built from the *world*, and a goal that
+`/api/tickets`' reason and one sharper: `/api/state`'s map is built from the _world_, and a goal that
 spent inside a five-hour window has very often closed since — that is exactly the row whose title the
 tab draws as `no longer on the tracker`. Without the route's own map the cockpit renders that goal's
 number as plain text, which is a row that reads correctly and is a dead end

@@ -7,6 +7,7 @@ import type {
   PoolInsightsPayload,
   ReliabilityInsights,
   RemedyInsights,
+  ReviewCalibration,
   SpendInsights,
   SpendTrend,
 } from '../types.js';
@@ -21,6 +22,7 @@ import { SpendTrendTab } from './SpendTrendTab.js';
 import { WorkMixTab } from './WorkMixTab.js';
 import { McpUsageTab, mcpCsv } from './McpUsageTab.js';
 import { PoolTab } from './PoolTab.js';
+import { ReviewCalibrationTab } from './ReviewCalibrationTab.js';
 
 /**
  * Insights — one destination, one window, five readings of it.
@@ -65,6 +67,7 @@ const TABS: readonly { id: InsightsView; label: string; note: string }[] = [
   { id: 'trend', label: 'Trend', note: 'whether what you changed is working' },
   { id: 'mix', label: 'Work mix', note: 'why this kind of work costs what it does' },
   { id: 'mcp', label: 'MCP', note: 'which tools the fleet reaches for, and which it never does' },
+  { id: 'review', label: 'Review', note: 'what the review packs say about the agents that write them' },
   { id: 'pool', label: 'Pool', note: 'what the whole pool spent, across fleets' },
 ];
 
@@ -137,6 +140,11 @@ export function InsightsPage({
   // digest's bucket is a UTC day and its retention is ninety of them, so the page's
   // five spans are not the question anybody asks of it. It is keyed on the project
   // instead, which is the one narrowing that changes what the payload contains.
+  // The Review tab's own, on the trend's terms and keyed the same way: it folds
+  // every pack the store holds against every mark, which nothing on the top bar
+  // needs and nobody who came here to read the phase table should pay for.
+  const [calibration, setCalibration] = useState<Fetched<ReviewCalibration>>(PENDING);
+  const calibrationFetchedFor = useRef<InsightsWindow | null>(null);
   const [pool, setPool] = useState<Fetched<PoolInsightsPayload>>(PENDING);
   const poolFetchedFor = useRef<string | null | undefined>(undefined);
   // Both refetch on a window change, and both are re-read from scratch rather
@@ -152,6 +160,8 @@ export function InsightsPage({
     setMcp(PENDING);
     allowanceFetchedFor.current = null;
     setAllowance(PENDING);
+    calibrationFetchedFor.current = null;
+    setCalibration(PENDING);
     api
       .getSpend(chosen)
       .then((res) => live && setSpend({ state: 'ready', data: res.insights }))
@@ -216,6 +226,22 @@ export function InsightsPage({
       .getAllowance(chosen)
       .then((res) => live && setAllowance({ state: 'ready', data: res }))
       .catch(() => live && setAllowance({ state: 'failed', data: null }));
+    return () => {
+      live = false;
+    };
+  }, [view, chosen]);
+
+  // The Review tab's own, on the same terms and hanging off the *place* for the
+  // trend's reason — a shared `?view=review` link is a first visit too.
+  useEffect(() => {
+    if (view !== 'review' || calibrationFetchedFor.current === chosen) return;
+    calibrationFetchedFor.current = chosen;
+    let live = true;
+    setCalibration(PENDING);
+    api
+      .getReviewCalibration(chosen)
+      .then((res) => live && setCalibration({ state: 'ready', data: res.calibration }))
+      .catch(() => live && setCalibration({ state: 'failed', data: null }));
     return () => {
       live = false;
     };
@@ -308,6 +334,7 @@ export function InsightsPage({
           trend={trend}
           mcp={mcp}
           allowance={allowance}
+          calibration={calibration}
           pool={pool}
           poolProject={poolProject}
           actions={actions}
@@ -438,6 +465,7 @@ function Body({
   trend,
   mcp,
   allowance,
+  calibration,
   pool,
   poolProject,
   actions,
@@ -450,6 +478,7 @@ function Body({
   trend: Fetched<SpendTrend>;
   mcp: Fetched<McpInsights>;
   allowance: Fetched<AllowancePayload>;
+  calibration: Fetched<ReviewCalibration>;
   pool: Fetched<PoolInsightsPayload>;
   poolProject: string | null;
   actions: CockpitActions;
@@ -485,6 +514,14 @@ function Body({
     if (mcp.state === 'loading') return <p className="empty">Reading the tool channel…</p>;
     if (mcp.data === null) return <p className="empty">Could not read the tool channel.</p>;
     return <McpUsageTab insights={mcp.data} />;
+  }
+
+  if (view === 'review') {
+    if (calibration.state === 'loading') return <p className="empty">Reading the packs…</p>;
+    // A failed fetch is its own answer and never an empty one: an empty tab here
+    // would say nobody has ever overridden a label, which is a different fact.
+    if (calibration.data === null) return <p className="empty">Could not read the review packs.</p>;
+    return <ReviewCalibrationTab calibration={calibration.data} />;
   }
 
   if (view === 'pool') {

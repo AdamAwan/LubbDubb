@@ -2589,6 +2589,15 @@ export interface ReviewPackShare {
   /** When the transport took it, or null while it has not been published yet. */
   publishedAt: string | null;
   /**
+   * When somebody unshared it, or null. Set only on a share that **is** in the
+   * pool: the copy is still in the namespace until the pool's own arm takes it
+   * out, and the row is what tells the arm to. A withdrawal of a share the pool
+   * never carried has nothing to remove and deletes the row outright, so this is
+   * never set beside a null {@link publishedAt}.
+   * → `docs/spec/31-review-packs.md#unsharing-a-pack`
+   */
+  withdrawnAt: string | null;
+  /**
    * Why the secret backstop refused it, naming the line. Null on a share nothing
    * refused. A refusal is **loud and never a rewrite**: the pack stays local and
    * the page says which line stopped it.
@@ -2619,6 +2628,18 @@ export interface ReviewMark {
   attention: ReviewAttention | null;
   /** Whether the reviewer marked the owning idea read. */
   read: boolean;
+  /**
+   * Whether the reviewer took the finding on this idea's false claim.
+   *
+   * The third column, and the only one about the **checker's** output rather than
+   * the author's. It is what makes prominence measurable: the four surface
+   * requirements under *What a false claim does* are checkable as an order things
+   * are drawn in, and none of them says whether a false claim was read. This does
+   * — a pull request that merged with a false claim nobody marked seen is the one
+   * number that measures them.
+   * → `docs/spec/31-review-packs.md#whether-prominence-works`
+   */
+  seen: boolean;
   markedAt: string;
 }
 

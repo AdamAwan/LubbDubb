@@ -131,7 +131,10 @@ export class PoolDesk {
    */
   private async carryPacks(): Promise<void> {
     for (const share of this.deps.store.listReviewPackShares()) {
-      if (this.dead(share)) {
+      // Withdrawn first, and before the death check: an unshare is a person
+      // saying *take it out now*, and it is the same removal the prune does — one
+      // path, so a withdrawal cannot take a route a prune has never taken.
+      if (share.withdrawnAt !== null || this.dead(share)) {
         await this.prune(share);
         continue;
       }
@@ -190,8 +193,9 @@ export class PoolDesk {
   }
 
   /**
-   * Take a shared pack out of the namespace. **The local row is kept** — it is the
-   * fleet's own record, and the cost of keeping it is the fleet's; what goes is
+   * Take a shared pack out of the namespace — because its pull request has been
+   * closed long enough, or because somebody unshared it. **The local `review_packs`
+   * row is kept** — it is the fleet's own record, and the cost of keeping it is the fleet's; what goes is
    * the copy in a substrate everybody clones, and the share row that described it.
    */
   private async prune(share: ReviewPackShare): Promise<void> {
@@ -244,6 +248,23 @@ export class PoolDesk {
    * `docs/spec/28-cross-fleet-pool.md#the-publish-is-never-inside-a-route-handler`'s
    * reason.
    */
+  /**
+   * The inverse: a person taking a shared pack back out. **Immediate** in the only
+   * sense a route may be — the ask is recorded at once and the copy is gone on the
+   * next pulse, because the network write is the pool's and never a route
+   * handler's
+   * (`docs/spec/28-cross-fleet-pool.md#the-publish-is-never-inside-a-route-handler`).
+   * A share the pool never carried has nothing to remove and the row simply goes.
+   *
+   * There is nothing to refuse here that a share can refuse: no backstop, no
+   * document to read. Unsharing something nobody shared is answered as done rather
+   * than as an error — the caller wanted it out of the pool, and it is.
+   * → `docs/spec/31-review-packs.md#unsharing-a-pack`
+   */
+  unshareReviewPack(prNumber: number): { share: ReviewPackShare | null } {
+    return { share: this.deps.store.withdrawReviewPackShare(prNumber) };
+  }
+
   shareReviewPack(prNumber: number): { ok: true; share: ReviewPackShare } | { ok: false; status: 409; error: string } {
     const record = this.deps.store.getCurrentReviewPack(prNumber);
     if (record === null) {

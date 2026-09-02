@@ -1029,6 +1029,9 @@ export class Store {
   listReviewPacks(prNumber: number): ReviewPackRecord[] {
     return this.reviewPacks.listReviewPacks(prNumber);
   }
+  listCurrentReviewPacks(): ReviewPackRecord[] {
+    return this.reviewPacks.listCurrentReviewPacks();
+  }
   getReviewPackAt(prNumber: number, headSha: string): ReviewPackRecord | null {
     return this.reviewPacks.getReviewPackAt(prNumber, headSha);
   }
@@ -1050,14 +1053,23 @@ export class Store {
   deleteReviewPackShare(prNumber: number): void {
     this.reviewPacks.deleteReviewPackShare(prNumber);
   }
+  withdrawReviewPackShare(prNumber: number): ReviewPackShare | null {
+    return this.reviewPacks.withdrawReviewPackShare(prNumber);
+  }
   markReviewIdeaRead(input: Parameters<ReviewPackStore['markReviewIdeaRead']>[0]): ReviewMark[] {
     return this.reviewPacks.markReviewIdeaRead(input);
   }
   overrideReviewAttention(input: Parameters<ReviewPackStore['overrideReviewAttention']>[0]): ReviewMark[] {
     return this.reviewPacks.overrideReviewAttention(input);
   }
+  markReviewFindingSeen(input: Parameters<ReviewPackStore['markReviewFindingSeen']>[0]): ReviewMark[] {
+    return this.reviewPacks.markReviewFindingSeen(input);
+  }
   listReviewMarks(prNumber: number): ReviewMark[] {
     return this.reviewPacks.listReviewMarks(prNumber);
+  }
+  listAllReviewMarks(): ReviewMark[] {
+    return this.reviewPacks.listAllReviewMarks();
   }
 
   // -- The account's Claude usage windows ------------------------------------

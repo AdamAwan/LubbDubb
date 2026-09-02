@@ -55,8 +55,9 @@ interface PoolFetchedDocument {
 ```
 
 `unpublish` is the one delete, and it is narrow on purpose: only a
-[shared review pack](#a-third-document-rides-this-and-is-not-a-claim) is ever pruned, so nothing can
-be asked to remove `claims.json`. It is inside this fleet's own directory, so one writer per namespace
+[shared review pack](#a-third-document-rides-this-and-is-not-a-claim) is ever removed — pruned on the
+pull request's retention clock, or withdrawn because somebody unshared it — so nothing can be asked to
+remove `claims.json`. It is inside this fleet's own directory, so one writer per namespace
 is untouched, and removing what is not there is a success — the inverse of a whole-document put has to
 be as retryable as one.
 
@@ -597,12 +598,12 @@ One desk in the pulse, and the pulse is the clock. Not a timer of its own: a `se
 during a pause, during shutdown and during the upgrade handoff, which is the class of failure
 [21](21-self-update.md#where-the-shutdown-handlers-are-registered) is written about.
 
-|                | Attempts when          | At the default cadence (30s busy, 5 minutes idle) |
-| -------------- | ---------------------- | ------------------------------------------------- |
-| Claims publish | the document is dirty  | the next pulse — 30s busy, up to five minutes idle |
-| Claims poll    | every pulse            | the same                                          |
-| Digest publish | an hour since the last | the next pulse after the hour              |
-| Backstop       | an hour since the last | re-derives **both** documents and compares |
+|                | Attempts when          | At the default cadence (30s busy, 5 minutes idle)         |
+| -------------- | ---------------------- | --------------------------------------------------------- |
+| Claims publish | the document is dirty  | the next pulse — 30s busy, up to five minutes idle        |
+| Claims poll    | every pulse            | the same                                                  |
+| Digest publish | an hour since the last | the next pulse after the hour                             |
+| Backstop       | an hour since the last | re-derives **both** documents and compares                |
 | Packs          | a share is standing    | the next pulse — and prunes the pull requests long closed |
 
 ### The dirty flag is a hint. The content hash is the truth.
@@ -770,13 +771,13 @@ So there are three things instead, and they have to be read together:
 until a restart — which the reading restates rather than suppresses, in the shape
 [26](26-setup.md#a-fault-the-file-has-already-answered) describes for every other restart-only key.
 
-| Key                          | Layer      | Default                                                             |
-| ---------------------------- | ---------- | ------------------------------------------------------------------- |
-| `integrations.pool`          | project    | `fake` — publishes nowhere, fetches nothing, runs no desk           |
-| `pool.project`               | project    | none; required when the pool is selected                            |
-| `pool.remote`, `pool.branch` | project    | none; the `git` transport's coordinates                             |
-| `pool.path`                  | project    | empty — the repository root; a prefix when the repository is shared |
-| `pool.digestIntervalMs`      | either     | one hour                                                            |
+| Key                          | Layer      | Default                                                                      |
+| ---------------------------- | ---------- | ---------------------------------------------------------------------------- |
+| `integrations.pool`          | project    | `fake` — publishes nowhere, fetches nothing, runs no desk                    |
+| `pool.project`               | project    | none; required when the pool is selected                                     |
+| `pool.remote`, `pool.branch` | project    | none; the `git` transport's coordinates                                      |
+| `pool.path`                  | project    | empty — the repository root; a prefix when the repository is shared          |
+| `pool.digestIntervalMs`      | either     | one hour                                                                     |
 | `fleetId`                    | deployment | none; required when the pool is selected — the desk sits out until it is set |
 
 **Off by default.** `fake` is the default provider for the same reason it is for `sourceControl` and
@@ -890,6 +891,13 @@ both cut against the arrangements above:
   pulls rather than by whoever published. The publishing fleet drops it from its namespace once the
   pull request has been closed for `closedPrWindowMs`, the clock that drops the pull request from the
   world; the fleet's own local row is kept.
+- **A pack can also be taken back out on the ask, and that is the same removal.** A pack shared by
+  mistake must not wait weeks for the prune, so the share row carries a `withdrawnAt` and the packs
+  arm calls the same `unpublish` on the next pulse before it looks at whether the pull request is dead
+  ([31](31-review-packs.md#unsharing-a-pack)). The **network write stays out of the route** for this
+  half exactly as for the publish: the route records the withdrawal and answers `202`, and a withdrawal
+  that throws leaves the row standing so the next pulse tries again. A share the pool never carried has
+  nothing to remove and no commit is made to say so.
 
 ## What nothing does
 

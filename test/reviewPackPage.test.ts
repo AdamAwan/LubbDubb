@@ -167,9 +167,11 @@ function render(p: ReviewPackPayload, openIdea: string | null = null): string {
         openIdea,
         onOpenIdea: () => undefined,
         onRead: noop,
+        onSeen: noop,
         onAttention: noop,
         onAsk: noop,
         onShare: noop,
+        onUnshare: noop,
         shareRefusal: null,
         onShareRefused: () => undefined,
         refUrls: {},
@@ -239,15 +241,27 @@ test('marks lay over an idea only when every hunk it owns agrees', () => {
     headSha: HEAD,
     read,
     attention,
+    seen: false,
     markedAt: '2026-09-01T13:20:00Z',
   });
   assert.deepEqual(layMarks(pack, [mark('src/a.ts', 1, 4, true, 'skim')]).get('idea_a'), {
     read: true,
     attention: 'skim',
+    seen: false,
   });
-  assert.deepEqual(layMarks(pack, []).get('idea_a'), { read: false, attention: null });
+  assert.deepEqual(layMarks(pack, []).get('idea_a'), { read: false, attention: null, seen: false });
   // A mark on a hunk the pack no longer carries lands nowhere.
-  assert.deepEqual(layMarks(pack, [mark('src/a.ts', 40, 44, true)]).get('idea_a'), { read: false, attention: null });
+  assert.deepEqual(layMarks(pack, [mark('src/a.ts', 40, 44, true)]).get('idea_a'), {
+    read: false,
+    attention: null,
+    seen: false,
+  });
+  // `seen` is its own column and rides the same hunks: a read mark leaves it alone.
+  assert.deepEqual(layMarks(pack, [{ ...mark('src/a.ts', 1, 4, false), seen: true }]).get('idea_a'), {
+    read: false,
+    attention: null,
+    seen: true,
+  });
   // Two hunks, one marked: not read, and no override.
   const twoHunks: ReviewPack = {
     ...pack,
@@ -264,10 +278,11 @@ test('marks lay over an idea only when every hunk it owns agrees', () => {
   assert.deepEqual(layMarks(twoHunks, [mark('src/a.ts', 1, 4, true, 'skim')]).get('idea_c'), {
     read: false,
     attention: null,
+    seen: false,
   });
   assert.deepEqual(
     layMarks(twoHunks, [mark('src/a.ts', 1, 4, true, 'skim'), mark('src/a.ts', 20, 22, true, 'skim')]).get('idea_c'),
-    { read: true, attention: 'skim' },
+    { read: true, attention: 'skim', seen: false },
   );
 });
 
