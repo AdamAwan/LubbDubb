@@ -2193,6 +2193,23 @@ in "12 of 218" are about one set. Its foot distinguishes three emptinesses, beca
 facts: nothing has ever been in this state, nothing under it is still in the open set (with the widen),
 and nothing here matches these filters.
 
+**The board takes the whole situation area; nothing else on the tab does.** The `1400px` cap is about
+reading _across_ — a row's id and its date are two ends of one fact, and let out to the width of a
+monitor the eye loses the line between them. That is true of the head, the filter rail and the table
+alike. A board column is read _down_ and is its own list, so the cap buys it nothing and costs it
+columns: on a wide monitor it drew a sideways scroll with a page of empty margin beside it (#632). The
+scroll stays, because a tracker with twenty states outruns any monitor, but it now begins where the
+screen ends. The board runs past the rail that filters it, which reads as the board using the room
+rather than as an edge that failed to line up.
+
+**The cap is `.tickets > *` with `.tickets > .tb` as the one exception, and the difference from a cap
+on the tab is the whole point.** On the tab it bounded whichever body was up _and_ the chrome above it,
+so lifting it for the board moved the head, the filter rail and the view toggle _itself_ — the control
+changing width under the pointer that pressed it, which reads as the page lurching rather than as a
+view opening. Per child, every block keeps its width in both views and only the board differs. The
+toggle does still shift on the click, by the width of `Group` giving way to `Order` — that is the rail
+differing in card view, three paragraphs down, and it predates any of this.
+
 **A card's reason lane is always drawn, and it is the board's whole advantage over the table.** A
 column of cards answers _why is nothing on this_ without a click on any of them. `cardReason` decides
 which of five readings supplies it — an intake hold, then the outcome word, then the dispatcher's own
@@ -3672,7 +3689,7 @@ and the trend's.
 ### The page is bounded, because a reading is not
 
 Every surface here is read **across** — a phase against its share, a goal against its runs, a cause
-against what would have caught it — so the page is capped at `1400px` like the tickets tab. A row let
+against what would have caught it — so the page is capped at `1400px` like the tickets table. A row let
 out to the width of the monitor puts the two ends of one fact far enough apart that the eye loses the
 line between them, and none of the graphs say anything more for the space.
 
