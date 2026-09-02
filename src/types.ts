@@ -5166,3 +5166,76 @@ export interface PoolPublication {
   dirty: boolean;
   checkedAt: string | null;
 }
+
+// ---------------------------------------------------------------------------
+// The obstacle board → `docs/spec/32-obstacles.md`
+
+/**
+ * What identifies an obstacle: a fact about the world, not a sentence about it.
+ *
+ * The three the harness can check something against — `check`, `test`, `path` —
+ * bind. The two it cannot only ever suggest: a signature is a normalisation of
+ * somebody else's output, and the thing being normalised is outside this
+ * repository's control.
+ */
+export type ObstacleKeyKind = 'check' | 'test' | 'path' | 'signature' | 'cmd';
+
+/** Where an obstacle is, and therefore who it reaches. → `src/obstacles/lifecycle.ts` */
+export type ObstacleState = 'sighted' | 'standing' | 'owned' | 'resolved' | 'dormant' | 'muted';
+
+/**
+ * Whether a fix ends it. The discriminator is the one boolean an agent can always
+ * answer, and it is the whole of what the intake asks about where a report goes.
+ */
+export type ObstacleKind = 'obstacle' | 'note';
+
+/** One way into an obstacle. An obstacle may hold several. */
+export interface ObstacleKey {
+  id: string;
+  obstacleId: string;
+  kind: ObstacleKeyKind;
+  /** The identity. Unique across the whole board, kind included in nothing. */
+  value: string;
+  /** Whether this key may resolve an obstacle. False for a suggestion. */
+  binds: boolean;
+  /** How often a suggestion on this key was confirmed — what a later promotion reads. */
+  confirmations: number;
+  createdAt: string;
+}
+
+/** One voice, and the words it said it in. */
+export interface ObstacleSighting {
+  id: string;
+  obstacleId: string;
+  agentId: string | null;
+  taskId: string | null;
+  /** The goal, collapsed from the dispatch origin. Null for a harness voice. */
+  goalRef: string | null;
+  sessionId: string | null;
+  /** What the harness observed, for its own voice; null for an agent's. */
+  transition: string | null;
+  /** The reporter's own sentence, verbatim — never the claim restated. */
+  words: string;
+  /** Required at the intake and read by nobody but an operator. */
+  whyNotMine: string | null;
+  /** Why this landed here: `check:test (windows)`, or `fresh`. */
+  matchedBy: string;
+  createdAt: string;
+}
+
+/** A row on the board. */
+export interface Obstacle {
+  id: string;
+  /** One line, the reporter's words with its own frame stripped. */
+  what: string;
+  kind: ObstacleKind;
+  state: ObstacleState;
+  /** The ticket or repair dispatch fixing it; null while nothing is. */
+  ownerRef: string | null;
+  /** The reporter's clock, read only by the backstop. */
+  until: string | null;
+  createdAt: string;
+  updatedAt: string;
+  /** The newest sighting, which is what decay reads. */
+  lastSeenAt: string;
+}

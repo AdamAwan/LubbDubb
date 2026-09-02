@@ -274,6 +274,15 @@ export interface McpToolDeps {
    * and same floor as {@link McpToolDeps.reviewPacks}.
    */
   reviewPackChecker?: Pick<ReviewPackChecker, 'submit'>;
+  /**
+   * The checkout an obstacle's `path` key is validated against — `config.repoRoot`.
+   *
+   * Optional for {@link McpToolDeps.openPr}'s reason and with a floor of the same
+   * shape: unwired, no path key validates, so those keys are **dropped and the
+   * report is kept**. A refusal an agent cannot satisfy is a report that was never
+   * filed, and that is the one loss the board cannot recover from.
+   */
+  repoRoot?: string;
   errors?: ErrorRecorder;
 }
 

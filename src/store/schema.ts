@@ -1664,6 +1664,73 @@ CREATE TABLE IF NOT EXISTS account_rate_limits (
 -- captured_at is the primary key rather than a surrogate id, because two agents
 -- reporting the identical instant are reporting one reading of one account. The
 -- windows are independently nullable here for the same reason they are above.
+-- ---------------------------------------------------------------------------
+-- The obstacle board (docs/spec/32-obstacles.md). Something broken now, which a
+-- fix ends — a red base branch, a wedged runner, a flaking check — or a note:
+-- something true of the repository the repository does not say.
+--
+-- Three tables, and the split is the design. The row is what the fleet is told;
+-- the keys are its identity; the sightings are who said it, in their own words.
+CREATE TABLE IF NOT EXISTS obstacles (
+  id         TEXT PRIMARY KEY,
+  what       TEXT NOT NULL,        -- one line, the reporter's words with its own frame stripped
+  kind       TEXT NOT NULL,        -- obstacle | note, from "would a fix make this go away?"
+  state      TEXT NOT NULL,        -- sighted | standing | owned | resolved | dormant | muted
+  owner_ref  TEXT,                 -- the ticket or repair dispatch fixing it; null while nothing is
+  until      TEXT,                 -- the reporter's clock, read only by the backstop; null for most
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL       -- the newest sighting, which is what decay reads
+);
+
+-- What identifies an obstacle: a fact about the world, never a sentence about it.
+--
+-- UNIQUE is on value **and not on (kind, value)**, which is the whole of why
+-- deduplication is an index lookup rather than a judgement: two agents may
+-- reasonably disagree about whether something is a flaking test or a broken
+-- check, and a key on the pair would split one obstacle into two on that
+-- disagreement — the prose problem rebuilt with a smaller vocabulary. The kind is
+-- recorded because it says what was checked against what, and nothing that
+-- matches reads it.
+--
+-- binds is whether this key may resolve an obstacle at all: signature and
+-- cmd never do, and neither does a key that failed grounding. confirmations
+-- counts how often a suggestion on it was confirmed, which is what a later change
+-- promoting a signature to binding would read.
+CREATE TABLE IF NOT EXISTS obstacle_keys (
+  id          TEXT PRIMARY KEY,
+  obstacle_id TEXT NOT NULL,
+  kind        TEXT NOT NULL,       -- check | test | path | signature | cmd
+  value       TEXT NOT NULL UNIQUE,
+  binds       INTEGER NOT NULL,
+  confirmations INTEGER NOT NULL,
+  created_at  TEXT NOT NULL
+);
+
+-- Who said it, one row per voice, each carrying the reporter's own words.
+--
+-- Never a counter on the obstacle: the count is what carries a row to standing,
+-- and the words are what the second agent reads instead of spending ten turns.
+-- goal_ref is the goal rather than the dispatch origin (pr:412:ci and
+-- pr:412:comments are two origins and one observation) and session_id is beside
+-- it so a re-dispatch that inherited a conversation is not counted twice.
+-- transition names what the harness observed, for a harness voice, and is null
+-- for an agent's: the transition is the identity, so one check going red is one
+-- voice however many pulses see it still red.
+CREATE TABLE IF NOT EXISTS obstacle_sightings (
+  id          TEXT PRIMARY KEY,
+  obstacle_id TEXT NOT NULL,
+  agent_id    TEXT,
+  task_id     TEXT,
+  goal_ref    TEXT,
+  session_id  TEXT,
+  transition  TEXT,
+  words       TEXT NOT NULL,       -- the reporter's own sentence, verbatim
+  why_not_mine TEXT,               -- required at the intake, read by nobody but an operator
+  matched_by  TEXT NOT NULL,       -- the key that bound it ("check:test (windows)"), or "fresh"
+  created_at  TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS rate_limit_readings (
   captured_at               TEXT PRIMARY KEY,
   five_hour_used_percentage REAL,
@@ -1701,4 +1768,8 @@ CREATE INDEX IF NOT EXISTS idx_pet_purchases_pet ON pet_purchases(pet_id);
 -- carry arguments, and without it that is a full scan on every boot.
 CREATE INDEX IF NOT EXISTS idx_mcp_calls_created ON mcp_calls(created_at);
 CREATE INDEX IF NOT EXISTS idx_mcp_calls_args ON mcp_calls(args_dropped, created_at);
+-- Both obstacle reads are by their parent row: the keys an obstacle holds, and the
+-- sightings behind it. The key *lookup* goes through the UNIQUE index on value.
+CREATE INDEX IF NOT EXISTS idx_obstacle_keys_obstacle ON obstacle_keys(obstacle_id);
+CREATE INDEX IF NOT EXISTS idx_obstacle_sightings_obstacle ON obstacle_sightings(obstacle_id);
 `;

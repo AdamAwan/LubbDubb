@@ -87,6 +87,11 @@ interface McpBridgeServerOptions {
   /** The checker desk `review_pack_check` hands its verdicts to. Lazy for the same reason. */
   reviewPackChecker?: () => McpToolDeps['reviewPackChecker'];
   /**
+   * The checkout an obstacle's `path` key is validated against. Absent, no path
+   * key validates and those keys are dropped — the report is kept either way.
+   */
+  repoRoot?: string;
+  /**
    * How long a recorded call's arguments are kept, in days. `0` records none at
    * all. Absent takes the store's own default — see `McpCallStore`.
    */
@@ -317,6 +322,7 @@ export class McpBridgeServer {
         watch: this.opts.watch?.(),
         reviewPacks: this.opts.reviewPacks?.(),
         reviewPackChecker: this.opts.reviewPackChecker?.(),
+        repoRoot: this.opts.repoRoot,
         errors: this.opts.errors,
       },
       resolved.identity,

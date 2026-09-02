@@ -1,10 +1,13 @@
 # 32 — Obstacles
 
-**Not yet built.** Nothing in this document is running code. It supersedes [27](27-knowledge.md) on
-landing — that document describes the claim store this replaces, and what it says is true of the
-harness today. The markers come off section by section, in the change that makes each true; the
-change that lands the last of them deletes [27](27-knowledge.md) and this document takes its number.
-Every path named here is italic until the file exists.
+**Partly built.** The spine is running: the tables, the keys and their three gates, the matcher, the
+states, and the intake. What is not yet built carries its own marker, section by section — delivery,
+ownership, the `blocked` verdict, the ways an obstacle ends, and the cockpit tab. It supersedes
+[27](27-knowledge.md) on landing — that document describes the claim store this replaces, and what
+it says is true of the harness today; a **note** still lands there, through the same intake, until
+the last of these sections is built. The change that lands the last of them deletes
+[27](27-knowledge.md) and this document takes its number. Every path named here is italic until the
+file exists.
 
 An agent working a goal runs into something that is not its goal: a test that fails for reasons that
 have nothing to do with its change, a base branch someone else broke, a bug in code nobody is
@@ -19,13 +22,13 @@ is largely the story of confusing the two.
 
 ## What it is
 
-| | |
-| --- | --- |
+|                 |                                                                                                                                                   |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | An **obstacle** | Something broken now, which a fix ends. A red base branch, a wedged runner, a flaking check, a bug nobody is on. It gets an owner, and it closes. |
-| A **note** | Something true of the repository that the repository does not say. It has no owner and ends by being written down. |
+| A **note**      | Something true of the repository that the repository does not say. It has no owner and ends by being written down.                                |
 
-One intake for both, and the discriminator is a single boolean the agent can always answer — *would a
-fix make this go away?* Not two tools: an agent choosing a shelf is an agent choosing wrongly, which
+One intake for both, and the discriminator is a single boolean the agent can always answer — _would a
+fix make this go away?_ Not two tools: an agent choosing a shelf is an agent choosing wrongly, which
 [27](27-knowledge.md#the-intake-asks-nothing-an-agent-cannot-answer) established at the cost of
 finding out.
 
@@ -37,13 +40,13 @@ would spend a round trip discovering is pushed to it instead.
 The store this replaces is not a bad implementation of this design. It is a good implementation of a
 different one, and naming the differences is what keeps them from coming back.
 
-| It did | And so |
-| --- | --- |
-| Gated every durable claim on an operator's click | Its output when nobody visited the page was exactly zero. Neglect had no degraded mode. |
-| Matched claims on **prose** (`claimsMatch` in `src/claims.ts`: equality or containment above a 24-character floor) | Two agents who hit one wall and wrote it down in their own words filed two singletons. *"there's a flakey test"* normalises to a 21-character key and can never match anything at all. |
-| Named `raise` and `knowledge_ask` only inside the injected block, which renders as `''` when nothing is injected (`renderKnowledgeBlock`, `src/knowledge/block.ts`) | An empty store told no agent the tools existed, so nothing was written, so the store stayed empty. Self-sealing. |
-| Answered *what does the fleet know* | The question an operator opens a page to answer is *what is on me*, and the question an agent has is *is this already known*. Neither was the one being answered. |
-| Never acted — "no rule, desk or gate reads a fact" ([27](27-knowledge.md#what-nothing-does)) | The fleet was **told** the base was red and each agent decided alone what to do about it. Telling thirty agents a thing is not the same as stopping thirty agents doing the same work. |
+| It did                                                                                                                                                              | And so                                                                                                                                                                                 |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Gated every durable claim on an operator's click                                                                                                                    | Its output when nobody visited the page was exactly zero. Neglect had no degraded mode.                                                                                                |
+| Matched claims on **prose** (`claimsMatch` in `src/claims.ts`: equality or containment above a 24-character floor)                                                  | Two agents who hit one wall and wrote it down in their own words filed two singletons. _"there's a flakey test"_ normalises to a 21-character key and can never match anything at all. |
+| Named `raise` and `knowledge_ask` only inside the injected block, which renders as `''` when nothing is injected (`renderKnowledgeBlock`, `src/knowledge/block.ts`) | An empty store told no agent the tools existed, so nothing was written, so the store stayed empty. Self-sealing.                                                                       |
+| Answered _what does the fleet know_                                                                                                                                 | The question an operator opens a page to answer is _what is on me_, and the question an agent has is _is this already known_. Neither was the one being answered.                      |
+| Never acted — "no rule, desk or gate reads a fact" ([27](27-knowledge.md#what-nothing-does))                                                                        | The fleet was **told** the base was red and each agent decided alone what to do about it. Telling thirty agents a thing is not the same as stopping thirty agents doing the same work. |
 
 Two of those are the ones to keep hold of. **Identity cannot rest on prose**, and **a state whose only
 exit is a person is a state that fills up**.
@@ -52,16 +55,16 @@ exit is a person is a state that fills up**.
 
 An obstacle is identified by a **key**: a fact about the world, not a sentence about it.
 
-| Kind | Value | Checked against |
-| --- | --- | --- |
-| `check` | The provider's own check name | the checks the provider is reporting |
-| `test` | File plus test name | the suite's own reporting |
-| `path` | A repository path | the tree |
+| Kind        | Value                                                                                                      | Checked against                                             |
+| ----------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `check`     | The provider's own check name                                                                              | the checks the provider is reporting                        |
+| `test`      | File plus test name                                                                                        | the suite's own reporting                                   |
+| `path`      | A repository path                                                                                          | the tree                                                    |
 | `signature` | The normalised first line of an error — paths relativised, hex, numbers and timestamps blanked, lowercased | nothing — [suggestion-only](#signature-and-cmd-do-not-bind) |
-| `cmd` | The command that failed | nothing — [suggestion-only](#signature-and-cmd-do-not-bind) |
+| `cmd`       | The command that failed                                                                                    | nothing — [suggestion-only](#signature-and-cmd-do-not-bind) |
 
 **A key resolves to exactly one obstacle**, which is what makes deduplication an index lookup rather
-than a judgement. The uniqueness constraint is on `value` in _src/store/obstacles.ts_, and the claim
+than a judgement. The uniqueness constraint is on `value` in `src/store/obstacles.ts`, and the claim
 is made inside the synchronous write `CLAUDE.md` already guarantees: insert the keys, read back
 which obstacle won, attach the loser's report to the winner. Two agents reporting in the same
 millisecond cannot both create a row, and neither waits.
@@ -78,7 +81,7 @@ one thing, and a report carrying any of them joins.
 ### A key alone is not always enough
 
 A key coarse enough to catch everything catches everything, and then the fleet is told that a genuinely
-new failure is already owned. That failure is silent — the swallowed report is answered *stand down*,
+new failure is already owned. That failure is silent — the swallowed report is answered _stand down_,
 nobody fixes it, and nothing is red.
 
 So a `check` key **never binds on its own**. It must co-occur with a `test` or a `path` key to resolve
@@ -86,11 +89,11 @@ an obstacle. A report carrying only a check name **files fresh**, and the prose 
 (`claimsMatch`, `src/claims.ts`) is run over the new row against the existing ones — its hits land in
 `near[]` as suggestions and bind nothing. That is the matcher this whole document replaces, kept
 where a wrong answer is a line an agent may ignore rather than a report swallowed.
-_test/obstacleMatch.test.ts_ holds that, because it is the guard the rest of the design leans on.
+`test/obstacleMatch.test.ts` holds that, because it is the guard the rest of the design leans on.
 
 A `signature` does not rescue a bare `check`, and that is the pair of rules meeting rather than one of
 them having an exception: a key that cannot bind alone cannot make another one bind either, or "does
-not bind" would mean *binds when convenient*.
+not bind" would mean _binds when convenient_.
 
 Matching is exact and never a prefix, which is `priorRemedies`' choice
 ([07](07-pull-requests.md)) and the same fragility accepted for the same reason: a check name is a
@@ -123,8 +126,8 @@ design that fails quietly on the day they are not.
 
 The key is **extracted from what the agent wrote and then validated**, and both halves matter:
 
-- **Extracted** by the harness, from the agent's own sentence plus the dispatch it came from. *"there's
-  a flakey test"* on a dispatch about `test (windows)` yields `check:test (windows)`.
+- **Extracted** by the harness, from the agent's own sentence plus the dispatch it came from. _"there's
+  a flakey test"_ on a dispatch about `test (windows)` yields `check:test (windows)`.
 - **Validated** against the world. A `check` key must name a check the provider is reporting or the
   dispatch is about; a `path` key must exist in the tree. A key that does not resolve is **dropped, and
   the claim is kept** — never refused. A refusal an agent cannot satisfy is a report that was never
@@ -132,9 +135,25 @@ The key is **extracted from what the agent wrote and then validated**, and both 
 - **Grounded**, which is the third half. A key must be consistent with what the harness already knows
   about that dispatch — the checks it was dispatched about, the files its branch touches. A key outside
   that set does not bind; it is recorded as a suggestion. Validation catches nonsense, not plausible
-  error, and a *plausible* wrong key is a silent wrong merge arriving through the back door.
+  error, and a _plausible_ wrong key is a silent wrong merge arriving through the back door.
 
 An agent may name keys itself, and they go through the same three gates.
+
+The gates are `src/obstacles/keys.ts`, run against what the harness already holds
+(`src/obstacles/world.ts`): the world model's own reading of the checks, `Task.ciChecks` for the
+dispatch, `listGoalFiles` for the branch, and the checkout for the tree. Two readings of the general
+rule are worth stating, because both could have gone the other way:
+
+- **A `test` key is validated against the tree**, on its file half, and not against the suite's own
+  reporting. The harness holds no registry of test names, so a gate that claimed to check one would
+  be a gate that checked nothing. A key with no file in it is dropped: identity here is a fact about
+  the world, and a test name on its own is a sentence.
+- **A `test` or `path` key is grounded by *either* half of what the harness knows** — the branch's
+  own files, or a `check` key on the same report that grounded. The branch alone is the wrong half
+  for most honest reports: an agent saying a test is not its doing is saying precisely that the file
+  is not in its diff. A grounded check is the harness's own statement that this dispatch is about
+  that check, so the file named beside it is that check's reporting rather than a file the agent
+  thought of. Neither half, and the key suggests.
 
 ## What may be decided by a model, and what may not
 
@@ -143,27 +162,32 @@ cheaply. The rule that governs where they may be used is not about trust:
 
 > **A model may do anything whose mistakes are visible.**
 
-| Job | Model | Because |
-| --- | --- | --- |
-| Deciding two reports are one obstacle | **No** | A wrong merge hides one agent's report inside another's. The swallowed report is answered *already owned*, nobody fixes it, and nothing is red. A duplicate row costs a few hundred bytes and can be seen. |
-| Extracting keys from prose | Yes | The output is checked against the world. A wrong key fails to resolve and falls back to prose. |
-| Suggesting a merge the keys missed | Yes | It is a suggestion. An agent confirms it by id, or an operator does, or nobody does and the rows stay apart. |
-| Deciding what an obstacle is for — a ticket, a documentation change | Yes | A wrong ticket is a ticket, and a ticket is visible. |
-| Writing the ticket from the sightings | Yes | It is prose, read by whoever reads any other ticket. |
+| Job                                                                 | Model  | Because                                                                                                                                                                                                    |
+| ------------------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Deciding two reports are one obstacle                               | **No** | A wrong merge hides one agent's report inside another's. The swallowed report is answered _already owned_, nobody fixes it, and nothing is red. A duplicate row costs a few hundred bytes and can be seen. |
+| Extracting keys from prose                                          | Yes    | The output is checked against the world. A wrong key fails to resolve and falls back to prose.                                                                                                             |
+| Suggesting a merge the keys missed                                  | Yes    | It is a suggestion. An agent confirms it by id, or an operator does, or nobody does and the rows stay apart.                                                                                               |
+| Deciding what an obstacle is for — a ticket, a documentation change | Yes    | A wrong ticket is a ticket, and a ticket is visible.                                                                                                                                                       |
+| Writing the ticket from the sightings                               | Yes    | It is prose, read by whoever reads any other ticket.                                                                                                                                                       |
 
 The desk that does this work is _src/obstacles/desk.ts_, on the pulse, and only where the inbox is
 non-empty. It is the harness's secretary and it is deliberately not its judge.
 
+**Not yet built.** The rule holds over what is running — nothing merges on a model's say-so, because
+nothing calls a model at all. The desk is a later phase; extraction today is the mechanical reading
+in `src/obstacles/keys.ts`, checked against the world by the same three gates a model's output would
+be.
+
 ## States
 
-| State | Means | Reaches an agent |
-| --- | --- | --- |
-| `sighted` | One voice has said it. It may be that goal's own doing. | Nobody. |
-| `standing` | **Two independent voices** have said it. | Every dispatch its keys match, and running agents. |
-| `owned` | Something is fixing it. | The same, plus *do not fix it*. |
-| `resolved` | The world was observed to clear it, or the owner landed. | Nobody. Keeps its keys. |
-| `dormant` | Nothing has re-reported it inside `obstacleDormantMs`. | Nobody. Keeps its keys. |
-| `muted` | You said never tell the fleet this. | Nobody. |
+| State      | Means                                                    | Reaches an agent                                   |
+| ---------- | -------------------------------------------------------- | -------------------------------------------------- |
+| `sighted`  | One voice has said it. It may be that goal's own doing.  | Nobody.                                            |
+| `standing` | **Two independent voices** have said it.                 | Every dispatch its keys match, and running agents. |
+| `owned`    | Something is fixing it.                                  | The same, plus _do not fix it_.                    |
+| `resolved` | The world was observed to clear it, or the owner landed. | Nobody. Keeps its keys.                            |
+| `dormant`  | Nothing has re-reported it inside `obstacleDormantMs`.   | Nobody. Keeps its keys.                            |
+| `muted`    | You said never tell the fleet this.                      | Nobody.                                            |
 
 **A voice is a goal, or [the harness itself](#the-harness-is-a-voice)** — and a goal is counted as a
 goal, never as an origin and never as an agent. `pr:412:ci` and `pr:412:comments` are two origins of
@@ -177,6 +201,11 @@ voice. Anything the count cannot tell apart from an echo is not a second voice.
 
 **One report is not evidence.** It is also the case the harness cannot tell apart from an agent
 mis-diagnosing its own breakage, which is why `sighted` reaches nobody.
+
+The states and their exits are declared in `src/obstacles/lifecycle.ts`, and what moves a row today
+is a report: `sighted` on the first voice, `standing` on the second, and back to `standing` from a
+terminal state on a re-report. **Not yet built:** nothing writes `owned`, `resolved` or `dormant` —
+those are the ownership, world-condition and decay phases, and each is marked below.
 
 ### The harness is a voice
 
@@ -196,6 +225,9 @@ waiting is the class the harness genuinely cannot witness — a bug in code nobo
 of documentation the code stopped agreeing with — and none of those is costing an agent its session
 this minute.
 
+**Not yet built.** The sighting carries the column the transition is recorded in, and the voice count
+already folds by it; nothing on the pulse writes one yet.
+
 A harness voice is recorded as a sighting like any other, attributed to the harness rather than to a
 goal, and says which transition it saw. An operator reading why a row is standing must never find
 one voice that is really the same reading counted twice: the transition is the identity, so the same
@@ -213,7 +245,7 @@ lands. `resolved` and `dormant` are terminal in the sense that matters — nothi
 anyone, and the row moves again only if the world re-reports it. The one state whose exit is a person
 is `muted`, and a person put it there.
 
-_test/obstacleLifecycle.test.ts_ enumerates the states and **fails when one is added without an
+`test/obstacleLifecycle.test.ts` enumerates the states and **fails when one is added without an
 automatic exit**. It carves out `muted` by name, not by predicate: a second entry in that carve-out
 is the failure it exists to catch, and a rule loose enough to admit one would have admitted every
 state the previous store filled up with. A queue that only a human empties is exactly how the last
@@ -222,15 +254,15 @@ attempt died, and a convention would not have caught it.
 ## The intake
 
 One tool. Reshaped from `raise` (`src/mcp/tools/raise.ts`), which keeps its name because an agent
-asking *what do I do with this* should keep finding one door.
+asking _what do I do with this_ should keep finding one door.
 
-| The agent supplies | Read as |
-| --- | --- |
-| `what` | One line, its own words. Required. |
-| `why_not_mine` | Free text, required, unvalidated. |
-| `keys` | Optional; goes through the three gates above. |
-| `fix_makes_it_go_away` | Present and true → an obstacle. False → a note. |
-| `until` | Optional clock for something the agent believes transient. Read only by [the backstop](#how-an-obstacle-ends). |
+| The agent supplies     | Read as                                                                                                        |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `what`                 | One line, its own words. Required.                                                                             |
+| `why_not_mine`         | Free text, required, unvalidated.                                                                              |
+| `keys`                 | Optional; goes through the three gates above.                                                                  |
+| `fix_makes_it_go_away` | Present and true → an obstacle. False → a note.                                                                |
+| `until`                | Optional clock for something the agent believes transient. Read only by [the backstop](#how-an-obstacle-ends). |
 
 `originRef`, `goalRef`, `branch` and the agent id come from the credential and are never arguments —
 the rule every other write in the tool channel already follows ([11](11-mcp-tools.md)).
@@ -240,7 +272,7 @@ that has to write down why this is not its doing checks before it answers, and t
 operator reads later when the routing turns out wrong. A field the harness validates would be a field
 the agent games.
 
-**The agent's own frame is stripped from `what`.** *"test X is flaky and nothing to do with PR 512"* is
+**The agent's own frame is stripped from `what`.** _"test X is flaky and nothing to do with PR 512"_ is
 written for the reader of PR 512, which is the one place the claim will never be needed again, and the
 ref inside it is what no other agent's wording can match. `stripOwnFrame` (`src/knowledge/frame.ts`)
 already does exactly this, against a closed list of function words, and survives unchanged. The
@@ -259,12 +291,15 @@ trip, with no model call and no waiting:
 
 `directive` is one imperative sentence, chosen by the harness and never by the agent:
 
-| Situation | Directive |
-| --- | --- |
-| `owned` | *#841 owns this. Do not fix it. Note it and return to your task.* |
-| `standing`, unowned | *Two independent voices have hit this. It is not yours. Recorded — return to your task.* |
-| `sighted` | *Recorded. Nothing else has seen this, so it may be your own change: check your diff before deciding it is not. Either way, do not go fixing it.* |
-| The obstacle makes the task impossible | *You cannot finish. Conclude `blocked`, naming this obstacle.* |
+| Situation                              | Directive                                                                                                                                         |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `owned`                                | _#841 owns this. Do not fix it. Note it and return to your task._                                                                                 |
+| `standing`, unowned                    | _Two independent voices have hit this. It is not yours. Recorded — return to your task._                                                          |
+| `sighted`                              | _Recorded. Nothing else has seen this, so it may be your own change: check your diff before deciding it is not. Either way, do not go fixing it._ |
+| The obstacle makes the task impossible | _You cannot finish. Conclude `blocked`, naming this obstacle._                                                                                    |
+
+The last of those is **not yet built** — it needs the `blocked` verdict, which is [ownership's
+phase](#blocked-is-an-answer). The other three are what the tool answers with today.
 
 `near[]` names rows a suggestion linked but no key merged, with their ids, so the agent may agree with
 one directly. **The report is filed either way** and never held pending a reply: a round trip is a
@@ -289,20 +324,24 @@ that carried it there were independent.
 If a report's `path` or `test` keys intersect the agent's own branch diff, the tool **refuses**, names
 the file, and records nothing.
 
-The harness holds the diff already (`src/fileOverlap.ts`). This is the only enforcement of *an agent
-fixes what its own session broke and nothing else* that is not a sentence in a prompt, and a sentence
+The harness holds the diff already (`src/fileOverlap.ts`). This is the only enforcement of _an agent
+fixes what its own session broke and nothing else_ that is not a sentence in a prompt, and a sentence
 in a prompt is not an enforcement.
 
 ## Delivery
+
+**Not yet built.** Nothing in this section is running: an obstacle reaches an agent only by that
+agent's own call to the tool. `renderKnowledgeBlock` and the fleet-wide block it renders are
+[27](27-knowledge.md)'s and stay until the last of this document lands.
 
 Three channels, and the tool is none of them.
 
 **At dispatch, scoped to the keys.** The obstacles whose keys intersect this dispatch — the checks it
 is about, the paths its goal touches — are **appended** to the rendered task prompt, never
-interpolated. `loadPromptTemplates` rejects only *unknown* placeholders, so an override written before
+interpolated. `loadPromptTemplates` rejects only _unknown_ placeholders, so an override written before
 this existed would silently drop a `{obstacles}` token on exactly the deployments that customised most
 ([05](05-dispatcher.md#prompt-templates)). `dispatchFactScopes` (`src/knowledge/block.ts`) is the
-existing computation of *which scopes this dispatch matches* and is what the keys are read against, so
+existing computation of _which scopes this dispatch matches_ and is what the keys are read against, so
 the scope a row is delivered on and the scope it is judged against cannot drift.
 
 **Mid-session, to a running agent.** A desk sends into a live session when — and only when — a state
@@ -324,9 +363,12 @@ less.
 
 ## Ownership
 
+**Not yet built.** No row is owned, nothing files a ticket from a sighting, and there is no
+`obstacle:<id>` origin.
+
 **Never an agent.** The reporting agent is not the owner, and no agent stakes a claim: a lock an agent
 takes is a lock an agent forgets. Ownership is a row the harness writes, on the pulse, transactionally
-on `owner IS NULL` — so *do not all pile on* is a uniqueness constraint rather than an instruction.
+on `owner IS NULL` — so _do not all pile on_ is a uniqueness constraint rather than an instruction.
 
 A `standing` obstacle gets an owner one of two ways:
 
@@ -349,7 +391,7 @@ schedule things.
 ### Blocked is an answer
 
 An agent whose task is genuinely stopped by an obstacle — the base will not build — is not helped by
-*carry on*, and telling it to carry on makes it spin. `conclude_work` gains a `blocked` verdict
+_carry on_, and telling it to carry on makes it spin. `conclude_work` gains a `blocked` verdict
 carrying an obstacle id: the task parks, the goal does **not** return to pickup, and a desk re-queues
 it when the obstacle resolves.
 
@@ -357,6 +399,9 @@ That is the difference between the fleet queueing behind one obstacle and the fl
 allowance on it.
 
 ## How an obstacle ends
+
+**Not yet built.** A row stands where its sightings put it; nothing settles, lands, expires or
+decays one yet. `obstacleDormantMs` is named here and is not yet a setting.
 
 - **A condition the harness can evaluate**, written by the harness and never by an agent. Settling one
   means reading a world object pulse after pulse, and the only party that can promise to do that is the
@@ -384,7 +429,10 @@ pays for it again, and nothing is red.
 
 ## In the cockpit
 
-One tab, and it is **read-mostly**: *what is blocking the fleet, and what owns each one*. Not a queue,
+**Not yet built.** There is no tab and no route. When there is, it is reachable by URL only —
+deliberately not registered in the navbar until the operator says otherwise.
+
+One tab, and it is **read-mostly**: _what is blocking the fleet, and what owns each one_. Not a queue,
 not a triage surface, and no badge counting things that are waiting on a decision — because nothing is.
 
 Two sections. **Standing**, which is what reaches agents, and **Sighted once**, which reaches nobody,
@@ -399,7 +447,7 @@ last is the only place the matcher can be seen working or getting it wrong, and 
 row expands at all.
 
 **The page draws what it counts and never what it would like to.** Sightings, goals cost, dispatches
-told and the rate agents call the tool are all observed. *Turns an agent did not spend* is the figure
+told and the rate agents call the tool are all observed. _Turns an agent did not spend_ is the figure
 everyone wants and nothing measures, so it is not drawn — a number invented to sit beside four real
 ones is the one thing on the page that would be a lie, and it would be the one quoted.
 
@@ -420,15 +468,15 @@ nothing here is a durable statement about the repository to bar.
 
 ## What is deliberately not built
 
-| Not | Because |
-| --- | --- |
-| A search tool for agents | Retrieval by guessed words is the failure mode this replaces, and a lookup is a turn. |
-| Embeddings, a vector store | Machinery for a problem that is not there across tens of live rows, and its errors are the invisible-merge kind. |
-| An agent-to-agent channel, or locks agents take | A lock an agent takes is a lock an agent forgets. |
-| A severity an agent assigns | Severities from different agents are not comparable. |
-| Auto-fix by the reporter, including "it is a one-liner" | The rule has no exceptions or it is not enforcement. |
-| A durable claim store about the repository | That is the tree, and [what went wrong last time](#what-went-wrong-last-time) is largely this. |
-| Anything crossing to another fleet | An obstacle is about this repository's state right now. [28](28-cross-fleet-pool.md) is unaffected and stays unbuilt. |
+| Not                                                     | Because                                                                                                               |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| A search tool for agents                                | Retrieval by guessed words is the failure mode this replaces, and a lookup is a turn.                                 |
+| Embeddings, a vector store                              | Machinery for a problem that is not there across tens of live rows, and its errors are the invisible-merge kind.      |
+| An agent-to-agent channel, or locks agents take         | A lock an agent takes is a lock an agent forgets.                                                                     |
+| A severity an agent assigns                             | Severities from different agents are not comparable.                                                                  |
+| Auto-fix by the reporter, including "it is a one-liner" | The rule has no exceptions or it is not enforcement.                                                                  |
+| A durable claim store about the repository              | That is the tree, and [what went wrong last time](#what-went-wrong-last-time) is largely this.                        |
+| Anything crossing to another fleet                      | An obstacle is about this repository's state right now. [28](28-cross-fleet-pool.md) is unaffected and stays unbuilt. |
 
 ## What is not settled
 
