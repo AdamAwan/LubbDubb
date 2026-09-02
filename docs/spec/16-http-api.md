@@ -451,8 +451,9 @@ arrives later, through the read below.
 Refused in the order a reader would blame them: 400 on a non-integer number; 404 for a pull request
 that is not open; 409 when the provider reports no head for it, when an author is already on it
 (a second ask is refused rather than queued — the reader decides when a new pack is worth two agent
-runs, and the ask on a new head once the first author has finished is the same call), and when
-dispatch is paused. The author is not counted against the concurrency cap; it takes a read-only
+runs, and the ask on a new head once the first author has finished is the same call), when the
+checker that follows the author is still on it (a second author would replace the ideas its verdicts
+are keyed to), and when dispatch is paused. The author is not counted against the concurrency cap; it takes a read-only
 worktree slot under `review-pack/pr-<n>/<headSha>`. Nothing is written to the provider and no cycle
 runs. A head the clone turns out not to hold fails after the 202 — recorded to the error log, with no
 task and no lease left behind — and the pull request can be asked about again.
@@ -465,8 +466,10 @@ request's head as the harness last saw it, null for one no longer in the world) 
 when that head is not the pack's: `{headSha, commitsBehind}`, the count asked of the clone and null
 where it cannot say — a head not yet fetched leaves the pack stale by sha alone, never "zero
 behind". Both null for a pull request the world no longer carries, which a reader must not fold into
-"current". Nothing here regenerates a pack: a stale one is shown, and the ask above is how a new one
-is made.
+"current". `checking` says whether the checker is on the pull request right now, so a pack whose
+every verdict is null reads as "being checked" or "unchecked" rather than either
+([31](31-review-packs.md#the-check)). Nothing here regenerates a pack: a stale one is shown, and the
+ask above is how a new one is made.
 
 404 with `{error, writing}` when there is no pack — `writing` says whether an author is on its way,
 so "not asked for" and "on its way" read differently. The newest pack written is what is shipped,

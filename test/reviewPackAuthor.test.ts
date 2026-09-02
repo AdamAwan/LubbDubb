@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path';
 import { loadConfig } from '../src/config.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
-import { packLeaseHead, packLeaseKey, packOrigin, packTargetPr } from '../src/reviewPacks/author.js';
+import { packLeaseHead, packLeaseKey, packOrigin, packTargetPr } from '../src/reviewPacks/origins.js';
 import { coverageRefusal, parseDiffHunks } from '../src/reviewPacks/hunks.js';
 import { REVIEW_PACK_SCHEMA } from '../src/store/reviewPacks.js';
 import { buildApp } from '../src/server/app.js';
@@ -429,7 +429,7 @@ test('a pack is refused by field name — an unowned hunk, one owned twice, a ma
     ],
   });
   assert.equal(twice.isError, true);
-  assert.match(twice.text, /h3 \(owned by idea_\w+ and plumbing\)/);
+  assert.match(twice.text, /h3 \(owned by idea_[\w-]+ and plumbing\)/);
 
   const falseMark = await submit(system, agent, {
     ...base,
@@ -614,6 +614,15 @@ test('a pack is shown stale when the head moves, saying how far behind, and noth
   const busy = await app.inject({ method: 'POST', url: '/api/prs/7/review-pack' });
   assert.equal(busy.statusCode, 409);
   system.agents.complete(agent.id);
+  // The checker follows the author onto the pack, and holds the pull request
+  // the same way until it has finished.
+  await system.reviewPackChecker.whenIdle();
+  const checking = await app.inject({ method: 'POST', url: '/api/prs/7/review-pack' });
+  assert.equal(checking.statusCode, 409);
+  assert.match(checking.json().error, /being checked/);
+  const checker = system.store.listAgents().find((a) => a.status === 'running' && a.id !== agent.id);
+  assert.ok(checker, 'the checker is on the pull request');
+  system.agents.complete(checker!.id);
   const again = await app.inject({ method: 'POST', url: '/api/prs/7/review-pack' });
   assert.equal(again.statusCode, 202);
   await system.reviewPacks.whenIdle();

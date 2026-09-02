@@ -43,7 +43,7 @@ export interface Commission {
  *
  * Pure: the tool hands it the commission and the arguments and writes what comes
  * back. Everything the checker owns is set here, not taken — `order` empty, every
- * `attention`, `cue`, `verdict` and `evidence` null — because a pack the author
+ * `attention`, `cue`, `verdict`, `evidence` and `finding` null — because a pack the author
  * wrote is a pack the checker has not read, whatever the submission says.
  * `witnessed`, the pull request and the head are the commission's, for the same
  * reason.
@@ -257,7 +257,7 @@ function readClaim(
     }
     provenance = { kind, entryId };
   } else return { ok: false, error: `${at}.provenance.kind must be "witnessed", "inferred" or "disputed".` };
-  return { ok: true, claim: { text: claimText, provenance, verdict: null, evidence: null } };
+  return { ok: true, claim: { text: claimText, provenance, verdict: null, evidence: null, finding: null } };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

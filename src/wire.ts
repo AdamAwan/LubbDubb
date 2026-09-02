@@ -2081,6 +2081,13 @@ export interface ReviewPackPayload extends ReviewPackRecord {
    * → `docs/spec/31-review-packs.md#when-a-pack-is-made`
    */
   stale: { headSha: string; commitsBehind: number | null } | null;
+  /**
+   * Whether the checker is on the pull request right now. A pack whose every
+   * verdict is null is either being checked or was left unchecked — a paused
+   * fleet, a checker that failed — and a reader must be able to tell which
+   * without guessing. → `docs/spec/31-review-packs.md#the-check`
+   */
+  checking: boolean;
 }
 
 /**

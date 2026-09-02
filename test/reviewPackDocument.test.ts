@@ -56,15 +56,28 @@ function fullPack(headSha: string): ReviewPack {
       provenance: witnessed,
       verdict: shown,
       evidence: 'Read schema.ts.',
+      finding: null,
     },
-    { text: 'Nothing outside src/store/ reads the row.', provenance: inferred, verdict: 'cant_tell', evidence: null },
+    {
+      text: 'Nothing outside src/store/ reads the row.',
+      provenance: inferred,
+      verdict: 'cant_tell',
+      evidence: null,
+      finding: null,
+    },
     {
       text: 'Marks are keyed to the idea id.',
       provenance: disputed,
       verdict: 'false',
       evidence: 'review_marks has no idea column.',
+      finding: {
+        headline: 'Marks ride on hunks, not ideas.',
+        body: 'An idea id is minted per run, so a mark keyed to it would die with the pack.',
+        step: 1,
+        counter: null,
+      },
     },
-    { text: 'Not yet checked.', provenance: inferred, verdict: null, evidence: null },
+    { text: 'Not yet checked.', provenance: inferred, verdict: null, evidence: null, finding: null },
   ];
   const anchors: ReviewAnchor[] = [
     {
@@ -263,7 +276,13 @@ test('the wire payload is the record plus the marks, never a second declaration'
   const record = store.recordReviewPack(fullPack('a1b2c3d'));
   store.markReviewIdeaRead({ prNumber: 695, headSha: 'a1b2c3d', hunks: [SPEC_HUNK], read: true });
 
-  const payload: ReviewPackPayload = { ...record, marks: store.listReviewMarks(695), head: 'a1b2c3d', stale: null };
+  const payload: ReviewPackPayload = {
+    ...record,
+    marks: store.listReviewMarks(695),
+    head: 'a1b2c3d',
+    stale: null,
+    checking: false,
+  };
 
   assert.equal(payload.pack.schema, REVIEW_PACK_SCHEMA);
   assert.equal(payload.marks.length, 1);

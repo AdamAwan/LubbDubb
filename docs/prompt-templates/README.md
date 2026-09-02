@@ -54,3 +54,4 @@ placeholder is fine.
 | `pr-review-comment`       | a PR has an unhandled review comment                        |
 | `pr-concern-escalation`   | a PR concern keeps failing to clear (→ human)               |
 | `review-pack-author`      | a reviewer asked for a review pack from a PR's row (not a rule) |
+| `review-pack-check`       | the review pack author finished and left a pack to check (not a rule) |

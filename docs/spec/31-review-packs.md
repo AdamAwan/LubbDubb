@@ -2,10 +2,11 @@
 
 **Partly built.** [The witness log](#the-witness-log), [the pack document](#the-pack) — its shape,
 its schema version, the reviewer's marks and the two tables under [Where it lives](#where-it-lives) —
-[the author](#when-a-pack-is-made), [coverage](#coverage), the two routes and the `review-pack-author`
-prompt id are running code; the rest of this document is not: no checker, no rendering, no sharing.
-Every path a section names is italic while that section is unbuilt, and the marker comes off it in
-the change that makes it true.
+[the author](#when-a-pack-is-made), [coverage](#coverage), [the check](#the-check) and its
+[attention labels](#attention), the two routes and the `review-pack-author` and `review-pack-check`
+prompt ids are running code; the rest of this document is not: no rendering, no sharing, and the
+attention overrides are recorded but not yet surfaced to the operator. Every path a section names is
+italic while that section is unbuilt, and the marker comes off it in the change that makes it true.
 
 A diff is what is left over after the thinking. The reasoning that produced it — what was considered,
 what was rejected, which file was deliberately not touched — is thrown away at the moment of commit,
@@ -171,8 +172,8 @@ _Built_ — stage 2 of the subsystem: the document's shape and where it lives, a
 or draws it. The types are in `src/types.ts` (`ReviewPack`, `ReviewIdea`, `ReviewAnchor`,
 `ReviewClaim`, `ReviewMark`), the tables in `src/store/reviewPacks.ts`;
 `test/reviewPackDocument.test.ts` holds it. A field the checker writes is **null until it has run**
-(`attention`, `cue`, `verdict`, `evidence`; the reading `order` is empty), because the author writes
-the pack first and the checker annotates it, and a renderer draws the gap rather than guessing.
+(`attention`, `cue`, `verdict`, `evidence`, `finding`; the reading `order` is empty), because the author
+writes the pack first and the checker annotates it, and a renderer draws the gap rather than guessing.
 
 ### An idea
 
@@ -268,6 +269,7 @@ two callers" is.
 | `provenance` | where it came from ([Provenance](#provenance))                              |
 | `verdict`    | `true`, `false` or `cant_tell`, written by the checker; null until it has   |
 | `evidence`   | what the checker did to decide — the search, the test, the file it read; null until it has |
+| `finding`    | on a `false` claim and on nothing else: what is wrong and what follows ([What a false claim does](#what-a-false-claim-does)); null until it has, and null on every claim that held or could not be decided |
 
 ### Provenance
 
@@ -293,6 +295,9 @@ surfaced as one.
 
 ### Attention
 
+_Built_ — stage 4, with the checker; the overrides are recorded ([marks](#what-a-reviewer-does-is-not-part-of-the-pack))
+and their surfacing to the operator, below, is not yet built.
+
 Each idea carries a label saying how hard to look: **read**, **decide**, **skim** or **split**.
 
 The label is written by the **checker**, never the author. How much scrutiny a change deserves is
@@ -305,14 +310,17 @@ A reviewer may override a label, and the override is recorded — but it is **ne
 checker on a later pack**. Given the overrides it would calibrate to what reviewers like rather than
 to what is risky, and a label that has learned to agree with its reader has stopped being evidence.
 
-The overrides are surfaced to the operator instead. A pattern of reviewers upgrading `skim` to `read`
-says the checker is systematically underselling risk, which is worth more than any single pack and is
-fixed by changing its prompt — a thing a person does, deliberately, once.
+The overrides are surfaced to the operator instead — _not yet built_. A pattern of reviewers upgrading
+`skim` to `read` says the checker is systematically underselling risk, which is worth more than any
+single pack and is fixed by changing its prompt — a thing a person does, deliberately, once.
 
 With nothing blocking, this label is the main thing steering where a reviewer spends their attention.
 That makes its independence load-bearing rather than tidy.
 
 ## The check
+
+_Built_ — stage 4. `src/reviewPacks/checker.ts` is the desk, `src/reviewPacks/check.ts` its pure
+half, `src/mcp/tools/reviewPackCheck.ts` the tool; `test/reviewPackChecker.test.ts` holds it.
 
 The checker is handed the claims as bare sentences, each idea's claim and anchor list, the diff, and
 the tree at the pull request's head. It is not given the witness log or the notes. It answers one
@@ -333,12 +341,58 @@ into `true` is a lie. It is surfaced to the person, whose call it is.
 disagrees with, reassign an anchor, or open a code change — all three would make it an author, and
 there would again be nobody checking.
 
+**It follows the author, and nobody asks for it.** The reviewer's one ask buys both runs — the "two
+agent runs spent deliberately" under [Cost](#cost) — so the checker's trigger is the author's run
+**ending** with a pack written against its head: the desk listens to the fleet's `done`, and an
+author task (`pr:<n>:pack`, head off its lease key) whose head has a pack with an empty `order` is
+followed. Not the submit: at `written` the author is still alive, may submit again in the same turn,
+and still holds its slot; at `done` the document is final and the slot is back. A run the operator
+killed is not followed — a kill emits no `done` — and an author that failed after submitting is,
+because the pack is there. A fleet paused between the two runs is honoured, and said in the error
+log: the pack stays unchecked, visibly, and asking for it again re-runs both. A checker that fails
+leaves the same state, for the same recovery; nothing retries on its own.
+
+**The same shape as the author, under its own names.** Origin `pr:<n>:check`, lease key
+`review-pack-check/pr-<n>/<headSha>` — the head in the key for the author's reason, so
+`review_pack_check` re-derives the pull request and the head from its task row and lands on the
+document it was handed, whatever the pull request points at by then. A read-only slot through
+`WorktreeManager.ensureReadOnly`, released by the reap; reaped through `session.kill()`; not counted
+against the cap; no fetch, because the author diffed the same head moments before. **One slot and
+the claims in series** — one agent per claim was rejected under [Cost](#cost). While the checker is
+on a pull request the ask is refused (409, "being checked") exactly as it is while the author is,
+because a second author would replace the ideas the checker's verdicts are keyed to; and the read
+ships `checking`, so a pack whose every verdict is null reads as "being checked" or "unchecked"
+rather than either.
+
+**What it is handed** is the rendered `review-pack-check` template and then, **appended** and never
+interpolated: the diff's hunk count with the instruction to read it in the checkout (`git diff
+<base>...HEAD`); the skeleton — per idea its id, its one-line `claim`, its anchors as numbered bare
+ranges tagged _changed_ or _not in the diff_, and its claims by number; and the note naming
+`review_pack_check`. Not the `title`, `gist`, `caption`, `note`, `headline`, `summary`, provenance or
+either pad: nothing the author wrote to persuade. `plumbing` is listed like any other idea, and the
+prompt says to check its claim like any other.
+
+**The tool enforces the rule structurally.** `review_pack_check` takes verdicts keyed to what the
+prompt handed out — the idea ids and the claim numbers — and `applyCheck` merges them onto the
+stored document: per idea `attention` and `cue`; per claim `verdict`, `evidence` and, on a false
+one, `finding`; the `false` mark on the step a finding names; the reading `order`. Nothing else in the
+document is reachable from the arguments, so a claim cannot be reworded, an anchor moved or a `key` or
+`disputed` mark set, because there is no field that would. **Complete or refused**: every idea gets a
+label, every claim a verdict with evidence, the order names every idea exactly once, and a finding is
+required on a false claim and refused on any other — a checker that skipped a claim has not checked
+the pack, and a half-annotated document would read as one where the rest was found fine. A `false`
+mark set by the merge replaces whatever the step carried: a false claim outranks the author's
+emphasis on the same stop. Each merge starts from the author's marks, so a resumed checker calling
+twice does not leave a stale `false` behind. The call re-records the document through
+`Store.recordReviewPack` on the same (pull request, head) row, the desk emits `checked` and the hub
+marks the goals section dirty.
+
 ## When a pack is made
 
 _Built_ — stage 3: the author and the way a reviewer asks for one. `src/reviewPacks/author.ts` is
 the desk, `src/mcp/tools/reviewPackSubmit.ts` the tool, `src/server/routes/reviewPacks.ts` the
-routes; `test/reviewPackAuthor.test.ts` holds it. What is not built is what reads the pack: the
-checker, and the control on the pull request's row that asks.
+routes; `test/reviewPackAuthor.test.ts` holds it. What is not built is the control on the pull
+request's row that asks; the checker that reads the pack is ([The check](#the-check)).
 
 **On request, and never automatically.** A reviewer asks for one from the pull request's row on its
 goal's page ([Reading it](#reading-it)) and waits while it is written. The fleet opens more pull
@@ -464,6 +518,21 @@ says.
 There is no mechanism for clearing a false claim, because there is nothing holding. The author is
 re-run against the fixed code and the new pack replaces the old one, exactly as any other
 regeneration does.
+
+**Where the finding lives** — _built_, stage 4; the four surface requirements above are the
+rendering's, stage 5. A false claim's finding is a field **on the claim**, `ReviewClaim.finding`
+(`ReviewFinding` in `src/types.ts`), because the claim is what is false and the claim is what the
+gate counts; the step of the walk it is about carries `mark: 'false'`, set by the same write, so
+the walk shows where. A finding carries its `headline` (one plain line), its `body` (the consequence
+worked out, how serious, whose call — the closing paragraph; markdown), the `step` it is about
+(1-based, as the page numbers them; null where no stop fits) and, where the contradicting code is not
+already on the walk, a `counter`: a range of the tree at the head with its `code` read off the
+checkout the way a region anchor's is, and the checker's one-line caption. The "two pieces of code
+that disagree" on the page are the marked step and the counter. It rides inside the document —
+`ReviewPackPayload` extends the record and re-declares nothing — so the page draws the gate from the
+count of `false` verdicts, the flag on the idea's collapsed row from the same, the claim at the top of
+the idea from the claim's own fields, and the boxed section from `finding`. An added field on a
+claim, so `REVIEW_PACK_SCHEMA` stays at 1: no renderer exists yet that the shape could surprise.
 
 ## A pack is data, and rendering is downstream
 
@@ -696,13 +765,16 @@ and every handler is wrapped in `checked(schemas, handler)` rather than reading 
 the ask and the read under [When a pack is made](#when-a-pack-is-made), both on
 `/api/prs/:number/review-pack`. → [16](16-http-api.md#post-apiprsnumberreview-pack)
 
-Two prompt ids, registered like any other: `review-pack-author`, built, and _review-pack-check_,
-not yet. A `PromptId` is never deleted once it exists — it is marked `retired: true`, because
+Two prompt ids, registered like any other: `review-pack-author` and `review-pack-check`, both
+built. A `PromptId` is never deleted once it exists — it is marked `retired: true`, because
 `loadPromptTemplates` throws on a file naming no known id and removing one turns every deployment
-that overrode it into a harness that will not boot. The author's tool is `review_pack_submit`,
-named in `MCP_TOOL_NAMES` and classified `point-of-use` — the prompt names it, twice — and the
-desk it hands the pack to reaches the tool layer as `McpToolDeps.reviewPacks`, lazily, like the
-filing desk. → [05](05-dispatcher.md#prompt-templates), [11](11-mcp-tools.md#the-tools)
+that overrode it into a harness that will not boot. The author's tool is `review_pack_submit` and
+the checker's `review_pack_check`, both named in `MCP_TOOL_NAMES` and classified `point-of-use` —
+each prompt names its own, twice — and the two desks reach the tool layer as
+`McpToolDeps.reviewPacks` and `McpToolDeps.reviewPackChecker`, lazily, like the filing desk; each a
+`Pick` of the one `submit` method, so a tool can reach nothing of a desk but the write it exists for.
+The origins and lease keys of both live together in `src/reviewPacks/origins.ts`, so the two shapes
+cannot drift. → [05](05-dispatcher.md#prompt-templates), [11](11-mcp-tools.md#the-tools)
 
 ## Cost
 
@@ -750,6 +822,21 @@ purpose — so the pad grows a `pr:<n>` family rather than the log growing a sto
 **The checker reads claims in series, on one checkout.** One agent per claim would parallelise the
 wait away, and would do it by spawning outside the cap into a worktree pool bounded by it.
 → [Cost](#cost)
+
+**The checker follows the author, and nobody asks for it.** A second explicit ask was the
+alternative, and it would make an unchecked pack the ordinary state and a checked one a further
+click — where every sentence in this document assumes the labels and the gate arrive with the pack.
+It follows the author's run ending rather than its submit, because at the submit the author is
+still alive and still holds its slot. → [The check](#the-check)
+
+**The finding lives on the claim, and the `false` mark on the step.** The claim is what is false and
+what the gate counts; a separate findings list on the pack would be one more place for the count and
+the prose to disagree. → [What a false claim does](#what-a-false-claim-does)
+
+**The checker's tool takes verdicts, never a document.** Handed a whole document back, the rule that
+the checker may not edit the pack would be a sentence in a prompt; keyed to the ids and numbers the
+prompt handed out and merged by a function that can reach only the checker's fields, it is the shape
+of the tool. → [The check](#the-check)
 
 **The document embeds the code its anchors point at.** The alternative — anchors as paths and ranges,
 resolved at render — needs a file-at-a-commit route and a diff viewer the cockpit does not have, and

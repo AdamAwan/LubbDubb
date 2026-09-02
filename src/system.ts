@@ -17,6 +17,7 @@ import { defaultPoolSize, WorktreeManager, type Worktrees } from './worktree/wor
 import { GitCliObserver, type GitObserver } from './git/gitObserver.js';
 import { fetchRemote } from './git/gitCli.js';
 import { ReviewPackAuthor } from './reviewPacks/author.js';
+import { ReviewPackChecker } from './reviewPacks/checker.js';
 import { PlanReconciler } from './plans/planReconciler.js';
 import { AppraisalDesk } from './intake/appraisalDesk.js';
 import { AreaPathDirectory } from './intake/areaPaths.js';
@@ -275,6 +276,12 @@ export interface System {
    * hub. → `docs/spec/31-review-packs.md#when-a-pack-is-made`
    */
   reviewPacks: ReviewPackAuthor;
+  /**
+   * The review pack checker desk: follows the author onto the pack it wrote and
+   * merges the verdicts back. Exposed for the route module (`checking`) and the
+   * hub. → `docs/spec/31-review-packs.md#the-check`
+   */
+  reviewPackChecker: ReviewPackChecker;
   /** Central error log: every caught failure is persisted here and streamed to the cockpit. */
   errors: ErrorLog;
   /**
@@ -668,6 +675,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     // Lazy for the same reason: the desk needs the fleet and the worktrees, both
     // built below this.
     reviewPacks: (): McpToolDeps['reviewPacks'] => reviewPacks,
+    reviewPackChecker: (): McpToolDeps['reviewPackChecker'] => reviewPackChecker,
     errors,
   });
 
@@ -855,6 +863,21 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     defaultBranch: config.defaultBranch,
     runtime: runtimeControl,
     fetch: opts.gitObserver ? undefined : () => fetchRemote(config.repoRoot),
+    errors,
+  });
+
+  // The checker follows the author: it listens for an author's run ending with
+  // a pack written against its head, and spawns itself the same way — outside
+  // the pulse, a read-only slot under its own key, reaped through the same kill.
+  // No fetch: the head the author just diffed is in the clone.
+  const reviewPackChecker = new ReviewPackChecker({
+    store,
+    agents,
+    worktrees,
+    git: gitObserver,
+    prompts,
+    defaultBranch: config.defaultBranch,
+    runtime: runtimeControl,
     errors,
   });
 
@@ -1447,6 +1470,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     desktop,
     worktrees,
     reviewPacks,
+    reviewPackChecker,
     errors,
   };
 }
