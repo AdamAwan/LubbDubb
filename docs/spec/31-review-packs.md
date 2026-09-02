@@ -1,8 +1,10 @@
 # 31 — Review packs
 
-**Mostly not yet built.** [The witness log](#the-witness-log) is running code; nothing else in this
-document is. Every path a section names is italic while that section is unbuilt, and the marker comes
-off it in the change that makes it true.
+**Mostly not yet built.** [The witness log](#the-witness-log) and [the pack document](#the-pack) —
+its shape, its schema version, the reviewer's marks and the two tables under
+[Where it lives](#where-it-lives) — are running code; nothing else in this document is: no author, no
+checker, no route, no rendering, no sharing. Every path a section names is italic while that section
+is unbuilt, and the marker comes off it in the change that makes it true.
 
 A diff is what is left over after the thinking. The reasoning that produced it — what was considered,
 what was rejected, which file was deliberately not touched — is thrown away at the moment of commit,
@@ -164,6 +166,13 @@ Desk agents do not get it — they move no head, and a pack is written from the 
 
 ## The pack
 
+_Built_ — stage 2 of the subsystem: the document's shape and where it lives, and nothing that writes
+or draws it. The types are in `src/types.ts` (`ReviewPack`, `ReviewIdea`, `ReviewAnchor`,
+`ReviewClaim`, `ReviewMark`), the tables in `src/store/reviewPacks.ts`;
+`test/reviewPackDocument.test.ts` holds it. A field the checker writes is **null until it has run**
+(`attention`, `cue`, `verdict`, `evidence`; the reading `order` is empty), because the author writes
+the pack first and the checker annotates it, and a renderer draws the gap rather than guessing.
+
 ### An idea
 
 An **idea** is a claim plus an ordered walk of anchors. It is the unit the whole subsystem exists to
@@ -172,6 +181,7 @@ sorting everything alphabetically by path.
 
 | Field       | What                                                                                              |
 | ----------- | ------------------------------------------------------------------------------------------------- |
+| `id`        | minted by the author on every run, so nothing durable is keyed to it ([marks](#what-a-reviewer-does-is-not-part-of-the-pack)); the one reserved id is `plumbing` ([Coverage](#coverage)) |
 | `claim`     | one sentence, falsifiable, stating what this idea does                                            |
 | `title`     | the same thing said the way a colleague would say it across a desk — what changed and why it matters, no identifiers ([The page](#the-page)) |
 | `cue`       | one short line under the title: why this idea has the attention it has, and where its risk is     |
@@ -202,14 +212,17 @@ request does not contain — or a **deliberate absence**: the file a reader woul
 changed, shown unchanged, with the reason. The second kind is the one that reaches the failures this
 repo cannot otherwise review, and it is worth building even if nothing else here is.
 
-Every anchor carries a `gist` (one line, always shown) and may carry a `note` (the reasoning, folded
-away). The gist belongs to the code; the note is support and is never required to understand it.
+Every anchor carries its `range` — path, and 1-based inclusive `start` and `end` lines at the head
+sha — and its `code`, the lines as they stood there ([The document carries its code](#the-document-carries-its-code));
+a hunk's lines keep their diff prefixes, a region's are plain. Every anchor carries a `gist` (one
+line, always shown) and may carry a `note` (the reasoning, folded away). The gist belongs to the code; the note is support and is never required to understand it.
 It may also carry a `caption` — the one-line label on the code block itself, saying what the block
 is ("new function", "existing code, unchanged — shown because you need it", "two places, 250 lines
 apart") — and a `mark`, one of `key` (the stop the idea turns on), `false` (the stop a false claim is
 about) or `disputed` (the stop where the witness and the code disagree). A note states its
-provenance the way a claim does: written by the witness at the time, and stamped with when, or added
-by the author afterwards. The page shows which, because the reader weighs them differently.
+provenance the way a claim does: written by the witness at the time — `by: 'witness'`, citing the
+pad entry's id and stamped with its time — or added by the author afterwards, `by: 'author'`. The
+page shows which, because the reader weighs them differently.
 
 ### Coverage
 
@@ -222,7 +235,8 @@ Two escape valves, because the invariant is otherwise false in practice:
 - **A hunk may be _referenced_ by other ideas** as a `region` anchor, while still having one owner.
   Shared code genuinely serves several ideas; pretending otherwise forces a bad assignment.
 - **A reserved idea, `plumbing`,** owns hunks that carry no meaning to review: mechanical renames,
-  formatting, generated files, a lockfile. It is declared like any other idea and the checker
+  formatting, generated files, a lockfile. It is declared like any other idea, under the fixed id
+  `plumbing` where every other id is minted per run, and the checker
   verifies the claim that its hunks are semantically empty. Without it the author is pushed to invent
   a story for a rename, which is worse than saying there isn't one.
 
@@ -235,8 +249,8 @@ two callers" is.
 | ------------ | --------------------------------------------------------------------------- |
 | `text`       | the sentence                                                                |
 | `provenance` | where it came from ([Provenance](#provenance))                              |
-| `verdict`    | `true`, `false` or `cant_tell`, written by the checker                      |
-| `evidence`   | what the checker did to decide — the search, the test, the file it read     |
+| `verdict`    | `true`, `false` or `cant_tell`, written by the checker; null until it has   |
+| `evidence`   | what the checker did to decide — the search, the test, the file it read; null until it has |
 
 ### Provenance
 
@@ -246,9 +260,14 @@ from the diff, and a reader must be able to tell which they are looking at.
 
 | Provenance  | Means                                                                                                        |
 | ----------- | ------------------------------------------------------------------------------------------------------------ |
-| `witnessed` | traceable to a witness entry, which it cites by id — the entry is shown beside it, verbatim                  |
-| `inferred`  | the author's reading of the code; the witness said nothing about this                                        |
-| `disputed`  | a witness entry and the code disagree. The claim states what the code does; the entry is shown beside it     |
+| `witnessed` | traceable to a witness entry, which it cites by id (`entryId`, a `scr_…`) — the entry is shown beside it, verbatim |
+| `inferred`  | the author's reading of the code; the witness said nothing about this. Cites nothing                         |
+| `disputed`  | a witness entry and the code disagree. The claim states what the code does; the entry it cites is shown beside it |
+
+The provenance is a discriminated union rather than a label beside an optional id, so a `witnessed`
+claim without an entry to show is a shape the type refuses rather than a row the page draws with a
+blank beside it. The pack stores the id and never a copy of the entry: a copy is the retelling the
+verbatim rendering exists to prevent.
 
 `witnessed` claims cite the entry and the cockpit renders it unedited next to the claim. That is what
 stops the author quietly improving a note in the retelling — not a fourth agent checking the third,
@@ -396,6 +415,12 @@ fields is the tempting behaviour and the wrong one: a page silently missing its 
 because the renderer was a version behind is exactly the failure the whole subsystem exists to catch,
 reproduced by the thing that reports it.
 
+The version this build writes is `REVIEW_PACK_SCHEMA` in `src/store/reviewPacks.ts`, and the field is
+a number rather than a literal type so the comparison can be written. The store refuses to **write**
+a document stating any other number: a pack it accepted and every reader then refused would be a
+run's work lost with nothing red at the one moment it could have been caught. It does not inspect
+the version on read — what was written is returned as written, and refusing is the renderer's job.
+
 ### What a reviewer does is not part of the pack
 
 Attention overrides, an idea marked read, a reviewer disagreeing with a verdict — these live in their
@@ -408,6 +433,15 @@ the idea: an idea's id is minted by the author on every run, so a mark keyed to 
 in the next pack. A mark on an idea is stored against the hunks that idea owns (path and range at the
 head sha), and the next pack draws it on whichever idea owns the same hunks. A hunk the next head
 rewrote loses its mark, honestly: the thing that was read is gone.
+
+A mark (`ReviewMark`) is one row per hunk, keyed on the pull request and the hunk — path, start,
+end — and **not** on the head sha, which it records but is not keyed by: keyed to a head, a mark
+would die with the pack it was made against, which is the one thing the table exists to prevent. The
+two things a reviewer can do — read an idea, override its label — are two columns on that one row,
+`read` and `attention`, and each write names only its own column so the other keeps what it had.
+`Store.markReviewIdeaRead` and `Store.overrideReviewAttention` take the hunks an idea owns and write
+them all in one transaction; `listReviewMarks` hands back every mark on the pull request, whichever
+head each was made against, for the renderer to lay over whichever ideas own those hunks now.
 
 ## Reading it
 
@@ -532,40 +566,49 @@ Two consequences that are easy to miss:
 
 ## Where it lives
 
-Two tables, in a new module under `src/store/` — the only directory that touches SQLite, one module
-per group of related tables, taking a `StoreContext`, with `Store` delegating under the same method
-names — and one column on a table another module owns. → [14](14-persistence.md#shape)
+Two tables, in `src/store/reviewPacks.ts` — under `src/store/`, the only directory that touches
+SQLite, one module per group of related tables, taking a `StoreContext`, with `Store` delegating
+under the same method names — and one column on a table another module owns.
+→ [14](14-persistence.md#shape)
 
 | Table             | Holds                                                                                        |
 | ----------------- | -------------------------------------------------------------------------------------------- |
 | `scratch_entries` | the witness log: a `decision` column on the pad's own rows, null on an ordinary note          |
-| _review_packs_    | one row per (pull request, head sha): the pack document and its verdicts                     |
-| _review_marks_    | what a reviewer did to a pack — overrides, ideas read — keyed to pack and the hunks an idea owns |
+| `review_packs`    | one row per (pull request, head sha): the pack document as JSON, and when it was written      |
+| `review_marks`    | what a reviewer did to a pack — overrides, ideas read — one row per hunk an idea owns, keyed on the pull request and the hunk |
 
 The pack is one document rather than a table per level. It is written whole and read whole, and
 nothing queries inside it — three normalised tables would buy nothing and cost a join on every read.
-The head sha it was written against is a column rather than a field, because staleness is decided by
-comparing it to the pull request's head on every load. The witness log lives on the pad because it
-_is_ pad entries, appended over time by the working agents; the marks are separate because they
-outlive the document they were made against.
+The head sha it was written against is a column **as well as** a field, because staleness is decided
+by comparing it to the pull request's head on every load and that read must not open the document to
+do it; the row's columns are copied off the document at write, never taken as arguments, so the two
+cannot disagree. `recordReviewPack` upserts on (pull request, head sha): asking again on the same
+head replaces the pack, and a pack for a newer head is a row beside the older one, which is kept.
+`getCurrentReviewPack` answers the newest written, whatever head it names — whether that is stale is
+decided above the store, which does not know the pull request's head. The witness log lives on the
+pad because it _is_ pad entries, appended over time by the working agents; the marks are separate
+because they outlive the document they were made against.
 
 `scratch_entries` exists, so the `decision` column needs its `ColumnMigrations` entry in the pad's
 own store module, or every database from before it has no column and every fork is silently a note.
-The two pack tables are new, so neither needs one; a table being new **once** does not keep it
-exempt, and the first column added to either afterwards needs an additive `ALTER TABLE` guarded by a
+The two pack tables are new, so neither needs one — `REVIEW_PACK_COLUMNS` declares both empty so the
+first column added to either is noticed there rather than read back as `undefined`; a table being new
+**once** does not keep it exempt, and that first column needs an additive `ALTER TABLE` guarded by a
 `PRAGMA table_info` check. → [14](14-persistence.md#migrations)
 
 The shapes the routes ship live in `src/wire.ts`, and a wire type either **is** the domain type or
 `extends` it — never a re-declaration and never widened. `test/wireContract.test.ts` asserts that
 `src/wire.ts` is the only server module anything under `web/src/` names. The pack document is the
 clearest case there is: the cockpit, the companion and the store read one shape, so there is one
-declaration of it.
+declaration of it — `ReviewPackPayload` extends `ReviewPackRecord` (the document and when it was
+written) with the marks, and re-declares nothing. Declared with the document, ahead of the route that
+will ship it, so the two cannot drift apart.
 
-Routes go in a new module under `src/server/routes/` with an entry in `app.ts`'s `ROUTE_MODULES`, and
-every handler is wrapped in `checked(schemas, handler)` rather than reading the request itself.
-→ [16](16-http-api.md#shape)
+_Not yet built:_ routes go in a new module under `src/server/routes/` with an entry in `app.ts`'s
+`ROUTE_MODULES`, and every handler is wrapped in `checked(schemas, handler)` rather than reading the
+request itself. → [16](16-http-api.md#shape)
 
-Two new prompt ids, _review-pack-author_ and _review-pack-check_, registered like any other. A
+_Not yet built:_ two new prompt ids, _review-pack-author_ and _review-pack-check_, registered like any other. A
 `PromptId` is never deleted once it exists — it is marked `retired: true`, because
 `loadPromptTemplates` throws on a file naming no known id and removing one turns every deployment
 that overrode it into a harness that will not boot. → [05](05-dispatcher.md#prompt-templates)

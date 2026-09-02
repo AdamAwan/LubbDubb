@@ -574,6 +574,38 @@ CREATE TABLE IF NOT EXISTS retrospectives (
   updated_at TEXT NOT NULL
 );
 
+-- A review pack: one pull request's change restated as ideas, claims and anchors
+-- (docs/spec/31-review-packs.md). One row per (pull request, head sha), and the
+-- pack is one JSON document rather than a table per level: it is written whole and
+-- read whole, and nothing queries inside it. head_sha is a column as well as a
+-- field because staleness is decided by comparing it to the pull request's head on
+-- every load, and that read must not open the document to do it. An older head's
+-- row is kept when a newer one is written; the newest written is the current one.
+CREATE TABLE IF NOT EXISTS review_packs (
+  pr_number  INTEGER NOT NULL,
+  head_sha   TEXT NOT NULL,
+  document   TEXT NOT NULL,           -- JSON ReviewPack, schema-versioned inside
+  written_at TEXT NOT NULL,
+  PRIMARY KEY (pr_number, head_sha)
+);
+
+-- What a reviewer did to a pack, held beside the document and never written into
+-- it, so a pack rewritten against a new head does not throw their marks away.
+-- Keyed to a hunk — path and range at the head sha — never to an idea: an idea's
+-- id is minted on every run. A mark on an idea is one row per hunk the idea owns,
+-- and the next pack draws it on whichever idea owns the same hunks.
+CREATE TABLE IF NOT EXISTS review_marks (
+  pr_number  INTEGER NOT NULL,
+  path       TEXT NOT NULL,
+  start_line INTEGER NOT NULL,
+  end_line   INTEGER NOT NULL,
+  head_sha   TEXT NOT NULL,           -- the head the reviewer was looking at
+  attention  TEXT,                    -- the reviewer's override; null where the checker's label stands
+  read       INTEGER NOT NULL,        -- 0/1
+  marked_at  TEXT NOT NULL,
+  PRIMARY KEY (pr_number, path, start_line, end_line)
+);
+
 -- One delivery plan per issue — the planning agent's verdict. Written for *both*
 -- outcomes (one pull request as much as a decomposition), so the planner never
 -- re-runs on the same issue. The graph lives here and nowhere else: it is

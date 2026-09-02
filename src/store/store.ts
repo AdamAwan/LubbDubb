@@ -33,6 +33,7 @@ import { absorbSinglePlanStatus, backfillWholePlanParts, PlanStore, PLAN_COLUMNS
 import { ValidationStore, VALIDATION_COLUMNS, VALIDATION_REBUILDS } from './validation.js';
 import { IssueVerdictStore, ISSUE_VERDICT_COLUMNS, ISSUE_VERDICT_RENAMES } from './issueVerdicts.js';
 import { ScratchStore, SCRATCH_COLUMNS } from './scratch.js';
+import { ReviewPackStore, REVIEW_PACK_COLUMNS } from './reviewPacks.js';
 import { RateLimitStore } from './rateLimits.js';
 import { UpgradeStore } from './upgrades.js';
 import { openPetsFromBeforeEggs, PetStore, PET_COLUMNS } from './pets.js';
@@ -139,6 +140,9 @@ import type {
   Retrospective,
   ScratchEntry,
   ScratchPadSummary,
+  ReviewMark,
+  ReviewPack,
+  ReviewPackRecord,
   GoalPriority,
   PlanStatus,
   PriorityOverride,
@@ -212,6 +216,7 @@ export class Store {
   private readonly verdicts: IssueVerdictStore;
   private readonly instructions: InstructionStore;
   private readonly scratch: ScratchStore;
+  private readonly reviewPacks: ReviewPackStore;
   private readonly rateLimits: RateLimitStore;
   private readonly agents: AgentStore;
   private readonly transcripts: TranscriptStore;
@@ -282,6 +287,7 @@ export class Store {
       WATCH_COLUMNS,
       PR_REVIEW_ROUTE_COLUMNS,
       SCRATCH_COLUMNS,
+      REVIEW_PACK_COLUMNS,
     ]) {
       addedColumns.push(...ensureColumns(this.db, columns));
     }
@@ -378,6 +384,7 @@ export class Store {
     this.verdicts = new IssueVerdictStore(ctx);
     this.instructions = new InstructionStore(ctx);
     this.scratch = new ScratchStore(ctx);
+    this.reviewPacks = new ReviewPackStore(ctx);
     this.rateLimits = new RateLimitStore(ctx);
     this.agents = new AgentStore(ctx);
     this.transcripts = new TranscriptStore(ctx);
@@ -1001,6 +1008,27 @@ export class Store {
   }
   listRetrospectiveOrigins(): string[] {
     return this.scratch.listRetrospectiveOrigins();
+  }
+
+  // -- Review packs (a change restated for a person, and what they did to it) --
+
+  recordReviewPack(pack: ReviewPack): ReviewPackRecord {
+    return this.reviewPacks.recordReviewPack(pack);
+  }
+  getCurrentReviewPack(prNumber: number): ReviewPackRecord | null {
+    return this.reviewPacks.getCurrentReviewPack(prNumber);
+  }
+  listReviewPacks(prNumber: number): ReviewPackRecord[] {
+    return this.reviewPacks.listReviewPacks(prNumber);
+  }
+  markReviewIdeaRead(input: Parameters<ReviewPackStore['markReviewIdeaRead']>[0]): ReviewMark[] {
+    return this.reviewPacks.markReviewIdeaRead(input);
+  }
+  overrideReviewAttention(input: Parameters<ReviewPackStore['overrideReviewAttention']>[0]): ReviewMark[] {
+    return this.reviewPacks.overrideReviewAttention(input);
+  }
+  listReviewMarks(prNumber: number): ReviewMark[] {
+    return this.reviewPacks.listReviewMarks(prNumber);
   }
 
   // -- The account's Claude usage windows ------------------------------------
