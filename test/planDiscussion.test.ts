@@ -41,6 +41,11 @@ test('plan_read hands the session the verdict, the parts and the agenda', async 
   // and a session shown only prose would re-declare them under new names.
   assert.match(body.parts as string, /"schema"/);
   assert.match(body.parts as string, /"api"/);
+  // And what to do with it forks on the status above, because `plan_amend`
+  // settles two different ways — a session that does not know which one it is
+  // doing will describe the wrong one to the operator.
+  assert.match(body.next as string, /awaiting_approval/);
+  assert.match(body.next as string, /active/);
   await close();
 });
 
@@ -100,14 +105,70 @@ test('plan_amend records the amendment and withdraws the card it supersedes', as
   await close();
 });
 
-test('plan_amend refuses a released plan and leaves it untouched', async () => {
+test('plan_amend on a released plan proposes, and writes nothing over it', async () => {
   const { system, session, close } = await buildDesk();
   const plan = seedAwaitingApprovalPlan(system);
-  // Released, with its parts scheduling off that decision. Amending writes
-  // `awaiting_approval` back over it, which reopens a gate rule `plan-part` had
-  // cleared and stops the rest of the work — for a conversation nobody asked to
-  // be a hold.
+  // Released, with its parts scheduling off that decision. Rewriting it in place
+  // would write `awaiting_approval` back over it, reopening a gate rule
+  // `plan-part` had cleared and stopping the rest of the work for a conversation
+  // nobody asked to be a hold — so this route proposes instead.
   system.store.setPlanStatus(plan.id, 'active');
+
+  const res = await session.call('plan_amend', {
+    issue: 231,
+    note: 'The api part does not need the schema first — the column is already there.',
+    reason: 'Schema first, but the api part can start now.',
+    parts: [
+      { slug: 'schema', title: 'Schema', scope: 'src/store', dependsOn: [] },
+      { slug: 'api', title: 'API', scope: 'src/api', dependsOn: [] },
+    ],
+  });
+  assert.ok(!res.isError, res.content[0]?.text);
+  const body = JSON.parse(res.content[0]!.text) as Record<string, unknown>;
+  assert.equal(body.proposed, true);
+  assert.equal(body.amended, undefined, 'the two settlements do not share a word');
+  assert.deepEqual(body.changes, ['changed api']);
+  // The reply is the whole of what the session tells the operator, and the one
+  // thing it must not let them believe is that the work is on hold while they
+  // decide.
+  assert.match(body.means as string, /has not changed/i);
+  assert.match(body.next as string, /cockpit/i);
+
+  const after = system.store.getPlan(plan.id)!;
+  assert.equal(after.status, 'active', 'the plan keeps scheduling while the question is open');
+  assert.equal(after.reason, 'Schema first.', 'and nothing is written over it');
+  assert.equal(system.store.listPlanRevisions(plan.id).length, 1);
+
+  const amendments = system.store.listPlanAmendments(plan.id);
+  assert.equal(amendments.length, 1);
+  assert.equal(amendments[0]!.status, 'pending');
+  assert.equal(amendments[0]!.author, 'operator', 'proposed at the operator’s own keyboard, not by an agent');
+  await close();
+});
+
+test('plan_amend on a released plan refuses without a reason, and writes nothing', async () => {
+  const { system, session, close } = await buildDesk();
+  const plan = seedAwaitingApprovalPlan(system);
+  system.store.setPlanStatus(plan.id, 'active');
+
+  // The note is the whole of what the operator reads beside the diff, so it is
+  // required on this path and ignored on the other — the plan they are about to
+  // approve is read whole anyway.
+  const res = await session.call('plan_amend', {
+    issue: 231,
+    reason: 'Schema first, but the api part can start now.',
+    parts: [{ slug: 'schema', title: 'Schema', scope: 'src/store', dependsOn: [] }],
+  });
+  assert.ok(res.isError);
+  assert.match(res.content[0]!.text, /needs a reason/i);
+  assert.deepEqual(system.store.listPlanAmendments(plan.id), []);
+  await close();
+});
+
+test('plan_amend refuses a plan that is neither awaiting approval nor running', async () => {
+  const { system, session, close } = await buildDesk();
+  const plan = seedAwaitingApprovalPlan(system);
+  system.store.setPlanStatus(plan.id, 'complete');
 
   const res = await session.call('plan_amend', {
     issue: 231,
@@ -115,10 +176,8 @@ test('plan_amend refuses a released plan and leaves it untouched', async () => {
     parts: [{ slug: 'schema', title: 'Schema', scope: 'src/store', dependsOn: [] }],
   });
   assert.ok(res.isError);
-  assert.match(res.content[0]!.text, /not awaiting approval/i);
-
-  const after = system.store.getPlan(plan.id)!;
-  assert.equal(after.status, 'active', 'a refused call must not move the plan at all');
+  assert.match(res.content[0]!.text, /"complete"/);
+  assert.equal(system.store.getPlan(plan.id)!.status, 'complete', 'a refused call must not move the plan at all');
   assert.equal(system.store.listPlanRevisions(plan.id).length, 1);
   await close();
 });

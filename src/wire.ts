@@ -121,6 +121,7 @@ import type {
   LocalRunPorts,
   LocalRunTurn,
   Plan,
+  PlanAmendmentAuthor,
   PlanPart,
   FeatureSummary,
   PlanRevision,
@@ -788,6 +789,38 @@ export interface ValidationResourceView extends ValidationResource {
 export interface PlanHistory {
   revisions: PlanRevision[];
   diff: PlanDiff | null;
+  /**
+   * The change waiting on the operator, if there is one — a plan that is running
+   * *and* has a correction pending against it.
+   *
+   * Here rather than on the plan itself because it belongs with the other reading
+   * of what an amendment did: the sheet draws the pending one immediately above
+   * "what changed", and the two are the same question asked either side of a
+   * decision. Null is the ordinary case, and there is at most one — a second
+   * pending amendment is refused where it is proposed.
+   */
+  pending: PendingPlanAmendment | null;
+}
+
+/**
+ * A pending amendment as the plan sheet reads it: why, and what it would change.
+ *
+ * The diff is `proposedPlanDiff` — the *server's* reading, and the same one
+ * `latestPlanDiff` gives for an amendment already applied, so a change looks the
+ * same before and after it is accepted. The document itself is not shipped: it is
+ * the largest prose the store holds and the operator decides on the diff, which is
+ * what the approval card carries too.
+ */
+export interface PendingPlanAmendment {
+  id: string;
+  /** Why the plan must change — the author's own words, and the whole of the case. */
+  note: string;
+  author: PlanAmendmentAuthor;
+  createdAt: string;
+  /** Null when the plan has no revision to compare against. → `proposedPlanDiff` */
+  diff: PlanDiff | null;
+  /** What applying it would leave standing that its author may not have meant. */
+  warnings: string[];
 }
 
 /**
@@ -2460,6 +2493,7 @@ export type {
   KnowledgeGraduation,
   KnowledgeSimilarity,
   Plan,
+  PlanAmendmentAuthor,
   PlanCaveat,
   PlanEvidence,
   PlanNarrative,

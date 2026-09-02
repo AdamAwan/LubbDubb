@@ -93,6 +93,7 @@ unconditional.
 | `issue-shortfall`          | Assessment says the goal was missed  | —                    | An assessment recorded that a watched open issue was worked and its goal is still not reached. Claims no headroom.                                                                                                                           |
 | `issue-retro`              | Delivered goal needs a retrospective | `retrospective`      | A goal the harness parked as delivered, with nothing in flight under it and no write-up yet, gets one desk agent to write the run up. Retained runs included.                                                                                |
 | `plan-approval`            | Plan needs your approval             | `planning`           | A planner's verdict — either arm — is `awaiting_approval` and no verdict is pending.                                                                                                                                                         |
+| `plan-amendment`           | A change to a plan needs approval    | `planning`           | A plan that is **running** has an amendment pending against it and no card up for that amendment. Touches the plan not at all; claims no headroom.                                                                                           |
 | `plan-blocked`             | Approved plan is going nowhere       | `planning`           | A released plan has something blocked and nothing moving, so nothing will be dispatched for it — and a live part nobody refused is stuck behind it. Asks a human once; dispatches nobody.                                                    |
 | `plan-part`                | Plan part ready                      | `planning`           | A part of an active plan is `ready` and unstaffed.                                                                                                                                                                                           |
 | `issue-pickup`             | Open issue without a PR              | —                    | An eligible open issue has no **open** PR and no agent on it, and the funnel **failed open** on it (route `unplanned`). Never a retained run.                                                                                                |
@@ -919,6 +920,34 @@ act on it, and the cockpit chip should keep saying so. That is the asymmetry wit
 exists only because a plan is the sole thing that schedules anything for a decomposed issue. A
 shortfall gates nothing, so refusing one leaves the issue exactly where it was.
 
+## `plan-amendment` — putting a change to a running plan
+
+A change to a plan that is **already running** is a proposal, exactly as the plan itself was. The rule
+is `plan-approval` with one field moved: the pending row is an amendment in `plan_amendments` rather
+than the plan's own status, the hold is `planAmendmentHold` on
+`planAmendmentProposalRef(amendmentId)`, and the thing it must **not** do is touch the plan. Every part
+that was dispatchable stays dispatchable while the question is open, which is the whole difference
+between this and a replan. It claims no headroom and starts nothing.
+
+It fires only on an `active` plan whose goal is open and watched. An amendment against one that has
+since been replanned, refused or backed out is settled where the world moved
+(`supersedePlanAmendments`), so a row this skips is already on its way to `superseded` — and skipping
+is the safe direction either way, since applying refuses outside `active` and a card nobody's answer
+can settle is worse than no card.
+
+The action is `propose_plan_amendment`, and **the card's body is built in the executor, not here**: it
+is a reading of the plan out of the store — which parts the amendment moves against the plan as it
+stands when the card is created, and what applying it would leave running — rather than of the cycle's
+world. The executor re-asks the hold and re-reads the row for the same reason every proposing action
+does: an operator may have answered from another tab between the rule and the write.
+
+What the two answers do is **appended** to the rendered `plan-amendment` template rather than
+interpolated, for `plan-approval`'s reason — an override that never learned a `{settlement}` token
+would drop it silently on exactly the deployments that customised most. Both halves of it matter and
+neither is obvious from every other plan verdict an operator has answered: accepting does not stop
+anything, and rejecting does not send the plan back to a planner.
+→ [08](08-planning.md#amending-a-running-plan)
+
 ## `issue-retro` — the retrospective
 
 Rule `issue-retro` is **unconditional** and puts one **desk** agent on a goal the harness has already
@@ -1236,7 +1265,8 @@ expiry from re-asking on a PR that has merely been commented on.
 dispatcher emits, each under a stable `PromptId`, each with a built-in default, a declared placeholder
 list, and a doc string.
 
-Ids: `issue-plan`, `issue-replan`, `discuss-plan` (retired), `plan-part`, `plan-approval`, `issue-shortfall`,
+Ids: `issue-plan`, `issue-replan`, `discuss-plan` (retired), `plan-part`, `plan-approval`, `plan-amendment`,
+`issue-shortfall`,
 `plan-part-escalation`, `issue-pickup`, `issue-pickup-escalation`, `issue-assess`, `issue-appraisal`,
 `issue-retro`, `validation-check`, `local-run`, `pr-ci-fix`, `pr-base-update-behind`, `pr-base-update-conflict`,
 `pr-review-triage`, `pr-review`, `pr-review-comment`, `pr-concern-escalation`, `pr-title`, `finding-ticket`, `raise-bug`,

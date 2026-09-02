@@ -3,9 +3,13 @@ import { z } from 'zod';
 import { orderedProfiles } from '../../agents/modelPolicy.js';
 import { planAmendmentProposalRef, planProposalRef } from '../../proposals/proposals.js';
 import { acceptanceCriteria } from '../../plans/parts.js';
-import { latestPlanDiff } from '../../plans/planDiff.js';
-import { supersedePlanAmendments } from '../../plans/planAmendment.js';
-import type { PlanHistory } from '../../wire.js';
+import { latestPlanDiff, proposedPlanDiff } from '../../plans/planDiff.js';
+import { amendmentWarnings, supersedePlanAmendments } from '../../plans/planAmendment.js';
+import { planNarrative, planPartInputs, validatePlanDocument } from '../../plans/planDocument.js';
+import type { PendingPlanAmendment, PlanHistory } from '../../wire.js';
+import type { PlanAmendment, PlanNarrative, PlanPartInput } from '../../types.js';
+import type { ErrorRecorder } from '../../errorLog.js';
+import type { Store } from '../../store/store.js';
 import { AcceptanceBody, checked, IdParams, optionalText, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
 
@@ -30,7 +34,18 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const { id } = params;
       if (!store.getPlan(id)) return reply.code(404).send({ error: 'plan not found' });
       const revisions = store.listPlanRevisions(id);
-      return { revisions, diff: latestPlanDiff(revisions) } satisfies PlanHistory;
+      // The change waiting on the operator, read the same way the approval card
+      // reads it: `proposedPlanDiff` against the latest revision, and
+      // `amendmentWarnings` over the plan's live rows. Both are the server's, for
+      // the diff's reason above — a second reading in the browser is a second
+      // answer to a question this route already answers, and the one drawn beside
+      // the card would be the other one.
+      const pending = store.listPlanAmendments(id).find((a) => a.status === 'pending') ?? null;
+      return {
+        revisions,
+        diff: latestPlanDiff(revisions),
+        pending: pendingView(pending, store, system.errors),
+      } satisfies PlanHistory;
     }),
   );
 
@@ -67,18 +82,24 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       // same reason: a replan replaces the document the amendment was written
       // against, so accepting it afterwards would either write a plan nobody asked
       // for over the replan or — since applying refuses outside `active` — do
-      // nothing at all while telling the operator it had. Withdrawing the card
-      // first, then settling the row, so the rejection finds a proposal to close
-      // and the rule finds nothing to re-ask.
-      for (const amendment of store.listPlanAmendments(plan.id)) {
-        if (amendment.status !== 'pending') continue;
+      // nothing at all while telling the operator it had.
+      //
+      // **The rows are settled before the cards are withdrawn**, and the order is
+      // the whole of what makes this a withdrawal rather than a verdict: rejecting
+      // a `plan_amendment` proposal runs `declinePlanAmendment`, so a card closed
+      // over a still-pending row writes `declined` — the terminal that means *an
+      // operator said no*, against a question nobody was asked. Settled first, the
+      // rejection finds the row already `superseded` and changes nothing about it,
+      // and the card closing is only the inbox item going away.
+      const pendingAmendments = store.listPlanAmendments(plan.id).filter((a) => a.status === 'pending');
+      supersedePlanAmendments(store, plan.id, 'A replan replaced the plan this amendment was written against.');
+      for (const amendment of pendingAmendments) {
         const amendmentRef = planAmendmentProposalRef(amendment.id);
         const card = store
           .listProposals()
           .find((p) => p.kind === 'plan_amendment' && p.ref === amendmentRef && p.status === 'pending');
         if (card) proposals.reject(card.id, 'superseded by a replan');
       }
-      supersedePlanAmendments(store, plan.id, 'A replan replaced the plan this amendment was written against.');
       hub.broadcast({ type: 'world:changed' });
       await harness.runCycle('manual');
       return { ok: true, plan: next };
@@ -160,4 +181,76 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       return { ok: true, part: updated };
     }),
   );
+}
+
+/**
+ * A pending amendment as the plan sheet reads it, or null.
+ *
+ * The stored document is parsed here rather than shipped: the sheet draws the
+ * diff, not the document, and a row written by an older build that no longer
+ * validates has no diff to draw — so it degrades to its note and its warnings
+ * rather than failing the whole history. `applyPlanAmendment` makes the same
+ * reading and settles such a row where it is applied; this one only has to avoid
+ * being the reason a plan sheet will not open.
+ */
+function pendingView(
+  amendment: PlanAmendment | null,
+  store: Store,
+  errors: ErrorRecorder,
+): PendingPlanAmendment | null {
+  if (!amendment) return null;
+  const declared = readDeclaration(amendment, errors);
+  return {
+    id: amendment.id,
+    note: amendment.note,
+    author: amendment.author,
+    createdAt: amendment.createdAt,
+    diff:
+      declared === null
+        ? null
+        : proposedPlanDiff(store.listPlanRevisions(amendment.planId), {
+            narrative: declared.narrative,
+            parts: declared.parts,
+          }),
+    warnings:
+      declared === null
+        ? []
+        : amendmentWarnings(
+            store.listPlanParts(amendment.planId),
+            declared.parts.map((p) => p.slug),
+          ),
+  };
+}
+
+/**
+ * The stored document as the two readings above need it, or null.
+ *
+ * Null on anything that cannot be read — malformed JSON from a hand-edited row, a
+ * document the schema has since moved past — and **recorded** rather than
+ * swallowed, since a row nothing can draw is a row nothing can apply either and
+ * the operator's card is about to say the same. The reading is degraded, not
+ * fatal: the sheet still draws the note, which is the case being made.
+ */
+function readDeclaration(
+  amendment: PlanAmendment,
+  errors: ErrorRecorder,
+): { narrative: PlanNarrative; parts: PlanPartInput[] } | null {
+  try {
+    const parsed = validatePlanDocument(JSON.parse(amendment.document) as unknown);
+    if (!parsed.ok) {
+      errors.record({
+        source: 'server',
+        message: `The pending amendment ${amendment.id} no longer validates, so the plan sheet draws no diff for it: ${parsed.error}`,
+      });
+      return null;
+    }
+    return { narrative: planNarrative(parsed.document), parts: planPartInputs(parsed.document) };
+  } catch (err) {
+    errors.record({
+      source: 'server',
+      message: `The pending amendment ${amendment.id} could not be read, so the plan sheet draws no diff for it`,
+      detail: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
 }

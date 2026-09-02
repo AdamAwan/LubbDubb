@@ -236,13 +236,18 @@ export const ALLOWED_MCP_TOOLS: string[] = MCP_TOOL_NAMES.map((name) => `mcp__${
  *
  * `plan_correct` is the fleet's tool for the same *sort* of act and is a third
  * name again, deliberately. It proposes a change to a plan that is already
- * running, which is neither of the other two: `plan_submit` writes the first
- * document, `plan_amend` rewrites one nothing is scheduled off yet, and this one
- * cannot write at all — it records a proposal an operator answers. Three
- * settlements, three names, one shared document schema.
+ * running and **cannot write at all** — the row it leaves is answered by an
+ * operator. `plan_amend` reaches that same proposal on an `active` plan, which is
+ * not a reason to fold the two into one name: this one is fenced by the origin
+ * its caller was dispatched on and is offered to every agent working a part,
+ * while `plan_amend` is fenced by the plan's status and is offered to one
+ * long-lived credential in the operator's home directory. One name over two
+ * fences is the `validation_report` trap above, and the fences are exactly what
+ * an edit to "the plan tool" would silently reach past.
  *
- * `plan_amend` is deliberately **not** a second `plan_submit`. It writes the same
- * document through the same ingestion, but a shared name would make it the trap
+ * `plan_amend` is deliberately **not** a second `plan_submit`. It carries the same
+ * document — rewriting an `awaiting_approval` plan through the same ingestion,
+ * proposing against an `active` one — but a shared name would make it the trap
  * above without the warning: an edit to "the plan tool" that silently reaches one
  * channel. A different name on each side is the whole of the defence, and the
  * document schema they genuinely do share is one export

@@ -21,6 +21,7 @@ assembles them (see [How a tool is built](#how-a-tool-is-built)).
 | `raise`              | The one door for anything an agent learns. Says what is true and what it saw; the harness works out where the claim goes and an operator settles what it is for. No kind, no lifetime word, no destination. → [27](27-knowledge.md#the-intake-asks-nothing-an-agent-cannot-answer)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `plan_submit`        | Submit a decomposition verdict. Replaces writing `.lubbdubb/plan.json`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `plan_not_needed`    | The planner's other verdict: this goal is already met, so no plan is written at all. Records the delivery park, writes no plan row. Fenced to `issue:<n>:plan` origins, and refused on a replan. → [08](08-planning.md#when-there-is-nothing-to-plan)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `plan_correct`       | Propose a correction to the plan the agent is working under, when the repository does not match what it assumed. Records a proposal an operator answers; writes nothing, pauses nothing, and does not stop the agent's own part.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `escalate`           | Ask the human a question and park. The typed form of the WAITING sentinel.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `world_read`         | Read the harness's own view of a PR or issue.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `request_human_task` | Ask for work only a person can do. Files a durable work item, parks nobody, dispatches nobody.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
@@ -125,6 +126,53 @@ delivering the issue, `conclude_part` for a part agent, `assess_issue` for an as
 
 It routes through `AgentManager.recordGoalMet` for the `goalMet` event, so the cockpit repaints on the
 verdict rather than on the next pulse.
+
+### `plan_correct`
+
+An agent's way of saying **the plan is wrong** without stopping the run.
+
+The agent working a part is the reader most likely to find out that the decomposition was written
+against a repository nobody had read closely enough — a dependency the other way round, a part that
+turns out to be two, a step the code already does. Until this existed the only things it could do with
+that were write it into a conclusion and hope, or park the whole goal for a replan; both cost the run,
+and the second re-derives a decomposition that was mostly right.
+
+It takes the **whole** document, like `plan_submit` and for the same reason — a part omitted is a part
+you are asking to drop, and the slug is the merge key — plus a `note` saying why. It changes nothing by
+itself: the row goes to `plan_amendments`, rule `plan-amendment` puts it to an operator, and the plan
+carries on scheduling in the meantime, **including the part this agent is working**, which is not
+stopped, held or re-dispatched by anything here. The reply says so outright and hands back the plan as
+it still stands, because the one thing an agent must not infer from a successful call is that the
+amended plan is in force.
+
+It is for the plan being wrong, never for the agent's part being hard: a part it cannot finish is an
+escalation, and one that turns out not to need building is `conclude_part` with a determination. →
+[08](08-planning.md#amending-a-running-plan)
+
+#### Why `plan_correct` and not a second `plan_amend`
+
+`validation_report` living on both channels is the trap this repo has already been caught by once — one
+name over two settlements, and an edit to "the tool" that silently reaches one of them. So the third
+name is deliberate, and it is not because the two acts differ: on an `active` plan they reach the same
+`proposePlanAmendment` and leave the same row.
+
+What differs is the **fence**, which is the half a shared name would erase. `plan_correct` is fenced by
+the origin its caller was dispatched on — it resolves the goal from `task.originRef` and refuses an
+agent that is not working a planned goal, so it can only correct the plan it is under. `plan_amend` is
+fenced by the plan's status and takes the goal number as an argument, because the session holding that
+credential is a person's own and may legitimately be asked about any goal. One is granted per dispatch
+to every part agent; the other is a long-lived credential in the operator's home directory. They also
+settle differently by status — `plan_amend` on `awaiting_approval` writes, which `plan_correct` never
+does at any status.
+
+Three names, then, for three fences: `plan_submit` writes the first document, `plan_amend` rewrites or
+proposes depending on the plan's life, and `plan_correct` can only ever propose. The document schema
+they genuinely do share is one export (`src/mcp/planDocumentSchema.ts`) rather than three literals, and
+the object handed to `validatePlanDocument` is built once per channel rather than at each call site.
+
+`plan_correct` is named in `MCP_PROTOCOL_ADDENDUM`, not at a point of use: an agent finds the plan wrong
+part-way through work nobody dispatched it to question, which is exactly the shape of tool the addendum
+exists for.
 
 ### `escalate`
 
@@ -784,7 +832,7 @@ and [the run](20-validation.md#getting-the-application-up);
 | `validation_claim`  | Take the one check this session is about to run. One claim at a time, harness-wide.                                                                                               |
 | `validation_report` | Record what was seen: `passed`, `failed`, or `handback`. Reported against the claim, not an argument.                                                                             |
 | `plan_read`         | Read a goal's delivery plan: the verdict, the parts and their slugs, the agenda. Records nothing.                                                                                 |
-| `plan_amend`        | Rewrite it after talking it through. Refuses outside `awaiting_approval`; withdraws the stale card.                                                                               |
+| `plan_amend`        | Amend it after talking it through. On `awaiting_approval` a rewrite that withdraws the stale card; on `active` a proposal, with a required `note`. Refuses on anything else.      |
 | `local_run`         | The machine's dev environment: what is running and its readings; given a goal, start it on that goal's code; given a `message`, type it into the session holding the environment. |
 
 ### Answering a question about a goal
@@ -922,8 +970,8 @@ called. `open_pr` spent its first release exactly there.
 So every tool is named in one of two places, and which one is a decision, not a default:
 
 - **`MCP_PROTOCOL_ADDENDUM`** for the tools any agent may choose to call at any point in any dispatch:
-  `raise`, `escalate`, `plan_submit`, `world_read`, `open_pr`, `request_human_task`, `note_progress`
-  and `knowledge_ask`. Nothing else names these. `raise` and `knowledge_ask` are here because every
+  `raise`, `escalate`, `plan_submit`, `plan_correct`, `world_read`, `open_pr`, `request_human_task`,
+  `note_progress` and `knowledge_ask`. Nothing else names these. `raise` and `knowledge_ask` are here because every
   agent may write to that store and every agent may read it, so there is no one dispatch prompt that
   could name them — and `raise` most of all, since the whole of its value is being callable the moment
   an agent learns something rather than at a point somebody predicted.

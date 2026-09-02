@@ -123,6 +123,7 @@ export type {
   PlanDiff,
   PlanEvidence,
   PlanHistory,
+  PendingPlanAmendment,
   PlanNarrative,
   PlanPart,
   PlanPartView,

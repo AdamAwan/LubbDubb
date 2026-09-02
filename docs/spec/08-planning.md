@@ -1210,17 +1210,29 @@ Two tools on the desktop channel do the rest (→ [11](11-mcp-tools.md#the-deskt
   argue about, which is the agenda unless the operator brings one), the parts through
   `currentPlanSummary` so every slug is in front of the session, the acceptance criteria, the live
   validation checks and the revision count.
-- **`plan_amend(issue, …plan document)`** — the same document as `plan_submit`, validated by
-  `validatePlanDocument` and written by `ingestPlanDocument`. The schema is one export
-  (`src/mcp/planDocumentSchema.ts`) shared by both tools rather than two literals.
+- **`plan_amend(issue, note?, …plan document)`** — the same document as `plan_submit`, validated by
+  `validatePlanDocument`. The schema is one export (`src/mcp/planDocumentSchema.ts`) shared by both
+  tools rather than two literals, and the object handed to `validatePlanDocument` is built once
+  (`submittedPlanDocument`) rather than at each of the two call sites below, so the two paths cannot
+  differ by a field.
 
-`plan_amend` gets three things right, and each of them is silent when wrong:
+**Which amendment `plan_amend` makes turns on the plan's status**, because the same conversation
+reaches both. On `awaiting_approval` it is a rewrite in place, specified here; on `active` it is a
+proposal, specified in [Amending a running plan](#amending-a-running-plan) below. Anything else is
+refused, naming the status — a `planning` plan is already with a planner whose document will replace
+this one, and a `complete` or `abandoned` one schedules nothing an amendment could keep running.
+`plan_read` says which of the two the session is about to do, in its `next`, because by the time the
+tool's own reply is read the write has happened.
 
-1. **It refuses unless the plan is `awaiting_approval`** — the gate the old `/discuss` route made, kept
-   next to the write. A released plan's parts schedule off a decision an operator already took;
-   writing `awaiting_approval` back over it reopens a gate rule `plan-part` had cleared and stops the
-   rest of the work. `PlanModal.tsx` offers Discuss only on `awaiting_approval`, so the control agrees
-   with the tool rather than surprising it.
+The rewrite gets three things right, and each of them is silent when wrong:
+
+1. **It is reached only on `awaiting_approval`** — the gate the old `/discuss` route made, kept next to
+   the write. A released plan's parts schedule off a decision an operator already took; writing
+   `awaiting_approval` back over it reopens a gate rule `plan-part` had cleared and stops the rest of
+   the work, which is why the released plan gets a proposal instead of this.
+   `PlanModal.tsx` offers **Discuss…** on exactly the two statuses `plan_amend` settles —
+   `awaiting_approval` and `active` — so the control never sends a session to argue about a plan it
+   cannot then change, and the sentence on the control says which of the two it is opening.
 2. **It withdraws the superseded proposal**, and **writes the status first**. A pending proposal holds
    rule `plan-approval` off the plan (`planProposalHold`), so an amendment that left the card up would
    send the operator back to approve the _pre-discussion_ decomposition. The order matters exactly as
@@ -1238,6 +1250,115 @@ and the retry is against an unchanged plan.
 
 **If they decide the plan was right after all**, the session amends nothing and the plan is approvable
 exactly as it was — there is no state to unwind, because none was written.
+
+## Amending a running plan
+
+The funnel's one answer to "this plan is wrong" was a replan, and it is the right answer to exactly
+one question: the _shape_ of the work was wrong. For everything else — a part whose scope drifted, a
+dependency that turns out to run the other way, a step the code already does — it is far too big a
+hammer. It parks the whole goal on a planner, re-derives a decomposition that was mostly right, and
+puts every part of it back through the approval gate. And the reader most likely to find one of those
+faults is an agent halfway through a part, which had nowhere at all to put it.
+
+An **amendment** is the other route: a proposal against a plan that is already `active`. The amended
+document waits in `plan_amendments` while the plan keeps scheduling; an operator accepts, and it is
+ingested over the running plan. `src/plans/planAmendment.ts` is the module, and the three properties
+that make it worth having are all properties of _not_ writing:
+
+- **The plan keeps scheduling while the question is open.** Nothing in the proposal touches `plans` or
+  `plan_parts`. The parts that were dispatchable stay dispatchable, agents already running are not
+  paused, stopped or re-dispatched, and the acceptance criteria a part is being judged on are still
+  the ones it was given. A replan's cost is the whole goal waiting; an amendment's cost is one card.
+- **Nobody but an operator applies it.** Both authors reach the same pending row — an agent through
+  the fleet's `plan_correct`, an operator's own Claude Code through `plan_amend` on an `active` plan.
+  A live plan that rewrote itself on an agent's say-so would change what other agents were dispatched
+  against mid-flight, which is precisely what the approval gate exists to stop happening once.
+- **Applying it is the ordinary ingestion.** `ingestPlanDocument` with `approved: true` — the plan
+  stays `active` and `rollUpPlanStatus` is asked, and that flag is the whole of the difference.
+  Without it the ingestion writes `awaiting_approval` back over a running plan and stops every part of
+  it. There is no second write path here that could disagree with the one every other plan takes.
+
+### The gates on proposing one
+
+`proposePlanAmendment` refuses outside `active`, and **each refusal names the route that does apply** —
+a caller told only "no" writes its correction into a comment nobody reads. `awaiting_approval` is
+amended in place (above), `planning` is already with a planner, and `complete` / `abandoned` have no
+schedule left for an amendment to keep running, which is the whole thing this holds open; more work on
+a delivered goal is an instruction on the goal ([16](16-http-api.md)).
+
+**One pending amendment per plan.** A second would put two cards in front of one operator, each
+describing the plan as if the other did not exist, and accepting both would apply the older
+document over the newer one — the plan the second author corrected would silently come back. The
+refusal quotes the standing one so the author can fold their change into it. The bar is one
+_pending_: once it is settled, the next is accepted.
+
+An amendment also **needs a reason**. The note is the whole of what an operator reads beside the diff,
+and a change to a plan agents are working with no reason on it is one they cannot answer. The document
+is validated before anything is written, so a rejection — a bad document, an empty note, the wrong
+status — leaves the plan graph and the table exactly as they were and the retry is against an
+unchanged plan.
+
+### What applying merges, and what it leaves running
+
+Ingestion merges on **slug**, so a part with a branch, a pull request or an outcome keeps all three
+and only its declaration is refreshed. A part the amendment no longer declares is retired only if
+nothing was started for it (`partsToRetire`). A part it adds is schedulable on the next pulse.
+
+That merge is what makes an amendment safe, and it is also the source of the two things the card warns
+about (`amendmentWarnings`) — the half of the reading a diff cannot give, because it is about the
+plan's _rows_ rather than its declarations:
+
+- **A dropped part that work has started on keeps running.** `partsToRetire` spares it, so the
+  amendment does not stop it; only the operator can end that run.
+- **A re-declared part that has already settled has its declaration rewritten while what it delivered
+  stays as it was** — so the plan would then describe delivered work in terms nobody delivered it
+  under.
+
+Applying compares-and-sets twice, against the amendment row _and_ the plan's status, for
+`releasePlan`'s reason: a verdict that arrives after the world moved must not write a document nobody
+was shown over a plan that is no longer the one it amends. A plan that has left `active` settles the
+row `superseded` rather than leaving it pending, because a row nothing can ever apply is one an
+operator is asked about for good. The stored document is re-validated rather than trusted — it may
+have been written by an older build, and a document the schema has since moved past is refused whole
+rather than ingested in halves.
+
+### What a rejection deliberately does not do
+
+**Nothing at all.** It is the one settlement in the funnel with no effect on the goal, and that is the
+design rather than an omission. A refused _plan_ has to leave the issue a route, because a plan is the
+only thing that schedules work for a planned issue; a refused amendment leaves the plan that was
+already scheduling it, which _is_ the route. Saying no to a correction is saying "carry on as
+planned" — the plan is not sent back to a planner, no part is retired, nothing is paused, and the
+agent that proposed it is not re-dispatched.
+
+The refusal still needs a write: `declinePlanAmendment` settles the row, because a row left pending
+would be re-proposed on the next pulse. It reaches `plan_amendments` even though it reaches nothing
+else.
+
+### When the world overtakes one
+
+A replan, a refusal or a back-out replaces the document the amendment was written against, so the
+question it puts to an operator is about a plan that no longer exists. `supersedePlanAmendments`
+settles every pending row for the plan, and the route withdraws its card. Leaving it standing would
+either sit in the inbox for good (applying refuses outside `active`) or be answered "yes" to no
+effect — and an operator who approved a change and saw nothing happen learns not to trust the card.
+
+**The rows are settled before the cards are withdrawn.** Rejecting a `plan_amendment` proposal runs
+`declinePlanAmendment`, so a card closed over a still-pending row writes `declined` — the terminal
+that means _an operator said no_, against a question nobody was asked. Settled first, the rejection
+finds the row already `superseded` and changes nothing about it, and the card closing is only the
+inbox item going away.
+
+### On the plan sheet
+
+`GET /api/plans/:id/history` carries the pending amendment beside the revision history: the note, the
+author, and `proposedPlanDiff` against the plan's latest revision — deliberately the same reading
+`latestPlanDiff` gives for an amendment already applied, so a change does not look like a different
+kind of thing either side of the decision that applies it. The sheet draws it above "What changed",
+and offers the control on a plan with a single revision, which a pending amendment is the one reason
+to. It carries no verdict: accepting or declining is the proposal's, on its card, and a second pair of
+buttons over one decision is two places for it to be answered differently.
+→ [17](17-cockpit.md#the-plan-sheet)
 
 ## What the prompts spend their words on
 
@@ -1259,4 +1380,5 @@ show.
 
 `test/issuePlan.test.ts`, `test/planIngestion.test.ts`, `test/planPart.test.ts`,
 `test/planApproval.test.ts`, `test/planReconcile.test.ts`, `test/planDiscussion.test.ts`,
-`test/planNarrative.test.ts`, `test/stackedPrs.test.ts`, `test/closedPrs.test.ts`.
+`test/planNarrative.test.ts`, `test/planAmendment.test.ts`, `test/stackedPrs.test.ts`,
+`test/closedPrs.test.ts`.
