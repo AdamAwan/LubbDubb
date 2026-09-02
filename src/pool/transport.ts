@@ -38,8 +38,27 @@ export interface PoolTransport {
   readonly canRead: boolean;
   /** Replace **this fleet's** document of that kind, whole. Never an append, never a merge. */
   publish(document: PoolDocument): Promise<void>;
+  /**
+   * Remove **this fleet's** shared pack for that pull request, and its companion.
+   *
+   * The one thing a transport deletes, and narrow on purpose: only a pack is
+   * pruned, so nothing can be asked to remove `claims.json`. A claim is durable; a
+   * pack for a merged pull request is dead weight in a substrate every fleet
+   * clones, and the publishing fleet drops it once the pull request has been
+   * closed for `closedPrWindowMs`. One writer per namespace holds unchanged — the
+   * address is inside the fleet's own directory — and removing what is not there
+   * is a success, since the put is a whole replace and this is its inverse.
+   * → `docs/spec/31-review-packs.md#sharing-a-pack`
+   */
+  unpublish(pack: PoolPackRef): Promise<void>;
   /** Everyone's documents, this fleet's included, as the bytes they were stored as. */
   fetch(): Promise<PoolFetchedDocument[]>;
+}
+
+/** Which shared pack to remove: this fleet's, for one pull request. */
+export interface PoolPackRef {
+  fleetId: string;
+  prNumber: number;
 }
 
 /**

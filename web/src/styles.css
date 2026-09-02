@@ -8966,6 +8966,38 @@ select:disabled {
   background: var(--blue-fill);
 }
 
+/* The share control: the second, deliberate act, drawn apart from the ask. Quiet
+   until it is refused, because a refusal names the line it stopped on. */
+.rp-share {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  border-radius: var(--r-sm);
+  font-size: 0.9em;
+}
+.rp-share > span {
+  flex: 1 1 320px;
+}
+.rp-share-off {
+  color: var(--muted);
+}
+.rp-share-live {
+  color: var(--green);
+}
+.rp-share-waiting {
+  color: var(--muted);
+}
+.rp-share-refused {
+  flex: 1 1 100%;
+  margin: 0;
+  color: var(--red);
+}
+
 /* The gate: above the ideas, and nothing a reader can reach them without. */
 .rp-gate {
   margin-top: 14px;

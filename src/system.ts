@@ -6,6 +6,7 @@ import { Store } from './store/store.js';
 import { CompositeConnector } from './integrations/compositeConnector.js';
 import { buildIntegrations, buildPoolTransport } from './integrations/registry.js';
 import { PoolDesk } from './pool/poolDesk.js';
+import type { PoolTransport } from './pool/transport.js';
 import { harnessVersion } from './pool/harnessVersion.js';
 import type { ActionSink } from './sink/actionSink.js';
 import { ticketFiler, type TicketFiler } from './tickets/filing.js';
@@ -397,6 +398,14 @@ interface BuildOptions {
    * issue somebody has to close or a failure that depends on whose machine ran it.
    */
   upstream?: UpstreamIssues;
+  /**
+   * Override the pool's transport (tests inject `FakePoolTransport`). Wiring one
+   * also **wires the pool desk**, which is otherwise off on the `fake` provider —
+   * so a test can watch a document leave without a git remote behind it. The
+   * fleet name is still required: an unnamed fleet publishes nothing at all.
+   * → `docs/spec/28-cross-fleet-pool.md#a-fleet-with-no-name-yet`
+   */
+  poolTransport?: PoolTransport;
   /**
    * Override when crash recovery considers this process to have started (tests).
    * Everything older is a previous run's orphan; everything newer is a dispatch
@@ -1163,17 +1172,26 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // with no author, so the desk sits out entirely until the row is answered.
   // → `docs/spec/28-cross-fleet-pool.md#a-fleet-with-no-name-yet`
   const fleetId = config.fleetId ?? '';
+  const poolTransport =
+    opts.poolTransport ??
+    (config.integrations.pool === 'fake'
+      ? undefined
+      : buildPoolTransport(config.integrations, { store, config, now, errors }));
   const pool =
-    config.integrations.pool === 'fake' || fleetId === ''
+    poolTransport === undefined || fleetId === ''
       ? undefined
       : new PoolDesk({
           store,
-          transport: buildPoolTransport(config.integrations, { store, config, now, errors }),
+          transport: poolTransport,
           fleetId,
           project: config.pool?.project ?? '',
           harnessVersion: harnessVersion(),
           now,
           digestIntervalMs: config.pool?.digestIntervalMs ?? 60 * 60 * 1000,
+          // The clock a shared review pack is pruned on: the same one that drops a
+          // closed pull request out of the world the cockpit draws, so a shared
+          // pack outlives its pull request's row by nothing.
+          closedPrWindowMs: config.closedPrWindowMs,
           errors,
         });
 

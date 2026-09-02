@@ -45,6 +45,7 @@ import type {
   ReviewMarksPayload,
   ReviewPackAbsence,
   ReviewPackPayload,
+  ReviewPackSharing,
   ScratchpadPayload,
   ReliabilityPayload,
   SpendPayload,
@@ -254,6 +255,14 @@ const realApi = {
   /** Ask for a pack. `202` — the author is an agent run, and the pack arrives through the read above. */
   requestReviewPack: (prNumber: number) =>
     post<{ ok: true; prNumber: number; headSha: string }>(`/api/prs/${prNumber}/review-pack`),
+  /**
+   * Share the pack into the pool — the second, deliberate act, never part of
+   * asking for one. `202`: the document goes out on the pool's own clock, and the
+   * page watches the share's state through the read above. A refusal is a 409
+   * whose message names the line the secret backstop stopped on.
+   * → docs/spec/31-review-packs.md#sharing-a-pack
+   */
+  shareReviewPack: (prNumber: number) => post<ReviewPackSharing>(`/api/prs/${prNumber}/review-pack/share`),
   markReviewIdeaRead: (prNumber: number, ideaId: string, read: boolean) =>
     post<ReviewMarksPayload>(`/api/prs/${prNumber}/review-pack/ideas/${encodeURIComponent(ideaId)}/read`, { read }),
   overrideReviewAttention: (prNumber: number, ideaId: string, attention: ReviewAttention | null) =>

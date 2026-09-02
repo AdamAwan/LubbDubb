@@ -7,6 +7,7 @@ import type {
   ReviewIdea,
   ReviewMark,
   ReviewPackPayload,
+  ReviewPackSharing,
   ReviewRange,
   ReviewVerdict,
   ScratchEntryView,
@@ -66,6 +67,20 @@ interface ReviewPackPageProps {
   onAttention: (ideaId: string, attention: ReviewAttention | null) => Promise<void>;
   /** Ask for a new pack — the same control as the first ask, from the pull request's row. */
   onAsk: () => Promise<void>;
+  /**
+   * Publish this pack into the pool. **A second, deliberate act**, and a separate
+   * control from the ask: a pack carries its code, so sharing one puts the
+   * fleet's source into a repository that never forgets, and nothing does it by
+   * default. → docs/spec/31-review-packs.md#sharing-a-pack
+   */
+  onShare: () => Promise<void>;
+  /**
+   * What the last share was refused for, in the route's own words — held by the
+   * shell, because this page is a pure function of the payload and the refusal is
+   * about a click rather than about the pack.
+   */
+  shareRefusal: string | null;
+  onShareRefused: (message: string) => void;
   refUrls: Record<string, string>;
 }
 
@@ -106,6 +121,13 @@ export function ReviewPackPage(props: ReviewPackPageProps): JSX.Element {
   return (
     <div className="rp">
       <Masthead {...props} />
+      <Share
+        sharing={payload.sharing}
+        headSha={pack.headSha}
+        onShare={props.onShare}
+        refused={props.shareRefusal}
+        onRefused={props.onShareRefused}
+      />
       {standing !== 'checked' && <Unchecked standing={standing} onAsk={props.onAsk} />}
       {wrong.length > 0 && <Gate wrong={wrong} />}
       <IdeasRule numbered={numbered} openIdea={props.openIdea} onOpenIdea={props.onOpenIdea} />
@@ -204,6 +226,76 @@ function Masthead({ payload, onAsk }: ReviewPackPageProps): JSX.Element {
         </div>
       )}
     </header>
+  );
+}
+
+/**
+ * The share control: the second act, drawn as one.
+ *
+ * Five states and none of them is a default — no pool to publish to, nobody has
+ * shared it, asked for and waiting on the pool's own clock, in the pool, and
+ * refused by the secret backstop. The refusal is drawn in full rather than
+ * flashed, because it **names the line** it stopped on and that is the whole of
+ * what the person can act on; nothing was rewritten and nothing left the machine.
+ * → docs/spec/31-review-packs.md#sharing-a-pack
+ */
+function Share({
+  sharing,
+  headSha,
+  onShare,
+  refused,
+  onRefused,
+}: {
+  sharing: ReviewPackSharing;
+  headSha: string;
+  onShare: () => Promise<void>;
+  /** The route's own words for the last refused click, held by the shell. */
+  refused: string | null;
+  onRefused: (message: string) => void;
+}): JSX.Element | null {
+  if (!sharing.available) {
+    return (
+      <div className="rp-share rp-share-off">
+        This deployment publishes to no pool, so this pack stays here. It is the fleet&rsquo;s own record either way.
+      </div>
+    );
+  }
+  const share = sharing.share;
+  const button = (label: string) => (
+    <AsyncButton className="ghost small" onClick={onShare} onRefused={onRefused} pendingLabel="sharing…">
+      {label}
+    </AsyncButton>
+  );
+  const refusal = refused ?? share?.refusal ?? null;
+  return (
+    <div className="rp-share">
+      {share === null && (
+        <>
+          <span>
+            Not shared. Publishing puts this pack — <b>its code included</b> — in the pool, where every fleet can read
+            it. It is pruned when the pull request has been closed a while.
+          </span>
+          {button('Share this pack')}
+        </>
+      )}
+      {share !== null && share.refusal === null && share.publishedAt === null && (
+        <span className="rp-share-waiting">
+          Shared — waiting for the next pool publish. It goes out on the pool&rsquo;s own clock, never on the click.
+        </span>
+      )}
+      {share !== null && share.publishedAt !== null && (
+        <>
+          <span className="rp-share-live">In the pool since {new Date(share.publishedAt).toLocaleString()}.</span>
+          {share.headSha !== headSha && button('Share this pack instead')}
+        </>
+      )}
+      {share !== null && share.refusal !== null && share.publishedAt === null && button('Try again')}
+      {refusal !== null && (
+        <p className="rp-share-refused" role="alert">
+          <b>Not shared.</b> {refusal}
+        </p>
+      )}
+    </div>
   );
 }
 

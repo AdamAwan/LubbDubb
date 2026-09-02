@@ -606,6 +606,21 @@ CREATE TABLE IF NOT EXISTS review_marks (
   PRIMARY KEY (pr_number, path, start_line, end_line)
 );
 
+-- Whether a pull request's pack has been shared into the cross-fleet pool
+-- (docs/spec/31-review-packs.md#sharing-a-pack). One row per pull request, written
+-- only when somebody asks: sharing is a second, deliberate act, so no row is the
+-- ordinary state. The request and the publish are two columns because the publish
+-- is never inside a route handler — the route records the ask and the pool's own
+-- clock puts the document out. The row is deleted when the pack is pruned from the
+-- namespace; the review_packs row it names is kept, being the fleet's own record.
+CREATE TABLE IF NOT EXISTS review_pack_shares (
+  pr_number    INTEGER PRIMARY KEY,
+  head_sha     TEXT NOT NULL,         -- the pack that was shared, not just the pull request
+  requested_at TEXT NOT NULL,
+  published_at TEXT,                  -- null while the next pool pulse has not carried it
+  refusal      TEXT                   -- the secret backstop's reason, naming the line; null when nothing matched
+);
+
 -- One delivery plan per issue — the planning agent's verdict. Written for *both*
 -- outcomes (one pull request as much as a decomposition), so the planner never
 -- re-runs on the same issue. The graph lives here and nowhere else: it is

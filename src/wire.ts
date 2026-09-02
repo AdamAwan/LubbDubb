@@ -126,6 +126,7 @@ import type {
   ReviewAttention,
   ReviewMark,
   ReviewPackRecord,
+  ReviewPackShare,
   ScratchEntry,
   ShortfallAuthor,
   ShortfallCause,
@@ -2089,6 +2090,27 @@ export interface ReviewPackPayload extends ReviewPackRecord {
    * without guessing. → `docs/spec/31-review-packs.md#the-check`
    */
   checking: boolean;
+  /**
+   * Whether this pack is in the pool, and whether there is a pool to put it in.
+   * Sharing is a second, deliberate act — never on the ask, never by default — so
+   * the page draws a control of its own from this.
+   * → `docs/spec/31-review-packs.md#sharing-a-pack`
+   */
+  sharing: ReviewPackSharing;
+}
+
+/**
+ * What has become of one pull request's share, and the answer
+ * `POST /api/prs/:number/review-pack/share` gives.
+ *
+ * `share` is null where nobody has asked — the ordinary state, and the honest
+ * one. `available` is false on a deployment with no pool selected or no fleet
+ * name: there is nowhere to publish to, which a page must say rather than
+ * offering a control that would 409.
+ */
+export interface ReviewPackSharing {
+  available: boolean;
+  share: ReviewPackShare | null;
 }
 
 /**
@@ -2380,6 +2402,7 @@ export type {
   ReviewMark,
   ReviewNote,
   ReviewPack,
+  ReviewPackShare,
   ReviewRange,
   ReviewVerdict,
   ScratchEntry,
@@ -2435,8 +2458,8 @@ export type { McpChannel } from './types.js';
 // what the store holds. → `docs/spec/28-cross-fleet-pool.md`
 export type {
   PoolClaim,
+  PoolClockKind,
   PoolDigestRow,
-  PoolDocumentKind,
   PoolFleetReading,
   PoolMirroredClaim,
   PoolPublication,

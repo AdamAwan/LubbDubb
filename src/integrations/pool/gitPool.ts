@@ -1,9 +1,10 @@
-import { mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, posix, resolve } from 'node:path';
 import { runGit } from '../../git/gitCli.js';
-import { poolDocumentPath, serialisePoolDocument } from '../../pool/document.js';
-import { poolMarkdownPath, renderPoolMarkdown } from '../../pool/markdown.js';
-import type { PoolFetchedDocument, PoolTransport } from '../../pool/transport.js';
+import { poolCompanion } from '../../pool/companion.js';
+import { poolDocumentAddress, poolPackPath, serialisePoolDocument } from '../../pool/document.js';
+import { reviewPackCompanionPath } from '../../reviewPacks/companion.js';
+import type { PoolFetchedDocument, PoolPackRef, PoolTransport } from '../../pool/transport.js';
 import type { PoolDocument } from '../../types.js';
 
 /**
@@ -71,15 +72,10 @@ export class GitPoolTransport implements PoolTransport {
     // markdown is derived from the same document and never read back — `fetch`
     // names the `.json` by name — so it cannot become a second grammar for one
     // fact. → `docs/spec/28-cross-fleet-pool.md#the-human-readable-companion`
+    const companion = poolCompanion(document);
     const files = [
-      {
-        relative: this.prefixed(poolDocumentPath(this.deps.fleetId, document.kind)),
-        text: serialisePoolDocument(document),
-      },
-      {
-        relative: this.prefixed(poolMarkdownPath(this.deps.fleetId, document.kind)),
-        text: renderPoolMarkdown(document),
-      },
+      { relative: this.prefixed(poolDocumentAddress(document)), text: serialisePoolDocument(document) },
+      { relative: this.prefixed(companion.path), text: companion.text },
     ];
     const paths = files.map((file) => file.relative);
     for (const file of files) {
@@ -87,14 +83,51 @@ export class GitPoolTransport implements PoolTransport {
       mkdirSync(dirname(absolute), { recursive: true });
       writeFileSync(absolute, file.text, 'utf8');
     }
-    // By name, and only these two. See the class note.
+    await this.commit(paths, `pool: ${this.deps.fleetId} ${document.kind}`);
+  }
+
+  /**
+   * Remove this fleet's shared pack for a pull request, and its companion.
+   *
+   * The same write set rule as {@link publish}, one level narrower: two paths
+   * inside this fleet's own directory, staged by name, and a commit that names
+   * only them. Removing what is not there is a success — the commit finds nothing
+   * staged and returns — because a prune is the inverse of a whole-document put
+   * and must be as retryable as one.
+   * → `docs/spec/31-review-packs.md#sharing-a-pack`
+   */
+  async unpublish(pack: PoolPackRef): Promise<void> {
+    await this.ensureClone();
+    const paths = [
+      this.prefixed(poolPackPath(pack.fleetId, pack.prNumber)),
+      this.prefixed(reviewPackCompanionPath(pack.fleetId, pack.prNumber)),
+    ];
+    for (const relative of paths) {
+      // Unlinked rather than `git rm`, so a file already gone is not an error and
+      // the staging below is the one place that decides whether anything changed.
+      try {
+        unlinkSync(join(this.deps.root, ...relative.split('/')));
+      } catch {
+        /* already gone: a prune that has run before, or a pack that never landed */
+      }
+    }
+    await this.commit(paths, `pool: ${this.deps.fleetId} pack #${pack.prNumber} pruned`);
+  }
+
+  /**
+   * Stage exactly these paths, commit if anything moved, and push.
+   *
+   * **By name, and only these.** Never `git add -A`, never `git add .`, and never
+   * `git clean` anywhere in the clone — see the class note. `git add` on a path
+   * that is gone records the removal, which is what makes a prune the same two
+   * commands as a publish. Nothing staged means the repository already holds what
+   * this fleet meant to write, and an empty commit is never the right answer to that.
+   */
+  private async commit(paths: string[], message: string): Promise<void> {
     await runGit(this.deps.root, ['add', '--', ...paths]);
     const staged = await runGit(this.deps.root, ['diff', '--cached', '--name-only', '--', ...paths]);
-    // Nothing staged means the bytes are already what the repository holds — which
-    // the content hash upstream should have caught, and which an empty commit is
-    // never the right answer to.
     if (staged.stdout.trim() === '') return;
-    await runGit(this.deps.root, ['commit', '-m', `pool: ${this.deps.fleetId} ${document.kind}`, '--', ...paths]);
+    await runGit(this.deps.root, ['commit', '-m', message, '--', ...paths]);
     await this.push();
   }
 

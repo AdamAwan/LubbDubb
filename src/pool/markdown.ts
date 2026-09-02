@@ -1,10 +1,10 @@
 import { PHASE_ORDER, type SpendPhase } from '../spendInsights.js';
 import type {
   PoolClaimsDocument,
+  PoolClockDocument,
+  PoolClockKind,
   PoolDigestDocument,
   PoolDigestRow,
-  PoolDocument,
-  PoolDocumentKind,
 } from '../types.js';
 import { poolCauseLabel, poolPhaseLabel } from './aggregate.js';
 import { POOL_RETENTION_DAYS, utcDay } from './digestArm.js';
@@ -17,7 +17,7 @@ import { POOL_RETENTION_DAYS, utcDay } from './digestArm.js';
  * `digest.json` by name, so nothing here is ever read back — which is the whole
  * reason it is safe. A markdown file the importer parsed would be a second grammar
  * for one fact, free to disagree with the JSON the moment either side is edited,
- * and it would disagree silently. This renders the same {@link PoolDocument} the
+ * and it would disagree silently. This renders the same {@link PoolClockDocument} the
  * JSON is serialised from and holds no state of its own, so the two cannot drift.
  *
  * **The digest companion summarises rather than transcribes.** Ninety days across
@@ -32,12 +32,12 @@ import { POOL_RETENTION_DAYS, utcDay } from './digestArm.js';
 const WINDOWS: readonly number[] = [7, 30, POOL_RETENTION_DAYS];
 
 /** Where one fleet's companion of a kind lives, relative to the pool's own prefix. */
-export function poolMarkdownPath(fleetId: string, kind: PoolDocumentKind): string {
+export function poolMarkdownPath(fleetId: string, kind: PoolClockKind): string {
   return `fleets/${fleetId}/${kind}.md`;
 }
 
 /** One document as the page a person reads. Pure — same document in, same bytes out. */
-export function renderPoolMarkdown(document: PoolDocument): string {
+export function renderPoolMarkdown(document: PoolClockDocument): string {
   const body = document.kind === 'claims' ? claimsBody(document) : digestBody(document);
   return `${[...heading(document), ...body]
     .join('\n')
@@ -45,7 +45,7 @@ export function renderPoolMarkdown(document: PoolDocument): string {
     .trimEnd()}\n`;
 }
 
-function heading(document: PoolDocument): string[] {
+function heading(document: PoolClockDocument): string[] {
   const source = `${document.kind}.json`;
   return [
     `# ${document.project} — ${document.kind === 'claims' ? 'what this fleet has vouched for' : 'daily digest'}`,

@@ -1,4 +1,11 @@
-import type { ReviewAttention, ReviewMark, ReviewPack, ReviewPackRecord, ReviewRange } from '../types.js';
+import type {
+  ReviewAttention,
+  ReviewMark,
+  ReviewPack,
+  ReviewPackRecord,
+  ReviewPackShare,
+  ReviewRange,
+} from '../types.js';
 import type { ColumnMigrations } from './migrate.js';
 import type { StoreContext } from './context.js';
 
@@ -14,14 +21,15 @@ import type { StoreContext } from './context.js';
 export const REVIEW_PACK_SCHEMA = 1;
 
 /**
- * Both tables are new, so neither has a column to migrate — and a table being new
- * *once* does not keep it exempt. Declared empty so the first column added to
- * either is noticed here rather than read back as `undefined` on every database
- * from before it.
+ * All three tables are new, so none has a column to migrate — and a table being
+ * new *once* does not keep it exempt. Declared empty so the first column added to
+ * any of them is noticed here rather than read back as `undefined` on every
+ * database from before it.
  */
 export const REVIEW_PACK_COLUMNS: ColumnMigrations = {
   review_packs: {},
   review_marks: {},
+  review_pack_shares: {},
 };
 
 /**
@@ -92,6 +100,82 @@ export class ReviewPackStore {
       .prepare(`SELECT document, written_at FROM review_packs WHERE pr_number=? ORDER BY written_at DESC, rowid DESC`)
       .all(prNumber) as PackRow[];
     return rows.map((r) => ({ pack: JSON.parse(r.document) as ReviewPack, writtenAt: r.written_at }));
+  }
+
+  /**
+   * The pack written against one head, or null. What a share publishes: a share
+   * is of the pack somebody read, not of whatever the pull request has by the
+   * time the pool's clock comes round.
+   */
+  getReviewPackAt(prNumber: number, headSha: string): ReviewPackRecord | null {
+    const row = this.ctx.db
+      .prepare(`SELECT document, written_at FROM review_packs WHERE pr_number=? AND head_sha=?`)
+      .get(prNumber, headSha) as PackRow | undefined;
+    return row ? { pack: JSON.parse(row.document) as ReviewPack, writtenAt: row.written_at } : null;
+  }
+
+  /**
+   * Somebody asked for this pack to be shared. Upserted on the pull request: a
+   * second ask on a newer head replaces the first, and clears the previous
+   * publish and refusal — what is in the namespace is one document per pull
+   * request, so the row that describes it is one too.
+   */
+  recordReviewPackShare(input: { prNumber: number; headSha: string; refusal?: string | null }): ReviewPackShare {
+    const requestedAt = this.ctx.now();
+    this.ctx.db
+      .prepare(
+        `INSERT INTO review_pack_shares (pr_number, head_sha, requested_at, published_at, refusal)
+         VALUES (?, ?, ?, NULL, ?)
+         ON CONFLICT(pr_number) DO UPDATE SET
+           head_sha = excluded.head_sha,
+           requested_at = excluded.requested_at,
+           published_at = NULL,
+           refusal = excluded.refusal`,
+      )
+      .run(input.prNumber, input.headSha, requestedAt, input.refusal ?? null);
+    return this.getReviewPackShare(input.prNumber)!;
+  }
+
+  /** The transport took it. Stamped after the publish, never before: the row says what is in the pool. */
+  recordReviewPackShared(prNumber: number): void {
+    this.ctx.db
+      .prepare(`UPDATE review_pack_shares SET published_at=?, refusal=NULL WHERE pr_number=?`)
+      .run(this.ctx.now(), prNumber);
+  }
+
+  /**
+   * The backstop refused it, and it is not in the pool. Recorded rather than
+   * thrown away, because a refusal a reviewer never sees is a share they believe
+   * happened. The publish stamp is cleared with it: a pack refused on a re-share
+   * is one the pool no longer carries.
+   */
+  recordReviewPackShareRefusal(prNumber: number, refusal: string): void {
+    this.ctx.db
+      .prepare(`UPDATE review_pack_shares SET refusal=?, published_at=NULL WHERE pr_number=?`)
+      .run(refusal, prNumber);
+  }
+
+  /** What this pull request's share is, or null where nobody has asked for one. */
+  getReviewPackShare(prNumber: number): ReviewPackShare | null {
+    const row = this.ctx.db.prepare(`SELECT * FROM review_pack_shares WHERE pr_number=?`).get(prNumber) as
+      | ShareRow
+      | undefined;
+    return row ? rowToShare(row) : null;
+  }
+
+  /** Every share, for the arm that publishes the asked-for ones and prunes the dead. */
+  listReviewPackShares(): ReviewPackShare[] {
+    const rows = this.ctx.db.prepare(`SELECT * FROM review_pack_shares ORDER BY pr_number ASC`).all() as ShareRow[];
+    return rows.map(rowToShare);
+  }
+
+  /**
+   * Forget a share. Called when the pack has been pruned from the namespace —
+   * **the `review_packs` row is untouched**: it is the fleet's own record, and the
+   * cost of keeping it is the fleet's.
+   */
+  deleteReviewPackShare(prNumber: number): void {
+    this.ctx.db.prepare(`DELETE FROM review_pack_shares WHERE pr_number=?`).run(prNumber);
   }
 
   /**
@@ -172,6 +256,22 @@ export class ReviewPackStore {
 interface PackRow {
   document: string;
   written_at: string;
+}
+interface ShareRow {
+  pr_number: number;
+  head_sha: string;
+  requested_at: string;
+  published_at: string | null;
+  refusal: string | null;
+}
+function rowToShare(r: ShareRow): ReviewPackShare {
+  return {
+    prNumber: r.pr_number,
+    headSha: r.head_sha,
+    requestedAt: r.requested_at,
+    publishedAt: r.published_at,
+    refusal: r.refusal,
+  };
 }
 interface MarkRow {
   pr_number: number;

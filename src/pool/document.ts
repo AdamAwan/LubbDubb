@@ -1,5 +1,11 @@
 import { createHash } from 'node:crypto';
-import type { PoolClaimsDocument, PoolDigestDocument, PoolDocument, PoolDocumentKind } from '../types.js';
+import type {
+  PoolClaimsDocument,
+  PoolClockDocument,
+  PoolClockKind,
+  PoolDigestDocument,
+  PoolDocument,
+} from '../types.js';
 
 /**
  * The schema version, **on the envelope and never inside the body**.
@@ -59,7 +65,7 @@ export function poolContentHash(document: PoolDocument): string {
  * skipped, recorded, and drawn on the page as a fleet that is ahead of you.
  */
 type PoolParse =
-  | { ok: true; document: PoolDocument }
+  | { ok: true; document: PoolClockDocument }
   | { ok: false; reason: 'ahead'; version: number; fleetId: string | null }
   | { ok: false; reason: 'malformed' | 'mismatched-fleet'; detail: string };
 
@@ -92,6 +98,11 @@ export function parsePoolDocument(text: string, expectFleetId?: string): PoolPar
   // build has no grammar for, and reading it would be guessing.
   if (version > POOL_SCHEMA_VERSION) return { ok: false, reason: 'ahead', version, fleetId };
   const kind = raw.kind;
+  // The two clock documents and nothing else. A shared review pack is a third kind
+  // and lives under `packs/`, which `fetch` never names — it is published for a
+  // person to read and is never polled, corroborated or landed
+  // (`docs/spec/31-review-packs.md#sharing-a-pack`), so arriving here it is as
+  // unreadable as any other stranger's file, and said so per document.
   if (kind !== 'claims' && kind !== 'digest') {
     return { ok: false, reason: 'malformed', detail: `unknown document kind ${JSON.stringify(kind)}` };
   }
@@ -200,7 +211,25 @@ function stableKeys(value: object): string[] {
   return [...keys].sort();
 }
 
-/** Where one fleet's document of a kind lives, relative to the pool's own prefix. */
-export function poolDocumentPath(fleetId: string, kind: PoolDocumentKind): string {
+/** Where one fleet's document of a clock kind lives, relative to the pool's own prefix. */
+export function poolDocumentPath(fleetId: string, kind: PoolClockKind): string {
   return `fleets/${fleetId}/${kind}.json`;
+}
+
+/**
+ * Where one shared review pack lives: **in the fleet's own namespace**, beside
+ * `claims.json` and `digest.json`, under a directory of its own because there is
+ * one per pull request rather than one per fleet. `fetch` names the two clock
+ * documents by name and never walks, so nothing polls these.
+ * → `docs/spec/31-review-packs.md#sharing-a-pack`
+ */
+export function poolPackPath(fleetId: string, prNumber: number): string {
+  return `fleets/${fleetId}/packs/pr-${prNumber}.json`;
+}
+
+/** One document's address, whichever kind it is — the only place that decides. */
+export function poolDocumentAddress(document: PoolDocument): string {
+  return document.kind === 'pack'
+    ? poolPackPath(document.fleetId, document.prNumber)
+    : poolDocumentPath(document.fleetId, document.kind);
 }

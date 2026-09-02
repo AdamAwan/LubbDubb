@@ -555,6 +555,7 @@ function desk(s: Store, transport: FakePoolTransport, now = () => NOW): PoolDesk
     harnessVersion: '0.1.0',
     now,
     digestIntervalMs: 60 * 60 * 1000,
+    closedPrWindowMs: 6 * 60 * 60 * 1000,
   });
 }
 
@@ -602,6 +603,7 @@ test('a failed publish leaves the document dirty and nothing else stops', async 
     harnessVersion: '0.1.0',
     now: () => NOW,
     digestIntervalMs: 60 * 60 * 1000,
+    closedPrWindowMs: 6 * 60 * 60 * 1000,
     errors: { record: (e: { message: string }) => void errors.push(e.message) } as never,
   });
 

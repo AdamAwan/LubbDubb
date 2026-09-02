@@ -4212,6 +4212,7 @@ export const demoApi = {
   // "Not asked for" is the honest reading, and asking is refused out loud.
   getReviewPack: (): Promise<ReviewPackReading> => Promise.resolve({ kind: 'none', writing: false }),
   requestReviewPack: () => Promise.reject(new Error('the demo has no fleet to write a review pack')),
+  shareReviewPack: () => Promise.reject(new Error('the demo has no pool to share a review pack into')),
   markReviewIdeaRead: () => Promise.reject(new Error('the demo has no review pack to mark')),
   overrideReviewAttention: () => Promise.reject(new Error('the demo has no review pack to mark')),
   // The spend breakdown, authored above. The real route derives it from every
