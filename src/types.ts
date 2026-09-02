@@ -2983,6 +2983,32 @@ export interface Plan {
 }
 
 /**
+ * One thing about a plan an operator has to have *read* before they may release
+ * it (`src/plans/planCaveats.ts`).
+ *
+ * A plan approval used to be a click on a card whose warnings were prose in the
+ * body: the planner's own uncertainty, a part that is already blocked, a pull
+ * request open on the issue that belongs to no part of the plan. Prose is
+ * skippable, and the one verdict that starts every agent, branch and pull request
+ * the plan declares was the easiest thing on the page to give without reading it.
+ * A caveat is that same sentence made into a thing the operator ticks, and the
+ * accept refuses while any of them is unticked.
+ *
+ * `id` is what the acknowledgement names, and it is stable for the life of one
+ * proposal because it is stored on the action the proposal carries — the gate
+ * compares what was ticked against what that row declares, never against a
+ * re-derivation from a world that has moved since the card was drawn.
+ */
+export interface PlanCaveat {
+  /** Stable within one proposal; what an acknowledgement names. */
+  id: string;
+  /** The sentence the operator is ticking — what they are saying they have read. */
+  label: string;
+  /** The planner's own words behind it, where the label is a summary of a longer field. */
+  detail: string | null;
+}
+
+/**
  * The plan-level prose of one verdict, gathered so a revision can hold it whole.
  *
  * Every field is on {@link Plan} as well, and that is not duplication: the plan row

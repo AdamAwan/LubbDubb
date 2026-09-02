@@ -1,7 +1,7 @@
 import { issueWatchGateReason } from '../issuePickup.js';
 import { planProposalHold, planProposalRef } from '../../proposals/proposals.js';
 import { describeProposedParts, planApprovalDetail, planApprovalNote } from '../../plans/planApproval.js';
-import { planApprovalWarnings } from '../../plans/planWedge.js';
+import { caveatNotice, planCaveats } from '../../plans/planCaveats.js';
 import { liveParts, planIssueNumber } from '../../plans/parts.js';
 import type { RawAction, StageContext } from './context.js';
 
@@ -37,6 +37,11 @@ export function planApproval(s: StageContext): void {
     if (issueWatchGateReason(issue, s.pickup) !== null) continue;
     if (planProposalHold(planProposalRef(plan.originRef), ctx.proposals ?? []) !== null) continue;
     const parts = liveParts((ctx.planParts ?? []).filter((p) => p.planId === plan.id));
+    // What this plan raises, resolved once, here — the same list the ask's prose is
+    // rendered from and the gate on the accept compares against. Deriving it twice
+    // is the drift this repo has fixed before: an operator ticking one list while
+    // the route checks another either wedges the approval or waves it through.
+    const caveats = planCaveats(plan, issue, parts, s.openPrs);
     s.raw.push({
       type: 'propose_plan',
       planId: plan.id,
@@ -51,6 +56,7 @@ export function planApproval(s: StageContext): void {
       // it: the split moved behind the plan panel, and an override written when it
       // was the body of the ask must keep working.
       detail: planApprovalDetail(plan),
+      caveats,
       prompt:
         s.templates.render('plan-approval', {
           number: issueNumber,
@@ -60,7 +66,7 @@ export function planApproval(s: StageContext): void {
           list: describeProposedParts(parts),
         }) +
         planApprovalNote() +
-        planApprovalWarnings(issue, parts, s.openPrs),
+        caveatNotice(caveats),
       rule: 'plan-approval',
       reason: `Issue #${issueNumber} has a ${parts.length}-part plan and approval is required before any of it is scheduled.`,
     } satisfies RawAction);

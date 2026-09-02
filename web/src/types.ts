@@ -116,6 +116,7 @@ export type {
   ViewerAssignment,
   AcceptanceCriterion,
   Plan,
+  PlanCaveat,
   PrReviewThread,
   PrThreadMessage,
   PrThreadState,

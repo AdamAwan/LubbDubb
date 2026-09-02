@@ -13,7 +13,7 @@ import type { RawAction, StageContext } from './context.js';
  * approval was the last thing that happened to it.
  *
  * Only `active` plans. An unapproved one is already in front of a human, and
- * `planApprovalWarnings` puts the same fact in that ask — escalating as well would
+ * `planCaveats` puts the same fact in that ask, as something to tick — escalating as well would
  * be the same sentence twice, to the same person, about a decomposition they have
  * not authorized.
  */
