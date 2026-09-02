@@ -969,6 +969,11 @@ export class Harness extends EventEmitter {
         standingJobs,
         plans,
         planParts,
+        // Changes proposed to plans that are already running, waiting on the
+        // operator. Only the pending ones: rule `plan-amendment` reads nothing
+        // else, and a settled amendment is history the cockpit reads out of the
+        // plan sheet rather than off the pulse.
+        planAmendments: store.listPendingPlanAmendments(),
         // How anyone checks each goal was met. Rule `validate-check` reads only
         // whether a check was handed to the fleet and whether anybody has
         // recorded a reading against it — never what it says.

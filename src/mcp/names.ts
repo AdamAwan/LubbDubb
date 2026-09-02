@@ -24,6 +24,7 @@ export const MCP_SERVER_ID = 'lubbdubb';
  */
 export const MCP_TOOL_NAMES = [
   'plan_submit',
+  'plan_correct',
   'plan_not_needed',
   'escalate',
   'world_read',
@@ -100,6 +101,11 @@ export const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use'> = {
   raise: 'addendum',
   escalate: 'addendum',
   plan_submit: 'addendum',
+  // Every agent working a planned goal may find the plan wrong, and no one
+  // dispatch prompt is where that happens — the appraiser, a part agent and a
+  // reviewer all reach it. An addendum tool nothing has called is a signal worth
+  // reading here: either no plan has been wrong, or the agents cannot see it.
+  plan_correct: 'addendum',
   world_read: 'addendum',
   open_pr: 'addendum',
   note_progress: 'addendum',
@@ -227,6 +233,13 @@ export const ALLOWED_MCP_TOOLS: string[] = MCP_TOOL_NAMES.map((name) => `mcp__${
  * share the schema and the store writes; what differs is where the check comes
  * from — the fleet's from the origin it was dispatched on, this one from what the
  * session claimed — and neither can be reached from the other's transport.
+ *
+ * `plan_correct` is the fleet's tool for the same *sort* of act and is a third
+ * name again, deliberately. It proposes a change to a plan that is already
+ * running, which is neither of the other two: `plan_submit` writes the first
+ * document, `plan_amend` rewrites one nothing is scheduled off yet, and this one
+ * cannot write at all — it records a proposal an operator answers. Three
+ * settlements, three names, one shared document schema.
  *
  * `plan_amend` is deliberately **not** a second `plan_submit`. It writes the same
  * document through the same ingestion, but a shared name would make it the trap

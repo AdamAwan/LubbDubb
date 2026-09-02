@@ -6,6 +6,9 @@ import type {
   PartSize,
   Plan,
   PlanEvidence,
+  PlanAmendment,
+  PlanAmendmentAuthor,
+  PlanAmendmentStatus,
   PlanNarrative,
   PlanPart,
   PlanPartBlocker,
@@ -182,6 +185,86 @@ export class PlanStore {
       .prepare(`SELECT * FROM plan_revisions WHERE plan_id=? ORDER BY seq ASC`)
       .all(planId) as PlanRevisionRow[];
     return rows.map(rowToRevision);
+  }
+
+  /**
+   * Record a change somebody wants made to a plan that is already running.
+   *
+   * Pending, always: this table is the *holding* of an amendment, and nothing here
+   * touches the plan. What applies it is an accepted proposal, through the ordinary
+   * ingestion — see `src/plans/planAmendment.ts`.
+   */
+  recordPlanAmendment(input: {
+    planId: string;
+    originRef: string;
+    document: string;
+    note: string;
+    author: PlanAmendmentAuthor;
+    authorRef: string | null;
+  }): PlanAmendment {
+    const at = this.ctx.now();
+    const amendment: PlanAmendment = {
+      id: `amd_${nanoid(10)}`,
+      ...input,
+      status: 'pending',
+      resolution: null,
+      createdAt: at,
+      decidedAt: null,
+    };
+    this.ctx.db
+      .prepare(
+        `INSERT INTO plan_amendments (id, plan_id, origin_ref, document, note, author, author_ref, status,
+           resolution, created_at, decided_at)
+         VALUES (@id, @planId, @originRef, @document, @note, @author, @authorRef, @status, @resolution,
+           @createdAt, @decidedAt)`,
+      )
+      .run(amendment);
+    return amendment;
+  }
+
+  getPlanAmendment(id: string): PlanAmendment | null {
+    const row = this.ctx.db.prepare(`SELECT * FROM plan_amendments WHERE id=?`).get(id) as PlanAmendmentRow | undefined;
+    return row ? rowToAmendment(row) : null;
+  }
+
+  /** Every amendment ever proposed for one plan, newest first. */
+  listPlanAmendments(planId: string): PlanAmendment[] {
+    const rows = this.ctx.db
+      .prepare(`SELECT * FROM plan_amendments WHERE plan_id=? ORDER BY created_at DESC`)
+      .all(planId) as PlanAmendmentRow[];
+    return rows.map(rowToAmendment);
+  }
+
+  /**
+   * Every amendment still waiting on an answer, across every plan — what the rule
+   * that puts them to an operator reads. Oldest first: the one that has waited
+   * longest is asked about first.
+   */
+  listPendingPlanAmendments(): PlanAmendment[] {
+    const rows = this.ctx.db
+      .prepare(`SELECT * FROM plan_amendments WHERE status='pending' ORDER BY created_at ASC`)
+      .all() as PlanAmendmentRow[];
+    return rows.map(rowToAmendment);
+  }
+
+  /**
+   * Settle one amendment — compare-and-set against `pending` for
+   * `Store.decideProposal`'s reason: a verdict that arrives after the amendment was
+   * superseded must not apply a document nobody was shown. Null when it had already
+   * been settled, which every caller reads as "not mine to act on".
+   */
+  settlePlanAmendment(
+    id: string,
+    status: Exclude<PlanAmendmentStatus, 'pending'>,
+    resolution: string,
+  ): PlanAmendment | null {
+    const row = this.ctx.db.prepare(`SELECT * FROM plan_amendments WHERE id=?`).get(id) as PlanAmendmentRow | undefined;
+    if (!row || row.status !== 'pending') return null;
+    const at = this.ctx.now();
+    this.ctx.db
+      .prepare(`UPDATE plan_amendments SET status=?, resolution=?, decided_at=? WHERE id=? AND status='pending'`)
+      .run(status, resolution, at, id);
+    return { ...rowToAmendment(row), status, resolution, decidedAt: at };
   }
 
   getPlan(id: string): Plan | null {
@@ -646,6 +729,20 @@ interface PlanRevisionRow {
   at: string;
 }
 
+interface PlanAmendmentRow {
+  id: string;
+  plan_id: string;
+  origin_ref: string;
+  document: string;
+  note: string;
+  author: string;
+  author_ref: string | null;
+  status: string;
+  resolution: string | null;
+  created_at: string;
+  decided_at: string | null;
+}
+
 interface PlanPartRow {
   id: string;
   plan_id: string;
@@ -805,6 +902,32 @@ function parseEvidence(raw: string | null | undefined): PlanEvidence[] {
     return [];
   }
 }
+
+/**
+ * A stored amendment. `author` and `status` are narrowed by reading rather than
+ * trusted: these rows outlive the build that wrote them, and a value this build
+ * does not know reads as the safest of each — somebody else's proposal, still
+ * waiting — rather than widening the union.
+ */
+function rowToAmendment(r: PlanAmendmentRow): PlanAmendment {
+  return {
+    id: r.id,
+    planId: r.plan_id,
+    originRef: r.origin_ref,
+    document: r.document,
+    note: r.note,
+    author: r.author === 'operator' ? 'operator' : 'agent',
+    authorRef: r.author_ref,
+    status: AMENDMENT_STATUSES.includes(r.status as PlanAmendmentStatus)
+      ? (r.status as PlanAmendmentStatus)
+      : 'pending',
+    resolution: r.resolution,
+    createdAt: r.created_at,
+    decidedAt: r.decided_at,
+  };
+}
+
+const AMENDMENT_STATUSES: PlanAmendmentStatus[] = ['pending', 'applied', 'declined', 'superseded'];
 
 function rowToRevision(r: PlanRevisionRow): PlanRevision {
   return {

@@ -16,6 +16,9 @@ import type { PlanNarrative, PlanPartInput, PlanRevision } from '../types.js';
  * the sheet warns about.
  */
 
+/** The two sides of any diff here: a plan's prose and its declared parts, at one version. */
+type Snapshot = { seq: number; narrative: PlanNarrative; parts: PlanPartInput[] };
+
 /** What happened to one part across an amendment. */
 type PartChangeKind = 'added' | 'dropped' | 'changed' | 'unchanged';
 
@@ -65,8 +68,31 @@ export function latestPlanDiff(revisions: PlanRevision[]): PlanDiff | null {
   return diffPlanRevisions(prev, next);
 }
 
+/**
+ * Diff a plan *not yet ingested* against the revision it would amend — what an
+ * operator is shown before they approve a change to a plan already running.
+ *
+ * Deliberately the same reading as {@link latestPlanDiff}, over the same pair of
+ * shapes: a proposed amendment and an applied one differ in when they are read,
+ * never in what "changed" means, and two comparisons would drift the day one
+ * learned about a field the other did not. `seq` is the revision this *would*
+ * become, so the card names the same version the history will.
+ *
+ * Null when the plan has no revision to compare against, for
+ * {@link latestPlanDiff}'s reason: every part drawn as "added" is a change log for
+ * a plan nobody had seen.
+ */
+export function proposedPlanDiff(
+  revisions: PlanRevision[],
+  proposed: { narrative: PlanNarrative; parts: PlanPartInput[] },
+): PlanDiff | null {
+  const prev = revisions[revisions.length - 1];
+  if (prev === undefined) return null;
+  return diffPlanRevisions(prev, { ...proposed, seq: prev.seq + 1 });
+}
+
 /** The pure comparison. */
-function diffPlanRevisions(prev: PlanRevision, next: PlanRevision): PlanDiff {
+function diffPlanRevisions(prev: Snapshot, next: Snapshot): PlanDiff {
   return {
     seq: next.seq,
     againstSeq: prev.seq,

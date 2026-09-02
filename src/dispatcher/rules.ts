@@ -240,6 +240,13 @@ const RULES = [
       '**Every** planner verdict is a proposal rather than work: the plan lands as `awaiting_approval`, this rule puts it to you once, and nothing is scheduled until you accept — `plan-part` holds a decomposition\'s parts, `issue-pickup` holds a single verdict\'s issue. Accepting releases the plan, to `active` for a decomposition or to `single` for one pull request. Rejecting a decomposition retires the parts nothing has started for and falls the issue back to a single pull request; rejecting a single verdict sends the plan back to a planner with your reason, since the single-PR route is what a rejected decomposition already falls back to. Either way a "no" leaves the issue a route instead of parking it. A replan asks again — the amended verdict is a new proposal, and the old one cannot release it. There is no deployment in which a verdict commits the moment the planner writes it. A `single` verdict the harness *overruled* — parts are already in flight — is never asked about: the collapse was refused, so there is no decision in it.',
   },
   {
+    id: 'plan-amendment',
+    kind: 'rule',
+    name: 'Change to a running plan needs your approval',
+    description:
+      'Somebody — an agent working the plan, or you at your own keyboard — has proposed a correction to a plan that is already running, and it waits here until you answer it. This is the alternative to a replan for the case a replan is wrong for: a part whose scope drifted, a dependency that turned out to be the other way round, a step nobody needs any more. **Nothing is paused while you decide.** The plan keeps scheduling exactly as it was, its agents keep working, and accepting ingests the amended document over it — merged on slug, so a part with a branch, a pull request or an outcome keeps all three and only its declaration is refreshed. Rejecting changes nothing at all, which is what "carry on as planned" means. One amendment per plan is asked about at a time.',
+  },
+  {
     id: 'plan-blocked',
     kind: 'rule',
     name: 'Approved plan is going nowhere',

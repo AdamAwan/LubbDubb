@@ -138,6 +138,7 @@ import type {
   Plan,
   PlanPart,
   PlanPartInput,
+  PlanAmendment,
   PlanRevision,
   FeatureSummary,
   Retrospective,
@@ -849,6 +850,25 @@ export class Store {
   }
   listPlanRevisions(planId: string): PlanRevision[] {
     return this.plans.listPlanRevisions(planId);
+  }
+  recordPlanAmendment(input: Parameters<PlanStore['recordPlanAmendment']>[0]): PlanAmendment {
+    return this.plans.recordPlanAmendment(input);
+  }
+  getPlanAmendment(id: string): PlanAmendment | null {
+    return this.plans.getPlanAmendment(id);
+  }
+  listPlanAmendments(planId: string): PlanAmendment[] {
+    return this.plans.listPlanAmendments(planId);
+  }
+  listPendingPlanAmendments(): PlanAmendment[] {
+    return this.plans.listPendingPlanAmendments();
+  }
+  settlePlanAmendment(
+    id: string,
+    status: Parameters<PlanStore['settlePlanAmendment']>[1],
+    resolution: string,
+  ): PlanAmendment | null {
+    return this.plans.settlePlanAmendment(id, status, resolution);
   }
   markPartDispatched(id: string, taskId: string, branch: string): PlanPart | null {
     return this.plans.markPartDispatched(id, taskId, branch);

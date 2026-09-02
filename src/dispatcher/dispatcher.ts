@@ -9,6 +9,7 @@ import type {
   IssueShortfall,
   Job,
   Plan,
+  PlanAmendment,
   PlanPart,
   PriorityOverride,
   ProfileOverride,
@@ -133,6 +134,13 @@ export interface DispatchContext {
    * that became ready during the pulse is dispatchable in the same pulse.
    */
   planParts?: PlanPart[];
+  /**
+   * Changes somebody has proposed to plans that are already running, still
+   * waiting on an operator (`plan_amendments`). Rule `plan-amendment` is the only
+   * reader; a plan with none — which is nearly all of them, nearly all the time —
+   * costs the rule one skipped loop. Absent/empty means nobody has proposed one.
+   */
+  planAmendments?: PlanAmendment[];
   /**
    * Every plan's validation checks — how anyone checks the *goal* was met. Rule
    * `validate-check` is the only reader, and it reads exactly two things off a

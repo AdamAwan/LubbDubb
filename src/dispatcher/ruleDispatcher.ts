@@ -47,6 +47,7 @@ import { issuePlan } from './rules/issuePlan.js';
 import { issueAssess } from './rules/issueAssess.js';
 import { issueShortfall } from './rules/issueShortfall.js';
 import { issueRetro } from './rules/issueRetro.js';
+import { planAmendment } from './rules/planAmendment.js';
 import { planApproval } from './rules/planApproval.js';
 import { planBlocked } from './rules/planBlocked.js';
 import { planPart } from './rules/planPart.js';
@@ -86,6 +87,7 @@ const STAGES: Partial<Record<StageRuleId, (s: StageContext) => void>> = {
   'issue-shortfall': issueShortfall,
   'issue-retro': issueRetro,
   'plan-approval': planApproval,
+  'plan-amendment': planAmendment,
   'plan-blocked': planBlocked,
   'plan-part': planPart,
   'issue-pickup': issuePickup,

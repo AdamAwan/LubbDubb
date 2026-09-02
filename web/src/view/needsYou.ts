@@ -418,6 +418,8 @@ function escalationSummary(
     switch (proposal.kind) {
       case 'plan':
         return 'Plan ready';
+      case 'plan_amendment':
+        return 'Change to a running plan';
       case 'reply_draft': {
         const author = commentAuthor(state, context.prNumber, context.commentId);
         return `Draft reply${author === null ? '' : ` to ${author}`}${pr}`;
@@ -458,6 +460,11 @@ function holdingForEscalation(e: Escalation, state: AppState): number {
  */
 const PROPOSAL_KIND: Record<Proposal['kind'], NeedKind> = {
   plan: 'plan',
+  // A change to a running plan is still a decision about the plan, so it draws in
+  // the plan's tone and sorts with it. Only the headline tells them apart, which is
+  // the whole difference an operator needs at a glance: one holds work up, the
+  // other does not.
+  plan_amendment: 'plan',
   reply_draft: 'reply',
   merge: 'merge',
   shortfall: 'shortfall',

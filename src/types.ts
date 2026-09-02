@@ -3024,6 +3024,55 @@ export interface PlanRevision {
 }
 
 /**
+ * Who wants the plan changed. Only the settlement differs — an operator's own
+ * amendment is still proposed rather than applied, because the point of the gate
+ * is that a plan under way changes only on a decision somebody took deliberately,
+ * and the person arguing with a plan at their keyboard is not always the person
+ * who approved it.
+ */
+export type PlanAmendmentAuthor = 'agent' | 'operator';
+
+/**
+ * Where a proposed amendment stands. `superseded` is the terminal for one the
+ * world overtook — the plan was replanned, or abandoned, under it — and is not a
+ * verdict anybody gave.
+ */
+export type PlanAmendmentStatus = 'pending' | 'applied' | 'declined' | 'superseded';
+
+/**
+ * A correction to a plan that is **already running**, waiting on an operator.
+ *
+ * The row exists because the alternative is the one thing a live plan must not do:
+ * rewrite itself under the agents working it. An agent that finds the plan wrong
+ * halfway through a part, or an operator who reads it again and disagrees, records
+ * one of these; the plan keeps scheduling exactly as it was until the amendment is
+ * approved, and applying it is the ordinary ingestion — merged on slug, so work in
+ * flight keeps its branch, its pull request and its progress.
+ *
+ * The document is kept as submitted and re-validated at apply time, by the same
+ * `validatePlanDocument` the two transports use: what an operator approved and
+ * what is ingested are then the same document.
+ */
+export interface PlanAmendment {
+  id: string;
+  planId: string;
+  /** `issue:<n>` — the goal, so a reader need not resolve the plan first. */
+  originRef: string;
+  /** The proposed plan document, serialized. Parsed and validated where it is applied. */
+  document: string;
+  /** Why the plan must change. The whole of what an operator is shown beside the diff. */
+  note: string;
+  author: PlanAmendmentAuthor;
+  /** The agent that proposed it, for the audit line. Null for an operator's own. */
+  authorRef: string | null;
+  status: PlanAmendmentStatus;
+  /** What settled it: the operator's note, or why the harness withdrew it. */
+  resolution: string | null;
+  createdAt: string;
+  decidedAt: string | null;
+}
+
+/**
  * One place in the code a plan's diagnosis rests on — the planner's citation.
  *
  * `line` is optional because a claim is often about a file rather than a line, and
@@ -3780,7 +3829,7 @@ export interface Escalation {
  * rather than an automatic action because both arms spend a fleet, and a plan the
  * harness rewrote on its own would churn `plan_parts` under whatever is running.
  */
-export type ProposalKind = 'reply_draft' | 'merge' | 'plan' | 'shortfall';
+export type ProposalKind = 'reply_draft' | 'merge' | 'plan' | 'shortfall' | 'plan_amendment';
 
 /** One-way: a proposal leaves `pending` exactly once, in one of two directions. */
 type ProposalStatus = 'pending' | 'accepted' | 'rejected';
@@ -3889,6 +3938,7 @@ type ActionType =
   | 'reply_on_pr'
   | 'merge_pr'
   | 'propose_plan'
+  | 'propose_plan_amendment'
   | 'propose_shortfall'
   | 'update_pr_branch'
   | 'requeue_ci_check'
