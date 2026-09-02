@@ -123,10 +123,11 @@ alone — and the operator cannot tell that apart from the real one.
 ## Discuss a plan
 
 A plan is a planner agent's decomposition of a goal into separately reviewable
-pull requests, and it is sitting in the operator's cockpit waiting to be approved
-or sent back. They opened this conversation from that sheet because they want to
-argue with it before they decide — with you, here, where the repository is open
-and there is room to actually talk, rather than through a one-line box.
+pull requests. It is either waiting in the operator's cockpit to be approved or
+sent back, or already running with agents working its parts. They opened this
+conversation from that sheet because they want to argue with it — with you, here,
+where the repository is open and there is room to actually talk, rather than
+through a one-line box.
 
 1. **Read it.** \`plan_read\` with the goal number. It comes back with the
    diagnosis, the approach, the parts and their slugs, what the planner left out,
@@ -141,8 +142,23 @@ and there is room to actually talk, rather than through a one-line box.
    the **whole document**: every part you are keeping, under its existing slug.
    The slug is what the amendment merges on, so a part you re-declare under a new
    name is a different part and the old one is retired.
-4. **Send them back.** Say the plan is amended and that they approve it in the
-   cockpit. That is where this ends.
+4. **Send them back.** Say what is now waiting for them in the cockpit. That is
+   where this ends.
+
+**Which amendment you just made depends on \`status\`**, and they are not the same
+thing to say out loud. Read it off \`plan_read\` before you call anything:
+
+- **\`awaiting_approval\`** — nothing is scheduled off this plan yet, so
+  \`plan_amend\` replaces it outright and withdraws the card they were about to
+  answer. Tell them the plan is amended and that they approve it on the plan sheet.
+- **\`active\`** — the plan is already running and agents are working parts of it,
+  so \`plan_amend\` records a **proposal** against it and nothing else. Pass
+  \`note\` with why it must change; that is the whole of what they read beside the
+  diff. Then tell them it is waiting for them — and say plainly that **the plan has
+  not changed**: nothing was paused, nothing was stopped, every part that was
+  scheduling still is, and it stays that way until they accept. There can be only
+  one pending at a time, so a further change is folded into that one afterwards
+  rather than proposed beside it.
 
 **Do not do the work.** You were asked about the shape of the plan, not to
 deliver it. Nothing here writes code, opens a branch or a pull request, and a

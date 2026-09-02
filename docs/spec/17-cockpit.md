@@ -4660,8 +4660,29 @@ revision list above it: parts added, dropped, changed (field by field) or unchan
 fields the amendment rewrote. Prose is **named rather than diffed word by word**, because a planner
 rewrites a paragraph wholesale and a word-level diff of one is two paragraphs marked entirely changed.
 
-The control is absent until there is a second revision, and a fetch that fails leaves it absent rather
-than drawing an error for a view nobody has asked for.
+The control is absent until there is a second revision **or a change is waiting on the operator**, and
+a fetch that fails leaves it absent rather than drawing an error for a view nobody has asked for.
+
+### A change waiting on the operator
+
+Above the history, when `history.pending` is set: a plan that is still running, with a correction
+somebody has asked about it — the author's own words, the same `DiffBody` the applied diff is drawn
+through, and the warnings saying what applying it would leave standing. It is the only part of this
+view that is a **question** rather than a record, and the control on the rail says so (_Change
+waiting_) rather than naming the history it will become. Drawn on the amber the cockpit already carries
+(`--amber`, `--amber-line`, `--amber-fill`); no token was added, because "something is waiting on you"
+is not a new meaning for colour here.
+
+The reason it is on this sheet at all is that the inbox card is the other half of one reading: a plan
+sheet that showed a running decomposition with no sign that a correction to it was pending reads as a
+plan nobody has questioned, and this is the surface somebody goes to when they actually want to read
+the plan.
+
+**It carries no verdict.** Accepting or declining is the proposal's, on its card; a second pair of
+buttons over one decision is two places for it to be answered differently. What this owes the reader is
+the case and its consequences — including the sentence a running plan drawing its parts would otherwise
+leave them to infer wrongly: nothing is paused while they decide.
+→ [08](08-planning.md#amending-a-running-plan)
 
 **Every entry point is keyed on the plan existing, and none on what it is doing.** That is a
 correction, not a restatement: entry points keyed on a transient condition left the sheet reachable

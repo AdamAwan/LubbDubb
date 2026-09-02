@@ -3614,7 +3614,7 @@ export function buildDemoState(): DemoSeed {
  * a plan with no history draws — no History control at all.
  */
 export function demoPlanHistory(planId: string): PlanHistory {
-  if (planId !== 'plan-395') return { revisions: [], diff: null };
+  if (planId !== 'plan-395') return { revisions: [], diff: null, pending: null };
   const at = (mins: number) => new Date(Date.now() - mins * 60_000).toISOString();
   const narrative = (over: Partial<PlanNarrative>): PlanNarrative => ({
     reason: null,
@@ -3724,6 +3724,10 @@ export function demoPlanHistory(planId: string): PlanHistory {
     },
   ];
   return {
+    // The demo's plan has already been amended and released, so there is nothing
+    // waiting on the operator — the sheet's pending block is drawn from a live
+    // harness, where a running plan is what an amendment is proposed against.
+    pending: null,
     revisions,
     diff: {
       seq: 2,

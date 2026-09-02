@@ -1885,8 +1885,19 @@ stops drawing it. Broadcasts `dirty`, `dismissFinding`'s reason — nothing in t
 
 ### `GET /api/plans/:id/history`
 
-404 when the plan is unknown. Ships `{ revisions, diff }` — every verdict this plan has had, oldest
-first, and the last amendment read as a change (`latestPlanDiff`, null on a plan with one verdict).
+404 when the plan is unknown. Ships `{ revisions, diff, pending }` — every verdict this plan has had,
+oldest first, the last amendment read as a change (`latestPlanDiff`, null on a plan with one verdict),
+and **the change still waiting on the operator**, if there is one.
+
+`pending` is a running plan's amendment as the sheet reads it: the note, the author, the warnings, and
+`proposedPlanDiff` against the latest revision — deliberately the same reading `latestPlanDiff` gives
+once it is applied, so a change does not look like a different kind of thing either side of the
+decision that applies it. Null is the ordinary case, and there is at most one — a second pending
+amendment is refused where it is proposed. The stored document is **not** shipped: the operator decides
+on the diff, which is what the card carries too, and it is the largest prose the store holds. A row
+that no longer validates degrades to its note and no diff rather than failing the whole history — a
+plan sheet that will not open is the worse failure, and `applyPlanAmendment` settles such a row where
+it is applied. → [08](08-planning.md#amending-a-running-plan)
 
 **A route of its own rather than a field on `/api/state`**, for the reason the work graph and the
 retrospective have theirs: it is read when a plan sheet is opened rather than on every poll, and the

@@ -2775,6 +2775,13 @@ select:disabled {
   color: var(--text);
   border-color: var(--accent);
 }
+/* A change waiting on the operator: the one control on this rail that is asking
+   them something, on the same amber the pending block below it uses. */
+.pm-jump.history.waiting {
+  color: var(--amber);
+  border-color: var(--amber-line);
+  background: var(--amber-fill);
+}
 
 /* The verdict band: the two questions side by side, so a long "what's wrong" does
    not push "what we'll do" off the first screen. One column below 800px, where
@@ -3161,6 +3168,41 @@ select:disabled {
 }
 
 /* -- What changed --------------------------------------------------------- */
+/* The pending amendment sits above the history and reads as a question, which is
+   what the amber is doing: it is the sheet's only asking element, and the diff
+   below it is a record. */
+.pm-pending {
+  border: 1px solid var(--amber-line);
+  background: var(--amber-fill);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+.pm-pending-head {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.pm-pending-head .pm-section-label {
+  margin-bottom: 0;
+  color: var(--amber);
+}
+.pm-pending-note {
+  margin: 7px 0 10px;
+  font-size: 13px;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+.pm-pending-warnings {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.pm-pending-warnings li {
+  margin-top: 4px;
+}
+
 .pm-revs {
   display: flex;
   gap: 6px;
