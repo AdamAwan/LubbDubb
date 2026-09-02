@@ -35,7 +35,7 @@ is about.
 | `routes/spend.ts`       | `/api/spend` and `/api/spend/trend` — the breakdown behind the cost indicators, and its trend                                                                             |
 | `routes/allowance.ts`   | `/api/allowance` — the account's usage percentage over time, and the work that spent it                                                                                   |
 | `routes/readings.ts`    | `/api/retrospectives/:ref`, `/api/scratchpads/:ref`                                                                                                                       |
-| `routes/reviewPacks.ts` | `/api/prs/:number/review-pack` — asking for a review pack, reading the one a pull request has, and the reviewer's two marks on an idea ([31](31-review-packs.md))          |
+| `routes/reviewPacks.ts` | `/api/prs/:number/review-pack` — asking for a review pack, reading the one a pull request has, sharing it into the pool, and the reviewer's two marks on an idea ([31](31-review-packs.md))          |
 | `routes/reliability.ts` | `/api/reliability` — run outcomes, CI health, and why the fleet came back                                                                                                 |
 | `routes/mcpUsage.ts`    | `/api/mcp/usage` — which MCP tools the fleet reached for, and which it never did                                                                                          |
 | `routes/pool.ts`        | `/api/pool`, `/api/pool/insights` and the pool's one write — the cross-fleet pool ([28](28-cross-fleet-pool.md))                                                          |
@@ -468,12 +468,34 @@ where it cannot say — a head not yet fetched leaves the pack stale by sha alon
 behind". Both null for a pull request the world no longer carries, which a reader must not fold into
 "current". `checking` says whether the checker is on the pull request right now, so a pack whose
 every verdict is null reads as "being checked" or "unchecked" rather than either
-([31](31-review-packs.md#the-check)). Nothing here regenerates a pack: a stale one is shown, and the
+([31](31-review-packs.md#the-check)). `sharing` is `{available, share}`: whether this deployment has
+a pool to publish to at all, and the pull request's share row — null where nobody has asked, which is
+the ordinary state ([31](31-review-packs.md#sharing-a-pack)). Nothing here regenerates a pack: a stale one is shown, and the
 ask above is how a new one is made.
 
 404 with `{error, writing}` (`ReviewPackAbsence`) when there is no pack — `writing` says whether an
 author is on its way, so "not asked for" and "on its way" read differently. The newest pack written
 is what is shipped, whatever head it names; an older head's row is kept and never shipped here.
+
+### `POST /api/prs/:number/review-pack/share`
+
+Publish the pull request's current pack into the cross-fleet pool — **a second, deliberate act**, and
+never something asking for a pack does ([31](31-review-packs.md#sharing-a-pack)). **`202`**, and the
+answer is the `ReviewPackSharing` the read above ships: the share is recorded and the document goes
+out on the pool's own pulse, because the publish is never inside a route handler
+([28](28-cross-fleet-pool.md#the-publish-is-never-inside-a-route-handler)) — a route that did the
+network write would make the click wait on a push to another continent and report a failure there as
+a failure here.
+
+Refused: 400 on a non-integer number; 409 for a deployment with no pool (nothing is selected, or the
+fleet has no name yet), for a pull request with no pack to share, and — the one that matters — by the
+**secret backstop**, whose message names the line it stopped on and never quotes it. The backstop
+runs over every embedded line, not only the sentences, it refuses and never rewrites, and a refusal
+with somebody to tell writes no row: nothing was published and nothing was changed.
+
+Asking again on a newer pack replaces the share, and the pool holds one document per pull request.
+There is no unshare route: a shared pack is pruned when its pull request has been closed for
+`closedPrWindowMs`.
 
 ### `POST /api/prs/:number/review-pack/ideas/:id/read`
 

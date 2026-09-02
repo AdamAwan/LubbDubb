@@ -1,9 +1,16 @@
 import type { ErrorRecorder } from '../errorLog.js';
+import { packSecretRefusal } from '../reviewPacks/secrets.js';
 import type { Store } from '../store/store.js';
-import type { PoolDocument, PoolDocumentKind, PoolMirroredClaim } from '../types.js';
+import type {
+  PoolClockDocument,
+  PoolClockKind,
+  PoolMirroredClaim,
+  PoolPackDocument,
+  ReviewPackShare,
+} from '../types.js';
 import { buildClaimsDocument, importClaims, type PoolRefusal } from './claimsArm.js';
 import { buildDigestDocument } from './digestArm.js';
-import { parsePoolDocument, poolContentHash } from './document.js';
+import { POOL_SCHEMA_VERSION, parsePoolDocument, poolContentHash } from './document.js';
 import type { PoolTransport } from './transport.js';
 
 /**
@@ -20,6 +27,7 @@ import type { PoolTransport } from './transport.js';
  * | Claims poll    | every pulse           | the same                                  |
  * | Digest publish | an hour since the last| the next pulse after the hour             |
  * | Backstop       | an hour since the last| re-derives **both** documents and compares|
+ * | Packs          | a share is standing   | the next pulse; and prunes the dead ones  |
  *
  * **The dirty flag is a hint. The content hash is the truth.** An operator's ruling
  * marks the claims document dirty and the next pulse publishes it — the fast path,
@@ -76,6 +84,13 @@ export class PoolDesk {
       /** Injectable clock, so the hourly arms are testable without waiting an hour. */
       now: () => string;
       digestIntervalMs: number;
+      /**
+       * How long a closed pull request stays in the world the cockpit draws. A
+       * shared pack is pruned on the first publish after its pull request has been
+       * closed that long, so it outlives its pull request's row by nothing.
+       * → `docs/spec/31-review-packs.md#sharing-a-pack`, `docs/spec/07-pull-requests.md`
+       */
+      closedPrWindowMs: number;
       errors?: ErrorRecorder;
     },
   ) {}
@@ -99,6 +114,155 @@ export class PoolDesk {
     if (this.deps.transport.canRead) await this.poll();
     await this.publishKind('claims', boot);
     await this.publishKind('digest', boot);
+    await this.carryPacks();
+  }
+
+  /**
+   * The third document, and the one nothing here decides to publish.
+   *
+   * A pack leaves because a person asked for that pack to be shared, so this arm
+   * has no clock, no dirty flag and no hash: it carries out the asks that are
+   * standing, and prunes the ones whose pull request has been closed long enough.
+   * It runs here rather than in the route for
+   * `docs/spec/28-cross-fleet-pool.md#the-publish-is-never-inside-a-route-handler`'s
+   * reason — a failed push must not read as a share that failed locally — and a
+   * publish that throws leaves the row unpublished, so the next pulse retries it
+   * exactly as a dirty document is retried.
+   */
+  private async carryPacks(): Promise<void> {
+    for (const share of this.deps.store.listReviewPackShares()) {
+      if (this.dead(share)) {
+        await this.prune(share);
+        continue;
+      }
+      // Published already, or refused: both are settled states, and a refusal is
+      // never retried into a publish — the pack has to be written again.
+      if (share.publishedAt !== null || share.refusal !== null) continue;
+      await this.publishPack(share);
+    }
+  }
+
+  /**
+   * One asked-for pack into the namespace, with the backstop run over it again
+   * first.
+   *
+   * Run **again** rather than trusted from the ask: the refusal the route gave is
+   * about the document as it stood then, and this is the last thing between the
+   * pack and a repository that never forgets. It refuses and never rewrites, and
+   * the refusal names the line.
+   */
+  private async publishPack(share: ReviewPackShare): Promise<void> {
+    const record = this.deps.store.getReviewPackAt(share.prNumber, share.headSha);
+    if (record === null) {
+      this.deps.store.recordReviewPackShareRefusal(
+        share.prNumber,
+        `the pack for #${share.prNumber} at ${share.headSha} is no longer in the store, so there was nothing to share`,
+      );
+      return;
+    }
+    const refusal = packSecretRefusal(record.pack);
+    if (refusal !== null) {
+      // Not an error-log entry: a refusal is this control working, and the row is
+      // where the person who asked reads it.
+      this.deps.store.recordReviewPackShareRefusal(share.prNumber, refusal);
+      return;
+    }
+    const document: PoolPackDocument = {
+      pool: POOL_SCHEMA_VERSION,
+      kind: 'pack',
+      fleetId: this.deps.fleetId,
+      project: this.deps.project,
+      publishedAt: this.deps.now(),
+      harnessVersion: this.deps.harnessVersion,
+      prNumber: share.prNumber,
+      headSha: record.pack.headSha,
+      writtenAt: record.writtenAt,
+      pack: record.pack,
+    };
+    try {
+      await this.deps.transport.publish(document);
+      this.deps.store.recordReviewPackShared(share.prNumber);
+    } catch (error) {
+      // Left unpublished deliberately: the put is a whole replace, so the next
+      // pulse re-derives and retries, and there is nothing to queue or replay.
+      this.record(`Could not publish the review pack for #${share.prNumber} to the pool`, error);
+    }
+  }
+
+  /**
+   * Take a shared pack out of the namespace. **The local row is kept** — it is the
+   * fleet's own record, and the cost of keeping it is the fleet's; what goes is
+   * the copy in a substrate everybody clones, and the share row that described it.
+   */
+  private async prune(share: ReviewPackShare): Promise<void> {
+    if (share.publishedAt === null) {
+      // Never landed, so there is nothing in the namespace to remove and no reason
+      // to make a commit saying so.
+      this.deps.store.deleteReviewPackShare(share.prNumber);
+      return;
+    }
+    try {
+      await this.deps.transport.unpublish({ fleetId: this.deps.fleetId, prNumber: share.prNumber });
+      this.deps.store.deleteReviewPackShare(share.prNumber);
+    } catch (error) {
+      // The row stays, so the next pulse tries again: a pack left in the pool
+      // because one push failed is the thing pruning exists to prevent.
+      this.record(`Could not prune the shared review pack for #${share.prNumber}`, error);
+    }
+  }
+
+  /**
+   * Whether a shared pack's pull request has been closed for `closedPrWindowMs` —
+   * read off the same world the cockpit draws, and never off a silence. With no
+   * baseline at all nothing is pruned: *the harness has not looked* must not be
+   * folded into *the pull request is long gone*.
+   */
+  private dead(share: ReviewPackShare): boolean {
+    const world = this.deps.store.getWorldBaseline();
+    if (!world) return false;
+    if (world.pullRequests.some((pr) => pr.number === share.prNumber)) return false;
+    const closed = world.closedPullRequests?.find((pr) => pr.number === share.prNumber);
+    // Out of the closed window entirely: the row the cockpit drew is gone, which is
+    // the clock this is the same side of.
+    if (!closed) return true;
+    if (!closed.closedAt) return false;
+    return new Date(this.deps.now()).getTime() - new Date(closed.closedAt).getTime() >= this.deps.closedPrWindowMs;
+  }
+
+  /**
+   * A person asking for one pack to be shared. **Never by default and never on
+   * the ask for a pack**: this is a second, deliberate act, and it is the only
+   * thing that puts a pack in the namespace.
+   *
+   * The backstop runs here, synchronously, so the person who clicked is told which
+   * line stopped it rather than watching a share that silently never happens —
+   * and **no row is written for a refusal with a caller to tell**, because a row
+   * would leave a "refused" state nothing clears. The refusal the arm records
+   * later is the one nobody is there to hear.
+   *
+   * The publish itself is not here: it is the next pulse's, for
+   * `docs/spec/28-cross-fleet-pool.md#the-publish-is-never-inside-a-route-handler`'s
+   * reason.
+   */
+  shareReviewPack(prNumber: number): { ok: true; share: ReviewPackShare } | { ok: false; status: 409; error: string } {
+    const record = this.deps.store.getCurrentReviewPack(prNumber);
+    if (record === null) {
+      return { ok: false, status: 409, error: `there is no review pack for #${prNumber} to share` };
+    }
+    const refusal = packSecretRefusal(record.pack);
+    if (refusal !== null) {
+      return {
+        ok: false,
+        status: 409,
+        error:
+          `This pack was not shared: ${refusal}. Nothing was rewritten and nothing left the machine — ` +
+          `fix the line in the change and ask for the pack again.`,
+      };
+    }
+    return {
+      ok: true,
+      share: this.deps.store.recordReviewPackShare({ prNumber, headSha: record.pack.headSha }),
+    };
   }
 
   /** What the cockpit draws about this fleet's own side of the pool. */
@@ -168,7 +332,7 @@ export class PoolDesk {
    * wearing evidence it had itself written. Nothing would error, and it would look
    * like another fleet agreeing.
    */
-  private land(document: PoolDocument, now: string): void {
+  private land(document: PoolClockDocument, now: string): void {
     try {
       if (document.fleetId === this.deps.fleetId) {
         this.deps.store.recordPoolFleetReading({
@@ -207,7 +371,7 @@ export class PoolDesk {
    * an hour has gone by — and either way what actually goes out is decided by
    * comparing the freshly derived content against what was last published.
    */
-  private async publishKind(kind: PoolDocumentKind, boot: boolean): Promise<void> {
+  private async publishKind(kind: PoolClockKind, boot: boolean): Promise<void> {
     const publication = this.deps.store.getPoolPublication(kind);
     const now = this.deps.now();
     const slowClockDue =
@@ -218,7 +382,7 @@ export class PoolDesk {
     // nothing an operator does moves a number the way a ruling moves a claim.
     if (!slowClockDue && !(kind === 'claims' && publication.dirty)) return;
 
-    let document: PoolDocument;
+    let document: PoolClockDocument;
     try {
       document = this.derive(kind, now);
     } catch (error) {
@@ -243,7 +407,7 @@ export class PoolDesk {
     }
   }
 
-  private derive(kind: PoolDocumentKind, now: string): PoolDocument {
+  private derive(kind: PoolClockKind, now: string): PoolClockDocument {
     const context = {
       fleetId: this.deps.fleetId,
       project: this.deps.project,

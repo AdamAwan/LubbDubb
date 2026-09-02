@@ -231,6 +231,7 @@ export type {
   ReviewPack,
   ReviewPackAbsence,
   ReviewPackPayload,
+  ReviewPackSharing,
   ReviewRange,
   ReviewVerdict,
   ScratchEntry as ScratchEntryView,

@@ -282,6 +282,7 @@ test('the wire payload is the record plus the marks, never a second declaration'
     head: 'a1b2c3d',
     stale: null,
     checking: false,
+    sharing: { available: false, share: null },
   };
 
   assert.equal(payload.pack.schema, REVIEW_PACK_SCHEMA);

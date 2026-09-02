@@ -112,7 +112,7 @@ import type {
   KnowledgeCorroboration,
   KnowledgeFact,
   PoolDigestDocument,
-  PoolDocumentKind,
+  PoolClockKind,
   PoolFleetReading,
   PoolMirroredClaim,
   PoolPublication,
@@ -143,6 +143,7 @@ import type {
   ReviewMark,
   ReviewPack,
   ReviewPackRecord,
+  ReviewPackShare,
   GoalPriority,
   PlanStatus,
   PriorityOverride,
@@ -729,16 +730,16 @@ export class Store {
   listPoolDigestRows(project: string | null): PoolDigestMirrorRow[] {
     return this.pool.listDigestRows(project);
   }
-  getPoolPublication(kind: PoolDocumentKind): PoolPublication {
+  getPoolPublication(kind: PoolClockKind): PoolPublication {
     return this.pool.getPublication(kind);
   }
-  markPoolDirty(kind: PoolDocumentKind): void {
+  markPoolDirty(kind: PoolClockKind): void {
     this.pool.markPoolDirty(kind);
   }
-  recordPoolPublish(kind: PoolDocumentKind, contentHash: string): void {
+  recordPoolPublish(kind: PoolClockKind, contentHash: string): void {
     this.pool.recordPoolPublish(kind, contentHash);
   }
-  recordPoolChecked(kind: PoolDocumentKind): void {
+  recordPoolChecked(kind: PoolClockKind): void {
     this.pool.recordPoolChecked(kind);
   }
 
@@ -1020,6 +1021,27 @@ export class Store {
   }
   listReviewPacks(prNumber: number): ReviewPackRecord[] {
     return this.reviewPacks.listReviewPacks(prNumber);
+  }
+  getReviewPackAt(prNumber: number, headSha: string): ReviewPackRecord | null {
+    return this.reviewPacks.getReviewPackAt(prNumber, headSha);
+  }
+  recordReviewPackShare(input: Parameters<ReviewPackStore['recordReviewPackShare']>[0]): ReviewPackShare {
+    return this.reviewPacks.recordReviewPackShare(input);
+  }
+  recordReviewPackShared(prNumber: number): void {
+    this.reviewPacks.recordReviewPackShared(prNumber);
+  }
+  recordReviewPackShareRefusal(prNumber: number, refusal: string): void {
+    this.reviewPacks.recordReviewPackShareRefusal(prNumber, refusal);
+  }
+  getReviewPackShare(prNumber: number): ReviewPackShare | null {
+    return this.reviewPacks.getReviewPackShare(prNumber);
+  }
+  listReviewPackShares(): ReviewPackShare[] {
+    return this.reviewPacks.listReviewPackShares();
+  }
+  deleteReviewPackShare(prNumber: number): void {
+    this.reviewPacks.deleteReviewPackShare(prNumber);
   }
   markReviewIdeaRead(input: Parameters<ReviewPackStore['markReviewIdeaRead']>[0]): ReviewMark[] {
     return this.reviewPacks.markReviewIdeaRead(input);

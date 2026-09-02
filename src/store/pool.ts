@@ -1,7 +1,7 @@
 import type {
   PoolDigestDocument,
   PoolDigestRow,
-  PoolDocumentKind,
+  PoolClockKind,
   PoolFleetReading,
   PoolMirroredClaim,
   PoolPublication,
@@ -158,7 +158,7 @@ export class PoolStore {
   // -- This fleet's own side -------------------------------------------------
 
   /** What this fleet last published of one kind, or the untouched row for a kind it never has. */
-  getPublication(kind: PoolDocumentKind): PoolPublication {
+  getPublication(kind: PoolClockKind): PoolPublication {
     const row = this.ctx.db.prepare(`SELECT * FROM pool_publications WHERE kind=?`).get(kind) as
       | PublicationRow
       | undefined;
@@ -180,7 +180,7 @@ export class PoolStore {
    * no pending-change list to lose, reorder or replay — and a flag lost to a crash
    * self-heals on the slow clock, which re-derives and compares the hash.
    */
-  markPoolDirty(kind: PoolDocumentKind): void {
+  markPoolDirty(kind: PoolClockKind): void {
     this.ctx.db
       .prepare(
         `INSERT INTO pool_publications (kind, content_hash, published_at, dirty, checked_at)
@@ -191,7 +191,7 @@ export class PoolStore {
   }
 
   /** Record a successful publish: the hash it went out with, and when. Clears the hint. */
-  recordPoolPublish(kind: PoolDocumentKind, contentHash: string): void {
+  recordPoolPublish(kind: PoolClockKind, contentHash: string): void {
     const at = this.ctx.now();
     this.ctx.db
       .prepare(
@@ -213,7 +213,7 @@ export class PoolStore {
    * and writes nothing. Without it every idle fleet would commit an identical file
    * twenty-four times a day and the pool's history would be almost entirely noise.
    */
-  recordPoolChecked(kind: PoolDocumentKind): void {
+  recordPoolChecked(kind: PoolClockKind): void {
     this.ctx.db
       .prepare(
         `INSERT INTO pool_publications (kind, content_hash, published_at, dirty, checked_at)

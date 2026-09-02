@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ReviewAttention, ReviewMark, ScratchEntryView } from '../types.js';
+import type { ReviewAttention, ReviewMark, ReviewPackSharing, ScratchEntryView } from '../types.js';
 import { api, type ReviewPackReading } from '../api.js';
 import { AsyncButton } from './AsyncButton.js';
 import { Ref } from './refs.js';
@@ -51,6 +51,10 @@ export function ReviewPackModal({
   const [reading, setReading] = useState<ReviewPackReading | 'loading' | 'failed'>('loading');
   const [marks, setMarks] = useState<ReviewMark[] | null>(null);
   const [entries, setEntries] = useState<ReadonlyMap<string, ScratchEntryView> | null>(null);
+  // The last refused share, in the route's own words — the secret backstop's
+  // reason names the line it stopped on, which is the whole of what the person
+  // can act on. Held here rather than in the page, which is pure.
+  const [shareRefusal, setShareRefusal] = useState<string | null>(null);
   const live = useRef(true);
 
   const load = useCallback(async () => {
@@ -96,10 +100,13 @@ export function ReviewPackModal({
 
   // While an author or a checker is on the pull request the read is what will
   // change, so it is asked again on a clock and left alone otherwise.
+  // A share asked for and not yet published is the third thing that changes
+  // underneath the page on a clock of the harness's rather than the reader's: the
+  // pool publishes on its own pulse, so the state arrives through the same read.
   const busy =
     reading !== 'loading' &&
     reading !== 'failed' &&
-    (reading.kind === 'none' ? reading.writing : reading.payload.checking);
+    (reading.kind === 'none' ? reading.writing : reading.payload.checking || pendingShare(reading.payload.sharing));
   useEffect(() => {
     if (!busy) return;
     const timer = setInterval(() => void load(), AGENT_POLL_MS);
@@ -108,6 +115,12 @@ export function ReviewPackModal({
 
   const ask = useCallback(async () => {
     await api.requestReviewPack(prNumber);
+    await load();
+  }, [prNumber, load]);
+
+  const share = useCallback(async () => {
+    setShareRefusal(null);
+    await api.shareReviewPack(prNumber);
     await load();
   }, [prNumber, load]);
 
@@ -153,12 +166,20 @@ export function ReviewPackModal({
             onRead={onRead}
             onAttention={onAttention}
             onAsk={ask}
+            onShare={share}
+            shareRefusal={shareRefusal}
+            onShareRefused={setShareRefusal}
             refUrls={refUrls}
           />
         )}
       </div>
     </div>
   );
+}
+
+/** A share the pool has not carried yet — what the short clock above is for. */
+function pendingShare(sharing: ReviewPackSharing): boolean {
+  return sharing.share !== null && sharing.share.publishedAt === null && sharing.share.refusal === null;
 }
 
 /** No pack yet: on its way, or never asked for — two different sentences, and only the second offers the ask. */

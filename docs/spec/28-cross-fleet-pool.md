@@ -44,6 +44,7 @@ interface PoolTransport {
   readonly id: string; // `pool:git` — for the audit log and the cockpit
   readonly canRead: boolean;
   publish(doc: PoolDocument): Promise<void>; // replaces MY namespace, whole
+  unpublish(pack: PoolPackRef): Promise<void>; // removes MY shared pack for one pull request
   fetch(): Promise<PoolFetchedDocument[]>; // everyone's, mine included
 }
 
@@ -52,6 +53,12 @@ interface PoolFetchedDocument {
   text: string;
 }
 ```
+
+`unpublish` is the one delete, and it is narrow on purpose: only a
+[shared review pack](#a-third-document-rides-this-and-is-not-a-claim) is ever pruned, so nothing can
+be asked to remove `claims.json`. It is inside this fleet's own directory, so one writer per namespace
+is untouched, and removing what is not there is a success — the inverse of a whole-document put has to
+be as retryable as one.
 
 `fetch` hands up **bytes and an address**, not parsed documents, because checking the one against the
 other is the layer above's job — see [the envelope](#the-envelope). A substrate whose addresses do not
@@ -258,8 +265,12 @@ it is checked rather than assumed.
 
 A pool lives where people already are — a team's wiki, a repository somebody browses on the web. What
 they find there is a JSON document written for an importer, and the fleet's own knowledge is
-consequently readable only by the fleets. So each document is published with a markdown rendering of
-itself beside it, at the same address with a `.md` extension.
+consequently readable only by the fleets. So each document is published with a rendering of itself
+beside it, at the same address: markdown for the two clock documents, and for a
+[shared review pack](#a-third-document-rides-this-and-is-not-a-claim) the HTML companion
+[31](31-review-packs.md#reading-it) specifies. `poolCompanion` in `src/pool/companion.ts` is the one
+place that decides which, because what matters is a property of the pair — every document goes out
+with its companion, written and committed together.
 
 **It is derived output and never an input.** `fetch` names `claims.json` and `digest.json` by name, so
 nothing ever reads a companion back — which is the whole of why it is safe to have one. A markdown file
@@ -592,6 +603,7 @@ during a pause, during shutdown and during the upgrade handoff, which is the cla
 | Claims poll    | every pulse            | the same                                          |
 | Digest publish | an hour since the last | the next pulse after the hour              |
 | Backstop       | an hour since the last | re-derives **both** documents and compares |
+| Packs          | a share is standing    | the next pulse — and prunes the pull requests long closed |
 
 ### The dirty flag is a hint. The content hash is the truth.
 
@@ -836,16 +848,32 @@ on `:root` with an entry in `web/src/cockpit/tokens.ts`, and every reference on 
 
 ## A third document rides this, and is not a claim
 
-**Not yet built**, and specified in [31](31-review-packs.md#sharing-a-pack) rather than here — but it
-lands in this fleet's namespace, so it is named where a reader of this document would look for it.
+_Built_ — specified in [31](31-review-packs.md#sharing-a-pack) rather than here, but it lands in this
+fleet's namespace, so it is named where a reader of this document would look for it.
 
 A **review pack** is the restatement of one change for a human reviewer: ideas, claims about the code,
 and the code they point at, embedded. A shared one is published as a third kind of document beside
-`claims.json` and `digest.json`, in `<path>/fleets/<fleetId>/`, over the same `PoolTransport`, under
-the same one-writer-per-namespace rule — with an HTML companion beside it, rendered the way
+`claims.json` and `digest.json`, over the same `PoolTransport`, under the same one-writer-per-namespace
+rule — with an HTML companion beside it, rendered the way
 [the markdown companion](#the-human-readable-companion) is: a pure function of the document, written
 together with it, never read back. The companion is the whole of the standalone rendering, for a
 reviewer with no harness.
+
+**One per pull request rather than one per fleet**, so it has an address of its own inside the
+namespace:
+
+```
+<pool.path>/fleets/<fleetId>/packs/pr-<n>.json   <pool.path>/fleets/<fleetId>/packs/pr-<n>.html
+```
+
+Which is also why **nothing polls it**. `fetch` names `claims.json` and `digest.json` by name and
+never walks ([the clone](#the-clone-and-its-root)), so a pack is published for a person to open and
+is never read back, landed or mirrored — and `parsePoolDocument` never sees one. `PoolDocumentKind`
+grows the third value and `PoolClockKind` is the two that a clock publishes and
+`pool_publications` tracks: a pack has no dirty flag, no content hash and no cadence, because it goes
+out when a person shares it and comes out when its pull request is long closed. Removing it is the one
+delete a transport does — `unpublish`, narrowed to a pack of this fleet's, so nothing can be asked to
+remove `claims.json`.
 
 **It rides the transport and nothing else.** It is not a claim and takes none of the claims arm: no
 corroboration, no vouch, no contradiction, no lifetime, no reach, and nothing about it is ever

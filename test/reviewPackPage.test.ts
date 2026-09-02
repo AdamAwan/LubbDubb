@@ -147,6 +147,7 @@ function payload(over: Partial<ReviewPackPayload> = {}): ReviewPackPayload {
     head: HEAD,
     stale: null,
     checking: false,
+    sharing: { available: true, share: null },
     ...over,
   };
 }
@@ -168,6 +169,9 @@ function render(p: ReviewPackPayload, openIdea: string | null = null): string {
         onRead: noop,
         onAttention: noop,
         onAsk: noop,
+        onShare: noop,
+        shareRefusal: null,
+        onShareRefused: () => undefined,
         refUrls: {},
       }),
     }),

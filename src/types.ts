@@ -2567,6 +2567,37 @@ export interface ReviewPackRecord {
 }
 
 /**
+ * Whether one pull request's pack has been shared into the pool, and what became
+ * of it. → `docs/spec/31-review-packs.md#sharing-a-pack`
+ *
+ * **Sharing is a second, deliberate act**, so this row exists only once somebody
+ * has asked for one: no row is the ordinary state, and it is the honest one — a
+ * pack unshared costs nobody anything, and a pack shared by default costs the
+ * fleet its source, in volume.
+ *
+ * The request is recorded and the publish happens on the pool's own clock, because
+ * the publish is never inside a route handler
+ * (`docs/spec/28-cross-fleet-pool.md#the-publish-is-never-inside-a-route-handler`).
+ * So the row carries both moments, and a reader can tell "asked for" from "in the
+ * pool" without guessing.
+ */
+export interface ReviewPackShare {
+  prNumber: number;
+  /** The head of the pack that was shared — a share is of one pack, not of a pull request. */
+  headSha: string;
+  requestedAt: string;
+  /** When the transport took it, or null while it has not been published yet. */
+  publishedAt: string | null;
+  /**
+   * Why the secret backstop refused it, naming the line. Null on a share nothing
+   * refused. A refusal is **loud and never a rewrite**: the pack stays local and
+   * the page says which line stopped it.
+   * → `docs/spec/28-cross-fleet-pool.md#data-classification`
+   */
+  refusal: string | null;
+}
+
+/**
  * What a reviewer did to a pack — an attention override, an idea marked read —
  * held beside the document and never written into it, so a pack rewritten
  * against a new head does not throw their marks away.
@@ -4555,8 +4586,24 @@ export interface McpCallInput {
 // `src/remedyInsights.ts` already hold every figure. This moves what exists.
 // ---------------------------------------------------------------------------
 
-/** Which of the two documents this is. They differ in cadence, content, readership and retention. */
-export type PoolDocumentKind = 'claims' | 'digest';
+/**
+ * Which document this is.
+ *
+ * The first two are the fleet's own standing documents, published on a clock and
+ * tracked in `pool_publications`; a **pack** is neither. It is one pull request's
+ * review pack, published because a person asked for that one to be shared and
+ * pruned when its pull request has been closed long enough, so it has no dirty
+ * flag, no content hash and no cadence.
+ * → `docs/spec/31-review-packs.md#sharing-a-pack`
+ */
+type PoolDocumentKind = PoolClockKind | 'pack';
+
+/**
+ * The two documents a **clock** publishes. Named apart from {@link PoolDocumentKind}
+ * so the publication bookkeeping — dirty, hash, checked — cannot be handed a pack,
+ * which has none of those things and is published by a person.
+ */
+export type PoolClockKind = 'claims' | 'digest';
 
 /**
  * What every pool document carries, whichever kind it is.
@@ -4675,8 +4722,33 @@ export interface PoolDigestDocument extends PoolEnvelope {
   byFault: PoolDigestRow[];
 }
 
+/**
+ * One shared review pack: the local document, whole and unedited, in an envelope.
+ *
+ * **It rides the transport and nothing else.** It is not a claim and takes none of
+ * the claims arm: no corroboration, no vouch, no contradiction, no lifetime, and
+ * nothing about it is ever injected into a prompt or read by a rule. The pack is
+ * carried as it was written rather than restated, for the reason every other
+ * rendering of one is downstream of the document: a second grammar for one fact is
+ * free to disagree with the first, silently.
+ * → `docs/spec/31-review-packs.md#sharing-a-pack`
+ */
+export interface PoolPackDocument extends PoolEnvelope {
+  kind: 'pack';
+  /** The pull request at the origin. Half the address, and never a ref: it points into a tracker the reader may not have. */
+  prNumber: number;
+  /** The head the pack was written against, copied off the document the way the local row copies it. */
+  headSha: string;
+  /** When the pack was written locally. Never the publish time, which is the envelope's. */
+  writtenAt: string;
+  pack: ReviewPack;
+}
+
+/** A document published on a clock, and tracked as one. The layer above splits on `kind`. */
+export type PoolClockDocument = PoolClaimsDocument | PoolDigestDocument;
+
 /** One document, whichever kind. The layer above splits on `kind`; the transport stays opaque. */
-export type PoolDocument = PoolClaimsDocument | PoolDigestDocument;
+export type PoolDocument = PoolClockDocument | PoolPackDocument;
 
 /**
  * One arriving claim as the mirror holds it, plus what this fleet did with it.
@@ -4714,7 +4786,7 @@ export interface PoolFleetReading {
 
 /** What this fleet has published of one kind, and whether the store has moved since. */
 export interface PoolPublication {
-  kind: PoolDocumentKind;
+  kind: PoolClockKind;
   contentHash: string | null;
   publishedAt: string | null;
   /** A **hint**. The content hash is the truth; the slow clock re-derives and compares. */

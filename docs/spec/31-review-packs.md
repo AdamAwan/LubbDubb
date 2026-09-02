@@ -1,14 +1,13 @@
 # 31 — Review packs
 
-**Partly built.** [The witness log](#the-witness-log), [the pack document](#the-pack) — its shape,
-its schema version, the reviewer's marks and the two tables under [Where it lives](#where-it-lives) —
+**Built**, with one thing outstanding. [The witness log](#the-witness-log), [the pack document](#the-pack),
 [the author](#when-a-pack-is-made), [coverage](#coverage), [the check](#the-check) and its
-[attention labels](#attention), the four routes, the `review-pack-author` and `review-pack-check`
-prompt ids and [the cockpit rendering](#reading-it) — the control on the pull request's row, the
-page, the reviewer's marks — are running code; the rest of this document is not: no HTML companion,
-no sharing, and the attention overrides are recorded and taken but not yet surfaced to the operator.
-Every path a section names is italic while that section is unbuilt, and the marker comes off it in
-the change that makes it true.
+[attention labels](#attention), the five routes, the two prompt ids,
+[the cockpit rendering](#reading-it), [the HTML companion](#reading-it) and
+[sharing a pack](#sharing-a-pack) — the publish, the secret backstop over every embedded line, and
+the prune — are running code. What is not: the attention overrides are recorded and taken, and
+**not yet surfaced to the operator** ([Attention](#attention)). Every path a section names is italic
+while that section is unbuilt, and the marker comes off it in the change that makes it true.
 
 A diff is what is left over after the thinking. The reasoning that produced it — what was considered,
 what was rejected, which file was deliberately not touched — is thrown away at the moment of commit,
@@ -624,7 +623,7 @@ exists to avoid. An idea owning no hunk can carry no mark and reads unread.
 
 ## Reading it
 
-_Built_ — stage 5, the cockpit rendering; the HTML companion is not. `web/src/components/ReviewPackPage.tsx`
+_Built_ — stage 5, the cockpit rendering; stage 6, the HTML companion. `web/src/components/ReviewPackPage.tsx`
 draws the page, `ReviewPackModal.tsx` fetches it and takes the marks, `ReviewPackControl.tsx` is the
 control on the row, and `web/src/view/reviewPack.ts` holds the derivations; `test/reviewPackPage.test.ts`
 holds it.
@@ -733,16 +732,39 @@ schema number is `KNOWN_REVIEW_PACK_SCHEMA` in `web/src/view/reviewPack.ts`, res
 the cockpit may name nothing of the harness but `src/wire.ts`, which carries no runtime; the test
 pins it to `REVIEW_PACK_SCHEMA`.
 
-**The HTML companion** is a single self-contained file, rendered by the harness from the pack document
-alone when a pack is [shared](#sharing-a-pack), the way [28](28-cross-fleet-pool.md#the-human-readable-companion)
-renders its markdown beside `claims.json`: a pure function of the document, written beside it, never
-read back. It is read-only, it has no harness behind it, and it is for the reviewer who has no
-LubbDubb — which is most reviewers on most teams. It needs nothing checked out, because the document
-[carries its code](#the-document-carries-its-code). A skill in the repository was the earlier shape
-and is rejected for the reason [20](20-validation.md#the-skill) keeps its skill out of the checkout:
-a copy that travels with a checkout is the stale one, and this renderer's one job is to not be.
+**The HTML companion** — _built_, stage 6. `renderReviewPackCompanion` in
+`src/reviewPacks/companion.ts` is a single self-contained file rendered by the harness from the pack
+document alone when a pack is [shared](#sharing-a-pack), the way
+[28](28-cross-fleet-pool.md#the-human-readable-companion) renders its markdown beside `claims.json`:
+a pure function of the document, written beside it, never read back;
+`test/reviewPackCompanion.test.ts` holds it. It is read-only, it has no harness behind it, and it is
+for the reviewer who has no LubbDubb — which is most reviewers on most teams. It needs nothing
+checked out, because the document [carries its code](#the-document-carries-its-code): one file, one
+inline stylesheet, no script and no request, every fold a `<details>`. It **takes no input** — a
+shared pack carries no marks, so there is no control on it and nothing for one to write to — and it
+refuses an unknown `schema` whole, exactly as the cockpit does. A skill in the repository was the
+earlier shape and is rejected for the reason [20](20-validation.md#the-skill) keeps its skill out of
+the checkout: a copy that travels with a checkout is the stale one, and this renderer's one job is to
+not be.
+
+**It draws the same page, from a second copy of the derivations.** The numbering, the false-claim
+list and the facts line are in `src/reviewPacks/derive.ts` for the companion and
+`web/src/view/reviewPack.ts` for the cockpit, and neither can import the other: `web/src/` may name
+no server module but `src/wire.ts`, which carries no runtime, so there is no one place both can
+reach. The arrangement is the one `KNOWN_REVIEW_PACK_SCHEMA` already has and the defence is the same
+— `test/reviewPackCompanion.test.ts` runs both over one pack and asserts they agree, so a rule
+changed on one side and not the other fails there rather than shipping two pages that disagree about
+which idea is number one. Two differences are deliberate and are the absence of a harness rather than
+a second design: every idea is open, because there is no address bar to hold which one is not; and a
+`witnessed` claim's pad entry is **said to have stayed behind** rather than drawn, because a shared
+pack carries the document and nothing else.
 
 ## Sharing a pack
+
+_Built_ — stage 6. `PoolDesk.shareReviewPack` takes the ask and its packs arm publishes and prunes
+(`src/pool/poolDesk.ts`); `packSecretRefusal` in `src/reviewPacks/secrets.ts` is the backstop, the
+route is `POST /api/prs/:number/review-pack/share` and the control is on the page
+(`web/src/components/ReviewPackPage.tsx`); `test/reviewPackShare.test.ts` holds it.
 
 A pack is written locally. **Publishing one is a second, deliberate act**, and the two are separate
 controls on the page. The person shares the pack when they are happy with the pull request and with
@@ -765,6 +787,23 @@ pack is a third kind of document in the fleet's own namespace, beside `claims.js
 **not** a claim: no corroboration, no vouch, no contradiction, no lifetime, and nothing about it is
 ever injected into an agent's prompt. → [27](27-knowledge.md)
 
+**One document per pull request**, at `fleets/<fleetId>/packs/pr-<n>.json` with its companion beside
+it, carrying the pack whole in the pool's own envelope
+([28](28-cross-fleet-pool.md#a-third-document-rides-this-and-is-not-a-claim)) — the local document
+restated nowhere, for the reason every rendering of one is downstream of it. Sharing again on a newer
+head replaces that one document; the older pack stays in the fleet's own store, which is where the
+history belongs. **Nothing polls it**: `fetch` names the two clock documents and never walks, so a
+shared pack is read by people and by no harness, this fleet's included.
+
+**The ask is a person's and the publish is the pulse's.** The route records the share and answers
+`202`; the pool's own arm puts the document out on the next pulse, because
+[28](28-cross-fleet-pool.md#the-publish-is-never-inside-a-route-handler) has a route that pushed to
+another continent reporting a network failure as a failure of the click. A publish that throws leaves
+the share standing, so the next pulse retries it, exactly as a dirty document is retried. The page
+draws the states between — not shared, shared and waiting for the next publish, in the pool, refused
+— and re-reads on the short clock while one is waiting, the same clock the pack and the check arrive
+on. A deployment with no pool says so instead of offering a control that could only refuse.
+
 Two consequences that are easy to miss:
 
 - **The secret backstop matters more here than it does for a claim.** A pattern check written for one
@@ -772,17 +811,27 @@ Two consequences that are easy to miss:
   an internal hostname in a config default is exactly the thing that hides. It runs over every
   embedded line, not only the sentences. It refuses and never rewrites, as it does for claims — and it
   will refuse a legitimate share sometimes, which is the correct direction to fail in and should
-  surprise nobody when it happens.
+  surprise nobody when it happens. It is the pool's own `secretRefusal` pointed at every string the
+  document would carry — anchor code, counter code, notes, claims, the author's prose — and **the
+  refusal names the place and never the match**: _idea 1, step 2: src/config.ts:41 — it looks like it
+  contains a GitHub token_. Echoing the line would be this control creating the exposure it exists to
+  stop. It runs twice, at the ask and again at the publish, because the ask is the last moment a
+  person is there to be told and the publish is the last moment before the bytes leave; a refusal with
+  somebody to tell writes no row, and the one nobody is there to hear is recorded on the share.
 - **A shared pack is pruned; the local one is kept.** A claim is durable; a pack is disposable, and
   the pack for a merged pull request is dead weight in a repository everybody clones. The fleet that
   published it removes it from its namespace on the publish after the pull request has been closed
   for `closedPrWindowMs` — the same clock that drops the pull request out of the world the cockpit
   draws ([07](07-pull-requests.md)), so a shared pack outlives its pull request's row by nothing. The
   local row is untouched: it is the fleet's own record, and the cost of keeping it is the fleet's.
+  The reading is off the world the cockpit draws and **never off a silence**: with no baseline at all
+  nothing is pruned, because _the harness has not looked_ must not be folded into _the pull request is
+  long gone_. A prune that fails leaves the share row standing and the next pulse tries again — a pack
+  left in the pool because one push failed is the thing pruning exists to prevent.
 
 ## Where it lives
 
-Two tables, in `src/store/reviewPacks.ts` — under `src/store/`, the only directory that touches
+Three tables, in `src/store/reviewPacks.ts` — under `src/store/`, the only directory that touches
 SQLite, one module per group of related tables, taking a `StoreContext`, with `Store` delegating
 under the same method names — and one column on a table another module owns.
 → [14](14-persistence.md#shape)
@@ -792,6 +841,7 @@ under the same method names — and one column on a table another module owns.
 | `scratch_entries` | the witness log: a `decision` column on the pad's own rows, null on an ordinary note          |
 | `review_packs`    | one row per (pull request, head sha): the pack document as JSON, and when it was written      |
 | `review_marks`    | what a reviewer did to a pack — overrides, ideas read — one row per hunk an idea owns, keyed on the pull request and the hunk |
+| `review_pack_shares` | whether a pull request's pack is in the pool: one row per pull request, written only when somebody shares one, deleted when it is pruned |
 
 The pack is one document rather than a table per level. It is written whole and read whole, and
 nothing queries inside it — three normalised tables would buy nothing and cost a join on every read.
@@ -805,12 +855,18 @@ decided above the store, which does not know the pull request's head. The witnes
 pad because it _is_ pad entries, appended over time by the working agents; the marks are separate
 because they outlive the document they were made against.
 
+No row is the ordinary state for a share, and the honest one: sharing is a second, deliberate act, so
+a pull request nobody shared has nothing to say. The row carries the head it shared — a share is of
+one pack, not of a pull request — and the ask and the publish as two stamps, because the publish
+happens on the pool's clock rather than in the route. Deleting it on the prune leaves the
+`review_packs` row alone.
+
 `scratch_entries` exists, so the `decision` column needs its `ColumnMigrations` entry in the pad's
 own store module, or every database from before it has no column and every fork is silently a note.
-The two pack tables are new, so neither needs one — `REVIEW_PACK_COLUMNS` declares both empty so the
-first column added to either is noticed there rather than read back as `undefined`; a table being new
-**once** does not keep it exempt, and that first column needs an additive `ALTER TABLE` guarded by a
-`PRAGMA table_info` check. → [14](14-persistence.md#migrations)
+The three pack tables are new, so none needs one — `REVIEW_PACK_COLUMNS` declares all three empty so
+the first column added to any of them is noticed there rather than read back as `undefined`; a table
+being new **once** does not keep it exempt, and that first column needs an additive `ALTER TABLE`
+guarded by a `PRAGMA table_info` check. → [14](14-persistence.md#migrations)
 
 The shapes the routes ship live in `src/wire.ts`, and a wire type either **is** the domain type or
 `extends` it — never a re-declaration and never widened. `test/wireContract.test.ts` asserts that
@@ -823,7 +879,9 @@ will ship it, so the two cannot drift apart.
 The routes are `src/server/routes/reviewPacks.ts`, with its entry in `app.ts`'s `ROUTE_MODULES`,
 and every handler is wrapped in `checked(schemas, handler)` rather than reading the request itself:
 the ask and the read under [When a pack is made](#when-a-pack-is-made), both on
-`/api/prs/:number/review-pack`, and the two mark routes under
+`/api/prs/:number/review-pack`; the share under [Sharing a pack](#sharing-a-pack), on
+`…/review-pack/share`, whose answer — `ReviewPackSharing`, the same shape the read ships as
+`sharing` — is declared beside the payload; and the two mark routes under
 [What a reviewer does](#what-a-reviewer-does-is-not-part-of-the-pack) beneath it, whose body
 shapes — `ReviewReadBody`, `ReviewAttentionBody` — and answer — `ReviewMarksPayload` — are declared
 in `src/wire.ts` beside the payload. → [16](16-http-api.md#post-apiprsnumberreview-pack)

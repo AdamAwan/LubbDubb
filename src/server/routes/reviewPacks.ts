@@ -7,6 +7,7 @@ import type {
   ReviewMarksPayload,
   ReviewPackAbsence,
   ReviewPackPayload,
+  ReviewPackSharing,
   ReviewReadBody,
 } from '../../wire.js';
 import { checked, PrNumberParams, requiredBoolean } from '../validation.js';
@@ -48,6 +49,17 @@ function ownedHunks(idea: ReviewIdea): ReviewRange[] {
  */
 export function register(app: FastifyInstance, { system }: RouteContext): void {
   const { store, reviewPacks, reviewPackChecker } = system;
+
+  /**
+   * Whether this pull request's pack is in the pool. `available` is false on a
+   * deployment with no pool desk — no pool selected, or no fleet name yet — where
+   * there is nowhere to publish to and the page says so instead of offering a
+   * control that could only refuse.
+   */
+  const sharing = (prNumber: number): ReviewPackSharing => ({
+    available: system.pool !== undefined,
+    share: store.getReviewPackShare(prNumber),
+  });
 
   /**
    * Ask for a pack from the pull request's row. `202` — accepted, not done. The
@@ -95,7 +107,34 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
         head,
         stale,
         checking: reviewPackChecker.checking(params.number),
+        sharing: sharing(params.number),
       } satisfies ReviewPackPayload;
+    }),
+  );
+
+  /**
+   * Share the pull request's current pack into the pool — **a second, deliberate
+   * act**, and never something asking for a pack does. `202`, accepted rather
+   * than done: the document goes out on the pool's own clock, because a route
+   * that did the network write would make the click wait on a push to another
+   * continent and report a failure there as a failure here
+   * (`docs/spec/28-cross-fleet-pool.md#the-publish-is-never-inside-a-route-handler`).
+   *
+   * Refused with a 409 for a deployment with no pool, for a pull request with no
+   * pack, and — the one that matters — by the secret backstop, which names the
+   * line it stopped on and rewrites nothing.
+   */
+  app.post(
+    '/api/prs/:number/review-pack/share',
+    checked({ params: PrNumberParams }, async ({ params, reply }) => {
+      if (!system.pool) {
+        return reply.code(409).send({
+          error: 'this deployment publishes to no pool — set integrations.pool and the fleet name to share a pack',
+        });
+      }
+      const outcome = system.pool.shareReviewPack(params.number);
+      if (!outcome.ok) return reply.code(outcome.status).send({ error: outcome.error });
+      return reply.code(202).send(sharing(params.number) satisfies ReviewPackSharing);
     }),
   );
 
