@@ -1719,8 +1719,8 @@ bug anybody filed; the overview is only ever read two cards at a time.
 
 So the row is a **value**, `PanelRowModel` in `web/src/console/PanelRow.tsx`, and the card builds one
 rather than writing markup. The fields are the grammar: `lamp`, `title` with its optional `open`,
-`toggle`, `refs`, `facts`, `why`, `reading`, `chips`, `action`. Three of them carry the rules that kept
-being forgotten:
+`toggle`, `who`, `refs`, `facts`, `why`, `reading`, `chips`, `action`, and the `group` a row sits under.
+Three of them carry the rules that kept being forgotten:
 
 - **`refs` is required.** Null is how a row says it points at nothing — the goal rows say it, because
   the row _is_ the way to that goal — and a card that simply never got round to drawing a way
@@ -1936,6 +1936,7 @@ card is the drift `PanelRowModel` exists to end, one level up.
   same weight as the ones being worked, which is the whole thing the absent tag is meant to say.
   Most pull requests here are tagged by the harness itself ([07](07-pull-requests.md#watching)), so
   the button is normally an **un-watch**: the way to stop a runaway agent's pull request.
+  **Yours are a band, above the fleet's** — see [below](#yours-then-the-fleets).
   A PR is joined to its goal through **`goalOfPr`** — the server's own three-way match (a part's
   `prNumber`, the tracker's `linkedPrNumber`, the branch convention), read backwards — and the goal is
   drawn as a way onto its page. Through the parts alone it was drawn for almost no PR at all: a goal
@@ -1986,6 +1987,40 @@ card is the drift `PanelRowModel` exists to end, one level up.
   amber as an `orange` tier and is told apart by the word beside it, because a check that could not
   answer is a thing to look at and drawing it green or red would claim an answer it did not give.
   → [24](24-environments.md#is-the-environment-well)
+
+### Yours, then the fleet's
+
+The rack's question is _is anything waiting on me_, and it was answered one row at a time:
+a pull request a colleague handed you wore `you` in the state column, which is a reading an operator
+has to take down the whole card before they know the answer is no. Worse, it is the **same word** a
+pending merge proposal and a conflict put on a row — so "yours" and "your court" were one red chip,
+and the two are different obligations.
+
+So the rack **orders and bands** instead. The pull requests somebody handed you are drawn first, under
+a `Yours` heading in the `ask` red the state column already speaks, and the rest under `The fleet's`;
+each heading carries its own count, so how much is yours is read without counting rows. The predicate
+is **`attention.assignedToYou`**, never `attention.status === 'you'`: that field is set on exactly the
+arm where an assignment _is_ the court ([07](07-pull-requests.md#a-pull-request-a-person-put-on-you)),
+and it is what the queue rail keys on — one field, so the two surfaces cannot come to disagree about
+whose a pull request is.
+
+Beside each row, in a slot of its own, is **who asked**: the person's initials on a filled disc, the
+harness's rows a hollow dashed one. The name is the tracker's — `PullRequest.author`, as the provider
+reported it — and `initials` reads the three shapes that field arrives in off one rule: a GitHub login
+(`adamawan` → `AD`, two letters, because a column of rows that all start with `A` distinguishes
+nobody), an Azure display name (`Priya Raman` → `PR`) and an Azure unique name, whose domain is
+dropped. **Nothing invents a person.** A provider that reported no author draws the same hollow mark
+the fleet's rows wear, because _we were not told who_ and _nobody asked_ are both honestly "no person
+here". The mark's accessible label is the whole name, never the initials, which are two letters that
+mean nothing said out loud.
+
+**Both appear exactly when they have something to say.** With nothing assigned, there is no band and
+no column of marks: one heading over every row separates nothing, and a column of identical hollow
+diamonds is furniture announcing there is no news. The card takes back precisely the shape it had.
+`RowGroup` is a general field on the row model rather than a rack-only rule — a heading is drawn where
+`group.key` changes, so a card that interleaves two bands draws the heading twice, which is the honest
+rendering of rows ordered against their bands rather than a silent regrouping.
+→ `test/prRackGroups.test.ts`
 
 ### Rate, removed
 

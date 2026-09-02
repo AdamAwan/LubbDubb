@@ -212,9 +212,17 @@ test('a pull-request row wears the court the server put it in', () => {
   const html = render(view());
   const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('Up next'));
   const rows = rack.split(ROW).slice(1);
-  assert.equal(rows.length, state.world.pullRequests.length, 'every open pull request is drawn');
+  // In the card's own order, not the world's: the rack puts the pull requests
+  // somebody handed you above the fleet's, so a positional match against
+  // `world.pullRequests` would be asserting against a list nothing draws.
+  const open = state.world.pullRequests;
+  const drawn = [
+    ...open.filter((pr) => pr.attention.assignedToYou !== undefined),
+    ...open.filter((pr) => pr.attention.assignedToYou === undefined),
+  ];
+  assert.equal(rows.length, open.length, 'every open pull request is drawn');
   for (const [i, row] of rows.entries()) {
-    const pr = state.world.pullRequests[i];
+    const pr = drawn[i];
     assert.ok(pr, 'the fixtures line up with the rows');
     assert.ok(
       row.includes(`>${pr.attention.status}</button>`),

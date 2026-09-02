@@ -19,7 +19,8 @@ import { elapsed, fmtUsd, relTime } from '../components/util.js';
 import { PrOut, Ref, RefText, refLabel } from '../components/refs.js';
 import { CiLadder, StaleChip, waitedFor } from './GoalPage.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
-import { PanelRows, type PanelRowModel } from './PanelRow.js';
+import { PanelRows, type PanelRowModel, type RowGroup } from './PanelRow.js';
+import { Who } from '../components/who.js';
 import { AgentOnIt } from '../components/AgentOnIt.js';
 import { orphanCount, orphanGoal } from '../view/orphanGoal.js';
 
@@ -790,6 +791,14 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
   const closed = view.state.world.closedPullRequests;
   const merged = closed === undefined ? null : closed.filter((pr) => pr.merged).length;
   const { watchLabel } = config;
+  // Yours first, then the fleet's — and only where there is a *yours* to put
+  // first. With nothing assigned, a band over the whole list is a heading that
+  // separates nothing and a column of identical hollow marks beside it, so the
+  // card takes back exactly the shape it had before the split existed.
+  const yours = open.filter(isYours);
+  const theirs = open.filter((pr) => !isYours(pr));
+  const grouped = yours.length > 0;
+  const ordered = grouped ? [...yours, ...theirs] : open;
 
   return (
     <section className="cn-card cn-span2">
@@ -798,9 +807,53 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
         {merged !== null && <span className="cn-more">{merged} merged</span>}
       </h3>
       {open.length === 0 && <p className="cn-empty">No pull request is open.</p>}
-      <PanelRows rows={open.map((pr) => prRow(pr, view, actions, watchLabel))} />
+      <PanelRows
+        rows={ordered.map((pr) => {
+          const row = prRow(pr, view, actions, watchLabel);
+          if (!grouped) return row;
+          return { ...row, group: band(isYours(pr), yours.length, theirs.length), who: <Who name={whoAsked(pr)} /> };
+        })}
+      />
     </section>
   );
+}
+
+/**
+ * A pull request somebody handed you, off the server's verdict rather than off
+ * the court.
+ *
+ * `attention.status === 'you'` is the wrong predicate and reads almost right: a
+ * pending merge proposal and a conflict put a pull request in your court too,
+ * and neither is a colleague asking. `assignedToYou` is set on exactly the arm
+ * where an assignment *is* the court — which is the same field the queue rail
+ * keys on, so the two surfaces cannot come to disagree about whose it is.
+ * → [07](docs/spec/07-pull-requests.md#a-pull-request-a-person-put-on-you)
+ */
+function isYours(pr: OpenPullRequest): boolean {
+  return pr.attention.assignedToYou !== undefined;
+}
+
+/**
+ * Whose mark the row wears: the person who asked, or nobody.
+ *
+ * The author is only drawn on a row that is *yours*. On the fleet's own rows it
+ * would be the harness's login on every one of them — one repeated name, in a
+ * column whose whole job is to tell rows apart.
+ */
+function whoAsked(pr: OpenPullRequest): string | null {
+  const author = pr.author?.trim() ?? '';
+  return isYours(pr) && author !== '' ? author : null;
+}
+
+/**
+ * The two bands, with their counts. The counts are the reading the heading adds:
+ * "is anything mine" is answered by the band existing, and "how much" by the
+ * number, without the operator counting rows.
+ */
+function band(mine: boolean, yours: number, theirs: number): RowGroup {
+  return mine
+    ? { key: 'yours', label: 'Yours', note: `${yours}`, tone: 'ask' }
+    : { key: 'fleet', label: 'The fleet’s', note: `${theirs}` };
 }
 
 /**
