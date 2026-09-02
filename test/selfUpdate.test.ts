@@ -10,7 +10,10 @@ import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { UpdateDesk } from '../src/selfUpdate/updateDesk.js';
 import { applyUpgradeAction, buildReading, upgradability, IDLE_INTENT } from '../src/selfUpdate/upgradePlan.js';
-import type { BuildStanding } from '../src/selfUpdate/buildStanding.js';
+import { readBuildStanding, type BuildStanding } from '../src/selfUpdate/buildStanding.js';
+import { execFileSync } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
+import { tmpDir } from './support/gitRepo.js';
 
 /** A headless `claude` that spawns, says nothing and never exits: enough to be interrupted. */
 class SilentChild extends EventEmitter implements StreamChild {
@@ -327,4 +330,56 @@ test('a genuine crash inside the upgrade window is left to the operator', async 
   assert.equal(settled.left[0]!.died, 'crashed');
   assert.equal(system.recovery.pendingCount(), 1, 'the pulse is held, as it would be for any crash');
   system.store.close();
+});
+
+// -- The reading, against a real checkout -----------------------------------
+
+/**
+ * An install directory a few commits behind an upstream it can reach, both real
+ * repositories: the dirty test's whole subject is what git reports, so a fake
+ * would be asserting the fake.
+ */
+function behindCheckout(): { install: string; upstream: string } {
+  const root = tmpDir('lubbdubb-install-');
+  const upstream = join(root, 'upstream');
+  const install = join(root, 'install');
+  const git = (cwd: string, args: string[]): void => void execFileSync('git', args, { cwd });
+  execFileSync('git', ['init', '-q', '-b', 'main', upstream]);
+  git(upstream, ['config', 'user.email', 'test@example.com']);
+  git(upstream, ['config', 'user.name', 'Test']);
+  writeFileSync(join(upstream, 'version'), '1\n');
+  git(upstream, ['add', 'version']);
+  git(upstream, ['commit', '-q', '-m', 'the commit the install is on']);
+  execFileSync('git', ['clone', '-q', upstream, install]);
+  for (const n of [2, 3, 4]) {
+    writeFileSync(join(upstream, 'version'), `${n}\n`);
+    git(upstream, ['add', 'version']);
+    git(upstream, ['commit', '-q', '-m', `release ${n}`]);
+  }
+  return { install, upstream };
+}
+
+const at = (): string => '2026-08-17T00:00:00.000Z';
+
+test('an untracked file in the install directory does not take the upgrade away', async () => {
+  const { install } = behindCheckout();
+  // The kind of thing a long-neglected install picks up: a note, a dropped log, a
+  // path a newer build writes that this checkout's `.gitignore` never learned. A
+  // `pull --ff-only` over it succeeds, so the button must still be there.
+  writeFileSync(join(install, 'notes.txt'), 'left here by an operator\n');
+
+  const standing = await readBuildStanding({ remote: 'origin', branch: 'main', now: at, root: install });
+  assert.equal(standing.unavailable, null);
+  assert.equal(standing.behind, 3);
+  assert.equal(standing.dirty, false);
+  assert.equal(upgradability(standing).can, true);
+});
+
+test('a modified tracked file still refuses the upgrade, because the pull would fail', async () => {
+  const { install } = behindCheckout();
+  writeFileSync(join(install, 'version'), 'edited by hand\n');
+
+  const standing = await readBuildStanding({ remote: 'origin', branch: 'main', now: at, root: install });
+  assert.equal(standing.dirty, true);
+  assert.match(upgradability(standing).blocked!, /uncommitted changes/);
 });

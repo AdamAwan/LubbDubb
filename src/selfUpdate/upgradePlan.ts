@@ -67,7 +67,7 @@ export function upgradability(standing: BuildStanding): Upgradability {
   if (standing.dirty)
     return {
       can: false,
-      blocked: 'the install directory has uncommitted changes; commit or stash them before upgrading',
+      blocked: 'the install directory has uncommitted changes to tracked files; commit or stash them before upgrading',
     };
   if (standing.ahead > 0)
     return {
