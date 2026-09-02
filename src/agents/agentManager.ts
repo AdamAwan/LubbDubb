@@ -22,6 +22,7 @@ import type {
   PartOutcomeKind,
   PlanPart,
   Remedy,
+  PadDecision,
   ScratchEntry,
   ShortfallCause,
   StallPark,
@@ -1110,8 +1111,10 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
    *
    * The pad is resolved from the credential by {@link padWriteTarget} — an agent
    * cannot name it, so it cannot reach another goal's record — and it is refused
-   * outright outside an issue subtree rather than scoped down, because an agent
-   * handed a silent success believes its note was recorded.
+   * outright outside an issue's or a pull request's subtree rather than scoped
+   * down, because an agent handed a silent success believes its note was recorded.
+   * A `decision` beside the note makes the entry a fork of the witness log; it
+   * arrives already normalised by the tool.
    *
    * Routed through the manager rather than straight to the store for
    * {@link recordProgress}'s reason: the event is what lets a reader hear about
@@ -1122,6 +1125,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     agentId: string,
     note: string,
     topic: string | null,
+    decision: PadDecision | null,
   ): { ok: true; entry: ScratchEntry } | { ok: false; error: string } {
     return this.withCaller(agentId, ({ task }) => {
       const target = padWriteTarget(task.originRef);
@@ -1133,6 +1137,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         taskId: task.id,
         topic,
         note,
+        decision,
       });
       this.emit('scratch', { agentId, taskId: task.id, entry });
       return { ok: true, entry };

@@ -2286,9 +2286,9 @@ export interface IssueAppraisal {
  */
 export interface ScratchEntry {
   id: string;
-  /** The pad, always an `issue:<n>` ref — see `padOriginFor`. */
+  /** The pad: an `issue:<n>` ref, or `pr:<n>` for the agents working a pull request — see `padOriginFor`. */
   padRef: string;
-  /** The origin of the agent that wrote it: a part, the planner, the assessor. */
+  /** The origin of the agent that wrote it: a part, the planner, the assessor, a CI fixer. */
   authorOriginRef: string;
   /** Attribution, taken from the credential rather than from an argument. */
   agentId: string;
@@ -2296,7 +2296,30 @@ export interface ScratchEntry {
   /** An optional scannable tag the author chose. */
   topic: string | null;
   note: string;
+  /**
+   * What makes the entry a **fork** rather than a note: the witness log of
+   * [31](../docs/spec/31-review-packs.md#the-witness-log). Null on an ordinary
+   * note, which is every entry from before the field existed.
+   */
+  decision: PadDecision | null;
   createdAt: string;
+}
+
+/**
+ * A moment where the change could reasonably have gone another way, recorded by
+ * the agent that took it. `rejected` is the field that justifies the record: the
+ * road not taken leaves no trace in the tree, and a diff can never answer *why not
+ * the other way*. Every line is one line; the lists may be empty.
+ */
+export interface PadDecision {
+  /** What the change does here. */
+  chose: string;
+  /** Why. */
+  because: string;
+  /** The alternatives, each with the reason it was not taken. */
+  rejected: { alternative: string; because: string }[];
+  /** The files the fork touches, where the agent can say. */
+  paths: string[];
 }
 
 /**

@@ -397,6 +397,7 @@ test('the retro agent’s prompt carries the pad and the harness record, appende
     taskId: 't1',
     topic: 'store',
     note: 'the ALTER needed a PRAGMA check first',
+    decision: null,
   });
   store.recordDelivery({
     originRef: 'issue:12',

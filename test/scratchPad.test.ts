@@ -65,8 +65,10 @@ test('padOriginFor maps every origin in an issue subtree to the issue', () => {
   assert.equal(padOriginFor('issue:12:part:schema'), 'issue:12');
 });
 
-test('padOriginFor refuses everything outside one issue', () => {
-  assert.equal(padOriginFor('pr:42:ci'), null);
+test('padOriginFor refuses everything outside one issue or one pull request', () => {
+  // A pull request's agents have a pad of their own — see witnessLog.test.ts —
+  // and it is never the issue's.
+  assert.equal(padOriginFor('pr:42:ci'), 'pr:42');
   assert.equal(padOriginFor('job:job_abc'), null);
   assert.equal(padOriginFor('epic:e-1:work'), null);
   assert.equal(padOriginFor(null), null);
@@ -75,10 +77,10 @@ test('padOriginFor refuses everything outside one issue', () => {
 
 test('padWriteTarget names the tool a refused caller actually wants', () => {
   assert.deepEqual(padWriteTarget('issue:12:part:schema'), { ok: true, padRef: 'issue:12' });
-  const refused = padWriteTarget('pr:42:ci');
+  const refused = padWriteTarget('job:job_abc');
   assert.equal(refused.ok, false);
   if (refused.ok) return;
-  assert.match(refused.error, /pr:42:ci/);
+  assert.match(refused.error, /job:job_abc/);
   assert.match(refused.error, /report_finding|note_progress/);
 });
 
@@ -100,6 +102,7 @@ test('pad entries are appended and read back oldest first, one pad per issue', (
     taskId: 't1',
     topic: 'store',
     note: 'the migration needed a PRAGMA check',
+    decision: null,
   });
   store.appendScratchEntry({
     padRef: 'issue:12',
@@ -108,6 +111,7 @@ test('pad entries are appended and read back oldest first, one pad per issue', (
     taskId: 't2',
     topic: null,
     note: 'reused the schema part branch as a base',
+    decision: null,
   });
   store.appendScratchEntry({
     padRef: 'issue:99',
@@ -116,6 +120,7 @@ test('pad entries are appended and read back oldest first, one pad per issue', (
     taskId: 't3',
     topic: null,
     note: 'another goal entirely',
+    decision: null,
   });
 
   const entries = store.listScratchEntries('issue:12');
@@ -169,9 +174,9 @@ test('the pad is shared across one issue and reached only through the credential
   system.store.close();
 });
 
-test('an agent outside an issue subtree is refused, and told which tool it wants', async () => {
+test('an agent outside an issue or pull request subtree is refused, and told which tool it wants', async () => {
   const system = build();
-  for (const origin of ['pr:42:ci', 'job:job_abc', 'epic:e-1:work']) {
+  for (const origin of ['job:job_abc', 'epic:e-1:work']) {
     const agent = spawnAgent(system, origin);
     const res = await callTool(system, agent, 'scratch_append', { note: 'anything' });
     assert.equal(res.isError, true, `${origin} must not reach a pad`);
@@ -260,7 +265,7 @@ test('the snapshot ships the pad reading and the trail is fetched on demand', as
   assert.equal(untouched.statusCode, 200);
   assert.deepEqual(untouched.json().entries, []);
   // ...while a ref that names no pad at all is a bad request, not an empty one.
-  const notAPad = await app.inject({ method: 'GET', url: '/api/scratchpads/pr:42' });
+  const notAPad = await app.inject({ method: 'GET', url: '/api/scratchpads/job:job_abc' });
   assert.equal(notAPad.statusCode, 400);
 
   await app.close();

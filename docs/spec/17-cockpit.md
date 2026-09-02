@@ -4486,6 +4486,14 @@ there are entries, so an empty trail on screen means the fetch and the snapshot 
 plan and retrospective documents, which are written to be read as documents. A pad note is one agent's
 testimony, and rendering it would let a stray backtick or hash change what that testimony looks like.
 
+**A fork is drawn apart from a note.** An entry carrying a `decision`
+([31](31-review-packs.md#the-witness-log)) gets a `fork` chip in its head and, under its note, a
+labelled block: _chose_, _because_, the _rejected_ list with each alternative's reason, and the
+_paths_ where the agent gave them. The rejected list is the part a diff can never show, so it is the
+part given the room. Drawn on the blue tint the cockpit already uses for the fleet's own reasoning
+(`--blue-line`, `--blue-line-2`, `--blue-fill`) — a fork is not a new meaning for colour to carry, so
+no token was added.
+
 ## Running locally
 
 A **Local** reading in the top bar's `cn-reads` row, quiet when nothing is up and carrying the goal's

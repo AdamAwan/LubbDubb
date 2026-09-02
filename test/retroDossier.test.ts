@@ -206,6 +206,7 @@ test('the retro pad is bounded far above what a goal writes, and says so when it
       authorOriginRef: `issue:12:part:p${i}`,
       topic: null,
       note: `note ${i}`,
+      decision: null,
       createdAt: '2026-07-30T09:00:00Z',
     }) as ScratchEntry;
 
@@ -231,6 +232,7 @@ test('pad testimony is attributed and quoted, and an empty pad renders nothing',
     taskId: 't1',
     topic: 'store',
     note: 'needed a PRAGMA check\nbefore the ALTER',
+    decision: null,
     createdAt: '2026-07-30T09:00:00Z',
   };
   const text = padTestimony([entry]);

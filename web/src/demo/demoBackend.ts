@@ -2301,6 +2301,21 @@ const DEMO_SCRATCHPAD = [
     taskId: 'task-4',
     topic: 'deadlock',
     note: 'The starvation is not "the queue is busy": a maintenance orchestrator holds its watcher while it blocks in the API callback, and the follow-up AI jobs it enqueued can only be claimed by a *second* watcher. With one watcher it waits for itself. The docs have to say that, not "run more watchers if it feels slow".',
+    decision: {
+      chose: 'Release the watcher before the orchestrator blocks in the API callback.',
+      because: 'The claim path needs the watcher, and the callback holds it for the whole round-trip.',
+      rejected: [
+        {
+          alternative: 'Raise the worker count so a second claimer is usually free.',
+          because: 'Hides the deadlock behind capacity; it comes back under load.',
+        },
+        {
+          alternative: 'Move the follow-up jobs onto their own queue.',
+          because: 'Two queues to drain, and the ordering guarantee between them is what the feature is.',
+        },
+      ],
+      paths: ['src/maintenance/orchestrator.ts'],
+    },
     createdAt: new Date(Date.now() - 9_000_000).toISOString(),
   },
   {
@@ -2311,6 +2326,7 @@ const DEMO_SCRATCHPAD = [
     taskId: 'task-4',
     topic: 'ci',
     note: 'CI on this branch is red and none of it is ours — the failures are all in the base PR (#406). Do not chase them.',
+    decision: null,
     createdAt: new Date(Date.now() - 7_800_000).toISOString(),
   },
   {
@@ -2321,6 +2337,7 @@ const DEMO_SCRATCHPAD = [
     taskId: 'task-6',
     topic: 'ci',
     note: 'Spent about an hour on the red suite before working out the failures come from the base branch. Reading the pad first would have saved all of it.',
+    decision: null,
     createdAt: new Date(Date.now() - 4_800_000).toISOString(),
   },
   {
@@ -2331,6 +2348,7 @@ const DEMO_SCRATCHPAD = [
     taskId: 'task-7',
     topic: null,
     note: 'PR #410 covers the deadlock and the one-watcher warning. Nothing outstanding that I can see.',
+    decision: null,
     createdAt: new Date(Date.now() - 4_200_000).toISOString(),
   },
 ];

@@ -3903,6 +3903,48 @@ select:disabled {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+/*
+ * A fork on the pad: the decision drawn under its note as a labelled block, on
+ * the blue tint the rest of the cockpit uses for "the fleet's own reasoning".
+ * Existing tokens only — a fork is not a new meaning for colour to carry.
+ */
+.pad-fork-chip {
+  border-color: var(--blue-line-2);
+  color: var(--blue);
+}
+.pad-decision {
+  margin-top: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--blue-line);
+  border-left: 2px solid var(--blue-line-2);
+  background: var(--blue-fill);
+  font-size: 12px;
+}
+.pad-decision-row {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 6px;
+  margin: 2px 0;
+  overflow-wrap: anywhere;
+}
+.pad-decision-label {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding-top: 1px;
+}
+.pad-decision-rejected {
+  margin: 0;
+  padding-left: 14px;
+}
+.pad-decision-rejected li {
+  margin: 1px 0;
+}
+.pad-decision-paths {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
 .pm-say {
   display: flex;
   gap: 6px;

@@ -35,7 +35,7 @@ import { featureSummarySubmitOrigin } from '../summaries/featureSummary.js';
 import { featureRecords, featureReach, renderFeatureDossier } from '../summaries/featureRecord.js';
 import { neighbourSeedPaths, priorWorkBriefing } from '../briefing/priorWork.js';
 import { ciEvidenceNote, type CiEvidenceReader, type CiEvidenceTarget } from '../ci/ciEvidence.js';
-import { padOriginFor } from '../scratch/pad.js';
+import { goalOriginFor, WITNESS_INSTRUCTION } from '../scratch/pad.js';
 import { dispatchFactScopes, KNOWLEDGE_READ_LIMIT, renderScopedKnowledgeNote } from '../knowledge/block.js';
 import { retryNote, retryResumeFor, type RetryResume } from './retryResume.js';
 import { isActiveTask } from '../tasks.js';
@@ -1062,6 +1062,12 @@ export class ActionExecutor {
     // they are a cached prefix; only what varies per dispatch belongs in a task
     // prompt, and that is the whole of the split.
     const knowledge = knowledgeFor(action, store);
+    // The witness log's one standing instruction: record the forks. Code agents
+    // only — a desk agent moves no head, and a pack is written from the forks
+    // behind one. Appended for the reason every block above it is, and last,
+    // because it is about how to work rather than what the work is.
+    // → docs/spec/31-review-packs.md#the-witness-log
+    const witness = action.type === 'dispatch_code_agent' ? WITNESS_INSTRUCTION : null;
     const prompt = [
       note,
       action.prompt,
@@ -1074,6 +1080,7 @@ export class ActionExecutor {
       briefing,
       feature,
       attachments,
+      witness,
     ]
       .filter(Boolean)
       .join('\n\n');
@@ -1181,10 +1188,10 @@ export class ActionExecutor {
  * that go on to work it are dispatched for `issue:<n>:plan`, `:appraisal`, `:assess`,
  * `:part:<slug>` and `:retro`. An exact match would put the screenshot in front of
  * the filing agent alone — the one agent that writes no code — so the whole point
- * of the ticket surviving would be lost. `padOriginFor` is the harness's own
- * spelling of "which goal is this origin inside", already used to decide who
- * shares a scratchpad, so the answer here and there cannot drift; an origin
- * outside any issue subtree (a `job:<id>` brief that dispatched directly)
+ * of the ticket surviving would be lost. `goalOriginFor` is the harness's own
+ * spelling of "which goal is this origin inside" — the issue half of the pad's
+ * resolution, so the answer here and there cannot drift; an origin outside any
+ * issue subtree (a `job:<id>` brief that dispatched directly, a PR concern)
  * falls back to itself, which is an exact match.
  *
  * The scoping is deliberately unconditional within a goal: a part agent working
@@ -1194,7 +1201,7 @@ export class ActionExecutor {
  */
 function attachmentsFor(originRef: string | null | undefined, store: Store): string | null {
   if (!originRef) return null;
-  return attachmentsNote(store.listAttachments(padOriginFor(originRef) ?? originRef)) || null;
+  return attachmentsNote(store.listAttachments(goalOriginFor(originRef) ?? originRef)) || null;
 }
 
 /**
@@ -1228,7 +1235,7 @@ function knowledgeFor(
  * The operator's standing instructions on the goal being dispatched for — or null
  * when it carries none, which is every dispatch on a goal nobody has written on.
  *
- * **Scoped by `padOriginFor`**, the attachments' rule for the attachments' reason:
+ * **Scoped by `goalOriginFor`**, the attachments' rule for the attachments' reason:
  * an instruction is about the *goal*, and the agents that go on to work it are
  * dispatched for `issue:<n>:plan`, `:appraisal`, `:assess` and `:part:<slug>`. An
  * exact match would put "change the button to primary" in front of nobody at all
@@ -1246,7 +1253,7 @@ function instructionsFor(
   store: Store,
   tracker: ((issueNumber: number) => string | null) | undefined,
 ): string | null {
-  const goal = padOriginFor(originRef ?? null);
+  const goal = goalOriginFor(originRef ?? null);
   if (!goal) return null;
   const standing = store.listStandingInstructions(goal);
   if (standing.length === 0) return null;
@@ -1265,16 +1272,16 @@ function outstandingForOrigin(originRef: string | null | undefined, store: Store
  * The rows behind {@link priorWorkBriefing}, gathered for the goal this dispatch
  * belongs to — or null for every dispatch that is not on one.
  *
- * **Scoped by `padOriginFor`, not by a fresh predicate.** That is already the
- * harness's answer to "which goal is this agent working", written for the pad and
- * asked here for the same population: the `issue:<n>` root plus its `:plan`,
- * `:appraisal`, `:assess` and `:part:<slug>` arms. Everything else — a PR concern, a
- * job, a filing — resolves to null and is handed nothing, which is
+ * **Scoped by `goalOriginFor`, not by a fresh predicate.** That is already the
+ * harness's answer to "which goal is this agent working", the issue half of the
+ * pad's resolution and asked here for the same population: the `issue:<n>` root
+ * plus its `:plan`, `:appraisal`, `:assess` and `:part:<slug>` arms. Everything
+ * else — a PR concern, a job, a filing — resolves to null and is handed nothing, which is
  * `outstandingForOrigin`'s widening rule at the level of a whole goal: an agent
  * fixing CI on `pr:42` has no use for a planner's write-up about `issue:12` and
  * cannot tell it apart from its own task.
  *
- * **The retro origin is excluded**, though `padOriginFor` accepts it: a
+ * **The retro origin is excluded**, though `goalOriginFor` accepts it: a
  * retrospective is handed the pad and the whole dossier by {@link retroBriefing},
  * and would otherwise read its own goal's testimony twice in one prompt.
  *
@@ -1295,7 +1302,7 @@ function outstandingForOrigin(originRef: string | null | undefined, store: Store
  */
 function priorWorkFor(originRef: string | null | undefined, store: Store, outstandingShown: boolean): string | null {
   const ref = originRef ?? '';
-  const issueOriginRef = padOriginFor(ref);
+  const issueOriginRef = goalOriginFor(ref);
   if (!issueOriginRef) return null;
   if (retroSubmitOrigin(ref).ok) return null;
   const plan = store.getPlanByOrigin(issueOriginRef);

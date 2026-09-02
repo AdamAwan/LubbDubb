@@ -488,10 +488,10 @@ prompt.
   written under it, while a plan's evidence is written before any part is dispatched. They mean
   different things and neither is widened into the other; what keeps that honest is that the section
   names the paths a neighbour **shares** and never claims this goal edited them.
-- **Scoped by `padOriginFor`, not a fresh predicate** — already the harness's answer to "which goal is
+- **Scoped by `goalOriginFor`, not a fresh predicate** — already the harness's answer to "which goal is
   this agent working": the `issue:<n>` root plus its `:plan`, `:appraisal`, `:assess` and `:part:<slug>`
   arms. Everything else (a PR concern, a job, a filing) is handed nothing, which is the rejection note's
-  widening rule at the level of a whole goal. The **retro origin is excluded** though `padOriginFor`
+  widening rule at the level of a whole goal. The **retro origin is excluded** though `goalOriginFor`
   accepts it: `retroBriefing` already hands it the pad and the whole dossier, both bounded on their own
   terms ([05](05-dispatcher.md#what-it-is-bounded-by)).
 - **A part agent gets no parts section**, because `plan-part` renders every sibling through
@@ -539,7 +539,7 @@ dispatch prompt whenever the goal carries an instruction nobody has concluded ye
   casts — the agent's note is the answer to them, and it reaches the next agent through
   `outstandingWorkNote` ([11](11-mcp-tools.md#conclude_work)). **Not settled at dispatch**: an agent
   that died before doing anything would take the operator's words with it, silently.
-- **Scoped by `padOriginFor`**, the attachments' rule for the attachments' reason — an instruction is
+- **Scoped by `goalOriginFor`**, the attachments' rule for the attachments' reason — an instruction is
   about the goal, and the agents that work it are dispatched for `:plan`, `:appraisal`, `:assess` and
   `:part:<slug>`. An exact match would put _change the button to primary_ in front of nobody at all on
   a decomposed goal. The retro origin is deliberately **not** excluded the way the briefing excludes
@@ -618,9 +618,10 @@ operator's own filename as a label.
   screenshot being committed onto a branch and would duplicate it once per agent on a goal. The single
   file is readable instead through a `permissions.additionalDirectories` grant on every launch, see
   [10](10-agent-runtimes.md#reading-outside-the-worktree).
-- **Scoped to the goal, not to the exact origin.** The lookup is `padOriginFor(originRef) ?? originRef`
-  — the harness's own spelling of "which goal is this origin inside", already used to decide who shares
-  a scratchpad, so the two cannot drift. It has to be: a filed brief's images are keyed `issue:<n>`
+- **Scoped to the goal, not to the exact origin.** The lookup is `goalOriginFor(originRef) ?? originRef`
+  — the harness's own spelling of "which goal is this origin inside": the issue half of `padOriginFor`,
+  which decides who shares a scratchpad, so the two cannot drift. The pull request half is not a goal
+  ([31](31-review-packs.md#the-witness-log)), so a `pr:<n>:*` concern still resolves to itself here. It has to be: a filed brief's images are keyed `issue:<n>`
   while the agents that go on to work it are dispatched for `issue:<n>:appraisal`, `:plan`, `:part:<slug>`
   and `:retro`. An exact match would put the screenshot in front of the filing agent alone, the one
   agent that writes no code. An origin outside any issue subtree — a `job:<id>` brief that
@@ -630,6 +631,25 @@ operator's own filename as a label.
     the alternative is guessing which part an image is "about", which the harness has no basis for.
 - **The label is quoted as the operator's**, never as an instruction — a filename is not a directive,
   and it is never used to build a path.
+
+## The instruction to record forks reaches the agent
+
+`recordDispatchTask` appends `WITNESS_INSTRUCTION` (`src/scratch/pad.ts`, a constant) to every
+**code** dispatch's prompt, last among the appended blocks: the standing instruction of the witness
+log ([31](31-review-packs.md#the-witness-log)) to leave a `scratch_append` entry with a `decision`
+at each fork the change takes.
+
+- **Appended, not filled in**, for the rejection note's reason — and with more force, because this
+  block goes on every code dispatch there is: an operator template written before it existed would
+  drop a `{witness}` token on every one of them, in silence.
+- **Code agents only.** A desk agent moves no head, and a pack is written from the forks behind one.
+  The prompt of a desk dispatch is byte-identical to one composed before this existed.
+- **Last, and constant.** It is about how to work rather than what the work is, so it follows every
+  block that says what the work is; and it derives nothing from the dispatch, so it is the one
+  appended block that is the same on every prompt.
+- **Short, and it says an empty log is fine.** A prose ceiling to fill is what turns a record of
+  facts into a story; the instruction names what a fork is, that `rejected` is the field that
+  matters, and that nothing recorded is an honest outcome.
 
 ## `update_pr_branch` — the base merge without an agent
 
