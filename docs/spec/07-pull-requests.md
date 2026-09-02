@@ -704,6 +704,85 @@ implies `you`. Every defect this section now describes — the stale order, the 
 the held-check denial printed over a dispatch — was green against both suites' own fixtures and red on
 the first cell of that table.
 
+## Review threads
+
+A pull request's review reaches the harness twice, from one reading.
+
+`unresolvedComments` is the fold every dispatch rule consumes: one `PrComment` per thread, keyed on
+the thread's root comment, carrying `handled` — the single bit that decides whether rule
+`pr-review-comment` has work. `reviewThreads` is the same threads with the conversation and the state
+kept: the replies, who wrote each one, where the thread hangs in the diff, and one of four states.
+The providers build the threads and derive the comments from them (`threadComments` in
+`src/prThreads.ts`), so a thread the cockpit draws as open and a comment list that calls it handled
+cannot happen — there is one derivation, not two.
+
+| state | what it means | `handled` |
+| --- | --- | --- |
+| `open` | nobody from the fleet has answered | no |
+| `answered` | the harness wrote the last reply; it is with the reviewer | yes |
+| `resolved` | the reviewer closed the thread — their own verdict | yes |
+| `reopened` | the operator put it back to the fleet, whatever the provider says | no |
+
+The first three are exactly the two arms `handled` always folded, said out loud. They are worth
+separating because the fold is right for dispatch and wrong for a person: "3 handled" cannot tell an
+operator whether a review is finished or whether three answers are sitting unread on a reviewer.
+
+**`reviewThreads` is optional and its absence is a third answer.** A provider that does not report
+threads leaves it unset, and the cockpit says so in those words. Drawing that as "no review threads"
+would claim nobody has reviewed the change, which is the opposite of what is known.
+
+Both providers already read what this needs, so nothing here costs a request. GitHub joins the REST
+review comments to the GraphQL resolution read it was already making (`buildReviewThreads` in
+`src/integrations/github/sourceControl.ts`); Azure reads the thread status and `threadContext` off
+the threads it already fetches (`src/integrations/azure/sourceControl.ts`). A provider that reports
+no file or line leaves `path`/`line` unset and the thread is drawn without a place rather than with
+a guessed one.
+
+### Reopening a thread
+
+The operator can put one thread back in front of the fleet:
+`POST /api/prs/:number/threads/:threadId/reopen`. The thread then reads `reopened`, which is
+unhandled, and rule `pr-review-comment` picks the pull request up again on the next pulse exactly as
+it would for a thread nobody had answered.
+
+It is what an operator has instead of arguing with an agent's answer. A thread the fleet replied to
+is `answered` and a thread the reviewer closed is `resolved`, and both are settled as far as every
+rule is concerned — so before this, an answer that missed the point could only be pursued by leaving
+a second comment on the provider and waiting for it to be read as new work.
+
+**It is a mark in the harness, never a write to the provider.** Unresolving a thread on GitHub is a
+statement to the _reviewer_, reopening their question in their inbox; this is a statement to the
+_fleet_. They are different acts, and for the common case — a thread nobody resolved that the harness
+merely answered last — the provider cannot express the second at all. The reviewer's thread is left
+exactly as they left it, and the page says `reopened` so the operator can see that the two now
+disagree on purpose.
+
+Three properties hold it together:
+
+- **One fold, at the two seams that read a world.** `applyThreadReopens` lays the marks over the
+  reading the harness decides against, and over the stored baseline as the cockpit serves it. Both,
+  because they are not the same read: `runCycle` coalesces while a cycle is in flight, so a click
+  that lands during one is followed by no world read at all, and a cockpit waiting for the next pulse
+  would draw the thread as settled for a beat.
+- **The baseline is never overwritten with it.** That row is the record of what the provider last
+  said; folding an override into it would leave the harness unable to put the thread back when the
+  ask is taken back — which is the whole of what "never mind" does.
+- **The mark is spent by the fleet's next reply into that thread**, in `ActionExecutor`, and by
+  nothing else — no timer, no cycle count. Left standing it would hold the thread open against every
+  later reading and dispatch for it every pulse, for as long as the pull request lived. The loop is
+  finite by construction: reopen → open → dispatch → reply → mark cleared → `answered`.
+
+A mark naming a thread the current reading does not carry is skipped, not invented — the row stays,
+costing nothing, and takes effect again if the thread comes back. A reopen is refused outright on a
+pull request or thread the world does not carry: a stale page must not leave an operator believing
+the fleet was asked for something it will never see.
+
+One limit worth stating. While an agent is _already running_ on the branch, a reopened thread it was
+dispatched with may not be read back to it as news — `dispatchedSignals` de-duplicates on the signal
+ref over the recent-decision window, and a reopen does not mint a new one. The reopen still stands:
+the next dispatch onto that branch carries the thread as work. Nothing is lost, but the answer can be
+one round later than the click.
+
 ## The fleet review
 
 **Off by default** (`review.enabled`). What follows is what a deployment gets when a project turns it

@@ -243,6 +243,15 @@ export interface GhReviewComment {
   body: string;
   /** in_reply_to_id — null for a thread root, the root's id for a reply. */
   inReplyToId: number | null;
+  /**
+   * The file the comment hangs on, and the line in it. Display only — nothing
+   * dispatches on either — and both **optional** in the honest sense: a comment
+   * attached to no line (a review's summary) carries neither, and neither does a
+   * fixture written before they were read. A surface without them names the
+   * thread and not the place, rather than guessing one.
+   */
+  path?: string;
+  line?: number | null;
 }
 
 /**

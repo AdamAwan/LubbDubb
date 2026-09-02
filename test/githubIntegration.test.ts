@@ -1,11 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { threadComments } from '../src/prThreads.js';
+import type { PrComment } from '../src/types.js';
 import { Store } from '../src/store/store.js';
 import {
   GitHubSourceControlIntegration,
   aggregateCiStatus,
   computeApproved,
-  buildUnresolvedComments,
+  buildReviewThreads,
 } from '../src/integrations/github/sourceControl.js';
 import { GitHubIssuesIntegration, linkedPrFromTimeline, viewerAddedLabels } from '../src/integrations/github/issues.js';
 import { diffWorlds } from '../src/world/worldDiff.js';
@@ -248,6 +250,18 @@ function pull(over: Partial<GhPullSummary> = {}): GhPullSummary {
 // --------------------------------------------------------------------------
 // Pure helpers
 // --------------------------------------------------------------------------
+
+/**
+ * The comment list as the provider now ships it: the threads, folded. The
+ * assertions below are written against `handled` because that is the bit every
+ * dispatch rule reads, and folding here rather than restating each case is what
+ * keeps them assertions about the provider's own derivation.
+ */
+const buildUnresolvedComments = (
+  comments: GhReviewComment[],
+  viewerLogin: string,
+  threads?: GhReviewThread[],
+): PrComment[] => threadComments(buildReviewThreads(comments, viewerLogin, threads));
 
 test('aggregateCiStatus: any failing check wins', () => {
   const runs: GhCheckRun[] = [

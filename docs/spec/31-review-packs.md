@@ -495,11 +495,12 @@ many words — neither pad has an entry, and whether the harness links the pull 
 all — and tells the author not to invent a witness; the tool then refuses any claim or note that
 cites an entry, since there is none to cite, and writes `witnessed: false`.
 
-Offered where every pack is — on the pull request's row on a goal's page. There is no pull request
-page in the cockpit ([17](17-cockpit.md#links)), so a human-authored pull request gets a pack only
-where the harness has linked it to a goal (`ownsPr`, [17](17-cockpit.md#the-pull-requests-and-the-tail)).
-One the provider has not linked has no row to carry the control, and gets none. That is the honest
-limit of the surface rather than a rule about authorship.
+Offered where every pack is — on the [pull request's own page](17-cockpit.md#the-pull-request-page),
+reached from its row on a goal's page. A pull request the provider has not linked to a goal has no
+row to be reached from, so in practice a human-authored pull request gets a pack where the harness
+knows about it (`ownsPr`, [17](17-cockpit.md#the-pull-requests-and-the-tail)). That is the honest
+limit of the surface rather than a rule about authorship — and one the address bar already answers
+for anybody who has the number: `?pr=<n>` opens the page, control and all.
 
 What is lost is the rejected alternatives, which are the best thing here. What survives is the idea
 grouping, the `region` anchors and the whole of the check — which is most of the value, and more than

@@ -2,10 +2,12 @@ import type { JSX, ReactNode } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions, ConsolePanel, ConsoleTab } from '../cockpit/actions.js';
 import type { NeedRow } from '../view/needsYou.js';
+import type { PrPageView } from '../view/prPage.js';
 import { TAB_LABEL, TopBar } from './TopBar.js';
 import { KIND_LABEL, KIND_SYMBOL, QueueRail, subjectLabel } from './QueueRail.js';
 import { needBody } from './NeedsBand.js';
 import { GoalPage } from './GoalPage.js';
+import { PrPage } from './PrPage.js';
 import { Overview } from './Overview.js';
 import { Panel } from './Panel.js';
 import { RecoveryPanel } from '../components/RecoveryPanel.js';
@@ -74,7 +76,18 @@ export function ConsoleRoot({ view, actions }: { view: CockpitView; actions: Coc
   // it does not move the nav — so with a tab winning, clicking an ask would land
   // on a triage list, or on the record, instead of on the ask.
   const situation =
-    view.goalPage !== null ? (
+    // A selected pull request outranks the goal, which outranks the nav — the same
+    // ladder one rung further in. The crumb it draws leads back to the goal rather
+    // than to the tab, because that is where the click came from and where leaving
+    // the page lands.
+    view.prPage !== null ? (
+      <>
+        <PrCrumb page={view.prPage} tab={view.tab} actions={actions} />
+        <PrPage page={view.prPage} view={view} actions={actions} />
+      </>
+    ) : view.selectedPr !== null ? (
+      <PrGone number={view.selectedPr} tab={view.tab} actions={actions} />
+    ) : view.goalPage !== null ? (
       <>
         <Crumb goal={view.goalPage.issue} tab={view.tab} actions={actions} />
         <GoalPage page={view.goalPage} view={view} actions={actions} />
@@ -303,6 +316,56 @@ function GoalGone({ ref_, tab, actions }: { ref_: string; tab: ConsoleTab; actio
         </p>
         <span className="cn-refs">
           <Ref to={ref_} />
+        </span>
+      </section>
+    </>
+  );
+}
+
+/**
+ * The trail out of a pull request's page: back to the goal it belongs to, or —
+ * on a pull request no ticket owns, which the harness works and which therefore
+ * reaches this page — back to the tab. Two arms rather than one because the way
+ * back has to be somewhere the operator can actually stand, and "the goal" is not
+ * always one.
+ */
+function PrCrumb({ page, tab, actions }: { page: PrPageView; tab: ConsoleTab; actions: CockpitActions }): JSX.Element {
+  return (
+    <nav className="cn-crumb">
+      <button type="button" onClick={() => actions.selectPr(null)}>
+        ‹ {page.goal !== null ? `#${page.goal.number} ${page.goal.title}` : TAB_LABEL[tab]}
+      </button>
+      <span className="cn-crumbsep">/</span>
+      <span className="cn-crumbnow">PR #{page.pr.number}</span>
+    </nav>
+  );
+}
+
+/**
+ * A pull request was selected and the world does not carry it — a stale link, or
+ * one that has aged past the closed-PR retention window. Said rather than fallen
+ * through to the page underneath, for `GoalGone`'s reason: the address bar naming
+ * something the screen does not show is a click that reads as doing nothing. The
+ * provider is where the answer actually is, so the reference is the offer.
+ */
+function PrGone({ number, tab, actions }: { number: number; tab: ConsoleTab; actions: CockpitActions }): JSX.Element {
+  return (
+    <>
+      <nav className="cn-crumb">
+        <button type="button" onClick={() => actions.selectPr(null)}>
+          ‹ {TAB_LABEL[tab]}
+        </button>
+        <span className="cn-crumbsep">/</span>
+        <span className="cn-crumbnow">PR #{number}</span>
+      </nav>
+      <section className="cn-gone">
+        <h2>PR #{number} is not in the current world</h2>
+        <p>
+          The last scan did not return this pull request — so there is no review, no check and no verdict to draw. That
+          is what a pull request closed longer ago than the retention window looks like from here.
+        </p>
+        <span className="cn-refs">
+          <Ref to={`pr:${number}`} />
         </span>
       </section>
     </>

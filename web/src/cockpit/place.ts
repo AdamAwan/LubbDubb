@@ -24,6 +24,17 @@ export interface Place {
   tab: ConsoleTab;
   /** The goal whose page is open, as `issue:<n>`, or null for the tab. */
   goal: string | null;
+  /**
+   * The pull request whose page is open, by number.
+   *
+   * **It outranks the goal**, which outranks the tab — the same ladder, one rung
+   * further in: a pull request is reached *from* a goal, and the crumb back names
+   * the goal it was reached from. Held here rather than replacing {@link goal}
+   * precisely so that crumb exists, and so the back button lands on the goal
+   * page rather than on the tab.
+   * → `docs/spec/17-cockpit.md#the-pull-request-page`
+   */
+  pr: number | null;
   /** Which full-surface panel is in front, or null. */
   panel: ConsolePanel;
   /** The agent whose drawer is open. */
@@ -262,6 +273,7 @@ const DEFAULT_INSIGHTS_WINDOW: InsightsWindow = '7d';
 export const NOWHERE: Place = {
   tab: 'overview',
   goal: null,
+  pr: null,
   panel: null,
   agent: null,
   plan: null,
@@ -430,6 +442,7 @@ export function readPlace(search: string): Place {
         (panel !== null ? PANEL_ALIASES[panel] : undefined) ??
         'overview'),
     goal: param(query, 'goal'),
+    pr: readPrNumber(param(query, 'pr')),
     // The ask panel carries its row, so it is its own parameter rather than a
     // prefix on `panel` — an id is opaque and free to contain whatever the
     // harness minted, including the separator a prefix would have to split on.
@@ -608,6 +621,16 @@ function readKnowledgeSort(value: string | null): {
  * nothing — and the idea is carried only under a pack, since without one it names
  * a fold on a page that is not open.
  */
+/**
+ * The pull request whose page is open, validated back into a number for
+ * `readReviewPack`'s reason: this is an operator-typed input, and `?pr=main` is a
+ * place that does not exist rather than a page drawn for `NaN`.
+ */
+function readPrNumber(value: string | null): number | null {
+  const number = Number(value);
+  return value !== null && Number.isInteger(number) && number > 0 ? number : null;
+}
+
 function readReviewPack(pack: string | null, idea: string | null): Pick<Place, 'reviewPack' | 'reviewIdea'> {
   const number = pack === null ? NaN : Number(pack);
   if (!Number.isInteger(number) || number <= 0) return { reviewPack: null, reviewIdea: null };
@@ -671,6 +694,7 @@ export function placeQuery(place: Place): string {
   const query = new URLSearchParams();
   if (place.tab !== 'overview') query.set('tab', place.tab);
   if (place.goal !== null) query.set('goal', place.goal);
+  if (place.pr !== null) query.set('pr', String(place.pr));
   if (place.panel !== null) {
     if (typeof place.panel === 'object') query.set('ask', place.panel.ask);
     else query.set('panel', place.panel);

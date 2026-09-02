@@ -322,6 +322,14 @@ export interface AzThread {
   id: number;
   /** active | fixed | wontFix | closed | byDesign | pending | unknown | null. */
   status: string | null;
+  /**
+   * The file the thread hangs on and the line in it, from `threadContext`, or
+   * null where Azure reports none — a thread on the pull request itself rather
+   * than on the diff. Display only; nothing dispatches on either. Optional on the
+   * type so a fixture written before them still describes a thread.
+   */
+  filePath?: string | null;
+  line?: number | null;
   comments: AzComment[];
 }
 
