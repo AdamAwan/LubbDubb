@@ -269,11 +269,39 @@ export const ALLOWED_MCP_TOOLS: string[] = MCP_TOOL_NAMES.map((name) => `mcp__${
  * is not a field on `validation_read` is that `validation_read` refuses a goal
  * with no checks, which is exactly the goal somebody most often wants to look at.
  *
+ * **The fleet half is seven tools and it is a different job from the rest.** Every
+ * other name here is about one goal: read its plan, argue with it, take one of its
+ * checks. `fleet_status`, `attention_read` and `agent_read` are about the *harness*
+ * — what it is running, what it is waiting on a person for, what one agent is
+ * actually doing — and `fleet_control`, `queue_control`, `escalation_answer` and
+ * `goal_control` are the four verbs an operator reaches for between goals: change
+ * the cap or pause, re-order or drop from the queue, answer the thing in "Needs
+ * you", and start or stop the fleet working a ticket.
+ *
+ * They exist because the cockpit was the only way to do any of it, and the cockpit
+ * is a browser tab on one machine. An operator who wants their own agent watching
+ * the fleet — noticing a park at 2am, answering a question, lowering the cap when
+ * the account's window is nearly spent — had no surface to do it through that was
+ * not the bearer token and forty hand-rolled endpoints.
+ *
+ * **Nothing here dispatches an agent, and that is the fence.** `queue_control` and
+ * `goal_control` change what the fleet would pick up next and `fleet_control`
+ * changes how much of it runs at once; none of them names work to start, writes
+ * code, opens a pull request or settles a goal. The verbs that do are the fleet's
+ * own, behind the origin an agent was dispatched on. → `docs/spec/11-mcp-tools.md`
+ *
  * No `ALLOWED_MCP_TOOLS` equivalent: the fleet's grants exist because nobody is
  * at the prompt to approve a call. Here somebody is, and it is their own machine.
  */
 export const DESKTOP_TOOL_NAMES = [
   'goal_read',
+  'fleet_status',
+  'fleet_control',
+  'attention_read',
+  'escalation_answer',
+  'agent_read',
+  'queue_control',
+  'goal_control',
   'validation_read',
   'validation_claim',
   'validation_report',

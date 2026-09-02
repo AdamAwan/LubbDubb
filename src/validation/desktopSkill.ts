@@ -47,24 +47,87 @@ import type { ErrorRecorder } from '../errorLog.js';
  */
 export const DESKTOP_SKILL = `---
 name: lubbdubb
-description: Answer a question about a goal LubbDubb has worked or is working — what was done, how, which pull requests, what is left, whether it has reached an environment — or run a validation check on this machine and report the reading back, get a goal's work running locally, or discuss and amend its delivery plan. Use when asked anything about a goal by number — e.g. "/lubbdubb ask 284", "/lubbdubb ask 284 is it on hallway yet?", "what happened on 284?", "why did 284 take four goes?" — to validate: "/lubbdubb 284:C" — to start it up: "/lubbdubb run 284" — or to talk a plan through: "/lubbdubb discuss 284".
+description: Answer a question about a goal LubbDubb has worked or is working — what was done, how, which pull requests, what is left, whether it has reached an environment — or check on the fleet itself and steer it, run a validation check on this machine and report the reading back, get a goal's work running locally, or discuss and amend its delivery plan. Use when asked anything about a goal by number — e.g. "/lubbdubb ask 284", "what happened on 284?" — anything about the harness as a whole — "/lubbdubb fleet", "is anything stuck?", "what is LubbDubb doing?", "pause the fleet", "answer that question" — to validate: "/lubbdubb 284:C" — to start it up: "/lubbdubb run 284" — or to talk a plan through: "/lubbdubb discuss 284".
 ---
 
 # LubbDubb at your keyboard
 
-Four jobs, told apart by the argument. \`ask 284 …\` is
-[a question about a goal](#answer-a-question-about-a-goal), \`discuss 284\` is
-[a conversation about a plan](#discuss-a-plan), \`run 284\` is
+Five jobs, told apart by the argument. \`fleet\` — or anything about the harness
+rather than about one goal — is [watching and steering it](#watch-and-steer-the-fleet).
+\`ask 284 …\` is [a question about a goal](#answer-a-question-about-a-goal),
+\`discuss 284\` is [a conversation about a plan](#discuss-a-plan), \`run 284\` is
 [getting it up on this machine](#run-it-locally), and anything else is
 [a validation check](#run-a-validation-check).
 
 A question asked in plain words — "what happened on 284", "did we ever ship the
-export fix", "is 284 on hallway" — is the first of those whether or not the word
-\`ask\` was typed.
+export fix", "is 284 on hallway" — is the goal one whether or not the word
+\`ask\` was typed. One with **no goal number in it** — "is anything stuck", "what
+is it working on", "why is nothing running" — is the fleet one.
 
 <!-- Managed by LubbDubb: the desktop channel is unconditional, so this file is
      rewritten from scratch every time the harness starts. There is no setting
      that keeps a local version — edit it and the next start overwrites you. -->
+
+## Watch and steer the fleet
+
+The operator is asking about the harness rather than about one goal: what it is
+doing, whether anything is stuck, and sometimes to change it.
+
+1. **Read it.** \`fleet_status\` — one call, and it carries the cap, whether
+   dispatch is paused, how much headroom there actually is, every live agent with
+   its own account of what it is doing, the Up next queue with a reason against
+   every held row, the account's rate-limit windows, and the recent failures.
+2. **Then look closer only where the answer is not there.** \`attention_read\`
+   for what is waiting on a person; \`agent_read <id>\` for one agent's transcript
+   tail when the question is why that one is stuck.
+3. **Say what is actually true.** A held row names its own reason and that reason
+   is the answer: "capped", "cooldown", "unapproved" and "ignored" are four
+   different problems, and only one of them is fixed by raising the cap.
+
+### Reading it honestly
+
+- **\`headroom\` is the number, not \`cap\`.** A paused fleet with four free slots
+  dispatches nothing.
+- **\`accountUsage: null\` is not room to spare.** It means nothing has reported a
+  window since this harness started. Say that, rather than that there is capacity.
+- **A transcript comes back as a tail.** \`totalChars\` says how much you are not
+  reading. Ask for more with \`chars\` rather than judging a run on its last page.
+
+### Steering it
+
+Four verbs, and each does less than it sounds like:
+
+- **\`fleet_control\`** — \`cap\`, \`paused\`, \`pulse\`. Lowering the cap or
+  pausing **never stops a running agent**; it stops the next dispatch. Both are in
+  memory and are gone at the next restart, which is worth saying out loud rather
+  than letting the operator think they have changed a setting.
+- **\`queue_control\`** — \`order\` pins origins to the front, and it **replaces
+  every standing pin** rather than adding one. It only re-orders: a row held by a
+  cap, a cooldown, an unapproved plan or a missing watch tag is still held.
+  \`cancelJob\` drops a brief that has not run yet.
+- **\`escalation_answer\`** — settles one row from \`attention_read\`. Free text
+  (or \`answers\`, one per question) for a question, \`permission\` for a blocked
+  tool call. **Two kinds are not yours**: a proposal and a crashed agent's question
+  are decisions with consequences you cannot see, and each row says so in its
+  \`settledBy\`. Say what is waiting and let the operator take them in the cockpit.
+- **\`goal_control\`** — \`watched\` is the tracker tag that opts work in or out
+  (and cascades to everything under a container); \`priority\` is the harness's own
+  mark and only re-orders its queue. Neither starts or stops an agent.
+
+### What not to do
+
+- **Do not answer the question by changing something.** "Why is nothing running"
+  is answered by reading, and the answer is very often a pause or a hold the
+  operator set on purpose. Propose the change and let them say yes.
+- **Do not raise the cap to clear a backlog** without looking at
+  \`accountUsage\` first. The fleet running out of allowance mid-goal costs more
+  than the wait did.
+- **Nothing here starts work.** You cannot dispatch an agent, open a pull request
+  or settle a goal from this session, and you should not describe what you have
+  done as if you had. Pinning a row means it goes first *when something dispatches*.
+- **Do not answer an escalation you do not understand.** The answer is typed
+  straight into a running agent and it acts on it. If the question needs the
+  operator, say so and leave it open.
 
 ## Answer a question about a goal
 

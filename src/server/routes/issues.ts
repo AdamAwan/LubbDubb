@@ -11,10 +11,10 @@ import { GateReleaseBody } from '../../environments/arrival.js';
 import { validationHeadline } from '../../delivery/closeOut.js';
 import { goalValidation } from '../../validation/goal.js';
 import { clearGoalWork } from '../../floor/endRun.js';
+import { applyIssueWatch } from '../../issueWatch.js';
 import { watchLabelFor } from '../../watchLabels.js';
 import { fleetWorksUpstream, UPSTREAM_REPO } from '../../tickets/upstream.js';
 import { modelLabelsFor } from '../../modelLabels.js';
-import { watchCascadeTargets } from '../../issueRelations.js';
 import { checked, IssueNumberParams, optionalText, requiredBoolean, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
 import type { FilingTargetProbe, GoalAgentsPayload, IssueFiled } from '../../wire.js';
@@ -92,52 +92,32 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     checked({ params: IssueNumberParams, body: WatchBody }, async ({ params, body, reply }) => {
       const { number: issueNumber } = params;
       const { watched } = body;
-      const world = store.getWorldBaseline();
-      const issue = world?.issues.find((i) => i.number === issueNumber);
-      // An issue the snapshot does not carry still gets its own tag written — the
-      // toggle must keep working for a world that has aged out — it simply has no
-      // hierarchy to walk.
-      const targets =
-        issue === undefined
-          ? [issueNumber]
-          : watchCascadeTargets(issue, world?.issues ?? [], config.issueContainerTypes);
-
-      const failed: { number: number; message: string }[] = [];
-      for (const target of targets) {
-        try {
-          await connector.setIssueLabel({ number: target, label: watchLabel, present: watched });
-        } catch (err) {
-          const message = (err as Error).message;
-          failed.push({ number: target, message });
-          errors.record({
-            source: 'server',
-            message: `Failed to set the watch tag on #${target} while ${watched ? 'watching' : 'dropping'} #${issueNumber}: ${message}`,
-          });
-        }
-      }
+      // The cascade, the two mirrors and the partial-failure report are one
+      // behaviour shared with the plan back-out and the desktop channel's
+      // `goal_control` — `src/issueWatch.ts` holds it. What stays here is what is
+      // about *this* surface: the broadcast, the cycle, and the shape of the reply.
+      const outcome = await applyIssueWatch(
+        {
+          store,
+          sink: connector,
+          errors,
+          labelPrefix: config.labelPrefix,
+          issueContainerTypes: config.issueContainerTypes,
+        },
+        issueNumber,
+        watched,
+        `while ${watched ? 'watching' : 'dropping'} #${issueNumber}`,
+      );
+      const { targets, failed } = outcome;
 
       // Whatever landed, landed — the world is now different from the one the
       // cockpit is showing even on a partial failure, so it is republished before
       // the refusal rather than after a success only.
-      //
-      // Folded onto the baseline first, and that ordering is the whole of why the
-      // toggle changes under the click: `/api/state` serves the baseline, so a
-      // broadcast ahead of the write just makes the cockpit redraw the old state.
-      // The cycle below cannot be relied on for it either — it coalesces away to
-      // nothing while another is in flight, which is most clicks on a busy fleet.
-      // Only the targets whose write the provider took.
-      const landed = targets.filter((t) => !failed.some((f) => f.number === t));
-      store.patchWorldLabels({ issues: landed, label: watchLabel, present: watched });
-      // And the mirror, which is a *second* reading of the same tag rather than a
-      // copy of the first: the Tickets tab — the one surface with an explicit
-      // Unwatch — draws the toggle and its watch filter from `/api/tickets`, which
-      // is built from `tracker_items` and never from the baseline. Patched here
-      // for the reason the baseline is, and the same one twice over: the sweep
-      // that would otherwise carry it runs last in a cycle, and the cycle below
-      // coalesces away to nothing while another is in flight (issue #417).
-      store.patchTicketLabels({ numbers: landed, label: watchLabel, present: watched });
       hub.broadcast({ type: 'world:changed' });
-      if (failed.length === targets.length) {
+      // `targets` is empty only where the deployment configures no label prefix —
+      // the gate is off, everything is watched, and there was nothing to write. That
+      // is a success with nothing done, not a total failure.
+      if (targets.length > 0 && failed.length === targets.length) {
         return reply.code(400).send({ error: failed[0]?.message ?? 'no watch tag could be written' });
       }
       await harness.runCycle('manual');
@@ -148,7 +128,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
             `#${failed.map((f) => f.number).join(', #')} kept the old tag: ${failed[0]?.message ?? ''}`,
         });
       }
-      return { ok: true, watched, cascaded: targets.length - 1 };
+      return { ok: true, watched, cascaded: Math.max(targets.length - 1, 0) };
     }),
   );
 

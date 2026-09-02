@@ -750,6 +750,20 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     // this channel and the cockpit's panel must start *the same* run.
     localRun: (): LocalRunner => localRun,
     localRunWatch: (): LocalRunWatch => localRunWatch,
+    // The fleet half of the channel (`src/mcp/desktopOps.ts`). `runtimeControl` is
+    // handed over **by reference** rather than snapshotted: it is the live cap and
+    // pause the executor reads on every dispatch, and a copy taken here would be a
+    // second opinion about how big the fleet is. The rest are thunks for
+    // `proposals`' reason — the harness, the two desks and the recovery board are
+    // all constructed below this server.
+    runtimeControl,
+    harness: () => harness,
+    escalations: () => escalations,
+    permissions: () => permissions,
+    recovery: () => recovery,
+    connector,
+    labelPrefix: config.labelPrefix,
+    issueContainerTypes: config.issueContainerTypes,
     // Lazy for the fleet deps' reason a few lines above: `plan_amend` withdraws
     // the superseded approval card and puts the fresh one up, and both the desk
     // and the harness are built below this.
