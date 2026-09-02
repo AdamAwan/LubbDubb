@@ -52,15 +52,18 @@ const EVIDENCE_SUFFIXES = ['assess', 'retro'];
 
 /**
  * The evidence origins that name something *within* the issue, so they are
- * prefixes rather than whole suffixes — today only `validate:<checkId>`, one
- * origin per validation check the operator handed to the fleet.
+ * prefixes rather than whole suffixes — the two validation origins, one of each
+ * per check: `validate:<checkId>`, a check the operator handed to the fleet to
+ * run, and `validate-failure:<checkId>`, a check that was run and failed and is
+ * being looked into.
  *
  * Evidence rather than work for {@link EVIDENCE_SUFFIXES}' reason and rather
- * more strictly: rule `validate-check` fires only for a goal already parked as
- * delivered, so a task on one of these cannot exist unless work was done and
- * finished. It builds nothing and opens no pull request.
+ * more strictly: rules `validate-check` and `validation-failed` both fire only
+ * for a goal already parked as delivered, so a task on one of these cannot exist
+ * unless work was done and finished. Both build nothing and open no pull request
+ * — they are dispatched into a read-only checkout.
  */
-const EVIDENCE_SUFFIX_PREFIXES = ['validate:'];
+const EVIDENCE_SUFFIX_PREFIXES = ['validate:', 'validate-failure:'];
 
 /**
  * Classify a task's origin against an issue.
