@@ -483,22 +483,55 @@ ${RESUME_RULES}`);
     // really does survive anything says so here and gets the behaviour it had before.
     if (!Number.isFinite(windowMs) || windowMs <= 0) return null;
 
-    if (live.interruptedAt === null)
+    // The shutdown's own stamp first, and the last pulse that held the run behind it.
+    // The fallback is not a nicety: the paths an operator most often takes — closing
+    // the window, End task, pulling the power — run no line at all, so `interruptedAt`
+    // is null on exactly the crashes a resume is most wanted for.
+    const stamp = live.interruptedAt ?? live.lastSeenAt;
+    if (stamp === null)
       return (
-        'nothing recorded when it was interrupted, so how long ago that was is not known and it was ' +
-        'not brought back — the harness went without shutting down. Whatever survived may still be running.'
+        'nothing recorded when it was interrupted or when it was last held, so how long ago that was is ' +
+        'not known and it was not brought back. Whatever survived may still be running.'
       );
-    const at = Date.parse(live.interruptedAt);
+    const at = Date.parse(stamp);
     if (Number.isNaN(at)) return 'when it was interrupted was not readable, so it was not brought back';
 
     const now = (this.deps.now ?? Date.now)();
     const ageMs = now - at;
     if (ageMs <= windowMs) return null;
+    // Said as "last held" where that is what the figure is, because an operator who
+    // pulled the power is owed a sentence that matches what they did.
+    const what = live.interruptedAt === null ? 'the harness was last holding it' : 'it was interrupted';
     return (
-      `it was interrupted ${describeAge(ageMs)} ago, longer than the ${describeAge(windowMs)} a run may be ` +
+      `${what} ${describeAge(ageMs)} ago, longer than the ${describeAge(windowMs)} a run may be ` +
       'brought back within, so it was not brought back — start it again when you want it. Whatever survived ' +
-      'the restart may still be running. `localRun.resumeWindowMs` on the Config page is what sets that.'
+      'may still be running. `localRun.resumeWindowMs` on the Config page is what sets that.'
     );
+  }
+
+  /**
+   * Record that this harness is still holding the run, if it is holding one.
+   *
+   * **Called from the pulse**, and it is what makes the resume window survive a force
+   * close. `stopFast` stamps the interruption on the way down, which covers a Ctrl-C
+   * and an upgrade — and covers none of `taskkill /F`, Task Manager's End task, a
+   * power cut, or a console window closed on Windows, where the process is taken
+   * without running a line. Those are the crashes a resume is most wanted for, and
+   * before this they were the ones it refused.
+   *
+   * **Only while `runId` is set**, which is the whole safety of it: that field is this
+   * process's claim on the row, dropped by a stop and never held for a row a boot
+   * declined to bring back. Stamping "whatever is live" instead would date a row this
+   * harness refused, and the boot after would bring back an environment two harnesses
+   * ago — the exact thing the window exists to stop.
+   *
+   * Deliberately above the pulse's recovery hold: it says the harness is alive, which
+   * is true whether or not a cycle did any work. Held for three hours and then killed,
+   * a run dated at the last cycle *that ran* would read as three hours stale.
+   */
+  noteAlive(): void {
+    if (this.runId === null) return;
+    this.deps.store.markLocalRunSeen(this.runId);
   }
 
   /**

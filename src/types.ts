@@ -4501,11 +4501,26 @@ export interface LocalRun {
    * cannot answer that question — a run started on Monday and still in use at five
    * o'clock is not a stale one.
    *
-   * **Null is unknown, not recent.** A row left live with no stamp is one the harness
-   * never got a line about — a kill, a power cut, a machine that rebooted — and a
-   * resume refuses it rather than guessing.
+   * **Null is not recent, it is "nobody wrote a line".** A kill, a power cut or a
+   * closed console window takes the process with no shutdown at all, so the fallback
+   * is {@link lastSeenAt}; with both null the age is genuinely unknown and a resume
+   * refuses rather than guessing.
    */
   interruptedAt: string | null;
+  /**
+   * The last pulse on which the harness was holding this run, or null on a row no
+   * process ever stamped.
+   *
+   * **What dates a force close** — `taskkill /F`, Task Manager's End task, a power
+   * cut, a console window closed on Windows. None of those run a line on the way out,
+   * so {@link interruptedAt} stays null and this is the only record of when the
+   * environment was last true. Accurate to one heartbeat, which is all a two-hour
+   * window needs.
+   *
+   * Stamped only by the process **actually holding the run**, never by a boot that
+   * walked past a live row it declined to bring back.
+   */
+  lastSeenAt: string | null;
   /**
    * What the sessions behind this run have cost, and what they spent to do it.
    *

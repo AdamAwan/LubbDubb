@@ -192,7 +192,13 @@ deployment is upgrading over, which a fast stop left standing moments before thi
 `dateInterruptionsFromBeforeTheStamp` dates that row to now, on the boot the column arrives and never
 again: unconditionally it would re-date every stale row on every boot and resume it for ever, which is
 the thing the stamp exists to stop. Both directions cost an operator an environment and neither is red.
-→ [23](23-local-runs.md#coming-back-after-a-restart)
+
+`local_runs.last_seen_at` arrives in the same change and needs **no** backfill, for a reason worth
+stating rather than assuming. Its null is read only as a *fallback* behind `interrupted_at` — the
+resume judges `interruptedAt ?? lastSeenAt` — and the one live row a database from before the pair can
+hold is dated by the gated backfill above. Every row written since is stamped by the pulse that holds
+it. Backfilling it as well would be inventing a beat that never happened, on rows nothing will ever
+read it for. → [23](23-local-runs.md#coming-back-after-a-restart)
 
 A column whose absence is simply a weaker claim — `built_sha`, `chain`, `dismiss_note` — needs none
 of this. The test is whether _null_ is a value the running code will act on.
