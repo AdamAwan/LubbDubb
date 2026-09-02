@@ -8,6 +8,8 @@ import type {
   Issue,
   OpenPullRequest,
   QueueItem,
+  ReadyingAction,
+  ReadyingStep,
   SupplyState,
   WorldEvent,
 } from '../types.js';
@@ -65,6 +67,7 @@ function Fleet({ view, actions }: { view: CockpitView; actions: CockpitActions }
   const [showEnded, setShowEnded] = useState(false);
   const ended = view.past;
   const desk = view.deskRuns;
+  const readying = view.readying;
   // The count is the fleet's own, not the list's: the snapshot carries a bounded
   // tail of ended agents, so a number read off `ended` would settle at the cap and
   // report it forever on a deployment that had run twenty thousand shifts.
@@ -79,6 +82,10 @@ function Fleet({ view, actions }: { view: CockpitView; actions: CockpitActions }
           {/* Stated beside the count rather than added to it: nobody dispatched
               these and they take no slot, so "out" would be the wrong word and
               a bigger number would be the wrong reading. */}
+          {/* Beside the count for the same reason and a second one: these are on
+              their way to being out, so folding them in would make the number
+              jump twice for one dispatch. */}
+          {readying.length > 0 && ` · ${readying.length} being readied`}
           {desk.length > 0 && ` · ${desk.length} at a keyboard`}
         </i>
         <button
@@ -90,7 +97,9 @@ function Fleet({ view, actions }: { view: CockpitView; actions: CockpitActions }
           {endedTotal} shift{endedTotal === 1 ? '' : 's'} ended {showEnded ? '⌄' : '›'}
         </button>
       </h3>
-      {view.live.length === 0 && desk.length === 0 && <p className="cn-empty">Nobody is out.</p>}
+      {view.live.length === 0 && desk.length === 0 && readying.length === 0 && (
+        <p className="cn-empty">Nobody is out.</p>
+      )}
       {showEnded && ended.length === 0 && <p className="cn-empty">No shift has ended.</p>}
       {/* Said rather than left to be noticed: the list is the recent tail and the
           count above is all of them, so a disclosure that opened on 200 rows under
@@ -104,9 +113,11 @@ function Fleet({ view, actions }: { view: CockpitView; actions: CockpitActions }
       <PanelRows
         rows={[
           ...view.live.map((agent) => agentRow(agent, view, actions)),
-          // Below the dispatched agents, because that is the order the harness
-          // answers "what is happening" in: what it sent out, then what it did
-          // not send.
+          // Then what it is about to send. Between the two lists rather than at
+          // the foot, because that is the order the harness answers "what is
+          // happening" in — what it sent out, what it is sending, and then what it
+          // did not send at all.
+          ...readying.map((action) => readyingRow(action, view)),
           ...desk.map((run) => deskRow(run, view)),
           ...(showEnded ? ended.map((agent) => agentRow(agent, view, actions)) : []),
         ]}
@@ -379,6 +390,85 @@ function OnWhat({ origin, view }: { origin: string | null; view: CockpitView }):
       {goal !== null && <Ref to={goal} />}
     </>
   );
+}
+
+/**
+ * What each step of the readying is called on the row.
+ *
+ * The words are the spec's, not new ones: `docs/spec/09-execution.md` calls the
+ * slow one *handing a slot over*, so that is what the cockpit says it is doing.
+ * Totalled over {@link ReadyingStep}, so a step added to the executor fails the
+ * typecheck rather than drawing as an empty chip.
+ */
+const READYING_STEP: Record<ReadyingStep, string> = {
+  'picked-up': 'picked up',
+  'ci-evidence': 'reading CI output',
+  'slot-handover': 'handing a slot over',
+  authorizing: 'authorizing',
+};
+
+/** The longer half — what the step is waiting on, and why it takes what it takes. */
+const READYING_WHY: Record<ReadyingStep, string> = {
+  'picked-up': 'The executor has this action in hand and has not reached anything it has to wait for.',
+  'ci-evidence': 'Reading the failing check output out of the provider, so the agent is dispatched holding it.',
+  'slot-handover':
+    'Waiting on the worktree pool. A slot already on this branch comes back at once; one checked out on ' +
+    'another branch is wiped with `git clean -ffdx` and checked out cold first, which on a large repository ' +
+    'is minutes.',
+  authorizing: 'Asking whether this act is already authorized, which is a read against the tracker.',
+};
+
+/**
+ * An action the executor is working on, in the window before it is an agent.
+ *
+ * **Why the card has to say this at all.** `ActionExecutor.execute` walks a plan
+ * strictly serially, and each dispatch waits on the worktree pool before it
+ * spawns. A cycle that planned three appraisals with full headroom started them
+ * two minutes apart, and for those four minutes the Up next queue said all three
+ * had been dispatched while this card showed one agent. Nothing was wrong and
+ * nothing said so — which reads, correctly and unhelpfully, as a fleet that picked
+ * up one of three.
+ *
+ * It borrows {@link deskRow}'s grammar wholesale, because it is making the same
+ * distinction — in flight, and *not an agent* — and a second vocabulary for one
+ * idea is how a card stops being readable:
+ *
+ * - **A `div`, not a button.** There is no transcript to open, nothing to kill and
+ *   nothing to inject into: there is no process yet. A row wearing an agent's
+ *   affordances with none of them working is worse than one that never offered them.
+ * - **A hollow lamp and a dashed edge.** No dispatch cut this row — it is what a
+ *   dispatch is being made out of.
+ * - **No cost column.** Nothing has been spent; a `$0.00` would read as a cheap
+ *   agent rather than as no agent.
+ *
+ * Its own tint rather than the desk run's violet, because the two rows differ in
+ * exactly the thing an operator is reading them for: a desk run is somebody at a
+ * keyboard and takes no fleet slot ever, while this is the harness itself, on its
+ * way to taking one.
+ *
+ * The hover carries the two facts a glance cannot: that it holds no slot the cap
+ * counts *yet*, and that it leaves the list on its own — the row is drawn off a
+ * record the executor holds for the length of one `await`, released in a
+ * `finally`, so a dispatch that fails takes its row with it.
+ */
+function readyingRow(action: ReadyingAction, view: CockpitView): PanelRowModel {
+  return {
+    key: action.id,
+    lamp: <i className="cn-lamp cn-readying-lamp" />,
+    title: action.title,
+    refs: action.originRef === null ? null : <Ref to={action.originRef} />,
+    facts: [
+      ...(action.branch === null ? [] : [{ label: 'branch', value: action.branch }]),
+      { label: 'for', value: elapsed(action.startedAt, null, view.now) },
+    ],
+    whyLabel: READYING_STEP[action.step],
+    whyTone: 'quiet',
+    why:
+      `${READYING_WHY[action.step]} Nothing has been dispatched for this yet: it holds no fleet slot and ` +
+      'has no transcript, and it leaves this list the moment the agent starts — or, if the dispatch fails, ' +
+      'with the failure.',
+    readying: true,
+  };
 }
 
 /**

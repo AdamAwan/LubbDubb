@@ -23,6 +23,54 @@ reason, so "why did (or didn't) this happen" is always answerable.
    the cap holds within a single cycle's plan.
 3. Each validated action is handled by type.
 
+The loop is **strictly serial**, and that is what
+[What is being readied](#what-is-being-readied) exists to make visible: an action holds it for as long
+as its own awaits take, and every action behind it in the plan waits.
+
+## What is being readied
+
+An action the executor has picked up but not yet turned into an agent is on the **readying board** —
+`ReadyingBoard` (`src/executor/readying.ts`), shipped on the state snapshot as `readying` and drawn as
+its own row on the cockpit's Fleet card ([17](17-cockpit.md#work-that-is-not-an-agent-yet)).
+
+It exists because the serial loop's waits are long. The slow one is
+[handing a slot over](#handing-a-slot-over): a `git clean -ffdx` plus a cold checkout, which on a large
+target repository is around two minutes **per dispatch**. A cycle that planned three issue-appraisal
+dispatches with full headroom started them at 08:58:33, 09:00:56 and 09:02:53 — three slots, three
+handovers — during which the Up next queue had flipped all three to `dispatching` and the Fleet card
+showed one agent. Nothing was wrong, and nothing anywhere said the other two were being readied.
+
+**Every action goes on the board, not only the dispatches.** The row says _the executor is working on
+this action_, which is the honest answer to why the queue appears to stall: `ciEvidenceFor` and
+`authorize` are awaited in the same serial loop, and a plan whose first action is a merge waiting on an
+authorization read holds its dispatches exactly as a handover does. The step says which wait it is:
+
+| Step            | What it is waiting on                                                           |
+| --------------- | ------------------------------------------------------------------------------- |
+| `picked-up`     | Nothing yet — the action is in hand and has not reached an await.                |
+| `ci-evidence`   | `ciEvidenceFor`: the failing check output, read out of the provider.             |
+| `slot-handover` | `workingDirectory` → `WorktreeManager.ensure`. The minutes-long one.             |
+| `authorizing`   | `authorize`: whether the outbound act is already authorized. A read.             |
+
+The synchronous steps between them are deliberately unnamed: nothing yields there, so no reader can
+observe one. An action whose whole body is synchronous therefore goes on and off the board inside a
+single tick and is never drawn — which is correct, since nothing was waiting for it.
+
+**It is in memory, and it must be.** Every entry has a live `await` in this process behind it; the
+moment the process is gone, so is the truth the row asserts. A table would outlive it — a crash
+mid-dispatch would leave a row nothing ever clears, drawn as work in flight forever, and the recovery
+desk would have a second kind of orphan to learn about for no gain. Losing the
+readings on a restart costs nothing: the actions they described died with the process, and the next
+pulse re-plans them.
+
+**A row is released from a `finally`.** The throwing path is the one that matters — an `ensure` that
+cannot wipe a slot is the failure that actually happens — and it leaves the board through the same
+release as the success. Nothing else may remove an entry.
+
+**Nothing on the board is a slot.** It is not consulted by the cap, by `countLiveAgents`, or by any
+dispatch gate; it is a reading. What keeps two agents out of one directory is still the
+[lease](#the-lease).
+
 ## The dispatch gates
 
 For `dispatch_code_agent` and `dispatch_desk_agent`, in this exact order:
@@ -68,8 +116,9 @@ also advertises zero headroom while paused, so this is belt and braces.
 
 ### 5. Spawn
 
-`recordDispatchTask(action)`, then `workingDirectory(task, action)`, then `agents.spawn(task, cwd)`. On
-success:
+`recordDispatchTask(action)`, then `workingDirectory(task, action)`, then `agents.spawn(task, cwd)` —
+with the readying board moved to `ci-evidence` and then `slot-handover` as the two awaited steps are
+entered, so the wait is visible while it is happening. On success:
 
 - `liveCount` increments.
 - `if (action.jobId) store.markJobDispatched(jobId, task.id)`.

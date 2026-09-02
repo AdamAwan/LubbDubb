@@ -123,6 +123,7 @@ import type {
   Proposal,
   PrState,
   PullRequest as WorldPullRequest,
+  ReadyingAction,
   Retrospective,
   ReviewAttention,
   ReviewMark,
@@ -1231,6 +1232,22 @@ export interface CockpitState {
    * and nothing about the number would look wrong.
    */
   endedAgents: number;
+  /**
+   * Actions the executor is working on that have not become agents yet — a
+   * dispatch waiting on the worktree pool to hand a slot over, an outbound act
+   * waiting on the authorization read.
+   *
+   * On the fleet section because the fleet card is where it is drawn and because
+   * it moves on the fleet's clock, but it is **not** part of any fleet count: the
+   * cap counts agents, and these are not agents. Empty on every snapshot taken
+   * between cycles, which is nearly all of them — the list is non-empty only while
+   * `ActionExecutor.execute` is inside an await.
+   *
+   * In-memory server-side and shipped whole rather than as a count, because the
+   * reading an operator opens the card for is *which* work is being readied and
+   * for how long. → `docs/spec/09-execution.md#what-is-being-readied`
+   */
+  readying: ReadyingAction[];
   /**
    * The ids of agents parked because the *account's* usage limit is spent, rather
    * than because they asked anything (issue #318). They are ordinary `waiting` rows
@@ -2415,6 +2432,8 @@ export type {
   PetWallet,
   FeatureSummary,
   Proposal,
+  ReadyingAction,
+  ReadyingStep,
   Retrospective,
   ReviewAnchor,
   ReviewAttention,

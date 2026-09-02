@@ -71,6 +71,16 @@
   --cn-violet-fill: color-mix(in srgb, var(--cn-violet) 5%, var(--cn-panel));
   --cn-violet-line: color-mix(in srgb, var(--cn-violet) 24%, var(--cn-panel));
 
+  /* The harness readying an action into an agent: the fleet's own accent, pulled
+     most of the way to the faint ink. Derived rather than a fourteenth core
+     colour, so every preset answers it by answering the two it is mixed from —
+     and the mix *is* the reading. This is the accent's work, not a separate kind
+     of thing the way a desk run's violet is, but it is not out yet, so it does not
+     get the accent's full voice. */
+  --cn-readying: color-mix(in srgb, var(--cn-accent) 45%, var(--cn-fg-faint));
+  --cn-readying-fill: color-mix(in srgb, var(--cn-readying) 6%, var(--cn-panel));
+  --cn-readying-line: color-mix(in srgb, var(--cn-readying) 26%, var(--cn-panel));
+
   /* Four inks that are not a tint of the hue they belong to. `--cn-blue-ink` is
      the plainest case: it leans cyan where `--cn-accent` leans violet, so no
      amount of accent mixed into the foreground reaches it. A preset answers these
@@ -2032,6 +2042,22 @@ button.cn-grow {
   background: transparent;
   border: 1.5px solid var(--cn-violet);
 }
+/* The harness readying an action, and the same grammar the desk run wears, for the
+   same reason: this is in flight and it is not an agent. Hollow where an agent's
+   lamp is filled — there is no process to report a status — and its own tint,
+   because it is not a desk run either: nobody is at a keyboard, the harness is
+   working. */
+.cn-lamp.cn-readying-lamp {
+  background: transparent;
+  border: 1.5px solid var(--cn-readying);
+}
+/* Dashed for the desk row's reason — no dispatch cut this — and `default` because
+   there is nothing to click: no transcript, no kill, no inject. */
+.cn-row.cn-readying {
+  cursor: default;
+  border-left: 2px dashed var(--cn-readying);
+  padding-left: 11px;
+}
 /* The dashed edge is the same grammar the lamp uses — nothing cut this row from
    a dispatch. `default` rather than the row's inherited pointer, because there
    is nothing to click: no transcript, no kill, no inject. */
@@ -2978,6 +3004,14 @@ button.cn-grow {
 .cn-why-chip.cn-t-quiet {
   border-color: var(--cn-line);
   color: var(--cn-fg-dim);
+}
+/* A readying row keeps its tint the same way and for the same reason: the hollow
+   lamp, the dashed edge and the word are one signal, and the neutral grey would be
+   the part of it that stopped saying so. */
+.cn-readying .cn-why-chip {
+  background: var(--cn-readying-fill);
+  border-color: var(--cn-readying-line);
+  color: var(--cn-readying);
 }
 /* A desk run keeps its violet wherever it is drawn: the hollow lamp, the dashed
    edge and this word are one signal — nothing dispatched this row — and a state

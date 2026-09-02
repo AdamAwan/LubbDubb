@@ -101,6 +101,15 @@ export class Hub {
     // delivery — unlike `agent:tail`, which exists only as a broadcast and has to
     // carry its own payload. Same treatment as `usage` for the same reason.
     agents.on('progress', () => this.broadcast({ type: 'dirty', sections: ['fleet'] }));
+    // The executor picked an action up, moved it on a step, or let it go. The rows
+    // are shipped inside /api/state on the fleet section, so the refetch a `dirty`
+    // triggers is the whole delivery — the same treatment as `progress`, for the
+    // same reason. It needs a signal of its own because the pulse's own frames
+    // bracket the executor rather than punctuating it: `cycle:start` fires before
+    // the first action is picked up and `cycle:end` after the last is let go, so
+    // without this the whole readying window falls between two broadcasts and the
+    // rows are never drawn at all.
+    system.readying.on('changed', () => this.broadcast({ type: 'dirty', sections: ['fleet'] }));
     // An agent said whether its issue is finished. Same treatment and the same
     // reason: the verdict is shipped per-issue inside /api/state, so the refetch
     // a `dirty` triggers is the whole delivery.

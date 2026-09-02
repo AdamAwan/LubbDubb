@@ -432,6 +432,27 @@ export const THEME_TOKENS: readonly ThemeToken[] = [
     why: "A violet chip's edge",
   },
   {
+    name: '--cn-readying',
+    label: 'Console readying',
+    group: 'tints',
+    kind: 'colour',
+    why: 'Work the harness is readying into an agent',
+  },
+  {
+    name: '--cn-readying-fill',
+    label: 'Console readying fill',
+    group: 'tints',
+    kind: 'colour',
+    why: "A readying row's state chip",
+  },
+  {
+    name: '--cn-readying-line',
+    label: 'Console readying border',
+    group: 'tints',
+    kind: 'colour',
+    why: "A readying chip's edge",
+  },
+  {
     name: '--cn-red-ink-hi',
     label: 'Console red ink, louder',
     group: 'tints',
