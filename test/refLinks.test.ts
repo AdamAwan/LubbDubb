@@ -207,6 +207,11 @@ test('the pull request rack is a way onto each pull request’s own page', () =>
     'the row’s name is the control that opens the pull request’s page',
   );
   assert.match(rack, new RegExp(`<button[^>]*class="ref-goal"[^>]*>#${pr.number}<`), 'and so does its ref');
+  assert.match(
+    rack,
+    new RegExp(`<a[^>]*class="ext-ref ref-out"[^>]*>#${pr.number}<`),
+    'and the provider is a second token beside it, not a destination the row lost',
+  );
 });
 
 test('a queued dispatch is a way to what it is queued against', () => {

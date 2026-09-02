@@ -1923,7 +1923,13 @@ card is the drift `PanelRowModel` exists to end, one level up.
   bar, and four tones with nothing to read them against is a reading only somebody who has read the
   source can take.
 - **Pull requests** — every open PR with its court in the state column, its CI ladder, and the watch
-  eye pinned left of the title.
+  eye pinned left of the title. The **row's name opens
+  [its page](#the-pull-request-page)**, and the refs beside it carry **both destinations**: the
+  cockpit's page again as a `<Ref>`, and the provider's as a `<PrOut>`. Two tokens for one pull
+  request rather than a choice between them, because the row raises two questions and each answers
+  one — what the harness makes of it (the threads it owes an answer, the checks, the work on the
+  branch) and what the diff says. Which is which is the [marks'](#how-a-reference-is-drawn) job: the
+  filled box stays in the cockpit, the dashed one with the arrow leaves.
   An **unwatched** PR stays in the list, with its health, and is drawn **spent** — the same dimming a
   closed PR and an unwatched goal take, off `attention.status === 'unwatched'` rather than a
   second reading of the labels. The chip alone left the one row nothing will happen on sitting at the
@@ -4793,6 +4799,11 @@ shares the number. The tracker's page answers either.
 page carries — and exists for the same reason, since a ref onto a pull request the world carries now
 opens its page rather than the provider's. Two keys, most-trusted first: `pr:<n>` is unambiguous where
 `#<n>` is shared with an issue of the same number.
+
+`<PrOut number={…} />` is the same destination as a **token**, for a row that offers both — the
+overview's pull-request rack draws it beside the `<Ref>`. Absent rather than inert where the provider
+resolved nothing, unlike `<PrLink>`: it sits beside a token that did resolve, so an unavailable second
+one reads as a broken link rather than as a stated fact.
 
 `<TicketLink number={…} url={…} />` is the fourth, and the destination `<Ref>` deliberately does not
 offer: a ref onto a goal the world carries opens its **page**, so the goal header's `Open ticket ↗`

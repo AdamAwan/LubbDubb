@@ -276,8 +276,7 @@ export function PrLink({
   className?: string;
   children: ReactNode;
 }): JSX.Element {
-  const { refUrls } = useRefWorld();
-  const href = refUrls[`pr:${number}`] ?? refUrls[`#${number}`];
+  const href = prUrl(useRefWorld().refUrls, number);
   if (href === undefined)
     return (
       <span
@@ -293,6 +292,40 @@ export function PrLink({
       {children}
     </a>
   );
+}
+
+/**
+ * The same destination as a **token**, for a row that offers both: `<Ref>` for the
+ * cockpit's page and this beside it for the provider's.
+ *
+ * Two tokens for one pull request rather than a choice between them, because a
+ * pull-request row raises two different questions — *what does the harness make of
+ * this* and *what does the diff say* — and only one of them is answered here. The
+ * marks are what tell them apart, and they are the vocabulary the whole module is
+ * drawn in: the filled box stays inside the cockpit, the dashed one with the arrow
+ * leaves. Absent rather than inert where the provider resolved nothing, unlike
+ * {@link PrLink}: this sits in a slot beside a token that *did* resolve, so an
+ * unavailable second one reads as a broken link rather than as a stated fact.
+ */
+export function PrOut({ number }: { number: number }): JSX.Element | null {
+  const href = prUrl(useRefWorld().refUrls, number);
+  if (href === undefined) return null;
+  return (
+    <ExtLink
+      href={href}
+      title={`Open pull request #${number} on the provider — the diff, the review, the checks`}
+      boxed
+    >
+      #{number}
+    </ExtLink>
+  );
+}
+
+/** A pull request's address on the provider, by the two keys `buildRefUrls` writes for one. */
+function prUrl(refUrls: Record<string, string>, number: number): string | undefined {
+  // `pr:<n>` first because it is unambiguous: `#<n>` is shared with an issue of the
+  // same number, and the first writer into the map wins.
+  return refUrls[`pr:${number}`] ?? refUrls[`#${number}`];
 }
 
 /**
