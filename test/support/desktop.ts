@@ -1,3 +1,4 @@
+import { orderedProfiles } from '../../src/agents/modelPolicy.js';
 import type { DesktopToolDeps } from '../../src/mcp/desktopContext.js';
 import type { System } from '../../src/system.js';
 
@@ -29,6 +30,13 @@ export function desktopDeps(system: System): Omit<DesktopToolDeps, 'now'> {
     escalations: () => system.escalations,
     permissions: () => system.permissions,
     recovery: () => system.recovery,
+    agents: () => system.agents,
+    filing: () => system.filing,
+    briefConfig: () => system.config,
+    // The real template, so a test exercising `job_create` files the body an
+    // operator's deployment would actually get.
+    renderTicketBody: (vars) => system.prompts.render('brief-ticket-body', vars),
+    profileNames: () => orderedProfiles(system.config.agentModels).map((p) => p.name),
     connector: system.connector,
     errors: system.errors,
     labelPrefix: system.config.labelPrefix,

@@ -648,8 +648,28 @@ export const goalControl: DesktopToolFactory = (deps) => ({
     if (!ref.ok) return toolError(ref.error);
     const wantsWatch = typeof args.watched === 'boolean';
     const wantsPriority = typeof args.priority === 'boolean';
-    if (!wantsWatch && !wantsPriority)
-      return toolError('Nothing to do — give `watched` or `priority`. To read the goal, call goal_read.');
+    const wantsProfile = args.profile !== undefined;
+    if (!wantsWatch && !wantsPriority && !wantsProfile)
+      return toolError('Nothing to do — give `watched`, `priority` or `profile`. To read the goal, call goal_read.');
+
+    // Refused by name before anything is written, exactly as the cockpit's route
+    // refuses it: a profile that resolves to nothing prices nothing while reading
+    // as a decision taken, and the goal would go on running at whatever its rule
+    // says with an override on the row saying otherwise.
+    let profile: string | null = null;
+    if (wantsProfile) {
+      if (typeof args.profile !== 'string') return toolError('profile must be a string, or "" to clear the pin.');
+      const wanted = args.profile.trim() || null;
+      const known = deps.profileNames();
+      if (wanted !== null && !known.includes(wanted))
+        return toolError(
+          known.length === 0
+            ? 'This deployment configures no agentModels.profiles, so there is nothing to pin work to.'
+            : `"${wanted}" is not one of this deployment's profiles: ${known.join(', ')}.`,
+        );
+      deps.store.setProfileOverride(issueConclusionOrigin(ref.issue), wanted);
+      profile = wanted;
+    }
 
     let priority: boolean | null = null;
     if (wantsPriority) {
@@ -704,6 +724,7 @@ export const goalControl: DesktopToolFactory = (deps) => ({
       issue: ref.issue,
       watch,
       priority,
+      profile: wantsProfile ? profile : undefined,
       means:
         'this changes what the harness picks up next and in what order. Nothing running was stopped: an agent ' +
         'already working this goal carries on, and un-watching only stops the next dispatch.',

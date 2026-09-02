@@ -1,10 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { trackerCoordinates } from '../../mcp/findings.js';
-import { briefTicketFields } from '../../briefTicket.js';
-import { watchLabelFor } from '../../watchLabels.js';
 import { ATTACHMENT_BODY_LIMIT, AttachmentsField, prepareAttachments } from '../../jobs/attachments.js';
-import { deriveJobTitle } from '../../jobs.js';
+import { submitBrief } from '../../jobs/brief.js';
 import { orderedProfiles } from '../../agents/modelPolicy.js';
 import { checked, IdParams, optionalText } from '../validation.js';
 import type { RouteContext } from './context.js';
@@ -75,95 +72,36 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         );
       };
 
-      // A code brief enters the workflow through the *same* door as a ticket
-      // (issue #198): when a tracker is configured, it is not dispatched onto a
-      // branch but filed as a **watched ticket**, so it flows through the planning
-      // funnel (appraisal → plan → parts → work) exactly like a picked-up issue rather
-      // than being coded straight off this prompt. The whole transform is here, at
-      // route time — rule `manual-job` is untouched, which keeps a clean recursion
-      // boundary: only operator-injected code briefs via this route become
-      // tickets, and nothing is dispatched for the filing itself.
-      //
-      // The harness files it rather than a desk agent (issue #394), and this arm is
-      // why: the ticket must carry the effective watch label or the funnel never
-      // picks it up, and an agent that forgot it left an item created, a filing
-      // shown complete in the cockpit, and **nothing ever dispatched** — no error,
-      // nothing red. A label the harness passes cannot be forgotten. The body was
-      // already the operator's own words verbatim, so nothing was being delegated
-      // but a title.
-      //
-      // Fallbacks are today's behaviour: a *desk* brief dispatches directly, and
-      // a code brief with no tracker (`fake`/unconfigured) has nowhere to file,
-      // so it too dispatches directly.
-      const tracker = kind === 'code' ? trackerCoordinates(system.config) : null;
-      if (tracker) {
-        const watchLabel = watchLabelFor(config.labelPrefix);
-        const derived = briefTicketFields(prompt);
-        const ticketBody = system.prompts.render('brief-ticket-body', derived.vars);
-        let ticketRef: string;
-        try {
-          ticketRef = await system.filing({
-            title: providedTitle ?? derived.title,
-            body: ticketBody,
-            // Empty when the watch gate is off (`labelPrefix: ''`), and an empty
-            // label must not be written: the harness then acts on every open issue
-            // and there is nothing to tag.
-            labels: watchLabel ? [watchLabel] : [],
-          });
-        } catch (err) {
-          system.errors.record({
-            source: 'provider',
-            message: `filing a brief as a ticket failed: ${(err as Error).message}`,
-          });
-          return reply.code(502).send({ error: `the tracker refused the ticket: ${(err as Error).message}` });
-        }
-        // The images follow the ticket, which is what makes them the *goal's*: every
-        // agent the funnel dispatches for this issue is handed them. Recorded rather
-        // than raised — the ticket exists and the operator asked for it, and losing
-        // the onward visibility of a screenshot is the smaller failure.
-        try {
-          attach(ticketRef);
-        } catch (err) {
-          system.errors.record({
-            source: 'server',
-            message:
-              `The ticket ${ticketRef} was filed but its ${prepared.files.length} attachment(s) could not be ` +
-              `stored: ${(err as Error).message}. Agents working it will not see them.`,
-          });
-        }
+      // The transform a code brief goes through — filed as a watched ticket so it
+      // flows through the planning funnel rather than being coded straight off the
+      // prompt — is `submitBrief` (`src/jobs/brief.ts`), shared with the desktop
+      // channel's `job_create`. What stays here is what is about *this* surface: the
+      // attachment bytes, the broadcast, the cycle, and the shape of the reply.
+      let outcome;
+      try {
+        outcome = await submitBrief(
+          {
+            store,
+            config,
+            filing: system.filing,
+            errors: system.errors,
+            renderTicketBody: (vars) => system.prompts.render('brief-ticket-body', vars),
+            attach,
+          },
+          { prompt, title: providedTitle, kind, branch },
+        );
+      } catch (err) {
+        // Only the job arm's attachment failure reaches here, and it has already
+        // cancelled the job it would have belonged to.
+        return reply.code(500).send({ error: (err as Error).message });
+      }
+      if (!outcome.ok) return reply.code(outcome.reason === 'branch_busy' ? 409 : 502).send({ error: outcome.error });
+      if (outcome.kind === 'ticket') {
         hub.broadcast({ type: 'world:changed' });
         const report = await harness.runCycle('manual');
-        return { ok: true, ticketRef, report };
+        return { ok: true, ticketRef: outcome.ticketRef, report };
       }
-
-      // Refuse a branch a live task already holds, up front (issue #116). The
-      // executor's identical check is the real gate and stays — a branch can go busy
-      // between queueing and dispatch, so this one can't be the only one — but a 409
-      // now is worth far more to the operator than a deferral they'd have to read out
-      // of the decision log hours later. The two cannot drift apart because they ask
-      // `Store.findActiveTaskByBranch` the same question; where they differ is only in
-      // *when*, which is why this one rejects (nothing has been promised yet) and the
-      // executor's defers (a queued job the operator is entitled to have retried).
-      // Only for code jobs: rule `manual-job` ignores a desk job's branch entirely.
-      if (kind === 'code' && branch) {
-        const held = store.findActiveTaskByBranch(branch);
-        if (held)
-          return reply.code(409).send({
-            error: `branch ${branch} is held by active task ${held.id}${held.originRef ? ` (${held.originRef})` : ''}`,
-          });
-      }
-      // Fall back to a title derived from the prompt's first line when none is given.
-      const title = providedTitle ?? deriveJobTitle(prompt);
-      const job = store.createJob({ title, prompt, kind, branch });
-      // A job whose images failed to land is cancelled rather than left queued
-      // without them: a brief that says "make it look like this" without the
-      // "this" is worse than no brief at all.
-      try {
-        attach(`job:${job.id}`);
-      } catch (err) {
-        store.cancelJob(job.id);
-        throw err;
-      }
+      const job = outcome.job;
       hub.broadcast({ type: 'world:changed' });
       const report = await harness.runCycle('manual');
       return { ok: true, job, report };

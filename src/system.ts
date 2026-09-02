@@ -761,6 +761,13 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     escalations: () => escalations,
     permissions: () => permissions,
     recovery: () => recovery,
+    agents: () => agents,
+    filing: () => filing,
+    // By reference, never a copy: `labelPrefix` is live-applied, so a brief filed
+    // against a snapshot of it would carry a tag the gate no longer reads.
+    briefConfig: () => config,
+    renderTicketBody: (vars) => prompts.render('brief-ticket-body', vars),
+    profileNames: () => orderedProfiles(config.agentModels).map((p) => p.name),
     connector,
     labelPrefix: config.labelPrefix,
     issueContainerTypes: config.issueContainerTypes,

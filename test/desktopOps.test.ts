@@ -456,3 +456,214 @@ test('agent_read names an unknown agent rather than answering emptily', async ()
     await d.close();
   }
 });
+
+// -- deciding a proposed act -------------------------------------------------
+
+/**
+ * The channel's most consequential tool, and the reason `proposal_read` exists
+ * beside it: `accept` is one door for five kinds, and two of them publish
+ * something that cannot be taken back. A session that accepts a `merge` believing
+ * it approved a plan is the failure worth asserting against.
+ */
+test('proposal_read says which kind a row is and what accepting it would do', async () => {
+  const d = await deck();
+  try {
+    const merge = d.system.store.createProposal({
+      kind: 'merge',
+      ref: 'pr:42:merge',
+      action: { type: 'merge_pr', prNumber: 42, method: 'squash', confidence: 0.9, reason: 'green' },
+      escalationId: null,
+    });
+    const read = await d.call('proposal_read', { id: merge.id });
+    assert.equal(read.isError, false);
+    assert.equal(read.json.kind, 'merge');
+    assert.match(String(read.json.acceptWouldMean), /MERGED/, 'and it says so in the words a session reads out');
+    assert.equal(read.json.backOutAvailable, false, 'only a plan has a ticket to back out of');
+
+    const missing = await d.call('proposal_read', { id: 'nope' });
+    assert.ok(missing.isError);
+  } finally {
+    await d.close();
+  }
+});
+
+test('proposal_decide rejects without performing, and refuses an already-decided row', async () => {
+  const d = await deck();
+  try {
+    const proposal = d.system.store.createProposal({
+      kind: 'merge',
+      ref: 'pr:42:merge',
+      action: { type: 'merge_pr', prNumber: 42, method: 'squash', confidence: 0.9, reason: 'green' },
+      escalationId: null,
+    });
+    const rejected = await d.call('proposal_decide', { id: proposal.id, verdict: 'reject', note: 'not yet' });
+    assert.equal(rejected.isError, false);
+    assert.equal(d.system.store.listProposals().find((p) => p.id === proposal.id)?.status, 'rejected');
+
+    // One-way, so a second verdict is a refusal rather than a silent no-op: a
+    // session told "ok" twice would report an act performed twice.
+    const again = await d.call('proposal_decide', { id: proposal.id, verdict: 'accept' });
+    assert.ok(again.isError);
+    assert.match(again.text, /already rejected/);
+  } finally {
+    await d.close();
+  }
+});
+
+test('proposal_decide refuses the ticket verdicts on anything but a plan', async () => {
+  const d = await deck();
+  try {
+    const merge = d.system.store.createProposal({
+      kind: 'merge',
+      ref: 'pr:42:merge',
+      action: { type: 'merge_pr', prNumber: 42, method: 'squash', confidence: 0.9, reason: 'green' },
+      escalationId: null,
+    });
+    // Read before the transition, so a wrong-kind verdict is refused rather than
+    // settled into an effect that cannot run.
+    const wrong = await d.call('proposal_decide', { id: merge.id, verdict: 'hold_ticket' });
+    assert.ok(wrong.isError);
+    assert.match(wrong.text, /only a plan/);
+    assert.equal(d.system.store.listProposals().find((p) => p.id === merge.id)?.status, 'pending');
+
+    const plan = d.system.store.createProposal({
+      kind: 'plan',
+      ref: 'issue:12:plan',
+      action: { type: 'propose_plan', reason: 'x' },
+      escalationId: null,
+    });
+    // Closing somebody's ticket is a write on a tracker that outlives this harness,
+    // and one with no words on it is the "closed for reasons nobody can read" the
+    // gate exists to stop.
+    const noNote = await d.call('proposal_decide', { id: plan.id, verdict: 'close_ticket' });
+    assert.ok(noNote.isError);
+    assert.match(noNote.text, /note is required/);
+    assert.equal(d.system.store.listProposals().find((p) => p.id === plan.id)?.status, 'pending');
+  } finally {
+    await d.close();
+  }
+});
+
+test('proposal_decide will not release a plan whose caveats are unacknowledged', async () => {
+  const d = await deck();
+  try {
+    const plan = d.system.store.createProposal({
+      kind: 'plan',
+      ref: 'issue:12:plan',
+      action: {
+        type: 'propose_plan',
+        reason: 'x',
+        caveats: [{ id: 'schema', label: 'This changes the schema', detail: 'and there is no migration yet' }],
+      },
+      escalationId: null,
+    });
+
+    const gated = await d.call('proposal_decide', { id: plan.id, verdict: 'accept' });
+    // Not an error: the caller did nothing wrong and the next step is exact.
+    assert.equal(gated.isError, false);
+    assert.equal(gated.json.verdict, 'refused');
+    assert.deepEqual(
+      (gated.json.unacknowledged as Record<string, unknown>[]).map((c) => c.id),
+      ['schema'],
+    );
+    assert.equal(
+      d.system.store.listProposals().find((p) => p.id === plan.id)?.status,
+      'pending',
+      'and the plan is not released',
+    );
+
+    const read = await d.call('proposal_read', { id: plan.id });
+    assert.deepEqual(
+      (read.json.caveats as Record<string, unknown>[]).map((c) => c.id),
+      ['schema'],
+    );
+  } finally {
+    await d.close();
+  }
+});
+
+test('recovery_decide hands back the desk’s own refusal rather than a generic failure', async () => {
+  const d = await deck();
+  try {
+    const bad = await d.call('recovery_decide', { taskId: 'task_nope', verdict: 'restore' });
+    assert.ok(bad.isError);
+    // The desk's wording, because it is the one that says which of the three
+    // verdicts is still open.
+    assert.match(bad.text, /no orphaned work/);
+
+    const verdict = await d.call('recovery_decide', { taskId: 'task_nope', verdict: 'sideways' });
+    assert.ok(verdict.isError);
+    assert.match(verdict.text, /restore/);
+  } finally {
+    await d.close();
+  }
+});
+
+// -- putting work in and driving it ------------------------------------------
+
+test('job_create queues a desk brief and says it is not running yet', async () => {
+  const d = await deck();
+  try {
+    const created = await d.call('job_create', { prompt: 'summarise the release notes', kind: 'desk' });
+    assert.equal(created.isError, false);
+    const job = created.json.job as Record<string, unknown>;
+    assert.equal(job.kind, 'desk');
+    assert.equal(job.status, 'queued');
+    assert.equal(d.system.store.listJobs().length, 1);
+    // Stated rather than implied: a session told only "created" would report back
+    // that the work has started.
+    assert.match(String(created.json.means), /not running yet/);
+
+    const empty = await d.call('job_create', { prompt: '   ' });
+    assert.ok(empty.isError, 'a brief with no words in it asks for nothing');
+    assert.equal(d.system.store.listJobs().length, 1);
+  } finally {
+    await d.close();
+  }
+});
+
+test('agent_control tells a dead agent from one that never existed', async () => {
+  const d = await deck();
+  try {
+    const missing = await d.call('agent_control', { agentId: 'nope', action: 'kill' });
+    assert.ok(missing.isError);
+    assert.match(missing.text, /No agent/, 'a typo is not "not live"');
+
+    const badAction = await d.call('agent_control', { agentId: 'nope', action: 'detonate' });
+    assert.ok(badAction.isError);
+    assert.match(badAction.text, /respond/);
+
+    const noText = await d.call('agent_control', { agentId: 'nope', action: 'respond' });
+    assert.ok(noText.isError);
+  } finally {
+    await d.close();
+  }
+});
+
+// -- pinning a profile -------------------------------------------------------
+
+test('goal_control refuses a profile the deployment does not configure', async () => {
+  const d = await deck({
+    agentModels: { profiles: { cheap: { model: 'haiku', rank: 0, description: 'the cheap one, for small changes' } } },
+  });
+  try {
+    world(d.system, [42]);
+    const bad = await d.call('goal_control', { issue: 42, profile: 'enormous' });
+    assert.ok(bad.isError);
+    // Named against what is configured, because a profile that resolves to nothing
+    // prices nothing while reading as a decision taken.
+    assert.match(bad.text, /cheap/);
+    assert.equal(d.system.store.listProfileOverrides().length, 0);
+
+    const ok = await d.call('goal_control', { issue: 42, profile: 'cheap' });
+    assert.equal(ok.isError, false);
+    assert.equal(d.system.store.listProfileOverrides()[0]?.profile, 'cheap');
+
+    // Clearing is the state a goal starts in, not a third value.
+    const cleared = await d.call('goal_control', { issue: 42, profile: '' });
+    assert.equal(cleared.isError, false);
+    assert.equal(d.system.store.listProfileOverrides().length, 0);
+  } finally {
+    await d.close();
+  }
+});

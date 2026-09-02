@@ -47,7 +47,7 @@ assembles them (see [How a tool is built](#how-a-tool-is-built)).
 | `reply_to_review`    | Hand the harness your reply to a review thread, instead of posting it yourself — and say with `resolved` whether the thread is now dealt with, which is the only thing that closes one. Raises the same `reply_on_pr` act a rule raises and sends nothing: the operator's authority, the harness's signature and the audit row all follow from that. Fenced to `pr:<n>:comments` origins. → [09](09-execution.md#where-a-reply_on_pr-comes-from)                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `request_permission` | Harness-internal (issue #130). Claude Code calls it via `--permission-prompt-tool` to route an un-allowlisted tool call to the operator. The one tool an agent never calls itself, and the one whose response is **bare** (no `_status`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
-There is a **second, separate list** for the desktop channel below — fourteen tools, none of them
+There is a **second, separate list** for the desktop channel below — nineteen tools, none of them
 the fleet's. See [The desktop channel](#the-desktop-channel).
 
 ### The `_status` envelope
@@ -842,7 +842,12 @@ and [the run](20-validation.md#getting-the-application-up);
 | `fleet_control`     | The three live dispatch controls: `cap`, `paused`, and `pulse`. In memory, exactly as the cockpit's are. |
 | `queue_control`     | The Up next queue's two verbs: replace the pin set, and cancel a still-queued job. |
 | `escalation_answer` | Settle one inbox row: `response`/`answers` for a question, `permission` for a blocked tool call. Refuses the other two kinds by name. |
-| `goal_control`      | The two standing marks on a goal: `watched` (the tracker tag, cascading) and `priority` (the harness's own queue mark). |
+| `goal_control`      | The three standing marks on a goal: `watched` (the tracker tag, cascading), `priority` (the harness's own queue mark) and `profile` (which model the next dispatch runs on). |
+| `proposal_read`     | One proposed act in full: its kind, what accepting it would actually do, and the caveats that gate it. Records nothing. |
+| `proposal_decide`   | `accept` performs the act; `reject` performs nothing; `close_ticket` / `hold_ticket` are a plan's two verdicts about the **ticket**. |
+| `recovery_decide`   | `restore` / `requeue` / `remove` a run a crash orphaned. |
+| `job_create`        | Put work to the harness — filed as a watched ticket where a tracker is configured, queued directly otherwise. |
+| `agent_control`     | The six verbs on a live agent: respond, interrupt, complete, kill, extend a stall park, resume a usage-limit park. |
 
 ### Answering a question about a goal
 
@@ -905,7 +910,7 @@ one machine. An operator who wants their own agent keeping an eye on the fleet �
 overnight, answering a question, lowering the cap when the account's five-hour window is nearly spent
 — had the bearer token and forty hand-rolled endpoints, or nothing.
 
-Three reads and four verbs:
+Four reads and eight verbs. The reads:
 
 - **`fleet_status`** is the read, and it is one call rather than three because the decision it serves
   is one decision. An operator's agent checking in is nearly always asking _is there room to run
@@ -923,35 +928,75 @@ Three reads and four verbs:
   length beside it. A long run's transcript is megabytes; the question a session is answering — why is
   this parked, what is it stuck on — is in the last few thousand characters, and an agent judged on a
   truncated transcript it believed was whole is the failure worth naming in the payload.
+- **`proposal_read`** is the fourth, and it exists because of what its verb can do — see
+  [below](#what-it-may-do-and-what-it-may-not).
 
-#### The fence
+The verbs are `fleet_control`, `queue_control`, `goal_control`, `escalation_answer`,
+`proposal_decide`, `recovery_decide`, `job_create` and `agent_control`.
 
-**Nothing here dispatches an agent.** `queue_control` and `goal_control` change what the fleet would
-pick up next and `fleet_control` changes how much of it runs at once; none of them names work to
-start, writes code, opens a pull request or settles a goal. The verbs that do are the fleet's own,
-behind the origin an agent was dispatched on — and this credential is long-lived and sits in the
-operator's home directory, which is exactly why the line is drawn in the tool set rather than left to
-a caller's judgement. `test/desktopOps.test.ts` asserts it as a fact about the fleet: after a
-steering call on a harness in `raw` mode, `listAgents()` is empty.
+#### What it may do, and what it may not
 
-`fleet_control`'s `pulse` is the one argument that can put work on the fleet, and it does so the way
-the cockpit's Pulse button does — by asking for a cycle, which decides for itself. It is named as
-such in the tool's own description rather than left to be discovered.
+The channel started narrower than this: reads and four steering verbs, with the inbox's decisions and
+anything that put work in left to the cockpit. The operator asked for the rest, and the reason is the
+whole point of the channel — **the cockpit is a browser tab on one machine**, and an inbox with rows
+that can only be cleared there is an inbox that fills up while they are away. So the line moved, and
+it now sits here:
 
-**The `connector` dep is narrowed to `setIssueLabel`**, not the whole `ActionSink`. An `ActionSink`
-on this channel would put `mergePr`, `postPrReply` and `createIssue` one line away from a surface
-whose whole claim is that it steers the fleet and never acts for it.
+**What this channel may do** is what the operator's own hands do in the cockpit: read everything,
+steer the queue and the cap, settle every row in "Needs you", put a brief in, and drive a live agent.
+
+**What it may not do** is the *fleet's* surface. No tool here concludes a goal, writes a plan
+document, opens a pull request, or reports a validation reading on work it did itself. Those stay
+behind the origin an agent was dispatched on, because they are an agent's account of work it
+performed and this session performed none of it. `validation_report` is the one apparent exception
+and is not one: it reports a check this session **claimed and ran at the keyboard**, which is the
+whole reason the channel exists.
+
+**`job_create` is not a dispatch**, and the distinction is load-bearing rather than pedantic. A code
+brief on a deployment with a tracker is **filed as a watched ticket** and enters the planning funnel
+like any other issue — appraisal, plan, parts — so the harness still decides whether and when to work
+it. That is `POST /api/jobs`' behaviour since issue #198, reached through the same `submitBrief`
+(`src/jobs/brief.ts`) rather than a second account of it. The tool says so in what it hands back,
+because a session told only "created" would report that the work had started.
+
+**Two proposal kinds publish**, and this is the sharpest edge on the channel. `ProposalDesk.accept`
+is one door for five kinds: `plan` releases a decomposition, `plan_amendment` replaces a running
+plan's document, `shortfall` sends a goal back — and `reply_draft` **posts a comment** while `merge`
+**merges the pull request**. The last two reach outside the machine and cannot be taken back. The
+failure worth preventing is not a refusal but a session that accepts a `merge` believing it approved
+a plan, so `proposal_read` exists beside `proposal_decide` and answers exactly that in those words;
+both tools' descriptions say it, and so does every reply. **The caveat gate is not bypassed**: a plan
+that raises caveats is refused until the verdict names each id, and the refusal is a JSON reply
+carrying the unticked ones rather than an error, because the caller did nothing wrong and the next
+step is exact.
+
+**`agent_control` is the one place this channel touches a live process.** Each verb is
+`AgentManager`'s own, reached as the cockpit's button reaches it — `respond` through `respond`, which
+is also what clears the park, rather than writing to the session and leaving the agent answered and
+still parked. Each refuses an agent with no live session, and names the row's status rather than the
+map lookup that failed: a typo and an agent that has ended are different answers.
+
+The `connector` dep is still narrowed to `setIssueLabel` rather than taking the whole `ActionSink`.
+That is not undone by the above: a merge reached through `proposal_decide` is an act **the harness
+itself proposed** and an operator is approving, which is a different thing from a tool that can merge
+anything it names.
 
 #### Every write goes through the object the cockpit's click goes through
 
-`RuntimeControl.apply`, `EscalationInbox.answer`, `PermissionDesk.decide`,
+`RuntimeControl.apply`, `EscalationInbox.answer`, `PermissionDesk.decide`, `ProposalDesk.accept` /
+`reject` / `backOut`, `RecoveryDesk.decide`, `AgentManager`'s six verbs, `submitBrief`,
 `Store.setPriorityOverrides`, `Store.cancelJob`, `Store.setGoalPriority`, `applyIssueWatch` — never a
 second implementation beside one of them. A control surface that reached the store directly would be
 a second opinion about what a pause or a watch means, free to disagree with the cockpit on the next
 change to either. `fleet_control` does not even validate `cap`: which numbers are a legal cap is
 `RuntimeControl.apply`'s question, and a check in the handler would be two answers to one.
 
-The watch toggle is the case where that cost a real extraction. The cascade, the two label mirrors and
+Two extractions came out of that rule, and both were third-copy cases rather than tidying.
+`submitBrief` (`src/jobs/brief.ts`) is the ticket-or-job transform a brief goes through, now shared
+by `POST /api/jobs` and `job_create`: written twice, the copy without the watch label would file a
+ticket that is created, linked, shown complete in the cockpit and **never dispatched for**.
+
+The watch toggle is the other, and it cost the larger change. The cascade, the two label mirrors and
 the partial-failure report had grown **three** copies — the cockpit's route, the plan back-out's
 `hold`, and this tool would have been the third — so they are now `applyIssueWatch`
 (`src/issueWatch.ts`) and all three callers reach it. What each caller keeps is what is about its own

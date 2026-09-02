@@ -1,5 +1,7 @@
+import type { AgentManager } from '../agents/agentManager.js';
 import type { PermissionDesk } from '../agents/permissionDesk.js';
 import type { RecoveryDesk } from '../agents/recoveryDesk.js';
+import type { Config } from '../config.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import type { EscalationInbox } from '../escalation/escalationInbox.js';
@@ -8,6 +10,7 @@ import type { LocalRunWatch } from '../localRun/watch.js';
 import type { PrRefStyle } from '../prRef.js';
 import type { ProposalDesk } from '../proposals/proposalDesk.js';
 import type { RuntimeControl } from '../runtimeControl.js';
+import type { TicketFiler } from '../tickets/filing.js';
 import type { IssueWatchContext } from '../issueWatch.js';
 import type { Store } from '../store/store.js';
 import type { UpcomingPlan } from '../wire.js';
@@ -109,6 +112,29 @@ export interface DesktopToolDeps {
   harness(): { upcoming: UpcomingPlan | null };
   /** Where a question put to a person is answered — `escalation_answer`'s free-text arm. */
   escalations(): EscalationInbox;
+  /** The fleet, for `agent_control`'s six verbs on a live session. */
+  agents(): AgentManager;
+  /**
+   * How the harness files a tracker item, lazily — `job_create`'s code arm files a
+   * watched ticket rather than dispatching, through the same `ticketFiler` the
+   * cockpit's own brief route uses.
+   */
+  filing(): TicketFiler;
+  /**
+   * The whole running config, lazily, for `submitBrief` — which reads the tracker
+   * coordinates, the label prefix and the container types off it. By reference and
+   * not a copy: `labelPrefix` is live-applied, and a brief filed against a snapshot
+   * of it would carry a tag the gate no longer reads.
+   */
+  briefConfig(): Config;
+  /** Renders `brief-ticket-body`, which is operator-overridable. → `job_create`. */
+  renderTicketBody(vars: Record<string, string>): string;
+  /**
+   * The model profiles this deployment configures, for `goal_control`'s pin. A
+   * profile named by nothing prices nothing while reading as a decision taken, so
+   * the tool refuses an unknown name exactly as the cockpit's route does.
+   */
+  profileNames(): string[];
   /**
    * The permission backstop. Its own arm on `escalation_answer` rather than a
    * second tool, for the route's reason: an agent blocked inside a tool call is

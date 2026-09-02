@@ -22,6 +22,7 @@ import { checkBriefing } from '../validation/fleet.js';
 import { amendedReportReason, amendedSinceRunBegan, handbackReason, validateReport } from '../validation/report.js';
 import { validationGoalDir } from '../validation/resources.js';
 import { liveChecks } from '../validation/verdict.js';
+import { proposalDecide, proposalRead, recoveryDecide } from './desktopInbox.js';
 import {
   agentRead,
   attentionRead,
@@ -31,6 +32,7 @@ import {
   goalControl,
   queueControl,
 } from './desktopOps.js';
+import { agentControl, jobCreate } from './desktopWork.js';
 import type { DesktopSession, DesktopToolDeps, DesktopToolFactory } from './desktopContext.js';
 import { DESKTOP_TOOL_NAMES, type DesktopToolName } from './names.js';
 import { PLAN_DOCUMENT_SCHEMA } from './planDocumentSchema.js';
@@ -862,6 +864,11 @@ const DESKTOP_TOOLS: Record<DesktopToolName, DesktopToolFactory> = {
   agent_read: agentRead,
   queue_control: queueControl,
   goal_control: goalControl,
+  proposal_read: proposalRead,
+  proposal_decide: proposalDecide,
+  recovery_decide: recoveryDecide,
+  job_create: jobCreate,
+  agent_control: agentControl,
   validation_read: validationRead,
   validation_claim: validationClaim,
   validation_report: validationReport,

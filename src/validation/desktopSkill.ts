@@ -95,7 +95,7 @@ doing, whether anything is stuck, and sometimes to change it.
 
 ### Steering it
 
-Four verbs, and each does less than it sounds like:
+Eight verbs. The first four do less than they sound like:
 
 - **\`fleet_control\`** — \`cap\`, \`paused\`, \`pulse\`. Lowering the cap or
   pausing **never stops a running agent**; it stops the next dispatch. Both are in
@@ -112,7 +112,50 @@ Four verbs, and each does less than it sounds like:
   \`settledBy\`. Say what is waiting and let the operator take them in the cockpit.
 - **\`goal_control\`** — \`watched\` is the tracker tag that opts work in or out
   (and cascades to everything under a container); \`priority\` is the harness's own
-  mark and only re-orders its queue. Neither starts or stops an agent.
+  mark and only re-orders its queue; \`profile\` pins which model the next dispatch
+  runs on. None of them starts or stops an agent.
+
+The other four actually do something:
+
+- **\`job_create\`** — put work in. A \`code\` brief where a tracker is configured is
+  **filed as a ticket** and goes through planning like any other issue; it does not
+  start coding. Say that when you report back, or the operator will think it has.
+- **\`agent_control\`** — \`respond\`, \`interrupt\`, \`complete\`, \`kill\`,
+  \`extend_stall\`, \`resume\` on one live agent. \`kill\` loses whatever it had not
+  written down; read it with \`agent_read\` first.
+- **\`recovery_decide\`** — \`restore\` / \`requeue\` / \`remove\` a run a crash
+  orphaned. These hold the harness back from queueing new work, so clearing one is
+  usually the answer to "why is nothing starting".
+- **\`proposal_decide\`** — see below. This is the one to be careful with.
+
+### Deciding a proposed act
+
+The harness proposes acts and waits for a person. **\`accept\` performs the act**,
+and it is one door for five different things:
+
+| Kind | Accepting it |
+| --- | --- |
+| \`plan\` | releases the decomposition — the fleet starts working it, and spending |
+| \`plan_amendment\` | replaces a running plan's document |
+| \`shortfall\` | sends the goal back to a planner, or adds a follow-up part |
+| \`reply_draft\` | **posts a comment** to the tracker or pull request |
+| \`merge\` | **merges the pull request** |
+
+The last two cannot be taken back.
+
+1. **\`proposal_read\` first, every time.** It says which kind this is and what
+   accepting would do, in words you can read straight out. The id does not say.
+2. **Get a yes to the act, not to "the proposal".** "Shall I merge #412?" is the
+   question. "Shall I approve this?" is not.
+3. **Caveats are not a formality.** A plan that raises them is refused until you
+   pass their ids. They are the planner saying what it is least sure about — put
+   them to the operator in their own words first. Acknowledging one nobody read is
+   exactly what the gate exists to stop.
+4. **A plan has two more verdicts**, for when the *ticket* is the problem rather
+   than the plan: \`close_ticket\` (your note is posted on it as the reason) and
+   \`hold_ticket\` (the watch tag comes off, the ticket stays open). \`reject\` is
+   different — it sends the goal back to a planner, which means agreeing the work
+   is still worth doing.
 
 ### What not to do
 
@@ -122,9 +165,11 @@ Four verbs, and each does less than it sounds like:
 - **Do not raise the cap to clear a backlog** without looking at
   \`accountUsage\` first. The fleet running out of allowance mid-goal costs more
   than the wait did.
-- **Nothing here starts work.** You cannot dispatch an agent, open a pull request
-  or settle a goal from this session, and you should not describe what you have
-  done as if you had. Pinning a row means it goes first *when something dispatches*.
+- **Do not describe steering as doing.** Pinning a row means it goes first *when
+  something dispatches*. Filing a brief means the harness will consider it. Neither
+  is "I've started that".
+- **You cannot do the work itself.** Nothing here concludes a goal, writes a plan
+  or opens a pull request — that is the fleet's, and this session did none of it.
 - **Do not answer an escalation you do not understand.** The answer is typed
   straight into a running agent and it acts on it. If the question needs the
   operator, say so and leave it open.
