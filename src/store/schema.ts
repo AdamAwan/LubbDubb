@@ -1408,7 +1408,13 @@ CREATE TABLE IF NOT EXISTS local_runs (
   url        TEXT,              -- as configured when the run started, not as it reads now
   note       TEXT,
   started_at TEXT NOT NULL,
-  ended_at   TEXT
+  ended_at   TEXT,
+  -- When the harness that was holding this run went down, stamped by the fast stop
+  -- on its way out. It is the age a resume is judged on: an environment nobody has
+  -- been near for hours is not one to bring back. Null on a row nothing stamped --
+  -- a hard crash, where the harness never got a line -- which is unknown rather
+  -- than recent, and read as such.
+  interrupted_at TEXT
 );
 
 -- One dated cost delta per usage report a local run's sessions made -- the sibling

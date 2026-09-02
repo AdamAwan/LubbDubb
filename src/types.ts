@@ -4472,6 +4472,20 @@ export interface LocalRun {
   startedAt: string;
   endedAt: string | null;
   /**
+   * When the harness holding this run went down, or null if nothing stamped it.
+   *
+   * Stamped by the fast stop on its way out, and cleared again when a resume brings
+   * the run back. It is the age a resume is judged on: an environment nobody has been
+   * near for hours is not one to spend a session bringing back, and `startedAt`
+   * cannot answer that question — a run started on Monday and still in use at five
+   * o'clock is not a stale one.
+   *
+   * **Null is unknown, not recent.** A row left live with no stamp is one the harness
+   * never got a line about — a kill, a power cut, a machine that rebooted — and a
+   * resume refuses it rather than guessing.
+   */
+  interruptedAt: string | null;
+  /**
    * What the sessions behind this run have cost, and what they spent to do it.
    *
    * **Accumulated, not folded.** Every other usage figure the harness holds is a

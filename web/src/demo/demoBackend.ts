@@ -1555,6 +1555,7 @@ class DemoServer {
       note: null,
       startedAt: now,
       endedAt: null,
+      interruptedAt: null,
       live: true,
       phase: null,
       refFacts: facts,

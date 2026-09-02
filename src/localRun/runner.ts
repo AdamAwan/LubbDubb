@@ -151,6 +151,22 @@ function phaseOf(line: string): string | null {
   return said === '' ? null : said;
 }
 
+/**
+ * A span of milliseconds in the words an operator reading a note would use.
+ *
+ * Rounded to the coarsest unit that still says something, because the note it lands
+ * in is a sentence rather than a reading: "3 hours" is the useful half of "3 hours 14
+ * minutes", and the run it describes is gone either way.
+ */
+function describeAge(ms: number): string {
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 60) return `${String(Math.max(minutes, 1))} minute${minutes === 1 ? '' : 's'}`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${String(hours)} hour${hours === 1 ? '' : 's'}`;
+  const days = Math.round(hours / 24);
+  return `${String(days)} days`;
+}
+
 interface LocalRunnerDeps {
   store: Store;
   worktrees: Worktrees;
@@ -187,6 +203,12 @@ interface LocalRunnerDeps {
    * milliseconds; unset means {@link STOP_TIMEOUT_MS}.
    */
   stopTimeoutMs?: number;
+  /**
+   * The clock the resume window is measured against. Injected so a test can hold a
+   * run's interruption at an hour ago without sleeping through one; unset means
+   * `Date.now`.
+   */
+  now?: () => number;
   errors: ErrorRecorder;
 }
 
@@ -398,7 +420,16 @@ export class LocalRunner extends EventEmitter {
     // reporting a resume that never happened.
     if (!existsSync(live.dir)) return give(`its checkout at ${live.dir} is gone`);
 
+    // Last, because it is the least specific reason of the four: a run whose checkout
+    // has gone is told that rather than told it is old.
+    const stale = this.staleness(live);
+    if (stale !== null) return give(stale);
+
     this.deps.store.setLocalRunStatus(live.id, 'starting', 'the harness restarted; this run is being brought back');
+    // The stamp described an interruption that is now being answered. Left on, the
+    // next hard crash would be dated to this one, and a run interrupted a minute ago
+    // would be refused as hours old.
+    this.deps.store.markLocalRunInterrupted(live.id, null);
     this.runId = live.id;
     // The tail and the stage belong to the session that printed them, and that
     // session is gone. Kept, they would caption this bring-up with the last thing the
@@ -427,6 +458,47 @@ export class LocalRunner extends EventEmitter {
 ${RESUME_RULES}`);
     this.emit('changed');
     return { outcome: 'resumed', run: this.deps.store.currentLocalRun() ?? live };
+  }
+
+  /**
+   * Why this run is too old to bring back, or null if it is not.
+   *
+   * **A resume is for a restart**, and the whole case for spending a session on one is
+   * that the operator is a minute from wanting their environment back and the
+   * containers the reap could not touch are still up. Neither holds for a harness that
+   * was off overnight: the machine has probably been rebooted, there is nothing left
+   * to attach to, and the boot spends a session bringing up an environment nobody
+   * asked for and nobody is watching. The row was still live, so the old code brought
+   * it back regardless of when it stopped being true.
+   *
+   * **An unstamped row is unknown, and unknown is refused.** Null in `interruptedAt`
+   * means nothing wrote a line on the way down — a kill, a power cut, a machine that
+   * rebooted under the harness — and `startedAt` is not a stand-in for it: a run
+   * brought up on Monday and still in use this afternoon would read as days stale.
+   * The safe direction is the operator clicking Start, not a session spent on a guess.
+   */
+  private staleness(live: LocalRun): string | null {
+    const windowMs = this.deps.policy().resumeWindowMs;
+    // Not a bound at all, which is a supported setting: a deployment whose environment
+    // really does survive anything says so here and gets the behaviour it had before.
+    if (!Number.isFinite(windowMs) || windowMs <= 0) return null;
+
+    if (live.interruptedAt === null)
+      return (
+        'nothing recorded when it was interrupted, so how long ago that was is not known and it was ' +
+        'not brought back — the harness went without shutting down. Whatever survived may still be running.'
+      );
+    const at = Date.parse(live.interruptedAt);
+    if (Number.isNaN(at)) return 'when it was interrupted was not readable, so it was not brought back';
+
+    const now = (this.deps.now ?? Date.now)();
+    const ageMs = now - at;
+    if (ageMs <= windowMs) return null;
+    return (
+      `it was interrupted ${describeAge(ageMs)} ago, longer than the ${describeAge(windowMs)} a run may be ` +
+      'brought back within, so it was not brought back — start it again when you want it. Whatever survived ' +
+      'the restart may still be running. `localRun.resumeWindowMs` on the Config page is what sets that.'
+    );
   }
 
   /**
@@ -493,12 +565,20 @@ ${RESUME_RULES}`);
       // person to read, and `resumeInterrupted` cannot act on prose. The status is
       // left exactly as it was rather than moved — the harness is going down, and it
       // has learned nothing about this run to justify writing a different one.
-      else
+      else {
         this.deps.store.setLocalRunStatus(
           live.id,
           live.status,
           `${note} — it is left standing to be brought back on the next boot.`,
         );
+        // **The only line that dates the interruption**, and the next boot's resume is
+        // judged on it. Without it the row says it is live and nothing says since when,
+        // so a harness started tomorrow morning brings back last night's environment —
+        // which is the whole of #682. A stamp nobody wrote is read as unknown rather
+        // than as recent, so forgetting this refuses the resume rather than granting a
+        // stale one.
+        this.deps.store.markLocalRunInterrupted(live.id, new Date((this.deps.now ?? Date.now)()).toISOString());
+      }
     }
     this.emit('changed');
   }

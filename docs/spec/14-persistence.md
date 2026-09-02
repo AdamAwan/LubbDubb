@@ -128,7 +128,7 @@ answer without leaving the file you added the column's reader to. Current entrie
 ### When a null means something
 
 `ensureColumns` returns the columns it **actually added**, as `table.column`, and the composition
-root gates a backfill on that list. One column so far needs it. `pets.opened_at` is null on every row
+root gates a backfill on that list. Four columns need it so far, and the shape is the same each time. `pets.opened_at` is null on every row
 that predates it, and null there spells _still an egg_ — so the `ALTER TABLE` alone would turn every
 existing vivarium back into a crate of anonymous shells, with nothing red and no way out but clicking
 through the lot. `openPetsFromBeforeEggs` stamps them with their own `hatched_at`, and runs **only on
@@ -184,6 +184,15 @@ considered for the first time opens a window only if its confirming reading is w
 intervals of now, so the whole history is walked once, stamped, and opens nothing. A backfill would
 have been the wrong shape and an unstamped column the wrong answer; the freshness guard is what makes
 the third option correct. → [29](29-post-deploy-watch.md#only-for-an-arrival-the-harness-watched)
+
+`local_runs.interrupted_at` is the newest of the gated four, and `pets.opened_at`'s shape exactly. Null
+there means **nobody stamped this run**, which the local run's resume reads as _how long ago that was is
+not known_ and refuses — the honest answer for a hard crash, and the wrong one for the single live row a
+deployment is upgrading over, which a fast stop left standing moments before this very boot. So
+`dateInterruptionsFromBeforeTheStamp` dates that row to now, on the boot the column arrives and never
+again: unconditionally it would re-date every stale row on every boot and resume it for ever, which is
+the thing the stamp exists to stop. Both directions cost an operator an environment and neither is red.
+→ [23](23-local-runs.md#coming-back-after-a-restart)
 
 A column whose absence is simply a weaker claim — `built_sha`, `chain`, `dismiss_note` — needs none
 of this. The test is whether _null_ is a value the running code will act on.

@@ -228,8 +228,9 @@ session's subtree and kills it without one.
 **What happens to the row depends on whether the deployment can bring the run back.** The reap takes
 the dev server and cannot touch a container, so a restart leaves half an environment either way. With a
 `localRun.resumeInstruction` the row is deliberately **left live** — it is the only record that there
-is something to come back to — and the next boot's `resumeInterrupted` attaches a session to what
-survived. Without one it is settled with a note saying the stop instruction did not run, which is what
+is something to come back to, dated with when the harness went — and the next boot's
+`resumeInterrupted` attaches a session to what survived, so long as that was recent enough to be
+worth it (`localRun.resumeWindowMs`; an upgrade is seconds, so it always is). Without one it is settled with a note saying the stop instruction did not run, which is what
 turns a container that outlived the harness into something the panel states rather than a mystery an
 operator finds in `docker ps`. → [23](23-local-runs.md#coming-back-after-a-restart)
 

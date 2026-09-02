@@ -567,6 +567,12 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'How an environment the harness was holding is brought back after a restart. Empty means it is not.',
   },
   {
+    path: 'localRun.resumeWindowMs',
+    type: 'number',
+    access: 'plain',
+    why: 'How long after the harness went down a run may still be brought back. 0 means no bound.',
+  },
+  {
     path: 'localRun.url',
     type: 'string',
     access: 'plain',

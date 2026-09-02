@@ -41,8 +41,9 @@ limit invented here — the same one the validation claim is built on
 
 `localRun.instruction` — free text, what the session bringing the environment up is told —
 `localRun.stopInstruction`, what the session taking it back down is told, `localRun.resumeInstruction`,
-what a session bringing an interrupted one **back** is told, and `localRun.url`, where the
-application lands. All four are **live fields**
+what a session bringing an interrupted one **back** is told, `localRun.resumeWindowMs`, how long after
+an interruption that is still worth doing, and `localRun.url`, where the
+application lands. All five are **live fields**
 ([02](02-configuration.md#liveness)): an edit on the Config page applies to the next start with no
 restart. They sit under **Features** there, beside the other policy objects, and `localRunRoot` under
 **Paths** — which is a thing `GROUPS` in `src/server/runningConfig.ts` has to be told: a declared key
@@ -233,6 +234,19 @@ environment back, every time, for a reason that had nothing to do with them.
   kills, because the wired `exit` handler settles a run whose session dies while it is meant to be up —
   right everywhere except here, where the session dying _is_ the shutdown, and a `failed` written on the
   way out is a row the next boot would refuse.
+- **It is only worth doing while the interruption is recent**, which is `localRun.resumeWindowMs` —
+  two hours by default. Everything above argues for a resume from a *restart*: the operator is a
+  minute from wanting their environment back, and the containers the reap could not touch are still
+  up. A harness that was off overnight has neither — the machine has very likely been rebooted,
+  there is nothing left to attach to, and what the boot does is spend a session bringing up an
+  environment nobody asked for and nobody is watching. The row says live in both cases, which is why
+  the age has to be **recorded rather than inferred**: `stopFast` stamps `local_runs.interrupted_at`
+  as it leaves, `resumeInterrupted` judges the row on it, and a resume clears it again on the way
+  back up so the next interruption is not dated to the last one. `started_at` is no substitute — a
+  run brought up on Monday and still in use this afternoon is not stale — and a row **nothing
+  stamped** (a kill, a power cut, a machine that rebooted underneath) is read as *unknown rather than
+  recent* and settled, because the safe direction here is the operator clicking Start. `0` turns the
+  bound off, which is the behaviour before there was one. → [#682](https://github.com/AdamAwan/LubbDubb/issues/682)
 - **A `stopping` row is settled, not resumed**, however the deployment is configured. A teardown in
   flight is an operator who asked for this environment to go away; bringing it back answers the
   opposite of the last thing they said.
@@ -479,7 +493,11 @@ one, and missed by `beginLocalRun`'s supersede a stopped row is left claiming to
 A brand-new table needs no `ColumnMigrations`
 entry — but a table being new _once_ does not keep it exempt
 ([14](14-persistence.md#migrations)), which is exactly what the usage columns cost: this table was new
-in #451 and had no entry, and the columns added in this change needed one. `url` is frozen as configured when the run started, so a later
+in #451 and had no entry, and the columns added in this change needed one. `interrupted_at` is
+declared there too, and it needs a **backfill** beside the `ALTER TABLE`: its null means nobody
+stamped the run, which the resume refuses, so the column alone would cost the operator taking this
+build the environment they had up at the time
+([14](14-persistence.md#when-a-null-means-something)). `url` is frozen as configured when the run started, so a later
 config edit does not rewrite what a past run reported.
 
 ## Tests
@@ -492,7 +510,12 @@ the shutdown path runs no turn and records that it did not; a restart with nothi
 run back settles it and names the field that would; a restart with an instruction brings it back in the
 run's own checkout, prepares nothing, continues the same row and reads the turn ending as the
 environment up; a `stopping` row is settled even by a deployment that can resume; a run whose checkout
-has gone is not brought back; and nothing live is nothing to do. Then: the default is the **tip** and the options are in plan order; a merged,
+has gone is not brought back; a run interrupted longer ago than the window is not brought back and
+the note says how long ago, what may still be up and which field sets it, while one interrupted
+inside the window comes back and has its stamp cleared; a live row nothing stamped is unknown rather
+than recent and is not brought back; a zero window is no bound at all; the boot that adds the stamp
+dates the row it is upgrading over, so taking this build does not cost an operator the environment
+they had up; and nothing live is nothing to do. Then: the default is the **tip** and the options are in plan order; a merged,
 retired or concluded part is never the tip but stays on offer; an override runs an earlier part and one
 that is not the goal's is refused with the goal named; the refusal names the field that fixes it; a start prepares the checkout,
 writes the row and appends the rules; a merged goal runs from the integration branch; the turn ending
