@@ -200,6 +200,10 @@ export interface CockpitView {
   hatching: string | null;
   /** The goal whose shared scratchpad is open, as an `issue:<n>` ref. */
   viewingScratchpad: string | null;
+  /** The pull request whose review pack is open over the goal page, by number. */
+  viewingReviewPack: number | null;
+  /** Which idea of that pack is unfolded — an id, `all`, or null. */
+  reviewIdea: string | null;
   /** The claim whose provenance is open on the Knowledge page, by fact id. */
   viewingFact: string | null;
   /**
@@ -303,6 +307,13 @@ interface ViewInputs {
   hatching: string | null;
   /** The goal whose shared scratchpad is open, as an `issue:<n>` ref. */
   viewingScratchpad: string | null;
+  /**
+   * The pull request whose review pack is open, and which of its ideas is
+   * unfolded. Optional for `collapsed`'s reason: nothing open is what a bare URL
+   * means.
+   */
+  viewingReviewPack?: number | null;
+  reviewIdea?: string | null;
   /**
    * The claim whose provenance is open on the Knowledge page, by fact id.
    * Optional for `collapsed`'s reason: nothing open is what a bare URL means.
@@ -468,6 +479,8 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     viewingRetro: input.viewingRetro,
     hatching: input.hatching,
     viewingScratchpad: input.viewingScratchpad,
+    viewingReviewPack: input.viewingReviewPack ?? null,
+    reviewIdea: input.reviewIdea ?? null,
     viewingFact: input.viewingFact ?? null,
     // The queue, for `Place`'s reason: a bare link to the tab is *what is on me*,
     // and the nine headings that answer *what is in this store* are a click away.

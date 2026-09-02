@@ -333,6 +333,11 @@ export function useCockpit(): CockpitStatus {
       viewRetro: (issueRef) => go({ retro: issueRef }),
       hatchEgg: (id) => go({ hatch: id }),
       viewScratchpad: (issueRef) => go({ scratchpad: issueRef }),
+      // Closing the pack drops the idea with it: an idea is a fold on the page, and
+      // a place naming one with no page open is a place that does not exist.
+      viewReviewPack: (prNumber) =>
+        go(prNumber === null ? { reviewPack: null, reviewIdea: null } : { reviewPack: prNumber }),
+      openReviewIdea: (id) => go({ reviewIdea: id }),
       viewFact: (id) => go({ fact: id }),
       // One `go` for however many of the five moved: they are one place, and two
       // calls would push two history entries for a single change of question.
@@ -491,6 +496,8 @@ export function useCockpit(): CockpitStatus {
       viewingRetro: place.retro,
       hatching: place.hatch,
       viewingScratchpad: place.scratchpad,
+      viewingReviewPack: place.reviewPack,
+      reviewIdea: place.reviewIdea,
       viewingFact: place.fact,
       knowledgeView: place.knowledgeView,
       knowledgeShow: place.knowledgeShow,

@@ -35,7 +35,7 @@ is about.
 | `routes/spend.ts`       | `/api/spend` and `/api/spend/trend` — the breakdown behind the cost indicators, and its trend                                                                             |
 | `routes/allowance.ts`   | `/api/allowance` — the account's usage percentage over time, and the work that spent it                                                                                   |
 | `routes/readings.ts`    | `/api/retrospectives/:ref`, `/api/scratchpads/:ref`                                                                                                                       |
-| `routes/reviewPacks.ts` | `/api/prs/:number/review-pack` — asking for a review pack, and reading the one a pull request has ([31](31-review-packs.md))                                                |
+| `routes/reviewPacks.ts` | `/api/prs/:number/review-pack` — asking for a review pack, reading the one a pull request has, and the reviewer's two marks on an idea ([31](31-review-packs.md))          |
 | `routes/reliability.ts` | `/api/reliability` — run outcomes, CI health, and why the fleet came back                                                                                                 |
 | `routes/mcpUsage.ts`    | `/api/mcp/usage` — which MCP tools the fleet reached for, and which it never did                                                                                          |
 | `routes/pool.ts`        | `/api/pool`, `/api/pool/insights` and the pool's one write — the cross-fleet pool ([28](28-cross-fleet-pool.md))                                                          |
@@ -471,9 +471,30 @@ every verdict is null reads as "being checked" or "unchecked" rather than either
 ([31](31-review-packs.md#the-check)). Nothing here regenerates a pack: a stale one is shown, and the
 ask above is how a new one is made.
 
-404 with `{error, writing}` when there is no pack — `writing` says whether an author is on its way,
-so "not asked for" and "on its way" read differently. The newest pack written is what is shipped,
-whatever head it names; an older head's row is kept and never shipped here.
+404 with `{error, writing}` (`ReviewPackAbsence`) when there is no pack — `writing` says whether an
+author is on its way, so "not asked for" and "on its way" read differently. The newest pack written
+is what is shipped, whatever head it names; an older head's row is kept and never shipped here.
+
+### `POST /api/prs/:number/review-pack/ideas/:id/read`
+
+Body `{read: boolean}` (`ReviewReadBody`). A reviewer marking an idea of the pull request's
+**current** pack read, or unread again ([31](31-review-packs.md#what-a-reviewer-does-is-not-part-of-the-pack)).
+Recorded against every hunk the idea owns — its `hunk` anchors, at the pack's head — and never
+against the idea's id, which the next pack mints afresh; the `read` column alone is written, so an
+attention override on the same rows keeps what it had. Answers `{marks}` (`ReviewMarksPayload`):
+every mark on the pull request, exactly as the read ships them.
+
+Refused: 400 on a body that is not a boolean; 404 when the pull request has no pack, or when the
+current pack has no idea of that id — the pack was rewritten under the page, which should reload it;
+409 when the idea owns no hunk at all (a walk of regions only), since the mark would have nothing to
+ride on and a click that wrote nothing would read as taken.
+
+### `POST /api/prs/:number/review-pack/ideas/:id/attention`
+
+Body `{attention: 'read' | 'decide' | 'skim' | 'split' | null}` (`ReviewAttentionBody`) — the
+reviewer's label over the checker's, or null to clear it. The same rows, the same key and the same
+refusals as the read mark, writing only the `attention` column. The override is recorded and drawn;
+it is never shown to the checker on a later pack, and its surfacing to the operator is not yet built.
 
 ### `POST /api/issues/:number/watch`
 

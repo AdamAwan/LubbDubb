@@ -3,10 +3,12 @@
 **Partly built.** [The witness log](#the-witness-log), [the pack document](#the-pack) — its shape,
 its schema version, the reviewer's marks and the two tables under [Where it lives](#where-it-lives) —
 [the author](#when-a-pack-is-made), [coverage](#coverage), [the check](#the-check) and its
-[attention labels](#attention), the two routes and the `review-pack-author` and `review-pack-check`
-prompt ids are running code; the rest of this document is not: no rendering, no sharing, and the
-attention overrides are recorded but not yet surfaced to the operator. Every path a section names is
-italic while that section is unbuilt, and the marker comes off it in the change that makes it true.
+[attention labels](#attention), the four routes, the `review-pack-author` and `review-pack-check`
+prompt ids and [the cockpit rendering](#reading-it) — the control on the pull request's row, the
+page, the reviewer's marks — are running code; the rest of this document is not: no HTML companion,
+no sharing, and the attention overrides are recorded and taken but not yet surfaced to the operator.
+Every path a section names is italic while that section is unbuilt, and the marker comes off it in
+the change that makes it true.
 
 A diff is what is left over after the thinking. The reasoning that produced it — what was considered,
 what was rejected, which file was deliberately not touched — is thrown away at the moment of commit,
@@ -295,8 +297,9 @@ surfaced as one.
 
 ### Attention
 
-_Built_ — stage 4, with the checker; the overrides are recorded ([marks](#what-a-reviewer-does-is-not-part-of-the-pack))
-and their surfacing to the operator, below, is not yet built.
+_Built_ — stage 4, with the checker; the overrides are recorded and, since stage 5, taken from the
+page ([marks](#what-a-reviewer-does-is-not-part-of-the-pack)). Their surfacing to the operator,
+below, is not yet built.
 
 Each idea carries a label saying how hard to look: **read**, **decide**, **skim** or **split**.
 
@@ -391,8 +394,9 @@ marks the goals section dirty.
 
 _Built_ — stage 3: the author and the way a reviewer asks for one. `src/reviewPacks/author.ts` is
 the desk, `src/mcp/tools/reviewPackSubmit.ts` the tool, `src/server/routes/reviewPacks.ts` the
-routes; `test/reviewPackAuthor.test.ts` holds it. What is not built is the control on the pull
-request's row that asks; the checker that reads the pack is ([The check](#the-check)).
+routes; `test/reviewPackAuthor.test.ts` holds it. The control on the pull request's row that asks
+is stage 5, `web/src/components/ReviewPackControl.tsx` ([Reading it](#reading-it)); the checker that
+reads the pack is [The check](#the-check).
 
 **On request, and never automatically.** A reviewer asks for one from the pull request's row on its
 goal's page ([Reading it](#reading-it)) and waits while it is written. The fleet opens more pull
@@ -520,7 +524,8 @@ re-run against the fixed code and the new pack replaces the old one, exactly as 
 regeneration does.
 
 **Where the finding lives** — _built_, stage 4; the four surface requirements above are the
-rendering's, stage 5. A false claim's finding is a field **on the claim**, `ReviewClaim.finding`
+rendering's, stage 5, drawn by `web/src/components/ReviewPackPage.tsx` in that order and held as an
+order by `test/reviewPackPage.test.ts`. A false claim's finding is a field **on the claim**, `ReviewClaim.finding`
 (`ReviewFinding` in `src/types.ts`), because the claim is what is false and the claim is what the
 gate counts; the step of the walk it is about carries `mark: 'false'`, set by the same write, so
 the walk shows where. A finding carries its `headline` (one plain line), its `body` (the consequence
@@ -599,7 +604,30 @@ two things a reviewer can do — read an idea, override its label — are two co
 them all in one transaction; `listReviewMarks` hands back every mark on the pull request, whichever
 head each was made against, for the renderer to lay over whichever ideas own those hunks now.
 
+**The page writes them through two routes** — _built_, stage 5 —
+`POST /api/prs/:number/review-pack/ideas/:id/read` with `{read}` and
+`…/ideas/:id/attention` with `{attention}` (a label or null to clear), both in
+`src/server/routes/reviewPacks.ts` under `checked(...)`. Each resolves the idea in the **current**
+pack, takes the hunks it owns — the `hunk` anchors; a `region` is a reference, and a mark riding on
+one would land on the idea that owns that hunk — and writes at the pack's head. Refused when there
+is no pack or no such idea in the current one (404: the pack was rewritten under the page), and when
+the idea owns no hunk at all (409): a walk of regions only has nothing for a mark to ride on, and a
+click that wrote nothing would read as taken. Both answer with every mark on the pull request, the
+shape the read ships, so the page re-lays them from one shape rather than patching a copy.
+
+**Laying them back is a rule, not a lookup.** `layMarks` (`web/src/view/reviewPack.ts`) reads an
+idea as _read_ only when **every** hunk it owns carries a read mark, and as overridden only when
+every hunk agrees on one label. Across a rewrite that is the honest reading: the next pack may fold
+two ideas into one, and calling the union read because half of it was is the lie the per-hunk key
+exists to avoid. An idea owning no hunk can carry no mark and reads unread.
+→ [16](16-http-api.md#post-apiprsnumberreview-packideasidread)
+
 ## Reading it
+
+_Built_ — stage 5, the cockpit rendering; the HTML companion is not. `web/src/components/ReviewPackPage.tsx`
+draws the page, `ReviewPackModal.tsx` fetches it and takes the marks, `ReviewPackControl.tsx` is the
+control on the row, and `web/src/view/reviewPack.ts` holds the derivations; `test/reviewPackPage.test.ts`
+holds it.
 
 Two renderings, and the layering is the same in both because the layering *is* the product.
 
@@ -657,6 +685,22 @@ The document carries every field this needs and the renderer invents none: `head
 without a cue shows a row with no cue — the author's omission, visible, rather than a renderer's
 guess.
 
+Three things the order above leaves to the renderer, settled the same way in both:
+
+- **The numbers are the reading order when there is one.** The rows are numbered by `order` once
+  the checker has filled it and by document order until then, and the rule above the ideas says
+  which — _numbered in the order the checker says to read them_, or _in document order — the checker
+  has not ordered them_. "Where to spend the time" is drawn only from a filled order; with none it
+  says so rather than inventing one.
+- **An unchecked pack is drawn as itself.** Every `attention` and `verdict` null with `order` empty
+  is one of two states, told apart by the read's `checking`: a band saying the checker is on it, or
+  one saying it never finished — a paused fleet, a checker that failed, the error log says which —
+  with the ask beside it, because asking again is the recovery and nothing retries on its own.
+  Neither reads as "fine".
+- **The facts line's counts are computed, not stated.** Ideas, distinct files and changes come off
+  the hunk anchors; the claim counts off the verdicts, with _unchecked_ as a fifth figure while any
+  is null.
+
 The reference for the shape is the pack for #684, kept at
 [`examples/review-pack-684.html`](examples/review-pack-684.html) as the target the first build is
 measured against. It is a hand-made demo — its colophon says what in it is invented — and a pack the
@@ -666,12 +710,28 @@ harness writes is expected to render to the same page.
 ([17](17-cockpit.md#the-pull-requests-and-the-tail)) — there is no pull request page to put it on —
 and is the only one that takes input: the reviewer's marks, per
 [What a reviewer does](#what-a-reviewer-does-is-not-part-of-the-pack). Its position — which pull
-request's pack, which idea is open — is `Place` state and lives in the query string, not a
-`useState` in `useCockpit`: a surface held outside it is stepped over by the back button and dropped
-by a reload, both silently. → [17](17-cockpit.md#the-address-bar)
+request's pack, which idea is open — is `Place` state and lives in the query string as
+`?pack=<n>&idea=<id>`, not a `useState` in `useCockpit`: a surface held outside it is stepped over
+by the back button and dropped by a reload, both silently. `idea=all` is the open-all control, a
+value of the same field rather than a second one, and an idea is carried only under a pack.
+→ [17](17-cockpit.md#the-address-bar), [17](17-cockpit.md#the-review-pack)
+
+The control on the row draws the states between asking and reading — not asked, being written,
+written and being checked, checked, stale by so many commits or by an unknown number, and a pull
+request the world no longer carries — and reads them off the route itself, because the pack is not
+on the snapshot. A closed pull request's row keeps the way in to a pack it has and loses the ask,
+since the desk refuses to write one for it. Both the control and the page re-read on a short clock
+only while an author or a checker is on the pull request.
 
 Every reference to a goal, a pull request or an issue is drawn with `<Ref to={ref}/>`
 (`web/src/components/refs.tsx`), never as text. → [17](17-cockpit.md#links)
+
+The page fetches the two pads the author was handed — the pull request's own and the goal's — once
+per open, and draws the entry a `witnessed` or `disputed` claim cites verbatim beside it; an entry
+neither pad carries is said to be missing rather than left blank. The renderer's own copy of the
+schema number is `KNOWN_REVIEW_PACK_SCHEMA` in `web/src/view/reviewPack.ts`, restated there because
+the cockpit may name nothing of the harness but `src/wire.ts`, which carries no runtime; the test
+pins it to `REVIEW_PACK_SCHEMA`.
 
 **The HTML companion** is a single self-contained file, rendered by the harness from the pack document
 alone when a pack is [shared](#sharing-a-pack), the way [28](28-cross-fleet-pool.md#the-human-readable-companion)
@@ -763,7 +823,10 @@ will ship it, so the two cannot drift apart.
 The routes are `src/server/routes/reviewPacks.ts`, with its entry in `app.ts`'s `ROUTE_MODULES`,
 and every handler is wrapped in `checked(schemas, handler)` rather than reading the request itself:
 the ask and the read under [When a pack is made](#when-a-pack-is-made), both on
-`/api/prs/:number/review-pack`. → [16](16-http-api.md#post-apiprsnumberreview-pack)
+`/api/prs/:number/review-pack`, and the two mark routes under
+[What a reviewer does](#what-a-reviewer-does-is-not-part-of-the-pack) beneath it, whose body
+shapes — `ReviewReadBody`, `ReviewAttentionBody` — and answer — `ReviewMarksPayload` — are declared
+in `src/wire.ts` beside the payload. → [16](16-http-api.md#post-apiprsnumberreview-pack)
 
 Two prompt ids, registered like any other: `review-pack-author` and `review-pack-check`, both
 built. A `PromptId` is never deleted once it exists — it is marked `retired: true`, because

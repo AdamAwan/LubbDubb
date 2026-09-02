@@ -401,6 +401,8 @@ once.
 | `ask`                                | the queue row a `{ ask }` panel is showing                                                                                                                                                                                                                                                                                                                                                               |
 | `agent`                              | the open drawer's agent                                                                                                                                                                                                                                                                                                                                                                                  |
 | `plan` / `retro` / `pad`             | the plan sheet, the retrospective, the notepad                                                                                                                                                                                                                                                                                                                                                           |
+| `pack`                               | the pull request whose [review pack](#the-review-pack) is open over the goal page, by number                                                                                                                                                                                                                                                                                                         |
+| `idea`                               | which idea of that pack is unfolded, by the id the author minted, or `all` for the open-all control. Carried only under `pack`: a fold on a page that is not open is not a place                                                                                                                                                                                                                       |
 | `fact`                               | the claim whose provenance is open on the Knowledge tab, by fact id                                                                                                                                                                                                                                                                                                                                      |
 | `kn`                                 | the Knowledge tab's layout: `list` for the nine headings, `table` for one sortable row per claim; `queue` — one claim at a time — is the absent value. Not `view`, which the Tickets tab and Insights already share → [27](27-knowledge.md#the-queue-is-the-page)                                                                                                                                        |
 | `q`                                  | which claim the Knowledge queue is standing on, by fact id. On `Place` and not a `useState` for the usual reason: a reload has to land on the card the operator was ruling on, and the back button has to step back through the ones behind it → [27](27-knowledge.md#the-queue-is-the-page)                                                                                                             |
@@ -1443,11 +1445,20 @@ the open list, and a goal whose work has landed would otherwise draw an empty ca
 ([03](03-world-model.md)); the closed list is retention-windowed, so what it holds is what the harness
 still remembers.
 
-**Not yet built:** the row is also where a [review pack](31-review-packs.md#reading-it) is asked for
-and opened. There is no pull request page to put that on, so a pull request with no goal row — one
-the provider never linked — has no way to ask for one, which [31](31-review-packs.md#pull-requests-nobody-witnessed)
-states as the surface's limit. The control opens the pack over this page, and which pack and which
-idea are open is `Place` state ([the address bar](#the-address-bar)).
+**The row is also where a [review pack](31-review-packs.md#reading-it) is asked for and opened.**
+There is no pull request page to put that on, so a pull request with no goal row — one the provider
+never linked — has no way to ask for one, which [31](31-review-packs.md#pull-requests-nobody-witnessed)
+states as the surface's limit. The control is `ReviewPackControl` (`web/src/components/`), embedded
+on every open and closed row rather than drawn here, because it has an async flow of its own: the
+pack is not on the snapshot, so the control reads `GET /api/prs/:number/review-pack` itself on mount,
+again when the row's head moves, and on a short clock while an author or a checker is on the pull
+request. It draws the states between asking and reading — _Review pack_ to ask; _writing_;
+_checking_; _checked_; _unchecked_ where the checker never finished; _stale · n behind_ or
+_unknown behind_; _pull request gone_ where the read's `head` is null, never folded into current —
+and an _Open pack_ button beside any pack it has. A closed row keeps the way in and loses the ask,
+since the desk refuses to write a pack for one. Opening goes through the seam, `viewReviewPack`,
+because which pack and which idea are open is `Place` state ([the address bar](#the-address-bar));
+the page is [the review pack](#the-review-pack), over this one.
 
 Whose court a PR is in is `attention.status`, and which check is red is `ciVerdict`; both are quoted,
 never re-read. The chip prints the server's own word with `attention.reasons` in its title, and the
@@ -4494,6 +4505,45 @@ part given the room. Drawn on the blue tint the cockpit already uses for the fle
 (`--blue-line`, `--blue-line-2`, `--blue-fill`) — a fork is not a new meaning for colour to carry, so
 no token was added.
 
+## The review pack
+
+`ReviewPackModal` (`web/src/components/`) is a pull request's [review pack](31-review-packs.md#reading-it)
+over the goal page it was opened from: the change restated as ideas, each followed through the code
+it touched, every claim with the checker's verdict beside it. It is the one rendering of a pack that
+takes input — the reviewer's marks — and the page it draws is `ReviewPackPage`, a pure function of
+the payload, so the order of things on it is asserted on static markup rather than hoped for.
+
+**Shell-owned**, opened through `viewReviewPack(prNumber | null)` and its fold through
+`openReviewIdea(id | null)` — the notepad's seam, for its reason: the modal reaches `api.js` for the
+pack, for the two pads the claims cite and for the marks, while the control that opens it is on the
+pull request's row the console draws. Both are `Place` fields (`?pack=`, `?idea=`), so the back
+button steps out of an idea and a link somebody sends lands on one; `idea=all` is the open-all
+control, a value of the same field rather than a second one. An idea row is a `<details>` whose open
+state is the address bar's — the click is a move, not a toggle the element does on its own.
+
+**Four states, and the 404 is one of them**: loading, no pack (not asked for, with the ask; or being
+written, with nothing to press), the pack, and an error — a fetch that failed must not read as
+"nobody asked". While an author or a checker is on the pull request the modal re-reads on a short
+clock; the `dirty` the hub emits for either is a snapshot signal the modal is not on.
+
+**The page is [31](31-review-packs.md#the-page)'s order and nothing else**: masthead, the gate above
+the ideas when any claim is false, the idea rows numbered by the checker's order (or document order,
+and the rule says which), the walk and the claims on opening one — a false or disputed claim at the
+top of its idea, before the walk — the finding boxes, where to spend the time, the folded colophon.
+A pack whose `schema` this build does not know is refused whole at the top, never drawn as far as it
+is recognised. What a reviewer does rides the marks routes ([16](16-http-api.md#post-apiprsnumberreview-packideasidread))
+and the rows the write returns replace what the page holds, laid over the ideas by `layMarks`
+(`web/src/view/reviewPack.ts`): read only when every hunk the idea owns says so.
+
+**Colour is a verdict or a mark the document states, never decoration.** The four attention labels
+and the three verdicts take the shared family's hues — `--red` for read and false, `--amber` for
+decide, can't tell and a dispute, `--blue` for split, `--green` for true — and the diff lines four
+tokens of their own, `--diff-add-fill` / `-ink` and `--diff-del-fill` / `-ink`, all `color-mix` of
+the two verdict hues over the well so a theme that moves green or red moves the diff with it. A
+dashed box is the one visual rule the colophon explains: code that is _not_ in the pull request.
+Pad notes and cited entries render as plain text with their newlines kept, for the
+[notepad](#the-notepad-modal)'s reason.
+
 ## Running locally
 
 A **Local** reading in the top bar's `cn-reads` row, quiet when nothing is up and carrying the goal's
@@ -4916,7 +4966,7 @@ structurally — a missing arm is a compile error at the call site, not dead wei
 
 ## Tests
 
-Ten files, split on what they can see:
+Eleven files, split on what they can see:
 
 - `test/cockpitViewModel.test.ts` — the derivations `buildViewModel` folds, untestable while they lived
   inside a component.
@@ -4941,6 +4991,10 @@ Ten files, split on what they can see:
 - `test/refLinks.test.ts` — [Links](#links): where each family of ref goes, that a goal with no page
   links out instead, that an unresolvable ref is plain text, that `refLabel` is the only shortener, and
   — structurally, over the rendered console — that no reference is ever drawn inside a button.
+- `test/reviewPackPage.test.ts` — [the review pack](#the-review-pack): the derivations, and on the
+  rendered page the masthead-gate-ideas order, the flag on a collapsed row, the false claim at the top
+  of its idea, the three standings and three currencies each drawn as themselves, the unknown schema
+  refused whole, and the renderer's schema number pinned to the harness's.
 
 The renders are wrapped in a **clock pin**, because `buildDemoState` stamps every timestamp relative to
 `Date.now()` and the rendered relative times would drift between runs otherwise.

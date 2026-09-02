@@ -55,6 +55,9 @@ test('every place round-trips through the query string', () => {
     at({ plan: 'plan-395' }),
     at({ retro: 'issue:142' }),
     at({ scratchpad: 'issue:142' }),
+    at({ goal: 'issue:142', reviewPack: 684 }),
+    at({ goal: 'issue:142', reviewPack: 684, reviewIdea: 'idea_V1StGXR8-Z5jdHi6' }),
+    at({ goal: 'issue:142', reviewPack: 684, reviewIdea: 'all' }),
     at({ hatch: 'pet_7f2a1c' }),
     at({ panel: 'pets', hatch: 'pet_7f2a1c' }),
     at({ tab: 'config' }),
@@ -138,6 +141,16 @@ test('ids and refs survive encoding', () => {
   const place = at({ panel: { ask: 'esc:1&2=3' }, goal: 'issue:142' });
   assert.ok(!placeQuery(place).includes('&2=3'));
   assert.deepEqual(readPlace(placeQuery(place)), place);
+});
+
+// A fold on a page that is not open is not a place: a stray `?idea=` with no
+// pack reads as nothing, and a hand-typed `?pack=` that names no number opens nothing.
+test('an idea is carried only under a pack, and a pack is a positive integer', () => {
+  assert.deepEqual(readPlace('?idea=idea_x'), NOWHERE);
+  assert.deepEqual(readPlace('?pack=abc&idea=idea_x'), NOWHERE);
+  assert.deepEqual(readPlace('?pack=0'), NOWHERE);
+  assert.equal(readPlace('?pack=684&idea=idea_x').reviewIdea, 'idea_x');
+  assert.equal(placeQuery(at({ reviewIdea: 'idea_x' })), '', 'an idea with no pack writes nothing');
 });
 
 // The tab's folds are a place, not a `useState`: stepping back into it has to
