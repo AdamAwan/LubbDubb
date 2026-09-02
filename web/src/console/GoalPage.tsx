@@ -36,6 +36,7 @@ import { WorkRecord } from '../components/WorkRecord.js';
 import { NeedsBand } from './NeedsBand.js';
 import { OrphanBand } from './OrphanBand.js';
 import { AgentOnIt } from '../components/AgentOnIt.js';
+import { ReviewPackControl } from '../components/ReviewPackControl.js';
 
 /**
  * Where each of the track's stages jumps to. Anchors, not refs — one element on
@@ -127,7 +128,7 @@ export function GoalPage({
       />
       <div className="cn-gcols">
         <div className="cn-stack">
-          <PullRequests page={page} view={view} />
+          <PullRequests page={page} view={view} actions={actions} />
           <Environments page={page} actions={actions} now={view.now} />
         </div>
         <div className="cn-stack">
@@ -1001,7 +1002,15 @@ function Ticket({ issue, refUrls }: { issue: Issue; refUrls: Record<string, stri
  * re-read here: a client-side second opinion about a merge is the drift that
  * outlives the change that introduces it.
  */
-function PullRequests({ page, view }: { page: GoalPageView; view: CockpitView }): JSX.Element {
+function PullRequests({
+  page,
+  view,
+  actions,
+}: {
+  page: GoalPageView;
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element {
   const open = page.openPullRequests;
   const closed = page.closedPullRequests;
   return (
@@ -1027,6 +1036,15 @@ function PullRequests({ page, view }: { page: GoalPageView; view: CockpitView })
             </span>
             <CiLadder pr={pr} />
             <CourtChip pr={pr} now={view.now} />
+            {/* The row is where a review pack is asked for and opened — there is no
+                pull request page to put it on. Embedded, not redrawn: the control
+                reads the pack's route itself, which console markup may not. */}
+            <ReviewPackControl
+              prNumber={pr.number}
+              headSha={pr.headSha ?? null}
+              canAsk
+              onOpen={() => actions.viewReviewPack(pr.number)}
+            />
           </div>
         ))}
         {closed.map((pr) => (
@@ -1038,6 +1056,14 @@ function PullRequests({ page, view }: { page: GoalPageView; view: CockpitView })
               <span className="cn-sub">{pr.branch}</span>
             </span>
             <i className={`cn-chip ${pr.merged ? 'cn-ok' : ''}`}>{pr.merged ? 'merged' : 'closed'}</i>
+            {/* A closed pull request cannot be asked about — the desk refuses one —
+                but the pack it already has stays readable. */}
+            <ReviewPackControl
+              prNumber={pr.number}
+              headSha={pr.headSha ?? null}
+              canAsk={false}
+              onOpen={() => actions.viewReviewPack(pr.number)}
+            />
           </div>
         ))}
       </div>

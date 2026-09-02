@@ -46,6 +46,22 @@ export interface Place {
   /** The goal whose notepad is open, as an `issue:<n>` ref. */
   scratchpad: string | null;
   /**
+   * The pull request whose review pack is open over the goal page, by number.
+   *
+   * A place rather than a `useState` for the reason every field here is one, and
+   * stated by [31](../../../docs/spec/31-review-packs.md#reading-it): a surface held
+   * outside the address bar is stepped over by the back button and dropped by a
+   * reload, both silently — and "look at the pack for #684" is a link somebody sends.
+   */
+  reviewPack: number | null;
+  /**
+   * Which idea of the open pack is unfolded, by the id the author minted, or
+   * `all` for every one — the open-all control on the page. Meaningless without
+   * {@link reviewPack}, and read as null whenever that is null, so a stray `?idea=`
+   * never survives on its own.
+   */
+  reviewIdea: string | null;
+  /**
    * The claim whose provenance is open on the Knowledge page, by fact id.
    *
    * A place rather than a `useState` in the panel for the reason every field here
@@ -251,6 +267,8 @@ export const NOWHERE: Place = {
   retro: null,
   hatch: null,
   scratchpad: null,
+  reviewPack: null,
+  reviewIdea: null,
   fact: null,
   goalOpen: [],
   // The queue, which is what a bare link to the tab means: the page an operator
@@ -420,6 +438,7 @@ export function readPlace(search: string): Place {
     retro: param(query, 'retro'),
     hatch: param(query, 'hatch'),
     scratchpad: param(query, 'pad'),
+    ...readReviewPack(param(query, 'pack'), param(query, 'idea')),
     fact: param(query, 'fact'),
     goalOpen: readStrings(param(query, 'open')).filter((name) => GOAL_SECTIONS.includes(name)),
     // `kn`, not `view`: the tickets tab and the Insights page already share that
@@ -582,6 +601,18 @@ function readKnowledgeSort(value: string | null): {
     : { knowledgeSort: sort, knowledgeDesc: desc };
 }
 
+/**
+ * Which pull request's pack is open and which idea is unfolded in it. The number
+ * is validated like every other parameter here — a hand-typed `?pack=abc` opens
+ * nothing — and the idea is carried only under a pack, since without one it names
+ * a fold on a page that is not open.
+ */
+function readReviewPack(pack: string | null, idea: string | null): Pick<Place, 'reviewPack' | 'reviewIdea'> {
+  const number = pack === null ? NaN : Number(pack);
+  if (!Number.isInteger(number) || number <= 0) return { reviewPack: null, reviewIdea: null };
+  return { reviewPack: number, reviewIdea: idea };
+}
+
 /** A feature number, the orphan bucket, or null. Junk narrows nothing, as everywhere here. */
 function readFeature(value: string | null): number | 'none' | null {
   if (value === null) return null;
@@ -648,6 +679,10 @@ export function placeQuery(place: Place): string {
   if (place.retro !== null) query.set('retro', place.retro);
   if (place.hatch !== null) query.set('hatch', place.hatch);
   if (place.scratchpad !== null) query.set('pad', place.scratchpad);
+  if (place.reviewPack !== null) {
+    query.set('pack', String(place.reviewPack));
+    if (place.reviewIdea !== null) query.set('idea', place.reviewIdea);
+  }
   if (place.fact !== null) query.set('fact', place.fact);
   // `readStrings` already sorted these on the way in, so opening the ticket then
   // the record and the record then the ticket are one place rather than two

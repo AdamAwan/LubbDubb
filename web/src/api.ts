@@ -41,6 +41,10 @@ import type {
   SetupResolvePayload,
   ConfigSavePayload,
   ConfigPreviewPayload,
+  ReviewAttention,
+  ReviewMarksPayload,
+  ReviewPackAbsence,
+  ReviewPackPayload,
   ScratchpadPayload,
   ReliabilityPayload,
   SpendPayload,
@@ -58,6 +62,13 @@ import { demoApi, connectDemoWs } from './demo/demoBackend.js';
  * A distinct type rather than a status check at each call site: every request
  * goes through {@link authFetch}, so there is exactly one place it can arise.
  */
+/**
+ * What `getReviewPack` answers: the pack, or its absence with whether an author
+ * is on its way. A union rather than a thrown 404 because the absence is a state
+ * the pull request's row draws, not an error it reports.
+ */
+export type ReviewPackReading = { kind: 'pack'; payload: ReviewPackPayload } | { kind: 'none'; writing: boolean };
+
 export class UnauthorizedError extends Error {
   constructor(readonly status: number) {
     super(status === 403 ? 'Request refused by the cockpit' : 'Cockpit token missing or invalid');
@@ -225,6 +236,30 @@ const realApi = {
   // server resolves a subtree ref to its issue, so any origin on the goal works.
   getScratchpad: (ref: string) =>
     authFetch(`/api/scratchpads/${encodeURIComponent(ref)}`).then((r) => json<ScratchpadPayload>(r)),
+  /**
+   * A pull request's review pack with the reviewer's marks, or the fact that
+   * there is none — and whether one is on its way. The 404 is an answer here, not
+   * a failure: "not asked for" and "being written" are two states the row draws
+   * differently, so it is read off the body rather than thrown.
+   * → `docs/spec/31-review-packs.md#when-a-pack-is-made`
+   */
+  getReviewPack: (prNumber: number): Promise<ReviewPackReading> =>
+    authFetch(`/api/prs/${prNumber}/review-pack`).then(async (r) => {
+      if (r.status === 404) {
+        const absence = (await r.json()) as ReviewPackAbsence;
+        return { kind: 'none', writing: absence.writing === true };
+      }
+      return { kind: 'pack', payload: await json<ReviewPackPayload>(r) };
+    }),
+  /** Ask for a pack. `202` — the author is an agent run, and the pack arrives through the read above. */
+  requestReviewPack: (prNumber: number) =>
+    post<{ ok: true; prNumber: number; headSha: string }>(`/api/prs/${prNumber}/review-pack`),
+  markReviewIdeaRead: (prNumber: number, ideaId: string, read: boolean) =>
+    post<ReviewMarksPayload>(`/api/prs/${prNumber}/review-pack/ideas/${encodeURIComponent(ideaId)}/read`, { read }),
+  overrideReviewAttention: (prNumber: number, ideaId: string, attention: ReviewAttention | null) =>
+    post<ReviewMarksPayload>(`/api/prs/${prNumber}/review-pack/ideas/${encodeURIComponent(ideaId)}/attention`, {
+      attention,
+    }),
   // The breakdown behind the cost indicators, fetched when the Spend panel opens.
   // The snapshot already carries what the *indicators* need — the rolling windows
   // and each goal's own total — and this is the reading behind them: every agent

@@ -123,6 +123,7 @@ import type {
   PrState,
   PullRequest as WorldPullRequest,
   Retrospective,
+  ReviewAttention,
   ReviewMark,
   ReviewPackRecord,
   ScratchEntry,
@@ -2091,6 +2092,45 @@ export interface ReviewPackPayload extends ReviewPackRecord {
 }
 
 /**
+ * The 404 `GET /api/prs/:number/review-pack` answers with when there is no pack:
+ * `writing` says whether an author is on its way, so "not asked for" and "on its
+ * way" read differently on the pull request's row.
+ * → `docs/spec/31-review-packs.md#when-a-pack-is-made`
+ */
+export interface ReviewPackAbsence {
+  error: string;
+  writing: boolean;
+}
+
+/**
+ * `POST /api/prs/:number/review-pack/ideas/:id/read` — a reviewer marking an
+ * idea read, or unread again. Recorded against the hunks the idea owns, never
+ * the idea's id, which the next pack mints afresh.
+ * → `docs/spec/31-review-packs.md#what-a-reviewer-does-is-not-part-of-the-pack`
+ */
+export interface ReviewReadBody {
+  read: boolean;
+}
+
+/**
+ * `POST /api/prs/:number/review-pack/ideas/:id/attention` — a reviewer
+ * overriding the checker's label on an idea, or clearing the override with null.
+ * Never shown to the checker on a later pack.
+ */
+export interface ReviewAttentionBody {
+  attention: ReviewAttention | null;
+}
+
+/**
+ * What both mark routes answer with: every mark on the pull request after the
+ * write, exactly as the read ships them — so the page re-lays them over the
+ * ideas from one shape rather than patching a local copy.
+ */
+export interface ReviewMarksPayload {
+  marks: ReviewMark[];
+}
+
+/**
  * `/api/spend` — the breakdown behind the cost indicators: the same money split
  * by phase, by goal and over time. Fetched on open for the work graph's reason —
  * it reads every agent the harness has ever run.
@@ -2332,6 +2372,16 @@ export type {
   FeatureSummary,
   Proposal,
   Retrospective,
+  ReviewAnchor,
+  ReviewAttention,
+  ReviewClaim,
+  ReviewFinding,
+  ReviewIdea,
+  ReviewMark,
+  ReviewNote,
+  ReviewPack,
+  ReviewRange,
+  ReviewVerdict,
   ScratchEntry,
   GoalWatch,
   GoalWatchInput,

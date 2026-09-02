@@ -68,7 +68,7 @@ import type {
   WorldEvent,
   WorldEventKind,
 } from '../types.js';
-import type { WsClient } from '../api.js';
+import type { ReviewPackReading, WsClient } from '../api.js';
 import type { ValidationAct } from '../cockpit/actions.js';
 import { buildDemoState, demoPlanHistory } from './fixtures.js';
 import { isContainerType } from '../issueGroups.js';
@@ -4207,6 +4207,13 @@ export const demoApi = {
   // is what the real route says for a pad nobody has written to — and no way in
   // is drawn for one, since the snapshot's reading is what the control keys on.
   getScratchpad: (ref: string) => Promise.resolve({ padRef: ref, entries: ref === 'issue:364' ? DEMO_SCRATCHPAD : [] }),
+  // No pull request in the demo has a pack, and nothing can write one: the
+  // author is an agent run, and there is no fleet behind the demo to spend it.
+  // "Not asked for" is the honest reading, and asking is refused out loud.
+  getReviewPack: (): Promise<ReviewPackReading> => Promise.resolve({ kind: 'none', writing: false }),
+  requestReviewPack: () => Promise.reject(new Error('the demo has no fleet to write a review pack')),
+  markReviewIdeaRead: () => Promise.reject(new Error('the demo has no review pack to mark')),
+  overrideReviewAttention: () => Promise.reject(new Error('the demo has no review pack to mark')),
   // The spend breakdown, authored above. The real route derives it from every
   // agent the store holds; the demo's world is built fresh in the browser each
   // load, so a fixture is the only honest way to show the panel at all.

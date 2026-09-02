@@ -184,7 +184,11 @@ interface MarkRow {
   marked_at: string;
 }
 
-const ATTENTIONS: readonly ReviewAttention[] = ['read', 'decide', 'skim', 'split'];
+/**
+ * The four labels, in one place: the store narrows a stored override against it
+ * and the mark route refuses a body naming anything else against the same list.
+ */
+export const REVIEW_ATTENTIONS: readonly ReviewAttention[] = ['read', 'decide', 'skim', 'split'];
 
 function rowToMark(r: MarkRow): ReviewMark {
   return {
@@ -193,7 +197,7 @@ function rowToMark(r: MarkRow): ReviewMark {
     headSha: r.head_sha,
     // Narrowed on read rather than trusted: the column is text, and a label a
     // later build knew must not arrive as one this one will switch on.
-    attention: ATTENTIONS.find((a) => a === r.attention) ?? null,
+    attention: REVIEW_ATTENTIONS.find((a) => a === r.attention) ?? null,
     read: r.read === 1,
     markedAt: r.marked_at,
   };

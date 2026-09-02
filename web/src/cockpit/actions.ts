@@ -224,6 +224,20 @@ export interface CockpitActions {
    */
   viewScratchpad(issueRef: string | null): void;
   /**
+   * Which pull request's review pack is open over the goal page, by number, or
+   * null to close it. On the seam for `viewScratchpad`'s reason exactly: the page
+   * is shared, hangs off the shell and reaches `api.js` for the pack and for the
+   * reviewer's marks, while the control that opens it is on the pull request's row
+   * the console draws. → `docs/spec/31-review-packs.md#reading-it`
+   */
+  viewReviewPack(prNumber: number | null): void;
+  /**
+   * Which idea of the open pack is unfolded — an idea id, `all`, or null for none.
+   * A place, not a `useState` in the page: the back button steps out of an idea
+   * and a link lands on one.
+   */
+  openReviewIdea(id: string | null): void;
+  /**
    * Open or close the settings modal — the running config, the CI policy and the
    * prompt book. On the seam for `viewPlan`'s reason: the modal is shared and hangs
    * off the shell (it reaches `/api/config`, which `console/` may not do), while
