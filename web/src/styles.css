@@ -4985,8 +4985,26 @@ select:disabled {
  * that sheet reaching into it. Every colour here is a `--cn-*` token or a shared
  * one, so a theme change moves both together.
  * ------------------------------------------------------------------------- */
-.tickets {
+/* Every block on this tab is bounded, and the board is the one exception — stated as
+   a rule over the children rather than as a cap on the tab, because the difference
+   is what stops the width moving.
+
+   The cap is about reading *across*: a table row's id and its date are two ends of
+   one fact, and let out to the width of a monitor the eye loses the line between
+   them. That is true of the head, the filter rail and the table alike, so all of
+   them keep it whichever view is up — and nothing shifts on the click that switches
+   views, which is what a cap on the tab did: the toggle changed width under the
+   pointer that pressed it.
+
+   A board column is read *down* and is its own list, so the cap buys it nothing and
+   costs it columns — the sideways scroll beside a page of empty margin that #632
+   reported. It alone is let out, past the rail that filters it, which reads as the
+   board using the room rather than as an edge that failed to line up. */
+.tickets > * {
   max-width: 1400px;
+}
+.tickets > .tb {
+  max-width: none;
 }
 .tickets-head {
   display: flex;

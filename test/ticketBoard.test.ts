@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { boardColumns, cardReason, dropWarning, type BoardColumn, type StateRules } from '../web/src/ticketBoard.js';
 import type { Issue, TicketRow, TicketStateFacet } from '../web/src/types.js';
 
@@ -282,4 +284,47 @@ test('with no state gate configured a drop disturbs nothing the harness reads', 
   const bare = dropWarning(column('Anything', { pickup: false }), 'Ready', null);
   assert.equal(bare.tone, 'none');
   assert.match(bare.words, /no state gate/);
+});
+
+/**
+ * Where the tab's width cap sits, which is three statements and not one.
+ *
+ * **The chrome and the table are capped**, because both are read _across_ — a row's
+ * id and its date are two ends of one fact, and let out to the width of a monitor the
+ * eye loses the line between them.
+ *
+ * **The board is not**, because a column is read _down_ and is its own list: capped,
+ * it drew a sideways scroll with a page of empty margin beside it on a wide monitor,
+ * which is what #632 reported.
+ *
+ * **And the cap is on the children, not on the tab.** On the tab it bounded whichever
+ * body was up *and* the head, the rail and the view toggle with it — so switching
+ * views changed the width of the control that switched them, walking it out from under
+ * the pointer that pressed it. Per-child, every block keeps its width in both views
+ * and only the board differs.
+ *
+ * Asserted here because nothing else in `npm run check` reads this stylesheet, and
+ * none of the three failures has anything to show for itself: the sheet stays valid,
+ * both views render, and only a monitor wider than the cap tells them apart.
+ * → docs/spec/17-cockpit.md#the-board-and-what-a-card-says
+ */
+test('the cap is on the tab’s children, and the board is the one exception', () => {
+  const css = readFileSync(fileURLToPath(new URL('../web/src/styles.css', import.meta.url)), 'utf8');
+  const rule = (re: RegExp): string => re.exec(css)?.[1] ?? '';
+
+  assert.match(
+    rule(/^\.tickets > \*\s*\{([^}]*)\}/m),
+    /max-width:\s*\d/,
+    'the chrome and the table lost their cap: a row let out to the monitor puts its two ends past one glance',
+  );
+  assert.match(
+    rule(/^\.tickets > \.tb\s*\{([^}]*)\}/m),
+    /max-width:\s*none/,
+    'the board is capped with everything else, which is the sideways scroll #632 reported',
+  );
+  assert.doesNotMatch(
+    rule(/^\.tickets\s*\{([^}]*)\}/m),
+    /max-width:\s*\d/,
+    'the cap is back on the tab itself, which moves the view toggle on the click that presses it',
+  );
 });
