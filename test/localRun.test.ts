@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
@@ -71,11 +71,18 @@ function build(
     /** Blank by default, so an interrupted run settles rather than being brought back. */
     resumeInstruction?: string;
     stopTimeoutMs?: number;
+    /** Two hours by default, as the default config says. `0` is no bound at all. */
+    resumeWindowMs?: number;
     url?: string;
     ref?: string | null;
     parts?: PlanPart[];
     /** A second runner over the same database — a restart, where the row is live and nothing holds it. */
     store?: Store;
+    /**
+     * What this runner thinks the time is, in ms. Held rather than read, so a test can
+     * put a boot two hours after the interruption without sleeping through one.
+     */
+    now?: () => number;
   } = {},
 ): Harness {
   const store = over.store ?? new Store(':memory:');
@@ -94,6 +101,7 @@ function build(
       instruction: over.instruction ?? 'Run the dev server.',
       stopInstruction: over.stopInstruction ?? '',
       resumeInstruction: over.resumeInstruction ?? '',
+      resumeWindowMs: over.resumeWindowMs ?? 2 * 60 * 60 * 1000,
       url: over.url ?? '',
     }),
     claudeCommand: 'claude',
@@ -101,6 +109,7 @@ function build(
     permissionMode: 'acceptEdits',
     defaultBranch: 'main',
     stopTimeoutMs: over.stopTimeoutMs,
+    now: over.now,
     choicesFor: () =>
       localRunChoices(over.parts ?? (over.ref == null ? [] : [part({ slug: 'x', seq: 1, branch: over.ref })])),
     reap: (pid) => {
@@ -474,6 +483,142 @@ test('a restart brings an interrupted run back in its own checkout, without prep
   brought.emit('done');
   assert.equal(after.store.liveLocalRun()?.status, 'running');
   first.store.close();
+});
+
+/**
+ * The resume window: what stops a boot bringing back an environment nobody has been
+ * near since yesterday.
+ *
+ * A resume is for a *restart* — an Apply, a Ctrl-C, an upgrade handoff — where the
+ * operator wants their environment back in a minute and the containers the reap could
+ * not touch are still up. A harness that was off overnight has neither: the machine
+ * has probably been rebooted, and what the boot does is spend a session on an
+ * environment nobody asked for. The row is still live either way, which is why the
+ * age has to be recorded rather than inferred.
+ */
+const HOUR = 60 * 60 * 1000;
+
+test('a run interrupted longer ago than the window is not brought back', async () => {
+  const at = Date.parse('2026-09-02T09:00:00.000Z');
+  const first = build({ resumeInstruction: 'Run /dev-environment continue.', now: () => at });
+  await first.runner.start('issue:284');
+  first.runner.stopFast('the harness shut down');
+  assert.equal(
+    first.store.liveLocalRun()?.interruptedAt,
+    new Date(at).toISOString(),
+    'the fast stop dates the interruption — the one thing the next boot can judge',
+  );
+
+  // The boot, three hours later. The row still says live, which is exactly the state
+  // the old behaviour trusted.
+  const after = build({
+    store: first.store,
+    resumeInstruction: 'Run /dev-environment continue.',
+    now: () => at + 3 * HOUR,
+  });
+  const outcome = after.runner.resumeInterrupted();
+  assert.equal(outcome.outcome, 'settled');
+  assert.equal(after.sessions.length, 0, 'no session was spent bringing back an environment nobody is watching');
+  assert.equal(after.store.liveLocalRun(), null, 'and the row stops claiming a process that is gone');
+  const note = after.store.currentLocalRun()?.note ?? '';
+  assert.match(note, /3 hours ago/);
+  assert.match(note, /may still be running/, 'the operator is told what may still be up');
+  assert.match(note, /localRun\.resumeWindowMs/, 'and what would have changed it');
+  first.store.close();
+});
+
+test('a run interrupted inside the window still comes back', async () => {
+  const at = Date.parse('2026-09-02T09:00:00.000Z');
+  const first = build({ resumeInstruction: 'Run /dev-environment continue.', now: () => at });
+  await first.runner.start('issue:284');
+  first.runner.stopFast('the harness shut down');
+
+  const after = build({
+    store: first.store,
+    resumeInstruction: 'Run /dev-environment continue.',
+    now: () => at + HOUR,
+  });
+  assert.equal(after.runner.resumeInterrupted().outcome, 'resumed');
+  assert.equal(after.sessions.length, 1);
+  // The stamp described an interruption that has now been answered. Left on, the next
+  // hard crash would be dated to *this* one — and a run interrupted a minute later
+  // would be refused as an hour old.
+  assert.equal(after.store.liveLocalRun()?.interruptedAt, null);
+  first.store.close();
+});
+
+test('a live row nobody stamped is unknown, not recent, and is not brought back', () => {
+  const { runner, store } = build({ resumeInstruction: 'Run /dev-environment continue.' });
+  // What a hard crash leaves: a kill, a power cut, a machine that rebooted under the
+  // harness. `startedAt` is no stand-in — a run brought up on Monday and still in use
+  // this afternoon would read as days stale — so the honest answer is that nobody
+  // knows, and the safe direction is the operator clicking Start.
+  store.beginLocalRun({ originRef: 'issue:284', ref: 'main', dir: process.cwd(), url: null });
+
+  const outcome = runner.resumeInterrupted();
+  assert.equal(outcome.outcome, 'settled');
+  assert.match(store.currentLocalRun()?.note ?? '', /not known/);
+  assert.equal(store.liveLocalRun(), null);
+  store.close();
+});
+
+test('no window means no bound, which is the behaviour before there was one', async () => {
+  const at = Date.parse('2026-09-02T09:00:00.000Z');
+  const first = build({ resumeInstruction: 'Run /dev-environment continue.', now: () => at, resumeWindowMs: 0 });
+  await first.runner.start('issue:284');
+  first.runner.stopFast('the harness shut down');
+
+  // A supported setting, not a loophole: a deployment whose environment really does
+  // survive anything says so on the Config page and gets what it always had.
+  const after = build({
+    store: first.store,
+    resumeInstruction: 'Run /dev-environment continue.',
+    resumeWindowMs: 0,
+    now: () => at + 40 * HOUR,
+  });
+  assert.equal(after.runner.resumeInterrupted().outcome, 'resumed');
+  first.store.close();
+});
+
+test('the boot that adds the stamp dates the run it is upgrading over', () => {
+  // A column whose null means something needs a backfill as well, and here null means
+  // "nobody knows when this was interrupted" — which the resume refuses. Right for a
+  // hard crash and wrong for the one row a deployment is upgrading over: it was left
+  // live by a fast stop moments ago, and refusing it would make taking this build cost
+  // every operator the environment they had up at the time.
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-local-run-stamp-'));
+  const file = join(dir, 'before-the-stamp.sqlite');
+  const at = '2026-09-02T09:00:00.000Z';
+  // Closed in the `finally`, because Windows refuses to unlink a sqlite file whose
+  // handle is still open — an assertion failing above would otherwise come back as an
+  // `EBUSY` from the cleanup rather than as what it was.
+  let store: Store | null = null;
+  try {
+    const before = new Store(file);
+    before.beginLocalRun({ originRef: 'issue:284', ref: 'main', dir: process.cwd(), url: null });
+    before.close();
+
+    // Take the column away, which is the one state no fixture built from `SCHEMA` can
+    // reach. The reopen runs the real `ensureColumns`, which adds it back as NULL on
+    // every row already there — exactly what a deployment sees on the boot it takes
+    // this build.
+    const raw = new Database(file);
+    raw.exec(`CREATE TABLE local_runs_pre AS SELECT id, origin_ref, ref, dir, pid, status, url, note,
+                started_at, ended_at, cost_usd, input_tokens, output_tokens, cache_read_tokens,
+                cache_creation_tokens, num_turns FROM local_runs;
+              DROP TABLE local_runs;
+              ALTER TABLE local_runs_pre RENAME TO local_runs;`);
+    raw.close();
+
+    store = new Store(file, () => at);
+    assert.equal(store.liveLocalRun()?.interruptedAt, at, 'the row this boot inherited is dated to this boot');
+    // So the boot brings it back, as the build before this one would have.
+    const after = build({ store, resumeInstruction: 'Run /dev-environment continue.', now: () => Date.parse(at) });
+    assert.equal(after.runner.resumeInterrupted().outcome, 'resumed');
+  } finally {
+    store?.close();
+    rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
+  }
 });
 
 test('a run whose checkout has gone is not brought back', () => {

@@ -73,6 +73,7 @@ function localRun(id: string, originRef: string, over: Partial<LocalRun> = {}): 
     note: null,
     startedAt: T,
     endedAt: T,
+    interruptedAt: null,
     costUsd: 1,
     inputTokens: 1000,
     outputTokens: 100,

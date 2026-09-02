@@ -64,6 +64,26 @@ export interface LocalRunPolicy {
    */
   resumeInstruction: string;
   /**
+   * How long after the interruption a run may still be brought back.
+   *
+   * A resume was built for a restart — an Apply on the Config page, a Ctrl-C, an
+   * upgrade handoff — where the operator is a minute away from wanting their
+   * environment back and the containers the reap could not touch are still up. None
+   * of that is true of a harness that was off overnight: the machine has very likely
+   * been rebooted, nothing of the run survives to attach to, and what the boot
+   * actually does is spend a session on an environment nobody asked for and nobody
+   * is watching.
+   *
+   * Two hours, which is long enough to cover a restart an operator walked away from
+   * and short enough that yesterday's run is not brought back this morning. `0`
+   * means no bound, which is the old behaviour exactly — a supported setting for a
+   * deployment whose environment really does survive anything.
+   *
+   * Judged on the run's `interruptedAt`, so a run whose interruption was never
+   * stamped is out of the window whatever this says.
+   */
+  resumeWindowMs: number;
+  /**
    * Where the application lands, once it is up — drawn as a link in the panel.
    *
    * Declared rather than detected. Reading it out of the log would mean matching a
@@ -77,5 +97,6 @@ export const DEFAULT_LOCAL_RUN: LocalRunPolicy = {
   instruction: '',
   stopInstruction: '',
   resumeInstruction: '',
+  resumeWindowMs: 2 * 60 * 60 * 1000,
   url: '',
 };

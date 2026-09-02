@@ -44,7 +44,7 @@ import { EscalationStore } from './escalations.js';
 import { StackLandingStore } from './landings.js';
 import { BranchReapStore } from './branchReaps.js';
 import { dropPartialGoalArrivals, ENVIRONMENT_COLUMNS, EnvironmentStore, repairPartRefGoals } from './environments.js';
-import { LocalRunStore, LOCAL_RUN_COLUMNS } from './localRuns.js';
+import { dateInterruptionsFromBeforeTheStamp, LocalRunStore, LOCAL_RUN_COLUMNS } from './localRuns.js';
 import { WatchStore, WATCH_COLUMNS } from './watches.js';
 import { PrWatchSeedStore } from './prWatchSeeds.js';
 import { WorkItemLinkStore } from './workItemLinks.js';
@@ -313,6 +313,13 @@ export class Store {
     if (addedColumns.includes('knowledge_facts.project') && project !== undefined) {
       stampFactsWithProject(this.db, project);
     }
+    // The fourth, and the same shape again: `local_runs.interrupted_at` null means
+    // nobody stamped this row, which a resume reads as "unknown, do not bring it
+    // back". Right for a hard crash and wrong for the row this very boot is upgrading
+    // over — left live by a fast stop a moment ago — so a live row is dated to now,
+    // once. Ungated it would re-date every stale row on every boot and resume it for
+    // ever, which is the thing the stamp exists to stop.
+    if (addedColumns.includes('local_runs.interrupted_at')) dateInterruptionsFromBeforeTheStamp(this.db, clock());
     // The migrations that are not columns, here for the same reason the pass above
     // is — before any module is constructed, let alone reads. #203's
     // `floor_completions` becomes #234's `issue_runs`, carrying the operator's
@@ -1360,6 +1367,9 @@ export class Store {
   }
   markLocalRunPid(id: string, pid: number | null): void {
     this.localRuns.markLocalRunPid(id, pid);
+  }
+  markLocalRunInterrupted(id: string, at: string | null): void {
+    this.localRuns.markLocalRunInterrupted(id, at);
   }
   setLocalRunStatus(id: string, status: LocalRunStatus, note?: string): void {
     this.localRuns.setLocalRunStatus(id, status, note);

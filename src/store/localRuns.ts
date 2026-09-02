@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type Database from 'better-sqlite3';
 import type { StoreContext } from './context.js';
 import type { ColumnMigrations } from './migrate.js';
 import type { CostDelta, LocalRun, LocalRunStatus, LocalRunUsageDelta } from '../types.js';
@@ -11,6 +12,7 @@ export const LOCAL_RUN_COLUMNS: ColumnMigrations = {
     cache_read_tokens: 'INTEGER',
     cache_creation_tokens: 'INTEGER',
     num_turns: 'INTEGER',
+    interrupted_at: 'TEXT',
   },
 };
 
@@ -71,6 +73,7 @@ export class LocalRunStore {
       note: null,
       startedAt: now,
       endedAt: null,
+      interruptedAt: null,
       costUsd: null,
       inputTokens: null,
       outputTokens: null,
@@ -99,6 +102,22 @@ export class LocalRunStore {
   /** Record the process holding the environment up, so a stop knows whose subtree to reap. */
   markLocalRunPid(id: string, pid: number | null): void {
     this.ctx.db.prepare(`UPDATE local_runs SET pid = ? WHERE id = ?`).run(pid, id);
+  }
+
+  /**
+   * Stamp when the harness holding this run went down, or clear it because the run
+   * is being held again.
+   *
+   * The one thing a resume can judge a row's age on. `started_at` cannot answer it —
+   * an environment an operator brought up on Monday and was still using at five
+   * o'clock is not a stale one — and the note the fast stop writes is prose.
+   *
+   * Cleared on the way back up, because after a resume the stamp describes an
+   * interruption that has been answered: left on, the next hard crash would be dated
+   * to the *previous* one and a run interrupted a minute ago would read as hours old.
+   */
+  markLocalRunInterrupted(id: string, at: string | null): void {
+    this.ctx.db.prepare(`UPDATE local_runs SET interrupted_at = ? WHERE id = ?`).run(at, id);
   }
 
   /**
@@ -218,6 +237,7 @@ interface LocalRunRow {
   note: string | null;
   started_at: string;
   ended_at: string | null;
+  interrupted_at: string | null;
   cost_usd: number | null;
   input_tokens: number | null;
   output_tokens: number | null;
@@ -248,6 +268,7 @@ function toLocalRun(row: LocalRunRow): LocalRun {
     note: row.note,
     startedAt: row.started_at,
     endedAt: row.ended_at,
+    interruptedAt: row.interrupted_at ?? null,
     // Null on every row written before these columns existed, and on every run of a
     // PTY deployment — which has no usage channel at all. Unmeasured, not free.
     costUsd: row.cost_usd ?? null,
@@ -257,6 +278,28 @@ function toLocalRun(row: LocalRunRow): LocalRun {
     cacheCreationTokens: row.cache_creation_tokens ?? null,
     numTurns: row.num_turns ?? null,
   };
+}
+
+/**
+ * Date the interruption of the run this boot inherited, on the **one boot**
+ * `local_runs.interrupted_at` arrives.
+ *
+ * Null in that column means "nobody stamped this", which the resume reads as unknown
+ * and refuses — the honest answer for a hard crash, and the wrong one for the row an
+ * operator is upgrading over right now. That row was left live by a fast stop
+ * moments ago, so it is stamped `now` and the boot brings it back exactly as the
+ * build before this one would have.
+ *
+ * Ungated it is the same silence pointed the other way: every stale row would be
+ * re-dated to the current boot and resumed for ever.
+ *
+ * @public — called by `Store`'s constructor, the only place that knows a column was
+ * just added.
+ */
+export function dateInterruptionsFromBeforeTheStamp(db: Database.Database, now: string): void {
+  db.prepare(`UPDATE local_runs SET interrupted_at = ? WHERE interrupted_at IS NULL AND status IN ${LIVE_SQL}`).run(
+    now,
+  );
 }
 
 /** Every status a live row can carry, for the callers that ask "is this one going". */
