@@ -1149,6 +1149,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     remote: config.selfUpdate.remote,
     branch: config.selfUpdate.branch,
     checkIntervalMs: config.selfUpdate.checkIntervalMs,
+    autoUpdate: config.selfUpdate.autoUpdate,
+    drainDeadlineMs: config.selfUpdate.drainDeadlineMs,
   });
 
   // How the harness files a tracker item: three of the four filing arms call this

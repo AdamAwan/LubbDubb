@@ -36,6 +36,17 @@ export interface SelfUpdatePolicy {
   branch: string;
   /** A floor on how often the remote is touched, not on how fresh the answer is served. */
   checkIntervalMs: number;
+  /**
+   * Take an update on the fleet's behalf: drain when one lands, hand off when the
+   * drain runs dry. One key rather than two, because a drain nobody ever applies
+   * is a fleet that paused itself and stopped.
+   */
+  autoUpdate: boolean;
+  /**
+   * How long an automatic drain waits for the fleet before it stops waiting and
+   * interrupts what is left. Zero waits forever.
+   */
+  drainDeadlineMs: number;
 }
 
 /** The resting intent — what a database with no row, and a finished upgrade, both read as. */
@@ -200,7 +211,62 @@ export function applyUpgradeAction(
       // drain recorded one.
       targetSha: intent.targetSha ?? ctx.targetSha,
       requestedAt: intent.requestedAt ?? ctx.now,
-      pausedByDrain: intent.pausedByDrain,
+      // From `idle` there was no drain to inherit the answer from, and inheriting
+      // the resting `false` would say the operator had paused the fleet themselves.
+      // It is read on the way back up to decide whether they get it back paused,
+      // so getting it wrong here parks a fleet nobody parked.
+      pausedByDrain: intent.state === 'idle' ? !ctx.alreadyPaused : intent.pausedByDrain,
     },
+  };
+}
+
+/** What an automatic upgrade does on this pulse, or nothing. */
+interface AutoStep {
+  action: UpgradeAction;
+  interrupt?: boolean;
+  /** Why, in the operator's words — the log line an unattended upgrade leaves. */
+  why: string;
+}
+
+/**
+ * The whole of `selfUpdate.autoUpdate`: the operator's two clicks, decided on a
+ * pulse instead. Pure, so what the fleet does unattended is asserted without a
+ * clock, a store or a process to lose.
+ *
+ * **Nothing at all without a supervisor.** The handoff is an exit, and an exit
+ * with nothing in front of it to relaunch is the fleet going down and staying
+ * down — the one failure an unattended feature must not have. The manual button
+ * degrades to a printed command here ([21](../../docs/spec/21-self-update.md#an-unsupervised-deployment));
+ * this degrades to doing nothing, which is the same answer.
+ *
+ * **The deadline forces the handoff, it does not cancel it.** An automatic drain
+ * that waits on one long agent holds dispatch paused for as long as that agent
+ * runs, which is its own interruption and a quieter one — the fleet stops, the
+ * gauge says `draining`, and nothing is wrong. Past the deadline the drain stops
+ * waiting: the interrupt is not lossy, because every agent it stops is restored on
+ * the way back up by the same intent that stopped it.
+ */
+export function autoUpgradeStep(ctx: {
+  intent: UpgradeIntent;
+  upgradable: Upgradability;
+  live: number;
+  supervised: boolean;
+  drainDeadlineMs: number;
+  /** Milliseconds the current drain has been waiting, or null when none is. */
+  drainingForMs: number | null;
+}): AutoStep | null {
+  if (!ctx.supervised) return null;
+  if (ctx.intent.state === 'applying') return null;
+  if (ctx.intent.state === 'idle') return ctx.upgradable.can ? { action: 'drain', why: 'an update is waiting' } : null;
+  if (ctx.intent.state === 'ready') return { action: 'apply', why: 'the fleet is clear' };
+  // Draining, with something still running.
+  if (ctx.drainDeadlineMs <= 0 || ctx.drainingForMs === null) return null;
+  if (ctx.drainingForMs < ctx.drainDeadlineMs) return null;
+  return {
+    action: 'apply',
+    interrupt: true,
+    why:
+      `the drain has waited ${Math.round(ctx.drainingForMs / 60_000)}m for ${ctx.live} agent(s) — ` +
+      'interrupting them, and they are restored on the way back up',
   };
 }

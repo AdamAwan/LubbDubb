@@ -440,6 +440,11 @@ export interface Config {
    * **On by default and cheap**: the steady state is one `ls-remote` an hour,
    * which transfers no objects, and a real fetch only once the tip has moved.
    * Deep-merged, so one field can be set alone.
+   *
+   * `autoUpdate` is the separate question of whether the harness takes what it
+   * finds. It is **off** by default, and on it does both halves — drain when an
+   * update lands, hand off when the fleet runs dry — because a drain nobody applies
+   * is a fleet that paused itself and stopped.
    */
   selfUpdate: SelfUpdatePolicy;
   /**
@@ -1092,7 +1097,16 @@ const DEFAULTS: Config = {
   // as a constant, because each of those numbers was also a way of writing a pet
   // into existence without doing anything.
   pets: { enabled: true, visible: true },
-  selfUpdate: { enabled: true, remote: 'origin', branch: 'main', checkIntervalMs: 60 * 60 * 1000 },
+  selfUpdate: {
+    enabled: true,
+    remote: 'origin',
+    branch: 'main',
+    checkIntervalMs: 60 * 60 * 1000,
+    // Off by default: taking a build out from under a fleet is a decision, and the
+    // deployment that wants it unattended is the one that says so.
+    autoUpdate: false,
+    drainDeadlineMs: 2 * 60 * 60 * 1000,
+  },
   validation: DEFAULT_VALIDATION,
   review: DEFAULT_PR_REVIEW,
   localRun: DEFAULT_LOCAL_RUN,
