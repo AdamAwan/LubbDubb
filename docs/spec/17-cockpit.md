@@ -5056,11 +5056,14 @@ reason. A goal's arm tries `issue:<n>` then `#<n>`, a pull request's `pr:<n>` th
 412 and PR 412 both exist `#412` is the pull request's address. A goal's arm that tried it first opened
 the wrong thing on exactly the deployments busy enough to have both.
 
-**`cn-rel` is the other half of the rack's fix.** Two references side by side state that a row names two
-things and nothing about how they are joined, and on the rack and the fleet row the joining *is* the
-row — a pull request is there because of the goal it is delivering. So the row says it: `PR 412
-delivers #212`. The word is muted and carries no box, because anything in that slot wearing a box is
-read as a way somewhere, and this is not one.
+**A pair of references is joined by its order, not by a word between them.** On the rack and the fleet
+row a row's two refs are a pull request and the goal it delivers, always in that order, and the row
+once said so with a muted `delivers` between them. It cost more than it said: the word was the widest
+thing in the refs slot, and the group packs to the right, so on a half-width card the pair overflowed
+its column to the *left* and painted the pull request's own token over the reading slot beside it —
+`agent on it` read as `ag`. The word is gone, `--cn-w-refs` is wide enough for the two tokens, and the
+group is `overflow: hidden` so it can never again spill onto its neighbour. The relation stays in the
+goal ref's hover, which is where a sentence belongs.
 
 ## Agent-authored prose
 

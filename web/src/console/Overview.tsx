@@ -388,15 +388,11 @@ function OnWhat({ origin, view }: { origin: string | null; view: CockpitView }):
   return (
     <>
       {origin !== null && <Ref to={origin} />}
-      {/* The same relation the rack states, stated the same way: this row's two
-          refs are a pull request and the goal it is delivering, and side by side
-          they say only that the row names two things. */}
-      {goal !== null && (
-        <>
-          <span className="cn-rel">delivers</span>
-          <Ref to={goal} />
-        </>
-      )}
+      {/* The relation is the pair's position, not a word between them: on a rail
+          this narrow the word cost more room than the two refs it joined, and the
+          refs group overran the reading slot beside it. Each ref keeps its own
+          hover, which is where the relation is said. */}
+      {goal !== null && <Ref to={goal} title={`Open the goal this pull request is delivering — ${refLabel(goal)}`} />}
     </>
   );
 }
@@ -892,19 +888,15 @@ function prRow(pr: OpenPullRequest, view: CockpitView, actions: CockpitActions, 
     // harness makes of this, and what the diff says — but they are two doors onto
     // one thing, and drawn apart they read as a repeat.
     //
-    // `delivers` is the row saying the relation it was leaving to inference. Two
-    // bare tokens side by side state that the row names two things and nothing
-    // about how they are joined, and this is the one card where the joining *is*
-    // the row: a pull request is here because of the goal it is delivering.
+    // The goal sits beside it as a second token rather than behind a word: the
+    // pair is always drawn in that order — the pull request, then what it
+    // delivers — and on a half-width card the word between them was the slot's
+    // widest thing, pushing the group over the reading column beside it. The
+    // relation is said in the goal ref's own hover.
     refs: (
       <>
         <Ref to={`pr:${pr.number}`} />
-        {goal !== null && (
-          <>
-            <span className="cn-rel">delivers</span>
-            <Ref to={goal} title={`Open the goal this pull request is delivering — ${refLabel(goal)}`} />
-          </>
-        )}
+        {goal !== null && <Ref to={goal} title={`Open the goal this pull request is delivering — ${refLabel(goal)}`} />}
       </>
     ),
     // The name is the way onto the pull request's page — its review threads, its

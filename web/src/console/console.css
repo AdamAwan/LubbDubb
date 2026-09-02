@@ -2049,7 +2049,13 @@ a.cn-tgl {
      while an earlier one is in staging does. */
   --cn-w-chips: 148px;
   --cn-w-act: 124px;
-  --cn-w-refs: 108px;
+  /* Two references and the rule that fences them off — a pull request and the goal
+     it delivers, which is the widest this slot ever gets now that the word between
+     them is gone. At 108px the pair did not fit, and the group being `flex-end`
+     the overflow went *left*, painting over the reading slot beside it: the row's
+     `agent on it` chip read as `ag`. A ceiling, so a narrow card still takes it
+     back. */
+  --cn-w-refs: 152px;
   /* The subject's floor, and the only one of these that is a minimum rather than a
      ceiling. Every rail above gives way to it, because a title clipped to one word
      is the row saying nothing at all while the slots beside it keep room they do
@@ -2187,23 +2193,16 @@ button.cn-grow {
 .cn-refs:empty {
   border-left-color: transparent;
 }
-/* The word between two references, where the row's whole point is how they are
-   joined — `PR 412 delivers #212`. Two bare tokens state that a row names two
-   things and nothing about the relation, which on the rack and the fleet row is
-   the one thing the row is for.
-
-   Deliberately quiet and deliberately not a token: it is not a way anywhere, and
-   anything in this slot that carries a box is read as one. Lowercase, muted, and
-   the group's `gap` does the spacing. */
-.cn-rel {
-  color: var(--cn-fg-faint);
-  font-size: 11px;
-}
 /* On the grid the column is the width, so the group stops setting its own — and
    it keeps its rule even when this row's is empty, because the rule is the
-   card's edge between what a row *is* and what it *names*, not this row's. */
+   card's edge between what a row *is* and what it *names*, not this row's.
+
+   Clipped, because the group packs to the right: content wider than its column
+   overflows to the *left*, over the slot beside it, and a reference painted on
+   top of a chip is worse than one cut off at the rule. */
 .cn-frow .cn-refs {
   min-width: 0;
+  overflow: hidden;
   border-left-color: var(--cn-line);
 }
 
