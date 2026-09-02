@@ -25,6 +25,8 @@ import type {
   ContradictionRuling,
   FactExit,
   FactRuling,
+  GoalWatch,
+  GoalWatchDeclaration,
   GraduationOutcome,
   FilingTargetProbe,
   Issue,
@@ -1015,6 +1017,60 @@ class DemoServer {
       else check.proposal = null;
       this.dirty();
     }
+    return { ok: true };
+  }
+
+  /**
+   * The operator's own check, written from the goal page.
+   *
+   * The demo has no environment to put a query to, so the dry run is empty and the
+   * reading columns are cleared rather than guessed — which is the honest mirror:
+   * a query nothing has asked has been read by nothing, and inventing a `fires`
+   * here would teach the control that saving proves something.
+   */
+  async saveWatchCheck(issueNumber: number, check: GoalWatchDeclaration): Promise<{ ok: true; dryRun: string[] }> {
+    const originRef = `issue:${issueNumber}`;
+    const watches = this.state.goalWatches ?? [];
+    const existing = watches.find((w) => w.originRef === originRef && w.id === check.id);
+    const seq = existing?.seq ?? watches.filter((w) => w.originRef === originRef).length + 1;
+    const saved: GoalWatch = {
+      originRef,
+      seq,
+      id: check.id,
+      kind: check.kind,
+      title: check.title,
+      query: check.query,
+      presence: check.kind === 'signal' ? check.presence : null,
+      tolerate: check.kind === 'signal' ? check.tolerate : 0,
+      expectUnder: check.kind === 'measure' ? (check.expect.under ?? null) : null,
+      expectOver: check.kind === 'measure' ? (check.expect.over ?? null) : null,
+      expectBaseline: check.kind === 'measure' && check.expect.noWorseThan === 'baseline',
+      unit: check.kind === 'measure' ? (check.unit ?? null) : null,
+      why: check.why ?? null,
+      baselineValue: null,
+      baselineAt: null,
+      live: true,
+      proposal: null,
+      authored: 'operator',
+      dryRunEnvironment: null,
+      dryRunAt: null,
+      dryRunVerdict: null,
+      dryRunPresence: null,
+      dryRunRows: null,
+      dryRunDetail: null,
+    };
+    this.state.goalWatches =
+      existing === undefined ? [...watches, saved] : watches.map((w) => (w === existing ? saved : w));
+    this.dirty();
+    return { ok: true, dryRun: [] };
+  }
+
+  async deleteWatchCheck(issueNumber: number, checkId: string): Promise<{ ok: true }> {
+    const originRef = `issue:${issueNumber}`;
+    this.state.goalWatches = (this.state.goalWatches ?? []).filter(
+      (w) => !(w.originRef === originRef && w.id === checkId),
+    );
+    this.dirty();
     return { ok: true };
   }
 
@@ -4617,6 +4673,8 @@ export const demoApi = {
   replan: (planId: string) => getServer().replan(planId),
   ruleWatchProposal: (issueNumber: number, checkId: string, accept: boolean) =>
     getServer().ruleWatchProposal(issueNumber, checkId, accept),
+  saveWatchCheck: (issueNumber: number, check: GoalWatchDeclaration) => getServer().saveWatchCheck(issueNumber, check),
+  deleteWatchCheck: (issueNumber: number, checkId: string) => getServer().deleteWatchCheck(issueNumber, checkId),
   extendWatch: (issueNumber: number, environment: string) => getServer().extendWatch(issueNumber, environment),
   // The demo's plans have one revision each — no replan has landed in a browser
   // session — so the history is that single revision and a null diff, which is

@@ -11,6 +11,7 @@ import type {
   PullRequest,
   EnvironmentGateRelease,
   GoalEnvironmentReach,
+  GoalWatch,
   GoalWatchView,
   ValidationCheck,
   ValidationResourceView,
@@ -138,6 +139,22 @@ export interface GoalPageView {
    * → `docs/spec/29-post-deploy-watch.md#in-the-cockpit`
    */
   watches: GoalWatchView[];
+  /**
+   * What this goal declared a running system would have to show — every check on
+   * it, an agent's unruled declaration included.
+   *
+   * The declarations rather than the readings, which is what separates it from
+   * {@link GoalPageView.watches}: those are what an arrival's window has read so
+   * far, and hang off an environment; these are the questions themselves, and
+   * exist from the moment a plan is submitted — months before anything ships, and
+   * on goals that never arrive anywhere.
+   *
+   * **Empty draws no card.** A goal that declared nothing reads null, and null is
+   * a third fact rather than a synonym for clean — with the one exception the card
+   * itself makes, which is that an operator can start the list from a page that
+   * shows none.
+   */
+  signals: GoalWatch[];
 }
 
 /**
@@ -398,6 +415,10 @@ export function buildGoalPage(
     gateHold: reach?.gateHold ?? null,
     gateRelease: reach?.released ?? null,
     watches: (state.goalWatchWindows ?? []).filter((w) => w.goalRef === ref),
+    // Both lists, live and proposed: the card draws an agent's declaration beside
+    // the live checks with the ruling on it, which is the only place an operator
+    // who never opens the plan sheet would see one.
+    signals: (state.goalWatches ?? []).filter((w) => w.originRef === ref),
   };
 }
 

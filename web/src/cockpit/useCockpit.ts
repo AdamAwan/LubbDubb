@@ -327,6 +327,15 @@ export function useCockpit(): CockpitStatus {
 
       replan: (planId) => then(api.replan(planId)),
       ruleWatchProposal: (issueNumber, checkId, accept) => then(api.ruleWatchProposal(issueNumber, checkId, accept)),
+      // Refetches like every other write, and hands the dry run's refusals back to
+      // the form that caused them: the check is saved either way, and what the
+      // environment could not answer about it is the operator's to act on.
+      saveWatchCheck: async (issueNumber, check) => {
+        const { dryRun } = await api.saveWatchCheck(issueNumber, check);
+        await refresh(null);
+        return dryRun;
+      },
+      deleteWatchCheck: (issueNumber, checkId) => then(api.deleteWatchCheck(issueNumber, checkId)),
       extendWatch: (issueNumber, environment) => then(api.extendWatch(issueNumber, environment)),
       setAcceptance: (planId, slug, criterion, met) => then(api.setAcceptance(planId, slug, criterion, met)),
       setValidation: (issueNumber, checkId, act) => then(api.setValidation(issueNumber, checkId, act)),

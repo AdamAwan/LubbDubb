@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { GoalWatchInput } from '../types.js';
+import type { GoalWatchDeclaration, GoalWatchInput } from '../types.js';
 
 /**
  * The `watch` block of a plan document: what a running system would have to show
@@ -135,46 +135,76 @@ export const WatchSchema = z
   });
 
 /**
- * The declared checks as store input, sequenced by their order in the document —
- * signals first, then measures.
+ * One check on its own, with the kind it is written under named rather than
+ * implied by which array it sat in.
+ *
+ * The third writer's shape ([the operator, at any
+ * time](../../docs/spec/29-post-deploy-watch.md#the-operator-at-any-point)): a
+ * goal page edits one check, not a document, so there is no array to read the
+ * kind off. Built from the same two schemas the block is, for the reason this
+ * module exists at all — a writer with its own copy of these rules is one that
+ * accepts what a plan document refuses on the day either learns a field.
+ */
+export const WatchCheckSchema: z.ZodType<GoalWatchDeclaration, z.ZodTypeDef, unknown> = z.discriminatedUnion('kind', [
+  WatchSignalSchema.extend({ kind: z.literal('signal') }).strict(
+    'a signal declares only kind/id/title/query/presence/tolerate/why',
+  ),
+  WatchMeasureSchema.extend({ kind: z.literal('measure') }).strict(
+    'a measure declares only kind/id/title/query/expect/unit/why',
+  ),
+]);
+
+/**
+ * One check as store input, at the position the caller places it.
  *
  * One function over both kinds rather than two, because the store holds one table:
  * a measure is a row with no `presence`, a `tolerate` nothing reads, and an
  * expectation the signal columns are null for.
  */
+export function watchCheckInput(check: GoalWatchDeclaration, seq: number): GoalWatchInput {
+  if (check.kind === 'signal')
+    return {
+      id: check.id,
+      seq,
+      kind: 'signal',
+      title: check.title,
+      query: check.query,
+      presence: check.presence,
+      tolerate: check.tolerate,
+      expectUnder: null,
+      expectOver: null,
+      expectBaseline: false,
+      unit: null,
+      why: check.why ?? null,
+    };
+  return {
+    id: check.id,
+    seq,
+    kind: 'measure',
+    title: check.title,
+    query: check.query,
+    // A measure declares none, and the fold reads that null rather than
+    // inferring it from the kind: presence answers "is this code path running",
+    // which a measure's own single row already fails without.
+    presence: null,
+    tolerate: 0,
+    expectUnder: check.expect.under ?? null,
+    expectOver: check.expect.over ?? null,
+    expectBaseline: check.expect.noWorseThan === 'baseline',
+    unit: check.unit ?? null,
+    why: check.why ?? null,
+  };
+}
+
+/**
+ * The declared checks as store input, sequenced by their order in the document —
+ * signals first, then measures.
+ */
 export function watchCheckInputs(block: z.infer<typeof WatchSchema>): GoalWatchInput[] {
-  const signals: GoalWatchInput[] = block.signals.map((signal, index) => ({
-    id: signal.id,
-    seq: index + 1,
-    kind: 'signal' as const,
-    title: signal.title,
-    query: signal.query,
-    presence: signal.presence,
-    tolerate: signal.tolerate,
-    expectUnder: null,
-    expectOver: null,
-    expectBaseline: false,
-    unit: null,
-    why: signal.why ?? null,
-  }));
   return [
-    ...signals,
-    ...block.measures.map((measure, index) => ({
-      id: measure.id,
-      seq: signals.length + index + 1,
-      kind: 'measure' as const,
-      title: measure.title,
-      query: measure.query,
-      // A measure declares none, and the fold reads that null rather than
-      // inferring it from the kind: presence answers "is this code path running",
-      // which a measure's own single row already fails without.
-      presence: null,
-      tolerate: 0,
-      expectUnder: measure.expect.under ?? null,
-      expectOver: measure.expect.over ?? null,
-      expectBaseline: measure.expect.noWorseThan === 'baseline',
-      unit: measure.unit ?? null,
-      why: measure.why ?? null,
-    })),
+    ...block.signals.map((signal, index) => watchCheckInput({ ...signal, kind: 'signal' }, index + 1)),
+    ...block.measures.map((measure, index) =>
+      watchCheckInput({ ...measure, kind: 'measure' }, block.signals.length + index + 1),
+    ),
   ];
 }

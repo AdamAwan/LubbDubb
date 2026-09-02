@@ -2,6 +2,7 @@ import type {
   ContradictionRuling,
   FactExit,
   FactRuling,
+  GoalWatchDeclaration,
   GraduationOutcome,
   FilingTargetProbe,
   KnowledgeFactPayload,
@@ -194,6 +195,18 @@ export interface CockpitActions {
    * operator says so, and accepting is what runs it once.
    */
   ruleWatchProposal(issueNumber: number, checkId: string, accept: boolean): Promise<void>;
+  /**
+   * Write one of a goal's checks — the operator's own, from the goal page.
+   *
+   * One verb for both a new check and an edit, because the slug is the merge key
+   * every writer in this subsystem folds on. **What comes back is what the dry run
+   * refused**, empty on a clean one: saving puts the query to an environment in the
+   * same call, and a query that could not resolve is the thing the form exists to
+   * catch before an arrival does.
+   */
+  saveWatchCheck(issueNumber: number, check: GoalWatchDeclaration): Promise<string[]>;
+  /** Drop one of a goal's checks, and the readings taken against it. */
+  deleteWatchCheck(issueNumber: number, checkId: string): Promise<void>;
   /**
    * Give one goal's watch on one environment more time.
    *

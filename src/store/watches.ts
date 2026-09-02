@@ -58,6 +58,11 @@ import type { ColumnMigrations } from './migrate.js';
  * existed: a signal declares no baseline, and every check the operator's own plan
  * approval already authorised is live.
  *
+ * `authored` needs no backfill for the same kind of reason: its default is
+ * `'plan'`, which is what every row written before an operator could edit one
+ * actually was. The wrong default would be the expensive one here — a database
+ * whose rows all read `operator` is a fleet no replan can amend.
+ *
  * `watch_windows.extended_at` is the third table's first added column, and it is
  * the one the table's own warning is about: `settled_at` null means *still
  * watching*, so a column here whose null meant something would reopen every
@@ -77,6 +82,7 @@ export const WATCH_COLUMNS: ColumnMigrations = {
     baseline_at: 'TEXT',
     live: 'INTEGER NOT NULL DEFAULT 1',
     proposal: 'TEXT',
+    authored: "TEXT NOT NULL DEFAULT 'plan'",
   },
   watch_readings: { value: 'REAL' },
   watch_windows: { extended_at: 'TEXT' },
@@ -113,33 +119,49 @@ export class WatchStore {
    * exists to avoid. A pending amendment *to* a check the document still declares
    * is dropped with the re-declaration, because it was an amendment to text that
    * no longer stands.
+   *
+   * **An operator's own check is neither swept nor overwritten**, which is the one
+   * exception to "a document speaks for the whole watch" — because for those rows
+   * it does not. A check written on the goal page was never in this document, so
+   * removing it would be a replan deleting somebody's work without their seeing
+   * it; a check they *edited* is a deliberate correction of the plan's wording, so
+   * the plan's version of that id is dropped on the floor rather than restored on
+   * the next amendment.
+   * → `docs/spec/29-post-deploy-watch.md#the-operator-at-any-point`
    * → `docs/spec/29-post-deploy-watch.md#the-working-agent-at-conclude-time`
    */
   ingestGoalWatch(originRef: string, checks: readonly GoalWatchInput[]): void {
-    const ids = checks.map((c) => c.id);
     this.ctx.db.transaction(() => {
-      const keep = new Set(ids);
+      const keep = new Set(checks.map((c) => c.id));
+      const mine = new Set<string>();
       for (const row of this.ctx.db
-        .prepare(`SELECT check_id FROM goal_watches WHERE goal_ref=? AND live=1`)
+        .prepare(`SELECT check_id, authored FROM goal_watches WHERE goal_ref=? AND live=1`)
         .all(originRef) as {
         check_id: string;
+        authored: string;
       }[]) {
+        // Neither swept nor, below, overwritten: this row is not this document's.
+        if (row.authored === 'operator') {
+          mine.add(row.check_id);
+          continue;
+        }
         if (keep.has(row.check_id)) continue;
         this.ctx.db.prepare(`DELETE FROM goal_watches WHERE goal_ref=? AND check_id=?`).run(originRef, row.check_id);
         this.ctx.db.prepare(`DELETE FROM watch_readings WHERE goal_ref=? AND check_id=?`).run(originRef, row.check_id);
       }
       for (const check of checks) {
+        if (mine.has(check.id)) continue;
         this.ctx.db
           .prepare(
             `INSERT OR REPLACE INTO goal_watches
                (goal_ref, check_id, seq, kind, title, query, presence, tolerate,
                 expect_under, expect_over, expect_baseline, unit, why,
-                baseline_value, baseline_at, live, proposal,
+                baseline_value, baseline_at, live, proposal, authored,
                 dry_run_environment, dry_run_at, dry_run_verdict, dry_run_presence, dry_run_rows, dry_run_detail,
                 created_at, updated_at)
              VALUES (@goalRef, @id, @seq, @kind, @title, @query, @presence, @tolerate,
                 @expectUnder, @expectOver, @expectBaseline, @unit, @why,
-                NULL, NULL, 1, NULL,
+                NULL, NULL, 1, NULL, 'plan',
                 NULL, NULL, NULL, NULL, NULL, NULL, @now, @now)`,
           )
           .run({ ...check, expectBaseline: check.expectBaseline ? 1 : 0, goalRef: originRef, now: this.ctx.now() });
@@ -248,12 +270,12 @@ export class WatchStore {
             `INSERT INTO goal_watches
                (goal_ref, check_id, seq, kind, title, query, presence, tolerate,
                 expect_under, expect_over, expect_baseline, unit, why,
-                baseline_value, baseline_at, live, proposal,
+                baseline_value, baseline_at, live, proposal, authored,
                 dry_run_environment, dry_run_at, dry_run_verdict, dry_run_presence, dry_run_rows, dry_run_detail,
                 created_at, updated_at)
              VALUES (@goalRef, @id, @seq, @kind, @title, @query, @presence, @tolerate,
                 @expectUnder, @expectOver, @expectBaseline, @unit, @why,
-                NULL, NULL, 0, @proposal,
+                NULL, NULL, 0, @proposal, 'plan',
                 NULL, NULL, NULL, NULL, NULL, NULL, @now, @now)`,
           )
           .run({
@@ -323,6 +345,111 @@ export class WatchStore {
       .prepare(`SELECT * FROM goal_watches WHERE goal_ref=? AND check_id=?`)
       .get(originRef, checkId) as GoalWatchRow | undefined;
     return after === undefined ? null : hydrate(after);
+  }
+
+  /**
+   * The operator's own declaration, written from the goal page.
+   *
+   * Upsert on the slug, which is the same merge key everything else here folds
+   * on: an edit lands on the row and an id nothing carries starts one, so the
+   * route has one verb rather than a create and an update that could disagree
+   * about what a re-used slug means.
+   *
+   * **Live immediately, and that is not the approval being skipped — it is the
+   * approval.** What `live=0` holds back is a query *an agent* wrote, until the
+   * operator has read it; a query the operator typed has been read by the only
+   * party the flag exists to protect. The caller runs the dry run straight after,
+   * exactly as accepting a proposal does, which is what puts it to the environment
+   * and takes a measure's baseline.
+   *
+   * **The readings are cleared only where the question changed.** An edited query
+   * or presence has never been run, so the dry run, the baseline and the window's
+   * own readings are readings of a question nobody is asking any more — the rule
+   * every other writer here follows. A re-worded title or a changed threshold is
+   * the *same* question, and dropping a baseline for it would cost a measure the
+   * before it cannot retake: the arrival has happened, and a baseline read now is
+   * a reading of the changed system.
+   *
+   * Any pending proposal on the row goes with the write, for the reason a replan
+   * drops one: it was an amendment to text that no longer stands.
+   */
+  saveOperatorWatch(originRef: string, check: Omit<GoalWatchInput, 'seq'>): GoalWatch {
+    const now = this.ctx.now();
+    this.ctx.db.transaction(() => {
+      const row = this.ctx.db
+        .prepare(`SELECT * FROM goal_watches WHERE goal_ref=? AND check_id=?`)
+        .get(originRef, check.id) as GoalWatchRow | undefined;
+      const asked = row !== undefined && row.query === check.query && row.presence === check.presence;
+      this.ctx.db
+        .prepare(
+          `INSERT OR REPLACE INTO goal_watches
+             (goal_ref, check_id, seq, kind, title, query, presence, tolerate,
+              expect_under, expect_over, expect_baseline, unit, why,
+              baseline_value, baseline_at, live, proposal, authored,
+              dry_run_environment, dry_run_at, dry_run_verdict, dry_run_presence, dry_run_rows, dry_run_detail,
+              created_at, updated_at)
+           VALUES (@goalRef, @id, @seq, @kind, @title, @query, @presence, @tolerate,
+              @expectUnder, @expectOver, @expectBaseline, @unit, @why,
+              @baselineValue, @baselineAt, 1, NULL, 'operator',
+              @dryRunEnvironment, @dryRunAt, @dryRunVerdict, @dryRunPresence, @dryRunRows, @dryRunDetail,
+              @createdAt, @now)`,
+        )
+        .run({
+          ...check,
+          expectBaseline: check.expectBaseline ? 1 : 0,
+          // The store's, never the caller's: `seq` is display order within this
+          // goal, so an edit keeps its position and a new check goes after the ones
+          // the reader has already placed rather than on top of one of them.
+          seq: row?.seq ?? this.nextWatchSeq(originRef),
+          baselineValue: asked ? row.baseline_value : null,
+          baselineAt: asked ? row.baseline_at : null,
+          dryRunEnvironment: asked ? row.dry_run_environment : null,
+          dryRunAt: asked ? row.dry_run_at : null,
+          dryRunVerdict: asked ? row.dry_run_verdict : null,
+          dryRunPresence: asked ? row.dry_run_presence : null,
+          dryRunRows: asked ? row.dry_run_rows : null,
+          dryRunDetail: asked ? row.dry_run_detail : null,
+          createdAt: row?.created_at ?? now,
+          goalRef: originRef,
+          now,
+        });
+      if (!asked)
+        this.ctx.db.prepare(`DELETE FROM watch_readings WHERE goal_ref=? AND check_id=?`).run(originRef, check.id);
+    })();
+    const saved = this.ctx.db
+      .prepare(`SELECT * FROM goal_watches WHERE goal_ref=? AND check_id=?`)
+      .get(originRef, check.id) as GoalWatchRow;
+    return hydrate(saved);
+  }
+
+  /**
+   * Drop a check and the readings taken against it, whoever wrote it.
+   *
+   * The readings go in the same transaction for the reason a replan's sweep takes
+   * them: a reading of a check nothing declares is a number with no rule, and a
+   * verdict with nothing behind it is the shape that is unreadable six weeks
+   * later.
+   *
+   * False back means there was no such row — refused by the route rather than
+   * reported as done, because a click that deleted nothing must not answer `ok`.
+   */
+  deleteGoalWatch(originRef: string, checkId: string): boolean {
+    return this.ctx.db.transaction(() => {
+      const gone = this.ctx.db
+        .prepare(`DELETE FROM goal_watches WHERE goal_ref=? AND check_id=?`)
+        .run(originRef, checkId).changes;
+      if (gone === 0) return false;
+      this.ctx.db.prepare(`DELETE FROM watch_readings WHERE goal_ref=? AND check_id=?`).run(originRef, checkId);
+      return true;
+    })();
+  }
+
+  /** One past the goal's furthest position, live rows and proposals alike — display order only. */
+  private nextWatchSeq(originRef: string): number {
+    const { top } = this.ctx.db.prepare(`SELECT MAX(seq) AS top FROM goal_watches WHERE goal_ref=?`).get(originRef) as {
+      top: number | null;
+    };
+    return (top ?? 0) + 1;
   }
 
   /**
@@ -480,6 +607,7 @@ interface WatchReadingRow {
 /** The table's own shape, as `better-sqlite3` hands it back. */
 interface GoalWatchRow {
   goal_ref: string;
+  created_at: string;
   check_id: string;
   seq: number;
   kind: string;
@@ -495,6 +623,7 @@ interface GoalWatchRow {
   baseline_at: string | null;
   live: number;
   proposal: string | null;
+  authored: string;
   why: string | null;
   dry_run_environment: string | null;
   dry_run_at: string | null;
@@ -523,6 +652,7 @@ function hydrate(row: GoalWatchRow): GoalWatch {
     baselineAt: row.baseline_at,
     live: row.live === 1,
     proposal: row.proposal === null ? null : (JSON.parse(row.proposal) as GoalWatchProposal),
+    authored: row.authored === 'operator' ? 'operator' : 'plan',
     dryRunEnvironment: row.dry_run_environment,
     dryRunAt: row.dry_run_at,
     dryRunVerdict: row.dry_run_verdict as WatchReadingVerdict | null,

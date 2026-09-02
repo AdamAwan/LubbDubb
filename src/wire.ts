@@ -2528,6 +2528,7 @@ export type {
   ReviewVerdict,
   ScratchEntry,
   GoalWatch,
+  GoalWatchDeclaration,
   GoalWatchInput,
   GoalWatchKind,
   GoalWatchProposal,

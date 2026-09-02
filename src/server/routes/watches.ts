@@ -2,16 +2,17 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { watchWindowMs } from '../../environments/watchWindow.js';
 import { issueOrigin } from '../../plans/planning.js';
+import { WatchCheckSchema, watchCheckInput } from '../../validation/watchDocument.js';
 import { checked, IssueNumberParams } from '../validation.js';
 import type { RouteContext } from './context.js';
 
 /**
- * The operator's ruling on a check an agent declared, and the extension of a
- * window that ran out too soon.
+ * What an operator does to a goal's watch: write a check, drop one, rule on one an
+ * agent declared, and give a window that ran out too soon more time.
  *
- * Two routes in one module, because they are one subject: a second module for the
- * second verb would be a second group for one thing the cockpit draws in one
- * block. Neither runs a cycle beyond the dry run an acceptance owes.
+ * Four routes in one module, because they are one subject: a second module per
+ * verb would be several groups for one thing the cockpit draws in one block. None
+ * of them runs a cycle beyond the dry run a write owes.
  *
  * The first, because there is one decision: an agent's declaration is not live
  * until somebody accepts it, and accepting is what puts the query to the
@@ -41,6 +42,69 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       invalid_type_error: 'accept is required — true to run this check, false to decline it',
     }),
   });
+
+  /**
+   * The operator's own check, written or re-written from the goal page.
+   *
+   * One verb rather than a create and an update, because the slug is the merge key
+   * everywhere else in this subsystem: an id the goal carries lands on that row,
+   * and one it does not starts a row. Two routes would be two answers to what a
+   * re-used slug means.
+   *
+   * **It runs the dry run in the same call**, exactly as an acceptance does and
+   * for the same two reasons: a query nobody has put to an environment is a query
+   * nobody has proved resolves, and a measure's baseline is that first reading
+   * kept. The refusals come back so the form can say what the environment said.
+   *
+   * The declaration is refused by {@link WatchCheckSchema} — a plan document's own
+   * rules, so a signal still cannot be written without a presence query and a
+   * measure still cannot be written with nothing that could fail it. A check
+   * written here is `authored: 'operator'`, which is what keeps the next replan
+   * off it.
+   * → `docs/spec/29-post-deploy-watch.md#the-operator-at-any-point`
+   */
+  app.put(
+    '/api/issues/:number/watch/checks/:checkId',
+    checked({ params: ProposalParams, body: WatchCheckSchema }, async ({ params, body, reply }) => {
+      // The path names the check, so a body naming a different one is a client
+      // editing one row and saving over another — refused rather than reconciled,
+      // because either reading of it silently discards somebody's edit.
+      if (body.id !== params.checkId)
+        return reply.code(400).send({ error: `the body declares "${body.id}" and the path names "${params.checkId}"` });
+      const origin = issueOrigin(params.number);
+      // `watchCheckInput` places a check within a document, and there is no
+      // document here: the position is the store's to keep or to append, so the one
+      // passed is not read.
+      const check = store.saveOperatorWatch(origin, watchCheckInput(body, 0));
+      hub.broadcast({ type: 'world:changed' });
+      const dryRun = await system.watch.run(origin);
+      hub.broadcast({ type: 'world:changed' });
+      return { ok: true, check, dryRun };
+    }),
+  );
+
+  /**
+   * Drop a check.
+   *
+   * Whoever wrote it: a plan's check the operator has decided is wrong is exactly
+   * as much theirs to remove as one they wrote, and a delete that refused the
+   * plan's would leave the goal page able to fix a query but not to stop asking
+   * it. The next replan re-declares the plan's own — the document still says it —
+   * which is the honest outcome rather than a surprise: what the operator removed
+   * is a check, not the plan's opinion.
+   *
+   * 404 rather than `ok` on a slug the goal does not carry, for the extension's
+   * reason: a click that deleted nothing must not report that it did.
+   */
+  app.delete(
+    '/api/issues/:number/watch/checks/:checkId',
+    checked({ params: ProposalParams }, ({ params, reply }) => {
+      const gone = store.deleteGoalWatch(issueOrigin(params.number), params.checkId);
+      if (!gone) return reply.code(404).send({ error: 'no such check on that goal' });
+      hub.broadcast({ type: 'world:changed' });
+      return { ok: true };
+    }),
+  );
 
   app.post(
     '/api/issues/:number/watch-proposals/:checkId',
