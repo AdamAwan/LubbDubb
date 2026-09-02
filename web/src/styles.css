@@ -9016,6 +9016,24 @@ select:disabled {
   color: var(--red);
 }
 
+/* Why the last ask was refused, wherever the ask is drawn — the empty page, the
+   stale line, the unchecked band. Its own line rather than a column beside the
+   button, which is what a sentence gets inside those wrapping flex rows; the
+   status alone was a button that did nothing. */
+.rp-refusal {
+  flex: 1 1 100%;
+  margin: 0;
+  color: var(--red);
+}
+.rp-ctl-refusal {
+  color: var(--red);
+  font-size: 11px;
+  /* The pull request's row is `nowrap`: the reason wraps to as much of the row as
+     is left rather than pushing the chips off the end of it. */
+  white-space: normal;
+  max-width: 42ch;
+}
+
 /* The gate: above the ideas, and nothing a reader can reach them without. */
 .rp-gate {
   margin-top: 14px;
