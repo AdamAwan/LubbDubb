@@ -49,7 +49,7 @@ interface AmendmentResult {
 }
 
 /** What a caller gets back when a proposal lands: the row, and what the operator will be shown. */
-export interface ProposedAmendment {
+interface ProposedAmendment {
   amendment: PlanAmendment;
   /** The change as a diff against the plan's latest revision. Null on a plan with no revision. */
   diff: PlanDiff | null;
@@ -149,7 +149,7 @@ export function proposePlanAmendment(
 }
 
 /** The pending amendment for one plan, or null. There is at most one — see {@link proposePlanAmendment}. */
-export function pendingAmendmentFor(store: Store, planId: string): PlanAmendment | null {
+function pendingAmendmentFor(store: Store, planId: string): PlanAmendment | null {
   return store.listPlanAmendments(planId).find((a) => a.status === 'pending') ?? null;
 }
 
