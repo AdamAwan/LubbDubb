@@ -84,6 +84,20 @@ export interface LocalRunPolicy {
    */
   resumeWindowMs: number;
   /**
+   * What the session holding a **running** environment is told after the checkout
+   * under it has been moved to the tip of its branch — the project's own steps for
+   * picking new code up: a rebuild, a migration, a restart of one service.
+   *
+   * A fourth sentence beside start, stop and continue, because it is a fourth job.
+   * The harness does the git half — `ensurePreview` puts the new commit on disk with
+   * dependencies standing — and appends the facts of what moved; only the project
+   * knows what those facts require.
+   *
+   * **Empty is a supported state**, not a missing one: a dev server that hot-reloads
+   * needs nothing said, and the session is still told what moved.
+   */
+  refreshInstruction: string;
+  /**
    * Where the application lands, once it is up — drawn as a link in the panel.
    *
    * Declared rather than detected. Reading it out of the log would mean matching a
@@ -98,5 +112,6 @@ export const DEFAULT_LOCAL_RUN: LocalRunPolicy = {
   stopInstruction: '',
   resumeInstruction: '',
   resumeWindowMs: 2 * 60 * 60 * 1000,
+  refreshInstruction: '',
   url: '',
 };

@@ -41,7 +41,7 @@ is about.
 | `routes/pool.ts`        | `/api/pool`, `/api/pool/insights` and the pool's one write — the cross-fleet pool ([28](28-cross-fleet-pool.md))                                                                                                                                |
 | `routes/work.ts`        | The work graph and its ignore / file verdicts                                                                                                                                                                                                   |
 | `routes/tickets.ts`     | Every item the tracker has returned since the harness first swept, and the filters over it                                                                                                                                                      |
-| `routes/localRun.ts`    | The machine's one dev environment: start it on a goal, stop it, read what is holding it up                                                                                                                                                      |
+| `routes/localRun.ts`    | The machine's one dev environment: start it on a goal, stop it, type into it, move its checkout to the tip, read what is holding it up                                                                                                          |
 | `routes/stacks.ts`      | The one verdict on a whole chain of stacked pull requests: land it, or call that off                                                                                                                                                            |
 | `routes/upgrade.ts`     | Asking the harness to take a build, and the interrupt that overrides its refusal                                                                                                                                                                |
 | `routes/pets.ts`        | The vivarium: opening a shell, feeding, naming, standing and blending                                                                                                                                                                           |
@@ -2116,6 +2116,22 @@ container — so the handler starts the teardown, the run goes to the live statu
 runner's own `changed` events carry the rest. Awaiting the turn here would hold a request open for up
 to two minutes. → [23](23-local-runs.md#stopping-is-a-turn-not-a-signal)
 
+### `POST /api/local-run/message`
+
+`{text}` — type into the session holding the environment: run the migrations, restart a service. No id,
+for `stop`'s reason. Refuses with a 400 and the runner's own reason while nothing is running, while it
+is starting or stopping, while another turn is in flight, or when nothing holds the session after a
+restart. The reply is immediate; what the session does with it arrives through its output, exactly as an
+agent's reply does through the drawer. → [23](23-local-runs.md#talking-to-the-environment)
+
+### `POST /api/local-run/refresh`
+
+No body: move the run's checkout to the tip of its own ref and tell the session what moved. **Awaited**,
+unlike `stop` — a refresh returns once the checkout has moved and the message is sent, which is seconds
+of git and not a model turn. Refuses with a 400 when the checkout is already at the tip (found out
+before anything is touched), when the run is not `running` with no turn in flight, or when the tree
+would not move. → [23](23-local-runs.md#refreshing-the-code-under-a-running-environment)
+
 ### `GET /api/local-run/output`
 
 The session's last lines. Fetched rather than shipped on the snapshot: the tail is up to two hundred
@@ -2506,7 +2522,10 @@ can change anything outside `fleet`.
 
 The local run's `changed` is a fourth, and the only one that is **rate-limited**: it fires per line of
 output, and every `dirty` costs every connected cockpit a whole snapshot. So the hub gathers them for
-`LOCAL_RUN_COALESCE_MS` (400) and asks once, for `harness`. Nothing subscribed to it at all when the runner shipped,
+`LOCAL_RUN_COALESCE_MS` (400) and asks once, for `harness`. The watch's `changed` rides the same
+coalescer: its readings ship on the same section, and a port coming up in the same window as a phase
+line is one refetch, not two ([23](23-local-runs.md#watching-the-environment)). Nothing subscribed to
+the runner's at all when it shipped,
 which is the failure worth naming: the panel's status, phase and log moved no sooner than the next
 heartbeat, so a bring-up in progress and one that had hung looked identical for a whole pulse at a
 time ([23](23-local-runs.md#saying-what-it-is-doing)).

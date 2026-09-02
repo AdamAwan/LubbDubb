@@ -9,6 +9,7 @@ import { planProposalRef } from '../proposals/proposals.js';
 import type { ProposalDesk } from '../proposals/proposalDesk.js';
 import type { Store } from '../store/store.js';
 import type { LocalRunner } from '../localRun/runner.js';
+import type { LocalRunWatch } from '../localRun/watch.js';
 import { localRunIsLive } from '../store/localRuns.js';
 import { retroDossier } from '../retro/dossier.js';
 import { goalRecord } from '../retro/record.js';
@@ -86,6 +87,11 @@ export interface DesktopToolDeps {
    * what it had told somebody to start.
    */
   localRun(): LocalRunner;
+  /**
+   * The run's readings — ports and freshness — lazily, for the runner's reason: the
+   * watch is built beside it, after this server.
+   */
+  localRunWatch(): LocalRunWatch;
   /**
    * The proposal desk, lazily — an amendment has to withdraw the card the
    * operator would otherwise approve, and the desk is constructed after this
@@ -571,8 +577,9 @@ const localRun: DesktopToolFactory = (deps) => ({
   description:
     "The machine's one dev environment: what is running in it, and — given a goal — start it on that " +
     "goal's code. Only one goal can be running locally at a time, so starting one stops whatever was " +
-    'there. Call it when somebody wants to look at a goal, or when a validation check cannot be carried ' +
-    'out until the application is up.',
+    'there. Given a message instead, it is typed into the session holding the environment — to run a ' +
+    'migration, restart a service, or pick something up. Call it when somebody wants to look at a goal, ' +
+    'or when a validation check cannot be carried out until the application is up.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -582,18 +589,36 @@ const localRun: DesktopToolFactory = (deps) => ({
           'Optional. The goal to start, e.g. 284 — **this stops whatever is running now**. Left out, ' +
           'nothing is started and the reply is just the state of the environment.',
       },
+      message: {
+        type: 'string',
+        description:
+          'Optional. Text for the session holding the running environment, e.g. "run the database ' +
+          'migrations". Refused while nothing is running, while it is starting or stopping, or while ' +
+          'the session is mid-turn. Not combined with `issue`.',
+      },
     },
   },
   handler: async (args) => {
     const runner = deps.localRun();
-    if (args.issue === undefined) return toolJson(describeRun(runner));
+    const watch = deps.localRunWatch();
+    const message = typeof args.message === 'string' ? args.message : undefined;
+    if (args.issue !== undefined && message !== undefined)
+      return toolError(
+        'Give one of `issue` or `message`: starting a goal and talking to the running one are two calls.',
+      );
+    if (message !== undefined) {
+      const sent = runner.send(message);
+      if (!sent.ok) return toolError(sent.error);
+      return toolJson(describeRun(runner, watch));
+    }
+    if (args.issue === undefined) return toolJson(describeRun(runner, watch));
     const ref = desktopIssueRef(args);
     if (!ref.ok) return toolError(ref.error);
     const started = await runner.start(issueOrigin(ref.issue));
     // A refusal is the reason handed back rather than a throw: both are read by a
     // person, and "nothing is configured to start" is an answer.
     if (!started.ok) return toolError(started.error);
-    return toolJson(describeRun(runner));
+    return toolJson(describeRun(runner, watch));
   },
 });
 
@@ -602,35 +627,46 @@ const localRun: DesktopToolFactory = (deps) => ({
  *
  * **`running` is presumed, not probed** — and it says so, because the one thing a
  * session must not do is report a check passed against a page it never saw. The
- * output tail rides along for the same reason it is in the panel: the case worth
- * explaining is the start that did not work.
+ * watch's readings ride along: the declared port answering is a reading, and a
+ * different claim from the application working. The output tail comes too, for the
+ * same reason it is in the panel: the case worth explaining is the start that did
+ * not work.
  */
-function describeRun(runner: LocalRunner): Record<string, unknown> {
+function describeRun(runner: LocalRunner, watch: LocalRunWatch): Record<string, unknown> {
   const run = runner.current();
   if (run === null)
     return {
       running: false,
       note: 'Nothing has been started locally on this machine.',
     };
+  const running = localRunIsLive(run);
+  const readings = watch.reading();
   return {
     // Through `localRunIsLive`, not a fifth hand-written copy of which statuses count
     // — and `stopping` is one of them, so a session asking during a teardown is told
     // the environment is still up rather than that it is free to start another.
-    running: localRunIsLive(run),
+    running,
     goal: run.originRef,
     ref: run.ref,
+    commit: run.commit,
     dir: run.dir,
     status: run.status,
+    turn: runner.turn(),
+    holdsSession: runner.holdsSession(),
     url: run.url,
     startedAt: run.startedAt,
     note: run.note,
-    // Not a reading. Nothing has opened that port — the status means the session
-    // that was told to bring it up finished without failing, which is a different
-    // claim, and reporting a check passed on the strength of it would be the one
-    // outcome the whole validation channel exists to prevent.
+    ports: running ? readings.ports : null,
+    freshness: running ? readings.freshness : null,
+    // The port may be probed; the application is not. The status means the session
+    // that was told to bring it up finished without failing, and `ports.declared.answering`
+    // means something accepted a TCP connection — neither is the page working, and
+    // reporting a check passed on the strength of either would be the one outcome the
+    // whole validation channel exists to prevent.
     caveat:
-      'The harness does not poll the application: `running` means the session that brought it up did not ' +
-      'fail. Open the URL and see for yourself before you report anything about it.',
+      'The harness probes the port but does not exercise the application: `running` means the session that ' +
+      'brought it up did not fail, and `ports.declared.answering` means something accepted a connection. ' +
+      'Open the URL and see for yourself before you report anything about it.',
     output: runner.output().slice(-40),
   };
 }

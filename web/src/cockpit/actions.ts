@@ -318,6 +318,17 @@ export interface CockpitActions {
   startLocalRun(issueNumber: number, ref?: string): Promise<void>;
   stopLocalRun(): Promise<void>;
   /**
+   * Type into the session holding the environment — "run the migrations". Not
+   * refetched, like {@link respondAgent}: it is conversational, and the `dirty` the
+   * server emits carries the turn's beginning and the echo into the tail.
+   */
+  messageLocalRun(text: string): Promise<void>;
+  /**
+   * Move the run's checkout to the tip of its branch and tell the session what
+   * moved. Refetched, because the row's commit changed the moment it returned.
+   */
+  refreshLocalRun(): Promise<void>;
+  /**
    * The last lines the session holding the environment up has printed.
    *
    * Fetched rather than read off the snapshot — two hundred lines on every

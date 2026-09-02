@@ -149,6 +149,9 @@ async function main(): Promise<void> {
     // pick up on the next boot, and without one it is settled with a note saying the
     // instruction did not run — which is what makes a container that outlived the
     // harness something the panel states rather than a mystery.
+    // The watch's timer goes before the run it watches: a tick that lands mid-close
+    // would ask git and the OS about an environment this process no longer holds.
+    system.localRunWatch.stop();
     system.localRun.stopFast('the harness shut down');
     await system.mcp.close();
     await system.desktop.close();
@@ -224,6 +227,10 @@ async function main(): Promise<void> {
     );
   else if (interrupted.outcome === 'settled')
     console.log(`[lubbdubb] the local run of ${interrupted.run.originRef} did not survive: ${interrupted.reason}`);
+  // Armed here and not in `buildSystem`: every test builds a `System`, and a timer
+  // that probes ports and asks git belongs only to a harness that is actually
+  // running. It reads nothing until a run is live.
+  system.localRunWatch.start();
 
   system.harness.start();
   await system.harness.runCycle('boot');

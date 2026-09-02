@@ -116,6 +116,9 @@ import type {
   KnowledgeSimilarity,
   GraduationReading,
   LocalRun,
+  LocalRunFreshness,
+  LocalRunPorts,
+  LocalRunTurn,
   Plan,
   PlanPart,
   FeatureSummary,
@@ -700,6 +703,22 @@ export interface LocalRunView extends LocalRun {
    * re-deriving it could caption the panel with something its own log contradicts.
    */
   phase: string | null;
+  /**
+   * Which turn is in flight on the held session, or null between turns. What the
+   * stage line is captioned with, and what says a `running` environment is in the
+   * middle of a refresh or a message rather than idle.
+   */
+  turn: LocalRunTurn | null;
+  /**
+   * Whether this harness holds a session for the run. False after a restart that
+   * could not bring it back: the row is live, the environment may well be up, and
+   * there is nobody to type to — so the panel offers no message box.
+   */
+  holdsSession: boolean;
+  /** The watch's port reading, or null while nothing is live or nothing has been taken yet. */
+  ports: LocalRunPorts | null;
+  /** The watch's freshness reading, null on the same terms. */
+  freshness: LocalRunFreshness | null;
 }
 
 export interface PlanPartView extends PlanPart {
@@ -877,6 +896,12 @@ interface CockpitConfig {
    * works and does less than it looks like it does.
    */
   localRunStopConfigured: boolean;
+  /**
+   * `localRun.refreshInstruction` is set, so a refresh tells the session the
+   * project's own steps as well as what moved. Blank is supported — a hot-reloading
+   * dev server needs nothing said — so this only words the control's hint.
+   */
+  localRunRefreshConfigured: boolean;
   /**
    * `issueContainerTypes` — the work-item types that hold work rather than being
    * it. Shipped because the backlog draws a container as a *heading* over its
@@ -2507,6 +2532,7 @@ export type {
   AllowanceReading,
 } from './allowanceInsights.js';
 export type { SpendGoal, SpendInsights, SpendPhase, SpendPhaseTotal, SpendRun } from './spendInsights.js';
+export type { LocalRunFreshness, LocalRunPorts, LocalRunTurn } from './types.js';
 export type {
   McpChannelUsage,
   McpInsights,

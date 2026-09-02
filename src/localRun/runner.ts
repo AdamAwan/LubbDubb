@@ -3,10 +3,11 @@ import { existsSync } from 'node:fs';
 import { STREAM_TRANSPORT_ARGS } from '../agents/agentProtocol.js';
 import type { AgentSession, SessionFactory } from '../agents/session.js';
 import type { ProcessReaper } from '../agents/processTree.js';
+import { HUMAN_BLOCK, renderBlocks } from '../agents/streamTranscript.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import type { Store } from '../store/store.js';
 import type { Worktrees } from '../worktree/worktreeManager.js';
-import type { AgentUsage, LocalRun } from '../types.js';
+import type { AgentUsage, LocalRun, LocalRunTurn } from '../types.js';
 import type { LocalRunChoices } from './ref.js';
 import type { LocalRunPolicy } from './policy.js';
 
@@ -96,6 +97,13 @@ const RESUME_RULES = [
 const STOP_TIMEOUT_MS = 120_000;
 
 /**
+ * Every event that means "the turn ended and the session did not fail". Declared
+ * once, because the two places that listen for a turn end used to name two of
+ * these each and miss the one the runtime actually emits — see `wire`.
+ */
+const TURN_ENDED = ['done', 'waiting', 'stalled', 'limited'] as const;
+
+/**
  * What the session taking the environment down is told, on top of the operator's own
  * instruction — appended, never interpolated, for the prompt templates' reason.
  */
@@ -133,6 +141,36 @@ const STOP_RULES_ALONE = [
   '- **Before each step, print one line starting with `phase:`** — somebody is watching this come down,',
   '  and that line is all they have to go on until it has.',
 ].join('\n');
+
+/**
+ * What the session holding a **running** environment is told when the checkout under
+ * it has moved — after the operator's own `localRun.refreshInstruction`, which may be
+ * blank, since a dev server that hot-reloads needs nothing said.
+ *
+ * A function rather than a constant because the harness's own facts — which ref,
+ * from which commit to which — are part of it. That is not the interpolation the
+ * prompt-template rule bans: the rule protects operator-overridable templates from
+ * an override that never learned a token, and nothing here is overridable. The
+ * operator's text is prepended verbatim and these lines are the harness's own.
+ */
+function refreshRules(ref: string, from: string | null, to: string, alone: boolean): string {
+  return [
+    alone ? 'The code under this environment has changed:' : 'How this works, on top of the above:',
+    '',
+    `- **The checkout under you has moved.** It now stands at ${to.slice(0, 12)} on \`${ref}\`` +
+      (from === null ? '.' : `, having stood at ${from.slice(0, 12)}.`) +
+      ' The files on disk already reflect the new commit; nothing has been restarted or rebuilt.',
+    '- **Restart or rebuild whatever needs it** so what is running reflects the new code. A dev server that',
+    '  hot-reloads may need nothing; a container image or a database schema may need a step. Leave alone',
+    '  what does not need touching.',
+    '- **Do not stop the environment.** Somebody is looking at it — keep it up throughout.',
+    '- **Do not commit, push, or change code.** This checkout is detached at a commit somebody else wrote.',
+    '- **Say what you did and what you did not need to touch.** The second half is how the refresh',
+    '  instruction gets better.',
+    '- **Before each step, print one line starting with `phase:`** — somebody is watching this and that',
+    '  line is all they have to go on until it is done.',
+  ].join('\n');
+}
 
 /**
  * The stage out of a line the session printed, or null if it was not one.
@@ -223,13 +261,20 @@ interface LocalRunnerDeps {
  * would leave two servers on one port with the cockpit drawing one of them.
  *
  * **Nothing here polls the application.** `running` means the session finished its
- * turn without failing and its process is still alive; the URL is drawn as a link to
- * try rather than as a reading. A readiness probe is the honest way to close that
- * gap and is deliberately a separate change.
+ * turn without failing and its process is still alive. Whether the declared port is
+ * answering, and how far the checkout has fallen behind its branch, are the
+ * readings of `LocalRunWatch` (`./watch.ts`) — probes on a timer, kept out of this
+ * class so the thing that holds the process never blocks on git or a socket.
  */
 export class LocalRunner extends EventEmitter {
   private session: AgentSession | null = null;
   private runId: string | null = null;
+  /**
+   * The turn in flight on the held session, or null between turns. Not the row's
+   * status: a `running` environment can have a refresh or a message turn going on
+   * top of it, and the panel draws the stage line for exactly as long as one is.
+   */
+  private inFlight: LocalRunTurn | null = null;
   private tail: string[] = [];
   private stage: string | null = null;
   /** The stop in flight, so a swap and a second click wait on one teardown. */
@@ -275,6 +320,28 @@ export class LocalRunner extends EventEmitter {
   }
 
   /**
+   * Which turn the held session is in the middle of, or null between turns.
+   *
+   * `starting` and `stopping` are row statuses and say the same for those two; this
+   * is what says it for a refresh or a message, both of which happen on top of a
+   * `running` row. On the snapshot for {@link phase}'s reason: the panel draws a
+   * stage line for as long as a turn is in flight, and which turn that is belongs
+   * beside the thing that started it.
+   */
+  turn(): LocalRunTurn | null {
+    return this.inFlight;
+  }
+
+  /**
+   * Whether this process holds a session for the live run — false after a restart
+   * that could not bring the run back, and during a stop driven by a fresh session.
+   * The panel offers the message box only when there is somebody to send to.
+   */
+  holdsSession(): boolean {
+    return this.session !== null;
+  }
+
+  /**
    * Start `originRef`'s work in the local environment, stopping whatever was there.
    *
    * `at` runs an **earlier part of the same goal** instead of the default — the tip
@@ -312,7 +379,7 @@ export class LocalRunner extends EventEmitter {
     const stopped = this.deps.store.liveLocalRun() !== null;
     await this.stop('superseded by a run of another goal');
 
-    let dir: string;
+    let checkout: { dir: string; commit: string };
     try {
       // **After** the stop, and that order is load-bearing: the stop instruction runs
       // *in this checkout* — `docker compose down` reads the compose file that is in
@@ -323,7 +390,7 @@ export class LocalRunner extends EventEmitter {
       // The cost is that a checkout that cannot be prepared now fails with the
       // previous environment already gone, so the refusal says so rather than leaving
       // an operator to wonder what happened to what they were looking at.
-      dir = await this.deps.worktrees.ensurePreview(ref);
+      checkout = await this.deps.worktrees.ensurePreview(ref);
     } catch (err) {
       return {
         ok: false,
@@ -333,9 +400,11 @@ export class LocalRunner extends EventEmitter {
       };
     }
 
+    const { dir, commit } = checkout;
     const url = this.deps.policy().url.trim();
-    const run = this.deps.store.beginLocalRun({ originRef, ref, dir, url: url === '' ? null : url });
+    const run = this.deps.store.beginLocalRun({ originRef, ref, dir, commit, url: url === '' ? null : url });
     this.runId = run.id;
+    this.inFlight = 'start';
     this.tail = [];
     this.stage = null;
 
@@ -431,6 +500,7 @@ export class LocalRunner extends EventEmitter {
     // would be refused as hours old.
     this.deps.store.markLocalRunInterrupted(live.id, null);
     this.runId = live.id;
+    this.inFlight = 'start';
     // The tail and the stage belong to the session that printed them, and that
     // session is gone. Kept, they would caption this bring-up with the last thing the
     // dead one said.
@@ -535,6 +605,140 @@ ${RESUME_RULES}`);
   }
 
   /**
+   * Type into the session holding the environment — "run the migrations", "restart
+   * the API" — the fleet's `AgentManager.respond` for the one session that is not an
+   * agent.
+   *
+   * Refused between the states where it means something: while nothing is up, while
+   * the run is being stopped, while it is still coming up (a stream session queues
+   * the message behind the bring-up turn, so `running` would arrive only when *this*
+   * turn ended and the panel would say "starting" for a turn it never saw), and
+   * while another turn is in flight, for the same reason. Refused too when nothing
+   * holds the session — a restart that could not bring the run back leaves a live
+   * row and nobody to tell.
+   *
+   * **Echoed into the tail**, because the stream runtime renders only what comes
+   * back: without this the message leaves no trace on the one surface an operator
+   * is watching. The PTY runtime records both halves itself and says so.
+   */
+  send(text: string): { ok: true } | { ok: false; error: string } {
+    const message = text.trim();
+    if (message === '') return { ok: false, error: 'Nothing to send.' };
+    const live = this.deps.store.liveLocalRun();
+    if (live === null) return { ok: false, error: 'Nothing is running locally, so there is no session to tell.' };
+    if (live.status === 'stopping' || this.stopping !== null)
+      return { ok: false, error: 'It is being stopped — there is nothing to tell it now.' };
+    if (live.status === 'starting')
+      return { ok: false, error: 'It is still coming up. Wait for the start to finish, then say it.' };
+    if (this.inFlight !== null)
+      return { ok: false, error: `The session is busy (${this.inFlight}). Wait for that turn to end, then say it.` };
+    const session = this.session;
+    if (session === null)
+      return {
+        ok: false,
+        error:
+          'The harness restarted and nothing holds this environment, so there is no session to tell. ' +
+          'Stop it and start it again.',
+      };
+    if (!session.recordsSentMessages) {
+      const at = new Date((this.deps.now ?? Date.now)()).toISOString();
+      this.takeIn(renderBlocks([{ type: HUMAN_BLOCK, text: message }], at));
+    }
+    this.inFlight = 'message';
+    session.send(message);
+    this.emit('changed');
+    return { ok: true };
+  }
+
+  /**
+   * Move the checkout to the tip of the run's own ref and tell the session what moved.
+   *
+   * The half of staleness the harness can act on. The watch says the branch has
+   * commits the checkout does not; this puts them on disk — `ensurePreview` is a
+   * `reset --hard` and a `clean -fd`, with everything git ignores left standing, so
+   * dependencies survive — and hands the session the operator's
+   * `localRun.refreshInstruction` plus the facts of what moved. Only the project
+   * knows whether that means a rebuild, a migration or nothing at all.
+   *
+   * **Resolved before anything is touched.** A refresh at the tip refuses, and it has
+   * to find that out from `previewCommit` rather than from `ensurePreview`: the latter
+   * would already have reset and cleaned the tree under a running server to move it
+   * nowhere.
+   *
+   * **The reset under a running server is the accepted hazard**, and it is why the
+   * control is a click and never automatic ([23](../../docs/spec/23-local-runs.md)).
+   * A tree that will not reset — a file held open on Windows — leaves the recorded
+   * commit alone and says the tree may be part-reset, because it may be.
+   *
+   * With nothing holding the session (a restart that could not bring the run back)
+   * the checkout still moves and the note says nobody was told, which is the honest
+   * half of the job.
+   */
+  async refresh(): Promise<
+    { ok: true; run: LocalRun; moved: { from: string | null; to: string } } | { ok: false; error: string }
+  > {
+    const live = this.deps.store.liveLocalRun();
+    if (live === null) return { ok: false, error: 'Nothing is running locally, so there is nothing to refresh.' };
+    if (live.status === 'stopping' || this.stopping !== null)
+      return { ok: false, error: 'It is being stopped — there is nothing to refresh.' };
+    if (live.status !== 'running')
+      return { ok: false, error: 'It is still coming up. Wait for the start to finish, then refresh.' };
+    if (this.inFlight !== null)
+      return { ok: false, error: `The session is busy (${this.inFlight}). Wait for that turn to end, then refresh.` };
+
+    let next: string;
+    try {
+      next = await this.deps.worktrees.previewCommit(live.ref);
+    } catch (err) {
+      return { ok: false, error: `Could not resolve ${live.ref}: ${(err as Error).message}` };
+    }
+    if (next === live.commit)
+      return {
+        ok: false,
+        error: `The checkout is already at the tip of ${live.ref} (${next.slice(0, 7)}); there is nothing to pick up.`,
+      };
+
+    try {
+      await this.deps.worktrees.ensurePreview(live.ref);
+    } catch (err) {
+      return {
+        ok: false,
+        error:
+          `Could not move the checkout to ${next.slice(0, 7)}: ${(err as Error).message}. ` +
+          'The tree may be part-reset — stop the run and start it again.',
+      };
+    }
+    // Two awaits have passed; the run may have been stopped or swapped under them.
+    // The checkout has moved either way, but the row and the session to tell are
+    // whatever is live *now*.
+    const still = this.deps.store.liveLocalRun();
+    if (still === null || still.id !== live.id || still.status !== 'running' || this.stopping !== null)
+      return { ok: false, error: 'The run was stopped while the checkout was being moved.' };
+
+    this.deps.store.setLocalRunCommit(live.id, next);
+    const moved = { from: live.commit, to: next };
+    const session = this.session;
+    if (session === null) {
+      this.deps.store.setLocalRunStatus(
+        live.id,
+        'running',
+        `the checkout moved to ${next.slice(0, 7)}, but nothing holds this environment so nothing was told to ` +
+          'restart — stop it and start it again to see the change',
+      );
+      this.emit('changed');
+      return { ok: true, run: this.deps.store.currentLocalRun() ?? live, moved };
+    }
+    const instruction = this.deps.policy().refreshInstruction.trim();
+    this.stage = null;
+    this.inFlight = 'refresh';
+    session.send(
+      `${instruction}${instruction === '' ? '' : '\n\n'}${refreshRules(live.ref, live.commit, next, instruction === '')}`,
+    );
+    this.emit('changed');
+    return { ok: true, run: this.deps.store.currentLocalRun() ?? live, moved };
+  }
+
+  /**
    * Stop the run, if one is going: the stop **instruction** first, then the reap.
    *
    * **A dev environment is not a process tree**, which is the whole reason this is a
@@ -582,6 +786,7 @@ ${RESUME_RULES}`);
     // the shutdown, and a `failed` written on the way out is a row the next boot
     // would refuse to bring back.
     this.runId = null;
+    this.inFlight = null;
     this.stopSession();
     if (live) {
       if (this.deps.policy().resumeInstruction.trim() === '')
@@ -629,6 +834,7 @@ ${RESUME_RULES}`);
     // like any other — which `up()` would read as "the environment is up". Dropping
     // the id is the one switch that keeps the bring-up's handlers out of the teardown.
     this.runId = null;
+    this.inFlight = 'stop';
     this.stage = null;
     this.emit('changed');
 
@@ -719,13 +925,18 @@ ${RESUME_RULES}`);
    * harness that can never start anything again. On the timeout the caller kills the
    * session anyway and says the stop was not confirmed — which is the honest reading,
    * and a different one from "it stopped".
+   *
+   * Four events mean "ended", and `stalled` is the one that actually fires here: a
+   * local run's session carries no protocol prompt, so it never prints a sentinel,
+   * and the stream runtime announces a sentinel-free turn end as `stalled` rather
+   * than `waiting`. `limited` is the account running out mid-turn — the turn is over
+   * whatever the instruction managed.
    */
   private turnEnds(session: AgentSession): Promise<'ended' | 'failed' | 'timeout'> {
     return new Promise((resolve) => {
       const settle = (how: 'ended' | 'failed' | 'timeout') => () => {
         clearTimeout(timer);
-        session.off('done', onEnded);
-        session.off('waiting', onEnded);
+        for (const event of TURN_ENDED) session.off(event, onEnded);
         session.off('failed', onFailed);
         session.off('exit', onFailed);
         resolve(how);
@@ -733,8 +944,7 @@ ${RESUME_RULES}`);
       const onEnded = settle('ended');
       const onFailed = settle('failed');
       const timer = setTimeout(settle('timeout'), this.stopTimeoutMs());
-      session.on('done', onEnded);
-      session.on('waiting', onEnded);
+      for (const event of TURN_ENDED) session.on(event, onEnded);
       session.on('failed', onFailed);
       session.on('exit', onFailed);
     });
@@ -794,36 +1004,64 @@ ${RESUME_RULES}`);
       last = usage;
       this.emit('changed');
     });
-    session.on('output', (delta: string) => {
-      for (const line of delta.split('\n')) {
-        if (line.trim() === '') continue;
-        this.tail.push(line);
-        // Newest wins, and a line that is not a phase leaves the last one standing:
-        // the session says `phase: installing` and then prints a page of npm output,
-        // and "installing" is still the true answer throughout it.
-        const said = phaseOf(line);
-        if (said !== null) this.stage = said;
-      }
-      if (this.tail.length > TAIL_LINES) this.tail = this.tail.slice(-TAIL_LINES);
-      this.emit('changed');
-    });
+    session.on('output', (delta: string) => this.takeIn(delta));
+  }
+
+  /**
+   * Lines into the tail and the newest `phase:` among them into the stage. One path
+   * for what a session prints and for what is typed into it, so an echoed message
+   * rolls off the top with everything else.
+   */
+  private takeIn(delta: string): void {
+    for (const line of delta.split('\n')) {
+      if (line.trim() === '') continue;
+      this.tail.push(line);
+      // Newest wins, and a line that is not a phase leaves the last one standing:
+      // the session says `phase: installing` and then prints a page of npm output,
+      // and "installing" is still the true answer throughout it.
+      const said = phaseOf(line);
+      if (said !== null) this.stage = said;
+    }
+    if (this.tail.length > TAIL_LINES) this.tail = this.tail.slice(-TAIL_LINES);
+    this.emit('changed');
   }
 
   private wire(session: AgentSession, id: string): void {
     this.absorb(session, id);
     // The turn ending is the environment being up, which is the whole of what the
-    // harness knows: `done` and `waiting` are both "it stopped talking and did not
-    // fail", and neither means the process has gone.
+    // harness knows: `done`, `waiting` and `stalled` are all "it stopped talking and
+    // did not fail", and none means the process has gone. `stalled` is the one a
+    // local run actually produces — no protocol prompt, so no sentinel — and for
+    // three revisions nothing listened for it, so on a real deployment the row sat
+    // in `starting` for the life of the environment.
+    //
+    // A refresh or a message turn ends through here too. Writing `running` onto a
+    // row that already says so is idempotent, and clearing the stage and the turn
+    // is exactly what their ending means.
     const up = (): void => {
       if (this.runId !== id) return;
       this.deps.store.setLocalRunStatus(id, 'running');
       // Nothing is in flight any more, so there is no stage. Left standing, the last
       // step of the bring-up would caption a finished one forever.
       this.stage = null;
+      this.inFlight = null;
       this.emit('changed');
     };
-    session.on('done', up);
-    session.on('waiting', up);
+    for (const event of TURN_ENDED) {
+      if (event === 'limited')
+        session.on(event, () => {
+          if (this.runId !== id) return;
+          // The turn is over because the account is, not because the work is. The
+          // row says `running` — the session did not fail — and the record says why
+          // that may be less true than it looks.
+          this.deps.errors.record({
+            source: 'agent',
+            message: 'The local run hit the account usage limit mid-turn; the environment may not be fully up.',
+          });
+          up();
+        });
+      else session.on(event, up);
+    }
     session.on('failed', () => {
       // Guarded like `exit` below and for the same reason: during a stop this session
       // is being driven by `carryOutStop`, which reports what happened itself. Two
@@ -844,6 +1082,7 @@ ${RESUME_RULES}`);
   private settle(id: string, status: 'stopped' | 'failed', note: string): void {
     this.deps.store.setLocalRunStatus(id, status, note);
     this.stage = null;
+    this.inFlight = null;
     if (this.runId === id) this.runId = null;
     this.emit('changed');
   }

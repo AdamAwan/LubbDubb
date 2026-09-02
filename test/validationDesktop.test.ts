@@ -101,6 +101,7 @@ async function desk(
     validationRoot: '/srv/validation',
     environments,
     localRun: () => system.localRun,
+    localRunWatch: () => system.localRunWatch,
     now: over.now ?? ((): string => new Date().toISOString()),
     socketPath,
     credentialPath: join(dir, 'desktop.json'),
@@ -240,6 +241,7 @@ test('two harnesses do not fight over the stable socket', async () => {
     validationRoot: '/srv/validation',
     environments: [],
     localRun: () => system.localRun,
+    localRunWatch: () => system.localRunWatch,
     now: () => NOW,
     socketPath,
     credentialPath: join(dir, 'second.json'),
@@ -315,16 +317,50 @@ test('local_run starts the environment on a goal, and reports what it knows', as
     assert.equal(started.json().running, true);
     assert.equal(started.json().goal, 'issue:12');
     assert.equal(started.json().url, 'http://localhost:4200');
+    // The bring-up is in flight, the checkout's commit is on record, and the watch has
+    // not read anything yet — each said as itself rather than left out.
+    assert.equal(started.json().turn, 'start');
+    assert.equal(typeof started.json().commit, 'string');
+    assert.equal(started.json().holdsSession, true);
+    assert.equal(started.json().ports, null);
+    assert.equal(started.json().freshness, null);
     // The reply says the harness has not opened that port. A session that reported
     // a check passed on the strength of a status is the one outcome the whole
     // validation channel exists to prevent, so the tool refuses to imply it.
-    assert.match(started.json().caveat as string, /does not poll/);
+    assert.match(started.json().caveat as string, /does not exercise the application/);
 
     const live = system.store.liveLocalRun();
     assert.equal(live?.originRef, 'issue:12');
     // The checkout came from the manager rather than being picked here — the pool is
     // the only thing that hands out a directory.
     assert.ok(live !== null && live.dir !== '');
+  } finally {
+    await server.close();
+    system.store.close();
+  }
+});
+
+test('local_run relays a message to the running environment, and refuses the cases with nobody to tell', async () => {
+  const system = build({ localRun: { instruction: 'Run the dev server.', url: '' } });
+  planWith(system);
+  const { server } = await desk(system);
+  try {
+    // Starting a goal and talking to the running one are two calls.
+    const both = await call(server, 'c1', 'local_run', { issue: 12, message: 'run the migrations' });
+    assert.ok(both.isError);
+    assert.match(both.text, /one of/);
+
+    // Nothing is running, so there is nobody to tell — an answer, not a throw.
+    const idle = await call(server, 'c1', 'local_run', { message: 'run the migrations' });
+    assert.ok(idle.isError);
+    assert.match(idle.text, /Nothing is running/);
+
+    // Mid bring-up the message would queue behind the start, so the runner refuses and
+    // the tool hands the reason back in as many words.
+    await call(server, 'c1', 'local_run', { issue: 12 });
+    const starting = await call(server, 'c1', 'local_run', { message: 'run the migrations' });
+    assert.ok(starting.isError);
+    assert.match(starting.text, /coming up/);
   } finally {
     await server.close();
     system.store.close();

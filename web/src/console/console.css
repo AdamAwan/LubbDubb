@@ -241,6 +241,12 @@
 .cn-read.cn-quiet b {
   color: var(--cn-fg-faint);
 }
+/* The Local reading when the environment is behind its own branch: the goal number
+   goes amber, the hue for "needs a look", because the code on the glass is old and
+   the panel has a control for it. */
+.cn-read.cn-stale b {
+  color: var(--cn-amber-ink);
+}
 /* The build gauge. Amber only when there is something to take or take now: its
    resting state is the muted `current` reading, which is where it spends nearly
    all of its life, and a gauge that is always coloured is one nobody reads. */

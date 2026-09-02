@@ -4479,6 +4479,15 @@ export interface LocalRun {
   /** The checkout it is running in. `localRunRoot`, and never a pool slot. */
   dir: string;
   /**
+   * The commit the checkout stands at, or null on a row from before this was
+   * recorded.
+   *
+   * What a freshness reading is measured from: `ref` names a branch, and a branch
+   * moves. Written by a start and rewritten by a refresh — `ensurePreview` is the
+   * only thing that moves the checkout, and it reports where it put it.
+   */
+  commit: string | null;
+  /**
    * The session process holding the environment up, or null once it is gone.
    *
    * Recorded because stopping the run means reaping *this* pid's whole subtree: the
@@ -4555,6 +4564,53 @@ export interface LocalRun {
  * write a zero share.
  */
 export type LocalRunUsageDelta = AgentUsage;
+
+/**
+ * Which turn the session holding a local run is in the middle of. `start` and `stop`
+ * double the row's `starting`/`stopping`; `refresh` and `message` happen on top of a
+ * `running` row, which is why the row's status cannot carry them.
+ */
+export type LocalRunTurn = 'start' | 'stop' | 'refresh' | 'message';
+
+/**
+ * What the local-run watch found on the machine's ports — a reading, taken on a
+ * timer while a run is live, and the first thing here that *is* one.
+ *
+ * Both halves are three-valued. `declared` is null when no URL is configured or the
+ * configured one has no port to speak of; `answering` is a TCP connect and nothing
+ * more, so it says the port is held and not that the application behind it works.
+ * `listening` is what the session's own process tree holds open, and null when the
+ * lister could not say — never an empty list, which would read as "nothing".
+ * Containers belong to the daemon and never appear here.
+ * → `docs/spec/23-local-runs.md#watching-the-environment`
+ */
+export interface LocalRunPorts {
+  checkedAt: string;
+  declared: { url: string; host: string; port: number; answering: boolean } | null;
+  listening: number[] | null;
+}
+
+/**
+ * How far the checked-out commit has fallen behind, in the clone's opinion.
+ *
+ * `behindTip` counts the commits the run's own ref has that the checkout does not —
+ * the branch moved since the start, so the preview is showing old code. `base` is
+ * the branch this ref was cut from and how many of its commits the ref lacks, or
+ * null on the integration branch, which has no base. Every count is null where the
+ * clone cannot say — an unfetched ref, a commit it has never seen — and null is
+ * never folded into zero. → `docs/spec/23-local-runs.md#watching-the-environment`
+ */
+export interface LocalRunFreshness {
+  checkedAt: string;
+  behindTip: number | null;
+  base: { ref: string; behind: number | null } | null;
+}
+
+/** Both readings together, as the watch holds them and the snapshot ships them. */
+export interface LocalRunReadings {
+  ports: LocalRunPorts | null;
+  freshness: LocalRunFreshness | null;
+}
 
 /**
  * One dated cost delta, whatever spent it — the shape a rolling window and the

@@ -1675,6 +1675,50 @@ test('the local run panel offers its filter when the filter is what is hiding th
   assert.ok(!nothing.includes('show every goal'), 'a filter that can reveal nothing must not be drawn');
 });
 
+/**
+ * The readings, and the one control they earn. Ports and freshness are the first
+ * things about the run that are observed rather than presumed, and each is
+ * three-valued: a null is "not checked", never a zero, and a Refresh is drawn only
+ * while there is something to pick up — absent otherwise, not disabled.
+ */
+test('the local run panel draws the readings and offers Refresh only while behind the tip', () => {
+  const v = view({ consolePanel: 'localRun' });
+  const run = v.state.localRun;
+  assert.ok(run?.ports?.listening != null && run.freshness?.behindTip != null, 'the demo fixture must carry readings');
+  assert.ok(run.freshness.behindTip > 0, 'and be behind its tip, so the control has a reason to exist');
+  const html = decode(render(v));
+  for (const port of run.ports.listening) assert.ok(html.includes(String(port)), `port ${String(port)} is not drawn`);
+  assert.ok(html.includes(`${String(run.freshness.behindTip)} commits behind the tip`));
+  assert.ok(html.includes('Move the checkout to the tip of'), 'the Refresh control is offered');
+
+  const withRun = (localRun: typeof run): string => decode(render({ ...v, state: { ...v.state, localRun } }));
+  const current = withRun({ ...run, freshness: { ...run.freshness, behindTip: 0 } });
+  assert.ok(!current.includes('Move the checkout to the tip of'), 'nothing to pick up, no control');
+  assert.ok(current.includes('>current<'));
+  const unknown = withRun({ ...run, freshness: null });
+  assert.ok(!unknown.includes('Move the checkout to the tip of'));
+  assert.ok(unknown.includes('>not checked<'), 'null is "not checked", never a zero');
+  const unreadable = withRun({ ...run, ports: { ...run.ports, listening: null } });
+  assert.ok(unreadable.includes('>could not read<'), 'and a lister that could not say says so');
+});
+
+/**
+ * Typing into the session is offered only when there is a session to type into and
+ * it is between turns. A restart that could not bring the run back leaves a live row
+ * and nobody to tell; a turn in flight is one the message would queue behind.
+ */
+test('the local run panel offers the message box only while something holds an idle session', () => {
+  const v = view({ consolePanel: 'localRun' });
+  const run = v.state.localRun;
+  assert.ok(run !== null && run.holdsSession && run.status === 'running' && run.turn === null);
+  const withRun = (localRun: typeof run): string => decode(render({ ...v, state: { ...v.state, localRun } }));
+  assert.ok(withRun(run).includes('Tell the session something'));
+  assert.ok(!withRun({ ...run, holdsSession: false }).includes('Tell the session something'));
+  const busy = withRun({ ...run, turn: 'message' });
+  assert.ok(!busy.includes('Tell the session something'), 'one turn at a time');
+  assert.ok(busy.includes('replying'), 'and the stage line says which turn is in flight');
+});
+
 test('the knowledge page draws the retired claims too', () => {
   // The load-bearing half of the prune surface: a claim that vanished on being
   // retired would leave no way to tell a list you have finished with from one that

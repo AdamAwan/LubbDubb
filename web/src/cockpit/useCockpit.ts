@@ -371,6 +371,9 @@ export function useCockpit(): CockpitStatus {
       checkBuild: () => then(api.checkBuild()),
       startLocalRun: (issueNumber, ref) => then(api.startLocalRun(issueNumber, ref)),
       stopLocalRun: () => then(api.stopLocalRun()),
+      // Conversational, like `respondAgent`: the server's `dirty` brings the echo.
+      messageLocalRun: (text) => api.messageLocalRun(text).then(() => undefined),
+      refreshLocalRun: () => then(api.refreshLocalRun()),
       // Not wrapped in `then`: this one is a read, and refetching the whole
       // snapshot to draw a log tail would make opening the panel cost what a pulse
       // costs.

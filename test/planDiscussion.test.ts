@@ -195,6 +195,7 @@ async function buildDesk(): Promise<{ system: System; session: Session; close: (
     validationRoot: join(dir, 'validation'),
     environments: [],
     localRun: () => system.localRun,
+    localRunWatch: () => system.localRunWatch,
     proposals: () => system.proposals,
     runCycle: () => system.harness.runCycle('manual').then(() => undefined),
     now: () => new Date().toISOString(),

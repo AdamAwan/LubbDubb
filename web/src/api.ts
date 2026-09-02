@@ -697,6 +697,10 @@ const realApi = {
   startLocalRun: (issue: number, ref?: string) =>
     post<{ ok: true; run: LocalRunView }>('/api/local-run', { issue, ...(ref === undefined ? {} : { ref }) }),
   stopLocalRun: () => post('/api/local-run/stop'),
+  // Type into the session holding the environment, and move its checkout to the tip
+  // of its branch. Neither takes an id, for `stopLocalRun`'s reason: there is one run.
+  messageLocalRun: (text: string) => post<{ ok: true }>('/api/local-run/message', { text }),
+  refreshLocalRun: () => post<{ ok: true; run: LocalRunView }>('/api/local-run/refresh'),
   // Its own fetch rather than a field on the snapshot: two hundred lines on every
   // heartbeat is a log nobody has open, paid for forever.
   localRunOutput: () => authFetch('/api/local-run/output').then((r) => json<{ lines: string[] }>(r)),

@@ -64,7 +64,7 @@ export class Hub {
   private localRunPending: NodeJS.Timeout | null = null;
 
   constructor(system: System) {
-    const { harness, agents, escalations, errors, localRun } = system;
+    const { harness, agents, escalations, errors, localRun, localRunWatch } = system;
 
     // Recorded failures stream to the cockpit's Errors panel live; the `dirty`
     // makes the panel durable-consistent via the /api/state refetch.
@@ -185,13 +185,18 @@ export class Hub {
     // Rate-limited because this event also fires per line of output, and every
     // `dirty` costs every connected cockpit a full snapshot. A bring-up printing an
     // install log would otherwise pay for one of those per line, to move a caption.
-    localRun.on('changed', () => {
+    //
+    // The watch's readings ride the same coalescer: they ship on the same section,
+    // and a port coming up in the same 400ms as a phase line is one refetch.
+    const refetchLocalRun = (): void => {
       if (this.localRunPending !== null) return;
       this.localRunPending = setTimeout(() => {
         this.localRunPending = null;
         this.broadcast({ type: 'dirty', sections: ['harness'] });
       }, LOCAL_RUN_COALESCE_MS);
-    });
+    };
+    localRun.on('changed', refetchLocalRun);
+    localRunWatch.on('changed', refetchLocalRun);
   }
 
   add(socket: WebSocket): void {

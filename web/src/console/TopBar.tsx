@@ -532,15 +532,19 @@ function LocalRun({ view, actions }: { view: CockpitView; actions: CockpitAction
   const run = view.state.localRun;
   const live = run !== null && run.live;
   const number = run === null ? null : originIssueNumber(run.originRef);
+  // Behind the tip of its own branch: the environment is showing old code. Said on
+  // the reading itself, because the panel is where you find out and this is where
+  // you would not think to look.
+  const stale = live && run.freshness !== null && run.freshness.behindTip !== null && run.freshness.behindTip > 0;
   const title = live
-    ? `Goal #${String(number)} is running locally${run.url === null ? '' : ` on ${run.url}`} — open to stop it or swap goals`
+    ? `Goal #${String(number)} is running locally${run.url === null ? '' : ` on ${run.url}`}${stale ? ' · behind the branch tip' : ''} — open to stop it or swap goals`
     : run === null
       ? 'Nothing has been run locally — open to start a goal on this machine'
       : `Nothing is running locally; the last attempt ${run.status === 'failed' ? 'did not start' : 'was stopped'} — open for the reason`;
   return (
     <button
       type="button"
-      className={`cn-read cn-act ${live ? '' : 'cn-quiet'}`}
+      className={`cn-read cn-act ${live ? '' : 'cn-quiet'} ${stale ? 'cn-stale' : ''}`}
       onClick={() => actions.openPanel('localRun')}
       title={title}
       aria-label={title}
