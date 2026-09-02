@@ -670,6 +670,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     // project's own review modes, in the order it declared them.
     reviewModes: reviewModeNames(config.review),
     reviewAllowSkip: config.review.allowSkip,
+    // What an obstacle's `path` key is validated against: the checkout itself. A
+    // key naming a file the tree does not have is dropped and the report is kept.
+    repoRoot: config.repoRoot,
     // What the appraiser is offered when it proposes where a goal belongs. A thunk
     // rather than a snapshot: the directory refreshes on the pulse, and a list
     // captured here would pin every agent to the tree as it stood at boot.

@@ -140,8 +140,8 @@ test('a raised claim lands as a proposal attributed to the caller’s own goal',
   const system = build();
   const agent = spawnAgent(system, 'issue:12:part:reader');
   const res = await callTool(system, agent, 'raise', {
-    claim: 'A route handler never reads the request; it is wrapped in checked(schemas, handler).',
-    evidence: 'The structural test over src/server/routes failed until I used the wrapper.',
+    what: 'A route handler never reads the request; it is wrapped in checked(schemas, handler).',
+    why_not_mine: 'The structural test over src/server/routes failed until I used the wrapper.',
   });
   assert.equal(res.isError, false);
   const payload = JSON.parse(res.text) as { fact: { id: string; reach: string; scope: string; lifetime: string } };
@@ -159,8 +159,8 @@ test('a raised claim carrying `until` lands as a notice, without the agent namin
   const system = build();
   const agent = spawnAgent(system, 'issue:12');
   const res = await callTool(system, agent, 'raise', {
-    claim: 'test (windows) has been timing out at the install step all afternoon.',
-    evidence: 'Four runs on three commits, each dying at npm ci after 6 minutes.',
+    what: 'test (windows) has been timing out at the install step all afternoon.',
+    why_not_mine: 'Four runs on three commits, each dying at npm ci after 6 minutes.',
     scope: 'check:test (windows)',
     until: 8,
   });
@@ -179,8 +179,8 @@ test('the locators land on the fact, so a claim about another item is not filed 
   const system = build();
   const agent = spawnAgent(system, 'issue:12');
   const res = await callTool(system, agent, 'raise', {
-    claim: 'pr:412 is the same work as pr:398 — both rewrite the worktree lease.',
-    evidence: 'Read both diffs; they touch the same three functions.',
+    what: 'pr:412 is the same work as pr:398 — both rewrite the worktree lease.',
+    why_not_mine: 'Read both diffs; they touch the same three functions.',
     ref: 'pr:412',
     where: 'src/worktree/worktreeManager.ts',
   });
@@ -197,10 +197,10 @@ test('the locators land on the fact, so a claim about another item is not filed 
 test('a second agent on a second goal is told it agreed rather than filed', async () => {
   const system = build();
   const claim = 'The suite wants a built web bundle before it will run.';
-  await callTool(system, spawnAgent(system, 'issue:12'), 'raise', { claim, evidence: 'It failed cold.' });
+  await callTool(system, spawnAgent(system, 'issue:12'), 'raise', { what: claim, why_not_mine: 'It failed cold.' });
   const res = await callTool(system, spawnAgent(system, 'issue:13'), 'raise', {
-    claim,
-    evidence: 'Same here, on a clean checkout.',
+    what: claim,
+    why_not_mine: 'Same here, on a clean checkout.',
   });
   assert.equal(res.isError, false);
   const payload = JSON.parse(res.text) as { corroborations: number; note: string };
@@ -215,19 +215,19 @@ test('`contradicts` routes to a contradiction, and moves nothing', async () => {
   const system = build();
   const claim = 'knip runs every rule at error.';
   const filed = await callTool(system, spawnAgent(system, 'issue:12'), 'raise', {
-    claim,
-    evidence: 'An unimported export turned check red.',
+    what: claim,
+    why_not_mine: 'An unimported export turned check red.',
   });
   const { fact } = JSON.parse(filed.text) as { fact: { id: string } };
   // Carried to `lookup` first, because a proposal cannot be contradicted: one
   // agent said it, nothing has agreed, it rides no prompt and is answered to
   // nobody — so there is nothing to take off the fleet.
-  await callTool(system, spawnAgent(system, 'issue:14'), 'raise', { claim, evidence: 'Again, in mine.' });
+  await callTool(system, spawnAgent(system, 'issue:14'), 'raise', { what: claim, why_not_mine: 'Again, in mine.' });
   assert.equal(system.store.getFact(fact.id)?.reach, 'lookup');
 
   const res = await callTool(system, spawnAgent(system, 'issue:13'), 'raise', {
-    claim: 'knip runs every rule at error, except that a type reached structurally reads as unused.',
-    evidence: 'The method was called through a seam and knip still flagged it.',
+    what: 'knip runs every rule at error, except that a type reached structurally reads as unused.',
+    why_not_mine: 'The method was called through a seam and knip still flagged it.',
     contradicts: fact.id,
   });
   assert.equal(res.isError, false);
@@ -247,8 +247,8 @@ test('`contradicts` routes to a contradiction, and moves nothing', async () => {
 test('an id that names nothing comes back as a fixable error rather than a silent success', async () => {
   const system = build();
   const res = await callTool(system, spawnAgent(system, 'issue:12'), 'raise', {
-    claim: 'a sharper version',
-    evidence: 'saw it',
+    what: 'a sharper version',
+    why_not_mine: 'saw it',
     contradicts: 'fact_nothing',
   });
   assert.equal(res.isError, true);
@@ -325,14 +325,17 @@ async function callTool(system: System, agent: Agent, name: string, args: Record
 test('a retired claim may be raised again, and the re-raise is a fresh row with a fresh date', async () => {
   const system = build();
   const claim = 'The fixture server has to be started before the integration suite.';
-  const filed = await callTool(system, spawnAgent(system, 'issue:12'), 'raise', { claim, evidence: 'It hung.' });
+  const filed = await callTool(system, spawnAgent(system, 'issue:12'), 'raise', {
+    what: claim,
+    why_not_mine: 'It hung.',
+  });
   const first = (JSON.parse(filed.text) as { fact: { id: string } }).fact.id;
   system.store.setFactReach(first, 'retired');
   assert.equal(system.store.getFact(first)?.reach, 'retired');
 
   const again = await callTool(system, spawnAgent(system, 'issue:13'), 'raise', {
-    claim,
-    evidence: 'Hung for me too, on a clean checkout.',
+    what: claim,
+    why_not_mine: 'Hung for me too, on a clean checkout.',
   });
   assert.equal(again.isError, false, 'a prune is not a bar');
   const second = (JSON.parse(again.text) as { fact: { id: string } }).fact.id;
@@ -347,11 +350,17 @@ test('a retired claim may be raised again, and the re-raise is a fresh row with 
 test('a rejected claim is still refused by name, with the way back', async () => {
   const system = build();
   const claim = 'Every route handler should read the request body itself.';
-  const filed = await callTool(system, spawnAgent(system, 'issue:12'), 'raise', { claim, evidence: 'I assumed so.' });
+  const filed = await callTool(system, spawnAgent(system, 'issue:12'), 'raise', {
+    what: claim,
+    why_not_mine: 'I assumed so.',
+  });
   const id = (JSON.parse(filed.text) as { fact: { id: string } }).fact.id;
   system.store.setFactReach(id, 'rejected');
 
-  const again = await callTool(system, spawnAgent(system, 'issue:13'), 'raise', { claim, evidence: 'Me too.' });
+  const again = await callTool(system, spawnAgent(system, 'issue:13'), 'raise', {
+    what: claim,
+    why_not_mine: 'Me too.',
+  });
   assert.equal(again.isError, true);
   assert.match(again.text, /rejected/i);
   // Refused by name and with the way back, so the fleet does not raise it again
@@ -364,7 +373,10 @@ test('a rejected claim is still refused by name, with the way back', async () =>
 test('a retired claim is out of every read, and reaches nobody', async () => {
   const system = build();
   const claim = 'knip runs every rule at error.';
-  const filed = await callTool(system, spawnAgent(system, 'issue:12'), 'raise', { claim, evidence: 'Saw it.' });
+  const filed = await callTool(system, spawnAgent(system, 'issue:12'), 'raise', {
+    what: claim,
+    why_not_mine: 'Saw it.',
+  });
   const id = (JSON.parse(filed.text) as { fact: { id: string } }).fact.id;
   system.store.setFactReach(id, 'injected');
   assert.ok(
@@ -384,8 +396,8 @@ test('a retired claim is out of every read, and reaches nobody', async () => {
 test('retiring is reversible where rejecting is not', async () => {
   const system = build();
   const filed = await callTool(system, spawnAgent(system, 'issue:12'), 'raise', {
-    claim: 'The suite wants a built bundle first.',
-    evidence: 'It failed cold.',
+    what: 'The suite wants a built bundle first.',
+    why_not_mine: 'It failed cold.',
   });
   const id = (JSON.parse(filed.text) as { fact: { id: string } }).fact.id;
 

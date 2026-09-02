@@ -505,9 +505,9 @@ test('a raised claim is attributed to the caller’s own goal', async () => {
   const system = build();
   const agent = spawnAgent(system, 'issue:12:part:reader');
   const res = await callTool(system, agent, 'raise', {
-    claim: 'A route handler never reads the request; it is wrapped in checked(schemas, handler).',
+    what: 'A route handler never reads the request; it is wrapped in checked(schemas, handler).',
     scope: 'fleet',
-    evidence: 'The structural test over src/server/routes failed until I used the wrapper.',
+    why_not_mine: 'The structural test over src/server/routes failed until I used the wrapper.',
   });
   assert.equal(res.isError, false);
   const payload = JSON.parse(res.text) as { fact: { id: string; reach: string }; corroborations: number };
@@ -522,12 +522,12 @@ test('a second agent on a second goal is told its call was corroboration, not a 
   const system = build();
   const claim = 'A route handler never reads the request; it is wrapped in checked(schemas, handler).';
   const first = spawnAgent(system, 'issue:12');
-  await callTool(system, first, 'raise', { claim, scope: 'fleet', evidence: 'saw it in routes.' });
+  await callTool(system, first, 'raise', { what: claim, scope: 'fleet', why_not_mine: 'saw it in routes.' });
   const second = spawnAgent(system, 'issue:44');
   const res = await callTool(system, second, 'raise', {
-    claim,
+    what: claim,
     scope: 'fleet',
-    evidence: 'again, in mine.',
+    why_not_mine: 'again, in mine.',
   });
   const payload = JSON.parse(res.text) as { corroborations: number; note: string };
   assert.equal(payload.corroborations, 2);
@@ -540,16 +540,16 @@ test('agreeWith is a corroboration made on purpose, and the gate is untouched by
   const system = build();
   const first = spawnAgent(system, 'issue:12');
   const filed = await callTool(system, first, 'raise', {
-    claim: 'knip runs every rule at error, so an unimported export turns check red.',
+    what: 'knip runs every rule at error, so an unimported export turns check red.',
     scope: 'fleet',
-    evidence: 'check went red on a type nothing named.',
+    why_not_mine: 'check went red on a type nothing named.',
   });
   const id = (JSON.parse(filed.text) as { fact: { id: string } }).fact.id;
 
   // The one thing that moved nothing: agreement from the goal that raised it. Two
   // *different* goals are what carry a claim to lookup, so an agent agreeing with
   // its own earlier claim is one voice however it spells the call.
-  const itself = await callTool(system, first, 'raise', { agreeWith: id, evidence: 'saw it again on my own run.' });
+  const itself = await callTool(system, first, 'raise', { agreeWith: id, why_not_mine: 'saw it again on my own run.' });
   assert.equal(itself.isError, false);
   assert.equal((JSON.parse(itself.text) as { corroborations: number }).corroborations, 1);
   assert.equal(system.store.getFact(id)?.reach, 'proposal');
@@ -560,7 +560,7 @@ test('agreeWith is a corroboration made on purpose, and the gate is untouched by
   const second = spawnAgent(system, 'issue:44');
   const agreed = await callTool(system, second, 'raise', {
     agreeWith: id,
-    evidence: 'my own check failed the same way on an unused type.',
+    why_not_mine: 'my own check failed the same way on an unused type.',
   });
   assert.equal(agreed.isError, false);
   const payload = JSON.parse(agreed.text) as { corroborations: number; agreedWith: { id: string } };
@@ -581,15 +581,15 @@ test('agreeWith is refused where raising the same words would be, and refused by
   const system = build();
   const first = spawnAgent(system, 'issue:12');
   const filed = await callTool(system, first, 'raise', {
-    claim: 'The dispatcher reads the lessons table before it ranks anything.',
+    what: 'The dispatcher reads the lessons table before it ranks anything.',
     scope: 'fleet',
-    evidence: 'I assumed so.',
+    why_not_mine: 'I assumed so.',
   });
   const id = (JSON.parse(filed.text) as { fact: { id: string } }).fact.id;
   system.store.setFactReach(id, 'rejected');
 
   const second = spawnAgent(system, 'issue:44');
-  const refused = await callTool(system, second, 'raise', { agreeWith: id, evidence: 'I assumed so too.' });
+  const refused = await callTool(system, second, 'raise', { agreeWith: id, why_not_mine: 'I assumed so too.' });
   assert.equal(refused.isError, true);
   // The bar is about the claim and never about the spelling of the call that
   // reaches for it, so the refusal is the same one and carries the same way back.
@@ -599,17 +599,17 @@ test('agreeWith is refused where raising the same words would be, and refused by
   // Two rulings on one row is not a call anybody can make, and the refusal says so
   // rather than picking one.
   const both = await callTool(system, second, 'raise', {
-    claim: 'It does not.',
+    what: 'It does not.',
     agreeWith: id,
     contradicts: id,
-    evidence: 'saw both.',
+    why_not_mine: 'saw both.',
   });
   assert.equal(both.isError, true);
   assert.match(both.text, /cannot both be present/i);
 
   // An id that names nothing is a typo the agent can fix this turn, so it comes
   // back as an error rather than a success it would believe.
-  const nobody = await callTool(system, second, 'raise', { agreeWith: 'fact-nope', evidence: 'saw it.' });
+  const nobody = await callTool(system, second, 'raise', { agreeWith: 'fact-nope', why_not_mine: 'saw it.' });
   assert.equal(nobody.isError, true);
   assert.match(nobody.text, /No claim has that id/);
   system.store.close();
@@ -619,15 +619,15 @@ test('a barred proposal is refused by name, with the amendment that is the way b
   const system = build();
   const claim = 'The dispatcher reads the lessons table before it ranks anything.';
   const first = spawnAgent(system, 'issue:12');
-  await callTool(system, first, 'raise', { claim, scope: 'fleet', evidence: 'I assumed so.' });
+  await callTool(system, first, 'raise', { what: claim, scope: 'fleet', why_not_mine: 'I assumed so.' });
   const rejected = system.store.listFacts()[0]!;
   system.store.setFactReach(rejected.id, 'rejected');
 
   const second = spawnAgent(system, 'issue:44');
   const res = await callTool(system, second, 'raise', {
-    claim,
+    what: claim,
     scope: 'fleet',
-    evidence: 'I assumed so too.',
+    why_not_mine: 'I assumed so too.',
   });
   assert.equal(res.isError, true);
   // A silent refusal teaches the fleet nothing and it files the claim again
@@ -642,7 +642,7 @@ test('knowledge_ask answers from the caller’s own scopes and says so when noth
   const claim = 'The suite wants a built web bundle first.';
   for (const origin of ['issue:12', 'issue:44']) {
     const agent = spawnAgent(system, origin);
-    await callTool(system, agent, 'raise', { claim, scope: 'fleet', evidence: 'the suite failed cold.' });
+    await callTool(system, agent, 'raise', { what: claim, scope: 'fleet', why_not_mine: 'the suite failed cold.' });
   }
   const asker = spawnAgent(system, 'issue:77');
   const answered = await callTool(system, asker, 'knowledge_ask', {});
@@ -823,9 +823,9 @@ test('the cockpit hears a proposal when it is filed, not on the next pulse', asy
   system.agents.on('fact', (e) => heard.push({ filed: e.filed, claim: e.fact.claim }));
   const first = spawnAgent(system, 'issue:12');
   const claim = 'A route handler never reads the request; it is wrapped in checked(schemas, handler).';
-  await callTool(system, first, 'raise', { claim, scope: 'fleet', evidence: 'saw it in routes.' });
+  await callTool(system, first, 'raise', { what: claim, scope: 'fleet', why_not_mine: 'saw it in routes.' });
   const second = spawnAgent(system, 'issue:44');
-  await callTool(system, second, 'raise', { claim, scope: 'fleet', evidence: 'again, in mine.' });
+  await callTool(system, second, 'raise', { what: claim, scope: 'fleet', why_not_mine: 'again, in mine.' });
   assert.deepEqual(
     heard.map((h) => h.filed),
     [true, false],
@@ -837,7 +837,7 @@ test('the cockpit hears a proposal when it is filed, not on the next pulse', asy
   const killed = system.store.listFacts()[0]!;
   system.store.setFactReach(killed.id, 'rejected');
   const third = spawnAgent(system, 'issue:77');
-  await callTool(system, third, 'raise', { claim, scope: 'fleet', evidence: 'me too.' });
+  await callTool(system, third, 'raise', { what: claim, scope: 'fleet', why_not_mine: 'me too.' });
   assert.equal(heard.length, 2);
   system.store.close();
 });
@@ -1314,11 +1314,12 @@ test('the operator arm is bounded by the same rule the intake is, and the bar ho
  * tests match on are the same words as before.
  */
 async function contradict(system: System, agent: Agent, args: Record<string, unknown>) {
-  const { factId, amendment, ...rest } = args;
+  const { factId, amendment, evidence, ...rest } = args;
   return callTool(system, agent, 'raise', {
     ...rest,
     contradicts: factId,
-    ...(amendment === undefined ? {} : { claim: amendment }),
+    ...(evidence === undefined ? {} : { why_not_mine: evidence }),
+    ...(amendment === undefined ? {} : { what: amendment }),
   });
 }
 
@@ -1495,9 +1496,9 @@ test('a superseded claim does not bar the amendment’s own words from being res
   // amendment an amendment.
   const later = spawnAgent(system, 'issue:99');
   const res = await callTool(system, later, 'raise', {
-    claim: EDGE_AMENDMENT,
+    what: EDGE_AMENDMENT,
     scope: 'fleet',
-    evidence: 'knip stayed red until the method went.',
+    why_not_mine: 'knip stayed red until the method went.',
   });
   assert.equal(res.isError, false);
   const payload = JSON.parse(res.text) as { corroborations: number; note: string };
@@ -1787,7 +1788,7 @@ test('an ask is recorded from the tool, and the cockpit’s own reads of the sam
   const claim = 'The suite wants a built web bundle first.';
   for (const origin of ['issue:12', 'issue:44']) {
     const agent = spawnAgent(system, origin);
-    await callTool(system, agent, 'raise', { claim, scope: 'fleet', evidence: 'the suite failed cold.' });
+    await callTool(system, agent, 'raise', { what: claim, scope: 'fleet', why_not_mine: 'the suite failed cold.' });
   }
   const id = system.store.listFacts()[0]!.id;
   assert.equal(system.store.getFact(id)?.reach, 'lookup');

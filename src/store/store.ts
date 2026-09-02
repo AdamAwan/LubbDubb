@@ -54,6 +54,7 @@ import { PrReviewRouteStore, PR_REVIEW_ROUTE_COLUMNS } from './prReviewRoutes.js
 import { PrReviewExternalStore } from './prReviewExternals.js';
 import { PrThreadReopenStore } from './prThreadReopens.js';
 import { PrReplyStore } from './prReplies.js';
+import { ObstacleStore, OBSTACLE_COLUMNS, type ObstacleOutcome } from './obstacles.js';
 import type { PrThreadReopen } from '../prThreads.js';
 import { DecisionStore, DECISION_COLUMNS } from './decisions.js';
 import { WorldStore, type WorldLabelPatch } from './world.js';
@@ -179,6 +180,9 @@ import type {
   WorkNodeObservation,
   WorkItemFiling,
   BugFiling,
+  Obstacle,
+  ObstacleKey,
+  ObstacleSighting,
   WorldEvent,
   WorldEventInput,
   WorldEventKind,
@@ -239,6 +243,7 @@ export class Store {
   private readonly prReviewExternals: PrReviewExternalStore;
   private readonly threadReopens: PrThreadReopenStore;
   private readonly prReplies: PrReplyStore;
+  private readonly obstacles: ObstacleStore;
   private readonly decisions: DecisionStore;
   private readonly world: WorldStore;
   private readonly errors: ErrorStore;
@@ -295,6 +300,7 @@ export class Store {
       PR_REVIEW_ROUTE_COLUMNS,
       SCRATCH_COLUMNS,
       REVIEW_PACK_COLUMNS,
+      OBSTACLE_COLUMNS,
     ]) {
       addedColumns.push(...ensureColumns(this.db, columns));
     }
@@ -416,6 +422,7 @@ export class Store {
     this.prReviewExternals = new PrReviewExternalStore(ctx);
     this.threadReopens = new PrThreadReopenStore(ctx);
     this.prReplies = new PrReplyStore(ctx);
+    this.obstacles = new ObstacleStore(ctx);
     this.decisions = new DecisionStore(ctx);
     this.world = new WorldStore(ctx);
     this.errors = new ErrorStore(ctx);
@@ -1514,6 +1521,22 @@ export class Store {
   recordPrReplySent(prNumber: number, threadId: string, commentRef: string): void {
     this.prReplies.recordPrReplySent(prNumber, threadId, commentRef);
   }
+  recordObstacleSighting(...args: Parameters<ObstacleStore['recordObstacleSighting']>): ObstacleOutcome {
+    return this.obstacles.recordObstacleSighting(...args);
+  }
+
+  listObstacles(): Obstacle[] {
+    return this.obstacles.listObstacles();
+  }
+
+  listObstacleKeys(obstacleId: string): ObstacleKey[] {
+    return this.obstacles.listObstacleKeys(obstacleId);
+  }
+
+  listObstacleSightings(obstacleId: string): ObstacleSighting[] {
+    return this.obstacles.listObstacleSightings(obstacleId);
+  }
+
   prReplyRefs(prNumber: number): ReadonlySet<string> {
     return this.prReplies.prReplyRefs(prNumber);
   }

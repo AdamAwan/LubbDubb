@@ -72,9 +72,9 @@ test('two goals seeing one notice put it in front of every agent; two seeing a s
   const system = build();
   const first = spawnAgent(system, 'pr:412:ci');
   const filed = await callTool(system, first, 'raise', {
-    claim: FLAKE,
+    what: FLAKE,
     scope: 'check:test (windows)',
-    evidence: 'Red at 09:02 and green at 09:14 with nothing pushed.',
+    why_not_mine: 'Red at 09:02 and green at 09:14 with nothing pushed.',
     until: 8,
   });
   assert.equal(filed.isError, false);
@@ -88,9 +88,9 @@ test('two goals seeing one notice put it in front of every agent; two seeing a s
 
   const second = spawnAgent(system, 'pr:517:ci');
   const agreed = await callTool(system, second, 'raise', {
-    claim: FLAKE,
+    what: FLAKE,
     scope: 'check:test (windows)',
-    evidence: 'Same thing on my pull request an hour later.',
+    why_not_mine: 'Same thing on my pull request an hour later.',
     until: 8,
   });
   const two = JSON.parse(agreed.text) as { fact: { id: string; reach: string }; corroborations: number };
@@ -104,8 +104,8 @@ test('two goals seeing one notice put it in front of every agent; two seeing a s
   // The same two goals agreeing about a *standing* claim stop at lookup. Nothing
   // ends a standing claim by itself, so nothing but an operator may put one there.
   const claim = 'A route handler never reads the request; it is wrapped in checked(schemas, handler).';
-  await callTool(system, first, 'raise', { claim, scope: 'fleet', evidence: 'the wrapper.' });
-  const standing = await callTool(system, second, 'raise', { claim, scope: 'fleet', evidence: 'me too.' });
+  await callTool(system, first, 'raise', { what: claim, scope: 'fleet', why_not_mine: 'the wrapper.' });
+  const standing = await callTool(system, second, 'raise', { what: claim, scope: 'fleet', why_not_mine: 'me too.' });
   assert.equal((JSON.parse(standing.text) as { fact: { reach: string } }).fact.reach, 'lookup');
   system.store.close();
 });
@@ -122,18 +122,18 @@ test('the clock is what makes a claim a notice, and without one it is standing',
   const system = build();
   const agent = spawnAgent(system, 'pr:412:ci');
   const bounded = await callTool(system, agent, 'raise', {
-    claim: FLAKE,
+    what: FLAKE,
     scope: 'check:test (windows)',
-    evidence: 'saw it.',
+    why_not_mine: 'saw it.',
     until: 8,
   });
   assert.equal(bounded.isError, false);
   assert.equal((JSON.parse(bounded.text) as { fact: { lifetime: string } }).fact.lifetime, 'expiring');
 
   const standing = await callTool(system, spawnAgent(system, 'pr:517:ci'), 'raise', {
-    claim: 'The settings reader resolves paths against repoRoot.',
+    what: 'The settings reader resolves paths against repoRoot.',
     scope: 'fleet',
-    evidence: 'read it.',
+    why_not_mine: 'read it.',
   });
   assert.equal(standing.isError, false);
   assert.equal((JSON.parse(standing.text) as { fact: { lifetime: string } }).fact.lifetime, 'standing');

@@ -1055,8 +1055,8 @@ test('a raised claim lands attributed from the credential, and nothing else', as
   const agent = spawnAgent(system, 'pr:142:ci');
 
   const res = await callTool(system, agent, 'raise', {
-    claim: 'The retry helper squares the delay instead of doubling it.',
-    evidence: 'The 5th retry waits ~17 minutes.',
+    what: 'The retry helper squares the delay instead of doubling it.',
+    why_not_mine: 'The 5th retry waits ~17 minutes.',
     ref: 'issue:41',
   });
   assert.equal(res.isError, false);
@@ -1113,22 +1113,26 @@ test('a claim is a write, so it stays structurally attributed — there is no ar
     // corroboration it writes is still the credential's, so agreeing on purpose
     // widens what an agent can say and not who it can say it as.
     'agreeWith',
-    'claim',
     'contradicts',
-    'evidence',
+    // The obstacle board's discriminator, and the only classification the intake
+    // asks for: *would a fix make this go away?* Not a shelf, and not an author.
+    'fix_makes_it_go_away',
+    'keys',
     'ref',
     'scope',
     'until',
+    'what',
     'where',
+    'why_not_mine',
   ]);
 
   await callTool(system, one, 'raise', {
-    claim: 'Upstream typings are wrong.',
-    evidence: 'The field is on the wire and not in the .d.ts.',
+    what: 'Upstream typings are wrong.',
+    why_not_mine: 'The field is on the wire and not in the .d.ts.',
   });
   await callTool(system, two, 'raise', {
-    claim: 'Same as #41.',
-    evidence: 'Both describe the same rate limiter.',
+    what: 'Same as #41.',
+    why_not_mine: 'Both describe the same rate limiter.',
     ref: 'issue:41',
   });
 
@@ -1142,9 +1146,9 @@ test('a claim carries where and the evidence through the channel, and a repeat i
   const agent = spawnAgent(system, 'pr:142:ci');
 
   await callTool(system, agent, 'raise', {
-    claim: 'The retry helper squares the delay instead of doubling it',
+    what: 'The retry helper squares the delay instead of doubling it',
     where: 'src/net/backoff.ts:41',
-    evidence: 'The 5th retry waits ~17 minutes.\n\n```\ndelay = base ** attempt\n```',
+    why_not_mine: 'The 5th retry waits ~17 minutes.\n\n```\ndelay = base ** attempt\n```',
   });
   const filed = system.store.listFacts()[0]!;
   assert.equal(filed.where, 'src/net/backoff.ts:41');
@@ -1155,8 +1159,8 @@ test('a claim carries where and the evidence through the channel, and a repeat i
   // because the words are what an operator reads to decide whether it should have
   // carried.
   await callTool(system, agent, 'raise', {
-    claim: 'The retry helper squares the delay instead of doubling it',
-    evidence: 'Confirmed: `ingest.flaky.test.ts` times out on the 4th retry.',
+    what: 'The retry helper squares the delay instead of doubling it',
+    why_not_mine: 'Confirmed: `ingest.flaky.test.ts` times out on the 4th retry.',
   });
   assert.equal(system.store.listFacts().length, 1, 'a repeat of the same claim is agreement, not a second row');
   assert.equal(system.store.listCorroborations(filed.id).length, 2);
@@ -1172,8 +1176,8 @@ test('a claim queues no work by itself; sending it on is the operator’s click'
   const agent = spawnAgent(system, 'pr:142:ci');
 
   await callTool(system, agent, 'raise', {
-    claim: 'The retry helper squares the delay instead of doubling it.',
-    evidence: 'Seen on the 5th retry.',
+    what: 'The retry helper squares the delay instead of doubling it.',
+    why_not_mine: 'Seen on the 5th retry.',
   });
   // The deliberate half of the design: an agent that could queue jobs could put
   // agents on the fleet (rule `manual-job` dispatches a job ahead of every
@@ -1214,8 +1218,8 @@ test('a rejected claim stays rejected, and a verbatim repeat is refused by name'
   const agent = spawnAgent(system, 'issue:12');
   const report = (): Promise<{ isError: boolean; text: string }> =>
     callTool(system, agent, 'raise', {
-      claim: 'Same as #41.',
-      evidence: 'Both describe the same rate limiter.',
+      what: 'Same as #41.',
+      why_not_mine: 'Both describe the same rate limiter.',
       ref: 'issue:41',
     });
 
@@ -1239,8 +1243,8 @@ test('a rejected claim stays rejected, and a verbatim repeat is refused by name'
 
   // A *different* claim is a different row, not a repeat.
   await callTool(system, agent, 'raise', {
-    claim: 'Also overlaps #7.',
-    evidence: 'Different subsystem entirely.',
+    what: 'Also overlaps #7.',
+    why_not_mine: 'Different subsystem entirely.',
   });
   assert.equal(system.store.listFacts().length, 2);
   await app.close();
@@ -1257,15 +1261,15 @@ test('a malformed report is refused with the reason and stores nothing', async (
   // (`report_finding` also refused a multi-line summary outright; `raise` caps the
   // length instead, and that rule went with the tool rather than moving.)
   const noEvidence = await callTool(system, agent, 'raise', {
-    claim: 'The retry helper squares the delay instead of doubling it.',
+    what: 'The retry helper squares the delay instead of doubling it.',
   });
   assert.equal(noEvidence.isError, true);
   assert.match(noEvidence.text, /evidence is required/);
   assert.deepEqual(system.store.listFacts(), []);
 
   const badRef = await callTool(system, agent, 'raise', {
-    claim: 'Same as 41.',
-    evidence: 'both describe the same limiter',
+    what: 'Same as 41.',
+    why_not_mine: 'both describe the same limiter',
     ref: '41',
   });
   assert.equal(badRef.isError, true);
@@ -1274,8 +1278,8 @@ test('a malformed report is refused with the reason and stores nothing', async (
 
   // ...and the corrected retry lands, in the same turn.
   const fixed = await callTool(system, agent, 'raise', {
-    claim: 'Same as #41.',
-    evidence: 'Both describe the same rate limiter.',
+    what: 'Same as #41.',
+    why_not_mine: 'Both describe the same rate limiter.',
     ref: 'issue:41',
   });
   assert.equal(fixed.isError, false);
@@ -1288,8 +1292,8 @@ test('the cockpit is shipped the claim and a link for the item it names', async 
   const { app } = await buildApp(system);
   const agent = spawnAgent(system, 'issue:12');
   await callTool(system, agent, 'raise', {
-    claim: 'Same as #41.',
-    evidence: 'Both describe the same rate limiter.',
+    what: 'Same as #41.',
+    why_not_mine: 'Both describe the same rate limiter.',
     ref: 'issue:41',
   });
 
