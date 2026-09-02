@@ -17,6 +17,7 @@ const { buildDemoState } = await import('../web/src/demo/fixtures.js');
 const { Overview } = await import('../web/src/console/Overview.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
 const { goalIssue } = await import('../web/src/view/goalPage.js');
+const { hasPrPage } = await import('../web/src/view/prPage.js');
 
 /**
  * The view model over the demo world, or over a doctored one.
@@ -67,6 +68,8 @@ const render = (v: CockpitView): string =>
       refUrls: v.state.refUrls,
       openGoal: () => undefined,
       hasGoal: (ref: string) => goalIssue(v.state, ref) !== undefined,
+      openPr: () => undefined,
+      hasPr: (n: number) => hasPrPage(v.state, n),
       children: createElement(Overview, { view: v, actions }),
     }),
   );

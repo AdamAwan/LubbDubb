@@ -30,6 +30,7 @@ const { ConsoleRoot } = await import('../web/src/console/ConsoleRoot.js');
 const { Panel } = await import('../web/src/console/Panel.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
 const { goalIssue } = await import('../web/src/view/goalPage.js');
+const { hasPrPage } = await import('../web/src/view/prPage.js');
 const { ThemeSettings } = await import('../web/src/components/ThemeSettings.js');
 const { ColourField } = await import('../web/src/components/ColourField.js');
 const { ConfigValues } = await import('../web/src/components/ConfigValues.js');
@@ -76,6 +77,8 @@ const render = (v: CockpitView) =>
       refUrls: v.state.refUrls,
       openGoal: () => undefined,
       hasGoal: (ref: string) => goalIssue(v.state, ref) !== undefined,
+      openPr: () => undefined,
+      hasPr: (n: number) => hasPrPage(v.state, n),
       children: createElement(ConsoleRoot, { view: v, actions }),
     }),
   );
@@ -828,6 +831,16 @@ test('a thread is drawn with its state, its conversation and where it hangs', ()
   assert.ok(html.includes('the cut alone would drop the tail it needs'), 'a reply is part of the thread');
   assert.ok(html.includes('cn-thmark'), 'and a reply the fleet wrote says so');
   assert.ok(html.includes('src/context/rank.ts'), 'a thread names the place it hangs');
+});
+
+/**
+ * The provider's own page, which the masthead's `<Ref>` used to be. A ref onto
+ * this pull request now opens *this* page, so the way out to the provider needs a
+ * control of its own — the shape a goal's `Open ticket ↗` already has.
+ */
+test('the pull request page carries the way out to the provider', () => {
+  const html = decode(render(prView(412)));
+  assert.ok(html.includes('Open pull request ↗'), 'the page a ref lands on must still reach the provider');
 });
 
 test('a pull request the world has lost is said so, rather than falling through to the goal', () => {

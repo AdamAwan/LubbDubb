@@ -465,6 +465,7 @@ test('the cockpit draws the park where the agent is, with a way out of it', asyn
   const { ConsoleRoot } = await import('../web/src/console/ConsoleRoot.js');
   const { RefLinks } = await import('../web/src/components/refs.js');
   const { goalIssue } = await import('../web/src/view/goalPage.js');
+  const { hasPrPage } = await import('../web/src/view/prPage.js');
 
   const state = buildDemoState().state;
   const parked = state.agents.find((a) => a.endedAt === null)!;
@@ -507,6 +508,8 @@ test('the cockpit draws the park where the agent is, with a way out of it', asyn
       refUrls: state.refUrls,
       openGoal: () => undefined,
       hasGoal: (ref: string) => goalIssue(state, ref) !== undefined,
+      openPr: () => undefined,
+      hasPr: (n: number) => hasPrPage(state, n),
       children: createElement(ConsoleRoot, { view, actions }),
     }),
   );

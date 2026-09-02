@@ -16,7 +16,7 @@ import type {
 import { buildGoalPage, buildGoalTrack, furthestEnvironment, goalOfPr, type GoalTrack } from '../view/goalPage.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { elapsed, fmtUsd, relTime } from '../components/util.js';
-import { Ref, RefText, refLabel } from '../components/refs.js';
+import { PrOut, Ref, RefText, refLabel } from '../components/refs.js';
 import { CiLadder, StaleChip, waitedFor } from './GoalPage.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
 import { PanelRows, type PanelRowModel } from './PanelRow.js';
@@ -825,12 +825,24 @@ function prRow(pr: OpenPullRequest, view: CockpitView, actions: CockpitActions, 
     // The pull request's own number moves out of the title and into the refs
     // slot, where every other card keeps what a row names: as a prefix it was a
     // way somewhere that only this card put there.
+    // Two ways to the pull request, because the row raises two questions and each
+    // answers one: the cockpit's page for what the harness makes of it — the
+    // threads it owes an answer, the checks, the work on the branch — and the
+    // provider's for the diff itself. The marks say which is which; a row that
+    // offered only the first made the provider a place you had to go and find.
     refs: (
       <>
         <Ref to={`pr:${pr.number}`} />
+        <PrOut number={pr.number} />
         {goal !== null && <Ref to={goal} title={`Open the goal this pull request is delivering — ${refLabel(goal)}`} />}
       </>
     ),
+    // The name is the way onto the pull request's page — its review threads, its
+    // checks and the work on its branch — which the rack named and offered no way
+    // to until the page existed. Every other card that names a thing with a page
+    // opens it from the title, and this is that.
+    open: () => actions.selectPr(pr.number),
+    openTitle: `Open pull request #${pr.number} — its review threads, its checks and the work on its branch`,
     facts: prFacts(pr, view.now),
     // Whose court it is in, which is the one question the card is for — the
     // server's word, with the server's own reasoning behind it. It was drawn

@@ -17,6 +17,7 @@ const { buildDemoState } = await import('../web/src/demo/fixtures.js');
 const { ConsoleRoot } = await import('../web/src/console/ConsoleRoot.js');
 const { Ref, RefLinks, TicketLink, refLabel } = await import('../web/src/components/refs.js');
 const { goalIssue } = await import('../web/src/view/goalPage.js');
+const { hasPrPage } = await import('../web/src/view/prPage.js');
 
 const actions = new Proxy({}, { get: () => () => undefined }) as CockpitActions;
 
@@ -53,31 +54,50 @@ const render = (v: CockpitView) =>
       refUrls: v.state.refUrls,
       openGoal: () => undefined,
       hasGoal: (ref: string) => goalIssue(v.state, ref) !== undefined,
+      openPr: () => undefined,
+      hasPr: (prNumber: number) => hasPrPage(v.state, prNumber),
       children: createElement(ConsoleRoot, { view: v, actions }),
     }),
   );
 
 /** One `<Ref>` on its own, against a stated world rather than the fixtures'. */
-function ref(to: string, world: { refUrls?: Record<string, string>; goals?: string[] } = {}): string {
+function ref(to: string, world: { refUrls?: Record<string, string>; goals?: string[]; prs?: number[] } = {}): string {
   return renderToStaticMarkup(
     createElement(RefLinks, {
       refUrls: world.refUrls ?? {},
       openGoal: () => undefined,
       hasGoal: (r: string) => (world.goals ?? []).includes(r),
+      openPr: () => undefined,
+      hasPr: (n: number) => (world.prs ?? []).includes(n),
       children: createElement(Ref, { to }),
     }),
   );
 }
 
-test('a goal is a way onto its page, and a pull request is a way out to the provider', () => {
+test('a goal and a pull request are both ways onto their page in the cockpit', () => {
   const goal = ref('issue:212', { goals: ['issue:212'], refUrls: { '#212': 'https://tracker/212' } });
   assert.match(goal, /<button[^>]*class="ref-goal"/, 'a goal the world carries opens in the cockpit');
   assert.match(goal, />#212</);
   assert.doesNotMatch(goal, /<a /, 'the page is the destination, not the ticket — the page carries "Open ticket ↗"');
 
-  const pr = ref('pr:412', { refUrls: { '#412': 'https://tracker/pull/412' } });
-  assert.match(pr, /<a[^>]*href="https:\/\/tracker\/pull\/412"/, 'there is no PR page in the cockpit');
+  // The pull request page is the richer destination on the same terms the goal's
+  // is, and the provider's own page is the `Open pull request ↗` it carries.
+  const pr = ref('pr:412', { prs: [412], refUrls: { '#412': 'https://tracker/pull/412' } });
+  assert.match(pr, /<button[^>]*class="ref-goal"/, 'a pull request the world carries opens in the cockpit');
   assert.match(pr, />#412</);
+  assert.doesNotMatch(pr, /<a /, 'the page is the destination — the page carries "Open pull request ↗"');
+});
+
+/**
+ * The pull request's half of the case above, and the one that must not be a
+ * cockpit link: `buildPrPage` returns null for a number the snapshot does not
+ * carry — a closed pull request on a deployment retaining none — and the page
+ * behind a link onto one draws nothing at all.
+ */
+test('a pull request the world does not carry links to the provider instead of to a blank page', () => {
+  const html = ref('pr:412', { refUrls: { '#412': 'https://tracker/pull/412' } });
+  assert.doesNotMatch(html, /ref-goal/, 'there is no page to open');
+  assert.match(html, /<a[^>]*href="https:\/\/tracker\/pull\/412"/);
 });
 
 test('a part’s ref is the goal it is under — the part itself has no page', () => {
@@ -98,7 +118,7 @@ test('a goal the world does not carry links to the tracker instead of to a blank
 });
 
 test('a ref the provider could not resolve is plain text, never a link to nowhere', () => {
-  assert.equal(ref('pr:412'), '#412', 'the fake provider resolves nothing');
+  assert.equal(ref('pr:412'), '#412', 'the fake provider resolves nothing, and the world carries no such PR');
   assert.equal(ref('issue:999'), '#999');
   assert.equal(ref('feature/context-budget'), 'feature/context-budget', 'a branch is already its own name');
 });
@@ -163,6 +183,35 @@ test('the pull request rack is a way to the goal each PR delivers', () => {
   const goal = v.state.world.issues.find((i) => i.linkedPrNumber === pr.number);
   assert.ok(goal, 'the demo fixtures must carry a goal one of those pull requests delivers');
   assert.ok(rack.includes(`>#${goal.number}<`), 'the rack names the goal, and names it as a way onto its page');
+});
+
+/**
+ * The complaint the pull request page came from second: the page existed and the
+ * card that lists every open pull request offered no way onto it, so the only
+ * route was through the goal a pull request happens to be linked to.
+ */
+test('the pull request rack is a way onto each pull request’s own page', () => {
+  const v = view();
+  const html = render(v);
+  const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('Up next'));
+
+  const pr = v.state.world.pullRequests[0];
+  assert.ok(pr, 'the demo fixtures must carry an open pull request');
+  // The name is the control and the refs are beside it, which is the rule every
+  // row with both follows.
+  const named = rack.indexOf(`>${pr.title}<`);
+  assert.notEqual(named, -1, 'the rack must name the pull request');
+  assert.match(
+    rack.slice(rack.lastIndexOf('<button', named), named),
+    /class="cn-grow"/,
+    'the row’s name is the control that opens the pull request’s page',
+  );
+  assert.match(rack, new RegExp(`<button[^>]*class="ref-goal"[^>]*>#${pr.number}<`), 'and so does its ref');
+  assert.match(
+    rack,
+    new RegExp(`<a[^>]*class="ext-ref ref-out"[^>]*>#${pr.number}<`),
+    'and the provider is a second token beside it, not a destination the row lost',
+  );
 });
 
 test('a queued dispatch is a way to what it is queued against', () => {
@@ -318,6 +367,8 @@ function ticket(number: number, world: Record<string, string>, url?: string): st
       refUrls: world,
       openGoal: () => undefined,
       hasGoal: () => false,
+      openPr: () => undefined,
+      hasPr: () => false,
       children: createElement(TicketLink, { number, url, className: 'cn-tgl', children: 'Open ticket ↗' }),
     }),
   );

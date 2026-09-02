@@ -160,6 +160,8 @@ function render(p: ReviewPackPayload, openIdea: string | null = null, askRefusal
       refUrls: { 'pr:7': 'https://example.test/pull/7' },
       openGoal: () => undefined,
       hasGoal: () => false,
+      openPr: () => undefined,
+      hasPr: () => false,
       children: createElement(ReviewPackPage, {
         payload: p,
         marks: p.marks,

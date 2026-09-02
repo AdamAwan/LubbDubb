@@ -27,8 +27,11 @@ import { ExtLink, linkify, refLink } from './util.js';
  *   reason the queue rail asks it rather than guessing: a page keyed on a ref the
  *   snapshot dropped renders nothing at all, and a link onto it is worse than a
  *   plain number.
- * - **A pull request links out.** There is no PR page in the cockpit, so the
- *   provider's is the only destination there is.
+ * - **A pull request opens its page too**, on the same terms: the page is built
+ *   from the snapshot, so one for a pull request the snapshot dropped would draw
+ *   nothing, and `hasPr` is what keeps a ref onto that one going to the provider
+ *   instead. The page carries `Open pull request ↗` for the provider's own, the
+ *   way a goal's page carries `Open ticket ↗`.
  * - **Anything the provider could not resolve renders as plain text**, the rule
  *   `refLink` already follows: the `fake` provider resolves nothing, and a link
  *   that goes nowhere asserts more than a bare number does.
@@ -50,6 +53,8 @@ interface RefWorld {
   refUrls: Record<string, string>;
   openGoal: (ref: string) => void;
   hasGoal: (ref: string) => boolean;
+  openPr: (prNumber: number) => void;
+  hasPr: (prNumber: number) => boolean;
 }
 
 /**
@@ -66,8 +71,18 @@ const RefContext = createContext<RefWorld | null>(null);
  * At the shell rather than in the console, because the drawer and the modals draw
  * refs too and none of them is inside `ConsoleRoot`.
  */
-export function RefLinks({ refUrls, openGoal, hasGoal, children }: RefWorld & { children: ReactNode }): JSX.Element {
-  const world = useMemo(() => ({ refUrls, openGoal, hasGoal }), [refUrls, openGoal, hasGoal]);
+export function RefLinks({
+  refUrls,
+  openGoal,
+  hasGoal,
+  openPr,
+  hasPr,
+  children,
+}: RefWorld & { children: ReactNode }): JSX.Element {
+  const world = useMemo(
+    () => ({ refUrls, openGoal, hasGoal, openPr, hasPr }),
+    [refUrls, openGoal, hasGoal, openPr, hasPr],
+  );
   return <RefContext.Provider value={world}>{children}</RefContext.Provider>;
 }
 
@@ -88,7 +103,8 @@ function useRefWorld(): RefWorld {
  * reference as plain text — correct-looking rows that are dead ends, which is the
  * single most repeated cockpit bug and the reason this module exists.
  *
- * `openGoal` and `hasGoal` are kept from the parent deliberately, not overridden.
+ * `openGoal`, `hasGoal`, `openPr` and `hasPr` are kept from the parent deliberately,
+ * not overridden.
  * `hasGoal` will say no for a ticket the snapshot has forgotten, and {@link Ref}'s
  * existing answer to that — link out to the tracker rather than open a page that
  * would render empty — is then exactly right, with no special case in the panel.
@@ -172,11 +188,29 @@ export function Ref({
 
   const pr = PR_REF.exec(to);
   if (pr) {
+    const number = Number(pr[1]);
+    const token = label ?? `#${pr[1]}`;
+    if (world.hasPr(number)) {
+      return (
+        <button
+          type="button"
+          className="ref-goal"
+          title={title ?? `Open pull request #${pr[1]} — its review threads, its checks and the work on its branch`}
+          onClick={() => world.openPr(number)}
+        >
+          {token}
+        </button>
+      );
+    }
+    // No page: the pull request has left the world the snapshot ships — a closed
+    // one on a deployment retaining none — so the provider's page is the only
+    // destination there is.
+    //
     // `#412` is what `buildRefUrls` keys an open pull request by; `pr:412` is the
     // structured key a world event or a task origin resolves under. Either
     // answers, and which one the snapshot happens to carry is not the row's
     // business — the whole reason this lookup is written once.
-    return <ExtLinkFor keys={[`#${pr[1]}`, to]} label={label ?? `#${pr[1]}`} title={title} world={world} />;
+    return <ExtLinkFor keys={[`#${pr[1]}`, to]} label={token} title={title} world={world} />;
   }
 
   // A branch, a `job:` origin, anything else the provider may or may not know.
@@ -216,6 +250,82 @@ function ExtLinkFor({
  */
 export function RefText({ text }: { text: string }): ReactNode {
   return linkify(text, useRefWorld().refUrls);
+}
+
+/**
+ * The way to a pull request on the provider — the `Open pull request ↗` its page
+ * carries, and the destination {@link Ref} stops offering the moment the cockpit
+ * has a page of its own for it.
+ *
+ * The same shape as {@link TicketLink} and for the same reason: a `<Ref>` onto a
+ * pull request the world carries now opens its **page**, which is the richer of
+ * the two and the one nothing else reaches, so the provider needs a control of
+ * its own. Two keys, most-trusted first — `pr:<n>` is unambiguous where `#<n>` is
+ * shared with an issue of the same number, and `buildRefUrls` writes both.
+ *
+ * Inert rather than absent when neither resolves, which is {@link TicketLink}'s
+ * rule: a control that comes and goes is a page whose shape depends on what a
+ * provider happened to resolve.
+ */
+export function PrLink({
+  number,
+  className,
+  children,
+}: {
+  number: number;
+  className?: string;
+  children: ReactNode;
+}): JSX.Element {
+  const href = prUrl(useRefWorld().refUrls, number);
+  if (href === undefined)
+    return (
+      <span
+        className={className}
+        aria-disabled="true"
+        title="No address for this pull request: the provider did not give it one, and the harness could not resolve it from the ref either. Nothing to open."
+      >
+        {children}
+      </span>
+    );
+  return (
+    <a className={className} href={href} target="_blank" rel="noopener noreferrer">
+      {children}
+    </a>
+  );
+}
+
+/**
+ * The same destination as a **token**, for a row that offers both: `<Ref>` for the
+ * cockpit's page and this beside it for the provider's.
+ *
+ * Two tokens for one pull request rather than a choice between them, because a
+ * pull-request row raises two different questions — *what does the harness make of
+ * this* and *what does the diff say* — and only one of them is answered here. The
+ * marks are what tell them apart, and they are the vocabulary the whole module is
+ * drawn in: the filled box stays inside the cockpit, the dashed one with the arrow
+ * leaves. Absent rather than inert where the provider resolved nothing, unlike
+ * {@link PrLink}: this sits in a slot beside a token that *did* resolve, so an
+ * unavailable second one reads as a broken link rather than as a stated fact.
+ */
+export function PrOut({ number }: { number: number }): JSX.Element | null {
+  const href = prUrl(useRefWorld().refUrls, number);
+  if (href === undefined) return null;
+  return (
+    <ExtLink
+      href={href}
+      title={`Open pull request #${number} on the provider — the diff, the review, the checks`}
+      boxed
+    >
+      #{number}
+    </ExtLink>
+  );
+}
+
+/** A pull request's address on the provider, by the two keys `buildRefUrls` writes for one. */
+function prUrl(refUrls: Record<string, string>, number: number): string | undefined {
+  // `pr:<n>` first because it is unambiguous: `#<n>` is shared with an issue of the
+  // same number, and the first writer into the map wins.
+  return refUrls[`pr:${number}`] ?? refUrls[`#${number}`];
 }
 
 /**

@@ -3276,24 +3276,41 @@ button.cn-grow {
   color: var(--cn-blue-ink);
 }
 
-/* ---------- review threads ---------- */
+/* ---------- review threads ----------
+   A thread is a conversation with a state, so it is drawn as a card rather than as
+   a row in a list: the run of hairlines it used to be put one thread's reply hard
+   against the next thread's question, and the amber wash on the two states that
+   are still work covered the whole card rather than marking it. State is the left
+   edge now — one glance down the edges says what is still owed — and the ground
+   stays tinted only where the answer is on us. */
 .cn-threads {
   display: flex;
   flex-direction: column;
+  gap: 9px;
+  padding: 2px 13px 13px;
 }
 .cn-thread {
-  border-bottom: 1px solid var(--cn-line-soft);
-  padding: 9px 13px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  border: 1px solid var(--cn-line-soft);
+  border-left: 3px solid var(--cn-inert);
+  border-radius: var(--cn-r-sm);
+  background: var(--cn-panel-2);
+  padding: 9px 11px 10px;
 }
-.cn-thread:last-child {
-  border-bottom: 0;
-}
-/* The two states that are still work carry a tint of the ground, so "what is on
-   us" reads off the shape of the list before any chip is read. A resolved thread
-   is drawn back rather than hidden — it is the record of what was asked. */
 .cn-thread.cn-th-open,
 .cn-thread.cn-th-reopened {
-  background: var(--cn-amber-bg);
+  border-left-color: var(--cn-amber);
+  background: var(--cn-amber-fill);
+}
+.cn-thread.cn-th-answered {
+  border-left-color: var(--cn-accent);
+}
+/* Drawn back rather than hidden — a resolved thread is the record of what was
+   asked, and the ask is what the page is for. */
+.cn-thread.cn-th-resolved {
+  border-left-color: var(--cn-green);
 }
 .cn-thread.cn-th-resolved .cn-thtext,
 .cn-thread.cn-th-resolved .cn-thwho {
@@ -3304,12 +3321,11 @@ button.cn-grow {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  margin-bottom: 6px;
 }
 /* Where the thread hangs. A path is the one thing here that can be longer than the
    column, so it scrolls inside itself rather than pushing the controls off the row. */
 .cn-thwhere {
-  font: 11px/1 var(--cn-mono);
+  font: 11px/1.35 var(--cn-mono);
   color: var(--cn-fg-dim);
   background: var(--cn-track);
   border-radius: 4px;
@@ -3319,29 +3335,51 @@ button.cn-grow {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* The thread's one control, and the one place `.cn-tgl` has to say its own border
+   out loud: the console's reset (`.cn button`) is more specific than the class, so
+   a toggle inside it draws as bare words — which on a card whose every other line
+   *is* words read as a label rather than as the thing you press. */
 .cn-throw .cn-tgl {
   margin-left: auto;
+  border: 1px solid var(--cn-line);
 }
+.cn-throw .cn-tgl:hover {
+  border-color: var(--cn-line-hi);
+}
+/* One message, as a card on the thread's ground. The bubble is what makes a
+   conversation read as one: the rail it replaced said where a message started and
+   nothing about where the one before it ended, so two replies ran together. */
 .cn-thmsg {
   display: flex;
-  gap: 9px;
-  padding: 4px 0 0 3px;
-}
-/* The rail is the thread's shape: one line down the side of every message, tinted
-   where the harness is the one speaking. */
-.cn-thrail {
-  width: 2px;
-  border-radius: 2px;
-  background: var(--cn-line-hi);
-  flex: none;
-}
-.cn-thours .cn-thrail {
-  background: var(--cn-violet);
-}
-.cn-thbody {
+  flex-direction: column;
+  gap: 3px;
+  border: 1px solid var(--cn-line-soft);
+  border-radius: var(--cn-r-sm);
+  background: var(--cn-panel);
+  padding: 7px 10px 8px;
   min-width: 0;
 }
+/* The harness speaking, in the violet it speaks in everywhere else. On a
+   single-operator deployment the fleet posts under the operator's own credential,
+   so the tint and the mark are the only things that say who is talking. */
+.cn-thmsg.cn-thours {
+  background: var(--cn-violet-fill);
+  border-color: var(--cn-violet-line);
+}
+/* The replies, indented under the comment they answer and strung on one line, so a
+   thread's shape says how far the conversation got before anything is read. */
+.cn-threplies {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-left: 9px;
+  padding-left: 11px;
+  border-left: 1px solid var(--cn-line);
+}
 .cn-thwho {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 11.5px;
   font-weight: 600;
   color: var(--cn-fg-dim);
@@ -3355,7 +3393,6 @@ button.cn-grow {
   background: var(--cn-violet-fill);
   padding: 2px 4px;
   border-radius: 3px;
-  margin-left: 6px;
 }
 .cn-thtext {
   font-size: 12.5px;
@@ -3364,6 +3401,12 @@ button.cn-grow {
 }
 .cn-thtext p {
   margin: 3px 0;
+}
+.cn-thtext p:first-child {
+  margin-top: 0;
+}
+.cn-thtext p:last-child {
+  margin-bottom: 0;
 }
 .cn-thtext pre {
   overflow-x: auto;
