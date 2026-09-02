@@ -1949,6 +1949,7 @@ export function buildDemoState(): DemoSeed {
         baselineAt: null,
         live: true,
         proposal: null,
+        authored: 'plan',
       },
       // A measure the working agent declared through `watch_declare`, waiting on
       // the operator: nothing has been put to an environment, because the query
@@ -1976,6 +1977,7 @@ export function buildDemoState(): DemoSeed {
         baselineValue: null,
         baselineAt: null,
         live: false,
+        authored: 'plan',
         proposal: {
           at: ago(2),
           note:

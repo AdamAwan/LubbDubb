@@ -880,6 +880,7 @@ CREATE TABLE IF NOT EXISTS goal_watches (
   baseline_at     TEXT,
   live            INTEGER NOT NULL DEFAULT 1,  -- 0 while an agent's declaration awaits the operator
   proposal        TEXT,            -- an agent's pending amendment, as JSON; NULL where none is outstanding
+  authored        TEXT NOT NULL DEFAULT 'plan', -- 'plan' | 'operator'; an operator's row is neither swept nor overwritten by a replan
   why        TEXT,
   dry_run_environment TEXT,        -- NULL while nothing has been asked
   dry_run_at          TEXT,

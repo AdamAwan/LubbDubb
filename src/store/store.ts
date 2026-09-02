@@ -1394,6 +1394,12 @@ export class Store {
   ruleOnWatchProposal(originRef: string, checkId: string, accept: boolean): GoalWatch | null {
     return this.watches.ruleOnWatchProposal(originRef, checkId, accept);
   }
+  saveOperatorWatch(originRef: string, check: Omit<GoalWatchInput, 'seq'>): GoalWatch {
+    return this.watches.saveOperatorWatch(originRef, check);
+  }
+  deleteGoalWatch(originRef: string, checkId: string): boolean {
+    return this.watches.deleteGoalWatch(originRef, checkId);
+  }
   openWatchWindow(input: { goalRef: string; environment: string; openedAt: string; settlesAt: string }): void {
     this.watches.openWatchWindow(input);
   }

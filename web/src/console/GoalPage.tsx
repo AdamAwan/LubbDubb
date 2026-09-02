@@ -30,6 +30,7 @@ import { Ref, TicketLink } from '../components/refs.js';
 import { askPrompt, localRunPrompt } from '../cockpit/desktopLink.js';
 import { DesktopLink } from '../components/DesktopLink.js';
 import { ValidationSection } from '../components/ValidationSection.js';
+import { SignalsSection } from '../components/SignalsSection.js';
 import { watchBucket } from '../worldBuckets.js';
 import { stateColour } from '../stateColour.js';
 import { WorkRecord } from '../components/WorkRecord.js';
@@ -125,6 +126,7 @@ export function GoalPage({
         refUrls={view.state.refUrls}
         desktopFolder={view.state.config.desktopFolder}
       />
+      <Signals page={page} actions={actions} refUrls={view.state.refUrls} />
       <div className="cn-gcols">
         <div className="cn-stack">
           <PullRequests page={page} view={view} actions={actions} />
@@ -703,6 +705,65 @@ function Validation({
           onHandover={(checkId, to) => actions.setValidation(issue.number, checkId, { kind: 'handover', to })}
         />
       </div>
+    </section>
+  );
+}
+
+/**
+ * What this goal asked production to show for the work, and the controls that
+ * change it.
+ *
+ * Under Validation and above the environments, which is the order the two
+ * questions are asked in: validation is *did we build it*, this is *did it do
+ * anything*, and the environment rows below carry what each window has read since
+ * the work arrived there. The card is the declarations; those rows are the
+ * readings.
+ *
+ * **Nothing is drawn where nothing is declared and nothing could be**, which is
+ * this subsystem's own null rule rather than the page being tidy: a goal that
+ * declared no checks reads null, and an empty card headed "Signals" is a surface
+ * saying the fleet is verified. The exception is a goal whose plan *has* a watch
+ * block — there the card draws with its list, and the add controls are how the
+ * list grows.
+ */
+function Signals({
+  page,
+  actions,
+  refUrls,
+}: {
+  page: GoalPageView;
+  actions: CockpitActions;
+  refUrls: Record<string, string>;
+}): JSX.Element | null {
+  const { issue, signals, plan } = page;
+  // No checks and no plan is a goal nobody has planned, and an add control on it
+  // would offer a query against an environment for work that does not exist yet.
+  if (signals.length === 0 && plan === null) return null;
+  const pending = signals.filter((c) => !c.live).length;
+  return (
+    <section className="cn-card" id="cn-signals">
+      <h3>
+        Signals
+        <i className="cn-n">
+          {signals.length === 1 ? '1 check' : `${signals.length} checks`}
+          {pending > 0 && ` · ${pending} awaiting you`}
+        </i>
+        <span className="cn-more">
+          asked of production after this ships
+          {plan !== null && (
+            <button type="button" className="cn-linkish" onClick={() => actions.viewPlan(plan.id)}>
+              see the plan ↗
+            </button>
+          )}
+        </span>
+      </h3>
+      <SignalsSection
+        signals={signals}
+        refUrls={refUrls}
+        onSave={(check) => actions.saveWatchCheck(issue.number, check)}
+        onDelete={(checkId) => actions.deleteWatchCheck(issue.number, checkId)}
+        onRule={(checkId, accept) => actions.ruleWatchProposal(issue.number, checkId, accept)}
+      />
     </section>
   );
 }

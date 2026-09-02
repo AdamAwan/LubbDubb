@@ -35,6 +35,7 @@ const CHECK: GoalWatch = {
   baselineAt: null,
   live: true,
   proposal: null,
+  authored: 'plan',
 };
 
 /**

@@ -143,10 +143,42 @@ names nothing under `src/environments/`, which is the lens boundary this subsyst
 
 ### The operator, at any point
 
-Edits, adds and deletes on the plan sheet, and **approves** — an agent-authored query is not run
-against an environment until the plan carrying it is approved, and an amendment lands as a pending
-change rather than taking effect. That approval is the whole of the authorisation story: the query
-runs inside the operator's own command, with the operator's own credential.
+**Approves**, first: an agent-authored query is not run against an environment until the plan
+carrying it is approved, and an amendment lands as a pending change rather than taking effect. That
+approval is the whole of the authorisation story — the query runs inside the operator's own command,
+with the operator's own credential.
+
+And **writes, edits and deletes**, from the goal's own page — the Signals card
+(`web/src/components/SignalsSection.tsx`, `PUT` and `DELETE`
+`/api/issues/:number/watch/checks/:checkId`). A plan document is written once, weeks before the work
+ships; a query that names the wrong operation is wrong for as long as it stands, and re-opening the
+plan to fix one is not what happens. So the third writer is the one holding the running system, on
+the page they are already on. A declaration written here is refused by `WatchCheckSchema` — the plan
+document's own rules, so a signal still cannot be written without a `presence` query and a measure
+still cannot be written with nothing that could fail it — and it **runs the dry run in the same
+call**, exactly as accepting an agent's declaration does, which is what puts it to an environment
+once and takes a measure's baseline.
+
+**A check the operator wrote or edited is `authored: 'operator'`, and a replan does not touch it.**
+This is the one exception to _a document speaks for the whole watch_
+([`ingestGoalWatch`](#persistence)), and it is exactly as narrow as it needs to be: a check they
+wrote was never in the document, so sweeping it would be a replan deleting somebody's work without
+their seeing it, and a check they edited is a deliberate correction of the plan's wording, so the
+plan's version of that id is dropped on the floor rather than restored on the next amendment. The
+opposite reading — the plan wins — makes the goal page a surface whose edits quietly expire, which is
+worse than one that cannot edit at all.
+
+A **delete** takes any check, the planner's included, with the readings taken against it; the plan
+re-declares its own on the next replan, because the document still says it. That is the honest
+outcome rather than a surprise: what a delete removes is a check, not the plan's opinion. An **edit**
+clears the dry run, the baseline and the window's readings **only where the query or the `presence`
+query changed** — a reading is a reading of _that_ question, and a re-worded title or a moved
+threshold is the same question. The distinction is load-bearing for one field only: a baseline is
+read _before the work arrived_, and after an arrival it cannot be retaken.
+
+An accepted `watch_declare` proposal does **not** make a check the operator's. It applies text to a
+row that already has an author, and a replan is still entitled to replace it — which is the behaviour
+that was there before `authored` existed, kept.
 
 ## The dry run
 
@@ -611,6 +643,23 @@ for the same reason the ruling exists — they were never part of the document, 
 adopts nor discards them, and a decision taken off an operator without their seeing it is what the
 approval prevents.
 
+**The goal page's Signals card** draws the declarations themselves — every check on the goal, its
+query, what it expects, and what the dry run read — with the controls that change them
+(`web/src/components/SignalsSection.tsx`, embedded by `web/src/console/GoalPage.tsx`). It sits under
+Validation and above the environments, which is the order the questions are asked in: validation is
+_did we build it_, this is _did it do anything_, and the environment rows below carry what each
+window has read since. It is not a second copy of the plan sheet's block: the sheet draws a document
+under review at approval time, and this draws a live goal being operated weeks later.
+
+Its rows carry the plan sheet's ruling control unchanged, so an operator who never opens a plan sheet
+still sees an agent's declaration and can accept or decline it. A check the operator wrote says so —
+a `yours` chip, which is the only place the replan rule above is visible.
+
+**Nothing is drawn where nothing is declared and no plan could declare one**: a goal that declared no
+checks reads null, and an empty card headed _Signals_ is a surface reporting the fleet verified. A
+goal that has a plan draws the card with whatever list it has, because the add controls are how a
+list starts.
+
 **The goal page's Environments card** grows a watch block **inside** each environment's row —
 indented, on the well, with a tinted left edge (`web/src/console/GoalPage.tsx`,
 `web/src/console/console.css`). Inside the row and not beside it, because a watch belongs to an
@@ -683,7 +732,7 @@ question marks. A goal that declared no checks renders nothing either, because n
 
 | Table            | One row per                   | Written                                                                                                              |
 | ---------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `goal_watches`   | `(goal_ref, check_id)`        | `OR REPLACE` on the declaration; the merge key is the slug                                                           |
+| `goal_watches`   | `(goal_ref, check_id)`        | `OR REPLACE` on the declaration; the merge key is the slug, and `authored` says which writer's it is                 |
 | `watch_windows`  | `(goal_ref, environment)`     | `OR IGNORE` — an arrival opens one window, and re-arriving is not a second; an operator's extend re-opens _that_ row |
 | `watch_readings` | `(window, check_id, read_at)` | append-only, and pruned only with the check an amendment dropped                                                     |
 
@@ -708,7 +757,9 @@ None of the new columns needs a backfill, and each for a stated reason.
 rather than as clean — and every database from before this build declares no measures anyway, since
 the schema refused them. `expect_baseline` and `live` carry SQL defaults that are the honest reading
 of a row written before either existed: a signal declares no baseline, and every check the operator's
-own plan approval already authorised is live. It needs no backfill, and that is a property of the freshness guard rather than
+own plan approval already authorised is live. `authored` defaults to `'plan'`, which is what every
+row written before an operator could edit one actually was — and the wrong default is the expensive
+one here, since a database whose rows all read `operator` is a fleet no replan can amend. It needs no backfill, and that is a property of the freshness guard rather than
 an oversight: null there means _not considered yet_, and an arrival considered for the first time
 opens a window only if its confirming reading is fresh — so a database full of nulls is walked once,
 stamped, and opens nothing for work that shipped in March.

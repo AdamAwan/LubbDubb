@@ -1,6 +1,7 @@
 import type {
   AppState,
   BugFiling,
+  GoalWatchDeclaration,
   BuildReading,
   InsightsWindow,
   JobAttachmentInput,
@@ -159,6 +160,26 @@ function post<T>(url: string, body?: unknown): Promise<T> {
     method: 'POST',
     ...(body === undefined ? {} : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
   }).then((r) => json<T>(r));
+}
+
+/**
+ * PUT a JSON body, and DELETE.
+ *
+ * Beside {@link post} rather than spelled out at the call sites for its reason —
+ * and because a route whose verb *is* its meaning should read that way here: a
+ * check is written at its own address and dropped from it, which is what makes one
+ * verb enough for both a new one and an edit.
+ */
+function put<T>(url: string, body: unknown): Promise<T> {
+  return authFetch(url, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  }).then((r) => json<T>(r));
+}
+
+function del<T>(url: string): Promise<T> {
+  return authFetch(url, { method: 'DELETE' }).then((r) => json<T>(r));
 }
 
 const realApi = {
@@ -541,6 +562,16 @@ const realApi = {
   // which is the whole reason it is asked.
   ruleWatchProposal: (issueNumber: number, checkId: string, accept: boolean) =>
     post<{ ok: true }>(`/api/issues/${issueNumber}/watch-proposals/${encodeURIComponent(checkId)}`, { accept }),
+  // The operator's own check, written or re-written. One verb for both, on the slug
+  // every other writer here folds on — and it runs the dry run in the same call, so
+  // `dryRun` is what the environment refused rather than a promise to look later.
+  saveWatchCheck: (issueNumber: number, check: GoalWatchDeclaration) =>
+    put<{ ok: true; dryRun: string[] }>(
+      `/api/issues/${issueNumber}/watch/checks/${encodeURIComponent(check.id)}`,
+      check,
+    ),
+  deleteWatchCheck: (issueNumber: number, checkId: string) =>
+    del<{ ok: true }>(`/api/issues/${issueNumber}/watch/checks/${encodeURIComponent(checkId)}`),
   // Give a window more time — the answer for one that closed before the weekly job
   // ran. It re-opens the window it names rather than opening a second one, so the
   // readings already taken stay in front of the ones it is about to take.

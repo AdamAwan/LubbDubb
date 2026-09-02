@@ -4447,6 +4447,45 @@ export type GoalWatchKind = 'signal' | 'measure';
  */
 export type WatchReadingVerdict = 'fires' | 'zero' | 'unknown';
 
+/**
+ * One check as its **author** writes it — a plan document's `watch` block, and the
+ * goal page's form, which is the same declaration with one check in it.
+ *
+ * A separate shape from {@link GoalWatchInput}, and the difference is which way
+ * round the two kinds are told apart: here by a `kind` the author states and an
+ * `expect` a measure carries, there by a row of columns most of which are null for
+ * whichever kind it is not. The store's shape is the one table's; this is the one
+ * a person types, and refusing it is where a signal without a presence query and a
+ * measure with nothing that could fail it are refused.
+ *
+ * `WatchCheckSchema` (`src/validation/watchDocument.ts`) is annotated with this,
+ * so a field learned by one and not the other does not compile.
+ * → `docs/spec/29-post-deploy-watch.md#the-declaration`
+ */
+export type GoalWatchDeclaration =
+  | {
+      kind: 'signal';
+      /** Stable and author-chosen: every writer merges on it, so it must survive a replan. */
+      id: string;
+      title: string;
+      query: string;
+      /** The second query proving the code path runs. A signal is not declarable without one. */
+      presence: string;
+      /** The count it must not exceed. Almost always zero — the thing should not be happening. */
+      tolerate: number;
+      why?: string;
+    }
+  | {
+      kind: 'measure';
+      id: string;
+      title: string;
+      query: string;
+      /** A threshold, a baseline comparison, or both. Never empty — see `WatchExpectSchema`. */
+      expect: { under?: number; over?: number; noWorseThan?: 'baseline' };
+      unit?: string;
+      why?: string;
+    };
+
 /** One declared check, as a plan document's `watch` block hands it to the store. */
 export interface GoalWatchInput {
   id: string;
@@ -4517,7 +4556,32 @@ export interface GoalWatch extends GoalWatchInput {
   live: boolean;
   /** An agent's pending amendment to this check, or null where none is outstanding. */
   proposal: GoalWatchProposal | null;
+  /**
+   * Who last wrote this declaration — the plan, or the operator on the goal page.
+   *
+   * **`operator` is what a replan does not touch**, and that is the whole of why
+   * the field exists. A document speaks for the whole watch, so re-ingesting one
+   * removes a check it stopped declaring and overwrites the text of one it still
+   * does; both are right for a check the plan wrote, and both are somebody's edit
+   * silently reverted for a check the operator did. So an operator's row is
+   * neither swept nor overwritten, and the plan's version of that id is dropped
+   * on the floor.
+   * → `docs/spec/29-post-deploy-watch.md#the-operator-at-any-point`
+   */
+  authored: GoalWatchAuthor;
 }
+
+/**
+ * Which writer a check's current text came from.
+ *
+ * Two rather than three, and `watch_declare` is neither: its output is a
+ * {@link GoalWatchProposal} against a row that already has an author, and
+ * accepting one applies text to that row without changing whose the row is. An
+ * agent's amendment to a check the plan wrote is still the plan's, and a replan
+ * is still entitled to replace it — which is the behaviour that was there before
+ * this field, kept.
+ */
+type GoalWatchAuthor = 'plan' | 'operator';
 
 /**
  * An agent's declaration, waiting on the operator.
