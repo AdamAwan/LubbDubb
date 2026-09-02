@@ -958,6 +958,19 @@ export function buildDemoState(): DemoSeed {
           },
         }),
       ],
+      // What the parent picker offers the orphan bug #341 — the same list the
+      // server derives with `candidateParents`, which is the open Feature above
+      // plus the parents the other stories name. Written out rather than derived
+      // here so the fixture states what the wire carries.
+      parentCandidates: [
+        {
+          number: 300,
+          title: 'Source-grounded document patrols',
+          issueType: 'Feature',
+          workItemState: 'Active',
+          state: 'open' as const,
+        },
+      ],
     },
     tasks: [
       {

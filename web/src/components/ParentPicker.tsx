@@ -15,9 +15,20 @@ import { AsyncButton } from './AsyncButton.js';
  * three buttons is two sets of wording, two disabled rules and two chances for
  * one of them to be wired to nothing, none of which `npm run check` can see.
  *
- * "Choose another" is a select over the containers in the world — the same set
- * `issueContainerTypes` names for every other gate — rather than a free number
- * box: an id typed by hand is the one answer here nobody can check.
+ * "Choose another" is a select over `world.parentCandidates` — the containers the
+ * harness can see, from the server — rather than a free number box: an id typed by
+ * hand is the one answer here nobody can check.
+ *
+ * **The list comes over the wire and is never re-derived here.** It used to be
+ * `world.issues` filtered by `containerTypes`, which is half of `candidateParents`
+ * and the half that is almost always empty: an Azure item list is narrowed by tag
+ * and assignee, so an open Feature is usually visible only as some *other* item's
+ * parent. On the deployments that raise the missing-parent warning at all, that
+ * filter therefore matched nothing and the select simply was not drawn — leaving
+ * "Not applicable" as the only answer to a warning about filing, which reads as a
+ * cockpit that has lost the control rather than one that has nothing to offer
+ * (issue #683). The server ships the same list the appraiser's own orphan note is
+ * written from.
  *
  * The proposed container is drawn by the caller, as a `<Ref>` beside these
  * buttons and never inside one. Verifying the suggestion has to be as cheap as
@@ -36,10 +47,10 @@ export function ParentPicker({
   actions: CockpitActions;
 }): JSX.Element {
   const [chosen, setChosen] = useState<string>('');
-  const types = view.state.config.containerTypes.map((t) => t.toLowerCase());
-  const options = view.state.world.issues
-    .filter((i) => i.number !== issue.number && i.issueType && types.includes(i.issueType.toLowerCase()))
-    .sort((a, b) => a.number - b.number);
+  // Already open, deduplicated and in id order — `candidateParents`' answer, taken
+  // whole. The goal itself is dropped: an item cannot be its own container, and it
+  // is in the list whenever somebody hung something off it.
+  const options = view.state.world.parentCandidates.filter((c) => c.number !== issue.number);
   return (
     <div className="cn-acts">
       {proposed !== null && (

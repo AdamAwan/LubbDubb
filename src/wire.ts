@@ -94,6 +94,7 @@ import type {
   HumanTask,
   IssueConclusionVerdict,
   IssueInstruction,
+  IssueRelative,
   IssueRunOutcome,
   IssueState,
   IssueSpend,
@@ -371,6 +372,22 @@ export interface CockpitWorld extends WorldSnapshot {
   /** Absent when the retention window is disabled or the baseline predates it. */
   closedPullRequests?: PullRequest[];
   issues: Issue[];
+  /**
+   * The open containers a goal with no parent could be hung off — `candidateParents`'
+   * answer over the whole world, one list per snapshot rather than one per goal.
+   *
+   * Shipped rather than re-derived because the browser cannot derive it. The list
+   * is the union of two things: the container-typed items in `issues`, and the
+   * **parents of other items** — and on Azure, where the item list is narrowed by
+   * tag and assignee, it is almost entirely the second. A picker filtering `issues`
+   * by type alone therefore offers nothing on the deployments that raise the
+   * question, which is a warning with no way to answer it.
+   *
+   * Empty on a tracker with no hierarchy, and on a world whose items name no open
+   * container. `ParentPicker` draws no list at all in that case rather than an
+   * empty select.
+   */
+  parentCandidates: IssueRelative[];
 }
 
 // ---------------------------------------------------------------------------

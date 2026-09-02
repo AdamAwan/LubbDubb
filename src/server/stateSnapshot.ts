@@ -79,6 +79,7 @@ import { isActiveTask } from '../tasks.js';
 import { validationResourcePath } from '../validation/resources.js';
 import { withLiveClaim } from '../validation/desktop.js';
 import { watchLabelFor } from '../watchLabels.js';
+import { candidateParents } from '../issueRelations.js';
 import { allGoalReach } from '../environments/reach.js';
 import { environmentGateHold } from '../environments/arrival.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
@@ -885,6 +886,14 @@ export function buildStateSections(
       // the first would make a `done` verdict silently veto an item the operator
       // had deliberately moved back to a pickup state.
       issues: world.issues.map(enrichIssue),
+      // The containers a goal with no parent could be hung off — the *same*
+      // `candidateParents` an agent's orphan note is written from, so the
+      // suggestion the fleet is offered and the list the operator picks from are
+      // one reading. Derived here because the browser cannot: most of this list is
+      // the parents of other items, and a picker filtering `issues` by container
+      // type alone finds nothing on an Azure board narrowed by tag and assignee —
+      // a missing-parent warning with no answer under it.
+      parentCandidates: candidateParents(world.issues, config.issueContainerTypes),
     },
     // Runs whose issue the tracker no longer returns (issues #203, #234) — closed
     // by hand, or the watch tag removed. Rebuilt from the run's own snapshot by
