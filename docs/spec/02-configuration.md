@@ -713,6 +713,8 @@ Both transitions need a provider that can write the state back (Azure). GitHub i
 | `selfUpdate.remote` | `string` | `"origin"` | The remote the install directory's updates come from. |
 | `selfUpdate.branch` | `string` | `"main"` | The branch on it that releases land on. **Not `defaultBranch`**, which is the _worked_ repo's integration branch and a different repository's. |
 | `selfUpdate.checkIntervalMs` | `number` | `3600000` | A floor on how often the remote is touched, not on how fresh the served answer is: the reading is held in memory and served from there in between. |
+| `selfUpdate.autoUpdate` | `boolean` | `false` | Take an update without being asked: drain when one lands, hand off when the fleet runs dry. Both halves or neither — a drain nobody applies is a fleet that paused itself. Does nothing without a supervisor in front of the process. |
+| `selfUpdate.drainDeadlineMs` | `number` | `7200000` | How long an automatic drain waits before it stops waiting and interrupts what is left (which the next boot restores). Zero waits forever. |
 
 #### `selfUpdate`
 
@@ -725,6 +727,10 @@ somewhere else.
 
 Cheap by construction: the steady state is one `ls-remote` an hour, which transfers no objects. Full
 behaviour, including the drain and the handoff, is [21](21-self-update.md).
+
+`autoUpdate` is the separate question of whether the harness *takes* what it finds, and it is off
+until a deployment says otherwise. On, it does both halves and relaxes nothing about when: the drain
+still waits for every agent, and only `drainDeadlineMs` ever ends that wait early.
 
 #### `spendBurn`
 

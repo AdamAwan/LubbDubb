@@ -128,7 +128,79 @@ each checking a subset. Three actions, and every refusal is a 409 with the reaso
 A drain does not become a handoff on its own. An operator who asked the fleet to wind down authorized
 the wind-down; taking the process out from under them the moment the last agent finishes, possibly
 hours later, is a second decision and stays theirs. `UpdateDesk.run` moves `draining` to `ready` on
-the pulse that finds the fleet clear, and stops there.
+the pulse that finds the fleet clear, and stops there — unless the operator has authorized both
+halves in advance, which is the whole of `autoUpdate` below.
+
+## Taking it unasked
+
+`selfUpdate.autoUpdate`, **off** by default, `autoUpgradeStep` in `upgradePlan.ts`. One key rather
+than two, because the two halves are not separately useful: a drain nobody applies is a fleet that
+paused itself and stopped, which is worse than never draining at all. On, the desk asks for the same
+two transitions the operator's two clicks ask for, in the same order, through the same `request`.
+
+Nothing about _when_ is relaxed. The drain still waits — no agent is interrupted for an update that
+arrived mid-run — and every refusal in `upgradability` still refuses: a dirty install, a build ahead
+of its upstream and an unavailable reading are all "not this pulse", said in words on the panel
+exactly as they are to a hand on the button.
+
+Two things it will not do:
+
+- **Nothing at all without a supervisor.** The handoff is an exit, and an exit with nothing in front
+  of it to relaunch is the fleet going down and staying down — unattended, on a machine nobody is
+  looking at. The manual path degrades to a printed command here; this one degrades to doing
+  nothing, which is the same answer.
+- **Never `interrupt`, except on the deadline.** The override exists because it is a decision, and
+  `autoUpdate` authorizes the ordinary path, not the forced one.
+
+The step runs as a **bounded loop of three**, not one transition per pulse, because a drain that
+finds an empty fleet is `ready` the moment it is asked for and an unattended upgrade sitting in a
+state whose whole meaning is "go now" until the next heartbeat is the mistake `applyUpgradeAction`
+already declines to make for the operator. Three is the length of the longest legal run — drain,
+ready, apply — so it terminates on the shape of the machine.
+
+### The drain deadline
+
+`selfUpdate.drainDeadlineMs`, default two hours; zero waits forever, which is the old behaviour.
+
+An automatic drain is not free while it waits. Dispatch is paused for as long as the longest agent
+runs, so one agent on a slow task holds the whole fleet — and it holds it _quietly_: the gauge says
+`draining`, nothing is red, and the operator who turned this on to stop thinking about updates is
+the one least likely to look. That is a worse interruption than the one the drain exists to avoid,
+because it has no end.
+
+Past the deadline the drain stops waiting and applies with `interrupt`. That is safe in the way the
+manual override is safe and no further: every agent it stops is reaped, recorded `interrupted`, and
+restored by `settleUpgrade` on the way back up — under the same intent row that stopped it. The
+deadline is measured from the intent's `requestedAt`; a stamp that cannot be parsed reads as "no
+deadline" rather than "expired", because a deadline armed off an unreadable timestamp would
+interrupt the fleet immediately.
+
+## The pause the upgrade must not lose
+
+`UpdateDesk.restorePause`, called from `main.ts` beside `settleUpgrade`.
+
+`RuntimeControl` is deliberately not persisted, so every boot seeds `paused` from
+`config.startPaused` ([02](02-configuration.md)). That is the right answer for a **cold** boot and
+the wrong one for this restart, which is not a boot at all: it is one process handing the fleet to
+the next, and the pause state it hands over is a live decision an operator made, not a default.
+
+Left to the configured value it goes both ways, and both are silent:
+
+- An operator who had paused the fleet themselves, then upgraded, gets it back **dispatching** — the
+  fleet starts working while they are still reading the release notes.
+- A deployment that starts paused by policy parks a fleet that was running a second ago, and the
+  operator finds out from the queue not moving.
+
+`pausedByDrain` is already the fact needed — it records whether the *drain* is what paused dispatch,
+so its negation is what the operator had — and it is on the one row written to outlive the process.
+So the boot reads it: under `applying`, and only under it, `paused` is seeded from the intent rather
+than from the config. Any other state means this restart was not the upgrade's and the configured
+default is exactly right, the same fence `settleUpgrade` stands behind.
+
+This is what makes `pausedByDrain` load-bearing in **both** directions, where before it was only
+read on cancel. It is why `apply` straight from `idle` computes it from `alreadyPaused` rather than
+inheriting the resting `false`: on that path there was no drain to inherit an answer from, and the
+default would tell the next boot the operator had parked a fleet they had not.
 
 ## Applying it
 

@@ -672,6 +672,19 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'How often the upstream tip is read.',
   },
   {
+    path: 'selfUpdate.autoUpdate',
+    type: 'boolean',
+    access: 'plain',
+    why: 'Take an update without being asked: drain, then hand off when the fleet is clear.',
+  },
+  {
+    path: 'selfUpdate.drainDeadlineMs',
+    type: 'number',
+    ms: true,
+    access: 'plain',
+    why: 'How long an automatic drain waits before interrupting what is left. Zero waits forever.',
+  },
+  {
     path: 'ci.checks',
     type: 'json',
     access: 'plain',

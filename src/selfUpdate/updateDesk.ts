@@ -4,6 +4,7 @@ import type { Store } from '../store/store.js';
 import { readBuildStanding, type BuildStanding } from './buildStanding.js';
 import {
   applyUpgradeAction,
+  autoUpgradeStep,
   buildReading,
   upgradability,
   IDLE_INTENT,
@@ -55,6 +56,10 @@ export class UpdateDesk {
       remote: string;
       branch: string;
       checkIntervalMs: number;
+      /** Whether the desk takes an update itself, rather than waiting to be clicked. */
+      autoUpdate: boolean;
+      /** How long an automatic drain waits before it interrupts what is left. Zero waits forever. */
+      drainDeadlineMs: number;
       /** Injectable so a test can stand in a checkout it controls, or none at all. */
       read?: typeof readBuildStanding;
       now?: () => string;
@@ -88,6 +93,7 @@ export class UpdateDesk {
   async run(): Promise<void> {
     await this.check(false);
     this.advanceDrain();
+    this.advanceAuto();
   }
 
   /**
@@ -143,6 +149,73 @@ export class UpdateDesk {
     if (intent.state !== 'draining') return;
     if (this.deps.store.countLiveAgents() > 0) return;
     this.deps.store.writeUpgradeIntent({ ...intent, state: 'ready' });
+  }
+
+  /**
+   * `selfUpdate.autoUpdate`: the two clicks, taken on the fleet's behalf.
+   *
+   * **A bounded loop, not one step a pulse.** A drain that finds an empty fleet is
+   * `ready` the moment it is asked for, and making an unattended upgrade sit in a
+   * state whose whole meaning is "go now" until the next heartbeat is the same
+   * mistake `applyUpgradeAction` already refuses to make for the operator. Three is
+   * the length of the longest legal run — drain, ready, apply — so it terminates on
+   * the shape of the machine rather than on the count.
+   *
+   * Every refusal is swallowed on purpose: a build that turned dirty, a tip that
+   * moved back, a reading that went unavailable between the check and here are all
+   * "not this pulse", and the operator's manual path says the same thing in words
+   * on the panel.
+   */
+  private advanceAuto(): void {
+    if (!this.deps.autoUpdate) return;
+    for (let i = 0; i < 3; i++) {
+      const intent = this.deps.store.readUpgradeIntent();
+      const step = autoUpgradeStep({
+        intent,
+        upgradable: upgradability(this.standing ?? unknownStanding(this.now())),
+        live: this.deps.store.countLiveAgents(),
+        supervised: this.supervised,
+        drainDeadlineMs: this.deps.drainDeadlineMs,
+        drainingForMs: drainingForMs(intent, Date.parse(this.now())),
+      });
+      if (!step) return;
+      const result = this.request(step.action, { interrupt: step.interrupt });
+      if (!result.ok) return;
+      console.log(`[lubbdubb] auto-update: ${step.action} — ${step.why}`);
+      // `apply` hands off; there is nothing after it worth deciding.
+      if (result.intent.state === 'applying') return;
+    }
+  }
+
+  /**
+   * Carry the operator's own pause across the upgrade's restart.
+   *
+   * `RuntimeControl` is deliberately not persisted, so every boot seeds `paused`
+   * from `config.startPaused` — which is the right answer for a *cold* boot and the
+   * wrong one for this restart. An upgrade is one process handing the fleet to the
+   * next, and the pause an operator set before it is a live decision that a
+   * configured default has no business overruling: theirs would be dropped and the
+   * fleet would come back dispatching, while a deployment that starts paused by
+   * policy would park a fleet that was running a second ago. Neither is red, and
+   * with `autoUpdate` on nobody is at the screen to notice.
+   *
+   * `pausedByDrain` is already the fact needed — it records whether the *drain* is
+   * what paused dispatch — and it is on the one row written to outlive the process.
+   * Reading it here is what makes it load-bearing in both directions.
+   *
+   * Fenced on `applying` for the same reason `settleUpgrade` is: any other state
+   * means this restart was not the upgrade's, and the configured default is then
+   * exactly the right answer. Returns what the fleet comes back as, or null when
+   * this was not an upgrade's restart.
+   *
+   * @public called by `main.ts`, beside `RecoveryDesk.settleUpgrade`.
+   */
+  restorePause(): boolean | null {
+    const intent = this.deps.store.readUpgradeIntent();
+    if (intent.state !== 'applying') return null;
+    const paused = !intent.pausedByDrain;
+    this.deps.runtimeControl.apply({ paused });
+    return paused;
   }
 
   /** What the gauge and the panel read. Serves the last reading; takes none. */
@@ -206,6 +279,19 @@ export class UpdateDesk {
     if (this.deps.store.readUpgradeIntent().state === 'idle') return;
     this.deps.store.writeUpgradeIntent(IDLE_INTENT);
   }
+}
+
+/**
+ * How long the drain in this intent has been waiting, or null when it is not one
+ * or never recorded when it was asked for. An unparseable stamp reads as null and
+ * so waits forever, which is the safe direction: the deadline exists to interrupt
+ * agents, and one armed off a timestamp nobody can read would do it immediately.
+ */
+function drainingForMs(intent: { state: string; requestedAt: string | null }, nowMs: number): number | null {
+  if (intent.state !== 'draining' || !intent.requestedAt) return null;
+  const since = Date.parse(intent.requestedAt);
+  if (Number.isNaN(since)) return null;
+  return Math.max(0, nowMs - since);
 }
 
 /** The standing before any reading has been taken, or after one could not be. */
