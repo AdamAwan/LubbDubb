@@ -2058,17 +2058,29 @@ export interface ScratchpadPayload {
 }
 
 /**
- * A pull request's current review pack with what the reviewer did to it — the
- * one shape the cockpit renders and takes marks against. The document is the
- * domain type unchanged, because the cockpit, the companion and the store read
- * one shape and there is one declaration of it
+ * `GET /api/prs/:number/review-pack` — a pull request's current review pack with
+ * what the reviewer did to it: the one shape the cockpit renders and takes marks
+ * against. The document is the domain type unchanged, because the cockpit, the
+ * companion and the store read one shape and there is one declaration of it
  * (`docs/spec/31-review-packs.md#a-pack-is-data-and-rendering-is-downstream`).
- * The route that ships it is not yet built; the shape is declared with the
- * document so the two cannot drift apart.
  */
 export interface ReviewPackPayload extends ReviewPackRecord {
   /** Every mark on the pull request, keyed to hunks; the renderer draws each on whichever idea owns them. */
   marks: ReviewMark[];
+  /**
+   * The pull request's head as the harness last saw it, or null for a pull
+   * request no longer in the world — where {@link stale} cannot be decided and is
+   * left null too, which a reader must not fold into "current".
+   */
+  head: string | null;
+  /**
+   * Set when the head has moved past the pack's `headSha`: the pack is shown, not
+   * regenerated, and says how far behind it is. `commitsBehind` is what the clone
+   * counts between the two, or null where it cannot say — an unfetched head — in
+   * which case the pack is stale by sha alone.
+   * → `docs/spec/31-review-packs.md#when-a-pack-is-made`
+   */
+  stale: { headSha: string; commitsBehind: number | null } | null;
 }
 
 /**

@@ -82,6 +82,8 @@ interface McpBridgeServerOptions {
    * queries nobody has ever put to an environment.
    */
   watch?: () => McpToolDeps['watch'];
+  /** The author desk `review_pack_submit` hands a pack to. Lazy for `filing`'s reason. */
+  reviewPacks?: () => McpToolDeps['reviewPacks'];
   /**
    * How long a recorded call's arguments are kept, in days. `0` records none at
    * all. Absent takes the store's own default — see `McpCallStore`.
@@ -311,6 +313,7 @@ export class McpBridgeServer {
         filing: this.opts.filing?.(),
         prReply: this.opts.prReply?.(),
         watch: this.opts.watch?.(),
+        reviewPacks: this.opts.reviewPacks?.(),
         errors: this.opts.errors,
       },
       resolved.identity,

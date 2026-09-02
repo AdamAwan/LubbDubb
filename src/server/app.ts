@@ -28,6 +28,7 @@ import { register as registerPool } from './routes/pool.js';
 import { register as registerPlans } from './routes/plans.js';
 import { register as registerReadings } from './routes/readings.js';
 import { register as registerReliability } from './routes/reliability.js';
+import { register as registerReviewPacks } from './routes/reviewPacks.js';
 import { register as registerSetup } from './routes/setup.js';
 import { register as registerSchedules } from './routes/schedules.js';
 import { register as registerSpend } from './routes/spend.js';
@@ -66,6 +67,7 @@ const ROUTE_MODULES: RouteModule[] = [
   registerPlans,
   registerReadings,
   registerReliability,
+  registerReviewPacks,
   registerSchedules,
   registerSetup,
   registerSpend,

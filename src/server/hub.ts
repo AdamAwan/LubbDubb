@@ -113,6 +113,9 @@ export class Hub {
     // (the retro as its per-issue reading; the pad through the retro that quotes
     // it), so a coarse dirty is the whole delivery for each.
     agents.on('scratch', () => this.broadcast({ type: 'dirty', sections: ['goals'] }));
+    // A pack landing is the moment a reviewer who asked for one stops waiting;
+    // the goal page carries the pull request's row, so that is the section.
+    system.reviewPacks.on('written', () => this.broadcast({ type: 'dirty', sections: ['goals'] }));
     agents.on('retrospective', () => this.broadcast({ type: 'dirty', sections: ['goals'] }));
     // An agent wrote down what it learned, or agreed with something already
     // written. Coarse for the pad's reason: every fact the Knowledge page draws

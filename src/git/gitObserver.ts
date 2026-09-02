@@ -55,6 +55,15 @@ export interface GitObserver {
    * → `docs/spec/24-environments.md#asking-the-clone`
    */
   contains(commits: string[], heads: string[]): Promise<Map<string, boolean | null>>;
+  /**
+   * The change between `base` and `head` as `git diff base...head` prints it —
+   * from their merge base, so a base that has moved on since the branch was cut
+   * contributes nothing. Null when either names nothing this clone holds: a diff
+   * over a head that was never fetched is not an empty change, and a caller that
+   * read it as one would write a pack owning nothing.
+   * → `docs/spec/31-review-packs.md#coverage`
+   */
+  diff(base: string, head: string): Promise<string | null>;
 }
 
 /** The real observer: `git` in the repo root, the same way {@link WorktreeManager} runs it. */
@@ -91,6 +100,29 @@ export class GitCliObserver implements GitObserver {
   async hasCommitsBeyond(branch: string, base: string): Promise<boolean> {
     const d = await this.divergence(branch, base);
     return d !== null && d.ahead > 0;
+  }
+
+  async diff(base: string, head: string): Promise<string | null> {
+    const [baseSha, headSha] = await Promise.all([
+      resolveCommit(this.repoRoot, base),
+      resolveCommit(this.repoRoot, head),
+    ]);
+    if (!baseSha || !headSha) return null;
+    try {
+      // `--no-ext-diff` and `--no-color`: the output is parsed, not shown, so an
+      // operator's diff tool or colour config must not reach it. Renames are
+      // detected so a moved file is a header and not a delete beside an add.
+      const { stdout } = await runGit(this.repoRoot, [
+        'diff',
+        '--no-color',
+        '--no-ext-diff',
+        '-M',
+        `${baseSha}...${headSha}`,
+      ]);
+      return stdout;
+    } catch {
+      return null;
+    }
   }
 
   async contains(commits: string[], heads: string[]): Promise<Map<string, boolean | null>> {

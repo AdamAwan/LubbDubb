@@ -31,6 +31,7 @@ import type { AreaPathTree } from '../../intake/placement.js';
 import type { RemedySubmission } from '../../remedies/remedies.js';
 import type { FactContradiction, FactProposal } from '../../knowledge/knowledge.js';
 import type { FeatureSummaryInput } from '../../summaries/featureSummary.js';
+import type { ReviewPackAuthor } from '../../reviewPacks/author.js';
 import type { FactAgreementOutcome, FactContradictionOutcome, FactProposalOutcome } from '../../store/knowledge.js';
 import { issueOrigin, originIssueNumber } from '../../plans/planning.js';
 import { type McpTool, toolJson, type ToolCallResult } from '../protocol.js';
@@ -259,6 +260,13 @@ export interface McpToolDeps {
    * nothing is asked of any environment.
    */
   watch?: WatchDryRunner;
+  /**
+   * Where `review_pack_submit` hands the pack it was given: the author desk, which
+   * re-derives what the pack is checked against from the task row and writes the
+   * document. Narrowed to the one method, and optional for {@link McpToolDeps.openPr}'s
+   * reason with the same floor: unwired, the tool says so, and nothing is recorded.
+   */
+  reviewPacks?: Pick<ReviewPackAuthor, 'submit'>;
   errors?: ErrorRecorder;
 }
 

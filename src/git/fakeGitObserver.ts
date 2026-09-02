@@ -13,6 +13,8 @@ export class FakeGitObserver implements GitObserver {
   private readonly divergences = new Map<string, BranchDivergence>();
   /** `<head> <commit>` -> what the clone says. Unscripted reads as "the clone cannot say". */
   private readonly containment = new Map<string, boolean>();
+  /** `<base>...<head>` -> the diff text. Undeclared pairs answer null, as an unfetched head does. */
+  private readonly diffs = new Map<string, string>();
 
   /** Declare where a branch exists. Unspecified sides default to absent. */
   setPresence(branch: string, presence: Partial<BranchPresence>): this {
@@ -34,6 +36,17 @@ export class FakeGitObserver implements GitObserver {
   setContains(head: string, commit: string, held: boolean): this {
     this.containment.set(`${head} ${commit}`, held);
     return this;
+  }
+
+  /** Declare what `git diff base...head` prints. Undeclared pairs answer null. */
+  setDiff(base: string, head: string, diff: string): this {
+    this.diffs.set(key(head, base), diff);
+    return this;
+  }
+
+  async diff(base: string, head: string): Promise<string | null> {
+    this.calls.push(`diff:${key(head, base)}`);
+    return this.diffs.get(key(head, base)) ?? null;
   }
 
   async contains(commits: string[], heads: string[]): Promise<Map<string, boolean | null>> {

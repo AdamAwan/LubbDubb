@@ -32,6 +32,7 @@ import type { FakeWorld, FakeWorldStore } from './fakeWorld.js';
 
 const KINDS: ReadonlySet<InjectableEvent['kind']> = new Set([
   'new_pr',
+  'pr_pushed',
   'ci_failed',
   'ci_passed',
   'pr_comment',
@@ -88,6 +89,9 @@ export class FakeGitHubIntegration
           break;
         case 'ci_passed':
           mutatePr(world, event.prNumber, (pr) => (pr.ciStatus = 'passing'));
+          break;
+        case 'pr_pushed':
+          mutatePr(world, event.prNumber, (pr) => (pr.headSha = event.headSha));
           break;
         case 'pr_approved':
           mutatePr(world, event.prNumber, (pr) => (pr.approved = true));
@@ -148,6 +152,7 @@ export class FakeGitHubIntegration
               mergeableState: 'unknown',
               merged: false,
               labels: event.labels ?? [],
+              ...(event.headSha === undefined ? {} : { headSha: event.headSha }),
             });
           }
           break;

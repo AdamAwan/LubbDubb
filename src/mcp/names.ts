@@ -49,6 +49,7 @@ export const MCP_TOOL_NAMES = [
   'report_remedy',
   'raise',
   'knowledge_ask',
+  'review_pack_submit',
 ] as const;
 
 /**
@@ -139,6 +140,9 @@ export const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use'> = {
   // assessor that cannot use it.
   watch_declare: 'point-of-use',
   report_remedy: 'point-of-use',
+  // Named by `review-pack-author`, the one prompt whose agent can cast it — and
+  // the only way a pack lands at all, which is why that prompt says so twice.
+  review_pack_submit: 'point-of-use',
   // The one tool an agent is never told about: Claude Code calls it through
   // --permission-prompt-tool, so naming it would invite a call that means nothing.
   request_permission: 'point-of-use',
