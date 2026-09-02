@@ -1,10 +1,11 @@
 # 31 — Review packs
 
-**Mostly not yet built.** [The witness log](#the-witness-log) and [the pack document](#the-pack) —
-its shape, its schema version, the reviewer's marks and the two tables under
-[Where it lives](#where-it-lives) — are running code; nothing else in this document is: no author, no
-checker, no route, no rendering, no sharing. Every path a section names is italic while that section
-is unbuilt, and the marker comes off it in the change that makes it true.
+**Partly built.** [The witness log](#the-witness-log), [the pack document](#the-pack) — its shape,
+its schema version, the reviewer's marks and the two tables under [Where it lives](#where-it-lives) —
+[the author](#when-a-pack-is-made), [coverage](#coverage), the two routes and the `review-pack-author`
+prompt id are running code; the rest of this document is not: no checker, no rendering, no sharing.
+Every path a section names is italic while that section is unbuilt, and the marker comes off it in
+the change that makes it true.
 
 A diff is what is left over after the thinking. The reasoning that produced it — what was considered,
 what was rejected, which file was deliberately not touched — is thrown away at the moment of commit,
@@ -226,9 +227,25 @@ page shows which, because the reader weighs them differently.
 
 ### Coverage
 
+_Built_ — stage 3. `src/reviewPacks/hunks.ts` computes the hunks and decides coverage;
+`test/reviewPackAuthor.test.ts` holds it.
+
 **Every hunk in the diff has exactly one owning idea.** A hunk nothing claims is either scope creep
 nobody declared or an omission from the pack, and both are things a reviewer must be told rather than
-left to notice. Coverage is mechanical, so it is checked mechanically.
+left to notice. Coverage is mechanical, so it is checked mechanically: `parseDiffHunks` turns
+`git diff base...head` into hunks — **a hunk is what git calls one**, at git's default context — and
+`coverageRefusal` compares them against the union of `hunk`-kind anchors across every idea, `plumbing`
+included, and refuses a pack that leaves one unowned or owns one twice, naming the hunks. The check
+runs in `review_pack_submit` before the store is written, so a pack that fails it never lands.
+
+A hunk's `range` is read off the `+c,d` half of git's header — lines `c` to `c + d − 1` at the head —
+and the author is **handed the hunks by id** (`h1`, `h2`, …) and names them back; it never writes a
+range for one. The ranges are what a reviewer's marks are keyed on, so they are computed from the
+diff and never taken from the agent's prose. **A pure-deletion hunk carries a zero-width range** at
+the line the deletion sits after — `d` is 0 and git's `c` names the line before the gap, so the range
+is `{c, c}`, clamped to line 1 for a deletion at the top of a file — and its code is the removed lines
+with their `-` prefixes; a deleted file keeps its old path, since the head has no new one. A binary
+file and a pure rename produce no hunk: there is nothing for an idea to own.
 
 Two escape valves, because the invariant is otherwise false in practice:
 
@@ -318,6 +335,11 @@ there would again be nobody checking.
 
 ## When a pack is made
 
+_Built_ — stage 3: the author and the way a reviewer asks for one. `src/reviewPacks/author.ts` is
+the desk, `src/mcp/tools/reviewPackSubmit.ts` the tool, `src/server/routes/reviewPacks.ts` the
+routes; `test/reviewPackAuthor.test.ts` holds it. What is not built is what reads the pack: the
+checker, and the control on the pull request's row that asks.
+
 **On request, and never automatically.** A reviewer asks for one from the pull request's row on its
 goal's page ([Reading it](#reading-it)) and waits while it is written. The fleet opens more pull
 requests than anybody reads, and a pack nobody opens is two agent runs spent on nothing — so the cost
@@ -326,9 +348,69 @@ is paid by the person who chose to pay it, at the moment they chose to.
 The wait is the trade, and it falls at the worst possible moment: somebody has just sat down to
 review and is told to hold on. That is accepted rather than solved.
 
+**The ask is `POST /api/prs/:number/review-pack`, and it returns at once** — `202`, accepted rather
+than done — because the author is an agent run and a route that held the connection for one would
+time out on every proxy between the cockpit and the port. The pack arrives later and
+`GET /api/prs/:number/review-pack` is how a reader learns it has: until then the read is a 404 that
+says whether one is being written. The desk refuses, in the order a reader would blame them, a pull
+request that is not open (404), a head the provider did not report, an author already on the pull
+request, and a paused fleet (409 each). A second ask while one is being written is refused rather
+than queued — the reader is the one party who can tell when a new pack is worth two agent runs — and
+the ask on a new head, once the first author has finished, is the same call.
+
+**The author is spawned outside the dispatcher.** It is not a rule: a pack is made when a person
+asks, never when a rule notices a pull request without one, and nothing under `src/dispatcher/`
+imports it (`test/reviewPackAuthor.test.ts` asserts so). What the desk keeps from the executor is the
+two things that must not be arranged twice. Its checkout comes through `WorktreeManager.ensureReadOnly`
+— a read-only slot detached at the head sha, leased under `review-pack/pr-<n>/<headSha>`, so the
+branch gate sees it and the reap releases it — and its process is reaped through `AgentManager.kill`
+→ `session.kill()` like every other agent's. It does **not** count against the concurrency cap, which
+is the cost [Cost](#cost) accepts; it does honour the pause flag, because a paused fleet is one the
+operator asked not to start agents. Its origin is `pr:<n>:pack`, inside the pull request's family, so
+`padOriginFor` resolves it to the pull request's own pad and no rule's vocabulary matches it.
+
+**The lease key carries the head sha.** The task row has no column for a head, and the pack must be
+written against the head the author was handed rather than whatever the pull request points at by
+the time it submits. The key is the task's own, survives a restart with the row, and names both — so
+the tool re-derives everything it checks against from the row (the pull request from the origin, the
+head from the key, the hunks from the same diff the prompt listed) and nothing lives only in this
+process's memory. A restart mid-run resumes the agent and its submit still lands.
+
+**What the author is handed** is the rendered `review-pack-author` template and then, **appended**
+in this order and never interpolated ([05](05-dispatcher.md#prompt-templates)): the hunks by id with
+their head-side ranges and `+n −m` counts, telling it to read the diff itself in its checkout with
+`git diff <base>...HEAD`; both pads verbatim, oldest first, each entry with its `scr_…` id and its
+fork drawn out — the goal's pad by the pull request's linked issue (`issueForPr`, then
+`goalOriginFor`) and the pull request's own — or the sentence that nobody witnessed it; and the note
+naming `review_pack_submit`. The diff is `GitObserver.diff(base, head)` — `git diff base...head`
+from the merge base, with the pull request's `baseBranch` or the configured `defaultBranch` as the
+base — and the clone is fetched first on the real observer, the plan reconciler's rule, because the
+head a person just clicked on was reported by the provider and the clone may not hold it yet. A
+head the clone still cannot diff fails the ask loudly: the error is recorded, no task and no lease
+are left behind, and the pull request can be asked about again.
+
+**The author writes ideas, claims, gists, notes and the ranges of regions; the harness fills in the
+rest.** `review_pack_submit` (`src/reviewPacks/submission.ts` is its pure half) copies the pull
+request and the head off the commission, sets `schema` to `REVIEW_PACK_SCHEMA`, mints every idea id
+but `plumbing` — the one id the author may name — fills every hunk anchor's `range` and `code` from
+the diff and every region anchor's `code` from the tree at the head (confined to the checkout: a
+path that leaves it, or a range past the file's end, is refused), stamps a witness note's `at` from
+the entry it cites, and reads `witnessed` off the log: true if either pad had an entry. A
+`witnessed` or `disputed` claim, and a `by: 'witness'` note, must cite an entry the author was
+handed, or it is refused by field name — the shape the type refuses is also the shape the tool
+refuses. Everything the checker owns is set, not taken: `order` empty, every `attention`, `cue`,
+`verdict` and `evidence` null, and the only marks an author may set are `key` and `disputed` — `false`
+is the checker's. The call is the pack: it writes `Store.recordReviewPack`, the desk emits `written`
+and the hub marks the goals section dirty, and a run that ends without the call has written nothing.
+
 **Once, and the reader decides when again.** A pack is written against one head sha and stays written
 against it. When the head moves the pack is marked **stale**, says how far behind it is, and **is
-still shown**. Nothing regenerates it: not the push, not the next pulse, and not a reader opening it.
+still shown**: the read ships `head`, the pull request's head as the harness last saw it, and `stale`
+— `{headSha, commitsBehind}` when that head is not the pack's, with the count asked of the clone
+(`GitObserver.divergence`) and null where the clone cannot say, which leaves the pack stale by sha
+alone rather than "zero behind". Both are null for a pull request no longer in the world, open or
+recently closed, where staleness cannot be decided; a reader must not fold that into "current".
+Nothing regenerates it: not the push, not the next pulse, and not a reader opening it.
 A pull request rarely changes direction enough after its first pack for a second to be worth two
 agent runs, and the reader is the only party who can tell when it has. Asking again is the same
 control as asking the first time, and the new pack replaces the old. The witness log has kept
@@ -341,9 +423,14 @@ they started, which is worse than being told it is old.
 
 ### Pull requests nobody witnessed
 
+_Built_ — stage 3, with the author.
+
 A pack is offered for a human-authored pull request too, and the harness says plainly that there is
 no witness log: every claim comes out `inferred`, and the pack's header states it rather than leaving
-a reader to notice the absence of `witnessed` beside anything.
+a reader to notice the absence of `witnessed` beside anything. The prompt's log block says so in as
+many words — neither pad has an entry, and whether the harness links the pull request to a goal at
+all — and tells the author not to invent a witness; the tool then refuses any claim or note that
+cites an entry, since there is none to cite, and writes `witnessed: false`.
 
 Offered where every pack is — on the pull request's row on a goal's page. There is no pull request
 page in the cockpit ([17](17-cockpit.md#links)), so a human-authored pull request gets a pack only
@@ -604,14 +691,18 @@ declaration of it — `ReviewPackPayload` extends `ReviewPackRecord` (the docume
 written) with the marks, and re-declares nothing. Declared with the document, ahead of the route that
 will ship it, so the two cannot drift apart.
 
-_Not yet built:_ routes go in a new module under `src/server/routes/` with an entry in `app.ts`'s
-`ROUTE_MODULES`, and every handler is wrapped in `checked(schemas, handler)` rather than reading the
-request itself. → [16](16-http-api.md#shape)
+The routes are `src/server/routes/reviewPacks.ts`, with its entry in `app.ts`'s `ROUTE_MODULES`,
+and every handler is wrapped in `checked(schemas, handler)` rather than reading the request itself:
+the ask and the read under [When a pack is made](#when-a-pack-is-made), both on
+`/api/prs/:number/review-pack`. → [16](16-http-api.md#post-apiprsnumberreview-pack)
 
-_Not yet built:_ two new prompt ids, _review-pack-author_ and _review-pack-check_, registered like any other. A
-`PromptId` is never deleted once it exists — it is marked `retired: true`, because
+Two prompt ids, registered like any other: `review-pack-author`, built, and _review-pack-check_,
+not yet. A `PromptId` is never deleted once it exists — it is marked `retired: true`, because
 `loadPromptTemplates` throws on a file naming no known id and removing one turns every deployment
-that overrode it into a harness that will not boot. → [05](05-dispatcher.md#prompt-templates)
+that overrode it into a harness that will not boot. The author's tool is `review_pack_submit`,
+named in `MCP_TOOL_NAMES` and classified `point-of-use` — the prompt names it, twice — and the
+desk it hands the pack to reaches the tool layer as `McpToolDeps.reviewPacks`, lazily, like the
+filing desk. → [05](05-dispatcher.md#prompt-templates), [11](11-mcp-tools.md#the-tools)
 
 ## Cost
 

@@ -263,7 +263,7 @@ test('the wire payload is the record plus the marks, never a second declaration'
   const record = store.recordReviewPack(fullPack('a1b2c3d'));
   store.markReviewIdeaRead({ prNumber: 695, headSha: 'a1b2c3d', hunks: [SPEC_HUNK], read: true });
 
-  const payload: ReviewPackPayload = { ...record, marks: store.listReviewMarks(695) };
+  const payload: ReviewPackPayload = { ...record, marks: store.listReviewMarks(695), head: 'a1b2c3d', stale: null };
 
   assert.equal(payload.pack.schema, REVIEW_PACK_SCHEMA);
   assert.equal(payload.marks.length, 1);

@@ -16,6 +16,7 @@ import { NodePtyBackend, type PtyBackend } from './pty/backend.js';
 import { defaultPoolSize, WorktreeManager, type Worktrees } from './worktree/worktreeManager.js';
 import { GitCliObserver, type GitObserver } from './git/gitObserver.js';
 import { fetchRemote } from './git/gitCli.js';
+import { ReviewPackAuthor } from './reviewPacks/author.js';
 import { PlanReconciler } from './plans/planReconciler.js';
 import { AppraisalDesk } from './intake/appraisalDesk.js';
 import { AreaPathDirectory } from './intake/areaPaths.js';
@@ -267,6 +268,13 @@ export interface System {
    * same manager the executor and the reap are wired to, not a second one.
    */
   worktrees: Worktrees;
+  /**
+   * The review pack author desk: the way a reviewer asks for a pack and the way
+   * the author agent hands one back. Outside the dispatcher on purpose — a pack is
+   * made on request, never by a rule — and exposed for the route module and the
+   * hub. → `docs/spec/31-review-packs.md#when-a-pack-is-made`
+   */
+  reviewPacks: ReviewPackAuthor;
   /** Central error log: every caught failure is persisted here and streamed to the cockpit. */
   errors: ErrorLog;
   /**
@@ -657,6 +665,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     // what turns a declared query from text in a document into a query somebody
     // has proved resolves.
     watch: (): McpToolDeps['watch'] => watchDryRun,
+    // Lazy for the same reason: the desk needs the fleet and the worktrees, both
+    // built below this.
+    reviewPacks: (): McpToolDeps['reviewPacks'] => reviewPacks,
     errors,
   });
 
@@ -826,6 +837,25 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     // Absent where there is no feature board, which is also where nothing
     // dispatches a summariser — one conjunction, asked once, above.
     featureBoard: featureBoard ?? undefined,
+  });
+
+  // The review pack author: a spawn outside the pulse, because a pack is made
+  // when a person asks and never when a rule notices. It leases its checkout
+  // through the same `worktrees` and reaps through the same `agents.kill`, so
+  // neither invariant is arranged twice; what it does not do is count against
+  // the cap, which is the cost 31 accepts. The fetch is wired only for the real
+  // observer, the reconciler's rule: a head the provider just reported may not
+  // be in the clone yet, and the observer is fetch-free by design.
+  const reviewPacks = new ReviewPackAuthor({
+    store,
+    agents,
+    worktrees,
+    git: gitObserver,
+    prompts,
+    defaultBranch: config.defaultBranch,
+    runtime: runtimeControl,
+    fetch: opts.gitObserver ? undefined : () => fetchRemote(config.repoRoot),
+    errors,
   });
 
   // The accept/reject surface for every act the harness will not perform on its
@@ -1416,6 +1446,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     mcp,
     desktop,
     worktrees,
+    reviewPacks,
     errors,
   };
 }

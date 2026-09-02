@@ -35,6 +35,7 @@ is about.
 | `routes/spend.ts`       | `/api/spend` and `/api/spend/trend` — the breakdown behind the cost indicators, and its trend                                                                             |
 | `routes/allowance.ts`   | `/api/allowance` — the account's usage percentage over time, and the work that spent it                                                                                   |
 | `routes/readings.ts`    | `/api/retrospectives/:ref`, `/api/scratchpads/:ref`                                                                                                                       |
+| `routes/reviewPacks.ts` | `/api/prs/:number/review-pack` — asking for a review pack, and reading the one a pull request has ([31](31-review-packs.md))                                                |
 | `routes/reliability.ts` | `/api/reliability` — run outcomes, CI health, and why the fleet came back                                                                                                 |
 | `routes/mcpUsage.ts`    | `/api/mcp/usage` — which MCP tools the fleet reached for, and which it never did                                                                                          |
 | `routes/pool.ts`        | `/api/pool`, `/api/pool/insights` and the pool's one write — the cross-fleet pool ([28](28-cross-fleet-pool.md))                                                          |
@@ -438,6 +439,38 @@ PR is picked up (or a now-unwatched one dropped). 400 on a non-integer PR number
 It also records a `pr_watch_seeds` row, in **both** directions: the seeding desk
 ([07](07-pull-requests.md#watching)) must not answer for a pull request a person has answered for, or
 un-watching one the harness opened would be undone on the next pulse.
+
+### `POST /api/prs/:number/review-pack`
+
+Ask for a review pack for the pull request ([31](31-review-packs.md#when-a-pack-is-made)). **`202`,
+accepted rather than done**: the author is an agent run, and the route returns the moment the ask is
+accepted — `{ok, prNumber, headSha}`, the head the pack will be written against — because holding
+the connection for an agent would time out on every proxy between the cockpit and the port. The pack
+arrives later, through the read below.
+
+Refused in the order a reader would blame them: 400 on a non-integer number; 404 for a pull request
+that is not open; 409 when the provider reports no head for it, when an author is already on it
+(a second ask is refused rather than queued — the reader decides when a new pack is worth two agent
+runs, and the ask on a new head once the first author has finished is the same call), and when
+dispatch is paused. The author is not counted against the concurrency cap; it takes a read-only
+worktree slot under `review-pack/pr-<n>/<headSha>`. Nothing is written to the provider and no cycle
+runs. A head the clone turns out not to hold fails after the 202 — recorded to the error log, with no
+task and no lease left behind — and the pull request can be asked about again.
+
+### `GET /api/prs/:number/review-pack`
+
+The pull request's current pack with the reviewer's marks: `ReviewPackPayload` — the record (the
+document and when it was written), every `ReviewMark` on the pull request, `head` (the pull
+request's head as the harness last saw it, null for one no longer in the world) and `stale`, set
+when that head is not the pack's: `{headSha, commitsBehind}`, the count asked of the clone and null
+where it cannot say — a head not yet fetched leaves the pack stale by sha alone, never "zero
+behind". Both null for a pull request the world no longer carries, which a reader must not fold into
+"current". Nothing here regenerates a pack: a stale one is shown, and the ask above is how a new one
+is made.
+
+404 with `{error, writing}` when there is no pack — `writing` says whether an author is on its way,
+so "not asked for" and "on its way" read differently. The newest pack written is what is shipped,
+whatever head it names; an older head's row is kept and never shipped here.
 
 ### `POST /api/issues/:number/watch`
 

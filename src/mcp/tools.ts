@@ -20,6 +20,7 @@ import { replyToReview } from './tools/replyToReview.js';
 import { requestHumanTask } from './tools/requestHumanTask.js';
 import { requestPermission } from './tools/requestPermission.js';
 import { retroSubmit } from './tools/retroSubmit.js';
+import { reviewPackSubmit } from './tools/reviewPackSubmit.js';
 import { reviewReport } from './tools/reviewReport.js';
 import { reviewRoute } from './tools/reviewRoute.js';
 import { scratchAppend } from './tools/scratchAppend.js';
@@ -72,6 +73,7 @@ const TOOLS: Record<McpToolName, ToolFactory> = {
   report_remedy: reportRemedy,
   raise: raiseFact,
   knowledge_ask: knowledgeAsk,
+  review_pack_submit: reviewPackSubmit,
 };
 
 /**

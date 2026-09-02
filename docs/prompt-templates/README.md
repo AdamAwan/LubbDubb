@@ -53,3 +53,4 @@ placeholder is fine.
 | `pr-base-update-conflict` | a PR conflicts with its base branch                         |
 | `pr-review-comment`       | a PR has an unhandled review comment                        |
 | `pr-concern-escalation`   | a PR concern keeps failing to clear (→ human)               |
+| `review-pack-author`      | a reviewer asked for a review pack from a PR's row (not a rule) |
