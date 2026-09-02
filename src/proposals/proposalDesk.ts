@@ -3,6 +3,7 @@ import type { EscalationInbox } from '../escalation/escalationInbox.js';
 import type { ActionExecutor } from '../executor/actionExecutor.js';
 import type { PlanCaveat, Proposal } from '../types.js';
 import { refusePlan } from '../plans/planApproval.js';
+import { declinePlanAmendment } from '../plans/planAmendment.js';
 import { proposedCaveats, unacknowledgedCaveats } from '../plans/planCaveats.js';
 import { backOutOfPlan, type BackOutContext, type BackOutVerdict } from '../plans/planBackOut.js';
 import { readProposedAct } from './proposals.js';
@@ -182,6 +183,17 @@ export class ProposalDesk {
    * silently skipping the transition that leaves the issue a route.
    */
   private settlePlan(proposal: Proposal): string {
+    // A refused *amendment* is the one settlement in the funnel with no effect on
+    // the goal, and it still needs a write: the row it leaves pending would be
+    // re-proposed on the next pulse, so the refusal has to reach
+    // `plan_amendments` even though it reaches nothing else. The plan is untouched
+    // on purpose — carrying on as planned is what "no" means here.
+    if (proposal.kind === 'plan_amendment') {
+      const readAmendment = readProposedAct(proposal);
+      if (!readAmendment.ok || readAmendment.act.kind !== 'plan_amendment')
+        return `; the amendment could not be settled (${readAmendment.ok ? 'the row names no amendment' : readAmendment.error})`;
+      return `; ${declinePlanAmendment(this.store, readAmendment.act.amendmentId, proposal.note).detail}`;
+    }
     if (proposal.kind !== 'plan') return '';
     const read = readProposedAct(proposal);
     if (!read.ok || read.act.kind !== 'plan') return `; the plan could not be settled (${read.ok ? '' : read.error})`;

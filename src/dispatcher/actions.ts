@@ -211,6 +211,38 @@ const ActionSchema = z.discriminatedUnion('type', [
     ...base,
   }),
   /**
+   * Put a change to a **running** plan to a human (`src/plans/planAmendment.ts`).
+   * Like `propose_plan` it carries no act to publish: the executor turns it into an
+   * inbox item plus a `plan_amendment` proposal, and accepting that proposal
+   * ingests the amended document while the plan stays released.
+   *
+   * The document is deliberately **not** in the payload — it is on the
+   * `plan_amendments` row, which is also what the rule reads and what both
+   * settlements rewrite. An action carrying the document would be a second copy of
+   * it that could be accepted after the row it came from was superseded.
+   */
+  z.object({
+    type: z.literal('propose_plan_amendment'),
+    /** The pending amendment row; what accepting applies and rejecting settles. */
+    amendmentId: z.string().min(1),
+    /** The plan being amended — carried so the audit line can name it without a lookup. */
+    planId: z.string().min(1),
+    /** The goal the plan hangs off (`issue:12`). */
+    originRef: z.string().min(1),
+    /**
+     * What the operator is shown: what is being changed, and what each verdict
+     * does.
+     *
+     * There is no `detail` beside it, unlike every other proposing action. The
+     * card's body — why, what changes, what it will not change — is a *reading of
+     * the plan as it stands*, built by the executor from the store when the card
+     * is created, so it cannot describe a diff against a plan that has moved on
+     * since the rule ran.
+     */
+    prompt: z.string().min(1),
+    ...base,
+  }),
+  /**
    * Put an assessor's "worked, and the goal is not reached" to a human, with the
    * arm its declared cause routes to (issue #159). Like `propose_plan` it carries
    * no act to publish: the executor turns it into an inbox item plus a `shortfall`

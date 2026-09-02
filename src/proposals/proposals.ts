@@ -70,6 +70,21 @@ export function planProposalRef(planOriginRef: string): string {
 }
 
 /**
+ * The subject of an amendment to a *running* plan: the amendment itself, not the
+ * plan.
+ *
+ * Keyed on the amendment id rather than the origin for the reason a threaded reply
+ * keys on its comment — a plan can be corrected more than once over its life, and a
+ * ref shared between two of them would make the second look like the first being
+ * re-asked. It is also what keeps this clear of `planProposalRef`: the two are
+ * different questions about one plan and both can be live at once on a plan that
+ * was replanned while an amendment was pending.
+ */
+export function planAmendmentProposalRef(amendmentId: string): string {
+  return `plan-amendment:${amendmentId}`;
+}
+
+/**
  * The world item a proposal is *about*, from the act's ref: `pr:42:merge` and
  * `pr:42:comment:c_7` both concern `pr:42`.
  *
@@ -357,6 +372,7 @@ function refusedAct(kind: ProposalKind): string {
   // day some origin does take that shape is not the day to discover this said
   // "a reply".
   if (kind === 'shortfall') return 'a response to a failed assessment';
+  if (kind === 'plan_amendment') return 'a change to the delivery plan';
   return 'a reply';
 }
 
@@ -399,6 +415,23 @@ function refusedAct(kind: ProposalKind): string {
  */
 export function planProposalHold(ref: string, proposals: Proposal[]): string | null {
   const standing = proposals.find((p) => p.kind === 'plan' && p.ref === ref && p.status === 'pending');
+  return standing ? `awaiting your accept/reject (${standing.id})` : null;
+}
+
+/**
+ * Why an amendment must not be put to the operator again — {@link
+ * planProposalHold}'s reasoning, one row down and for the same reason: the
+ * question is asked once per *amendment*, and both settlements rewrite the
+ * `plan_amendments` row the rule reads, so `pending` is the only arm that can
+ * carry over.
+ *
+ * `rejected` holding would be harmless here and is still wrong to add: a declined
+ * amendment is settled, so the rule that reads `pending` rows cannot re-ask about
+ * it, and a second predicate saying so would be a second answer to a question the
+ * row already answers.
+ */
+export function planAmendmentHold(ref: string, proposals: Proposal[]): string | null {
+  const standing = proposals.find((p) => p.kind === 'plan_amendment' && p.ref === ref && p.status === 'pending');
   return standing ? `awaiting your accept/reject (${standing.id})` : null;
 }
 
@@ -460,6 +493,7 @@ type ProposedAct =
   | { kind: 'merge'; prNumber: number; method: 'merge' | 'squash' | 'rebase' }
   | { kind: 'reply_draft'; prNumber: number; commentId: string | null; body: string; resolve: boolean }
   | { kind: 'plan'; planId: string; originRef: string }
+  | { kind: 'plan_amendment'; amendmentId: string; planId: string; originRef: string }
   | {
       kind: 'shortfall';
       planId: string;
@@ -490,6 +524,20 @@ export function readProposedAct(proposal: Proposal): { ok: true; act: ProposedAc
     if (typeof planId !== 'string' || planId === '' || typeof originRef !== 'string' || originRef === '')
       return { ok: false, error: `proposal ${proposal.id} names no plan` };
     return { ok: true, act: { kind: 'plan', planId, originRef } };
+  }
+
+  // Named before the PR number for the plan arm's reason. The amendment id is the
+  // whole of what performing this needs — the document is on the row, so nothing
+  // that decides what is written travels through the proposal payload and back.
+  if (proposal.kind === 'plan_amendment') {
+    const amendmentId = action.amendmentId;
+    const planId = action.planId;
+    const originRef = action.originRef;
+    if (typeof amendmentId !== 'string' || amendmentId === '')
+      return { ok: false, error: `proposal ${proposal.id} names no amendment` };
+    if (typeof planId !== 'string' || planId === '' || typeof originRef !== 'string' || originRef === '')
+      return { ok: false, error: `proposal ${proposal.id} names no plan` };
+    return { ok: true, act: { kind: 'plan_amendment', amendmentId, planId, originRef } };
   }
 
   // Checked before the PR number for the plan arm's reason, and with one extra

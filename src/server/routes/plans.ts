@@ -1,9 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { orderedProfiles } from '../../agents/modelPolicy.js';
-import { planProposalRef } from '../../proposals/proposals.js';
+import { planAmendmentProposalRef, planProposalRef } from '../../proposals/proposals.js';
 import { acceptanceCriteria } from '../../plans/parts.js';
 import { latestPlanDiff } from '../../plans/planDiff.js';
+import { supersedePlanAmendments } from '../../plans/planAmendment.js';
 import type { PlanHistory } from '../../wire.js';
 import { AcceptanceBody, checked, IdParams, optionalText, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
@@ -62,6 +63,22 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const ref = planProposalRef(plan.originRef);
       const pending = store.listProposals().find((p) => p.kind === 'plan' && p.ref === ref && p.status === 'pending');
       if (pending) proposals.reject(pending.id, 'superseded by a replan');
+      // A pending *amendment* goes the same way, and for the sharper version of the
+      // same reason: a replan replaces the document the amendment was written
+      // against, so accepting it afterwards would either write a plan nobody asked
+      // for over the replan or — since applying refuses outside `active` — do
+      // nothing at all while telling the operator it had. Withdrawing the card
+      // first, then settling the row, so the rejection finds a proposal to close
+      // and the rule finds nothing to re-ask.
+      for (const amendment of store.listPlanAmendments(plan.id)) {
+        if (amendment.status !== 'pending') continue;
+        const amendmentRef = planAmendmentProposalRef(amendment.id);
+        const card = store
+          .listProposals()
+          .find((p) => p.kind === 'plan_amendment' && p.ref === amendmentRef && p.status === 'pending');
+        if (card) proposals.reject(card.id, 'superseded by a replan');
+      }
+      supersedePlanAmendments(store, plan.id, 'A replan replaced the plan this amendment was written against.');
       hub.broadcast({ type: 'world:changed' });
       await harness.runCycle('manual');
       return { ok: true, plan: next };

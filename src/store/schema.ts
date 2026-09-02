@@ -710,6 +710,30 @@ CREATE TABLE IF NOT EXISTS plan_revisions (
   UNIQUE (plan_id, seq)
 );
 
+-- A change somebody wants made to a plan that is already *running*, held until an
+-- operator answers it. The row is the whole mechanism: a plan under way is not
+-- rewritten by whoever noticed it was wrong — the amended document sits here while
+-- the live plan keeps scheduling, and only an accepted proposal ingests it.
+--
+-- The document is kept serialized rather than exploded into columns because it is
+-- re-validated at apply time, by the same validatePlanDocument both transports
+-- use: what was proposed and what is ingested are then the same document, and a
+-- document the schema has since moved past is refused whole rather than applied
+-- in halves.
+CREATE TABLE IF NOT EXISTS plan_amendments (
+  id          TEXT PRIMARY KEY,
+  plan_id     TEXT NOT NULL,
+  origin_ref  TEXT NOT NULL,          -- issue:<n>, so a reader need not resolve the plan first
+  document    TEXT NOT NULL,          -- JSON PlanDocument, exactly as submitted
+  note        TEXT NOT NULL,          -- why the plan must change: the whole of what an operator reads
+  author      TEXT NOT NULL,          -- agent | operator
+  author_ref  TEXT,                   -- the agent that proposed it; null for an operator's own
+  status      TEXT NOT NULL,          -- pending | applied | declined | superseded
+  resolution  TEXT,                   -- what settled it, in the operator's words or the harness's
+  created_at  TEXT NOT NULL,
+  decided_at  TEXT
+);
+
 CREATE TABLE IF NOT EXISTS agent_transcripts (
   agent_id   TEXT NOT NULL,
   seq        INTEGER NOT NULL,

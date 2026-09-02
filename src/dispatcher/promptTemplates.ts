@@ -25,6 +25,7 @@ type PromptId =
   | 'discuss-plan'
   | 'plan-part'
   | 'plan-approval'
+  | 'plan-amendment'
   | 'issue-shortfall'
   | 'plan-part-escalation'
   | 'issue-pickup'
@@ -390,6 +391,15 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'Open the full plan for the parts, what it cites and what it leaves out. If you want a different one, use ' +
       'Replan there: that asks the planner again and comes back here.',
     doc: "Put to a human when a plan has landed, whatever its size (rule `plan-approval`). It is a proposal, not a question: the accept/reject buttons settle it, and free text cannot. What the planner diagnosed and what it will do about it is *not* templated — it is carried beside this as the escalation's `detail` and rendered as the body of the card, so an override cannot bury it in a paragraph. What approving and rejecting do is appended by the rule for the same reason. {list} is the parts in dispatch order; the built-in template no longer uses it (they are one click away in the plan panel, drawn) but it is still rendered, so an override written around it keeps working. Placeholders: {number} {title} {parts} (how many parts the plan has) {reason} {list}.",
+  },
+  'plan-amendment': {
+    placeholders: ['number', 'title', 'who', 'note'],
+    template:
+      'The plan for issue #{number} ("{title}") is running, and a change to it is waiting on you. {who} asked ' +
+      'for it:\n\n{note}\n\n' +
+      'Open the plan to read the amendment against what is there now. Nothing is paused while you decide — the ' +
+      'parts that were being worked are still being worked.',
+    doc: 'Put to a human when somebody proposes a change to a plan that is already running (rule `plan-amendment`). What changes, and what it will not change, is *not* templated — it is built from the store when the card is created and carried as the escalation\u2019s `detail`, so it describes the plan as it stands rather than as it stood when the amendment was written. What accepting and rejecting do is appended by the rule for the same reason `plan-approval` appends its settlement. Placeholders: {number} {title} {who} (who asked) {note} (their reason, verbatim).',
   },
   'issue-shortfall': {
     placeholders: ['number', 'title', 'consequence'],
