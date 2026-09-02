@@ -195,6 +195,26 @@ function isLoopbackOrigin(origin: string): boolean {
   }
 }
 
+/**
+ * An origin whose authority (scheme's host:port) is the request's own host.
+ * When the server is bound to a routable address (`0.0.0.0`, a LAN IP, the
+ * Tailscale address) the browser navigates to that name, so the WebSocket
+ * upgrade's `Origin` names it too — the exact shape the loopback-only rule
+ * refuses. Same-origin is the property that keeps the rule meaningful
+ * off-loopback: the browser only ever sends an `Origin` equal to the page it is
+ * on, so a matching origin is the cockpit serving itself, while a cross-site
+ * page claiming a matching origin is something a browser will not send at all.
+ * The port is part of the comparison — a different port is a different origin.
+ */
+function isSameOriginAsHost(origin: string, host: string | undefined): boolean {
+  if (!host) return false;
+  try {
+    return new URL(origin).host === host.trim().toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
 /** Constant-time token comparison. A length mismatch is answered before `timingSafeEqual`, which throws on unequal buffers. */
 function tokenMatches(expected: string, presented: string | undefined): boolean {
   if (!presented) return false;
@@ -385,10 +405,12 @@ export function authorizeRequest(req: AuthRequest, policy: AuthPolicy): AuthVerd
   }
   // A missing Origin is fine and common: curl, the smoke script and every
   // non-browser client omit it. Its absence is not a claim, so it is not refused
-  // — the token is what authenticates. What is refused is an Origin that is
-  // present and names somewhere else, which only a browser sends and which no
-  // legitimate caller of a local cockpit ever is.
-  if (req.origin !== undefined && !isLoopbackOrigin(req.origin)) {
+  // — the token is what authenticates. A present Origin must name this cockpit:
+  // a loopback one (always fine), or — when the operator bound a routable
+  // address and the browser navigated to it — the request's own host. Anything
+  // else is a cross-site page, which no legitimate caller of this cockpit is.
+  const sameOrigin = req.origin !== undefined && isSameOriginAsHost(req.origin, req.host);
+  if (req.origin !== undefined && !isLoopbackOrigin(req.origin) && !sameOrigin) {
     return { ok: false, code: 403, error: 'cross-origin request refused' };
   }
   if (!tokenMatches(policy.token, presentedToken(req).token)) {
