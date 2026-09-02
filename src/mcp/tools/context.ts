@@ -32,6 +32,7 @@ import type { RemedySubmission } from '../../remedies/remedies.js';
 import type { FactContradiction, FactProposal } from '../../knowledge/knowledge.js';
 import type { FeatureSummaryInput } from '../../summaries/featureSummary.js';
 import type { ReviewPackAuthor } from '../../reviewPacks/author.js';
+import type { ReviewPackChecker } from '../../reviewPacks/checker.js';
 import type { FactAgreementOutcome, FactContradictionOutcome, FactProposalOutcome } from '../../store/knowledge.js';
 import { issueOrigin, originIssueNumber } from '../../plans/planning.js';
 import { type McpTool, toolJson, type ToolCallResult } from '../protocol.js';
@@ -267,6 +268,12 @@ export interface McpToolDeps {
    * reason with the same floor: unwired, the tool says so, and nothing is recorded.
    */
   reviewPacks?: Pick<ReviewPackAuthor, 'submit'>;
+  /**
+   * Where `review_pack_check` hands its verdicts: the checker desk, which merges
+   * them onto the stored document and can reach nothing else in it. Same shape
+   * and same floor as {@link McpToolDeps.reviewPacks}.
+   */
+  reviewPackChecker?: Pick<ReviewPackChecker, 'submit'>;
   errors?: ErrorRecorder;
 }
 

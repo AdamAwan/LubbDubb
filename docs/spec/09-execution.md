@@ -906,11 +906,13 @@ reads, and what `remove` is called with when the agent is reaped — and it neve
   (`src/dispatcher/rules/readOnlyDispatch.ts`), the executor reads `action.readOnly` at the single
   `ensure` call site, and `readOnly` defaults to false — so a dispatch that writes code cannot lose
   its branch by omission. Tests: `test/readOnlyCheckout.test.ts`.
-- One spawn lives outside the executor and takes the same shape: the review pack author
+- Two spawns live outside the executor and take the same shape: the review pack author
   (`src/reviewPacks/author.ts`), which a reviewer asks for rather than a rule, leases a read-only
   checkout of the pull request's head under `review-pack/pr-<n>/<headSha>` through this same
-  `ensureReadOnly`, and is released by the same reap. The key carries the head because the task row
-  has nowhere else to keep it. → [31](31-review-packs.md#when-a-pack-is-made)
+  `ensureReadOnly`, and is released by the same reap; the checker (`src/reviewPacks/checker.ts`)
+  follows it onto the same head under `review-pack-check/pr-<n>/<headSha>`, one slot for all the
+  claims. The key carries the head because the task row has nowhere else to keep it.
+  → [31](31-review-packs.md#when-a-pack-is-made), [the check](31-review-packs.md#the-check)
 
 ### The checkout a local run uses
 

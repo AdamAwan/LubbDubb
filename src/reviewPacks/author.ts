@@ -12,41 +12,8 @@ import type { Store } from '../store/store.js';
 import type { Agent, PullRequest, ReviewPackRecord, ReviewRange, ScratchEntry, Task } from '../types.js';
 import type { Worktrees } from '../worktree/worktreeManager.js';
 import { parseDiffHunks, type DiffHunk } from './hunks.js';
+import { checkOrigin, packLeaseHead, packLeaseKey, packOrigin, packTargetPr } from './origins.js';
 import { assemblePack, type Commission } from './submission.js';
-
-/**
- * The author's origin on a pull request: `pr:<n>:pack`. Inside the pull
- * request's family, so `padOriginFor` resolves it to the pull request's own pad
- * and the author can `scratch_read` it like any other agent on the pull request
- * — and outside every dispatch rule's vocabulary, so nothing in the pulse ever
- * finds it as work to do.
- */
-export function packOrigin(prNumber: number): string {
-  return `pr:${prNumber}:pack`;
-}
-
-/** The pull request an author's origin names, or null for any other origin. */
-export function packTargetPr(originRef: string | null): number | null {
-  const match = originRef === null ? null : /^pr:(\d+):pack$/.exec(originRef);
-  return match ? Number(match[1]) : null;
-}
-
-/**
- * The lease key the author's read-only checkout is held under, and **where the
- * head sha lives for the rest of the run**. The task row has no column for a head
- * and the pack must be written against the head the author was handed rather than
- * whatever the pull request points at by the time it submits; the key is the
- * task's own, survives a restart with the row, and names both.
- */
-export function packLeaseKey(prNumber: number, headSha: string): string {
-  return `review-pack/pr-${prNumber}/${headSha}`;
-}
-
-/** The head sha a lease key carries, or null for a key that is not an author's. */
-export function packLeaseHead(branch: string | null): string | null {
-  const match = branch === null ? null : /^review-pack\/pr-\d+\/([0-9a-f]+)$/.exec(branch);
-  return match ? match[1]! : null;
-}
 
 interface AuthorDeps {
   store: Store;
@@ -135,6 +102,11 @@ export class ReviewPackAuthor extends EventEmitter {
     const originRef = packOrigin(prNumber);
     if (this.composing.has(prNumber) || this.deps.store.findActiveTaskByOrigin(originRef)) {
       return { ok: false, status: 409, error: `a pack for #${prNumber} is already being written` };
+    }
+    // The checker follows the author onto the same document; a second author
+    // under it would replace the ideas its verdicts are keyed to.
+    if (this.deps.store.findActiveTaskByOrigin(checkOrigin(prNumber))) {
+      return { ok: false, status: 409, error: `the pack for #${prNumber} is being checked` };
     }
     if (this.deps.runtime.paused) {
       return { ok: false, status: 409, error: 'dispatch is paused; resume it to ask for a pack' };
@@ -340,9 +312,10 @@ export class ReviewPackAuthor extends EventEmitter {
  * Lines `start..end` of `path` in the checkout, plain, or null where the range
  * names nothing there. Confined to the checkout: a region anchor is a place in
  * the tree at the head, so a path that leaves it — absolute, or through `..` —
- * is not a region, whatever it reads.
+ * is not a region, whatever it reads. The checker's counter-evidence is read
+ * through the same door, for the same reason.
  */
-function readRegion(cwd: string, range: ReviewRange): string[] | null {
+export function readRegion(cwd: string, range: ReviewRange): string[] | null {
   if (isAbsolute(range.path) || range.path.split(/[\\/]/).includes('..')) return null;
   const root = resolve(cwd);
   const file = resolve(root, range.path);

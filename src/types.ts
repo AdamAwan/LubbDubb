@@ -2501,6 +2501,12 @@ export interface ReviewClaim {
   verdict: ReviewVerdict | null;
   /** What the checker did to decide — the search, the test, the file it read. Null until it has run. */
   evidence: string | null;
+  /**
+   * The checker's finding, on a `false` claim and on nothing else: the page's most
+   * important prose. Null until the checker has run, and null on every claim that
+   * held or could not be decided. → `docs/spec/31-review-packs.md#what-a-false-claim-does`
+   */
+  finding: ReviewFinding | null;
 }
 
 /**
@@ -2518,6 +2524,36 @@ export type ReviewProvenance =
 
 /** `cant_tell` is a first-class answer: not decidable from this repository. */
 export type ReviewVerdict = 'true' | 'false' | 'cant_tell';
+
+/**
+ * What a false claim does to the document: the finding lives **on the claim**,
+ * because the claim is what is false, and the anchor it is about carries the
+ * `false` mark so the walk shows where. The page draws it twice — at the top of
+ * the idea, unfolded, and as the boxed section after the ideas — from this one
+ * field, and the gate above the ideas counts claims whose `verdict` is `false`.
+ */
+export interface ReviewFinding {
+  /** One plain line saying what is wrong. */
+  headline: string;
+  /**
+   * The consequence worked out, how serious it is and whose call it is — the
+   * closing paragraph. Markdown; a table where numbers make it concrete.
+   */
+  body: string;
+  /**
+   * The step of the idea's walk the claim is about, 1-based as the page numbers
+   * them — the anchor that carries `mark: 'false'`. Null where no step fits: the
+   * contradiction is somewhere the walk never stopped, and {@link counter} shows it.
+   */
+  step: number | null;
+  /**
+   * The code that contradicts the claim, where it is not already on the walk: a
+   * range of the tree at the head, read by the harness like a region anchor's, with
+   * the checker's one-line caption. The "two pieces of code that disagree" are the
+   * marked step and this.
+   */
+  counter: { range: ReviewRange; code: string[]; caption: string } | null;
+}
 
 /**
  * A pack as the store holds it: the document, and when it was written. The pull

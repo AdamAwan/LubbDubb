@@ -1207,7 +1207,7 @@ Ids: `issue-plan`, `issue-replan`, `discuss-plan` (retired), `plan-part`, `plan-
 `plan-part-escalation`, `issue-pickup`, `issue-pickup-escalation`, `issue-assess`, `issue-appraisal`,
 `issue-retro`, `validation-check`, `local-run`, `pr-ci-fix`, `pr-base-update-behind`, `pr-base-update-conflict`,
 `pr-review-triage`, `pr-review`, `pr-review-comment`, `pr-concern-escalation`, `pr-title`, `finding-ticket`, `raise-bug`,
-`work-item-ticket-body`, `brief-ticket-body`, `review-pack-author`, and the retired `work-item-ticket`,
+`work-item-ticket-body`, `brief-ticket-body`, `review-pack-author`, `review-pack-check`, and the retired `work-item-ticket`,
 `blueprint-ticket`, `blueprint-ticket-body` and `issue-assay`. The filing ids are route-driven rather than dispatcher-driven — they are here
 because _how a ticket should be worded_ is the operator's opinion, which is what the book exists to
 make overridable. `local-run` is here for the same reason and reaches nothing the dispatcher does:
@@ -1216,7 +1216,11 @@ renders it is on the desktop channel ([20](20-validation.md#getting-the-applicat
 is route-driven too and reaches nothing the dispatcher does: a reviewer asks for a pack from a pull
 request's row and the author desk spawns the agent itself, outside the pipeline
 ([31](31-review-packs.md#when-a-pack-is-made)); the hunks, both witness pads and the note naming
-`review_pack_submit` are appended after the rendered text, never interpolated.
+`review_pack_submit` are appended after the rendered text, never interpolated. `review-pack-check` is
+the same, one step further from the pipeline: nobody asks for it, the checker desk spawns it when the
+author's run ends with a pack written ([31](31-review-packs.md#the-check)), and the skeleton of the
+ideas and the note naming `review_pack_check` are appended, with the witness log and the author's
+notes withheld on purpose.
 
 Not every entry is a prompt. `pr-title` is rendered straight onto a pull request, and
 `work-item-ticket-body` and `brief-ticket-body` are written straight into the tracker: the harness files those two items itself

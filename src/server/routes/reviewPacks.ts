@@ -14,7 +14,7 @@ import type { RouteContext } from './context.js';
  * and how far behind, and the ask is the same control the second time.
  */
 export function register(app: FastifyInstance, { system }: RouteContext): void {
-  const { store, reviewPacks } = system;
+  const { store, reviewPacks, reviewPackChecker } = system;
 
   /**
    * Ask for a pack from the pull request's row. `202` — accepted, not done. The
@@ -34,7 +34,9 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
 
   /**
    * The pull request's current pack with the reviewer's marks, or a 404 that
-   * says whether one is on its way. Staleness is decided here, against the
+   * says whether one is on its way. `checking` says whether the checker is on it,
+   * so a pack with every verdict null reads as "being checked" or "unchecked"
+   * rather than either. Staleness is decided here, against the
    * pull request's head as the harness last saw it — the store does not know the
    * head — and the count between the two is asked of the clone, which may not
    * hold the newer commits yet: then the pack is stale by sha and the count is
@@ -54,7 +56,13 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
         });
       }
       const { head, stale } = await reviewPacks.staleness(params.number, record.pack.headSha);
-      return { ...record, marks: store.listReviewMarks(params.number), head, stale } satisfies ReviewPackPayload;
+      return {
+        ...record,
+        marks: store.listReviewMarks(params.number),
+        head,
+        stale,
+        checking: reviewPackChecker.checking(params.number),
+      } satisfies ReviewPackPayload;
     }),
   );
 }

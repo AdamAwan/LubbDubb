@@ -84,6 +84,8 @@ interface McpBridgeServerOptions {
   watch?: () => McpToolDeps['watch'];
   /** The author desk `review_pack_submit` hands a pack to. Lazy for `filing`'s reason. */
   reviewPacks?: () => McpToolDeps['reviewPacks'];
+  /** The checker desk `review_pack_check` hands its verdicts to. Lazy for the same reason. */
+  reviewPackChecker?: () => McpToolDeps['reviewPackChecker'];
   /**
    * How long a recorded call's arguments are kept, in days. `0` records none at
    * all. Absent takes the store's own default — see `McpCallStore`.
@@ -314,6 +316,7 @@ export class McpBridgeServer {
         prReply: this.opts.prReply?.(),
         watch: this.opts.watch?.(),
         reviewPacks: this.opts.reviewPacks?.(),
+        reviewPackChecker: this.opts.reviewPackChecker?.(),
         errors: this.opts.errors,
       },
       resolved.identity,

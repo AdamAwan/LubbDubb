@@ -19,6 +19,7 @@ function fakeSystem(): { system: System; agents: EventEmitter; localRun: EventEm
     errors,
     localRun,
     reviewPacks: new EventEmitter(),
+    reviewPackChecker: new EventEmitter(),
   } as unknown as System;
   return { system, agents, localRun, errors };
 }
