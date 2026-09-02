@@ -16,7 +16,7 @@ import type {
 import { buildGoalPage, buildGoalTrack, furthestEnvironment, goalOfPr, type GoalTrack } from '../view/goalPage.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { elapsed, fmtUsd, relTime } from '../components/util.js';
-import { PrOut, Ref, RefText, refLabel } from '../components/refs.js';
+import { Ref, RefText, refLabel } from '../components/refs.js';
 import { CiLadder, StaleChip, waitedFor } from './GoalPage.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
 import { PanelRows, type PanelRowModel } from './PanelRow.js';
@@ -386,8 +386,16 @@ function OnWhat({ origin, view }: { origin: string | null; view: CockpitView }):
   const goal = pr ? goalOfPr(view.state, Number(pr[1])) : null;
   return (
     <>
-      {origin !== null && <Ref to={origin} label={pr ? `PR ${refLabel(origin)}` : refLabel(origin)} />}
-      {goal !== null && <Ref to={goal} />}
+      {origin !== null && <Ref to={origin} />}
+      {/* The same relation the rack states, stated the same way: this row's two
+          refs are a pull request and the goal it is delivering, and side by side
+          they say only that the row names two things. */}
+      {goal !== null && (
+        <>
+          <span className="cn-rel">delivers</span>
+          <Ref to={goal} />
+        </>
+      )}
     </>
   );
 }
@@ -825,16 +833,25 @@ function prRow(pr: OpenPullRequest, view: CockpitView, actions: CockpitActions, 
     // The pull request's own number moves out of the title and into the refs
     // slot, where every other card keeps what a row names: as a prefix it was a
     // way somewhere that only this card put there.
-    // Two ways to the pull request, because the row raises two questions and each
-    // answers one: the cockpit's page for what the harness makes of it — the
-    // threads it owes an answer, the checks, the work on the branch — and the
-    // provider's for the diff itself. The marks say which is which; a row that
-    // offered only the first made the provider a place you had to go and find.
+    //
+    // Both ways to the pull request are one token now (`<Ref>` draws the arm), not
+    // two tokens carrying the same number: the row raises two questions — what the
+    // harness makes of this, and what the diff says — but they are two doors onto
+    // one thing, and drawn apart they read as a repeat.
+    //
+    // `delivers` is the row saying the relation it was leaving to inference. Two
+    // bare tokens side by side state that the row names two things and nothing
+    // about how they are joined, and this is the one card where the joining *is*
+    // the row: a pull request is here because of the goal it is delivering.
     refs: (
       <>
         <Ref to={`pr:${pr.number}`} />
-        <PrOut number={pr.number} />
-        {goal !== null && <Ref to={goal} title={`Open the goal this pull request is delivering — ${refLabel(goal)}`} />}
+        {goal !== null && (
+          <>
+            <span className="cn-rel">delivers</span>
+            <Ref to={goal} title={`Open the goal this pull request is delivering — ${refLabel(goal)}`} />
+          </>
+        )}
       </>
     ),
     // The name is the way onto the pull request's page — its review threads, its

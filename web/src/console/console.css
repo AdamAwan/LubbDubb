@@ -2006,6 +2006,18 @@ button.cn-grow {
 .cn-refs:empty {
   border-left-color: transparent;
 }
+/* The word between two references, where the row's whole point is how they are
+   joined — `PR 412 delivers #212`. Two bare tokens state that a row names two
+   things and nothing about the relation, which on the rack and the fleet row is
+   the one thing the row is for.
+
+   Deliberately quiet and deliberately not a token: it is not a way anywhere, and
+   anything in this slot that carries a box is read as one. Lowercase, muted, and
+   the group's `gap` does the spacing. */
+.cn-rel {
+  color: var(--cn-fg-faint);
+  font-size: 11px;
+}
 /* On the grid the column is the width, so the group stops setting its own — and
    it keeps its rule even when this row's is empty, because the rule is the
    card's edge between what a row *is* and what it *names*, not this row's. */

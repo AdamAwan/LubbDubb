@@ -74,18 +74,47 @@ function ref(to: string, world: { refUrls?: Record<string, string>; goals?: stri
   );
 }
 
-test('a goal and a pull request are both ways onto their page in the cockpit', () => {
-  const goal = ref('issue:212', { goals: ['issue:212'], refUrls: { '#212': 'https://tracker/212' } });
-  assert.match(goal, /<button[^>]*class="ref-goal"/, 'a goal the world carries opens in the cockpit');
-  assert.match(goal, />#212</);
-  assert.doesNotMatch(goal, /<a /, 'the page is the destination, not the ticket — the page carries "Open ticket ↗"');
+test('a goal and a pull request each carry both their doors', () => {
+  const goal = ref('issue:212', { goals: ['issue:212'], refUrls: { 'issue:212': 'https://tracker/212' } });
+  assert.match(goal, /<span class="ref-pair">/, 'the two doors are one token, not two tokens sharing a number');
+  assert.match(goal, /<button[^>]*class="ref-goal"[^>]*>#212</, 'the number opens the goal’s page in the cockpit');
+  assert.match(
+    goal,
+    /<a class="ref-arm"[^>]*href="https:\/\/tracker\/212"/,
+    'and the arm opens the story on the tracker, which the page can only summarise',
+  );
 
-  // The pull request page is the richer destination on the same terms the goal's
-  // is, and the provider's own page is the `Open pull request ↗` it carries.
-  const pr = ref('pr:412', { prs: [412], refUrls: { '#412': 'https://tracker/pull/412' } });
-  assert.match(pr, /<button[^>]*class="ref-goal"/, 'a pull request the world carries opens in the cockpit');
-  assert.match(pr, />#412</);
-  assert.doesNotMatch(pr, /<a /, 'the page is the destination — the page carries "Open pull request ↗"');
+  // The pull request is the same shape on the same terms: the cockpit's page for
+  // what the harness makes of it, the provider's for the diff itself.
+  const pr = ref('pr:412', { prs: [412], refUrls: { 'pr:412': 'https://tracker/pull/412' } });
+  assert.match(pr, /<span class="ref-pair">/);
+  assert.match(pr, /<button[^>]*class="ref-goal"[^>]*>PR 412</, 'and it says which family it is');
+  assert.match(pr, /<a class="ref-arm"[^>]*href="https:\/\/tracker\/pull\/412"/);
+});
+
+/**
+ * The arm is absent, not inert, where the provider resolved nothing. It stands
+ * against a token that *did* resolve, so a dead second target reads as a broken
+ * link where a missing one reads as a token with one door — which is what it is.
+ */
+test('a reference the provider gave no address keeps its page and draws no arm', () => {
+  const goal = ref('issue:212', { goals: ['issue:212'] });
+  assert.match(goal, /<button[^>]*class="ref-goal"[^>]*>#212</);
+  assert.doesNotMatch(goal, /ref-pair|ref-arm|<a /, 'there is no second destination to offer');
+});
+
+/**
+ * `#<n>` is shared — `buildRefUrls` walks the pull requests before the issues and
+ * the first writer wins — so a goal's arm that tried it first opened the pull
+ * request of the same number, on exactly the trackers busy enough to have both.
+ */
+test('a goal’s arm prefers the unambiguous key over the shared one', () => {
+  const html = ref('issue:412', {
+    goals: ['issue:412'],
+    refUrls: { '#412': 'https://tracker/pull/412', 'issue:412': 'https://tracker/412' },
+  });
+  assert.match(html, /href="https:\/\/tracker\/412"/);
+  assert.doesNotMatch(html, /tracker\/pull/, 'the shared key is the pull request’s address, not the ticket’s');
 });
 
 /**
@@ -118,7 +147,7 @@ test('a goal the world does not carry links to the tracker instead of to a blank
 });
 
 test('a ref the provider could not resolve is plain text, never a link to nowhere', () => {
-  assert.equal(ref('pr:412'), '#412', 'the fake provider resolves nothing, and the world carries no such PR');
+  assert.equal(ref('pr:412'), 'PR 412', 'the fake provider resolves nothing, and the world carries no such PR');
   assert.equal(ref('issue:999'), '#999');
   assert.equal(ref('feature/context-budget'), 'feature/context-budget', 'a branch is already its own name');
 });
@@ -126,7 +155,7 @@ test('a ref the provider could not resolve is plain text, never a link to nowher
 test('one function shortens a ref, and it answers for every family the cockpit draws', () => {
   assert.equal(refLabel('issue:212'), '#212');
   assert.equal(refLabel('issue:212:part:writes'), '#212');
-  assert.equal(refLabel('pr:412'), '#412');
+  assert.equal(refLabel('pr:412'), 'PR 412', 'the marks say where a ref goes; only the name says what it is');
   // Not a family we recognise: returned whole rather than shortened into a number
   // that would name a different thing.
   assert.equal(refLabel('job:abc'), 'job:abc');
@@ -147,10 +176,7 @@ test('a fleet row is a way to the goal it is working and to the pull request it 
   const prNumber = ci.originRef.slice('pr:'.length);
 
   const fleet = html.slice(html.indexOf('>Fleet'), html.indexOf('Goals in flight'));
-  assert.ok(
-    fleet.includes(`>PR #${prNumber}<`),
-    'the row names the pull request it is on, and names it as a way there',
-  );
+  assert.ok(fleet.includes(`>PR ${prNumber}<`), 'the row names the pull request it is on, and names it as a way there');
   assert.match(fleet, /<span class="cn-refs">/, 'the refs sit beside the row’s control, never inside it');
 
   // The goal behind that pull request, resolved the server's own way. Without it
@@ -206,11 +232,16 @@ test('the pull request rack is a way onto each pull request’s own page', () =>
     /class="cn-grow"/,
     'the row’s name is the control that opens the pull request’s page',
   );
-  assert.match(rack, new RegExp(`<button[^>]*class="ref-goal"[^>]*>#${pr.number}<`), 'and so does its ref');
+  assert.match(rack, new RegExp(`<button[^>]*class="ref-goal"[^>]*>PR ${pr.number}<`), 'and so does its ref');
   assert.match(
     rack,
-    new RegExp(`<a[^>]*class="ext-ref ref-out"[^>]*>#${pr.number}<`),
-    'and the provider is a second token beside it, not a destination the row lost',
+    /<span class="ref-pair"><button[^>]*class="ref-goal"[^>]*>PR \d+<\/button><a class="ref-arm"/,
+    'the provider is the same token\u2019s second door, not a second token carrying the same number',
+  );
+  assert.doesNotMatch(
+    rack,
+    new RegExp(`>PR ${pr.number}<[\\s\\S]{0,400}?>PR ${pr.number}<`),
+    'one pull request is named once on its row \u2014 the repeat is what made the rack unreadable',
   );
 });
 
@@ -289,7 +320,14 @@ test('a reference is drawn as a token at rest, and shows a ring when it takes fo
   // most references are drawn. Under one class the reset stripped the box off a
   // goal token and the colour off every reference in the console — a treatment
   // correct in the stylesheet, green in this test, and on screen nowhere.
-  for (const single of [/\n\.ext-ref \{/, /\n\.ref-goal \{/, /\n\.ref-out \{/, /\n\.ref-goal,/]) {
+  for (const single of [
+    /\n\.ext-ref \{/,
+    /\n\.ref-goal \{/,
+    /\n\.ref-out \{/,
+    /\n\.ref-goal,/,
+    /\n\.ref-pair \{/,
+    /\n\.ref-arm \{/,
+  ]) {
     assert.doesNotMatch(css, single, 'a single-class reference selector loses to the console’s own reset');
   }
 
@@ -298,9 +336,14 @@ test('a reference is drawn as a token at rest, and shows a ring when it takes fo
   }
   assert.match(
     css,
-    /\.ext-ref\.ext-ref:focus-visible,\s*\.ref-goal\.ref-goal:focus-visible \{[^}]*outline: 1px solid var\(--blue\)/,
-    '`.ref-goal` is a reset <button> — without this, tab moves the ring nowhere visible',
+    /\.ext-ref\.ext-ref:focus-visible,\s*\.ref-arm\.ref-arm:focus-visible,\s*\.ref-goal\.ref-goal:focus-visible \{[^}]*outline: 1px solid var\(--blue\)/,
+    '`.ref-goal` is a reset <button> — without this, tab moves the ring nowhere visible, and the arm is the next stop along',
   );
+
+  // The joint, which is the only new shape: the two halves share an outer edge and
+  // the dashed border between them is the vocabulary's own "beyond here, you leave".
+  assert.match(rule('.ref-pair.ref-pair > .ref-goal.ref-goal'), /border-right: 0/, 'the pair is one shape at rest');
+  assert.match(rule('.ref-arm.ref-arm'), /border-left-style: dashed/, 'and the joint says the arm leaves');
 });
 
 /**
