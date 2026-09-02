@@ -243,10 +243,29 @@ environment back, every time, for a reason that had nothing to do with them.
   the age has to be **recorded rather than inferred**: `stopFast` stamps `local_runs.interrupted_at`
   as it leaves, `resumeInterrupted` judges the row on it, and a resume clears it again on the way
   back up so the next interruption is not dated to the last one. `started_at` is no substitute — a
-  run brought up on Monday and still in use this afternoon is not stale — and a row **nothing
-  stamped** (a kill, a power cut, a machine that rebooted underneath) is read as *unknown rather than
-  recent* and settled, because the safe direction here is the operator clicking Start. `0` turns the
-  bound off, which is the behaviour before there was one. → [#682](https://github.com/AdamAwan/LubbDubb/issues/682)
+  run brought up on Monday and still in use this afternoon is not stale. `0` turns the bound off,
+  which is the behaviour before there was one. → [#682](https://github.com/AdamAwan/LubbDubb/issues/682)
+- **A shutdown stamp alone would refuse exactly the crashes a resume is for.** `stopFast` runs on a
+  Ctrl-C and on the upgrade handoff, and on none of `taskkill /F`, Task Manager's End task, a power
+  cut, or — before this — a console window closed on Windows. Those take the process without running
+  a line, so the row is live and `interrupted_at` is null, and a null read as _unknown_ settles the
+  one case an operator most wants back: they killed the harness two minutes ago. So the pulse dates
+  it too. `LocalRunner.noteAlive`, called once a beat from `Harness.runCycle`, stamps
+  `local_runs.last_seen_at` — and the resume judges `interruptedAt ?? lastSeenAt`, so a clean
+  shutdown gives the exact instant and a kill falls back to the last beat, accurate to one heartbeat,
+  which is all a two-hour window needs. Three things make it safe:
+  - **Only while `runId` is set**, which is this process's claim on the row — dropped by a stop, and
+    never held for a row a boot declined to bring back. Stamping "whatever is live" instead would
+    date the row a boot had just refused, and the boot after that would bring back an environment
+    two harnesses ago, freshly dated.
+  - **Above the pulse's recovery hold**, because the stamp says the harness is alive and that is true
+    of a held pulse too. Below it, a harness held on a recovery decision for three hours and then
+    killed would leave a run dated three hours back and never come back.
+  - **Both stamps null is still unknown, and still refused.** Every row a running build writes is
+    dated by one or the other, so that shape belongs to a hand-edited database — and the safe
+    direction there is unchanged.
+  `SIGHUP` and `SIGBREAK` are handled in `main.ts` beside `SIGINT` for the same reason: closing the
+  console window was taking Node's default path, which reaps no agent and dates nothing.
 - **A `stopping` row is settled, not resumed**, however the deployment is configured. A teardown in
   flight is an operator who asked for this environment to go away; bringing it back answers the
   opposite of the last thing they said.
@@ -493,10 +512,10 @@ one, and missed by `beginLocalRun`'s supersede a stopped row is left claiming to
 A brand-new table needs no `ColumnMigrations`
 entry — but a table being new _once_ does not keep it exempt
 ([14](14-persistence.md#migrations)), which is exactly what the usage columns cost: this table was new
-in #451 and had no entry, and the columns added in this change needed one. `interrupted_at` is
-declared there too, and it needs a **backfill** beside the `ALTER TABLE`: its null means nobody
-stamped the run, which the resume refuses, so the column alone would cost the operator taking this
-build the environment they had up at the time
+in #451 and had no entry, and the columns added in this change needed one. `interrupted_at` and
+`last_seen_at` are declared there too, and the first needs a **backfill** beside the `ALTER TABLE`:
+with both null the resume reads the age as unknown and refuses, so the columns alone would cost the
+operator taking this build the environment they had up at the time
 ([14](14-persistence.md#when-a-null-means-something)). `url` is frozen as configured when the run started, so a later
 config edit does not rewrite what a past run reported.
 
@@ -512,10 +531,15 @@ run's own checkout, prepares nothing, continues the same row and reads the turn 
 environment up; a `stopping` row is settled even by a deployment that can resume; a run whose checkout
 has gone is not brought back; a run interrupted longer ago than the window is not brought back and
 the note says how long ago, what may still be up and which field sets it, while one interrupted
-inside the window comes back and has its stamp cleared; a live row nothing stamped is unknown rather
-than recent and is not brought back; a zero window is no bound at all; the boot that adds the stamp
-dates the row it is upgrading over, so taking this build does not cost an operator the environment
-they had up; and nothing live is nothing to do. Then: the default is the **tip** and the options are in plan order; a merged,
+inside the window comes back and has its stamp cleared; a force close — no shutdown, one beat of the
+pulse — is dated by `last_seen_at` and comes back ten minutes later but not five hours later, with a
+note that says "last holding it" rather than "interrupted"; a boot never dates a run it declined to
+bring back; a row with **neither** stamp is unknown rather than recent and is not brought back; a
+zero window is no bound at all; the boot that adds the stamp dates the row it is upgrading over, so
+taking this build does not cost an operator the environment they had up; a pulse at the `buildSystem`
+seam re-dates a backdated row; the stamp sits above the recovery hold, asserted structurally because
+the two orderings are indistinguishable on any pulse that is not held; and nothing live is nothing to
+do. Then: the default is the **tip** and the options are in plan order; a merged,
 retired or concluded part is never the tip but stays on offer; an override runs an earlier part and one
 that is not the goal's is refused with the goal named; the refusal names the field that fixes it; a start prepares the checkout,
 writes the row and appends the rules; a merged goal runs from the integration branch; the turn ending

@@ -1405,6 +1405,9 @@ export class Store {
   markLocalRunInterrupted(id: string, at: string | null): void {
     this.localRuns.markLocalRunInterrupted(id, at);
   }
+  markLocalRunSeen(id: string): void {
+    this.localRuns.markLocalRunSeen(id);
+  }
   setLocalRunStatus(id: string, status: LocalRunStatus, note?: string): void {
     this.localRuns.setLocalRunStatus(id, status, note);
   }

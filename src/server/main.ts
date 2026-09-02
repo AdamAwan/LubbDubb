@@ -158,6 +158,17 @@ async function main(): Promise<void> {
   };
   process.on('SIGINT', shutdown(0));
   process.on('SIGTERM', shutdown(0));
+  // The two an operator actually reaches for, and neither took this path before.
+  // Closing the console window on Windows raises `SIGHUP` — unhandled, Node exits
+  // without running a line, so the agents were not reaped and the local run was not
+  // dated. Ctrl-Break is `SIGBREAK`, the same. Both are the clean shutdown, because
+  // both are somebody meaning "stop".
+  //
+  // What is still not reachable is a `taskkill /F` or an End task, which deliver no
+  // signal at all — the local run's pulse stamp is what covers those
+  // ([23](../../docs/spec/23-local-runs.md#coming-back-after-a-restart)).
+  process.on('SIGHUP', shutdown(0));
+  process.on('SIGBREAK', shutdown(0));
   // How the cockpit's Apply gets this process to exit *distinguishably*: the
   // supervisor relaunches on this code alone, and treats every other ending as the
   // server's own. Wired here rather than in `buildSystem` because shutdown is this

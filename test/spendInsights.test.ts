@@ -115,6 +115,7 @@ function localRun(id: string, originRef: string, over: Partial<LocalRun> = {}): 
     startedAt: T,
     endedAt: T,
     interruptedAt: null,
+    lastSeenAt: null,
     costUsd: 1,
     inputTokens: 1000,
     outputTokens: 100,

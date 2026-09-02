@@ -1239,6 +1239,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     updates: config.selfUpdate.enabled ? updates : undefined,
     graph,
     tickets,
+    // Dates the environment this process is holding, once a beat. Wrapped in a
+    // closure because `localRun` is constructed below this — it is the last thing
+    // built, being the one component that can spawn a session on its own — and this
+    // is only ever called from a later pulse.
+    localRun: { noteAlive: () => localRun.noteAlive() },
     landings,
     // Holds the pulse while a previous run's agents await a verdict.
     recovery,

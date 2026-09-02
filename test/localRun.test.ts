@@ -12,6 +12,10 @@ import { Store } from '../src/store/store.js';
 import { LocalRunner } from '../src/localRun/runner.js';
 import { localRunChoices } from '../src/localRun/ref.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
+import { FakePtyBackend } from '../src/pty/fakeBackend.js';
+import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
+import { buildSystem } from '../src/system.js';
+import { loadConfig } from '../src/config.js';
 import type { AgentSession, AgentSessionSpec, AgentSessionStatus } from '../src/agents/session.js';
 import type { PlanPart } from '../src/types.js';
 
@@ -547,19 +551,31 @@ test('a run interrupted inside the window still comes back', async () => {
   first.store.close();
 });
 
-test('a live row nobody stamped is unknown, not recent, and is not brought back', () => {
-  const { runner, store } = build({ resumeInstruction: 'Run /dev-environment continue.' });
-  // What a hard crash leaves: a kill, a power cut, a machine that rebooted under the
-  // harness. `startedAt` is no stand-in — a run brought up on Monday and still in use
-  // this afternoon would read as days stale — so the honest answer is that nobody
-  // knows, and the safe direction is the operator clicking Start.
-  store.beginLocalRun({ originRef: 'issue:284', ref: 'main', dir: process.cwd(), url: null });
+test('a live row with neither stamp is unknown, not recent, and is not brought back', () => {
+  // The defensive end of the pair. Every row a running build writes is dated by one
+  // stamp or the other — a shutdown's, or the pulse's — so this is the shape only a
+  // database somebody edited, or a boot that lost both migrations, can be in. Unknown
+  // is not folded into recent: the safe direction is the operator clicking Start.
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-local-run-undated-'));
+  const file = join(dir, 'undated.sqlite');
+  let store: Store | null = null;
+  try {
+    const before = new Store(file);
+    const run = before.beginLocalRun({ originRef: 'issue:284', ref: 'main', dir: process.cwd(), url: null });
+    before.close();
+    const raw = new Database(file);
+    raw.prepare(`UPDATE local_runs SET interrupted_at = NULL, last_seen_at = NULL WHERE id = ?`).run(run.id);
+    raw.close();
 
-  const outcome = runner.resumeInterrupted();
-  assert.equal(outcome.outcome, 'settled');
-  assert.match(store.currentLocalRun()?.note ?? '', /not known/);
-  assert.equal(store.liveLocalRun(), null);
-  store.close();
+    store = new Store(file);
+    const after = build({ store, resumeInstruction: 'Run /dev-environment continue.' });
+    assert.equal(after.runner.resumeInterrupted().outcome, 'settled');
+    assert.match(store.currentLocalRun()?.note ?? '', /not known/);
+    assert.equal(store.liveLocalRun(), null);
+  } finally {
+    store?.close();
+    rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
+  }
 });
 
 test('no window means no bound, which is the behaviour before there was one', async () => {
@@ -578,6 +594,128 @@ test('no window means no bound, which is the behaviour before there was one', as
   });
   assert.equal(after.runner.resumeInterrupted().outcome, 'resumed');
   first.store.close();
+});
+
+test('a force close is dated by the pulse, and its run still comes back', async () => {
+  // The case the interruption stamp alone cannot reach. `taskkill /F`, Task Manager's
+  // End task, a power cut — none of them run a line, so `stopFast` never happens and
+  // `interruptedAt` stays null. Those are the crashes a resume is most wanted for, and
+  // judged on the shutdown stamp alone they are exactly the ones it refuses.
+  const at = Date.parse('2026-09-02T09:00:00.000Z');
+  const first = build({ resumeInstruction: 'Run /dev-environment continue.', now: () => at });
+  await first.runner.start('issue:284');
+  // One beat of the pulse, which is all the harness leaves behind when it is killed.
+  first.runner.noteAlive();
+  const held = first.store.liveLocalRun();
+  assert.equal(held?.interruptedAt, null, 'nothing was shut down, so nothing stamped an interruption');
+  assert.ok(held?.lastSeenAt, 'but the pulse recorded that the harness was holding it');
+
+  const after = build({
+    store: first.store,
+    resumeInstruction: 'Run /dev-environment continue.',
+    now: () => at + 10 * 60 * 1000,
+  });
+  assert.equal(after.runner.resumeInterrupted().outcome, 'resumed', 'ten minutes after a kill is still a restart');
+  first.store.close();
+});
+
+test('a force close long enough ago is not brought back, and the note says what it knows', async () => {
+  const at = Date.parse('2026-09-02T09:00:00.000Z');
+  const first = build({ resumeInstruction: 'Run /dev-environment continue.', now: () => at });
+  await first.runner.start('issue:284');
+  first.runner.noteAlive();
+
+  const after = build({
+    store: first.store,
+    resumeInstruction: 'Run /dev-environment continue.',
+    now: () => at + 5 * HOUR,
+  });
+  assert.equal(after.runner.resumeInterrupted().outcome, 'settled');
+  assert.equal(after.sessions.length, 0);
+  // "Last holding it" rather than "interrupted": an operator who pulled the power is
+  // owed a sentence that matches what they did.
+  assert.match(after.store.currentLocalRun()?.note ?? '', /last holding it 5 hours ago/);
+  first.store.close();
+});
+
+test('a boot never dates a run it declined to bring back', () => {
+  // The one way the pulse stamp could undo the window. `runId` is this process's claim
+  // on the row, and a boot that refused the row never takes it — so a beat of the
+  // refusing harness must leave the row exactly as stale as it found it. Stamping
+  // "whatever is live" instead would hand the boot after this one an environment two
+  // harnesses ago, freshly dated.
+  const at = Date.parse('2026-09-02T09:00:00.000Z');
+  const { runner, store } = build({ resumeInstruction: 'Run /dev-environment continue.', now: () => at });
+  store.beginLocalRun({ originRef: 'issue:284', ref: 'main', dir: process.cwd(), url: null });
+  const before = store.liveLocalRun()?.lastSeenAt ?? null;
+
+  runner.noteAlive();
+  assert.equal(store.liveLocalRun()?.lastSeenAt, before, 'a harness holding nothing dates nothing');
+  store.close();
+});
+
+test('a pulse dates the run the harness is holding, at the buildSystem seam', async () => {
+  // The wiring, rather than the rule: the stamp is only worth anything if something
+  // actually calls it every beat. The heartbeat interval is enormous here, so the one
+  // cycle this drives is the only one.
+  const root = mkdtempSync(join(tmpdir(), 'lubbdubb-local-run-pulse-'));
+  // On a file rather than in memory, so the row can be **backdated** from a second
+  // handle: two timestamps a millisecond apart would make "it advanced" an assertion
+  // that passes whether or not anything wrote.
+  const file = join(root, 'pulse.sqlite');
+  const system = buildSystem(
+    loadConfig({
+      selfUpdate: { enabled: false } as never,
+      auth: { enabled: false } as never,
+      labelPrefix: '',
+      dbPath: file,
+      agentMode: 'raw',
+      deskRoot: join(root, 'desk'),
+      worktreeRoot: join(root, 'wt'),
+      heartbeatIntervalMs: 999_999,
+      localRun: { instruction: 'Run the dev server.' } as never,
+    }),
+    {
+      // Without this the test cuts a real branch in this checkout — see CLAUDE.md.
+      worktrees: new FakeWorktreeManager(),
+      backend: new FakePtyBackend(),
+      gitObserver: new FakeGitObserver(),
+      errorMirror: () => {},
+    },
+  );
+  try {
+    const started = await system.localRun.start('issue:12');
+    assert.ok(started.ok, started.ok ? '' : started.error);
+    const run = system.store.liveLocalRun();
+    assert.ok(run?.lastSeenAt, 'a run starts held, as of now');
+
+    const stale = '2020-01-01T00:00:00.000Z';
+    const raw = new Database(file);
+    raw.prepare(`UPDATE local_runs SET last_seen_at = ? WHERE id = ?`).run(stale, run.id);
+    raw.close();
+    assert.equal(system.store.liveLocalRun()?.lastSeenAt, stale, 'backdated, as a harness left running would be');
+
+    await system.harness.runCycle('manual');
+    const seen = system.store.liveLocalRun()?.lastSeenAt ?? null;
+    assert.ok(seen !== null && seen > stale, 'the pulse re-dated it');
+  } finally {
+    system.store.close();
+    rmSync(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
+  }
+});
+
+test('the pulse dates the run above its own recovery hold', () => {
+  // Structural, because the two orderings are indistinguishable from the outside on
+  // any pulse that is not held — and the one that is held is the case this protects.
+  // A harness sitting on a recovery decision for three hours is a harness that was up
+  // for three hours: dated from the last cycle that reached the *work*, a run killed
+  // at the end of that would read three hours stale and never come back.
+  const text = readFileSync(new URL('../src/harness.ts', import.meta.url), 'utf8');
+  const stamp = text.indexOf('localRun?.noteAlive()');
+  const hold = text.indexOf('recovery?.pendingCount()');
+  assert.ok(stamp > 0, 'the pulse stamps the local run it is holding');
+  assert.ok(hold > 0, 'and asks the recovery hold');
+  assert.ok(stamp < hold, 'the stamp comes first: a held pulse is still a live harness');
 });
 
 test('the boot that adds the stamp dates the run it is upgrading over', () => {

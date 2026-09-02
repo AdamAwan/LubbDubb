@@ -13,6 +13,7 @@ export const LOCAL_RUN_COLUMNS: ColumnMigrations = {
     cache_creation_tokens: 'INTEGER',
     num_turns: 'INTEGER',
     interrupted_at: 'TEXT',
+    last_seen_at: 'TEXT',
   },
 };
 
@@ -74,6 +75,7 @@ export class LocalRunStore {
       startedAt: now,
       endedAt: null,
       interruptedAt: null,
+      lastSeenAt: now,
       costUsd: null,
       inputTokens: null,
       outputTokens: null,
@@ -90,10 +92,11 @@ export class LocalRunStore {
         .run(now, 'superseded by a run of another goal');
       this.ctx.db
         .prepare(
-          `INSERT INTO local_runs (id, origin_ref, ref, dir, pid, status, url, note, started_at, ended_at)
-           VALUES (?, ?, ?, ?, NULL, 'starting', ?, NULL, ?, NULL)`,
+          `INSERT INTO local_runs (id, origin_ref, ref, dir, pid, status, url, note, started_at, ended_at,
+             last_seen_at)
+           VALUES (?, ?, ?, ?, NULL, 'starting', ?, NULL, ?, NULL, ?)`,
         )
-        .run(run.id, run.originRef, run.ref, run.dir, run.url, run.startedAt);
+        .run(run.id, run.originRef, run.ref, run.dir, run.url, run.startedAt, run.startedAt);
     });
     write();
     return run;
@@ -118,6 +121,24 @@ export class LocalRunStore {
    */
   markLocalRunInterrupted(id: string, at: string | null): void {
     this.ctx.db.prepare(`UPDATE local_runs SET interrupted_at = ? WHERE id = ?`).run(at, id);
+  }
+
+  /**
+   * Stamp that the harness is still holding this run, as of now.
+   *
+   * **What dates a force close.** `interrupted_at` is written on the way down, and a
+   * `taskkill /F`, an End task, a power cut and a closed console window all take the
+   * process without running a line — so on the paths an operator is most likely to
+   * take there is no shutdown to stamp anything, and without this the next boot knows
+   * only that the row says live. One write per pulse, on one row, keyed by id.
+   *
+   * Keyed by id and not by "whatever is live" **on purpose**: only the process
+   * actually holding the run may date it. A boot that declined to bring a live row
+   * back must not stamp it on its way past, or the row it just refused would look
+   * freshly held to the boot after that.
+   */
+  markLocalRunSeen(id: string): void {
+    this.ctx.db.prepare(`UPDATE local_runs SET last_seen_at = ? WHERE id = ?`).run(this.ctx.now(), id);
   }
 
   /**
@@ -238,6 +259,7 @@ interface LocalRunRow {
   started_at: string;
   ended_at: string | null;
   interrupted_at: string | null;
+  last_seen_at: string | null;
   cost_usd: number | null;
   input_tokens: number | null;
   output_tokens: number | null;
@@ -269,6 +291,7 @@ function toLocalRun(row: LocalRunRow): LocalRun {
     startedAt: row.started_at,
     endedAt: row.ended_at,
     interruptedAt: row.interrupted_at ?? null,
+    lastSeenAt: row.last_seen_at ?? null,
     // Null on every row written before these columns existed, and on every run of a
     // PTY deployment — which has no usage channel at all. Unmeasured, not free.
     costUsd: row.cost_usd ?? null,

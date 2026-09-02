@@ -239,6 +239,17 @@ interface HarnessDeps {
    */
   tickets?: { run(): Promise<void> };
   /**
+   * The local run, asked once a beat to date the environment it is holding. Absent =
+   * nothing is dated, which is every test that does not name one.
+   *
+   * A pass on the pulse rather than a timer of its own because the pulse *is* this
+   * process's proof of life, and that is the whole of what the stamp records. It runs
+   * **above the recovery hold**: a harness held for three hours is a harness that was
+   * up for three hours, and a run dated at the last cycle that did work would read as
+   * stale on the boot after a kill. → [23](../docs/spec/23-local-runs.md)
+   */
+  localRun?: { noteAlive(): void };
+  /**
    * Watches the harness's own build, and advances a drain that has run dry. Absent
    * = the watch is off, which is a supported configuration and every test that does
    * not name one. It decides no dispatch: what it can pause is the same `paused`
@@ -445,6 +456,12 @@ export class Harness extends EventEmitter {
   }
 
   async runCycle(source: CycleSource = 'manual'): Promise<CycleReport> {
+    // Before the hold, and before anything that can refuse to run: this writes down
+    // that the harness was alive on this beat, which is true of a held pulse too. It
+    // is the only thing that dates a run through a force close — a kill runs no
+    // shutdown — so a beat that skipped it would be a beat the next boot reads as
+    // absence. One `UPDATE` on one row, and only while this process holds a run.
+    this.deps.localRun?.noteAlive();
     // The crash-recovery hold, asked before anything else — including the world
     // fetch, which is the point: while agents orphaned by the last run are
     // undecided, the harness's own model of its fleet is wrong (rows saying
