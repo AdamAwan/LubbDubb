@@ -5,7 +5,7 @@ import type { PrPageView } from '../view/prPage.js';
 import type { OpenPullRequest, PrReviewThread, PrThreadMessage, PrThreadState, PullRequest } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { ReviewPackControl } from '../components/ReviewPackControl.js';
-import { Ref } from '../components/refs.js';
+import { PrLink, Ref } from '../components/refs.js';
 import { renderMarkdown } from '../components/markdown.js';
 import { relTime } from '../components/util.js';
 import { CiLadder, CourtChip } from './GoalPage.js';
@@ -89,7 +89,9 @@ function Masthead({
             because nothing is waiting on anybody once it has left the open set. */}
         {page.open && isOpenPr(pr) && <CourtChip pr={pr} now={view.now} />}
         <span className="cn-refs">
-          <Ref to={`pr:${pr.number}`} />
+          {/* The goal alone: a ref onto *this* pull request now opens this very
+              page, and the provider's own is the control below rather than a
+              token that looks like a way somewhere else. */}
           {page.goalRef !== null && <Ref to={page.goalRef} />}
         </span>
       </div>
@@ -99,6 +101,9 @@ function Masthead({
           is not reaching. A closed pull request cannot be asked about; the pack it
           already has stays readable. */}
       <div className="cn-prpack">
+        <PrLink number={pr.number} className="cn-tgl">
+          Open pull request ↗
+        </PrLink>
         <ReviewPackControl
           prNumber={pr.number}
           headSha={pr.headSha ?? null}
@@ -228,9 +233,15 @@ function Thread({
         )}
       </div>
       <Message message={{ id: thread.id, author: thread.author, body: thread.body, ours: false }} view={view} />
-      {thread.replies.map((reply) => (
-        <Message key={reply.id} message={reply} view={view} />
-      ))}
+      {/* The replies hang under the comment they answer rather than beside it: a
+          flat run of messages made a thread of three read as three threads. */}
+      {thread.replies.length > 0 && (
+        <div className="cn-threplies">
+          {thread.replies.map((reply) => (
+            <Message key={reply.id} message={reply} view={view} />
+          ))}
+        </div>
+      )}
     </article>
   );
 }
@@ -244,14 +255,11 @@ function Thread({
 function Message({ message, view }: { message: PrThreadMessage; view: CockpitView }): JSX.Element {
   return (
     <div className={`cn-thmsg ${message.ours ? 'cn-thours' : ''}`}>
-      <i className="cn-thrail" />
-      <div className="cn-thbody">
-        <span className="cn-thwho">
-          {message.author}
-          {message.ours && <span className="cn-thmark">fleet</span>}
-        </span>
-        <div className="cn-thtext">{renderMarkdown(message.body, view.state.refUrls)}</div>
-      </div>
+      <span className="cn-thwho">
+        {message.author}
+        {message.ours && <span className="cn-thmark">fleet</span>}
+      </span>
+      <div className="cn-thtext">{renderMarkdown(message.body, view.state.refUrls)}</div>
     </div>
   );
 }

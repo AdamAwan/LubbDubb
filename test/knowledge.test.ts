@@ -952,6 +952,8 @@ test('the page draws every reach, the rejected tail included', async () => {
         refUrls: state.refUrls,
         openGoal: () => undefined,
         hasGoal: () => true,
+        openPr: () => undefined,
+        hasPr: () => false,
         children: createElement(KnowledgePanel, {
           facts: state.knowledge,
           graduations: state.knowledgeGraduations,

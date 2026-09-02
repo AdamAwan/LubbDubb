@@ -831,6 +831,12 @@ function prRow(pr: OpenPullRequest, view: CockpitView, actions: CockpitActions, 
         {goal !== null && <Ref to={goal} title={`Open the goal this pull request is delivering — ${refLabel(goal)}`} />}
       </>
     ),
+    // The name is the way onto the pull request's page — its review threads, its
+    // checks and the work on its branch — which the rack named and offered no way
+    // to until the page existed. Every other card that names a thing with a page
+    // opens it from the title, and this is that.
+    open: () => actions.selectPr(pr.number),
+    openTitle: `Open pull request #${pr.number} — its review threads, its checks and the work on its branch`,
     facts: prFacts(pr, view.now),
     // Whose court it is in, which is the one question the card is for — the
     // server's word, with the server's own reasoning behind it. It was drawn

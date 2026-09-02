@@ -38,6 +38,25 @@ export interface PrPageView {
 const STATE_ORDER: Record<PrThreadState, number> = { reopened: 0, open: 1, answered: 2, resolved: 3 };
 
 /**
+ * Whether the cockpit has a page for this pull request — the question
+ * `<Ref to="pr:412">` asks before it links inward, for `hasGoal`'s reason: a page
+ * keyed on a pull request the snapshot dropped renders nothing at all, and a link
+ * onto it is worse than the provider's own.
+ */
+export function hasPrPage(state: AppState, prNumber: number): boolean {
+  return findPr(state, prNumber) !== null;
+}
+
+/** The pull request under this number, open or closed, or null when the world dropped it. */
+function findPr(state: AppState, prNumber: number): PullRequest | null {
+  return (
+    state.world.pullRequests.find((p) => p.number === prNumber) ??
+    (state.world.closedPullRequests ?? []).find((p) => p.number === prNumber) ??
+    null
+  );
+}
+
+/**
  * Build the page, or null when the world carries no such pull request.
  *
  * Null rather than an empty page, for `buildGoalPage`'s reason: a page of empty
@@ -50,7 +69,7 @@ const STATE_ORDER: Record<PrThreadState, number> = { reopened: 0, open: 1, answe
  */
 export function buildPrPage(state: AppState, prNumber: number): PrPageView | null {
   const open = state.world.pullRequests.find((p) => p.number === prNumber) ?? null;
-  const pr = open ?? (state.world.closedPullRequests ?? []).find((p) => p.number === prNumber) ?? null;
+  const pr = open ?? findPr(state, prNumber);
   if (pr === null) return null;
 
   const goalRef = goalOfPr(state, prNumber);

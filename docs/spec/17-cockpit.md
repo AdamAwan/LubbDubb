@@ -645,9 +645,9 @@ being answered is what the harness makes of the PR. Which kind of reviewer they 
 metadata line instead (`Required reviewer` / `Optional reviewer`), read off `assignedToYou` — a real
 distinction, and a clause every row would carry and no two rows would differ by.
 
-**And it carries the way to the pull request.** It is the one ask whose subject lives outside the
-cockpit entirely — there is no PR page here — so a row that merely _named_ the pull request left the
-operator to go and find it in the provider, which is the surface this queue exists to replace. The
+**And it carries the way to the pull request.** A row that merely _named_ the pull request left the
+operator to go and find it, which is the surface this queue exists to replace; the `<Ref>` opens the
+pull request's own page, or the provider's where the world no longer carries it. The
 `<Ref>` sits **beside** the row body, never inside it: one click may not have two destinations, so the
 body stays the control that opens the ask and the reference is its own target — the same shape a config
 row's fix strip takes ([links](#links)).
@@ -1624,7 +1624,9 @@ from.
 ## The pull request page
 
 One rung further in than the goal page: **a selected pull request outranks a selected goal, which
-outranks the nav**. It is reached from a goal's pull-request row, and the crumb at its head names the
+outranks the nav**. It is reached from a goal's pull-request row, from the overview's pull-request
+rack — whose row name is the way onto it — and from any `<Ref>` that names the pull request at all
+([links](#links)), and the crumb at its head names the
 goal it was reached from — or the tab, on a pull request no ticket owns, which the harness works and
 which therefore reaches this page too. Leaving it (`selectPr(null)`) lands on the goal underneath,
 which the place never cleared. `web/src/console/PrPage.tsx` draws it; `web/src/view/prPage.ts`
@@ -1640,9 +1642,11 @@ What it draws:
 
 - **The masthead** — number, title, branch → base, head, author; then the state chips: open/merged/
   closed, the CI ladder, approval, `mergeableState`, how many threads are on the fleet, and whose
-  court it is. The provider reference sits at the far end of that line, because everything else on it
-  is a reading taken inside the cockpit. The [review pack](31-review-packs.md#reading-it) control
-  rides the masthead: a pack is a reading of _this diff_, which is what the masthead is about.
+  court it is. The goal's reference sits at the far end of that line, and only the goal's: a ref onto
+  this pull request opens this very page, so the provider's own is a control of its own —
+  `Open pull request ↗`, the shape the goal page's `Open ticket ↗` already has. The
+  [review pack](31-review-packs.md#reading-it) control rides the masthead beside it: a pack is a
+  reading of _this diff_, which is what the masthead is about.
 - **The review threads**, which is what the page is for — see below.
 - **The checks**, in the CI policy's own three categories: what the harness will fix, what it will
   put to a person, what it has been told to leave alone. No check name is written in this repository;
@@ -1656,14 +1660,18 @@ What it draws:
 
 ### The threads, and the one control
 
-Each thread is drawn as the conversation it is: the root, the replies under it, a rail beside them,
-and a mark on any reply the harness wrote. That mark matters more than it looks — on a
-single-operator deployment the fleet posts under the operator's own credential, so the name alone
-cannot say "the fleet has already answered this", which is the fact a reader needs before doing
-anything about it.
+Each thread is a **card**, and the conversation inside it is drawn as one: the root comment, then the
+replies indented under it on a single line, each message on its own ground and any reply the harness
+wrote tinted and marked. That mark matters more than it looks — on a single-operator deployment the
+fleet posts under the operator's own credential, so the name alone cannot say "the fleet has already
+answered this", which is the fact a reader needs before doing anything about it. A card rather than a
+row in a ruled list, because a thread is a conversation with a state: hairlines alone put one thread's
+reply hard against the next thread's question, and a flat run of messages made a thread of three read
+as three threads.
 
-The state is a chip whose title says what the state _means_, and the two states that are still work
-tint the row, so "what is still on us" reads off the shape of the list before any chip is read.
+The state is a chip whose title says what the state _means_, and it is the card's **left edge** as
+well, so one glance down the edges says what is still owed. The two states that are still work tint
+the card's ground too, since "what is still on us" is what the page is for.
 Threads are ordered by what is owed — reopened, open, answered, resolved — and within a state the
 provider's own order stands, which is the order the review was written in. A resolved thread is drawn
 back rather than hidden: it is the record of what was asked.
@@ -4765,8 +4773,13 @@ sites pass a value they are already holding rather than re-deriving a number.
   `goalIssue`'s answer, handed to the provider as `hasGoal`, for the reason the queue rail asks it
   rather than guessing: `buildGoalPage` returns null for a ref the snapshot dropped, the console draws
   the tab behind it, and a link onto one is a click that appears to do nothing.
-- A **pull request links out**. There is no PR page in the cockpit. `#412` and `pr:412` are both tried
-  against `refUrls` — which of the two the snapshot happens to carry is not a row's business.
+- A **pull request opens [its page](#the-pull-request-page)** on the same terms, and for the same
+  reason: the review threads, the checks and the work on its branch are all there, and no other route
+  from a row that merely names it reaches them. Whether the cockpit has one is `hasPrPage`'s answer,
+  handed to the provider as `hasPr`.
+- A **pull request the world does not carry links to the provider instead** — a closed one on a
+  deployment retaining none. `#412` and `pr:412` are both tried against `refUrls`; which of the two
+  the snapshot happens to carry is not a row's business.
 - **Anything the provider could not resolve renders as plain text.** A ref the provider could not
   resolve is absent from the map, which is what the `fake` provider produces, and a link that goes
   nowhere asserts more than a bare number does.
@@ -4775,6 +4788,11 @@ sites pass a value they are already holding rather than re-deriving a number.
 signal, an agent's note. Deliberately **not** routed through `<Ref>`: a bare `#412` in a sentence does
 not say whether it is a goal or a pull request, and guessing would link onto whichever of the two
 shares the number. The tracker's page answers either.
+
+`<PrLink number={…} />` is `<TicketLink>`'s twin for a pull request — the `Open pull request ↗` its
+page carries — and exists for the same reason, since a ref onto a pull request the world carries now
+opens its page rather than the provider's. Two keys, most-trusted first: `pr:<n>` is unambiguous where
+`#<n>` is shared with an issue of the same number.
 
 `<TicketLink number={…} url={…} />` is the fourth, and the destination `<Ref>` deliberately does not
 offer: a ref onto a goal the world carries opens its **page**, so the goal header's `Open ticket ↗`
@@ -4796,7 +4814,7 @@ of pointing at it. `test/refLinks.test.ts` pins that nothing else strips a ref d
 
 - a **box** means this is a thing you can go to, not a number in a sentence;
 - a **fill** inside the box means the destination is here, in the cockpit (`.ref-goal`, the only filled
-  form, because a goal's page is the only cockpit destination a reference has);
+  form — a goal's page, and a pull request's);
 - an **arrow** means it leaves for the provider (`.ext-ref`, and `.ref-out` where that leaves from a
   standalone token).
 
