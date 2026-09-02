@@ -153,6 +153,7 @@ test('the fleet tools are advertised and none of them dispatches', async () => {
       'fleet_control',
       'attention_read',
       'escalation_answer',
+      'human_task_settle',
       'agent_read',
       'queue_control',
       'goal_control',
@@ -381,6 +382,76 @@ test('attention_read lists what is open, and escalation_answer settles a questio
 
     const twice = await d.call('escalation_answer', { id: esc.id, response: 'again' });
     assert.ok(twice.isError, 'an item already answered is a refusal');
+  } finally {
+    await d.close();
+  }
+});
+
+test('a human task is settled by its own verb, and escalation_answer names it rather than failing bare', async () => {
+  const d = await deck();
+  try {
+    // The reported failure, as a row: the supply desk's own bench item, which
+    // `attention_read` lists and `escalation_answer` cannot take — its id is not an
+    // escalation id, so the tool used to answer "No escalation" and a session
+    // reported the harness broken.
+    const { task } = d.system.store.recordHumanTask({
+      title: 'Top the account back up',
+      detail: 'The queue is thinning.',
+      originRef: null,
+      kind: 'supply',
+      agentId: null,
+      taskId: null,
+    });
+
+    const inbox = await d.call('attention_read');
+    const rows = inbox.json.humanTasks as Record<string, unknown>[];
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]?.id, task.id);
+    assert.ok(String(rows[0]?.settledBy).includes('human_task_settle'));
+
+    const wrong = await d.call('escalation_answer', { id: task.id, response: 'done it' });
+    assert.ok(wrong.isError);
+    assert.ok(wrong.text.includes('human_task_settle'), 'the refusal names the verb that does take it');
+
+    const settled = await d.call('human_task_settle', { id: task.id, status: 'done', note: 'topped up' });
+    assert.equal(settled.isError, false);
+    assert.equal(d.system.store.getHumanTask(task.id)?.status, 'done');
+    assert.equal(d.system.store.getHumanTask(task.id)?.resolution, 'topped up');
+    // Settling is a record, not a dispatch: the fence the whole channel rests on.
+    assert.equal(d.system.store.listAgents().length, 0);
+
+    const twice = await d.call('human_task_settle', { id: task.id, status: 'done' });
+    assert.ok(twice.isError, 'a row somebody already settled is a refusal');
+  } finally {
+    await d.close();
+  }
+});
+
+test('human_task_settle refuses a decline with no note, and an id nothing holds', async () => {
+  const d = await deck();
+  try {
+    const { task } = d.system.store.recordHumanTask({
+      title: 'Provide the fixture archive',
+      detail: null,
+      originRef: 'issue:7',
+      kind: 'ask',
+      agentId: null,
+      taskId: null,
+    });
+
+    // The note is what a replan reads — a refusal with nothing said about why
+    // leaves a planner no reason to decide differently to the way it just did.
+    const bare = await d.call('human_task_settle', { id: task.id, status: 'declined' });
+    assert.ok(bare.isError);
+    assert.equal(d.system.store.getHumanTask(task.id)?.status, 'open', 'and nothing was written');
+
+    const declined = await d.call('human_task_settle', { id: task.id, status: 'declined', note: 'not ours to do' });
+    assert.equal(declined.isError, false);
+    assert.equal(d.system.store.getHumanTask(task.id)?.status, 'declined');
+
+    const missing = await d.call('human_task_settle', { id: 'hum_nope', status: 'done' });
+    assert.ok(missing.isError);
+    assert.ok(missing.text.includes('escalation_answer'), 'and it names the other list a stray id may be on');
   } finally {
     await d.close();
   }

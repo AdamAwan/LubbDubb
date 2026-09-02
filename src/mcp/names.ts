@@ -273,10 +273,19 @@ export const ALLOWED_MCP_TOOLS: string[] = MCP_TOOL_NAMES.map((name) => `mcp__${
  * other name here is about one goal: read its plan, argue with it, take one of its
  * checks. `fleet_status`, `attention_read` and `agent_read` are about the *harness*
  * — what it is running, what it is waiting on a person for, what one agent is
- * actually doing — and `fleet_control`, `queue_control`, `escalation_answer` and
- * `goal_control` are the four verbs an operator reaches for between goals: change
- * the cap or pause, re-order or drop from the queue, answer the thing in "Needs
- * you", and start or stop the fleet working a ticket.
+ * actually doing — and `fleet_control`, `queue_control`, `escalation_answer`,
+ * `human_task_settle` and `goal_control` are the verbs an operator reaches for
+ * between goals: change the cap or pause, re-order or drop from the queue, answer
+ * the thing in "Needs you", settle a row on the bench, and start or stop the fleet
+ * working a ticket.
+ *
+ * `human_task_settle` is a second name beside `escalation_answer` rather than an
+ * arm on it, because the two rows are not the same object: an escalation is a
+ * question one parked agent is blocked on, a human task is a unit of work that
+ * outlives its agent. One name over both is the `validation_report` trap again,
+ * and the failure it already produced was a bench row whose id `escalation_answer`
+ * refused as "No escalation" — a session reporting the harness broken when what it
+ * had was the wrong verb. → `docs/spec/13-jobs-and-tickets.md#it-is-not-an-escalation-and-the-difference-is-not-a-nuance`
  *
  * They exist because the cockpit was the only way to do any of it, and the cockpit
  * is a browser tab on one machine. An operator who wants their own agent watching
@@ -307,6 +316,7 @@ export const DESKTOP_TOOL_NAMES = [
   'fleet_control',
   'attention_read',
   'escalation_answer',
+  'human_task_settle',
   'agent_read',
   'queue_control',
   'goal_control',

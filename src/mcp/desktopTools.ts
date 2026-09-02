@@ -30,6 +30,7 @@ import {
   fleetControl,
   fleetStatus,
   goalControl,
+  humanTaskSettle,
   queueControl,
 } from './desktopOps.js';
 import { agentControl, jobCreate } from './desktopWork.js';
@@ -861,6 +862,7 @@ const DESKTOP_TOOLS: Record<DesktopToolName, DesktopToolFactory> = {
   fleet_control: fleetControl,
   attention_read: attentionRead,
   escalation_answer: escalationAnswer,
+  human_task_settle: humanTaskSettle,
   agent_read: agentRead,
   queue_control: queueControl,
   goal_control: goalControl,

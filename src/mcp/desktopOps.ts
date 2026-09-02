@@ -1,6 +1,7 @@
 import { applyIssueWatch } from '../issueWatch.js';
 import { issueConclusionOrigin } from '../issueConclusion.js';
 import { formatAnswers } from '../escalation/questionnaire.js';
+import { settleHumanTask } from '../humanTaskSettle.js';
 import { desktopIssueRef } from '../validation/desktop.js';
 import type { Agent, Escalation } from '../types.js';
 import type { DesktopToolDeps, DesktopToolFactory } from './desktopContext.js';
@@ -305,7 +306,19 @@ export const attentionRead: DesktopToolFactory = (deps) => ({
       humanTasks: deps.store
         .listAllHumanTasks()
         .filter((t) => t.status === 'open')
-        .map((t) => ({ id: t.id, kind: t.kind, title: t.title, originRef: t.originRef, createdAt: t.createdAt })),
+        .map((t) => ({
+          id: t.id,
+          kind: t.kind,
+          title: t.title,
+          detail: t.detail,
+          originRef: t.originRef,
+          createdAt: t.createdAt,
+          // Named for the escalation rows' reason, and it is the whole of why this
+          // list stopped being a dead end: a row whose id `escalation_answer`
+          // refuses by construction — it is not an escalation — read as stuck in
+          // the harness rather than as work with a different verb.
+          settledBy: "human_task_settle with `status: 'done' | 'declined'`",
+        })),
       orphanedRuns: deps
         .recovery()
         .pending()
@@ -318,9 +331,11 @@ export const attentionRead: DesktopToolFactory = (deps) => ({
           waitingReason: o.waitingReason,
         })),
       next:
-        'Answer only the rows whose `settledBy` names this channel. The other two are decisions with ' +
-        'consequences a session cannot see — an act about to be published, a run about to be restored or ' +
-        'thrown away — and the operator takes them in the cockpit. Say what is waiting and let them go there.',
+        'Answer only the rows whose `settledBy` names this channel. A human task is work, not a question: it ' +
+        'settles when somebody has actually done it or refused it, never as an answer typed at an agent. The ' +
+        'two kinds that name the cockpit are decisions with consequences a session cannot see — an act about ' +
+        'to be published, a run about to be restored or thrown away. Say what is waiting and let the operator ' +
+        'go there.',
     });
   },
 });
@@ -371,7 +386,18 @@ export const escalationAnswer: DesktopToolFactory = (deps) => ({
     const id = typeof args.id === 'string' ? args.id.trim() : '';
     if (!id) return toolError('id required — take it from attention_read.');
     const item = deps.store.getEscalation(id);
-    if (!item) return toolError(`No escalation "${id}". Call attention_read for what is actually open.`);
+    if (!item) {
+      // A bench row's id lands here as often as a typo does — `attention_read`
+      // returns both lists — and "No escalation" reads as the harness having lost
+      // the row rather than as the wrong verb. Name the tool that does take it.
+      const task = deps.store.getHumanTask(id);
+      if (task)
+        return toolError(
+          `"${id}" is a human task ("${task.title}") — a unit of work, not a question an agent is parked on. ` +
+            'It is settled with human_task_settle (`done` or `declined`), never by typing an answer at an agent.',
+        );
+      return toolError(`No escalation "${id}". Call attention_read for what is actually open.`);
+    }
     if (item.status !== 'open')
       return toolError(
         `Escalation ${id} is already ${item.status}${item.response === null ? '' : ` — "${item.response}"`}. ` +
@@ -728,6 +754,91 @@ export const goalControl: DesktopToolFactory = (deps) => ({
       means:
         'this changes what the harness picks up next and in what order. Nothing running was stopped: an agent ' +
         'already working this goal carries on, and un-watching only stops the next dispatch.',
+    });
+  },
+});
+
+/**
+ * The bench's two verbs, on the channel that can already see the bench.
+ *
+ * `attention_read` has always listed the open human tasks, and until this tool
+ * there was nothing here that could settle one: a session that tried the obvious
+ * thing got `escalation_answer`'s "No escalation" — the id is a `hum_…` row and
+ * that tool reads `escalations` — which reads as the harness having lost the row
+ * rather than as the wrong verb. The row is not an escalation and never was
+ * ({@link docs/spec/13-jobs-and-tickets.md}), so it takes its own name.
+ *
+ * **The settlement is `settleHumanTask`'s, shared with the cockpit's routes.** The
+ * close-out's note, the part that concludes on `done` and deliberately does not on
+ * `declined`, are one definition rather than two — a second copy here would be
+ * free to conclude a part the cockpit would have left blocked, with nothing red.
+ *
+ * `close_ticket` is deliberately **not** an arm: it writes to the tracker, which is
+ * an act rather than a record of one, and this channel steers the fleet without
+ * acting for it. A close-out settles here as `done` for a close taken elsewhere,
+ * and the tool says which is which.
+ */
+export const humanTaskSettle: DesktopToolFactory = (deps) => ({
+  description:
+    'Settle a human task — a unit of work only a person can do, from attention_read. `done` records that it ' +
+    'has actually been done; `declined` records a refusal and takes a required `note`, which is what a ' +
+    'replan reads. Not for questions an agent parked on: those are escalation_answer.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      id: { type: 'string', description: 'The human task id, from attention_read (a `hum_…` row).' },
+      status: {
+        type: 'string',
+        enum: ['done', 'declined'],
+        description: 'Whether the work was done or refused.',
+      },
+      note: {
+        type: 'string',
+        description:
+          'What was done, or why it was refused. Required on `declined`, and on a close-out whose goal has ' +
+          'outstanding validation checks.',
+      },
+    },
+    required: ['id', 'status'],
+  },
+  handler: async (args) => {
+    const id = typeof args.id === 'string' ? args.id.trim() : '';
+    if (!id) return toolError('id required — take it from attention_read.');
+    const status = args.status;
+    if (status !== 'done' && status !== 'declined') return toolError('status must be "done" or "declined".');
+
+    const existing = deps.store.getHumanTask(id);
+    if (!existing)
+      return toolError(
+        `No human task "${id}". Call attention_read for what is actually open — an escalation id is answered ` +
+          'with escalation_answer instead.',
+      );
+    if (existing.status !== 'open')
+      return toolError(
+        `Human task ${id} is already ${existing.status}${existing.resolution === null ? '' : ` — "${existing.resolution}"`}. ` +
+          'Somebody has settled it; nothing more is needed on it.',
+      );
+
+    const note = typeof args.note === 'string' ? args.note : undefined;
+    const settled = settleHumanTask(deps.store, { id, status, note });
+    if (!settled.ok) return toolError(settled.error);
+    // A concluded part releases whatever named it in `dependsOn`, and the release
+    // happens on a pulse — run one rather than leaving dependents pending until the
+    // heartbeat, exactly as the cockpit's route does.
+    if (settled.runCycle) await settle(deps);
+    return toolJson({
+      settled: id,
+      status: settled.task.status,
+      part: settled.part === null ? null : { id: settled.part.id, status: settled.part.status },
+      means:
+        status === 'done'
+          ? settled.part === null
+            ? 'the obligation is recorded as met. Nothing was waiting on it — a standalone task blocks no work.'
+            : 'the plan part it backs is concluded, so anything that depended on this step is released on this pulse.'
+          : settled.task.partId === null
+            ? 'the obligation is recorded as refused. Your note is what a later reader finds.'
+            : 'the plan part it backs is NOT concluded — dependents stay pending and the reconciler blocks the ' +
+              'part with your note. The ways out are Replan and Abandon, in the cockpit.',
     });
   },
 });

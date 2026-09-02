@@ -842,6 +842,7 @@ and [the run](20-validation.md#getting-the-application-up);
 | `fleet_control`     | The three live dispatch controls: `cap`, `paused`, and `pulse`. In memory, exactly as the cockpit's are. |
 | `queue_control`     | The Up next queue's two verbs: replace the pin set, and cancel a still-queued job. |
 | `escalation_answer` | Settle one inbox row: `response`/`answers` for a question, `permission` for a blocked tool call. Refuses the other two kinds by name. |
+| `human_task_settle` | Settle one bench row — work only a person can do: `done` once it has been, `declined` with a required note. Not an escalation, and not answered as one. |
 | `goal_control`      | The three standing marks on a goal: `watched` (the tracker tag, cascading), `priority` (the harness's own queue mark) and `profile` (which model the next dispatch runs on). |
 | `proposal_read`     | One proposed act in full: its kind, what accepting it would actually do, and the caveats that gate it. Records nothing. |
 | `proposal_decide`   | `accept` performs the act; `reject` performs nothing; `close_ticket` / `hold_ticket` are a plan's two verdicts about the **ticket**. |
@@ -923,7 +924,8 @@ Four reads and eight verbs. The reads:
 - **`attention_read`** is the inbox, and every row names its own `kind` and its own `settledBy`. The
   four kinds share a panel in the cockpit and are four different objects: a question an agent parked
   on, a permission request it is blocked _inside_, an act proposed for approval, and a run orphaned
-  by a crash.
+  by a crash. The **human tasks** come back beside them as their own list, and they name
+  `human_task_settle` — see [below](#a-bench-row-is-not-an-escalation-and-does-not-answer-to-one).
 - **`agent_read`** is one agent close up, and it returns the **tail** of the transcript with the total
   length beside it. A long run's transcript is megabytes; the question a session is answering — why is
   this parked, what is it stuck on — is in the last few thousand characters, and an agent judged on a
@@ -932,7 +934,7 @@ Four reads and eight verbs. The reads:
   [below](#what-it-may-do-and-what-it-may-not).
 
 The verbs are `fleet_control`, `queue_control`, `goal_control`, `escalation_answer`,
-`proposal_decide`, `recovery_decide`, `job_create` and `agent_control`.
+`human_task_settle`, `proposal_decide`, `recovery_decide`, `job_create` and `agent_control`.
 
 #### What it may do, and what it may not
 
@@ -1020,6 +1022,37 @@ A bare failure would leave the operator finding the row hours later.
 `permission` is an **arm of this tool rather than a second tool**, because it is a row in the same
 inbox: a session that has read `attention_read` has a list where the difference is a field, and a
 second name would be one more thing to get wrong about a row whose kind it already knows.
+
+#### A bench row is not an escalation, and does not answer to one
+
+`attention_read` has always returned the open human tasks beside the inbox, and for a release there
+was nothing on this channel that could settle one. A session that did the obvious thing — the row was
+in the reply, so it passed its id to the tool that settles rows — got `No escalation "hum_…"`, which
+reads as the harness having lost the row rather than as the wrong verb. What that produced is an
+operator told their bench item was _stuck or misclassified in LubbDubb_ and had to be cleared in the
+cockpit, about a row that was doing exactly what it was meant to.
+
+The fix is a second name rather than an arm on `escalation_answer`, and the reason is
+[13](13-jobs-and-tickets.md#it-is-not-an-escalation-and-the-difference-is-not-a-nuance): the two rows
+share only that a person is looked at. An escalation is a **question** one parked agent is blocked
+on, and it dies with the session; a human task is a **unit of work** that outlives its agent, blocks
+nothing unless a plan part names it, and settles when somebody has actually done or refused the
+thing. One name over both would be the `validation_report` trap again — one verb, two fences, an edit
+to either silently reaching one of them.
+
+`human_task_settle` takes `done` or `declined`, and **the settlement is the cockpit's**:
+`settleHumanTask` (`src/humanTaskSettle.ts`) is the one definition both surfaces call, so the
+close-out's required note, the part concluded on `done` and the part deliberately _not_ concluded on
+`declined` cannot differ by which surface answered. A second copy here would be free to release the
+dependents of work that was refused, with nothing red.
+
+`close_ticket` is not an arm. It writes to the tracker, which is an act rather than a record of one,
+and the fence above is what this channel is. A close-out settles here as `done` for a close taken
+elsewhere.
+
+Both directions are named rather than left to be inferred: the human-task rows carry
+`settledBy: human_task_settle`, and `escalation_answer` handed a human task's id says so and names
+this tool — the "no escalation" answer is now what an id nothing holds gets.
 
 #### The two marks on a goal are not the same kind of thing
 

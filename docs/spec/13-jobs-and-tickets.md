@@ -743,6 +743,20 @@ Settled tasks stay in the list rather than being deleted, for the reason a rejec
 row that vanished on being settled would take the operator's own note with it, and on a decline that
 note is the whole account of why the work below it stopped.
 
+**Two surfaces settle a row, and the settlement is one function.** The routes above are the cockpit's;
+`human_task_settle` on the desktop channel ([11](11-mcp-tools.md#a-bench-row-is-not-an-escalation-and-does-not-answer-to-one))
+is the operator answering from their own Claude, and both call `settleHumanTask`
+(`src/humanTaskSettle.ts`). What is decided there is the whole of what settling means — the
+close-out's required note, the part concluded on `done`, the part deliberately left alone on
+`declined` — and the caller keeps only what is its own: the broadcast, and the cycle it runs when a
+part moved. A second copy on the channel would be free to conclude a part the cockpit would have left
+blocked, releasing the dependents of work that was refused with nothing red.
+
+**The bench row is answered by its own verb, on both surfaces.** `escalation_answer` handed a
+`hum_…` id says so and names `human_task_settle`, rather than the "no escalation" that reads as a
+lost row: the two objects are as different as the table above says, and a session that has just been
+shown both lists is exactly who reaches for the wrong one.
+
 ### Getting it off the bench — `POST /api/human-tasks/:id/dismiss`
 
 A settled row is a record, and a record you cannot put down is a permanent fixture. The close-out
