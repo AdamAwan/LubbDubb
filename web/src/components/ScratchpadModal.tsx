@@ -25,6 +25,11 @@ import { relTime } from './util.js';
  * matters more here than for the write-up, because an empty pad is unreachable by
  * construction: nothing draws a way in unless the snapshot says there are entries,
  * so an empty trail on screen means the fetch and the snapshot disagree.
+ *
+ * A **fork** — an entry carrying a `decision` — is drawn apart from a note: what
+ * was chosen, why, and the alternatives rejected with their reasons. The rejected
+ * list is the part a diff can never show, so it is the part given the room.
+ * → docs/spec/31-review-packs.md#the-witness-log
  */
 export function ScratchpadModal({ issueRef, onClose }: { issueRef: string; onClose: () => void }) {
   const [entries, setEntries] = useState<ScratchEntryView[]>([]);
@@ -80,6 +85,7 @@ export function ScratchpadModal({ issueRef, onClose }: { issueRef: string; onClo
                       goal wrote this is what a reader is placing the note by, and
                       an agent id is gone the moment the fleet turns over. */}
                   <span className="chip small">{entry.authorOriginRef}</span>
+                  {entry.decision && <span className="chip small pad-fork-chip">fork</span>}
                   {entry.topic && <span className="chip small">{entry.topic}</span>}
                   <span className="muted" title={entry.createdAt}>
                     {relTime(entry.createdAt)}
@@ -90,6 +96,37 @@ export function ScratchpadModal({ issueRef, onClose }: { issueRef: string; onClo
                     let an agent's stray backtick or hash change what its own
                     testimony looks like. */}
                 <div className="pad-entry-note">{entry.note}</div>
+                {entry.decision && (
+                  <div className="pad-decision">
+                    <div className="pad-decision-row">
+                      <span className="pad-decision-label">Chose</span>
+                      <span>{entry.decision.chose}</span>
+                    </div>
+                    <div className="pad-decision-row">
+                      <span className="pad-decision-label">Because</span>
+                      <span>{entry.decision.because}</span>
+                    </div>
+                    {entry.decision.rejected.length > 0 && (
+                      <div className="pad-decision-row">
+                        <span className="pad-decision-label">Rejected</span>
+                        <ul className="pad-decision-rejected">
+                          {entry.decision.rejected.map((r, i) => (
+                            <li key={i}>
+                              <span>{r.alternative}</span>
+                              <span className="muted"> — {r.because}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {entry.decision.paths.length > 0 && (
+                      <div className="pad-decision-row">
+                        <span className="pad-decision-label">Paths</span>
+                        <span className="pad-decision-paths">{entry.decision.paths.join(', ')}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>

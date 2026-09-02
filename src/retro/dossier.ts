@@ -327,6 +327,13 @@ export function padTestimony(entries: ScratchEntry[]): string {
   for (const e of entries) {
     lines.push(`- **${e.authorOriginRef}**${e.topic ? ` · ${e.topic}` : ''} · ${e.createdAt}`);
     lines.push(`  > ${e.note.replace(/\n/g, '\n  > ')}`);
+    // A fork rides with its note wherever the pad is replayed: the decision is a
+    // fact about one moment, and the next agent on the goal is owed it whole.
+    if (e.decision) {
+      lines.push(`  > Fork — chose: ${e.decision.chose}. Because: ${e.decision.because}`);
+      for (const r of e.decision.rejected) lines.push(`  > Rejected: ${r.alternative} — ${r.because}`);
+      if (e.decision.paths.length > 0) lines.push(`  > Paths: ${e.decision.paths.join(', ')}`);
+    }
   }
   return lines.join('\n');
 }

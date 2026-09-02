@@ -544,12 +544,13 @@ CREATE TABLE IF NOT EXISTS issue_appraisals (
 -- credential, never from an argument (see padOriginFor).
 CREATE TABLE IF NOT EXISTS scratch_entries (
   id                TEXT PRIMARY KEY,
-  pad_ref           TEXT NOT NULL,    -- always "issue:12"
-  author_origin_ref TEXT NOT NULL,    -- "issue:12:part:schema"
+  pad_ref           TEXT NOT NULL,    -- "issue:12", or "pr:42" for the agents working a pull request
+  author_origin_ref TEXT NOT NULL,    -- "issue:12:part:schema", "pr:42:ci"
   agent_id          TEXT NOT NULL,
   task_id           TEXT NOT NULL,
   topic             TEXT,             -- optional scannable tag
   note              TEXT NOT NULL,
+  decision          TEXT,             -- JSON PadDecision on a fork; null on an ordinary note
   created_at        TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_scratch_pad ON scratch_entries (pad_ref, created_at);

@@ -34,16 +34,20 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
   // count and the age, which is all a way in needs to draw itself.
   //
   // The ref is resolved through the **same `padOriginFor`** an agent's write goes
-  // through, so a part's origin names the pad its author writes to and the two
-  // sides cannot disagree about which pad a ref means. A ref naming no pad at all
-  // is a bad request rather than an empty one: "nobody has written here" and "that
-  // is not a pad" are different answers, and only the first is silence.
+  // through, so a part's origin names the pad its author writes to, a CI fixer's
+  // names the pull request's own, and the two sides cannot disagree about which
+  // pad a ref means. A ref naming no pad at all is a bad request rather than an
+  // empty one: "nobody has written here" and "that is not a pad" are different
+  // answers, and only the first is silence.
   app.get(
     '/api/scratchpads/:ref',
     checked({ params: RefParams }, async ({ params, reply }) => {
       const { ref } = params;
       const padRef = padOriginFor(ref);
-      if (!padRef) return reply.code(400).send({ error: `${ref} is not inside an issue, so it names no scratchpad` });
+      if (!padRef)
+        return reply
+          .code(400)
+          .send({ error: `${ref} is inside neither an issue nor a pull request, so it names no scratchpad` });
       return { padRef, entries: store.listScratchEntries(padRef) } satisfies ScratchpadPayload;
     }),
   );

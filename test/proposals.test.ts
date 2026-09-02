@@ -11,6 +11,7 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { defaultPromptTemplates } from '../src/dispatcher/promptTemplates.js';
 import { replyToolNote, reviewRecheckNote, reviewThreadsNote } from '../src/dispatcher/reviewThreads.js';
 import { remedyAskNote } from '../src/remedies/remedies.js';
+import { WITNESS_INSTRUCTION } from '../src/scratch/pad.js';
 import type { ActionSink } from '../src/sink/actionSink.js';
 import type { DispatchResult } from '../src/dispatcher/dispatcher.js';
 import { gitRepo } from './support/gitRepo.js';
@@ -370,9 +371,14 @@ test("a rejection reaches the next agent on that ref, in the operator's own word
   assert.ok(told.prompt.startsWith(reviewCommentPrompt(1, 'feat/one', 'This looks over-engineered.', withNote)));
 
   // An empty note changes the prompt not at all: there is nothing to pass on, and
-  // a placeholder saying so would only invite the agent to speculate.
+  // a placeholder saying so would only invite the agent to speculate. What follows
+  // the template is the witness log's standing instruction, which every code
+  // dispatch carries whether or not anything was refused.
   const untold = tasks.get('pr:2:comments')!;
-  assert.equal(untold.prompt, reviewCommentPrompt(2, 'feat/two', 'Same question here.', withoutNote));
+  assert.equal(
+    untold.prompt,
+    `${reviewCommentPrompt(2, 'feat/two', 'Same question here.', withoutNote)}\n\n${WITNESS_INSTRUCTION}`,
+  );
   system.store.close();
 });
 

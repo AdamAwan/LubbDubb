@@ -1,6 +1,20 @@
 import { nanoid } from 'nanoid';
-import type { Retrospective, ScratchEntry, ScratchPadSummary } from '../types.js';
+import type { PadDecision, Retrospective, ScratchEntry, ScratchPadSummary } from '../types.js';
+import type { ColumnMigrations } from './migrate.js';
 import type { StoreContext } from './context.js';
+
+/**
+ * `scratch_entries.decision` arrived after the table did, so it needs the entry:
+ * without it every database from before the witness log has no column, and every
+ * fork written there is a note that lost its decision in silence. Null means "an
+ * ordinary note", which is true of every row written before the column existed,
+ * so no backfill is owed. `retrospectives` is declared empty so its first added
+ * column is noticed here rather than read back as `undefined`.
+ */
+export const SCRATCH_COLUMNS: ColumnMigrations = {
+  scratch_entries: { decision: 'TEXT' },
+  retrospectives: {},
+};
 
 /**
  * The `scratch_entries` and `retrospectives` tables: a goal's written record.
@@ -28,14 +42,18 @@ export class ScratchStore {
     taskId: string;
     topic: string | null;
     note: string;
+    /** The fork behind the entry, or null for an ordinary note. */
+    decision: PadDecision | null;
   }): ScratchEntry {
     const row: ScratchEntry = { id: `scr_${nanoid(10)}`, ...input, createdAt: this.ctx.now() };
+    // Stored as one JSON column rather than normalised: it is written whole,
+    // read whole, and nothing queries inside it.
     this.ctx.db
       .prepare(
-        `INSERT INTO scratch_entries (id, pad_ref, author_origin_ref, agent_id, task_id, topic, note, created_at)
-         VALUES (@id, @padRef, @authorOriginRef, @agentId, @taskId, @topic, @note, @createdAt)`,
+        `INSERT INTO scratch_entries (id, pad_ref, author_origin_ref, agent_id, task_id, topic, note, decision, created_at)
+         VALUES (@id, @padRef, @authorOriginRef, @agentId, @taskId, @topic, @note, @decision, @createdAt)`,
       )
-      .run(row);
+      .run({ ...row, decision: row.decision ? JSON.stringify(row.decision) : null });
     return row;
   }
 
@@ -132,6 +150,8 @@ interface ScratchEntryRow {
   task_id: string;
   topic: string | null;
   note: string;
+  /** Nullable *and* possibly absent: added by `ensureColumns` on databases from an older build. */
+  decision?: string | null;
   created_at: string;
 }
 interface RetrospectiveRow {
@@ -153,6 +173,7 @@ function rowToScratchEntry(r: ScratchEntryRow): ScratchEntry {
     taskId: r.task_id,
     topic: r.topic,
     note: r.note,
+    decision: r.decision ? (JSON.parse(r.decision) as PadDecision) : null,
     createdAt: r.created_at,
   };
 }

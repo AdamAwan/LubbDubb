@@ -82,6 +82,7 @@ function entry(fields: Partial<ScratchEntry> = {}): ScratchEntry {
     taskId: 't1',
     topic: 'migrations',
     note: 'the column has to be added additively or older databases never see it',
+    decision: null,
     createdAt: '2026-07-30T10:00:00.000Z',
     ...fields,
   };
@@ -490,6 +491,7 @@ test("a part's agent is handed what the earlier agents on its issue wrote down",
       taskId: 't_prior',
       topic: 'gotcha',
       note: 'the fake provider leaves labelsAddedByViewer unset',
+      decision: null,
     });
     agentThatWrote(system.store, 'issue:1:plan', ['src/tags/registry.ts']);
     // A finished goal that has been in the same file, so the neighbour lookup has
@@ -528,6 +530,7 @@ test('an agent on a different goal is handed none of it', async () => {
       taskId: 't_prior',
       topic: null,
       note: 'a note about issue one',
+      decision: null,
     });
     system.connector.inject({ kind: 'new_pr', number: 7, title: 'Something else', branch: 'feature/x' });
     system.connector.inject({ kind: 'ci_failed', prNumber: 7 });

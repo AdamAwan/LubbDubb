@@ -32,7 +32,7 @@ import { HumanTaskStore, HUMAN_TASK_COLUMNS } from './humanTasks.js';
 import { absorbSinglePlanStatus, backfillWholePlanParts, PlanStore, PLAN_COLUMNS } from './plans.js';
 import { ValidationStore, VALIDATION_COLUMNS, VALIDATION_REBUILDS } from './validation.js';
 import { IssueVerdictStore, ISSUE_VERDICT_COLUMNS, ISSUE_VERDICT_RENAMES } from './issueVerdicts.js';
-import { ScratchStore } from './scratch.js';
+import { ScratchStore, SCRATCH_COLUMNS } from './scratch.js';
 import { RateLimitStore } from './rateLimits.js';
 import { UpgradeStore } from './upgrades.js';
 import { openPetsFromBeforeEggs, PetStore, PET_COLUMNS } from './pets.js';
@@ -281,6 +281,7 @@ export class Store {
       ENVIRONMENT_COLUMNS,
       WATCH_COLUMNS,
       PR_REVIEW_ROUTE_COLUMNS,
+      SCRATCH_COLUMNS,
     ]) {
       addedColumns.push(...ensureColumns(this.db, columns));
     }

@@ -1218,7 +1218,8 @@ Two things on the payload are deliberately **not** windowed:
 
 ### `GET /api/scratchpads/:ref`
 
-One goal's shared scratchpad in full — every entry every agent on it left, oldest first. Fetched on
+One goal's — or one pull request's — shared scratchpad in full: every entry every agent on it left,
+oldest first, each fork with its `decision` ([31](31-review-packs.md#the-witness-log)). Fetched on
 open for the reason the write-up above is, with more force: a pad is unbounded prose from every agent
 on the goal, where a retrospective is one document. The snapshot carries `issue.scratchpad`
 (`{entries, updatedAt}`, and `null` when nothing has been written), which is all a way in needs to
@@ -1229,11 +1230,12 @@ the retrospective that was handed it — so the account of a run was checkable a
 operator watching a goal go wrong could not read the reasoning as it was written.
 
 The ref is resolved through the **same `padOriginFor`** an agent's write goes through, so any origin
-on the goal (`issue:12:part:schema`, `issue:12:plan`) names the one pad and the cockpit cannot
-disagree with the tool channel about which pad a ref means. Returns `{padRef, entries}`. An untouched
-pad is an empty list — an ordinary answer — while a ref inside no issue at all (`pr:42`) is a **400**:
-"nobody has written here" and "that is not a pad" are different answers, and only the first is
-silence.
+on the goal (`issue:12:part:schema`, `issue:12:plan`) names the one pad, any concern on a pull
+request (`pr:42:ci`, `pr:42:comment:<id>`) names the pull request's own (`pr:42`), and the cockpit
+cannot disagree with the tool channel about which pad a ref means. Returns `{padRef, entries}`. An
+untouched pad is an empty list — an ordinary answer — while a ref inside neither an issue nor a pull
+request (`job:<id>`) is a **400**: "nobody has written here" and "that is not a pad" are different
+answers, and only the first is silence.
 
 ### `POST /api/work/:ref/file`
 

@@ -10,6 +10,7 @@ import type {
   IssueConclusionVerdict,
   KnowledgeFact,
   KnowledgeGraduation,
+  PadDecision,
   PartOutcomeKind,
   PlanPart,
   Remedy,
@@ -120,6 +121,7 @@ export interface AgentToolTarget {
     agentId: string,
     note: string,
     topic: string | null,
+    decision: PadDecision | null,
   ): { ok: true; entry: ScratchEntry } | { ok: false; error: string };
   readScratch(agentId: string): { ok: true; padRef: string; entries: ScratchEntry[] } | { ok: false; error: string };
   /**

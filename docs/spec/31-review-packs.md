@@ -1,7 +1,8 @@
 # 31 — Review packs
 
-**Not yet built.** Nothing in this document describes running code. Every path it names is italic for
-that reason, and the marker comes off in the change that makes each section true.
+**Mostly not yet built.** [The witness log](#the-witness-log) is running code; nothing else in this
+document is. Every path a section names is italic while that section is unbuilt, and the marker comes
+off it in the change that makes it true.
 
 A diff is what is left over after the thinking. The reasoning that produced it — what was considered,
 what was rejected, which file was deliberately not touched — is thrown away at the moment of commit,
@@ -74,6 +75,9 @@ ideas relate. A checker shown only a flat list of sentences could not write eith
 
 ## The witness log
 
+_Built_ — stage 1 of the subsystem. What it says below is what `src/scratch/pad.ts`,
+`src/mcp/tools/scratchAppend.ts` and `src/store/scratch.ts` do; `test/witnessLog.test.ts` holds it.
+
 The working agent records **forks**, not commentary. A fork is a moment where the change could
 reasonably have gone another way. One line at the fork is cheap; recovering it afterwards costs
 more than the pack ([below](#the-witness-log)).
@@ -84,8 +88,10 @@ replayed to the next agent on the goal — which is every property the log needs
 with the same properties would be the pad again under another name. A fork is a pad entry that
 carries a _decision_ argument beside its note; an entry without one is an ordinary note. No new tool,
 so the three-way agreement in [11](11-mcp-tools.md#launch-flags) is untouched; the tool's schema grows
-one optional object, and `scratch_entries` grows one column — an existing table, so it needs its
-`ColumnMigrations` entry ([14](14-persistence.md#migrations)).
+one optional object, and `scratch_entries` grows one column, `decision`, holding the object as JSON
+and null on a note — an existing table, so it has its `ColumnMigrations` entry, `SCRATCH_COLUMNS`
+([14](14-persistence.md#migrations)). Null is what every row from before the column spells, and it is
+the right answer for all of them, so no backfill is owed.
 
 **The pad grows a second family for the agents the issue pad refuses.** `padOriginFor` resolves only
 `issue:<n>` subtrees, and refuses a `pr:<n>:*` origin on purpose: `linkedPrNumber` is sticky, so
@@ -93,9 +99,17 @@ reaching an issue's pad through a pull request would let an agent write onto a g
 to. But the CI-fix and review-comment agents are `pr:<n>:*` origins, and they are exactly the agents
 whose pushes move a head — a pack for the third head of a pull request is mostly their forks. So a
 `pr:<n>:*` origin resolves to a pad of its own, `pr:<n>`, that no issue agent reads and no issue agent
-can reach. The author is handed both: the goal's pad, by the pull request's linked goal, and the pull
-request's own. A desk agent on a pull request — the triage, the fleet reviewer — may write there too,
-and rarely has reason to.
+can reach — and the resolution is by the origin's own first segment, never by a join, so the sticky
+`linkedPrNumber` still reaches nothing. `scratch_read` and `GET /api/scratchpads/:ref` resolve the
+same way ([16](16-http-api.md#get-apiscratchpadsref)). The author is handed both: the goal's pad, by
+the pull request's linked goal, and the pull request's own. A desk agent on a pull request — the
+triage, the fleet reviewer — may write there too, and rarely has reason to.
+
+Two things the pull request's pad does **not** yet do, deliberately left to the stages that need
+them: it is not replayed into the next agent on the pull request the way `priorWorkBriefing` replays
+an issue's pad — a CI fixer reads it with `scratch_read` — and the cockpit draws no way into it, since
+there is no pull request page to carry one ([17](17-cockpit.md#links)); the author, which is handed
+both pads, is the first reader that needs either.
 
 An entry's `decision` carries:
 
@@ -106,7 +120,13 @@ An entry's `decision` carries:
 | `rejected` | zero or more alternatives, each with the reason it was not taken              |
 | `paths`    | the files the fork touches, where the agent can say                           |
 
-The pad supplies `createdAt` from the harness clock, and attribution from the credential.
+`chose` and `because` are required inside the object and every line is collapsed to one; `rejected`
+and `paths` may be empty and come back empty rather than missing, so a reader never has to ask which
+fields a fork carries. `normalisePadDecision` refuses a malformed object **by field name** — the way
+`normalisePadNote` refuses an empty note — rather than storing it as a note, because a fork the log
+lost in silence is the one thing the log exists not to do; an over-long line or list is trimmed and
+the result says so, the pad's own trade. The pad supplies `createdAt` from the harness clock, and
+attribution from the credential.
 
 `rejected` is the field that justifies recording forks at all. _Why not derive it from the span?_ is
 the question a reviewer asks most often and the one a diff can never answer, because the road not
@@ -128,13 +148,18 @@ a prompt:
 - **No prose ceiling to fill.** An agent with nothing to record writes nothing. An empty log is an
   honest outcome and the author says the pack was written without one, rather than the witness
   padding to look thorough.
-- **It is read where the pad is read.** In the notepad modal, and replayed into the next agent on the
-  goal like every other pad note. Neither is a rendering of the pack: a fork is a fact about one
-  moment, and the pack is what the author makes of all of them.
+- **It is read where the pad is read.** In the notepad modal, drawn apart from a note — chose,
+  because, the rejected list ([17](17-cockpit.md#the-notepad-modal)) — and replayed into the next
+  agent on the goal like every other pad note, decision included (`padTestimony`). Neither is a
+  rendering of the pack: a fork is a fact about one moment, and the pack is what the author makes of
+  all of them.
 
-The instruction to use it is **appended** to the rendered execution prompt, never interpolated into
-it — an operator's overridden template never learned the placeholder, and interpolation drops it
-silently on exactly the deployments that customised most. → [09](09-execution.md),
+The instruction to use it, `WITNESS_INSTRUCTION`, is **appended** to the rendered execution prompt of
+every code dispatch, never interpolated into it — an operator's overridden template never learned the
+placeholder, and interpolation drops it silently on exactly the deployments that customised most. It
+is short: what a fork is, that `rejected` is the field that matters, and that an empty log is fine.
+Desk agents do not get it — they move no head, and a pack is written from the forks behind one.
+→ [09](09-execution.md#the-instruction-to-record-forks-reaches-the-agent),
 [05](05-dispatcher.md#prompt-templates)
 
 ## The pack
