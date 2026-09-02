@@ -383,6 +383,46 @@ test('the Host check is dropped when the operator binds a routable address', () 
   assert.equal(authorizeRequest(req, { token: 't', requireLoopbackHost: true, throttled: false }).ok, false);
 });
 
+test('an origin matching the request host is allowed when bound off-loopback', () => {
+  // A browser navigated to the routable address sends an Origin equal to the
+  // page it is on — the cockpit serving itself over the LAN/Tailscale. That is
+  // not a cross-site caller, and refusing it is what made a remote cockpit load
+  // with its state but never connect its live socket.
+  const req = {
+    url: '/api/state',
+    host: '100.117.182.27:4300',
+    origin: 'http://100.117.182.27:4300',
+    authorization: 'Bearer t',
+  };
+  assert.deepEqual(authorizeRequest(req, { token: 't', requireLoopbackHost: false, throttled: false }), { ok: true });
+
+  // The same host on a different port is a different origin: still refused.
+  const otherPort = {
+    url: '/api/state',
+    host: '100.117.182.27:4300',
+    origin: 'http://100.117.182.27:9999',
+    authorization: 'Bearer t',
+  };
+  assert.deepEqual(authorizeRequest(otherPort, { token: 't', requireLoopbackHost: false, throttled: false }), {
+    ok: false,
+    code: 403,
+    error: 'cross-origin request refused',
+  });
+
+  // A cross-site origin is refused even when it shares the token.
+  const crossSite = {
+    url: '/api/state',
+    host: '100.117.182.27:4300',
+    origin: 'https://evil.example',
+    authorization: 'Bearer t',
+  };
+  assert.deepEqual(authorizeRequest(crossSite, { token: 't', requireLoopbackHost: false, throttled: false }), {
+    ok: false,
+    code: 403,
+    error: 'cross-origin request refused',
+  });
+});
+
 test('origin and host are answered before the token, so a leak never opens those doors', () => {
   // Order is the property: a refusal must not depend on the credential being
   // wrong, or a leaked token turns a rebinding attempt back into a way in.
