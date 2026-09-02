@@ -1856,6 +1856,10 @@ a.cn-tgl {
   /* The watch switch: a glyph and the room to press it, and no more — it is the
      one slot that is the same on every row, so its whole job is to be skippable. */
   --cn-w-eye: 22px;
+  /* The mark for who asked: a 20px disc and the gap that keeps it off the title.
+     A width rather than a ceiling — it is the same glyph on every row, so a rail
+     that gave way would move the subject's left edge from card to card. */
+  --cn-w-who: 24px;
   --cn-w-why: 16px;
   /* The same column when its rows wear a word instead of a marker: wide enough for
      the longest state the fleet card has ("at a keyboard"). */
@@ -3174,6 +3178,66 @@ button.cn-grow {
   .cn-onit-dot {
     animation: none;
   }
+}
+
+/* ── The band, and who asked ──────────────────────────────────────────────────
+
+   Two readings the rack draws and no other card does yet, both about the same
+   question: which of these is *mine*. The band answers it for the card, the mark
+   answers it for the row, and neither spends a hue — the five the console already
+   has each mean something, and a sixth would be a word to learn.
+   → docs/spec/17-cockpit.md#yours-then-the-fleets */
+
+/* A heading over the rows under it, on the card's full width rather than on the
+   rail: lined up with the subject column it would read as a row whose every
+   other slot happened to be empty. */
+.cn-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 13px;
+  background: var(--cn-panel-2);
+  border-bottom: 1px solid var(--cn-line-soft);
+  font: 600 9.5px/1 var(--cn-mono);
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+}
+/* The band that is your move, in the tone the state column already says it in —
+   the same red an `ask` chip wears, at the band's weight rather than a chip's. */
+.cn-group.cn-group-ask {
+  background: var(--cn-red-fill);
+  color: var(--cn-red-ink);
+}
+.cn-group-n {
+  margin-left: auto;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Who asked, as a mark. A person is a filled disc carrying their initials; the
+   harness is a hollow dashed one, which is the *absence* of a person rather than
+   a second kind of one. */
+.cn-who {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font: 700 8.5px/1 var(--cn-mono);
+  letter-spacing: 0.2px;
+  cursor: default;
+}
+.cn-who-person {
+  background: color-mix(in srgb, var(--cn-red) 16%, var(--cn-panel));
+  border: 1px solid var(--cn-red-line);
+  color: var(--cn-red-ink);
+}
+.cn-who-none {
+  border: 1px dashed var(--cn-line-hi);
+  color: var(--cn-fg-faint);
+  font-weight: 400;
 }
 
 /* A row with work happening on it, as you read it.
