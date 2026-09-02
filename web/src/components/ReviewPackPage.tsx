@@ -74,6 +74,17 @@ interface ReviewPackPageProps {
   /** Ask for a new pack — the same control as the first ask, from the pull request's row. */
   onAsk: () => Promise<void>;
   /**
+   * Why the last ask was refused, in the route's own words — held by the shell,
+   * like {@link ReviewPackPageProps.shareRefusal} and for the same reason. The ask
+   * is refused for four reasons a person can act on (an author already on the pull
+   * request, a checker on the pack, a head the provider does not report, a paused
+   * fleet), and a 409 that reached the reader as a button that did nothing is the
+   * one of those four they cannot act on.
+   * → docs/spec/31-review-packs.md#when-a-pack-is-made
+   */
+  askRefusal: string | null;
+  onAskRefused: (message: string) => void;
+  /**
    * Publish this pack into the pool. **A second, deliberate act**, and a separate
    * control from the ask: a pack carries its code, so sharing one puts the
    * fleet's source into a repository that never forgets, and nothing does it by
@@ -141,7 +152,9 @@ export function ReviewPackPage(props: ReviewPackPageProps): JSX.Element {
         refused={props.shareRefusal}
         onRefused={props.onShareRefused}
       />
-      {standing !== 'checked' && <Unchecked standing={standing} onAsk={props.onAsk} />}
+      {standing !== 'checked' && (
+        <Unchecked standing={standing} onAsk={props.onAsk} refused={props.askRefusal} onRefused={props.onAskRefused} />
+      )}
       {wrong.length > 0 && <Gate wrong={wrong} />}
       <IdeasRule numbered={numbered} openIdea={props.openIdea} onOpenIdea={props.onOpenIdea} />
       <div className="rp-ideas">
@@ -182,7 +195,7 @@ export function ReviewPackPage(props: ReviewPackPageProps): JSX.Element {
   );
 }
 
-function Masthead({ payload, onAsk }: ReviewPackPageProps): JSX.Element {
+function Masthead({ payload, onAsk, askRefusal, onAskRefused }: ReviewPackPageProps): JSX.Element {
   const { pack } = payload;
   const facts = packFacts(pack);
   const currency = packCurrency(payload);
@@ -238,11 +251,7 @@ function Masthead({ payload, onAsk }: ReviewPackPageProps): JSX.Element {
               . Nothing regenerates it — ask again when the change has turned enough to be worth two agent runs.
             </span>
           )}
-          {currency.kind === 'stale' && (
-            <AsyncButton className="ghost small" onClick={onAsk} pendingLabel="asking…">
-              Ask again
-            </AsyncButton>
-          )}
+          {currency.kind === 'stale' && <AskAgain onAsk={onAsk} refused={askRefusal} onRefused={onAskRefused} />}
         </div>
       )}
     </header>
@@ -359,9 +368,13 @@ function Currency({ currency }: { currency: ReturnType<typeof packCurrency> }): 
 function Unchecked({
   standing,
   onAsk,
+  refused,
+  onRefused,
 }: {
   standing: 'unchecked' | 'checking';
   onAsk: () => Promise<void>;
+  refused: string | null;
+  onRefused: (message: string) => void;
 }): JSX.Element {
   if (standing === 'checking') {
     return (
@@ -382,10 +395,38 @@ function Unchecked({
         error log says which. Nothing here has been verified, and nothing retries on its own. Asking again re-runs both
         agents.
       </p>
-      <AsyncButton className="ghost small" onClick={onAsk} pendingLabel="asking…">
+      <AskAgain onAsk={onAsk} refused={refused} onRefused={onRefused} />
+    </div>
+  );
+}
+
+/**
+ * The ask, wherever it is drawn, with its refusal beside it.
+ *
+ * The desk refuses an ask for four reasons and every one of them is a sentence
+ * the reader can act on — an author is already on this pull request, its pack is
+ * being checked, the provider reports no head, the fleet is paused. Drawn rather
+ * than flashed, for the reason the share's refusal is: the status alone reached
+ * the reader as a button that did nothing, and nothing is written to the error
+ * log for a refusal, which is correct — a refusal is not a failure.
+ * → docs/spec/31-review-packs.md#when-a-pack-is-made
+ */
+function AskAgain({
+  onAsk,
+  refused,
+  onRefused,
+}: {
+  onAsk: () => Promise<void>;
+  refused: string | null;
+  onRefused: (message: string) => void;
+}): JSX.Element {
+  return (
+    <>
+      <AsyncButton className="ghost small" onClick={onAsk} onRefused={onRefused} pendingLabel="asking…">
         Ask again
       </AsyncButton>
-    </div>
+      {refused !== null && <p className="rp-refusal">{refused}</p>}
+    </>
   );
 }
 

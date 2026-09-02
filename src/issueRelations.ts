@@ -187,9 +187,15 @@ export function watchCascadeTargets(
 const PARENT_BODY_LIMIT = 4000;
 
 /**
- * How many candidate parents an orphan's note offers. A list long enough to be a
- * menu stops being a suggestion — and the agent's job is to name the best fit or
+ * How many candidate parents an orphan's **note** offers. A list long enough to be
+ * a menu stops being a suggestion — and the agent's job is to name the best fit or
  * say none of them are it, not to work through a board.
+ *
+ * Applied where the note is written and not inside {@link candidateParents},
+ * because the cap is about prompt economy and the cockpit's picker is the one
+ * surface where a truncated list is a dead end: the container an operator wants is
+ * either offered or unreachable, and "the thirteenth by id" is not a rule anybody
+ * can learn from a select box with nothing in it.
  */
 const CANDIDATE_LIMIT = 12;
 
@@ -205,7 +211,13 @@ const CANDIDATE_LIMIT = 12;
  * Deduplicated by number, open only — a closed feature is not somewhere to put
  * new work — and in id order so the same board produces the same list twice
  * running. Pure over the world, so the suggestion an agent is offered and the one
- * the cockpit could show are the same list.
+ * the cockpit shows are the same list — the cockpit's arrives on
+ * `CockpitWorld.parentCandidates`, because `web/src/` cannot re-derive this half
+ * and the half it *can* re-derive (containers in the world) is the one that is
+ * almost always empty.
+ *
+ * Whole, and capped only where it is written into a prompt
+ * ({@link CANDIDATE_LIMIT}).
  */
 export function candidateParents(issues: readonly Issue[], containerTypes?: readonly string[]): IssueRelative[] {
   const byNumber = new Map<number, IssueRelative>();
@@ -226,7 +238,7 @@ export function candidateParents(issues: readonly Issue[], containerTypes?: read
       byNumber.set(parent.number, { ...parent, body: undefined });
     }
   }
-  return [...byNumber.values()].sort((a, b) => a.number - b.number).slice(0, CANDIDATE_LIMIT);
+  return [...byNumber.values()].sort((a, b) => a.number - b.number);
 }
 
 /** One relative as a single line: `Bug #14 "Totals drift" (Active)`. */
@@ -281,7 +293,10 @@ export function relatedWorkNote(
     // never writes it, so what an agent can do about an orphan is name the feature
     // a human should hang it off. Offered only for an orphan — a suggestion beside
     // an item that already has a parent is an invitation to re-file work.
-    const open = candidates.filter((c) => c.number !== issue.number);
+    // Capped here rather than in `candidateParents`: a prompt pays for every line
+    // and an agent is asked for a judgement, where the cockpit's picker is asked
+    // for a click and a list it cut would put the right answer out of reach.
+    const open = candidates.filter((c) => c.number !== issue.number).slice(0, CANDIDATE_LIMIT);
     if (open.length > 0) {
       lines.push(
         `Open features it might belong to:\n${open.map((c) => `- ${relativeLine(c)}`).join('\n')}\n\n` +

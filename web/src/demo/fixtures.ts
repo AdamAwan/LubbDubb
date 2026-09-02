@@ -958,6 +958,19 @@ export function buildDemoState(): DemoSeed {
           },
         }),
       ],
+      // What the parent picker offers the orphan bug #341 — the same list the
+      // server derives with `candidateParents`, which is the open Feature above
+      // plus the parents the other stories name. Written out rather than derived
+      // here so the fixture states what the wire carries.
+      parentCandidates: [
+        {
+          number: 300,
+          title: 'Source-grounded document patrols',
+          issueType: 'Feature',
+          workItemState: 'Active',
+          state: 'open' as const,
+        },
+      ],
     },
     tasks: [
       {
@@ -1213,8 +1226,10 @@ export function buildDemoState(): DemoSeed {
       note: 'Up on :5173. Seeded the sample invoices — the instruction did not mention that step.',
       startedAt: ago(18),
       endedAt: null,
-      // Never interrupted: this one is up and being held by a live session.
+      // Never interrupted, and held on the latest beat: this one is up, with a live
+      // session behind it.
       interruptedAt: null,
+      lastSeenAt: ago(0),
       // What the session holding it up has cost so far — one of the two runs the
       // spend panel's #390 row counts.
       costUsd: 0.22,

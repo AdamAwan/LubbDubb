@@ -1414,9 +1414,16 @@ CREATE TABLE IF NOT EXISTS local_runs (
   -- When the harness that was holding this run went down, stamped by the fast stop
   -- on its way out. It is the age a resume is judged on: an environment nobody has
   -- been near for hours is not one to bring back. Null on a row nothing stamped --
-  -- a hard crash, where the harness never got a line -- which is unknown rather
-  -- than recent, and read as such.
-  interrupted_at TEXT
+  -- a hard crash, where the harness never got a line -- which falls back to
+  -- last_seen_at below, and is unknown only if that is null too.
+  interrupted_at TEXT,
+  -- The last beat on which the harness was holding this run, stamped from the pulse
+  -- while a session of this process holds it. What dates a force close: taskkill,
+  -- Task Manager, a power cut and a closed console window all take the process
+  -- without running a line, so interrupted_at stays null and this is the only record
+  -- of when the environment was last true. Stamped only by the process actually
+  -- holding the run, so a live row a boot declined to bring back is never dated.
+  last_seen_at TEXT
 );
 
 -- One dated cost delta per usage report a local run's sessions made -- the sibling

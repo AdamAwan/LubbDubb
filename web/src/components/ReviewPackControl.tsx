@@ -22,6 +22,11 @@ const AGENT_POLL_MS = 4000;
  *
  * `canAsk` is false on a closed pull request: the desk refuses to write a pack
  * for one, but the pack it already has stays readable.
+ *
+ * **A refused ask is drawn beside the button.** The desk refuses one for four
+ * reasons a reader can act on and records none of them — a refusal is not a
+ * failure — so a 409 the row kept to itself was a button that did nothing.
+ * → docs/spec/31-review-packs.md#when-a-pack-is-made
  */
 export function ReviewPackControl({
   prNumber,
@@ -36,6 +41,7 @@ export function ReviewPackControl({
   onOpen: () => void;
 }): JSX.Element | null {
   const [reading, setReading] = useState<ReviewPackReading | 'loading' | 'failed'>('loading');
+  const [refusal, setRefusal] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -60,8 +66,15 @@ export function ReviewPackControl({
   }, [busy, load]);
 
   const ask = useCallback(async () => {
-    await api.requestReviewPack(prNumber);
-    await load();
+    setRefusal(null);
+    try {
+      await api.requestReviewPack(prNumber);
+    } finally {
+      // Re-read either way. A refusal is usually about state that moved under the
+      // row — an author already on the pull request, a checker on its pack — and
+      // the re-read is what turns the button into the chip that says so.
+      await load();
+    }
   }, [prNumber, load]);
 
   if (reading === 'loading') return <span className="rp-ctl rp-ctl-quiet">pack…</span>;
@@ -81,9 +94,10 @@ export function ReviewPackControl({
     if (!canAsk) return null;
     return (
       <span className="rp-ctl">
-        <AsyncButton className="ghost small" onClick={ask} pendingLabel="asking…">
+        <AsyncButton className="ghost small" onClick={ask} onRefused={setRefusal} pendingLabel="asking…">
           Review pack
         </AsyncButton>
+        {refusal !== null && <span className="rp-ctl-refusal">{refusal}</span>}
       </span>
     );
   }

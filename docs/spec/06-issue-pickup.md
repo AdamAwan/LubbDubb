@@ -195,6 +195,13 @@ one or widen the work to an inferred goal, and offered the open containers it mi
 other item's parent. Naming the likely feature is a **suggestion for a human**: the harness reads the
 tracker's hierarchy and never writes it, so nothing here links, re-parents or edits a work item.
 
+The same list is what the cockpit's `ParentPicker` offers, shipped on
+`CockpitWorld.parentCandidates` ([17](17-cockpit.md#a-goal-with-no-parent-feature)) — one derivation,
+because the browser cannot make it: the half it could re-derive from `world.issues` is the
+container-typed items in the list, and on a board narrowed by tag and assignee that half is almost
+always empty. A picker built on it therefore drew no list at all on exactly the deployments that raise
+the missing-parent question, leaving a warning about filing with only "not applicable" under it.
+
 ### What the agents are told
 
 `relatedWorkNote(issue, containerTypes, candidates, parentedTypes)` is **appended** to the rendered prompt of rules
@@ -210,7 +217,11 @@ It carries, in this order and only when there is something to say:
 - the **siblings** with their states, named as other people's scope, so a planner can see where this
   item's edges are rather than re-decomposing work someone already holds;
 - the **children**, for a container;
-- the **orphan** flag and its candidate features.
+- the **orphan** flag and its candidate features — **twelve** of them at most, capped where the note
+  is written rather than in `candidateParents` itself. The cap is about what a prompt should pay for
+  and what an agent is being asked (name the best fit, or say none of them are it); the picker is
+  being asked for a click, and a list it cut short would put the right container out of reach with no
+  way to tell.
 
 An issue with no relations produces the empty string, so nothing is appended at all and the GitHub
 path is byte-for-byte what it was.

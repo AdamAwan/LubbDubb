@@ -1557,6 +1557,8 @@ class DemoServer {
       startedAt: now,
       endedAt: null,
       interruptedAt: null,
+      // Held right now, by the session this start just spawned.
+      lastSeenAt: now,
       live: true,
       phase: null,
       refFacts: facts,

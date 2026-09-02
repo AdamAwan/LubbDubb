@@ -61,6 +61,16 @@ The [local cycle](#the-local-cycle) below does not weaken that. It is a third ki
 a manual cycle that skipped its fetch, it says so on its own report, and a route that has changed the
 outside world still has to fold the change onto the baseline itself.
 
+## The one thing above the hold
+
+`runCycle` opens with a single write: `localRun.noteAlive()`, which dates the local dev environment
+this process is holding, if it is holding one ([23](23-local-runs.md#coming-back-after-a-restart)).
+It is above everything below — the hold included — because what it records is that the **harness was
+alive on this beat**, which is true of a held pulse as much as a working one. A harness sitting on a
+recovery decision for three hours is a harness that was up for three hours; dated from the last cycle
+that reached the work, a run killed at the end of that would read three hours stale and never come
+back. One `UPDATE` on one row, and none at all while nothing is held.
+
 ## The crash-recovery hold
 
 Before the coalescing guard, and **before the world is fetched**, `runCycle` asks
@@ -309,9 +319,10 @@ list of them is above, and no step below reads differently for it.
 
 ```mermaid
 flowchart TD
-    T(["Heartbeat timer · POST /api/pulse · boot"]) --> RH{"recovery.pendingCount() > 0?"}
-    L(["an agent ended — CycleTrigger, debounced"]) --> RH
-    IN(["a verified webhook delivery — CycleTrigger, debounced and floored"]) --> RH
+    T(["Heartbeat timer · POST /api/pulse · boot"]) --> SEEN
+    L(["an agent ended — CycleTrigger, debounced"]) --> SEEN
+    IN(["a verified webhook delivery — CycleTrigger, debounced and floored"]) --> SEEN
+    SEEN["localRun.noteAlive() — date the environment this process holds"] --> RH{"recovery.pendingCount() > 0?"}
     RH -- yes --> HELD(["cycleId: held — no snapshot, no dispatch, no act"])
     RH -- no --> CF{"cycle already in flight?"}
     CF -- yes --> CO(["cycleId: coalesced"])
