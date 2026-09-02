@@ -264,6 +264,10 @@ environment back, every time, for a reason that had nothing to do with them.
   - **Both stamps null is still unknown, and still refused.** Every row a running build writes is
     dated by one or the other, so that shape belongs to a hand-edited database — and the safe
     direction there is unchanged.
+  - **The stamp is the runner's clock, passed in**, exactly as `markLocalRunInterrupted`'s is.
+    `staleness` measures the column against `deps.now`, so a stamp taken from the store's own clock
+    made the age the difference between two clocks — identical in production, and whatever the wall
+    clock happened to say anywhere one of them is injected.
   `SIGHUP` and `SIGBREAK` are handled in `main.ts` beside `SIGINT` for the same reason: closing the
   console window was taking Node's default path, which reaps no agent and dates nothing.
 - **A `stopping` row is settled, not resumed**, however the deployment is configured. A teardown in
