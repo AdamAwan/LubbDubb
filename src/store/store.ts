@@ -53,6 +53,7 @@ import { PrReviewStore } from './prReviews.js';
 import { PrReviewRouteStore, PR_REVIEW_ROUTE_COLUMNS } from './prReviewRoutes.js';
 import { PrReviewExternalStore } from './prReviewExternals.js';
 import { PrThreadReopenStore } from './prThreadReopens.js';
+import { PrReplyStore } from './prReplies.js';
 import type { PrThreadReopen } from '../prThreads.js';
 import { DecisionStore, DECISION_COLUMNS } from './decisions.js';
 import { WorldStore, type WorldLabelPatch } from './world.js';
@@ -236,6 +237,7 @@ export class Store {
   private readonly prReviewRoutes: PrReviewRouteStore;
   private readonly prReviewExternals: PrReviewExternalStore;
   private readonly threadReopens: PrThreadReopenStore;
+  private readonly prReplies: PrReplyStore;
   private readonly decisions: DecisionStore;
   private readonly world: WorldStore;
   private readonly errors: ErrorStore;
@@ -412,6 +414,7 @@ export class Store {
     this.prReviewRoutes = new PrReviewRouteStore(ctx);
     this.prReviewExternals = new PrReviewExternalStore(ctx);
     this.threadReopens = new PrThreadReopenStore(ctx);
+    this.prReplies = new PrReplyStore(ctx);
     this.decisions = new DecisionStore(ctx);
     this.world = new WorldStore(ctx);
     this.errors = new ErrorStore(ctx);
@@ -1481,6 +1484,12 @@ export class Store {
   }
   prThreadReopens(): PrThreadReopen[] {
     return this.threadReopens.prThreadReopens();
+  }
+  recordPrReplySent(prNumber: number, threadId: string, commentRef: string): void {
+    this.prReplies.recordPrReplySent(prNumber, threadId, commentRef);
+  }
+  prReplyRefs(prNumber: number): ReadonlySet<string> {
+    return this.prReplies.prReplyRefs(prNumber);
   }
 
   // -- Decisions (audit) ---------------------------------------------------

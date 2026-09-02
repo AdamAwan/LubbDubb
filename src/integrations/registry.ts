@@ -54,6 +54,10 @@ const REGISTRY: Record<WorldCapability, Record<string, ProviderFactory>> = {
         owner: gh.owner,
         repo: gh.repo,
         closedPrWindowMs: ctx.config.closedPrWindowMs,
+        // Who replied is a record, not an inference: the store is the only thing
+        // that can tell the fleet's reply from the operator's when the credential
+        // belongs to both. → `docs/spec/07-pull-requests.md#review-threads`
+        sentReplies: ctx.store,
       });
     },
     azure: (ctx) => {
@@ -67,6 +71,9 @@ const REGISTRY: Record<WorldCapability, Record<string, ProviderFactory>> = {
         repository: az.repository,
         policyChecks: az.policyChecks,
         closedPrWindowMs: ctx.config.closedPrWindowMs,
+        // The same record the GitHub provider reads, for the same reason — the two
+        // must not come to disagree about a thread.
+        sentReplies: ctx.store,
       });
     },
   },

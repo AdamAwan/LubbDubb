@@ -12,7 +12,7 @@ import type {
   SendResult,
 } from '../../sink/actionSink.js';
 import type { CiCheck, CiStatus, MergeableState, PrReviewThread, PullRequest } from '../../types.js';
-import { threadComments, threadState } from '../../prThreads.js';
+import { ourReplyRefs, threadComments, threadState, type SentPrReplies } from '../../prThreads.js';
 import { EVIDENCE_LOG_TAIL_LINES, type CiEvidenceTarget, type CiFailureEvidence } from '../../ci/ciEvidence.js';
 import type {
   BranchDeleteCapable,
@@ -104,6 +104,14 @@ interface GitHubSourceControlOpts {
   closedPrWindowMs?: number;
   /** Injectable clock, so the retention window is testable without waiting for one. */
   now?: () => number;
+  /**
+   * The record of which replies this harness actually sent — what decides whether
+   * a reply is the fleet's. Threaded in from `src/system.ts` via the registry.
+   * Unset means "no record": every thread reads as unanswered work, which is the
+   * safe direction and never a claim that the fleet handled something.
+   * → `docs/spec/07-pull-requests.md#review-threads`
+   */
+  sentReplies?: SentPrReplies;
 }
 
 /**
@@ -262,7 +270,7 @@ export class GitHubSourceControlIntegration
       updatedAt: p.updatedAt ?? '',
       approved: computeApproved(reviews),
       viewerApproved: viewerApproved(reviews, viewer),
-      reviewThreads: buildReviewThreads(comments, viewer, threads ?? []),
+      reviewThreads: buildReviewThreads(comments, threads ?? [], ourReplyRefs(this.opts.sentReplies, p.number)),
       mergeable: detail.mergeable,
       mergeableState: normalizeMergeState(detail.mergeableState),
       merged: detail.merged,
@@ -351,7 +359,10 @@ export class GitHubSourceControlIntegration
       input.commentId !== null
         ? await api.createPullReviewReply(input.prNumber, Number(input.commentId), input.body)
         : await api.createIssueComment(input.prNumber, input.body);
-    return { ok: true, ref: ref.url };
+    // Two references, deliberately: the URL is for the audit line a person reads,
+    // and the id is what `buildReviewThreads` will see this comment as when it
+    // comes back on the next read. → `docs/spec/07-pull-requests.md#review-threads`
+    return { ok: true, ref: ref.url, commentRef: String(ref.id) };
   }
 
   /**
@@ -672,30 +683,33 @@ export function computeApproved(reviews: GhReview[]): boolean {
  *    REST — which is the entire reason this function ever had to infer anything.
  *    `threads` is empty when that read failed or when a caller does not supply
  *    one, and absence means "no verdict", never "unresolved".
- * 2. **The harness posted the newest reply.** The fallback for a thread nobody
- *    resolved, and the network-native analogue of the fake's `markCommentHandled`,
- *    so the deterministic loop settles one poll after a reply goes out.
+ * 2. **The harness posted the newest reply**, as `ourReplyRefs` records it. The
+ *    fallback for a thread nobody resolved, and the network-native analogue of the
+ *    fake's `markCommentHandled`, so the deterministic loop settles one poll after
+ *    a reply goes out.
  *
- * **Arm 2 is positional rather than an identity test, and has to be.**
- * `viewerLogin` is whoever holds `GITHUB_TOKEN`, which on a single-operator
- * deployment is the operator themselves. Comparing the *root's* author against it
- * marked every review comment the operator left as already handled the instant
- * they wrote it, and rule `pr-review-comment` never saw it: the harness silently ignored exactly
- * the reviews a human took the time to write, which is the one signal it must
- * never drop. No author comparison fixes that — the two identities are the same
- * string. The position test needs none: the harness only ever posts *replies*
- * under a root (`createPullReviewReply`; a `commentId: null` reply is an issue
- * comment, which this list never contains), so "the newest reply is ours" holds
- * whether the token belongs to a dedicated bot account or to the operator.
+ * **Arm 2 is a record, and it has to be.** It used to be positional — "the newest
+ * reply's author is `viewerLogin`" — which held only for as long as *every* reply
+ * under a root came from the harness. It does not: a reviewer replies under their
+ * own root, and on a single-operator deployment `viewerLogin` is the operator
+ * themselves, so their follow-up on their own thread read back as the fleet's
+ * answer. That folds to `PrComment.handled`, the only bit rule
+ * `pr-review-comment` reads, so the harness silently dropped exactly the reviews a
+ * human took the time to write — the one signal it must never drop. No comparison
+ * against an identity can fix it, because the two identities are the same string.
+ * `ourReplyRefs` carries the ids of the replies this harness actually sent
+ * (`PrReplyStore`), and nothing else is ever the fleet's.
  *
  * Both arms fail toward a thread staying **open**, which is the safe direction: an
  * agent dispatched for a comment already dealt with is visible and cheap, where a
- * dropped review is neither.
+ * dropped review is neither. An empty `ourReplyRefs` — no record yet, a reply from
+ * before the table existed, a send whose ref the provider would not name — is
+ * therefore every thread reading as work, never a thread claimed as handled.
  */
 export function buildReviewThreads(
   comments: GhReviewComment[],
-  viewerLogin: string,
   threads: GhReviewThread[] = [],
+  ourReplies: ReadonlySet<string> = new Set(),
 ): PrReviewThread[] {
   const resolved = new Set(threads.filter((t) => t.isResolved).map((t) => t.rootCommentId));
   const roots: GhReviewComment[] = [];
@@ -711,24 +725,25 @@ export function buildReviewThreads(
   }
   return roots.map((root) => {
     const replies = repliesByRoot.get(root.id) ?? [];
+    const newest = replies[replies.length - 1];
     const thread: PrReviewThread = {
       id: String(root.id),
       author: root.authorLogin,
       body: root.body,
-      // Resolution first; failing that, a thread with no reply of ours is
-      // unanswered, whoever wrote it.
+      // Resolution first; failing that, a thread whose newest reply is not one the
+      // harness recorded sending is unanswered — whoever wrote it, and however
+      // that author's login compares to the credential's.
       state: threadState({
         resolved: resolved.has(root.id),
-        answered: replies[replies.length - 1]?.authorLogin === viewerLogin,
+        answered: newest !== undefined && ourReplies.has(String(newest.id)),
       }),
       replies: replies.map((r) => ({
         id: String(r.id),
         author: r.authorLogin,
         body: r.body,
-        // The same position test arm 2 rests on, and it is sound for its reason:
-        // the harness only ever posts *replies*, so a reply from the viewer is the
-        // harness's however the token's identity is shared.
-        ours: r.authorLogin === viewerLogin,
+        // The record, not the author. A reply the harness has no row for is not
+        // the fleet's, which is what keeps the badge off a person's message.
+        ours: ourReplies.has(String(r.id)),
       })),
     };
     // Where the thread hangs, when GitHub reported it. Absent rather than

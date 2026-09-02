@@ -499,6 +499,17 @@ export interface AzWorkItemUpdate {
 
 export interface AzCommentRef {
   url: string;
+  /**
+   * Azure's own id for the comment created, as the thread read puts it on
+   * `AzComment.id` — what attribution matches a reply on
+   * (`docs/spec/07-pull-requests.md#review-threads`).
+   *
+   * Optional because the create endpoints answer with a body only on the API
+   * versions that return one, and a missing id must read as "cannot be named"
+   * rather than be invented: the harness then records nothing and the thread keeps
+   * reading as work.
+   */
+  id?: number;
 }
 
 export interface AzMergeResult {

@@ -850,7 +850,10 @@ export class ActionExecutor {
       // rule would dispatch for it every pulse for as long as the pull request
       // lived. A no-op on a thread nobody reopened.
       // → `docs/spec/07-pull-requests.md#reopening-a-thread`
-      if (act.commentId !== null) this.deps.store.setPrThreadReopened(act.prNumber, act.commentId, false);
+      if (act.commentId !== null) {
+        this.deps.store.setPrThreadReopened(act.prNumber, act.commentId, false);
+        this.recordReplySent(act.prNumber, act.commentId, res.commentRef);
+      }
       const resolution = await this.resolveAnswered(act);
       return audit(
         'executed',
@@ -882,6 +885,40 @@ export class ActionExecutor {
         `Authorized ${act.kind === 'merge' ? `merge of PR #${act.prNumber}` : `reply on PR #${act.prNumber}`} failed (${message}); escalated so it isn't dropped: ${esc.id}.`,
       );
     }
+  }
+
+  /**
+   * Write down that the harness sent this reply — the sole place attribution is
+   * ever recorded, because this is the sole place a reply goes out.
+   *
+   * The record replaces an identity test that could not work: the credential the
+   * harness posts under is the operator's own on a single-operator deployment, so
+   * reading "the last reply's author is us" off the provider marked the operator's
+   * own follow-up as the fleet's answer and dropped their comment before any rule
+   * saw it. → `docs/spec/07-pull-requests.md#review-threads`
+   *
+   * **A send the provider would not name is recorded as a failure, never guessed
+   * at.** Without an id there is nothing to match on the next read, so the thread
+   * keeps reading as work and the fleet answers it again — a re-dispatch, which is
+   * visible and cheap. Falling back to the author would settle the thread and lose
+   * the reviewer, which is neither. The `errors.record` is what stops that
+   * re-dispatch loop being silent: it names the provider that will not say what it
+   * created, which is the actual fault.
+   */
+  private recordReplySent(prNumber: number, threadId: string, commentRef: string | undefined): void {
+    if (commentRef !== undefined && commentRef !== '') {
+      this.deps.store.recordPrReplySent(prNumber, threadId, commentRef);
+      return;
+    }
+    this.deps.errors.record({
+      source: 'provider',
+      message: `The reply on PR #${prNumber} went out, but the provider returned no comment id for it.`,
+      detail:
+        `Thread ${threadId} will keep reading as unanswered work and the fleet will answer it again, because ` +
+        `attribution is a record of what was sent and there is nothing to record. Identity is deliberately not ` +
+        `used as a fallback: the harness posts under the operator's own credential, so it cannot tell its own ` +
+        `reply from theirs.`,
+    });
   }
 
   /**

@@ -16,9 +16,13 @@ import type { PrComment, PrReviewThread, PrThreadState, PullRequest, WorldSnapsh
  * Where a thread stands, from the two things a provider can actually answer.
  *
  * `resolved` is the reviewer's own verdict and leads, because it is a statement
- * rather than an inference. `answered` is the fallback the two providers already
- * shared: the harness wrote the last reply, so the thread is with the reviewer.
- * Neither is `reopened` — that is the operator's, written on top by
+ * rather than an inference. `answered` is the fallback the two providers share:
+ * the harness wrote the last reply — which is now read off the record of what the
+ * harness actually sent ({@link SentPrReplies}) rather than off the reply's
+ * author. Identity is never sufficient: the credential the harness posts under is
+ * the operator's own on a single-operator deployment, so an author test marked
+ * the operator's follow-up on their own thread as the fleet's answer and dropped
+ * it. Neither is `reopened` — that is the operator's, written on top by
  * {@link applyThreadReopens} and never derived from a provider reading.
  */
 export function threadState(opts: { resolved: boolean; answered: boolean }): PrThreadState {
@@ -45,6 +49,35 @@ function threadHandled(state: PrThreadState): boolean {
  */
 export function threadComments(threads: readonly PrReviewThread[]): PrComment[] {
   return threads.map((t) => ({ id: t.id, author: t.author, body: t.body, handled: threadHandled(t.state) }));
+}
+
+/**
+ * The record of what the harness itself sent, as a provider asks it.
+ *
+ * One method, per pull request, answered synchronously off SQLite — a provider
+ * building threads has the pull request in hand and nothing else to join on.
+ * `Store` implements it; a caller that has no record to offer passes nothing and
+ * every thread reads as unanswered work, which is the safe direction.
+ * → `docs/spec/07-pull-requests.md#review-threads`
+ */
+export interface SentPrReplies {
+  /** Provider comment refs of every reply the harness recorded sending on this PR. */
+  prReplyRefs(prNumber: number): ReadonlySet<string>;
+}
+
+/** No record at all — what a provider built without one derives against. */
+const NO_REPLIES: ReadonlySet<string> = new Set();
+
+/**
+ * What {@link SentPrReplies} says about one pull request, or nothing.
+ *
+ * The absence of a ledger and a ledger with nothing in it are deliberately the
+ * same answer: both mean "no reply here is known to be ours", and both leave every
+ * thread open. Failing the other way would hand the reviewer's comment back to the
+ * silence this record exists to end.
+ */
+export function ourReplyRefs(sent: SentPrReplies | undefined, prNumber: number): ReadonlySet<string> {
+  return sent === undefined ? NO_REPLIES : sent.prReplyRefs(prNumber);
 }
 
 /** One operator reopen, as the store holds it. */

@@ -259,9 +259,9 @@ function pull(over: Partial<GhPullSummary> = {}): GhPullSummary {
  */
 const buildUnresolvedComments = (
   comments: GhReviewComment[],
-  viewerLogin: string,
+  ourReplies: ReadonlySet<string>,
   threads?: GhReviewThread[],
-): PrComment[] => threadComments(buildReviewThreads(comments, viewerLogin, threads));
+): PrComment[] => threadComments(buildReviewThreads(comments, threads, ourReplies));
 
 test('aggregateCiStatus: any failing check wins', () => {
   const runs: GhCheckRun[] = [
@@ -319,19 +319,21 @@ test('buildUnresolvedComments: one entry per thread, keyed on the root comment',
     { id: 100, authorLogin: 'bob', body: 'why this?', inReplyToId: null },
     { id: 101, authorLogin: 'alice', body: 'because X', inReplyToId: 100 },
   ];
-  const out = buildUnresolvedComments(comments, 'lubbdubb-bot');
+  const out = buildUnresolvedComments(comments, new Set());
   assert.equal(out.length, 1);
   assert.equal(out[0]!.id, '100');
   assert.equal(out[0]!.author, 'bob');
   assert.equal(out[0]!.body, 'why this?');
 });
 
-test('buildUnresolvedComments: handled when the bot authored the latest reply', () => {
+test('buildUnresolvedComments: handled when the latest reply is one the harness recorded sending', () => {
   const comments: GhReviewComment[] = [
     { id: 100, authorLogin: 'bob', body: 'why?', inReplyToId: null },
     { id: 101, authorLogin: 'lubbdubb-bot', body: 'here is why', inReplyToId: 100 },
   ];
-  assert.equal(buildUnresolvedComments(comments, 'lubbdubb-bot')[0]!.handled, true);
+  assert.equal(buildUnresolvedComments(comments, new Set(['101']))[0]!.handled, true);
+  // And not on the author alone: the same reply with no row for it is not ours.
+  assert.equal(buildUnresolvedComments(comments, new Set())[0]!.handled, false);
 });
 
 test('buildUnresolvedComments: not handled while the human commented last', () => {
@@ -339,7 +341,7 @@ test('buildUnresolvedComments: not handled while the human commented last', () =
     { id: 100, authorLogin: 'lubbdubb-bot', body: 'thoughts?', inReplyToId: null },
     { id: 101, authorLogin: 'bob', body: 'change this', inReplyToId: 100 },
   ];
-  assert.equal(buildUnresolvedComments(comments, 'lubbdubb-bot')[0]!.handled, false);
+  assert.equal(buildUnresolvedComments(comments, new Set())[0]!.handled, false);
 });
 
 test('buildUnresolvedComments: the reviewer resolving the thread settles it', () => {
@@ -347,7 +349,7 @@ test('buildUnresolvedComments: the reviewer resolving the thread settles it', ()
   // GraphQL, which is the entire reason this function ever had to infer anything.
   const comments: GhReviewComment[] = [{ id: 100, authorLogin: 'bob', body: 'rename this', inReplyToId: null }];
   const threads: GhReviewThread[] = [{ rootCommentId: 100, isResolved: true }];
-  assert.equal(buildUnresolvedComments(comments, 'lubbdubb-bot', threads)[0]!.handled, true);
+  assert.equal(buildUnresolvedComments(comments, new Set(), threads)[0]!.handled, true);
 });
 
 test('buildUnresolvedComments: an unresolved thread the bot already replied to is still handled', () => {
@@ -359,23 +361,22 @@ test('buildUnresolvedComments: an unresolved thread the bot already replied to i
     { id: 101, authorLogin: 'lubbdubb-bot', body: 'because X', inReplyToId: 100 },
   ];
   const threads: GhReviewThread[] = [{ rootCommentId: 100, isResolved: false }];
-  assert.equal(buildUnresolvedComments(comments, 'lubbdubb-bot', threads)[0]!.handled, true);
+  assert.equal(buildUnresolvedComments(comments, new Set(['101']), threads)[0]!.handled, true);
 });
 
 test('buildUnresolvedComments: an unanswered thread the operator opened is not handled', () => {
-  // The bug this closes, on the fallback arm: `viewerLogin` is whoever holds
-  // GITHUB_TOKEN, which on a single-operator deployment is the operator.
-  // Comparing the *root's* author against it marked every review comment they
-  // left as handled the instant they wrote it, so the harness silently ignored
-  // exactly the reviews a human took the time to write. The harness posts nothing
-  // but replies, so the position test needs no identity to work.
+  // The bug this closes, on the fallback arm: the credential is the operator's own
+  // on a single-operator deployment, so any identity comparison marked the review
+  // comments they left as handled the instant they wrote them, and the harness
+  // silently ignored exactly the reviews a human took the time to write. Nothing
+  // was sent here, so nothing is recorded, so nothing is the fleet's.
   const comments: GhReviewComment[] = [
     { id: 100, authorLogin: 'the-operator', body: 'rename this', inReplyToId: null },
   ];
-  assert.equal(buildUnresolvedComments(comments, 'the-operator')[0]!.handled, false);
+  assert.equal(buildUnresolvedComments(comments, new Set())[0]!.handled, false);
   // And unchanged when resolution was read and said nothing about it.
   assert.equal(
-    buildUnresolvedComments(comments, 'the-operator', [{ rootCommentId: 100, isResolved: false }])[0]!.handled,
+    buildUnresolvedComments(comments, new Set(), [{ rootCommentId: 100, isResolved: false }])[0]!.handled,
     false,
   );
 });
@@ -384,18 +385,22 @@ test('buildUnresolvedComments: missing resolution degrades to the reply arm, nev
   // `threads` is empty when the GraphQL read failed or a caller supplied none.
   // Absence means "no verdict", never "resolved" — a thread must fail open.
   const comments: GhReviewComment[] = [{ id: 100, authorLogin: 'bob', body: 'rename this', inReplyToId: null }];
-  assert.equal(buildUnresolvedComments(comments, 'lubbdubb-bot', [])[0]!.handled, false);
-  assert.equal(buildUnresolvedComments(comments, 'lubbdubb-bot')[0]!.handled, false);
+  assert.equal(buildUnresolvedComments(comments, new Set(), [])[0]!.handled, false);
+  assert.equal(buildUnresolvedComments(comments, new Set())[0]!.handled, false);
 });
 
-test('buildUnresolvedComments: the operator reviewing under their own token still settles on a reply', () => {
+test('buildUnresolvedComments: the operator reviewing under their own token still settles on a reply the harness sent', () => {
   // The other half: once a reply *has* gone out under that same identity, the
-  // thread is answered. The fix must not turn every settled thread back on.
+  // thread is answered. The fix must not turn every settled thread back on — but
+  // it is the row for comment 101, not its author, that settles it.
   const comments: GhReviewComment[] = [
     { id: 100, authorLogin: 'the-operator', body: 'rename this', inReplyToId: null },
     { id: 101, authorLogin: 'the-operator', body: 'done', inReplyToId: 100 },
   ];
-  assert.equal(buildUnresolvedComments(comments, 'the-operator')[0]!.handled, true);
+  assert.equal(buildUnresolvedComments(comments, new Set(['101']))[0]!.handled, true);
+  // The operator answering their own thread by hand is the case identity could
+  // not see: same author, no row, still the fleet's to answer.
+  assert.equal(buildUnresolvedComments(comments, new Set())[0]!.handled, false);
 });
 
 test('linkedPrFromTimeline: takes the most recent PR cross-reference', () => {

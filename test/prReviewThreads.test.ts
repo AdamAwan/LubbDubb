@@ -80,7 +80,9 @@ test('the provider keeps the conversation and where it hangs, not just the root'
     { id: 101, authorLogin: 'lubbdubb-bot', body: 'because X', inReplyToId: 100 },
     { id: 102, authorLogin: 'bob', body: 'not convinced', inReplyToId: 100 },
   ];
-  const [built] = buildReviewThreads(comments, 'lubbdubb-bot');
+  // Comment 101 is the one the harness recorded sending; 102 came back from the
+  // reviewer. Attribution is that record, never the login on the message.
+  const [built] = buildReviewThreads(comments, [], new Set(['101']));
   assert.equal(built!.id, '100');
   assert.equal(built!.path, 'src/a.ts');
   assert.equal(built!.line, 42);
@@ -105,7 +107,9 @@ test('a thread the reviewer resolved is resolved, and one the fleet answered is 
     { id: 200, authorLogin: 'bob', body: 'and this', inReplyToId: null },
   ];
   const threads: GhReviewThread[] = [{ rootCommentId: 200, isResolved: true }];
-  const states = Object.fromEntries(buildReviewThreads(comments, 'lubbdubb-bot', threads).map((t) => [t.id, t.state]));
+  const states = Object.fromEntries(
+    buildReviewThreads(comments, threads, new Set(['101'])).map((t) => [t.id, t.state]),
+  );
   // Two words for what `handled` folded into one bit: the second is finished, the
   // first is waiting on a person who may yet come back.
   assert.deepEqual(states, { '100': 'answered', '200': 'resolved' });

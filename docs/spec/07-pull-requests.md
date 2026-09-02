@@ -718,8 +718,8 @@ cannot happen — there is one derivation, not two.
 
 | state | what it means | `handled` |
 | --- | --- | --- |
-| `open` | nobody from the fleet has answered | no |
-| `answered` | the harness wrote the last reply; it is with the reviewer | yes |
+| `open` | no reply the harness recorded sending stands last in the thread | no |
+| `answered` | the newest reply is one the harness recorded sending; it is with the reviewer | yes |
 | `resolved` | the reviewer closed the thread — their own verdict | yes |
 | `reopened` | the operator put it back to the fleet, whatever the provider says | no |
 
@@ -737,6 +737,49 @@ review comments to the GraphQL resolution read it was already making (`buildRevi
 the threads it already fetches (`src/integrations/azure/sourceControl.ts`). A provider that reports
 no file or line leaves `path`/`line` unset and the thread is drawn without a place rather than with
 a guessed one.
+
+### Attribution is a record, never an identity
+
+`answered` and `PrThreadMessage.ours` both turn on one question — _did the fleet write this reply?_ —
+and the answer is a **row in `pr_replies_sent`**, written when the reply went out. Never the author.
+
+The identity rule it replaces read "the reply's author is `config.userId`". That identity is the
+credential the harness posts under, and on a single-operator deployment it is the operator's own
+account. Their follow-up on their own review thread therefore came back as the harness's: the cockpit
+drew a "fleet" badge on a message a person wrote, the thread flipped to `answered`, that folded to
+`PrComment.handled` — the only bit rule `pr-review-comment` reads — and their comment was marked as
+work already done and never dispatched for. Nothing went red, because by every type in the system
+nothing was wrong.
+
+Every reply the harness sends leaves through exactly one call site, `sink.postPrReply` in
+`src/executor/actionExecutor.ts`, and `SendResult.commentRef` carries the provider's own id for the
+comment it created — in the same vocabulary `PrThreadMessage.id` uses on the way back in.
+`PrReplyStore` (`src/store/prReplies.ts`) writes one row per reply, keyed on
+`(pr_number, comment_ref)`. Both providers read it through the same `SentPrReplies` seam, threaded in
+from `src/system.ts` via the registry, so the reply list a person reads and the comment list a rule
+dispatches on cannot come to disagree about a thread — which is why there is one derivation in
+`src/prThreads.ts` at all.
+
+`commentRef` is deliberately separate from `SendResult.ref`. `ref` is a URL for a person to click in
+the audit log and matches nothing on a read; comparing the wrong one would quietly never match, which
+reads exactly like the reply having never been sent.
+
+**Three cases fail toward the thread reading as unanswered work, on purpose.** A thread wrongly left
+open costs one dispatch, which is visible and cheap; a thread wrongly marked answered loses the
+reviewer's comment entirely, which is silent and permanent.
+
+- **The provider returned no usable comment ref.** No row is written and the thread keeps reading as
+  work. The miss goes through `errors.record`, so the operator is told which provider will not name
+  what it created rather than left with a thread the fleet answers every pulse for no visible reason.
+  There is no fallback to the author: that is the bug, not a degraded mode of it.
+- **A reply sent before this record existed.** No row, so the thread reads open once more and the
+  fleet answers it again. **There is no backfill**, and there cannot be one: the only evidence left on
+  such a thread is the author, and telling the operator's reply from the harness's by author is
+  exactly what does not work. The cost is one-off — the next reply _is_ recorded and the thread
+  settles.
+- **A row naming a comment the current reading does not carry** (a deleted reply, a recreated thread).
+  It matches nothing. Rows are never pruned on that basis; a read served from a stale cache would
+  otherwise throw the record away for good.
 
 ### Reopening a thread
 
