@@ -805,7 +805,7 @@ test('an unapproved wedged plan is not escalated — the ask already carries it'
   const result = await new RuleDispatcher({}, {}, undefined, 'main', enabled).decide(
     context([issue(12)], { plans: [{ ...plan(), status: 'awaiting_approval' }], planParts: wedgedParts() }),
   );
-  // Rule `plan-approval` proposes it; `planApprovalWarnings` puts the collision in that ask.
+  // Rule `plan-approval` proposes it; `planCaveats` puts the collision in that ask.
   // Escalating as well would be the same sentence twice to the same person.
   assert.deepEqual(
     result.actions.map((a) => a.rule),

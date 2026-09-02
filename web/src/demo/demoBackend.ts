@@ -73,6 +73,7 @@ import type { ReviewPackReading, WsClient } from '../api.js';
 import type { ValidationAct } from '../cockpit/actions.js';
 import { buildDemoState, demoPlanHistory } from './fixtures.js';
 import { isContainerType } from '../issueGroups.js';
+import { planCaveatsOf } from '../planCaveats.js';
 import { buildGoalPage } from '../view/goalPage.js';
 
 /** The demo's catalogue carries no rates, so every kind names the same empty one. */
@@ -1474,9 +1475,14 @@ class DemoServer {
    * act*. So a merge marks the PR merged and a reply marks its comment handled,
    * exactly as the real sink would, rather than only flipping a status.
    */
-  async acceptProposal(id: string, note?: string): Promise<{ ok: boolean; detail: string }> {
+  async acceptProposal(id: string, note?: string, acknowledged?: string[]): Promise<{ ok: boolean; detail: string }> {
     const proposal = (this.state.proposals ?? []).find((p) => p.id === id);
     if (!proposal || proposal.status !== 'pending') return { ok: false, detail: 'already decided' };
+    // The demo mirrors the gate for the reason it mirrors the effect: a plan whose
+    // caveats are unticked is not released by the real route either, and a demo
+    // that approved one would teach the button to be a click.
+    const unticked = planCaveatsOf(proposal).filter((c) => !(acknowledged ?? []).includes(c.id));
+    if (unticked.length > 0) return { ok: false, detail: `${unticked.length} thing(s) still to acknowledge` };
     this.settle(proposal, 'accepted', note);
     const prNumber = proposal.action.prNumber as number | undefined;
     const pr = this.state.world.pullRequests.find((p) => p.number === prNumber);
@@ -4649,7 +4655,8 @@ export const demoApi = {
   declineHumanTask: (id: string, note: string) => getServer().declineHumanTask(id, note),
   closeHumanTaskTicket: (id: string, note?: string) => getServer().closeHumanTaskTicket(id, note),
   dismissHumanTask: (id: string) => getServer().dismissHumanTask(id),
-  acceptProposal: (id: string, note?: string) => getServer().acceptProposal(id, note),
+  acceptProposal: (id: string, note?: string, acknowledged?: string[]) =>
+    getServer().acceptProposal(id, note, acknowledged),
   rejectProposal: (id: string, note?: string) => getServer().rejectProposal(id, note),
   backOutProposal: (id: string, verdict: 'close' | 'hold', note?: string) =>
     getServer().backOutProposal(id, verdict, note),

@@ -18,7 +18,8 @@ import {
   planApprovalNote,
   refusePlan,
 } from '../src/plans/planApproval.js';
-import { planApprovalWarnings, planIsWedged, wedgedPlanPrompt } from '../src/plans/planWedge.js';
+import { planIsWedged, wedgedPlanPrompt } from '../src/plans/planWedge.js';
+import { caveatNotice, planCaveats, proposedCaveats, unacknowledgedCaveats } from '../src/plans/planCaveats.js';
 import { refCollisionReason } from '../src/plans/planReconciler.js';
 import { planProposalHold, planProposalRef } from '../src/proposals/proposals.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
@@ -349,7 +350,8 @@ test('accepting releases the plan, and the parts schedule once, audited to the h
   const proposal = system.store.listProposals()[0]!;
 
   const accepted = await system.proposals.accept(proposal.id, 'good split');
-  assert.equal(accepted!.outcome, 'performed');
+  assert.ok(accepted && 'outcome' in accepted, 'this plan raises no caveats, so nothing gates the accept');
+  assert.equal(accepted.outcome, 'performed');
   assert.equal(system.store.getPlanByOrigin('issue:12')!.status, 'active');
   // The inbox empties on the click, exactly as it does for a merge.
   assert.equal(system.store.getEscalation(proposal.escalationId!)!.status, 'answered');
@@ -607,7 +609,8 @@ test('accepting a one-part plan releases it, and its part is dispatched like any
   const proposal = system.store.listProposals()[0]!;
 
   const accepted = await system.proposals.accept(proposal.id, 'one PR is right');
-  assert.equal(accepted!.outcome, 'performed');
+  assert.ok(accepted && 'outcome' in accepted, 'this plan raises no caveats, so nothing gates the accept');
+  assert.equal(accepted.outcome, 'performed');
   const released = system.store.getPlanByOrigin('issue:12')!;
   assert.equal(released.status, 'active');
   const audited = system.store.listDecisions().find((d) => d.cycleId === `human:${proposal.id}`)!;
@@ -843,7 +846,7 @@ function plannerAgent(system: System, originRef: string): Agent {
 }
 
 /** An issue that has already been planned — into two independent parts, or as one PR. */
-function plannedSystem(opts: { slugs?: string[]; labelPrefix?: string } = {}): {
+function plannedSystem(opts: { slugs?: string[]; labelPrefix?: string; unsure?: boolean } = {}): {
   system: System;
   repoRoot: string;
 } {
@@ -871,24 +874,102 @@ function plannedSystem(opts: { slugs?: string[]; labelPrefix?: string } = {}): {
   // an open, watched issue, and the back-out's whole mechanism is that tag.
   const labels = opts.labelPrefix ? [`${opts.labelPrefix}-watch`] : [];
   system.connector.inject({ kind: 'new_issue', number: 12, title: 'Big thing', body: 'Several PRs.', labels });
-  submitPlan(system, 'issue:12', opts.slugs ?? ['schema', 'api']);
+  submitPlan(system, 'issue:12', opts.slugs ?? ['schema', 'api'], opts.unsure ?? false);
   return { system, repoRoot };
 }
 
 /** Land a planner's plan the way both transports do — through the one ingestion. */
-function submitPlan(system: System, originRef: string, slugs: string[]): void {
+function submitPlan(system: System, originRef: string, slugs: string[], unsure = false): void {
   const doc = parsePlanDocument(
     JSON.stringify({
       version: 1,
       reason: 'Schema first.',
       diagnosis: 'The column is nullable and two writers disagree about it.',
       approach: 'Make it non-null with a backfill, then teach both writers the one shape.',
+      // The planner's own uncertainty, which is what an approval has to have been
+      // read against — see `src/plans/planCaveats.ts`.
+      ...(unsure
+        ? {
+            openQuestions: 'Whether the backfill can run online, or needs the table locked.',
+            risks: 'A long lock would take writes down for the length of the backfill.',
+          }
+        : {}),
       parts: slugs.map((slug) => ({ slug, title: slug, scope: `src/${slug}/`, dependsOn: [] })),
     }),
   );
   assert.ok(doc.ok);
   ingestPlanDocument(system.store, { doc: doc.document, originRef, title: 'Big thing' });
 }
+
+test('a plan that raises caveats is not approved until each of them is acknowledged', async () => {
+  const { system } = plannedSystem({ unsure: true });
+  await system.harness.runCycle('manual');
+  const proposal = system.store.listProposals()[0]!;
+
+  // What the operator has to have read rides on the action the verdict is given
+  // against, so the boxes the cockpit draws and the gate on the accept are one list.
+  const caveats = proposedCaveats(proposal);
+  assert.deepEqual(
+    caveats.map((c) => c.id),
+    ['open-questions', 'risks'],
+  );
+  assert.match(caveats[0]!.detail ?? '', /needs the table locked/);
+  // And the ask says the accept is held, appended rather than templated so an
+  // override cannot drop it.
+  const esc = system.store.getEscalation(proposal.escalationId!)!;
+  assert.match(esc.prompt, /Approving is held until each of these is acknowledged/);
+
+  // An accept that names none of them decides nothing at all: the row is still
+  // pending, so the operator ticks the boxes and clicks again rather than finding
+  // a verdict spent.
+  const refused = await system.proposals.accept(proposal.id, 'looks fine');
+  assert.ok(refused && 'unacknowledged' in refused);
+  assert.deepEqual(
+    refused.unacknowledged.map((c) => c.id),
+    ['open-questions', 'risks'],
+  );
+  assert.equal(system.store.getProposal(proposal.id)!.status, 'pending');
+  assert.equal(system.store.getPlanByOrigin('issue:12')!.status, 'awaiting_approval');
+
+  // Half of them is still not the plan being read.
+  const half = await system.proposals.accept(proposal.id, 'looks fine', ['risks']);
+  assert.ok(half && 'unacknowledged' in half);
+  assert.deepEqual(
+    half.unacknowledged.map((c) => c.id),
+    ['open-questions'],
+  );
+
+  const accepted = await system.proposals.accept(proposal.id, 'the lock is fine', ['open-questions', 'risks']);
+  assert.ok(accepted && 'outcome' in accepted);
+  assert.equal(accepted.outcome, 'performed');
+  assert.equal(system.store.getPlanByOrigin('issue:12')!.status, 'active');
+  system.store.close();
+});
+
+test('only the accept is gated — a rejection needs no acknowledgement', async () => {
+  const { system } = plannedSystem({ unsure: true });
+  await system.harness.runCycle('manual');
+  const proposal = system.store.listProposals()[0]!;
+
+  // Saying no is a way of *not* releasing the work, so putting a reading list in
+  // front of it would be friction on the safe verdict.
+  const rejected = system.proposals.reject(proposal.id, 'wrong shape');
+  assert.ok(rejected && 'outcome' in rejected);
+  assert.equal(system.store.getPlanByOrigin('issue:12')!.status, 'planning');
+  system.store.close();
+});
+
+test('a plan that raises nothing is approved on the click it always was', async () => {
+  const { system } = plannedSystem();
+  await system.harness.runCycle('manual');
+  const proposal = system.store.listProposals()[0]!;
+  assert.deepEqual(proposedCaveats(proposal), [], 'no uncertainty, no blocked part, no unclaimed PR');
+  assert.deepEqual(unacknowledgedCaveats([], []), []);
+  const accepted = await system.proposals.accept(proposal.id);
+  assert.ok(accepted && 'outcome' in accepted);
+  assert.equal(accepted.outcome, 'performed');
+  system.store.close();
+});
 
 // -- the wedge: a plan approved onto a branch its parts cannot sit beneath -----
 
@@ -998,7 +1079,8 @@ test('the approval ask names an open PR that would belong to no part', () => {
   };
   const parts = [partRow('a', 1), partRow('b', 2)];
 
-  const warning = planApprovalWarnings(issue, parts, [pr]);
+  const clean = { risks: null, openQuestions: null };
+  const warning = caveatNotice(planCaveats(clean, issue, parts, [pr]));
   assert.match(warning, /PR #31231/);
   assert.match(warning, /belongs to no part/);
   // It says what approving does *not* do, because nothing here knows which part
@@ -1006,10 +1088,10 @@ test('the approval ask names an open PR that would belong to no part', () => {
   assert.match(warning, /does not close it, hand it to a part/);
 
   // A part that has claimed the PR is the ordinary working plan: nothing to say.
-  assert.equal(planApprovalWarnings(issue, [{ ...parts[0]!, prNumber: 31231 }, parts[1]!], [pr]), '');
+  assert.deepEqual(planCaveats(clean, issue, [{ ...parts[0]!, prNumber: 31231 }, parts[1]!], [pr]), []);
   // And a plan with nothing open against its issue warns about nothing at all,
   // so nothing is appended to the ask.
-  assert.equal(planApprovalWarnings({ ...issue, linkedPrNumber: null }, parts, []), '');
+  assert.equal(caveatNotice(planCaveats(clean, { ...issue, linkedPrNumber: null }, parts, [])), '');
 });
 
 test('a blocked decomposition warns before it is approved, quoting the stored reason', () => {
@@ -1029,7 +1111,7 @@ test('a blocked decomposition warns before it is approved, quoting the stored re
       blockedReason: refCollisionReason(12, { local: true, remote: false }),
     },
   ];
-  const warning = planApprovalWarnings(issue, parts, []);
+  const warning = caveatNotice(planCaveats({ risks: null, openQuestions: null }, issue, parts, []));
   // Quoted off the row rather than recomposed, so the ask, the plate and the
   // Errors panel are one sentence.
   assert.ok(warning.includes(refCollisionReason(12, { local: true, remote: false })));
@@ -1037,7 +1119,7 @@ test('a blocked decomposition warns before it is approved, quoting the stored re
 });
 
 test('the wedge escalation names the PR holding the branch', () => {
-  // Approval was days ago, so `planApprovalWarnings` having said it once is not
+  // Approval was days ago, so the approval caveats having said it once is not
   // the same as saying it at the moment the operator is stuck on it.
   const issue = {
     id: 'i12',

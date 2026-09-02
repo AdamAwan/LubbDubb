@@ -737,10 +737,12 @@ drops its prose for the plainer version of the same reason — its body _is_ the
 already draws under a label of its own, now open rather than folded away, since it is the thing being
 approved.
 
-**What is kept is the appended caution.** `planApprovalWarnings` (`src/plans/planWedge.ts`) writes its
+**What is kept is the appended caution.** `caveatNotice` (`src/plans/planCaveats.ts`) writes its
 bullets under a `Before you decide:` line, appended to the rendered ask rather than interpolated into
-it — an unclaimed pull request on the branch, parts already blocked. It is the one part of the ask that
-is about _this_ decision and appears nowhere else, so `splitCaution` keeps it while the rest goes.
+it — the planner's own uncertainty, an unclaimed pull request on the branch, parts already blocked. It
+is the one part of the ask that is about _this_ decision and appears nowhere else, so `splitCaution`
+keeps it while the rest goes — **unless the same caveats are drawn as tick boxes**, and then the
+paragraph is the checklist restated and the card drops it too.
 
 A tone is five custom properties on the row or the band — `--cn-tone`, `--cn-tone-fill`, `--cn-tone-bg`,
 `--cn-tone-line`, `--cn-tone-ink` — set by one `.cn-t-*` class and inherited by everything inside. Five
@@ -5069,6 +5071,18 @@ other.
   everything an approver would want that will not fit on a card — the split, the evidence, the risks,
   what it ruled out — is behind it. One control on the card, not two: it was rendered in both arms of
   the agent-actions row before, which is how it ended up looking like an afterthought in each.
+
+- **A plan approval's caveats are tick boxes, and Approve is held until they are ticked.**
+  `CaveatChecklist` draws what the proposal's action declares (`planCaveatsOf` reads the same row the
+  accept route enforces against, so the boxes and the gate cannot disagree), each with the planner's own
+  words beneath it — drawn, not folded behind a disclosure, since a box ticked without the thing it is
+  about on the page is the paragraph again. Amber, not red: a caveat is a precondition on the verdict,
+  not a fault. The button is **disabled with a hint naming how many are outstanding** rather than left
+  to 400 — the route refuses it either way ([08](08-planning.md#what-the-plan-raises-is-acknowledged-not-merely-rendered)),
+  and this is that answer where the operator is already looking. Reject, Hold and Close stay live: only
+  releasing the work is gated. The same checklist is drawn on the plan sheet, above its own Approve,
+  because that is the other surface the plan can be released from — and the surface where it has
+  actually been read.
 
 A **shortfall proposal carries a third arm**, `Overrule the assessment`, beside Approve and Reject.
 The other two settle what to _do_ about the assessor's finding; this one settles the finding itself.

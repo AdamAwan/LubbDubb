@@ -2460,6 +2460,7 @@ export type {
   KnowledgeGraduation,
   KnowledgeSimilarity,
   Plan,
+  PlanCaveat,
   PlanEvidence,
   PlanNarrative,
   PlanPart,

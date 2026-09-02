@@ -250,7 +250,7 @@ function relativeLine(rel: IssueRelative): string {
  * What an agent must know about the item's neighbourhood, as a block **appended**
  * to a rendered prompt — never interpolated into one.
  *
- * Appending is the rule every added instruction follows (see `planApprovalWarnings`
+ * Appending is the rule every added instruction follows (see `caveatNotice`
  * and `docs/spec/05-dispatcher.md`): prompt templates are operator-overridable and
  * `loadPromptTemplates` rejects only *unknown* placeholders, so a `{related}` token
  * would be dropped silently by exactly the deployments that customised most —

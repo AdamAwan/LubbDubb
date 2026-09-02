@@ -2027,6 +2027,22 @@ item; the same live agent then continues (allow) or reads the denial (deny). 400
 boolean; **409 when no pending permission request is attached** (already decided, or the agent died
 first). Returns `{ ok: true, allowed }`.
 
+### `POST /api/proposals/:id/accept`
+
+Body `{note?, acknowledged?: string[]}`. Authorizes the proposed act and performs it inline, through
+the same `ActionSink` auto-send would have used. `409` when the proposal is unknown or already decided;
+returns `{ok, proposal, outcome, detail}` otherwise, where `ok` is false for an act that was authorized
+and then failed.
+
+`acknowledged` is the caveat ids the operator ticked on a **plan** approval. A plan that raises caveats
+([08](08-planning.md#what-the-plan-raises-is-acknowledged-not-merely-rendered)) is refused with **400**
+and `{error, unacknowledged}` — the caveats still unticked — while any of them is unnamed. `ProposalDesk`
+asks **before** the compare-and-set, so a refusal decides nothing: the proposal is still `pending`, its
+inbox item still open, and the same click works once the boxes are ticked. Absent means none were
+ticked, which is the right reading of an older client — it releases a plan that raises nothing and
+refuses one that does, rather than waving through the case the gate exists for. Every other proposal
+kind ignores the field.
+
 ### `POST /api/proposals/:id/back-out`
 
 Body `{verdict: 'close'|'hold', note?}` — the two ways out of a **plan** verdict that are not verdicts

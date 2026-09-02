@@ -667,7 +667,54 @@ the harness answered by re-deriving a plan for work nobody wanted.
 was appended in the first place: a one-pull-request plan settled somewhere else entirely — approving
 it handed the issue to ordinary pickup, and refusing it had nowhere to fall back to — so a reader
 given the other arm's paragraph would answer the wrong question. Both settle identically, so there is
-no wrong paragraph left to hand anyone. `planApprovalWarnings` appends after that, unchanged.
+no wrong paragraph left to hand anyone. `caveatNotice` appends after that — see below.
+
+### What the plan raises is acknowledged, not merely rendered
+
+A plan approval starts every agent, branch and pull request the plan declares, and what an operator
+was told before that click was **prose**: the planner's own uncertainty on the plan sheet, and the
+`Before you decide:` paragraph appended to the ask when a part is already blocked or an unclaimed pull
+request is open on the issue. A paragraph above a primary button is the most skippable thing on a
+card, and nothing recorded whether it had been read — the careful approval and the blind one wrote
+identical rows.
+
+`src/plans/planCaveats.ts` turns that paragraph into a list of things the operator **ticks**, and the
+accept is refused while any of them is unticked.
+
+`planCaveats(plan, issue, parts, openPrs)` builds it from four sources, which are two kinds of thing:
+the planner's own `openQuestions` and `risks` — written for this moment and read at it — and two facts
+about the world the plan lands in, a part that is already blocked and a pull request open on the issue
+that belongs to no part of the plan (`wedgeReasons` and `unclaimedIssuePrs`, exported from
+`planWedge.ts` so the wedge escalation and the approval ask keep quoting one sentence).
+
+`outOfScope` and `alternatives` are deliberately **not** caveats. Both are the planner being explicit
+about the shape it chose, which is what the plan sheet is for; neither goes wrong if unread, and a gate
+that fires on every plan ever written is one operators learn to tick blind. A plan whose planner
+declared no uncertainty and whose issue is clear raises none, and approving it is the click it always
+was.
+
+**The list is stored on the action, never re-derived at accept time.** Rule `plan-approval` resolves it
+once and carries it on `propose_plan`, so `caveatNotice` renders the ask's prose from the same list the
+gate compares the operator's ticks against. Re-deriving it on the accept would ask a world that has
+moved since the card was drawn: a blocker cleared in that window would drop a caveat they ticked
+(harmless), and a pull request opened in it would add one they were never shown and refuse their accept
+for a sentence nobody put in front of them. The verdict is on what was proposed — the same principle as
+`Proposal.action` being kept verbatim.
+
+**The gate is on the desk, not on the route.** `ProposalDesk.accept(id, note, acknowledged)` asks
+`unacknowledgedCaveats` **before** the compare-and-set and returns what is still unticked, so a refused
+accept leaves the proposal `pending` and its inbox item open — the operator ticks the boxes and clicks
+again, rather than finding a verdict spent on a 400. `POST /api/proposals/:id/accept` turns that into a
+400 naming the outstanding caveats
+([16](16-http-api.md#post-apiproposalsidaccept)); the cockpit holds the button a step earlier
+([17](17-cockpit.md#how-an-escalation-card-is-laid-out)), which is the same answer given sooner and not
+the enforcement.
+
+**Only the accept is gated.** Reject, Hold and Close the ticket are all ways of _not_ releasing the
+work, and putting a reading list in front of them would be friction on the safe verdict.
+
+A tick is not proof of reading, and is not meant to be. What it does is make the skip **deliberate**,
+and give the harness a row that says the operator met the caveat rather than that the card rendered it.
 
 `planProposalHold(ref, proposals)` in `src/proposals/proposals.ts` holds on **`pending` only**, unlike
 `proposalHold`. A merge is proposed off world state that persists, so it needs a durable "no" and a
@@ -1000,14 +1047,16 @@ Replan — which is the way out of every plan that is wrong for any other reason
   offered only when something clearable is blocking them, because a decline is not a branch and
   clearing reaches nothing. It **names any open PR for the issue that no part claims** — its
   number, title and branch, and that it must be merged or abandoned before the branch can go. It is
-  the same `unclaimedIssuePrs` the approval warning uses, private to the module with two callers,
+  the same `unclaimedIssuePrs` the approval caveats use — exported from the module for that one reader,
   because approval can be days behind the moment the operator is standing in front of the wedge, and
   "clear what is blocking the parts" is unfollowable while a PR holds the branch open.
-- **Warning first** — `planApprovalWarnings(issue, parts, openPrs)` is **appended** to rule `plan-approval`'s ask
-  (never interpolated, for `ciFailureNote`'s reason) and names both the blocked parts and any open PR
-  for the issue that no part claims. It **warns and does not block**: refusing to approve would put a
-  git fact in front of a judgement about the _work_, the branch is one command from being gone, and
-  the operator's only exit would become the opposite verdict to the one they were giving.
+- **Warning first** — both readings feed `planCaveats`, whose prose (`caveatNotice`) is **appended** to
+  rule `plan-approval`'s ask (never interpolated, for `ciFailureNote`'s reason) and names both the
+  blocked parts and any open PR for the issue that no part claims. It **holds the accept until they are
+  acknowledged and refuses nothing else** — see _What the plan raises is acknowledged_ above. It does
+  not refuse the approval outright: that would put a git fact in front of a judgement about the _work_,
+  the branch is one command from being gone, and the operator's only exit would become the opposite
+  verdict to the one they were giving.
 
 There was a third thing, `abandonDecomposition` (`POST /api/plans/:id/abandon` and a control on the
 plan sheet), which retired the unstarted parts and worked the issue as one pull request. It was a

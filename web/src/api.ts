@@ -401,8 +401,11 @@ const realApi = {
     post<{ ok: true; allowed: boolean }>(`/api/escalations/${id}/permission`, { allow, note }),
   // Accepting is what performs the act — the harness merges / sends it through the
   // same seam auto-send would have used. Rejecting sends nothing and is durable.
-  acceptProposal: (id: string, note?: string) =>
-    post<{ ok: boolean; detail: string }>(`/api/proposals/${id}/accept`, { note }),
+  // `acknowledged` is the caveat ids the operator ticked. The route refuses the
+  // accept — 400, nothing decided — while a plan's caveats are unticked, so the
+  // list travels with the verdict rather than being asserted by the glass alone.
+  acceptProposal: (id: string, note?: string, acknowledged?: string[]) =>
+    post<{ ok: boolean; detail: string }>(`/api/proposals/${id}/accept`, { note, acknowledged }),
   rejectProposal: (id: string, note?: string) =>
     post<{ ok: boolean; detail: string }>(`/api/proposals/${id}/reject`, { note }),
   // Backing out of a plan verdict: the ticket is closed with the operator's comment,

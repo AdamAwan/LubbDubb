@@ -16,6 +16,8 @@ import type {
 import { api } from '../api.js';
 import { discussPrompt } from '../cockpit/desktopLink.js';
 import { DesktopLink } from './DesktopLink.js';
+import { CaveatChecklist, heldTitle, useAcknowledgements } from './CaveatChecklist.js';
+import { planCaveatsOf } from '../planCaveats.js';
 import { AsyncButton } from './AsyncButton.js';
 import { renderMarkdown } from './markdown.js';
 import { PlanMap } from './PlanMap.js';
@@ -97,7 +99,17 @@ export function PlanModal({
   onReplan: (planId: string) => Promise<unknown> | unknown;
   /** The operator's ruling on a check `watch_declare` wrote — see {@link WatchDigest}. */
   onWatchProposal: (issueNumber: number, checkId: string, accept: boolean) => Promise<unknown> | unknown;
-  onDecide: (id: string, verdict: 'accept' | 'reject', note?: string) => Promise<unknown> | unknown;
+  /**
+   * The verdict, with the caveat ids the operator ticked. Approving a plan that
+   * raises caveats is refused server-side until they are named — see
+   * `web/src/components/CaveatChecklist.tsx`.
+   */
+  onDecide: (
+    id: string,
+    verdict: 'accept' | 'reject',
+    note?: string,
+    acknowledged?: string[],
+  ) => Promise<unknown> | unknown;
   /**
    * The two answers that are about the **ticket** rather than the plan — close it
    * with the note as its comment, or hold it by dropping the watch tag. Offered
@@ -140,6 +152,14 @@ export function PlanModal({
   // it settles by *amending*, and the amendment withdraws this card and puts a
   // fresh one up, so the one drawn here is always about the plan on screen.
   const decidable = proposal?.status === 'pending' ? proposal : null;
+  // The same list the inbox card draws and the accept route enforces, read off the
+  // proposal rather than re-derived from the plan sheet's own caveat sections: the
+  // operator ticks ids, and two derivations of one list is the drift this repo has
+  // fixed before. Drawn here as well because this is the surface where the plan has
+  // actually been read, and it is the other button that releases it.
+  const caveats = planCaveatsOf(decidable ?? undefined);
+  const ack = useAcknowledgements(caveats);
+  const held = ack.outstanding.length > 0;
   // `approach` is the summary once a planner writes one; `reason` stands in for it
   // on every plan stored before the field existed, which is why the fallback is
   // here rather than in the store.
@@ -470,6 +490,9 @@ export function PlanModal({
               issueNumber={issueNumber}
             />
           )}
+          {decidable && (
+            <CaveatChecklist caveats={caveats} ticked={ack.ticked} onToggle={ack.toggle} refUrls={refUrls} />
+          )}
           <PinList pins={pins} parts={live} onClear={(slug) => setPins(without(pins, slug))} />
           <div className="pm-row">
             {decidable && (
@@ -538,8 +561,16 @@ export function PlanModal({
                 )}
                 <AsyncButton
                   className="primary"
-                  title="Release the plan — each part gets its own agent, branch and pull request"
-                  onClick={() => onDecide(decidable.id, 'accept', composeNote(pins, live, note))}
+                  // Held, not hidden: the checklist above says what is outstanding
+                  // and the hint on the button says how many. The route refuses it
+                  // either way — this is that answer, a step earlier.
+                  disabled={held}
+                  title={
+                    held
+                      ? heldTitle(ack.outstanding)
+                      : 'Release the plan — each part gets its own agent, branch and pull request'
+                  }
+                  onClick={() => onDecide(decidable.id, 'accept', composeNote(pins, live, note), ack.acknowledged)}
                 >
                   {approveLabel(live, queued, originOf)}
                 </AsyncButton>

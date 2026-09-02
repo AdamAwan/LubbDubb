@@ -379,7 +379,7 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
       refUrls={view.state.refUrls}
       onAnswer={(text) => actions.answerEscalation(escalation.id, text)}
       onAnswerQuestions={(answers) => actions.answerQuestions(escalation.id, answers)}
-      onDecide={(id, verdict, note) => actions.decideProposal(id, verdict, note)}
+      onDecide={(id, verdict, note, acknowledged) => actions.decideProposal(id, verdict, note, acknowledged)}
       onBackOut={(id, verdict, note) => actions.backOutProposal(id, verdict, note)}
       onCommentDraft={(id) => actions.proposalCommentDraft(id)}
       onOverrule={(issueNumber, proposalId, text) => actions.overruleShortfall(issueNumber, proposalId, text)}
