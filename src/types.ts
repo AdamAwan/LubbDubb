@@ -1047,6 +1047,57 @@ export interface GoalPriority {
  */
 export type AgentStatus = 'starting' | 'running' | 'waiting' | 'done' | 'killed' | 'interrupted' | 'failed' | 'crashed';
 
+/**
+ * What the executor is doing with an action it has picked up but not yet turned
+ * into anything the fleet can see.
+ *
+ * The steps are the awaited ones and only those. `ActionExecutor.execute` walks
+ * the plan strictly serially, so an action holds the loop for as long as its own
+ * awaits take, and every other action in the plan waits behind it with nothing
+ * anywhere saying so — which is the whole reason this type exists. The
+ * synchronous steps between them never yield, so no reader can observe one and
+ * none is named.
+ *
+ * - `picked-up` — the action is in hand and the executor has not reached an
+ *   awaited step. The step every action starts on, and the one nothing ever
+ *   sees for an action whose body does not await.
+ * - `ci-evidence` — reading the failing output of the checks a CI dispatch
+ *   answers, out of the provider.
+ * - `slot-handover` — the worktree pool, handing a slot over
+ *   ([09](../docs/spec/09-execution.md#handing-a-slot-over)). The `git clean -ffdx`
+ *   and cold checkout, which on a large target repository is the minutes-long one.
+ * - `authorizing` — asking whether an outbound act (a merge, a review reply) is
+ *   already authorized, which reaches the tracker.
+ */
+export type ReadyingStep = 'picked-up' | 'ci-evidence' | 'slot-handover' | 'authorizing';
+
+/**
+ * One action the executor is working on right now — in flight, and **not an
+ * agent**: it holds no slot the cap counts, has no transcript, and there is
+ * nothing to kill or inject into.
+ *
+ * In memory only, and deliberately (see {@link file://./executor/readying.ts}).
+ * The record's whole lifetime is one stack frame of `ActionExecutor.execute`, so
+ * a persisted row would outlive the process that could clear it and every crash
+ * would leave a phantom the cockpit draws forever.
+ */
+export interface ReadyingAction {
+  /** The row's key: the cycle it belongs to and the action's place in that plan. */
+  id: string;
+  /** The cycle whose plan this action came from. */
+  cycleId: string;
+  /** What the action is, in the words the dispatcher gave it. */
+  title: string;
+  /** What it is for, as `issue:<n>` / `pr:<n>:<concern>` / `job:<id>`, or null for an action naming none. */
+  originRef: string | null;
+  /** The branch a slot is being handed to, where the action names one. */
+  branch: string | null;
+  /** What the executor is doing with it now. */
+  step: ReadyingStep;
+  /** When the executor picked the action up — the only elapsed time the row has. */
+  startedAt: string;
+}
+
 export interface Agent {
   id: string;
   taskId: string;

@@ -7,6 +7,7 @@ import type {
   OrphanedWork,
   Escalation,
   Proposal,
+  ReadyingAction,
   TicketOrder,
   TicketStateFilter,
   TicketTrackingFilter,
@@ -58,6 +59,17 @@ export interface CockpitView {
    * nothing that counts a slot may reach them. See {@link DeskRun}.
    */
   deskRuns: DeskRun[];
+  /**
+   * Actions the executor is working on that are not agents yet. In flight, and
+   * *not* in {@link live} for {@link deskRuns}' reason and one more: an entry here
+   * is on its way to becoming an agent, so counting it as one would make the fleet
+   * card report the same dispatch twice as it landed.
+   *
+   * Straight off the snapshot rather than folded, because the server has already
+   * folded it — the list is a copy of the executor's own record, and there is
+   * nothing on the client to join it to.
+   */
+  readying: ReadyingAction[];
   /** Terminal agents, newest first as the server ordered them. */
   past: Agent[];
   /** Inbox items still awaiting an answer. */
@@ -401,6 +413,7 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     crashed,
     live,
     deskRuns: buildDeskRuns(state),
+    readying: state.readying,
     past,
     openEscalations,
     // Corroborated claims nobody has ruled on — the reading the Knowledge tile

@@ -2842,6 +2842,10 @@ export function buildDemoState(): DemoSeed {
     // The demo's ended agents are all in the list above, so the count is the
     // list's — what a deployment inside the tail reads.
     endedAgents: 0,
+    // Empty, and it has to be: a readying row is an action a live process is inside
+    // an await on, and a fixture's would draw as one that had been being readied
+    // since the fixture was written.
+    readying: [],
     parkedOnLimit: [],
     // Nor is anybody stopped without saying why. Present-and-empty for
     // `parkedOnLimit`'s reason: the wire always ships it, and the empty case is the

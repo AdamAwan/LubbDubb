@@ -1698,7 +1698,8 @@ being forgotten:
   row names how it ended where that is not `done` — `failed`, `crashed`, `killed`, `stopped`. The desk
   run wears `at a keyboard` here rather than a chip of its own, in its violet: the hollow lamp, the
   dashed edge and this word are one signal, and it is the same question the column answers on every
-  other row.
+  other row. A [readying row](#work-that-is-not-an-agent-yet) wears its step there, in its own tint,
+  for the same reason.
 
   **The Pull requests card's word is the court itself** — `you`, `harness`, `elsewhere`, `stalled`,
   `settled`, `unwatched`, `prAttentionStatus`'s own arms, quoted rather than re-read. The card drew
@@ -1926,6 +1927,42 @@ resolution — most six-hour stretches have one merge in them or none — under 
 routinely drew _nothing in the first half to compare against_, which is a card whose whole content is
 an admission it cannot answer yet. The reading it was pointing at is on [Insights](#insights), over a
 window the operator chooses, and the nav carries the way there.
+
+### Work that is not an agent yet
+
+The harness spends minutes turning a planned dispatch into a running agent, and the Fleet card draws
+that window as a row of its own: one per action `ActionExecutor.execute` currently has in hand,
+straight off the readying board it publishes
+([09](09-execution.md#what-is-being-readied)) as `state.readying`.
+
+Without it the card was wrong in the one way an operator acts on. A cycle planning three appraisals
+with full headroom starts them minutes apart, because the executor's loop is serial and each dispatch
+waits on the worktree pool; in between, the Up next queue said all three had been dispatched and this
+card showed one agent. The reading an operator took from that — _three to do, one picked up_ — was the
+only one available.
+
+**It is drawn as not-an-agent, in [the keyboard entry](#the-keyboard-entry)'s grammar**, because it is
+making the same distinction: a **`div`, not a button** (there is no transcript to open, nothing to kill
+and nothing to inject into — there is no process yet), a **hollow lamp**, a **dashed left edge**, and
+**no cost column**, where a `$0.00` would read as a cheap agent rather than as no agent. What differs
+is the tint: `--cn-readying`, a mix of the console accent and the faint ink, rather than the desk run's
+violet. The two rows differ in exactly what an operator is reading them for — a desk run is somebody at
+their own keyboard and will never take a fleet slot, while this is the harness itself, on its way to
+taking one — and one colour for both would have merged them.
+
+The state column carries the step (`handing a slot over`, `reading CI output`, `authorizing`,
+`picked up`) in the same slot every other row wears its state, in the tint. The words are
+[09](09-execution.md#handing-a-slot-over)'s own; the hover behind them says what that step waits on and
+the two things a glance cannot — that it holds no slot the cap counts *yet*, and that it leaves the
+list on its own, when the agent starts or when the dispatch fails.
+
+**It takes no slot and is not counted as one.** `view.live` excludes it, exactly as it excludes a desk
+run, so the header's `N out` and the cap readout are untouched; the count is stated beside them as
+`· 2 being readied`. Folding it in would make the number move twice for one dispatch — once when the
+executor picked the action up and again when the agent appeared.
+
+Its place in the list is the sentence the card reads as: the agents that are out, then what is being
+sent, then what nobody sent at all.
 
 ### The keyboard entry
 

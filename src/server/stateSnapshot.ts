@@ -179,7 +179,7 @@ export function buildStateSections(
   want: ReadonlySet<StateSection>,
   opts?: SnapshotOpts,
 ): Partial<CockpitState> {
-  const { store, connector, config, runtimeControl, harness, recovery, updates, agents: fleet } = system;
+  const { store, connector, config, runtimeControl, harness, recovery, updates, readying, agents: fleet } = system;
   const watchLabel = watchLabelFor(config.labelPrefix);
   const baseline = store.getWorldBaseline();
   const world: WorldSnapshot = baseline ?? {
@@ -1016,6 +1016,7 @@ export function buildStateSections(
     | 'tasks'
     | 'agents'
     | 'endedAgents'
+    | 'readying'
     | 'parkedOnLimit'
     | 'stallParks'
     | 'flags'
@@ -1034,6 +1035,12 @@ export function buildStateSections(
     tasks: history().tasks,
     agents: history().agents,
     endedAgents: history().ended,
+    // And what the executor is working on that is not one of those rows yet. Read
+    // straight off the board rather than through `once` — it is a copy of a map the
+    // same process is holding, not a query — and read *here* rather than derived
+    // from anything on the wire, because nothing on the wire knows: the record
+    // exists only in this process, for the length of one await.
+    readying: readying.list(),
     // Which of those rows are parked on a spent account limit rather than on a
     // question. Asked of the fleet, not derived from the rows: both parks are
     // `waiting` with a reason, and a cockpit that told them apart by reading the

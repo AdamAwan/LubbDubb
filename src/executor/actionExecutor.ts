@@ -10,6 +10,7 @@ import { resolveAgentProfile, type AgentModels } from '../agents/modelPolicy.js'
 import type { RuntimeControl } from '../runtimeControl.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import type { ValidatedAction } from '../dispatcher/actions.js';
+import type { ReadyingBoard } from './readying.js';
 import type { DispatchResult } from '../dispatcher/dispatcher.js';
 import {
   authorityOf,
@@ -47,6 +48,12 @@ interface ExecutorDeps {
   agents: AgentManager;
   worktrees: Worktrees;
   escalations: EscalationInbox;
+  /**
+   * Where an action the executor is working on is visible while it is being worked
+   * on — the minutes between a plan naming a dispatch and an agent existing for it.
+   * Written here and read nowhere else in the harness: it is a reading, not a gate.
+   */
+  readying: ReadyingBoard;
   /**
    * The operator's standing authorizations over whole stacks. Asked whether a
    * rung's merge is already authorized, and told when one it authorized failed.
@@ -167,380 +174,404 @@ export class ActionExecutor {
         tally(outcome);
       };
 
-      switch (action.type) {
-        case 'dispatch_code_agent':
-        case 'dispatch_desk_agent': {
-          const origin = action.originRef;
-          // Two ways the same work can already be in flight: a task dispatched on
-          // this origin, and a job standing in for it — a requeue, whose task says
-          // `job:<id>`. The second is what closes the window a requeue filed *after*
-          // the snapshot opens, which the dispatcher's `activeOrigins` cannot see
-          // because it was decided from a world that predates the requeue (#249).
-          if (origin && (store.findActiveTaskByOrigin(origin) || store.findStandingJobByOrigin(origin))) {
-            record('skipped', `Skipped: work for ${origin} is already in flight.`);
+      // On the board for as long as the executor holds it, whatever it does with
+      // it — see {@link ReadyingBoard}. The `finally` is the point: an action that
+      // throws (an `ensure` that could not wipe a slot is the one that happens)
+      // must take its row with it, or the cockpit draws work nobody is doing until
+      // the harness is bounced.
+      const hold = this.deps.readying.pickUp({
+        cycleId,
+        title: readyingTitle(action),
+        originRef: 'originRef' in action ? action.originRef : null,
+        branch: action.type === 'dispatch_code_agent' ? action.branch : null,
+      });
+      try {
+        switch (action.type) {
+          case 'dispatch_code_agent':
+          case 'dispatch_desk_agent': {
+            const origin = action.originRef;
+            // Two ways the same work can already be in flight: a task dispatched on
+            // this origin, and a job standing in for it — a requeue, whose task says
+            // `job:<id>`. The second is what closes the window a requeue filed *after*
+            // the snapshot opens, which the dispatcher's `activeOrigins` cannot see
+            // because it was decided from a world that predates the requeue (#249).
+            if (origin && (store.findActiveTaskByOrigin(origin) || store.findStandingJobByOrigin(origin))) {
+              record('skipped', `Skipped: work for ${origin} is already in flight.`);
+              break;
+            }
+            // The branch half of the same gate (issue #116). For every world-driven
+            // rule origin and branch are 1:1 (`pr:<n>:*`→`pr.branch`,
+            // `issue:<n>`→`issue/<n>`, `issue:<n>:plan`→`plan/issue/<n>`,
+            // `issue:<n>:part:<slug>`→`issue/<n>/<slug>`),
+            // so the origin check above already *is* a branch check and this one is a
+            // no-op for them — asserted in test/jobQueue.test.ts, because a later rule
+            // that broke the 1:1 property would otherwise break it silently. Two paths
+            // can reach here with a branch the origin doesn't determine: rule `manual-job`, whose
+            // `job.branch` is a free string the operator supplies, and the LLM
+            // dispatcher, which names branches in prose. `WorktreeManager.ensure` is
+            // reuse-first, so letting either through puts two live claude processes in
+            // one worktree directory — the same files on disk, and no merge anywhere to
+            // reconcile them.
+            //
+            // Deferred rather than skipped, deliberately. `skipped` is the origin
+            // gate's word and means "this work is already being done"; that is not what
+            // happened here — the job is a distinct request that merely names a busy
+            // branch. Every active task ends, so the collision is transient and the
+            // honest reading is "not yet": the job stays `queued` (nothing calls
+            // `markJobDispatched`) and the gate re-tests next cycle, exactly as the
+            // cap/pause deferrals below do, for one audit row a cycle. An operator who
+            // doesn't want to wait cancels it.
+            if (action.type === 'dispatch_code_agent') {
+              const held = store.findActiveTaskByBranch(action.branch);
+              if (held) {
+                record(
+                  'deferred',
+                  `Deferred: branch ${action.branch} is held by active task ${held.id}` +
+                    `${held.originRef ? ` (${held.originRef})` : ''}; a second agent would share its worktree. Will retry when it frees.`,
+                );
+                break;
+              }
+            }
+            if (this.deps.runtime.paused) {
+              record('deferred', `Deferred: dispatch is paused; will retry when resumed.`);
+              break;
+            }
+            if (liveCount >= this.deps.runtime.cap) {
+              record('deferred', `Deferred: concurrency cap ${this.deps.runtime.cap} reached; will retry next cycle.`);
+              break;
+            }
+            // Held outside the `try` so the catch can settle a row the throw left
+            // behind — see {@link ActionExecutor.abandonUnstarted}.
+            let task: Task | null = null;
+            try {
+              // Fetched before the row is written so the prompt stored on the task
+              // is the prompt the agent gets — a later append would leave the
+              // cockpit showing something the agent never saw.
+              hold.at('ci-evidence');
+              const evidence = action.type === 'dispatch_code_agent' ? await this.ciEvidenceFor(action) : '';
+              // Whether this dispatch continues the last agent's conversation or starts
+              // cold (issue #333). Decided before the row is written, because the note it
+              // produces is part of the prompt the row stores.
+              const retry = retryResumeFor(origin, store);
+              task = this.recordDispatchTask(action, evidence, retry);
+              // A desk retry keeps the previous scratch directory; every other dispatch
+              // gets the directory its own task names. A *code* retry still goes through
+              // `ensure` — the slot's lease was released when the previous agent was
+              // reaped — and reuse-first lands it back on the slot still checked out on
+              // the branch, so `--resume` finds the transcript where it left it.
+              //
+              // The step the row is on for nearly all of its life. `ensure` is
+              // reuse-first, so most dispatches return here at once — but the one
+              // handed a slot checked out on another branch pays a `git clean -ffdx`
+              // and a cold checkout, which is the minutes the whole board exists to
+              // account for. → `docs/spec/09-execution.md#handing-a-slot-over`
+              hold.at('slot-handover');
+              const cwd =
+                retry && action.type === 'dispatch_desk_agent'
+                  ? retry.previous.cwd
+                  : await this.workingDirectory(task, action);
+              // `claude --resume` resolves the transcript inside the *launch cwd's*
+              // project directory, so a retry that would land anywhere else has nothing
+              // to re-attach to. Checked rather than assumed: this is the one failure
+              // that costs a whole attempt and reports nothing but a cold-looking run.
+              const inherit = retry && retry.previous.cwd === cwd ? retry.previous.sessionId : null;
+              const agent = this.deps.agents.spawn(task, cwd, inherit);
+              // Read back off the row rather than from the request: a non-resumable
+              // runtime silently declines the inheritance, and the audit line must say
+              // what happened rather than what was asked for.
+              const resumed = inherit !== null && agent.sessionId === inherit;
+              liveCount += 1;
+              // An operator-launched job leaves the queue only once its agent is
+              // actually running — so a deferred (capped/paused) dispatch keeps it
+              // queued for a later cycle.
+              if (action.jobId) store.markJobDispatched(action.jobId, task.id);
+              // Same rule as a job, for the same reason: a dispatch the cap/pause gate
+              // held must leave the part `ready` for a later cycle, not claim it started.
+              if (action.type === 'dispatch_code_agent' && action.partId)
+                store.markPartDispatched(action.partId, task.id, action.branch);
+              const kind = action.type === 'dispatch_code_agent' ? 'code' : 'desk';
+              record(
+                'executed',
+                resumed
+                  ? `Resumed the previous agent's conversation for a ${kind} agent on task ${task.id} in ${cwd}.`
+                  : `Spawned ${kind} agent for task ${task.id} in ${cwd}.`,
+              );
+            } catch (err) {
+              if (task) this.abandonUnstarted(task);
+              record('rejected', `Failed to start agent: ${(err as Error).message}`);
+            }
             break;
           }
-          // The branch half of the same gate (issue #116). For every world-driven
-          // rule origin and branch are 1:1 (`pr:<n>:*`→`pr.branch`,
-          // `issue:<n>`→`issue/<n>`, `issue:<n>:plan`→`plan/issue/<n>`,
-          // `issue:<n>:part:<slug>`→`issue/<n>/<slug>`),
-          // so the origin check above already *is* a branch check and this one is a
-          // no-op for them — asserted in test/jobQueue.test.ts, because a later rule
-          // that broke the 1:1 property would otherwise break it silently. Two paths
-          // can reach here with a branch the origin doesn't determine: rule `manual-job`, whose
-          // `job.branch` is a free string the operator supplies, and the LLM
-          // dispatcher, which names branches in prose. `WorktreeManager.ensure` is
-          // reuse-first, so letting either through puts two live claude processes in
-          // one worktree directory — the same files on disk, and no merge anywhere to
-          // reconcile them.
-          //
-          // Deferred rather than skipped, deliberately. `skipped` is the origin
-          // gate's word and means "this work is already being done"; that is not what
-          // happened here — the job is a distinct request that merely names a busy
-          // branch. Every active task ends, so the collision is transient and the
-          // honest reading is "not yet": the job stays `queued` (nothing calls
-          // `markJobDispatched`) and the gate re-tests next cycle, exactly as the
-          // cap/pause deferrals below do, for one audit row a cycle. An operator who
-          // doesn't want to wait cancels it.
-          if (action.type === 'dispatch_code_agent') {
-            const held = store.findActiveTaskByBranch(action.branch);
-            if (held) {
+
+          case 'escalate_to_human': {
+            const esc = this.deps.escalations.create({
+              type: action.escalationType,
+              prompt: action.prompt,
+              context: action.context,
+              taskId: action.taskId,
+              agentId: action.agentId,
+            });
+            record('executed', `Escalated to human: ${esc.id} (${action.escalationType}).`);
+            break;
+          }
+
+          case 'respond_to_agent': {
+            const ok = this.deps.agents.respond(action.agentId, action.response);
+            record(
+              ok ? 'executed' : 'skipped',
+              ok ? `Typed response into agent ${action.agentId}.` : `Agent ${action.agentId} not live; nothing typed.`,
+            );
+            break;
+          }
+
+          case 'reply_on_pr':
+          case 'merge_pr': {
+            hold.at('authorizing');
+            const outbound = await this.authorize(cycleId, action);
+            // The authorized path audits itself, under this same cycle id and
+            // through the one function that performs an authorized act — so there
+            // is nothing left to write, only to count.
+            if (outbound.recorded) tally(outbound.outcome);
+            else record(outbound.outcome, outbound.detail);
+            break;
+          }
+
+          case 'propose_plan': {
+            // The one proposal with no act to send (issue #109 phase 3). It is
+            // born here anyway, with the other two: proposals are created in one
+            // place, from a validated action, so "who may put something to a human"
+            // has a single answer. The hold is re-asked here for the same reason
+            // `authorize` re-asks about a merge — rule `plan-approval` suppresses itself, but
+            // every path that reaches the executor must be covered, not just the
+            // one that happens to check first.
+            const ref = planProposalRef(action.originRef);
+            const heldBy = planProposalHold(ref, store.listProposals());
+            if (heldBy) {
+              record('skipped', `Skipped proposing the plan for ${action.originRef}: ${heldBy}.`);
+              break;
+            }
+            const esc = this.deps.escalations.create({
+              type: 'approve_change',
+              prompt: action.prompt,
+              // The planner's diagnosis and approach ride in `detail`, not in the
+              // prompt, for `propose_shortfall`'s reason: the card renders it as its
+              // own labelled body, directly above the two buttons.
+              context: {
+                originRef: action.originRef,
+                planId: action.planId,
+                ...(action.detail ? { detail: action.detail, detailFrom: 'What the plan says' } : {}),
+              },
+            });
+            const proposal = store.createProposal({
+              kind: 'plan',
+              ref,
+              action: action as unknown as Action,
+              escalationId: esc.id,
+            });
+            record(
+              'executed',
+              `Proposed the plan for ${action.originRef} for approval: ${esc.id} / ${proposal.id}. ` +
+                `Accepting releases its parts; nothing is scheduled until then.`,
+            );
+            break;
+          }
+
+          case 'propose_shortfall': {
+            // Born here with the other three, from a validated action, for
+            // `propose_plan`'s reason: proposals are created in one place, so "who
+            // may put something to a human" has a single answer. The hold is asked
+            // here too — rule `issue-shortfall` suppresses itself, but every path
+            // that reaches the executor must be covered, not just the one that
+            // happens to check first.
+            //
+            // Unlike a plan this uses the *full* `proposalHold`, all three arms. A
+            // plan proposal is made once per verdict and both settlements rewrite
+            // the row the gate reads; a shortfall is proposed off a row that
+            // persists until its arm is performed, so without the durable `rejected`
+            // arm one refusal would be re-asked every pulse. It expires on world
+            // signal like any other rejection, which it must: a replan refused
+            // because the issue needed one more look would otherwise be vetoed for
+            // good, and that is exactly the phase-4 failure.
+            const ref = shortfallRef(action.issueNumber);
+            const proposals = store.listProposals();
+            const signals = this.rejectionSignals(proposals);
+            const heldBy = proposalHold('shortfall', ref, proposals, { rejectionSignals: signals });
+            if (heldBy) {
+              record('skipped', `Skipped proposing a response to the assessment of ${action.originRef}: ${heldBy}.`);
+              break;
+            }
+            const again = reaskContext('shortfall', ref, proposals, { rejectionSignals: signals });
+            const esc = this.deps.escalations.create({
+              type: 'approve_change',
+              prompt: again ? `${again}\n\n${action.prompt}` : action.prompt,
+              // The assessor's write-up rides in `detail`, not in the prompt: the
+              // card renders it as its own labelled body, and a re-ask prepending
+              // to the prompt must not push it further from the buttons.
+              context: {
+                originRef: action.originRef,
+                issueNumber: action.issueNumber,
+                planId: action.planId,
+                detail: action.detail,
+                detailFrom: 'What the assessor found',
+              },
+            });
+            const proposal = store.createProposal({
+              kind: 'shortfall',
+              ref,
+              action: action as unknown as Action,
+              escalationId: esc.id,
+            });
+            record(
+              'executed',
+              `Proposed a response to the failed assessment of ${action.originRef}: ${esc.id} / ${proposal.id}. ` +
+                `Accepting ${action.cause === 'plan' ? 'sends the plan back to a planner' : `appends a follow-up part for "${action.partSlug}"`}; nothing happens until then.`,
+            );
+            break;
+          }
+
+          case 'update_pr_branch': {
+            // The `behind` arm of rule `pr-base-update`, performed rather than
+            // dispatched (issue #332). Not authorized and not proposed, for
+            // `set_work_item_state`'s reason and one more: this is a write to a
+            // branch the harness owns, of a merge the provider has already said is
+            // clean, and the agent path took it without asking anyone. Making the
+            // cheap path ask a human what the expensive one never did would be a new
+            // gate wearing an optimisation's clothes.
+            //
+            // The branch gate again, for the reason the dispatch path re-checks it:
+            // every path reaching the executor must be covered, not only the one
+            // that checked first. An agent holding the branch has a worktree cut
+            // from a commit this merge would move out from under it — the rule
+            // proposes this only for a free branch, and this is what makes that
+            // true of the moment it runs. **Deferred, not skipped**: the collision
+            // is transient, and `skipped` is the word the next cycle reads as "the
+            // cheap path is unavailable here" and falls back to an agent on.
+            const staffed = store.findActiveTaskByBranch(action.branch);
+            if (staffed) {
               record(
                 'deferred',
-                `Deferred: branch ${action.branch} is held by active task ${held.id}` +
-                  `${held.originRef ? ` (${held.originRef})` : ''}; a second agent would share its worktree. Will retry when it frees.`,
+                `Deferred: branch ${action.branch} is held by active task ${staffed.id}; ` +
+                  `merging ${action.base} in under it would move the commit its worktree was cut from. ` +
+                  `Will retry when it frees.`,
               );
               break;
             }
-          }
-          if (this.deps.runtime.paused) {
-            record('deferred', `Deferred: dispatch is paused; will retry when resumed.`);
+            try {
+              const res = await this.deps.sink.updatePrBranch({ prNumber: action.prNumber, base: action.base });
+              // `ok: false` is the provider saying it has no such operation (Azure
+              // DevOps), which is a configuration rather than a failure — so it is
+              // audited and *not* recorded as an error. Either way the row is what
+              // the next cycle's rule reads to fall back to a code agent, so the PR
+              // is never left sitting behind its base.
+              if (!res.ok) {
+                record(
+                  'skipped',
+                  `This provider cannot merge ${action.base} into PR #${action.prNumber} itself; ` +
+                    `a code agent will be dispatched to do it.`,
+                );
+                break;
+              }
+              record(
+                'executed',
+                `Brought PR #${action.prNumber} up to date with ${action.base} — no agent spent.${res.ref ? ` ref=${res.ref}` : ''}`,
+              );
+            } catch (err) {
+              const message = (err as Error).message;
+              this.deps.errors.record({
+                source: 'provider',
+                message: `Updating PR #${action.prNumber} from ${action.base} failed: ${message}`,
+                detail: 'Rule pr-base-update will dispatch a code agent to merge the base in instead.',
+              });
+              record(
+                'rejected',
+                `Failed to merge ${action.base} into PR #${action.prNumber}: ${message}. ` +
+                  `A code agent will be dispatched to do it.`,
+              );
+            }
             break;
           }
-          if (liveCount >= this.deps.runtime.cap) {
-            record('deferred', `Deferred: concurrency cap ${this.deps.runtime.cap} reached; will retry next cycle.`);
-            break;
-          }
-          // Held outside the `try` so the catch can settle a row the throw left
-          // behind — see {@link ActionExecutor.abandonUnstarted}.
-          let task: Task | null = null;
-          try {
-            // Fetched before the row is written so the prompt stored on the task
-            // is the prompt the agent gets — a later append would leave the
-            // cockpit showing something the agent never saw.
-            const evidence = action.type === 'dispatch_code_agent' ? await this.ciEvidenceFor(action) : '';
-            // Whether this dispatch continues the last agent's conversation or starts
-            // cold (issue #333). Decided before the row is written, because the note it
-            // produces is part of the prompt the row stores.
-            const retry = retryResumeFor(origin, store);
-            task = this.recordDispatchTask(action, evidence, retry);
-            // A desk retry keeps the previous scratch directory; every other dispatch
-            // gets the directory its own task names. A *code* retry still goes through
-            // `ensure` — the slot's lease was released when the previous agent was
-            // reaped — and reuse-first lands it back on the slot still checked out on
-            // the branch, so `--resume` finds the transcript where it left it.
-            const cwd =
-              retry && action.type === 'dispatch_desk_agent'
-                ? retry.previous.cwd
-                : await this.workingDirectory(task, action);
-            // `claude --resume` resolves the transcript inside the *launch cwd's*
-            // project directory, so a retry that would land anywhere else has nothing
-            // to re-attach to. Checked rather than assumed: this is the one failure
-            // that costs a whole attempt and reports nothing but a cold-looking run.
-            const inherit = retry && retry.previous.cwd === cwd ? retry.previous.sessionId : null;
-            const agent = this.deps.agents.spawn(task, cwd, inherit);
-            // Read back off the row rather than from the request: a non-resumable
-            // runtime silently declines the inheritance, and the audit line must say
-            // what happened rather than what was asked for.
-            const resumed = inherit !== null && agent.sessionId === inherit;
-            liveCount += 1;
-            // An operator-launched job leaves the queue only once its agent is
-            // actually running — so a deferred (capped/paused) dispatch keeps it
-            // queued for a later cycle.
-            if (action.jobId) store.markJobDispatched(action.jobId, task.id);
-            // Same rule as a job, for the same reason: a dispatch the cap/pause gate
-            // held must leave the part `ready` for a later cycle, not claim it started.
-            if (action.type === 'dispatch_code_agent' && action.partId)
-              store.markPartDispatched(action.partId, task.id, action.branch);
-            const kind = action.type === 'dispatch_code_agent' ? 'code' : 'desk';
-            record(
-              'executed',
-              resumed
-                ? `Resumed the previous agent's conversation for a ${kind} agent on task ${task.id} in ${cwd}.`
-                : `Spawned ${kind} agent for task ${task.id} in ${cwd}.`,
-            );
-          } catch (err) {
-            if (task) this.abandonUnstarted(task);
-            record('rejected', `Failed to start agent: ${(err as Error).message}`);
-          }
-          break;
-        }
 
-        case 'escalate_to_human': {
-          const esc = this.deps.escalations.create({
-            type: action.escalationType,
-            prompt: action.prompt,
-            context: action.context,
-            taskId: action.taskId,
-            agentId: action.agentId,
-          });
-          record('executed', `Escalated to human: ${esc.id} (${action.escalationType}).`);
-          break;
-        }
-
-        case 'respond_to_agent': {
-          const ok = this.deps.agents.respond(action.agentId, action.response);
-          record(
-            ok ? 'executed' : 'skipped',
-            ok ? `Typed response into agent ${action.agentId}.` : `Agent ${action.agentId} not live; nothing typed.`,
-          );
-          break;
-        }
-
-        case 'reply_on_pr':
-        case 'merge_pr': {
-          const outbound = await this.authorize(cycleId, action);
-          // The authorized path audits itself, under this same cycle id and
-          // through the one function that performs an authorized act — so there
-          // is nothing left to write, only to count.
-          if (outbound.recorded) tally(outbound.outcome);
-          else record(outbound.outcome, outbound.detail);
-          break;
-        }
-
-        case 'propose_plan': {
-          // The one proposal with no act to send (issue #109 phase 3). It is
-          // born here anyway, with the other two: proposals are created in one
-          // place, from a validated action, so "who may put something to a human"
-          // has a single answer. The hold is re-asked here for the same reason
-          // `authorize` re-asks about a merge — rule `plan-approval` suppresses itself, but
-          // every path that reaches the executor must be covered, not just the
-          // one that happens to check first.
-          const ref = planProposalRef(action.originRef);
-          const heldBy = planProposalHold(ref, store.listProposals());
-          if (heldBy) {
-            record('skipped', `Skipped proposing the plan for ${action.originRef}: ${heldBy}.`);
-            break;
-          }
-          const esc = this.deps.escalations.create({
-            type: 'approve_change',
-            prompt: action.prompt,
-            // The planner's diagnosis and approach ride in `detail`, not in the
-            // prompt, for `propose_shortfall`'s reason: the card renders it as its
-            // own labelled body, directly above the two buttons.
-            context: {
-              originRef: action.originRef,
-              planId: action.planId,
-              ...(action.detail ? { detail: action.detail, detailFrom: 'What the plan says' } : {}),
-            },
-          });
-          const proposal = store.createProposal({
-            kind: 'plan',
-            ref,
-            action: action as unknown as Action,
-            escalationId: esc.id,
-          });
-          record(
-            'executed',
-            `Proposed the plan for ${action.originRef} for approval: ${esc.id} / ${proposal.id}. ` +
-              `Accepting releases its parts; nothing is scheduled until then.`,
-          );
-          break;
-        }
-
-        case 'propose_shortfall': {
-          // Born here with the other three, from a validated action, for
-          // `propose_plan`'s reason: proposals are created in one place, so "who
-          // may put something to a human" has a single answer. The hold is asked
-          // here too — rule `issue-shortfall` suppresses itself, but every path
-          // that reaches the executor must be covered, not just the one that
-          // happens to check first.
-          //
-          // Unlike a plan this uses the *full* `proposalHold`, all three arms. A
-          // plan proposal is made once per verdict and both settlements rewrite
-          // the row the gate reads; a shortfall is proposed off a row that
-          // persists until its arm is performed, so without the durable `rejected`
-          // arm one refusal would be re-asked every pulse. It expires on world
-          // signal like any other rejection, which it must: a replan refused
-          // because the issue needed one more look would otherwise be vetoed for
-          // good, and that is exactly the phase-4 failure.
-          const ref = shortfallRef(action.issueNumber);
-          const proposals = store.listProposals();
-          const signals = this.rejectionSignals(proposals);
-          const heldBy = proposalHold('shortfall', ref, proposals, { rejectionSignals: signals });
-          if (heldBy) {
-            record('skipped', `Skipped proposing a response to the assessment of ${action.originRef}: ${heldBy}.`);
-            break;
-          }
-          const again = reaskContext('shortfall', ref, proposals, { rejectionSignals: signals });
-          const esc = this.deps.escalations.create({
-            type: 'approve_change',
-            prompt: again ? `${again}\n\n${action.prompt}` : action.prompt,
-            // The assessor's write-up rides in `detail`, not in the prompt: the
-            // card renders it as its own labelled body, and a re-ask prepending
-            // to the prompt must not push it further from the buttons.
-            context: {
-              originRef: action.originRef,
-              issueNumber: action.issueNumber,
-              planId: action.planId,
-              detail: action.detail,
-              detailFrom: 'What the assessor found',
-            },
-          });
-          const proposal = store.createProposal({
-            kind: 'shortfall',
-            ref,
-            action: action as unknown as Action,
-            escalationId: esc.id,
-          });
-          record(
-            'executed',
-            `Proposed a response to the failed assessment of ${action.originRef}: ${esc.id} / ${proposal.id}. ` +
-              `Accepting ${action.cause === 'plan' ? 'sends the plan back to a planner' : `appends a follow-up part for "${action.partSlug}"`}; nothing happens until then.`,
-          );
-          break;
-        }
-
-        case 'update_pr_branch': {
-          // The `behind` arm of rule `pr-base-update`, performed rather than
-          // dispatched (issue #332). Not authorized and not proposed, for
-          // `set_work_item_state`'s reason and one more: this is a write to a
-          // branch the harness owns, of a merge the provider has already said is
-          // clean, and the agent path took it without asking anyone. Making the
-          // cheap path ask a human what the expensive one never did would be a new
-          // gate wearing an optimisation's clothes.
-          //
-          // The branch gate again, for the reason the dispatch path re-checks it:
-          // every path reaching the executor must be covered, not only the one
-          // that checked first. An agent holding the branch has a worktree cut
-          // from a commit this merge would move out from under it — the rule
-          // proposes this only for a free branch, and this is what makes that
-          // true of the moment it runs. **Deferred, not skipped**: the collision
-          // is transient, and `skipped` is the word the next cycle reads as "the
-          // cheap path is unavailable here" and falls back to an agent on.
-          const staffed = store.findActiveTaskByBranch(action.branch);
-          if (staffed) {
-            record(
-              'deferred',
-              `Deferred: branch ${action.branch} is held by active task ${staffed.id}; ` +
-                `merging ${action.base} in under it would move the commit its worktree was cut from. ` +
-                `Will retry when it frees.`,
-            );
-            break;
-          }
-          try {
-            const res = await this.deps.sink.updatePrBranch({ prNumber: action.prNumber, base: action.base });
-            // `ok: false` is the provider saying it has no such operation (Azure
-            // DevOps), which is a configuration rather than a failure — so it is
-            // audited and *not* recorded as an error. Either way the row is what
-            // the next cycle's rule reads to fall back to a code agent, so the PR
-            // is never left sitting behind its base.
-            if (!res.ok) {
+          case 'requeue_ci_check': {
+            // The expired arm of rule `pr-ci-gate`, performed rather than dispatched
+            // (issue #395). Not authorized and not proposed, for `update_pr_branch`'s
+            // reasons: it is mechanical, and the agent path queued this same build
+            // without asking anyone.
+            //
+            // **No branch gate here, and that is not an omission.** A requeue writes
+            // to a policy evaluation, not to the branch: nothing an agent's worktree
+            // was cut from moves, so there is no collision to defer for. The rule
+            // only reaches this act for a free branch anyway — a staffed one gets the
+            // note — which makes the gate the base update needs redundant twice over.
+            const unperformed: string[] = [];
+            try {
+              for (const check of action.checks) {
+                const res = await this.deps.sink.requeueCiCheck({
+                  prNumber: action.prNumber,
+                  check: check.name,
+                  requeueRef: check.requeueRef,
+                });
+                // `ok: false` is the provider saying nothing was queued — it has no
+                // such operation, or it has one and declined. A configuration rather
+                // than a failure either way, so it is audited and *not* recorded as
+                // an error.
+                if (!res.ok) unperformed.push(check.name);
+              }
+            } catch (err) {
+              const message = (err as Error).message;
+              this.deps.errors.record({
+                source: 'provider',
+                message: `Requeueing the expired check(s) on PR #${action.prNumber} failed: ${message}`,
+                detail: 'Rule pr-ci-gate will dispatch a code agent to queue the build instead.',
+              });
+              // Deliberately whole-act, even where earlier checks in the list were
+              // queued: the ones that took stop being expired and drop out of the
+              // gate by themselves, and the agent the next pulse dispatches is left
+              // with exactly the checks that did not.
+              record(
+                'rejected',
+                `Failed to requeue the expired check(s) on PR #${action.prNumber}: ${message}. ` +
+                  `A code agent will be dispatched to queue the build.`,
+              );
+              break;
+            }
+            if (unperformed.length > 0) {
               record(
                 'skipped',
-                `This provider cannot merge ${action.base} into PR #${action.prNumber} itself; ` +
-                  `a code agent will be dispatched to do it.`,
+                `This provider did not requeue ${unperformed.join(', ')} on PR #${action.prNumber}; ` +
+                  `a code agent will be dispatched to queue the build.`,
               );
               break;
             }
             record(
               'executed',
-              `Brought PR #${action.prNumber} up to date with ${action.base} — no agent spent.${res.ref ? ` ref=${res.ref}` : ''}`,
+              `Queued a fresh run of ${action.checks.map((c) => c.name).join(', ')} on PR #${action.prNumber} — no agent spent.`,
             );
-          } catch (err) {
-            const message = (err as Error).message;
-            this.deps.errors.record({
-              source: 'provider',
-              message: `Updating PR #${action.prNumber} from ${action.base} failed: ${message}`,
-              detail: 'Rule pr-base-update will dispatch a code agent to merge the base in instead.',
-            });
-            record(
-              'rejected',
-              `Failed to merge ${action.base} into PR #${action.prNumber}: ${message}. ` +
-                `A code agent will be dispatched to do it.`,
-            );
+            break;
           }
-          break;
-        }
 
-        case 'requeue_ci_check': {
-          // The expired arm of rule `pr-ci-gate`, performed rather than dispatched
-          // (issue #395). Not authorized and not proposed, for `update_pr_branch`'s
-          // reasons: it is mechanical, and the agent path queued this same build
-          // without asking anyone.
-          //
-          // **No branch gate here, and that is not an omission.** A requeue writes
-          // to a policy evaluation, not to the branch: nothing an agent's worktree
-          // was cut from moves, so there is no collision to defer for. The rule
-          // only reaches this act for a free branch anyway — a staffed one gets the
-          // note — which makes the gate the base update needs redundant twice over.
-          const unperformed: string[] = [];
-          try {
-            for (const check of action.checks) {
-              const res = await this.deps.sink.requeueCiCheck({
-                prNumber: action.prNumber,
-                check: check.name,
-                requeueRef: check.requeueRef,
-              });
-              // `ok: false` is the provider saying nothing was queued — it has no
-              // such operation, or it has one and declined. A configuration rather
-              // than a failure either way, so it is audited and *not* recorded as
-              // an error.
-              if (!res.ok) unperformed.push(check.name);
+          case 'set_work_item_state': {
+            // A mechanical bookkeeping transition (e.g. move a work item to "In
+            // Review" once its PR is open), not a publish-to-the-world action — so it
+            // runs directly rather than through the auto-send gate. Idempotent, so a
+            // repeat before the next snapshot reflects the change is harmless.
+            try {
+              const res = await this.deps.sink.setWorkItemState({ number: action.number, state: action.state });
+              record(
+                'executed',
+                `Set work item #${action.number} to "${action.state}".${res.ref ? ` ref=${res.ref}` : ''}`,
+              );
+            } catch (err) {
+              record('rejected', `Failed to set work item #${action.number} state: ${(err as Error).message}`);
             }
-          } catch (err) {
-            const message = (err as Error).message;
-            this.deps.errors.record({
-              source: 'provider',
-              message: `Requeueing the expired check(s) on PR #${action.prNumber} failed: ${message}`,
-              detail: 'Rule pr-ci-gate will dispatch a code agent to queue the build instead.',
-            });
-            // Deliberately whole-act, even where earlier checks in the list were
-            // queued: the ones that took stop being expired and drop out of the
-            // gate by themselves, and the agent the next pulse dispatches is left
-            // with exactly the checks that did not.
-            record(
-              'rejected',
-              `Failed to requeue the expired check(s) on PR #${action.prNumber}: ${message}. ` +
-                `A code agent will be dispatched to queue the build.`,
-            );
             break;
           }
-          if (unperformed.length > 0) {
-            record(
-              'skipped',
-              `This provider did not requeue ${unperformed.join(', ')} on PR #${action.prNumber}; ` +
-                `a code agent will be dispatched to queue the build.`,
-            );
+
+          case 'no_op':
+            record('executed', `No-op: ${action.reason}`);
             break;
-          }
-          record(
-            'executed',
-            `Queued a fresh run of ${action.checks.map((c) => c.name).join(', ')} on PR #${action.prNumber} — no agent spent.`,
-          );
-          break;
         }
-
-        case 'set_work_item_state': {
-          // A mechanical bookkeeping transition (e.g. move a work item to "In
-          // Review" once its PR is open), not a publish-to-the-world action — so it
-          // runs directly rather than through the auto-send gate. Idempotent, so a
-          // repeat before the next snapshot reflects the change is harmless.
-          try {
-            const res = await this.deps.sink.setWorkItemState({ number: action.number, state: action.state });
-            record(
-              'executed',
-              `Set work item #${action.number} to "${action.state}".${res.ref ? ` ref=${res.ref}` : ''}`,
-            );
-          } catch (err) {
-            record('rejected', `Failed to set work item #${action.number} state: ${(err as Error).message}`);
-          }
-          break;
-        }
-
-        case 'no_op':
-          record('executed', `No-op: ${action.reason}`);
-          break;
+      } finally {
+        hold.release();
       }
     }
 
@@ -1394,5 +1425,36 @@ function safeJson(v: unknown): string {
     return JSON.stringify(v);
   } catch {
     return String(v);
+  }
+}
+
+/**
+ * What a readying row says it is for.
+ *
+ * The dispatcher's own `title` wherever there is one, so the row and the agent
+ * that follows it name the work the same way — a row whose wording changed at the
+ * moment the agent appeared would read as a second piece of work. The three acts
+ * that carry no title are worded here, from what they are: an action nobody can
+ * name is a row an operator cannot place.
+ */
+function readyingTitle(action: ValidatedAction): string {
+  switch (action.type) {
+    case 'dispatch_code_agent':
+    case 'dispatch_desk_agent':
+      return action.title;
+    case 'merge_pr':
+      return `Merging pull request #${action.prNumber}`;
+    case 'reply_on_pr':
+      return `Replying on pull request #${action.prNumber}`;
+    case 'escalate_to_human':
+      return 'Putting a question to you';
+    case 'respond_to_agent':
+      return `Answering agent ${action.agentId}`;
+    case 'propose_plan':
+      return 'Putting a plan to you';
+    case 'propose_shortfall':
+      return 'Putting a shortfall to you';
+    default:
+      return action.type.replace(/_/g, ' ');
   }
 }

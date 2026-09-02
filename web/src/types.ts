@@ -136,6 +136,8 @@ export type {
   Proposal,
   PullRequest,
   QueueItem,
+  ReadyingAction,
+  ReadyingStep,
   RecoveryVerdict,
   BuildReading,
   BuildStanding,

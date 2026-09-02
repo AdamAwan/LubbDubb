@@ -67,6 +67,7 @@ import { PERMISSION_PROMPT_TOOL } from './mcp/names.js';
 import { PermissionDesk } from './agents/permissionDesk.js';
 import { RecoveryDesk } from './agents/recoveryDesk.js';
 import { ActionExecutor } from './executor/actionExecutor.js';
+import { ReadyingBoard } from './executor/readying.js';
 import { RuleDispatcher } from './dispatcher/ruleDispatcher.js';
 import { loadPromptTemplates, type PromptTemplates } from './dispatcher/promptTemplates.js';
 import { loadReviewCharters } from './review/charter.js';
@@ -126,6 +127,13 @@ export interface System {
    */
   recovery: RecoveryDesk;
   executor: ActionExecutor;
+  /**
+   * What the executor is working on that is not an agent yet — the minutes a plan's
+   * dispatches spend queued behind each other's worktree handovers, which until it
+   * existed were visible nowhere at all. A reading, never a gate: nothing on it
+   * counts against the cap. → `docs/spec/09-execution.md#what-is-being-readied`
+   */
+  readying: ReadyingBoard;
   dispatcher: Dispatcher;
   harness: Harness;
   /**
@@ -826,12 +834,17 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // wired one way and there is no cycle to break.
   const landings = new StackLandingDesk(store, escalations, errors);
 
+  // Built beside the executor and owned by it: every write is one of that loop's,
+  // and its entries are alive for exactly as long as the frames that made them.
+  const readying = new ReadyingBoard();
+
   const executor = new ActionExecutor({
     store,
     landings,
     agents,
     worktrees,
     escalations,
+    readying,
     sink: opts.sink ?? connector,
     agentModels: config.agentModels,
     deskRoot: config.deskRoot,
@@ -1467,6 +1480,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     areaPaths,
     recovery,
     executor,
+    readying,
     dispatcher,
     harness,
     localCycles,
