@@ -881,8 +881,9 @@ indistinguishable from a goal that exists and has nothing on it, and only one of
 drawing. A **retained run** is found too (`retainedRuns`), so a goal whose ticket the tracker has
 stopped returning still has a page to be dismissed from.
 
-**A retained run is marked stale, never removed.** The overview's goals-in-flight list draws the
-retained runs beside the live goals, and the page header and the row both carry `StaleChip`: the tracker
+**A retained run is marked stale, never removed.** The overview's goals-in-flight list draws a retained
+run beside the live goals *while it still has work in flight*, and the rest behind that card's `kept`
+disclosure ([the six cards](#the-six-cards)); the page header and the row both carry `StaleChip`: the tracker
 stopped returning this item, and — where the ticket mirror has a row — what the tracker now calls it
 (`tracker: Resolved · seen 3h ago`). The chip's title says exactly what the marking covers: the title,
 description, labels and state are the harness's copy from the last pulse the item was live, and the
@@ -1814,7 +1815,15 @@ card is the drift `PanelRowModel` exists to end, one level up.
 - **Goals in flight** — every goal whose `pickup.status` says the harness has it in hand now
   (`active` / `has_pr` / `planning` / `delivered`). Read off the dispatcher's own word rather than
   re-inferred from agents, plans and pull requests, which are three inputs the server has already
-  folded into one. Each row is a way into that goal's page, carries its segment track, and takes a
+  folded into one.
+  **A retained run is listed only while it still has work in flight** — an agent on it, an ask about
+  it in the rail, or a plan part that is not finished (`retainedWorkInFlight`, folding the parts
+  through the same `buildGoalTrack` the row draws its track from, so the gate and the row cannot
+  disagree). The others — a finished run on a closed ticket, which every deployment accumulates
+  forever — go behind the header's **`kept` disclosure**, the fleet card's `shifts ended` pattern: one
+  click away rather than dropped, since dismissing one is still the operator's to do, and out of a card
+  whose whole reading is what the fleet is working on now. The disclosure draws at zero, muted, so the
+  way in never moves, and the header count stays the count of the list beneath it. Each row is a way into that goal's page, carries its segment track, and takes a
   **court read off `needsYou`** — a goal is in your court exactly when the rail is holding an ask
   about it. Anything else would let the row say "you" with nothing to answer. That is said **once**,
   as the alarmed `asking you` count: the `You` / `Harness` chip that used to sit beside it had no
@@ -4935,7 +4944,8 @@ stated in a comment above the `issues` array, and the arithmetic around it has t
 is 3 with two agents live, so exactly one goal is `eligible` and the rest of the ready ones are
 `blocked` — a world with six eligible goals under a cap of three is one the dispatcher could not have
 produced. Eleven of the thirteen are reachable by clicking, through the Twelve of the thirteen are reachable by clicking — eleven through the tickets tab's watch filter,
-and `retained` from the overview, which lists the retained runs beside the goals in flight; `done` is
+and `retained` from the overview, whose goals-in-flight card lists a retained run beside the live goals
+while work is still on it and the rest behind its `kept` disclosure; `done` is
 carried without being listed anywhere, because no surface lists a closed goal the harness holds no run
 for — it is still a reading the wire ships and the goal page draws.
 

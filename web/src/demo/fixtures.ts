@@ -589,8 +589,10 @@ export function buildDemoState(): DemoSeed {
        * cap of three is a world the dispatcher could never have produced.
        *
        * Thirteen of the fourteen are reachable by clicking: the backlog lists every
-       * *open* item, in one of its four groups, and the overview lists the retained
-       * run (#357, carried in `retainedRuns` below, marked stale). `done` (#352)
+       * *open* item, in one of its four groups, and the overview reaches the retained
+       * run (#357, carried in `retainedRuns` below, marked stale) behind the
+       * goals-in-flight card's `kept` disclosure, where a run with no work left on it
+       * goes. `done` (#352)
        * is the one that is not, because no surface lists a closed goal the harness
        * holds no run for — it is carried anyway, since it is a reading the wire
        * ships and the goal page draws, and a demo world with no closed goal in it

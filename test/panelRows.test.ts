@@ -322,3 +322,48 @@ test('a goal row says so while an agent is on it', () => {
   );
   assert.ok(!card(quiet).includes('cn-onit'), 'a finished agent still holds a goal');
 });
+
+/**
+ * A retained run is a goal in flight only while there is still work on it.
+ *
+ * The card is the answer to "what is the fleet working on", and a retained run —
+ * a closed ticket whose run the harness still holds — outlives its work by
+ * however long it takes somebody to dismiss it. Every deployment accumulates
+ * them, so listed unconditionally they end up outnumbering the live goals and the
+ * card stops being read at all. One with work left (an agent, an ask, an
+ * unfinished part) still rides the list; one with none is behind the header's
+ * `kept` disclosure, which is a click rather than a dead end because dismissing
+ * it is still the operator's to do.
+ */
+test('a finished retained run is behind the kept disclosure, not among the goals in flight', () => {
+  const state = buildDemoState().state;
+  const retained = state.retainedRuns ?? [];
+  assert.ok(retained.length > 0, 'the fixtures must carry a retained run');
+  const kept = retained[0]!;
+
+  const html = render(view());
+  const goals = html.slice(html.indexOf('Goals in flight'), html.indexOf('Pull requests'));
+  for (const issue of retained) {
+    assert.ok(
+      !goals.includes(`#${issue.number} ${issue.title}`),
+      `retained run #${issue.number} is listed as a goal in flight with no work on it`,
+    );
+  }
+  assert.match(goals, /kept/, 'the kept runs have no way in');
+
+  // And the gate is about the work, not about the close: the same run with an
+  // agent on it is a goal being worked, whatever the tracker did to its ticket.
+  const live = state.agents.find((a) => a.endedAt === null);
+  assert.ok(live, 'the fixtures must have an agent out');
+  const busy = render(
+    view({
+      tasks: state.tasks.map((t) => (t.id === live.taskId ? { ...t, originRef: `issue:${kept.number}` } : t)),
+    }),
+  );
+  assert.ok(
+    busy
+      .slice(busy.indexOf('Goals in flight'), busy.indexOf('Pull requests'))
+      .includes(`#${kept.number} ${kept.title}`),
+    'a retained run with an agent on it is not drawn as in flight',
+  );
+});
