@@ -142,7 +142,13 @@ export interface CockpitActions {
   /** Answer a multi-question ask; positional against the escalation's questions. */
   answerQuestions(id: string, answers: (string | null)[]): Promise<void>;
   dismissEscalation(id: string, note?: string): Promise<void>;
-  decideProposal(id: string, verdict: 'accept' | 'reject', note?: string): Promise<void>;
+  /**
+   * Accept or reject a proposed act. `acknowledged` carries the caveat ids the
+   * operator ticked on a plan approval: the route refuses the accept — nothing
+   * decided, the proposal still pending — while the plan raises one the verdict
+   * has not named (`src/plans/planCaveats.ts`). Ignored by every other verdict.
+   */
+  decideProposal(id: string, verdict: 'accept' | 'reject', note?: string, acknowledged?: string[]): Promise<void>;
   /**
    * The two ways out of a plan verdict that are about the **ticket** rather than
    * the plan: close it with the operator's comment, or take the watch tag off and

@@ -191,6 +191,21 @@ const ActionSchema = z.discriminatedUnion('type', [
      * words in a paragraph. Null when the planner wrote neither.
      */
     detail: z.string().min(1).nullable().default(null),
+    /**
+     * What the plan raises that has to be *read* before it may be released —
+     * `src/plans/planCaveats.ts`. Carried on the action rather than re-derived at
+     * accept time so the gate compares the operator's ticks against the list they
+     * were actually shown; empty is a plan that raises nothing, and no gate.
+     */
+    caveats: z
+      .array(
+        z.object({
+          id: z.string().min(1),
+          label: z.string().min(1),
+          detail: z.string().min(1).nullable().default(null),
+        }),
+      )
+      .default([]),
     /** What the operator is shown: what the plan is for, and what each verdict means. */
     prompt: z.string().min(1),
     ...base,

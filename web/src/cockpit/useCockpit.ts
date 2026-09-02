@@ -311,8 +311,8 @@ export function useCockpit(): CockpitStatus {
       answerEscalation: (id, text) => then(api.answerEscalation(id, text)),
       answerQuestions: (id, answers) => then(api.answerQuestions(id, answers)),
       dismissEscalation: (id, note) => then(api.dismissEscalation(id, note)),
-      decideProposal: (id, verdict, note) =>
-        then(verdict === 'accept' ? api.acceptProposal(id, note) : api.rejectProposal(id, note)),
+      decideProposal: (id, verdict, note, acknowledged) =>
+        then(verdict === 'accept' ? api.acceptProposal(id, note, acknowledged) : api.rejectProposal(id, note)),
       backOutProposal: (id, verdict, note) => then(api.backOutProposal(id, verdict, note)),
       // No refetch: nothing on the glass changes until the operator sends the
       // verdict, and the draft is the modal's own state until they do.

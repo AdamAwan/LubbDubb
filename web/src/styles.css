@@ -1418,6 +1418,67 @@ select:disabled {
   min-width: 160px;
 }
 
+/* The caveats a plan raises, as boxes on the way to Approve. Amber rather than red:
+   this is a precondition on a verdict, not a fault — the plan may be perfectly
+   right and still say something its approver has to have read. Every colour is a
+   token, so it follows the theme (docs/spec/17-cockpit.md#tokens). */
+.caveat-ack {
+  margin-top: 10px;
+  padding: 8px 10px;
+  background: var(--amber-fill);
+  border: 1px solid var(--amber-line);
+  border-radius: var(--r-md);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.caveat-ack-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 10px;
+}
+.caveat-ack-count {
+  color: var(--amber);
+  font-variant-numeric: tabular-nums;
+}
+.caveat-ack-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.caveat-ack-item input {
+  margin-top: 3px;
+  flex: none;
+}
+/* Ticked reads as done rather than as gone: the sentence stays legible, because an
+   operator re-reading the card before they click must still be able to see what
+   they agreed to. */
+.caveat-ack-item.done .caveat-ack-text {
+  color: var(--muted);
+}
+.caveat-ack-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 72ch;
+  overflow-wrap: anywhere;
+}
+.caveat-ack-detail {
+  color: var(--muted);
+  font-size: 12px;
+}
+.caveat-ack-detail > :first-child {
+  margin-top: 0;
+}
+.caveat-ack-detail > :last-child {
+  margin-bottom: 0;
+}
+
 .world {
   background: var(--panel);
   border: 1px solid var(--border);

@@ -4,6 +4,8 @@ import { relTime, untilTime, linkify } from './util.js';
 import { renderMarkdown } from './markdown.js';
 import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 import { QuestionnaireModal } from './QuestionnaireModal.js';
+import { CaveatChecklist, heldTitle, useAcknowledgements } from './CaveatChecklist.js';
+import { planCaveatsOf } from '../planCaveats.js';
 
 export function EscalationCard({
   escalation,
@@ -46,7 +48,17 @@ export function EscalationCard({
    * or two clients would say the same thing differently.
    */
   onAnswerQuestions?: (answers: (string | null)[]) => Promise<unknown> | unknown;
-  onDecide?: (id: string, verdict: 'accept' | 'reject', note?: string) => Promise<unknown> | unknown;
+  /**
+   * The verdict, with the caveat ids the operator ticked. `acknowledged` is what
+   * releases the accept server-side — the glass holding the button is the same
+   * answer given earlier, not the enforcement.
+   */
+  onDecide?: (
+    id: string,
+    verdict: 'accept' | 'reject',
+    note?: string,
+    acknowledged?: string[],
+  ) => Promise<unknown> | unknown;
   /**
    * A plan proposal's other two answers, and the ones the card had no way to say:
    * the ticket is not really an issue (close it, with the note as its comment), or
@@ -116,6 +128,13 @@ export function EscalationCard({
   // whole reason the proposal exists — so the text box is replaced rather than
   // supplemented: the note rides *with* the verdict instead of standing in for it.
   const decidable = proposal?.status === 'pending' && onDecide ? proposal : null;
+  // What this plan raises, and the ticks against it. Read off the proposal — the
+  // same row the accept route reads — so the boxes and the gate cannot disagree.
+  // `useAcknowledgements` is called unconditionally: it is a hook, and a card whose
+  // proposal is settled simply gets an empty list.
+  const caveats = planCaveatsOf(decidable ?? undefined);
+  const ack = useAcknowledgements(caveats);
+  const held = ack.outstanding.length > 0;
   // Only a plan has a ticket behind it to close or hold: a merge and a reply draft
   // are acts on a pull request, and a shortfall is about work already delivered.
   const backOutable = decidable?.kind === 'plan' && onBackOut ? decidable : null;
@@ -140,7 +159,10 @@ export function EscalationCard({
   // body *is* the draft, which the card already draws in a block of its own with
   // a label on it.
   const draftedBody = typeof context.draft === 'string' && ask.includes(context.draft.trim());
-  const body = proposal?.kind === 'plan' || draftedBody ? caution : prose;
+  // The caution *is* the caveat list in prose, so drawing both would ask the
+  // operator to read the same three sentences twice — once as a paragraph and once
+  // beside a box. The checklist wins: it is the half that has to be acted on.
+  const body = proposal?.kind === 'plan' || draftedBody ? (caveats.length > 0 ? '' : caution) : prose;
   // The plan behind a `plan` proposal. Drawn as its own control below the body
   // rather than as one more ghost link among the agent actions: the card carries
   // what the plan diagnosed and what it will do, and everything else about it —
@@ -314,6 +336,7 @@ export function EscalationCard({
         </div>
       ) : decidable ? (
         <>
+          <CaveatChecklist caveats={caveats} ticked={ack.ticked} onToggle={ack.toggle} refUrls={refUrls} />
           <div className="esc-decide">
             <input
               placeholder={
@@ -328,8 +351,13 @@ export function EscalationCard({
             />
             <AsyncButton
               className="primary"
-              title={ACCEPT_HINT[decidable.kind] ?? 'Authorize this act now'}
-              onClick={() => onDecide!(decidable.id, 'accept', text.trim() || undefined)}
+              // Disabled rather than hidden, and rather than left to 400: the button
+              // is where the operator is looking, so what is holding it belongs in
+              // its own hint. The route refuses it either way — this is the same
+              // answer given a step earlier.
+              disabled={held}
+              title={held ? heldTitle(ack.outstanding) : (ACCEPT_HINT[decidable.kind] ?? 'Authorize this act now')}
+              onClick={() => onDecide!(decidable.id, 'accept', text.trim() || undefined, ack.acknowledged)}
             >
               {ACCEPT_LABEL[decidable.kind] ?? 'Approve'}
             </AsyncButton>
@@ -474,13 +502,15 @@ function splitPrompt(prompt: string): [headline: string, body: string] {
 /**
  * A body's own prose and the caution the harness appended to it.
  *
- * `planApprovalWarnings` (`src/plans/planWedge.ts`) writes its bullets under a
+ * `caveatNotice` (`src/plans/planCaveats.ts`) writes its bullets under a
  * `Before you decide:` line, appended rather than interpolated — so the marker is
  * the harness's own and no operator override can lose it. Split here because the
  * two halves are read differently: the prose restates what the plan sheet draws,
  * and the caution is the only part of the ask that is about *this* decision — an
  * unclaimed pull request on the branch, parts already blocked. A card that drops
- * the first must keep the second.
+ * the first must keep the second — except where the same caveats are drawn as
+ * boxes to tick, and then the paragraph is the checklist restated and the card
+ * drops it (see the `caveats` reading below).
  *
  * No marker means no caution, which is the common case.
  */
