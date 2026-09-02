@@ -893,7 +893,7 @@ drawing. A **retained run** is found too (`retainedRuns`), so a goal whose ticke
 stopped returning still has a page to be dismissed from.
 
 **A retained run is marked stale, never removed.** The overview's goals-in-flight list draws a retained
-run beside the live goals *while it still has work in flight*, and the rest behind that card's `kept`
+run beside the live goals _while it still has work in flight_, and the rest behind that card's `kept`
 disclosure ([the six cards](#the-six-cards)); the page header and the row both carry `StaleChip`: the tracker
 stopped returning this item, and — where the ticket mirror has a row — what the tracker now calls it
 (`tracker: Resolved · seen 3h ago`). The chip's title says exactly what the marking covers: the title,
@@ -4701,7 +4701,8 @@ Pad notes and cited entries render as plain text with their newlines kept, for t
 
 A **Local** reading in the top bar's `cn-reads` row, quiet when nothing is up and carrying the goal's
 number when something is, opening the running-locally panel
-([23](23-local-runs.md#the-cockpit)).
+([23](23-local-runs.md#the-cockpit)). The number goes amber (`cn-stale`) when the environment is behind
+the tip of its own branch: the code on the glass is old, and the panel has a control for it.
 
 A reading rather than a nav tab, and the distinction is the one `TABS` is built on: the nav is the
 surfaces work happens on, and this is a state of the operator's own machine. The **number** is the
@@ -4709,10 +4710,17 @@ value because that is the question — "running" alone leaves somebody opening t
 whether it is the goal they are looking at, which is the only thing they wanted to know.
 
 `'localRun'` is a member of `ConsolePanel`, so the panel is a **place**: it survives a reload and the
-back button steps out of it, exactly as every other panel does. It draws one state and a picker rather
+back button steps out of it, exactly as every other panel does. It draws a card and two folds rather
 than a table of runs — a list would imply two environments could be up, which is the one thing the
-store refuses — and its start button says, where the control is, that starting stops what is running
-now.
+store refuses. The card is the environment: status, goal, ref and commit, the stage line while a turn
+is in flight, the readings as tiles (the URL and whether its port answered, the ports the session holds,
+how far the checkout is behind its branch, the spend), and the reply box. Its controls wear what they
+are — Stop is the danger button with the two-click arm, Refresh is primary and drawn only while there is
+something to pick up, Start appears once a row is picked — and none is ever disabled: a control that
+would be is absent, and the stage line says why. The output and the picker are `<details>` folds, the
+picker folded under "Run a different goal" while something is up, saying beside it that starting stops
+what is running now. Which fold is open is local state, not `Place`
+([23](23-local-runs.md#the-cockpit)).
 
 Beside the ref it draws **what the run has cost**, climbing while the environment comes up. It is the
 only spend figure in the cockpit read while the money is still going out, and it is here because this is

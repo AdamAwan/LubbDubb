@@ -63,8 +63,20 @@ export interface Worktrees {
    * looked at rather than work. An unresolvable `ref` throws rather than falling
    * back to HEAD, `ensure`'s rule: silently running a different goal's code than
    * the one asked for is the failure this refuses to have.
+   *
+   * Reports the commit it put the checkout at as well as the directory, because a
+   * ref names a branch and a branch moves: the run records where it stands so the
+   * watch can say how far behind it has fallen.
    */
-  ensurePreview(ref: string): Promise<string>;
+  ensurePreview(ref: string): Promise<{ dir: string; commit: string }>;
+  /**
+   * Where {@link ensurePreview} *would* put the checkout, without touching it — the
+   * same resolution, `origin/` first, and the same throw on a ref that names
+   * nothing. A refresh asks this first, because `ensurePreview` is a `reset --hard`
+   * and a `clean -fd` under a running server and finding out that the tip has not
+   * moved is not worth paying that for.
+   */
+  previewCommit(ref: string): Promise<string>;
   /**
    * Release the lease `ensure` or {@link ensureReadOnly} took. **The directory
    * stays**, still on the branch (or at the commit) and with everything git ignores
@@ -221,7 +233,11 @@ export class WorktreeManager implements Worktrees {
    * the directory is touched, `switchOnto`'s rule, so an unresolvable ref leaves
    * the checkout exactly as it was rather than reset and pointed at nothing.
    */
-  async ensurePreview(ref: string): Promise<string> {
+  previewCommit(ref: string): Promise<string> {
+    return this.startPoint('the local run', ref);
+  }
+
+  async ensurePreview(ref: string): Promise<{ dir: string; commit: string }> {
     const commit = await this.startPoint('the local run', ref);
     const dir = resolve(this.previewRoot);
     // Whether the directory is there, not whether `git worktree list` names it.
@@ -234,7 +250,7 @@ export class WorktreeManager implements Worktrees {
     if (!existsSync(dir)) {
       mkdirSync(dirname(dir), { recursive: true });
       await this.git(['worktree', 'add', '--detach', dir, commit]);
-      return dir;
+      return { dir, commit };
     }
     // Detach **before** the reset, and reset rather than switch. Three orderings
     // were wrong here and each failed differently: `switch` first refuses outright
@@ -249,7 +265,7 @@ export class WorktreeManager implements Worktrees {
     // and `node_modules` — ignored, and what makes the next start warm rather than a
     // cold install — stays exactly where it is.
     await runGit(dir, ['clean', '-fd']);
-    return dir;
+    return { dir, commit };
   }
 
   /**

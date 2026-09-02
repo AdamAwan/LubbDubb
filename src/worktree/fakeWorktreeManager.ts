@@ -54,6 +54,12 @@ export class FakeWorktreeManager implements Worktrees {
   readonly deleted: string[] = [];
   /** Every ref `ensurePreview` was asked for, in order. */
   readonly previewed: string[] = [];
+  /** Every ref `previewCommit` was asked for, in order — the resolve-only half. */
+  readonly resolved: string[] = [];
+  /** Set to make the next `ensurePreview` throw, as a tree that will not reset does. */
+  failPreview: Error | null = null;
+  /** Where each ref's tip "is", for a test that moves one. Unset refs get a sha derived from the name. */
+  private readonly tips = new Map<string, string>();
 
   private readonly root: string;
   private readonly size: number;
@@ -94,11 +100,36 @@ export class FakeWorktreeManager implements Worktrees {
    * and `git clean`, and there is no repository here for either to be observable
    * against. Every call is recorded so a test can assert which ref was asked for.
    */
-  ensurePreview(ref: string): Promise<string> {
+  ensurePreview(ref: string): Promise<{ dir: string; commit: string }> {
     this.previewed.push(ref);
+    if (this.failPreview !== null) return Promise.reject(this.failPreview);
     const dir = resolve(this.root, 'preview');
     mkdirSync(dir, { recursive: true });
-    return Promise.resolve(dir);
+    return Promise.resolve({ dir, commit: this.tipOf(ref) });
+  }
+
+  previewCommit(ref: string): Promise<string> {
+    this.resolved.push(ref);
+    return Promise.resolve(this.tipOf(ref));
+  }
+
+  /** Move a ref's tip, the way a push does — what a refresh exists to notice. */
+  setPreviewCommit(ref: string, commit: string): this {
+    this.tips.set(ref, commit);
+    return this;
+  }
+
+  /**
+   * A stable, sha-shaped stand-in per ref, so a test can assert a start recorded
+   * *which* commit without scripting one. Forty hex characters, because a caller
+   * that shortens it for display should see the shape it will see in production.
+   */
+  private tipOf(ref: string): string {
+    const declared = this.tips.get(ref);
+    if (declared !== undefined) return declared;
+    let hash = 0;
+    for (const ch of ref) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+    return hash.toString(16).padStart(8, '0').repeat(5);
   }
 
   private slotFor(branch: string): Promise<string> {

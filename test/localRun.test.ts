@@ -77,6 +77,7 @@ function build(
     stopTimeoutMs?: number;
     /** Two hours by default, as the default config says. `0` is no bound at all. */
     resumeWindowMs?: number;
+    refreshInstruction?: string;
     url?: string;
     ref?: string | null;
     parts?: PlanPart[];
@@ -106,6 +107,7 @@ function build(
       stopInstruction: over.stopInstruction ?? '',
       resumeInstruction: over.resumeInstruction ?? '',
       resumeWindowMs: over.resumeWindowMs ?? 2 * 60 * 60 * 1000,
+      refreshInstruction: over.refreshInstruction ?? '',
       url: over.url ?? '',
     }),
     claudeCommand: 'claude',
@@ -430,7 +432,7 @@ test('starting another goal stops the first — one environment, one run', async
 
 test('a restart settles a run it cannot bring back, and names the field that would', () => {
   const { runner, store } = build();
-  store.beginLocalRun({ originRef: 'issue:284', ref: 'main', dir: '/tmp/x', url: null });
+  store.beginLocalRun({ originRef: 'issue:284', ref: 'main', dir: '/tmp/x', commit: 'abc123', url: null });
   assert.equal(store.liveLocalRun()?.originRef, 'issue:284');
 
   // A row saying `running` after a restart describes a process this harness never
@@ -561,7 +563,13 @@ test('a live row with neither stamp is unknown, not recent, and is not brought b
   let store: Store | null = null;
   try {
     const before = new Store(file);
-    const run = before.beginLocalRun({ originRef: 'issue:284', ref: 'main', dir: process.cwd(), url: null });
+    const run = before.beginLocalRun({
+      originRef: 'issue:284',
+      ref: 'main',
+      dir: process.cwd(),
+      commit: 'abc123',
+      url: null,
+    });
     before.close();
     const raw = new Database(file);
     raw.prepare(`UPDATE local_runs SET interrupted_at = NULL, last_seen_at = NULL WHERE id = ?`).run(run.id);
@@ -646,7 +654,7 @@ test('a boot never dates a run it declined to bring back', () => {
   // harnesses ago, freshly dated.
   const at = Date.parse('2026-09-02T09:00:00.000Z');
   const { runner, store } = build({ resumeInstruction: 'Run /dev-environment continue.', now: () => at });
-  store.beginLocalRun({ originRef: 'issue:284', ref: 'main', dir: process.cwd(), url: null });
+  store.beginLocalRun({ originRef: 'issue:284', ref: 'main', dir: process.cwd(), commit: 'abc123', url: null });
   const before = store.liveLocalRun()?.lastSeenAt ?? null;
 
   runner.noteAlive();
@@ -733,7 +741,7 @@ test('the boot that adds the stamp dates the run it is upgrading over', () => {
   let store: Store | null = null;
   try {
     const before = new Store(file);
-    before.beginLocalRun({ originRef: 'issue:284', ref: 'main', dir: process.cwd(), url: null });
+    before.beginLocalRun({ originRef: 'issue:284', ref: 'main', dir: process.cwd(), commit: 'abc123', url: null });
     before.close();
 
     // Take the column away, which is the one state no fixture built from `SCHEMA` can
@@ -765,6 +773,7 @@ test('a run whose checkout has gone is not brought back', () => {
     originRef: 'issue:284',
     ref: 'main',
     dir: join(tmpdir(), 'lubbdubb-gone-' + String(process.pid)),
+    commit: 'abc123',
     url: null,
   });
 
@@ -885,6 +894,11 @@ test('a database from before the columns reads them as unmeasured, and can be wr
   const run = store.currentLocalRun();
   assert.equal(run?.id, 'r-old');
   assert.equal(run?.costUsd, null, 'that run measured nothing, which is not the same as costing nothing');
+  // Where that checkout stood was never written down either: null, and the
+  // freshness reading says "could not compare" rather than inventing a count.
+  assert.equal(run?.commit, null);
+  store.setLocalRunCommit('r-old', 'abc123');
+  assert.equal(store.currentLocalRun()?.commit, 'abc123', 'and the column can be written on an old database');
   store.addLocalRunUsage('r-old', {
     costUsd: 0.2,
     inputTokens: 100,
@@ -1021,7 +1035,7 @@ test('the preview checkout changes ref without losing what makes it warm', async
   git(['commit', '-q', '-am', 'second']);
 
   const wt = new WorktreeManager(repo, join(repo, '.wt'), { size: 2, held: () => false }, join(repo, '.preview'));
-  const dir = await wt.ensurePreview('main');
+  const { dir } = await wt.ensurePreview('main');
   // The dependency tree in miniature: ignored, and the only thing the warm-versus-
   // wiped distinction can be observed through.
   mkdirSync(join(dir, 'deps'), { recursive: true });
@@ -1030,7 +1044,7 @@ test('the preview checkout changes ref without losing what makes it warm', async
   writeFileSync(join(dir, 'app.txt'), 'scribbled over\n');
   writeFileSync(join(dir, 'scratch.txt'), 'left over\n');
 
-  const again = await wt.ensurePreview('feature');
+  const again = (await wt.ensurePreview('feature')).dir;
   assert.equal(again, dir, 'one directory, whatever ref it is pointed at');
   // The whole point: `clean -fd` without `-x`, so dependencies survive a swap
   // between goals and the next start is warm rather than a cold install.
@@ -1045,11 +1059,252 @@ test('the preview checkout changes ref without losing what makes it warm', async
 test('an unresolvable ref leaves the checkout exactly as it was', async () => {
   const repo = gitRepo('lubbdubb-preview-bad-');
   const wt = new WorktreeManager(repo, join(repo, '.wt'), { size: 2, held: () => false }, join(repo, '.preview'));
-  const dir = await wt.ensurePreview('main');
+  const { dir } = await wt.ensurePreview('main');
   writeFileSync(join(dir, 'kept.txt'), 'still here\n');
 
   // Resolved before the directory is touched, `switchOnto`'s rule: silently running
   // a different goal's code than the one asked for is the failure this refuses.
   await assert.rejects(() => wt.ensurePreview('no/such/branch'), /resolves to no commit/);
   assert.ok(existsSync(join(dir, 'kept.txt')), 'nothing was reset or cleaned on the way to the refusal');
+});
+
+test('ensurePreview reports the commit it stands at, and previewCommit resolves without touching the tree', async () => {
+  const repo = gitRepo('lubbdubb-preview-commit-');
+  const wt = new WorktreeManager(repo, join(repo, '.wt'), { size: 2, held: () => false }, join(repo, '.preview'));
+  const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8' }).trim();
+  const { dir, commit } = await wt.ensurePreview('main');
+  assert.equal(commit, head, 'the run records where the checkout actually stands');
+
+  // A refresh asks this first, and the whole reason it exists is that the answer
+  // costs nothing: no reset, no clean, a file left in the tree is still there.
+  writeFileSync(join(dir, 'kept.txt'), 'still here\n');
+  assert.equal(await wt.previewCommit('main'), head);
+  assert.ok(existsSync(join(dir, 'kept.txt')), 'resolving is not resetting');
+  await assert.rejects(() => wt.previewCommit('no/such/branch'), /resolves to no commit/);
+});
+
+// -- the turn ending, in the shapes the runtime actually produces -------------
+
+test('a turn that ends with no sentinel is the environment up', async () => {
+  const { runner, store, sessions } = build();
+  await runner.start('issue:284');
+  assert.equal(runner.turn(), 'start');
+  // The stream runtime says `stalled` for a turn that ended without a sentinel — and a
+  // local run's session carries no protocol prompt, so this is the ending every one of
+  // its turns produces. For three revisions nothing listened for it, and on a real
+  // deployment the row sat in `starting` for the life of the environment.
+  sessions[0]?.emit('stalled', 'Up on :5173');
+  assert.equal(store.liveLocalRun()?.status, 'running');
+  assert.equal(runner.turn(), null, 'nothing is in flight once the turn has ended');
+  assert.deepEqual(sessions[0]?.log, ['start'], 'nothing was killed');
+  store.close();
+});
+
+test('a stop whose session stalls rather than saying done still settles, reap before kill', async () => {
+  const { runner, store, sessions } = build({ stopInstruction: 'Run /dev-environment stop.' });
+  await runner.start('issue:284');
+  sessions[0]?.emit('stalled', '');
+  const stopping = runner.stop();
+  assert.equal(runner.turn(), 'stop');
+  sessions[0]?.emit('output', 'stopped 6 containers\n');
+  sessions[0]?.emit('stalled', 'stopped 6 containers');
+  await stopping;
+  assert.equal(store.currentLocalRun()?.status, 'stopped');
+  assert.match(store.currentLocalRun()?.note ?? '', /stopped 6 containers/);
+  assert.deepEqual(sessions[0]?.log, ['start', 'reap', 'kill']);
+  assert.equal(runner.turn(), null);
+  store.close();
+});
+
+test('a start records the commit the checkout stands at', async () => {
+  const { runner, store, worktrees } = build({ ref: 'issue/284/viewer' });
+  await runner.start('issue:284');
+  const run = store.liveLocalRun();
+  assert.equal(run?.commit, await worktrees.previewCommit('issue/284/viewer'));
+  assert.match(run?.commit ?? '', /^[0-9a-f]{40}$/, 'sha-shaped, as production will be');
+  store.close();
+});
+
+// -- talking to the environment ----------------------------------------------
+
+test('a message is echoed into the tail, handed to the session, and is a turn until it ends', async () => {
+  const { runner, store, sessions } = build();
+  await runner.start('issue:284');
+  sessions[0]?.emit('stalled', '');
+  const sent = runner.send('restart the api');
+  assert.ok(sent.ok, sent.ok ? '' : sent.error);
+  assert.equal(sessions[0]?.sent[1], 'restart the api');
+  // The stream runtime renders only what comes back, so without the echo a message
+  // leaves no trace on the one surface an operator is watching.
+  assert.ok(
+    runner.output().some((line) => line.includes('restart the api')),
+    'the message is in the tail',
+  );
+  assert.equal(runner.turn(), 'message');
+  assert.equal(store.liveLocalRun()?.status, 'running', 'a message is not a change of status');
+  sessions[0]?.emit('stalled', 'Restarted.');
+  assert.equal(runner.turn(), null);
+  assert.equal(store.liveLocalRun()?.status, 'running');
+  store.close();
+});
+
+test('a message is refused while starting, while busy, while stopping, and when nothing holds the environment', async () => {
+  const first = build({ stopInstruction: 'Run /dev-environment stop.' });
+  const nobody = first.runner.send('hello');
+  assert.equal(nobody.ok, false, 'nothing is running');
+
+  await first.runner.start('issue:284');
+  const starting = first.runner.send('hello');
+  assert.equal(starting.ok, false);
+  // A stream session queues the message behind the bring-up turn, so `running` would
+  // arrive only when *this* turn ended and the panel would say "starting" throughout.
+  assert.match(starting.ok ? '' : starting.error, /coming up/);
+
+  first.sessions[0]?.emit('stalled', '');
+  assert.ok(first.runner.send('one').ok);
+  const busy = first.runner.send('two');
+  assert.equal(busy.ok, false);
+  assert.match(busy.ok ? '' : busy.error, /busy/);
+
+  first.sessions[0]?.emit('stalled', '');
+  const stopping = first.runner.stop();
+  const midStop = first.runner.send('three');
+  assert.equal(midStop.ok, false);
+  assert.match(midStop.ok ? '' : midStop.error, /being stopped/);
+  first.sessions[0]?.emit('stalled', '');
+  await stopping;
+  assert.equal(first.sessions[0]?.sent.length, 3, 'the start, the one message that went, and the stop');
+
+  // A restart that left the row live and nothing holding it: there is no session to
+  // tell, and the answer says so rather than queueing a message for nobody.
+  const store = new Store(':memory:');
+  const before = build({ store });
+  await before.runner.start('issue:284');
+  before.sessions[0]?.emit('stalled', '');
+  const after = build({ store });
+  const orphan = after.runner.send('hello');
+  assert.equal(orphan.ok, false);
+  assert.match(orphan.ok ? '' : orphan.error, /nothing holds/);
+  first.store.close();
+  store.close();
+});
+
+test('a session that records what is sent is not echoed twice', async () => {
+  const { runner, sessions, store } = build();
+  await runner.start('issue:284');
+  const session = sessions[0];
+  assert.ok(session);
+  (session as { recordsSentMessages?: boolean }).recordsSentMessages = true;
+  session.emit('stalled', '');
+  const before = runner.output().length;
+  assert.ok(runner.send('hello').ok);
+  assert.equal(runner.output().length, before, 'the PTY runtime carries both halves itself');
+  store.close();
+});
+
+// -- picking up new code -----------------------------------------------------
+
+test('a refresh moves the checkout to the tip, records it, and tells the session what moved', async () => {
+  const { runner, store, worktrees, sessions } = build({
+    ref: 'issue/284/viewer',
+    refreshInstruction: 'Run the migrations.',
+  });
+  await runner.start('issue:284');
+  sessions[0]?.emit('stalled', '');
+  const was = store.liveLocalRun()?.commit ?? '';
+  const tip = 'f'.repeat(40);
+  worktrees.setPreviewCommit('issue/284/viewer', tip);
+
+  const result = await runner.refresh();
+  assert.ok(result.ok, result.ok ? '' : result.error);
+  assert.deepEqual(result.moved, { from: was, to: tip });
+  // Resolved first, then moved: `previewCommit` exists so a refresh at the tip never
+  // pays for a reset it did not need.
+  assert.deepEqual(worktrees.resolved, ['issue/284/viewer']);
+  assert.deepEqual(worktrees.previewed, ['issue/284/viewer', 'issue/284/viewer']);
+  assert.equal(store.liveLocalRun()?.commit, tip);
+
+  const told = sessions[0]?.sent[1] ?? '';
+  assert.match(told, /^Run the migrations\./, 'the operator’s own sentence first');
+  assert.match(told, /moved/);
+  assert.match(told, new RegExp(tip.slice(0, 12)));
+  assert.match(told, /Do not commit/);
+  assert.equal(runner.turn(), 'refresh');
+  sessions[0]?.emit('stalled', 'Restarted the API.');
+  assert.equal(runner.turn(), null);
+  assert.equal(store.liveLocalRun()?.status, 'running');
+  store.close();
+});
+
+test('a refresh at the tip refuses without touching the checkout', async () => {
+  const { runner, store, worktrees, sessions } = build({ ref: 'issue/284/viewer' });
+  await runner.start('issue:284');
+  sessions[0]?.emit('stalled', '');
+  const result = await runner.refresh();
+  assert.equal(result.ok, false);
+  assert.match(result.ok ? '' : result.error, /already at the tip/);
+  assert.deepEqual(worktrees.previewed, ['issue/284/viewer'], 'no reset, no clean — the tree was not touched');
+  assert.equal(sessions[0]?.sent.length, 1, 'and the session was not told anything');
+  store.close();
+});
+
+test('a refresh is refused while starting, while a turn is in flight, and during a stop', async () => {
+  const { runner, store, worktrees, sessions } = build({ ref: 'issue/284/viewer', stopInstruction: 'Stop it.' });
+  worktrees.setPreviewCommit('issue/284/viewer', 'a'.repeat(40));
+  const nothing = await runner.refresh();
+  assert.equal(nothing.ok, false, 'nothing is running');
+
+  await runner.start('issue:284');
+  worktrees.setPreviewCommit('issue/284/viewer', 'b'.repeat(40));
+  const starting = await runner.refresh();
+  assert.equal(starting.ok, false);
+  assert.match(starting.ok ? '' : starting.error, /coming up/);
+
+  sessions[0]?.emit('stalled', '');
+  assert.ok(runner.send('one').ok);
+  const busy = await runner.refresh();
+  assert.equal(busy.ok, false);
+  assert.match(busy.ok ? '' : busy.error, /busy/);
+
+  sessions[0]?.emit('stalled', '');
+  const stopping = runner.stop();
+  const midStop = await runner.refresh();
+  assert.equal(midStop.ok, false);
+  assert.match(midStop.ok ? '' : midStop.error, /being stopped/);
+  sessions[0]?.emit('stalled', '');
+  await stopping;
+  assert.deepEqual(worktrees.previewed, ['issue/284/viewer'], 'none of the refusals moved the checkout');
+  store.close();
+});
+
+test('a refresh whose checkout will not move leaves the recorded commit alone', async () => {
+  const { runner, store, worktrees, sessions } = build({ ref: 'issue/284/viewer' });
+  await runner.start('issue:284');
+  sessions[0]?.emit('stalled', '');
+  const was = store.liveLocalRun()?.commit;
+  worktrees.setPreviewCommit('issue/284/viewer', 'c'.repeat(40));
+  // A file held open on Windows is the real case: the reset gets partway and stops.
+  worktrees.failPreview = new Error('EBUSY: resource busy or locked');
+  const result = await runner.refresh();
+  assert.equal(result.ok, false);
+  assert.match(result.ok ? '' : result.error, /part-reset/);
+  assert.equal(store.liveLocalRun()?.commit, was, 'a commit the tree does not stand at is not recorded');
+  assert.equal(sessions[0]?.sent.length, 1, 'and the session was not told about a move that did not happen');
+  store.close();
+});
+
+test('a refresh with nothing holding the environment moves the checkout and says so', async () => {
+  const store = new Store(':memory:');
+  const before = build({ store, ref: 'issue/284/viewer' });
+  await before.runner.start('issue:284');
+  before.sessions[0]?.emit('stalled', '');
+  // A second harness over the same row: live, running, and held by nobody.
+  const after = build({ store, ref: 'issue/284/viewer' });
+  after.worktrees.setPreviewCommit('issue/284/viewer', 'd'.repeat(40));
+  const result = await after.runner.refresh();
+  assert.ok(result.ok, result.ok ? '' : result.error);
+  assert.equal(store.liveLocalRun()?.commit, 'd'.repeat(40), 'the git half is still done');
+  assert.match(store.liveLocalRun()?.note ?? '', /nothing holds/);
+  assert.equal(after.sessions.length, 0, 'and no session was spawned to be told');
+  store.close();
 });

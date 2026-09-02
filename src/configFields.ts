@@ -573,6 +573,12 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'How long after the harness went down a run may still be brought back. 0 means no bound.',
   },
   {
+    path: 'localRun.refreshInstruction',
+    type: 'text',
+    access: 'plain',
+    why: 'What a running environment does to pick up new code once its checkout has moved — rebuild, migrate, restart. Empty means it is only told what moved.',
+  },
+  {
     path: 'localRun.url',
     type: 'string',
     access: 'plain',

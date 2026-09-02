@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { checked, optionalText } from '../validation.js';
+import { checked, optionalText, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
 
 /**
@@ -73,6 +73,36 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       void localRun.stop();
       hub.broadcast({ type: 'dirty' });
       return { ok: true };
+    }),
+  );
+
+  // Type into the session holding the environment. No id, for `stop`'s reason. The
+  // reply is immediate: what the session does with it arrives through its output,
+  // exactly as an agent's reply does through the drawer.
+  const MessageBody = z.object({
+    text: requiredText('text is required — what to tell the session holding the environment'),
+  });
+  app.post(
+    '/api/local-run/message',
+    checked({ body: MessageBody }, async ({ body, reply }) => {
+      const result = localRun.send(body.text);
+      if (!result.ok) return reply.code(400).send({ error: result.error });
+      hub.broadcast({ type: 'dirty', sections: ['harness'] });
+      return { ok: true };
+    }),
+  );
+
+  // Move the checkout to the tip of the run's ref and tell the session what moved.
+  // Awaited, unlike `stop`: a refresh returns once the checkout has moved and the
+  // message is sent, which is seconds of git and not a model turn. The turn itself
+  // is followed through the runner's `changed` events like every other.
+  app.post(
+    '/api/local-run/refresh',
+    checked({}, async ({ reply }) => {
+      const result = await localRun.refresh();
+      if (!result.ok) return reply.code(400).send({ error: result.error });
+      hub.broadcast({ type: 'dirty', sections: ['harness'] });
+      return { ok: true, run: result.run, moved: result.moved };
     }),
   );
 

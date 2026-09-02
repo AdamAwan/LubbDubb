@@ -1,7 +1,8 @@
 # 23 — Local runs
 
 `src/localRun/`. The machine's **one** dev environment: which goal's code is in it, the process holding
-it up, and the two controls that change either. Always constructed; with
+it up, and the controls that change either: start, stop, a message to the session holding it, and a
+refresh of the code under it. Always constructed; with
 `localRun.instruction` unset every start refuses with that as its reason.
 
 A validation check says "open the page and click the thing" ([20](20-validation.md)). Nothing in that
@@ -13,13 +14,13 @@ This is that fact, plus the thing that acts on it.
 
 ## What it is not
 
-| Not           | Because                                                                                                                     |
-| ------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| A deployment  | Nothing here reaches a server, a registry or an environment. It runs the project on the machine the harness is on.          |
-| A fleet agent | No task row, no dispatch, no cap. The dispatcher does not know it exists and no rule reads it.                              |
-| A test run    | `npm run check` runs on every branch. This is a person looking at a screen.                                                 |
-| A reading     | `running` means the session that brought it up did not fail. **Nothing polls the application.**                             |
-| A queue       | One environment, so one run. Starting a second thing is stopping the first, and there is no route that means anything else. |
+| Not            | Because                                                                                                                                                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A deployment   | Nothing here reaches a server, a registry or an environment. It runs the project on the machine the harness is on.                                                                                                       |
+| A fleet agent  | No task row, no dispatch, no cap. The dispatcher does not know it exists and no rule reads it.                                                                                                                           |
+| A test run     | `npm run check` runs on every branch. This is a person looking at a screen.                                                                                                                                              |
+| A health check | `running` means the session that brought it up did not fail. The watch probes the declared **port** and compares the checkout to its branch ([below](#watching-the-environment)); **nothing exercises the application.** |
+| A queue        | One environment, so one run. Starting a second thing is stopping the first, and there is no route that means anything else.                                                                                              |
 
 ## One at a time
 
@@ -42,8 +43,9 @@ limit invented here — the same one the validation claim is built on
 `localRun.instruction` — free text, what the session bringing the environment up is told —
 `localRun.stopInstruction`, what the session taking it back down is told, `localRun.resumeInstruction`,
 what a session bringing an interrupted one **back** is told, `localRun.resumeWindowMs`, how long after
-an interruption that is still worth doing, and `localRun.url`, where the
-application lands. All five are **live fields**
+an interruption that is still worth doing, `localRun.refreshInstruction`, what the session is told once
+the checkout under a running environment has been moved to the tip of its branch, and `localRun.url`,
+where the application lands. All six are **live fields**
 ([02](02-configuration.md#liveness)): an edit on the Config page applies to the next start with no
 restart. They sit under **Features** there, beside the other policy objects, and `localRunRoot` under
 **Paths** — which is a thing `GROUPS` in `src/server/runningConfig.ts` has to be told: a declared key
@@ -140,9 +142,16 @@ The consequence is the sharpest thing in this document: **a plain `claude -p` ex
 ends**, which would take the dev server with it or orphan it. `StreamJsonSession` keeps the process
 alive while stdin is open, and that is what holds the server's parent open. So:
 
-- **The turn ending is the environment being up, not the run being over.** `done` and `waiting` both
-  mean "it stopped talking and did not fail", and the status goes to `running`. Nothing is killed —
-  a runner that treated `done` as terminal would kill the thing the run exists to hold.
+- **The turn ending is the environment being up, not the run being over.** `done`, `waiting` and
+  `stalled` all mean "it stopped talking and did not fail", and the status goes to `running`.
+  **`stalled` is the one that actually fires**: the session carries no protocol prompt, so it never
+  prints a sentinel, and the stream runtime announces a sentinel-free turn end as `stalled` rather than
+  `waiting` ([10](10-agent-runtimes.md)). For three revisions nothing here listened for it, and on a
+  `stream` deployment the row sat in `starting` for the life of the environment while every stop waited
+  out its bound. `limited` — the account running out mid-turn — ends the turn too, with an error recorded
+  beside the `running` it writes. `TURN_ENDED` in `runner.ts` is the one list, read by both places that
+  wait for a turn. Nothing is killed — a runner that treated `done` as terminal would kill the thing the
+  run exists to hold.
 - **Five rules are appended to the instruction, never interpolated into it** — the prompt templates'
   rule for their reason. Start it in the background and stay; do not stop it; do not commit (the
   checkout is detached at somebody else's commit); say where it landed; say each step before taking
@@ -235,7 +244,7 @@ environment back, every time, for a reason that had nothing to do with them.
   right everywhere except here, where the session dying _is_ the shutdown, and a `failed` written on the
   way out is a row the next boot would refuse.
 - **It is only worth doing while the interruption is recent**, which is `localRun.resumeWindowMs` —
-  two hours by default. Everything above argues for a resume from a *restart*: the operator is a
+  two hours by default. Everything above argues for a resume from a _restart_: the operator is a
   minute from wanting their environment back, and the containers the reap could not touch are still
   up. A harness that was off overnight has neither — the machine has very likely been rebooted,
   there is nothing left to attach to, and what the boot does is spend a session bringing up an
@@ -268,8 +277,8 @@ environment back, every time, for a reason that had nothing to do with them.
     `staleness` measures the column against `deps.now`, so a stamp taken from the store's own clock
     made the age the difference between two clocks — identical in production, and whatever the wall
     clock happened to say anywhere one of them is injected.
-  `SIGHUP` and `SIGBREAK` are handled in `main.ts` beside `SIGINT` for the same reason: closing the
-  console window was taking Node's default path, which reaps no agent and dates nothing.
+    `SIGHUP` and `SIGBREAK` are handled in `main.ts` beside `SIGINT` for the same reason: closing the
+    console window was taking Node's default path, which reaps no agent and dates nothing.
 - **A `stopping` row is settled, not resumed**, however the deployment is configured. A teardown in
   flight is an operator who asked for this environment to go away; bringing it back answers the
   opposite of the last thing they said.
@@ -326,6 +335,106 @@ instead trades away the one guarantee that a tracked file the last run edited is
 that is worth pulling is `localRun.instruction` itself — a stack that starts fewer things, named as a
 command rather than as an interactive skill with a phase per turn — and it belongs to the operator.
 
+### Which turn is in flight
+
+`LocalRunner.turn()` — `start`, `stop`, `refresh`, `message` or null — ships as `LocalRunView.turn`. The
+row's status says the first two; it cannot say the other two, which happen on top of a `running` row.
+Set where each turn is sent and cleared where any turn ends — the same `up()` a bring-up ends through,
+whose `running` is idempotent — on settle, and on the fast stop. The panel draws the stage line for
+exactly as long as it is non-null, captioned with the turn, and the runner refuses to begin a second turn
+while one is in flight: a stream session would queue the message behind the running turn, and the panel
+would caption the wrong one.
+
+## Watching the environment
+
+`LocalRunWatch` (`src/localRun/watch.ts`): the first thing about the run that is **observed** rather than
+presumed. Everything else the panel draws is what the session said or what the row records. Two
+readings, both on `LocalRunView`, both **three-valued** — a null is "could not say", and is never folded
+into an empty list or a zero, which would draw a reading nothing took.
+
+- **Ports.** `localRun.url` parsed for a host and a port (the scheme's default where none is written),
+  and a TCP connect with a one-second timeout: `declared.answering` is that the port is held, and nothing
+  more — not that the application behind it works. Beside it, every TCP port the session's own process
+  **subtree** is listening on, through a `PortLister` (`src/localRun/ports.ts`): PowerShell's
+  `Get-NetTCPConnection` and `Win32_Process` on Windows, `ss -ltnp` and `ps` on POSIX with `lsof`
+  behind `ss`, joined by a pure parent-pid walk. Containers never appear — a mapped port belongs to
+  the daemon, not to anything the session started. `listening: null` is the lister not being able to
+  say. The real lister follows the reaper's rule and is wired only beside a real transport: it walks a
+  tree from a pid, and a fake transport mints pids that belong to other people's processes.
+- **Freshness.** The run records the commit the checkout stands at (`commit_sha`, written by the start
+  and rewritten by a refresh — `ensurePreview` reports it, and `previewCommit` resolves it without
+  touching the tree). `behindTip` is `GitObserver.divergence(ref, commit).ahead`: the commits the branch
+  has that the checkout does not, which is an agent having pushed since the start. `base` is the branch
+  this ref was cut from — a part's from `partBase`, the goal's own branch's from its pull request, none
+  for the integration branch — and how many of its commits the ref lacks. Every count is null where the
+  clone cannot say, the review pack's rule ([31](31-review-packs.md)). Before comparing, the watch
+  fetches, floored by `planning.gitFetchIntervalMs` and only when the observer is real — and it is then
+  the only thing keeping `origin/*` fresh on a deployment with no active plan, since the reconciler
+  fetches only while it has plans to reconcile.
+
+Three things about how it runs:
+
+- **Its own timer, not the pulse.** The cycle is thirty seconds busy and five minutes idle, and an
+  operator watching a bring-up wants to see the port come up in seconds; the local run is also, by
+  design, nothing the dispatcher knows about. Ports every ten seconds, git every minute, and a reading
+  straight after the runner announces a new run or a new status — a bring-up that has just ended is
+  exactly when somebody is looking. Armed from `main.ts` beside `resumeInterrupted` and stopped in
+  `shutdown`, never in `buildSystem`: every test builds a `System`, and an armed interval would hold
+  `node --test` open while the real lister ran PowerShell on a developer's machine.
+- **Its own class, not the runner's.** The runner holds the process and must never block on git or a
+  socket; this blocks on both, on purpose, off to one side.
+- **`changed` only when a reading changes**, `checkedAt` excepted. It rides the hub's local-run
+  coalescer ([16](16-http-api.md#the-hub)), so a port coming up in the same 400ms as a phase line is
+  one refetch — and a steady environment read every ten seconds costs no snapshot at all.
+
+The snapshot ships the readings only while the run is live. The watch clears them itself, but a view
+that trusted that would draw a stale port beside a stopped run for the width of one tick.
+
+## Talking to the environment
+
+`LocalRunner.send(text)`, `POST /api/local-run/message`, and `message` on the desktop `local_run` tool
+— the fleet's `AgentManager.respond` ([10](10-agent-runtimes.md)) for the one session that is not an
+agent. For the things a running environment needs told that are not a restart: run the migrations,
+restart one service, pick something up.
+
+Refused with the reason returned, never thrown: while nothing is live; while the run is being stopped;
+while it is still coming up — a stream session queues the message behind the bring-up turn, so `running`
+would arrive only when the message turn ended and the panel would say "starting" for a turn it never
+saw; while another turn is in flight, for the same reason; and when nothing holds the session, which is
+a restart that could not bring the run back — the row is live, the environment may well be up, and there
+is nobody to type to. `holdsSession` ships on the view so the panel offers the box only when there is
+somebody.
+
+**Echoed into the tail.** The stream runtime renders only what comes back, so without the echo a
+message leaves no trace on the one surface the operator is watching; the PTY runtime records both halves
+itself and says so with `recordsSentMessages`. One `takeIn` path for what a session prints and what is
+typed into it, so the echo rolls off the top with everything else.
+
+## Refreshing the code under a running environment
+
+`LocalRunner.refresh()` and `POST /api/local-run/refresh` — the half of staleness the harness can act on,
+and a click, **never automatic**: `ensurePreview` is a `reset --hard` and a `clean -fd` under a running
+server, and an operator halfway through looking at a page is owed the choice.
+
+In order: refuse unless the run is `running` with no turn in flight; `previewCommit(ref)`, which resolves
+and touches nothing — a refresh at the tip refuses here, and had to find that out somewhere other than
+`ensurePreview`, which would already have reset and cleaned the tree to move it nowhere;
+`ensurePreview(ref)`, with everything git ignores left standing so dependencies survive; the row's
+`commit_sha` rewritten; then the session is handed `localRun.refreshInstruction` — the operator's
+sentence, blank allowed, since a hot-reloading dev server needs nothing said — with the harness's own
+account of what moved appended: which ref, from which commit to which, restart or rebuild what needs it,
+keep it up, do not commit, `phase:` lines. Those facts are the harness's words after the operator's
+verbatim text, which is not the interpolation the template rule bans: nothing here is overridable.
+
+A tree that will not move — a file held open on Windows — leaves the recorded commit alone and says the
+tree may be part-reset, because it may be. With nothing holding the session the checkout still moves and
+the note says nobody was told. A run stopped or swapped under the two awaits is noticed before anything
+is written or sent.
+
+Behind its **base** is the other half of staleness, and it is fleet work: the fix is merging the base in,
+which `pr-base-update` already dispatches off the provider's `mergeableState` where the ref has a pull
+request ([05](05-dispatcher.md)). The panel says it; nothing here acts on it.
+
 ## What it costs
 
 A local run is a Claude Code session, and a long one: it holds the environment for as long as somebody
@@ -377,9 +486,11 @@ Both reach the same runner, which is the point: the tool used to render an instr
 session act on it, so there were two definitions of what running meant and a harness that could not
 stop what it had told somebody to start.
 
-`local_run` reports the state, and given a goal starts it. Its reply carries the caveat in as many
-words — the harness does not poll the application — because a session reporting a check passed on the
-strength of a status is the one outcome the validation channel exists to prevent.
+`local_run` reports the state, given a goal starts it, and given a `message` types it into the session
+holding the environment. Its reply carries the readings and the caveat in as many words — the port may
+be probed, but the application is not exercised — because a session reporting a check passed on the
+strength of a status, or of a port answering, is the one outcome the validation channel exists to
+prevent.
 
 ## Routes
 
@@ -387,11 +498,13 @@ strength of a status is the one outcome the validation channel exists to prevent
 `checked(schemas, handler)`; a refusal is a returned 400 carrying the reason, never a throw
 ([16](16-http-api.md#request-validation)).
 
-| Route                       | Does                                                                                                            |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `POST /api/local-run`       | `{issue, ref?}` — start it on that goal, stopping whatever was running.                                         |
-| `POST /api/local-run/stop`  | No body and no id: there is one run, and stopping it is the request. Answers as soon as the teardown has begun. |
-| `GET /api/local-run/output` | The session's last lines.                                                                                       |
+| Route                         | Does                                                                                                                          |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/local-run`         | `{issue, ref?}` — start it on that goal, stopping whatever was running.                                                       |
+| `POST /api/local-run/stop`    | No body and no id: there is one run, and stopping it is the request. Answers as soon as the teardown has begun.               |
+| `POST /api/local-run/message` | `{text}` — type into the session holding the environment. A 400 with the reason when there is nobody to tell.                 |
+| `POST /api/local-run/refresh` | No body: move the checkout to the tip of the run's ref and tell the session what moved. Awaited — seconds of git, not a turn. |
+| `GET /api/local-run/output`   | The session's last lines.                                                                                                     |
 
 Stopping **answers before it has finished**, because it is a session's turn: the run goes to
 `stopping` and the runner's own `changed` events carry the rest. Awaiting the turn in the handler would
@@ -411,16 +524,42 @@ work and changes no world.
 ## The cockpit
 
 A **Local** reading in the top bar's `cn-reads` row, quiet when nothing is up, carrying the goal's
-number when something is. A reading rather than a nav tab: it is a state of the operator's own machine,
-not a surface work happens on. The number is the value because that is the question — "running" alone
-leaves an operator opening the panel to find out whether it is the goal they are looking at.
+number when something is — and amber when the environment is behind the tip of its own branch, because
+the panel is where you find out and the reading is where you would not think to look. A reading rather
+than a nav tab: it is a state of the operator's own machine, not a surface work happens on. The number
+is the value because that is the question — "running" alone leaves an operator opening the panel to
+find out whether it is the goal they are looking at.
 
 The panel (`web/src/components/LocalRunPanel.tsx`) is `'localRun'` on `ConsolePanel`, so it is a
 **place**: it survives a reload and the back button steps out of it
-([17](17-cockpit.md#the-address-bar)). It draws one state and a picker, never a table of runs — a list
-would imply two could be up. What is running, since when, the URL as a link _to try_, the session's
-output — in the fleet's own transcript pane, see below — and Stop plus a goal picker whose button says
-it stops what is running now.
+([17](17-cockpit.md#the-address-bar)). It is a **card and two folds**, never a table of runs — a list
+would imply two could be up.
+
+The card is the environment, and the only thing that moves while somebody is watching: a status dot
+and word with a mono clock (green up, amber a turn in flight, red a start that failed, muted otherwise),
+the goal and its title, the ref and the short commit, the branch's own reading (below), the stage line
+for as long as a turn is in flight — captioned `starting`, `stopping`, `refreshing` or `replying` — the
+note, then the readings as **tiles**: the URL with whether its port answered, the ports the session's
+own processes hold, how far the checkout is behind its tip and its base (amber when behind, with the
+Refresh above answering it), and what the run has cost. Each tile words its nulls — "not checked",
+"could not read", "could not compare" — and never draws a zero for one. Under the tiles, the reply box,
+offered only while an idle session is held.
+
+**Controls say what they are.** Stop is `ConfirmButton`, the danger button with the two-click arm,
+because a mis-click costs a warm environment and several minutes; it is not drawn while stopping, since
+the status line already says so. Refresh is primary and drawn only while there is something to pick up.
+Start appears once a row is picked, primary, with the ref beside it. Nothing on the panel is ever
+disabled: a control that would be is absent, and the stage line says why.
+
+The output and the picker are `<details>` folds under the card. The output is open while a turn is in
+flight or the run has settled — the cases with something to read — and folded under a steady
+environment, its summary carrying the last line; the picker is open when nothing is running and folded
+under "Run a different goal", with "stops what is running now" beside it, when something is. `<details>`
+rather than conditional rendering, so the browser draws the fold and the markup carries the content
+whichever way it stands — controlled from the summary's click rather than `onToggle`, which fires for a
+programmatic open too and would read a turn opening the output as the operator asking it to stay open — which is also what keeps `test/console.test.ts`'s assertions on the
+rows true with the picker folded, since `renderToStaticMarkup` runs no effects. The output is the
+session's own words in the fleet's transcript pane, see below.
 
 ### The picker
 
@@ -466,9 +605,8 @@ message that said there was nothing to run. Both now read `holdingBack`, the dif
 candidates and the rows, so the arm that says "tick it" is only ever drawn when it is there to tick.
 The other arms tell the two remaining cases apart — no goals on screen at all, or goals with nowhere
 to run — because "nothing to run" reads as a hidden filter to anybody who has just been offered
-one. The selection, the
-expander and the filter are local state and not `Place`: which row is highlighted is not _where you
-are_, and the panel itself is the place.
+one. The selection, the expander, the filter and the two folds are local state and not `Place`: which
+row is highlighted and which fold is open are not _where you are_, and the panel itself is the place.
 
 Three details are about the minutes a start takes rather than the state it ends in:
 
@@ -504,7 +642,9 @@ Three details are about the minutes a start takes rather than the state it ends 
 ## Persistence
 
 `local_runs`, one row per run, `src/store/localRuns.ts`. `id`, `origin_ref`, `ref`, `dir`, `pid`,
-`status`, `url`, `note`, `started_at`, `ended_at`, and the six usage columns
+`status`, `url`, `note`, `started_at`, `ended_at`, `commit_sha` — where the checkout stands, written by
+the start and rewritten by a refresh, named so because `COMMIT` is a keyword, null on a row from before
+it and needing no backfill since nothing refuses on it — and the six usage columns
 (`cost_usd`, `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_creation_tokens`,
 `num_turns`) — all nullable, all declared in `LOCAL_RUN_COLUMNS`, because the table predates them.
 `local_run_cost_deltas` holds the dated deltas beside it. Which statuses count as **live** is declared once,
@@ -567,5 +707,33 @@ names every ref it offers.
 refetch, and none of them inside the window. That anything is subscribed at all is half of what it
 asserts — nothing was, and nothing about it was red.
 
-`test/validationDesktop.test.ts` covers the tool: what it reports, that starting a second goal stops
-the first, and that a deployment with no instruction is refused with the field named.
+`test/validationDesktop.test.ts` covers the tool: what it reports — now with the commit, the turn,
+whether a session is held and the readings — that starting a second goal stops the first, that a
+deployment with no instruction is refused with the field named, and that a `message` is relayed or
+refused with the runner's own reason, and never combined with `issue`.
+
+Added with the watch, the message and the refresh, in `test/localRun.test.ts`: a turn that ends with no
+sentinel is the environment up; a stop whose session stalls still settles, reap before kill; the turn
+reads `start`, null, `stop`, null across a run; a start records the commit; an old database reads it as
+null and can write it; against a real repository `ensurePreview` reports the commit it stands at and
+`previewCommit` resolves without touching the tree; a message is echoed, handed to the session and is a
+turn until it ends; a message is refused while starting, while busy, while stopping and when nothing
+holds the environment; a session that records what is sent is not echoed twice; a refresh moves the
+checkout, records the commit and tells the session what moved, resolving before it touches; a refresh
+at the tip refuses without touching the checkout; a refresh is refused while starting, while a turn is
+in flight and during a stop; a checkout that will not move leaves the recorded commit alone; and a
+refresh with nothing holding the environment moves the checkout and says so.
+
+`test/localRunWatch.test.ts` covers the readings: nothing live is nothing read; the declared URL is
+probed and the tree listed; every null means what it says (no port in the URL is the scheme's, no URL
+and a bad URL are `declared: null` with nothing recorded, no pid and an unset lister are
+`listening: null`, an unfetched ref and a row without a commit are null counts, the integration branch
+has no base, and git throwing is recorded once); git runs on its own cadence and ports on every tick;
+the fetch runs once per interval and a failure is recorded once; a change of run clears the readings and
+asks again at once; a settled run takes its readings with it; identical readings are not announced; the
+runner announcing a new run or status nudges a reading; and the pure parts — the parent-pid walk with a
+cycle, the `ss` and `lsof` parsers, and `probePort` against a loopback server. `test/hub.test.ts`
+asserts the watch's `changed` rides the local run's coalescer; `test/stateSnapshot.test.ts` that the
+readings ship on a live run and not on a settled one; `test/console.test.ts` that the panel draws the
+ports and the behind-tip count, offers Refresh only while behind, and offers the message box only while
+an idle session is held.

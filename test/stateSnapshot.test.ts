@@ -8,6 +8,8 @@ import { buildSystem } from '../src/system.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
+import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
+import { FakePortLister } from '../src/localRun/fakePortLister.js';
 import { failPlanningOpen } from './support/plans.js';
 
 function testConfig() {
@@ -263,7 +265,13 @@ test('buildStateSnapshot puts a local run’s spend on the goal it ran', async (
   failPlanningOpen(system.store, 31);
   system.store.setWorldBaseline(await system.connector.getState());
 
-  const run = system.store.beginLocalRun({ originRef: 'issue:31', ref: 'issue/31', dir: '/preview', url: null });
+  const run = system.store.beginLocalRun({
+    originRef: 'issue:31',
+    ref: 'issue/31',
+    dir: '/preview',
+    commit: 'abc123',
+    url: null,
+  });
   system.store.addLocalRunUsage(run.id, {
     costUsd: 0.8,
     inputTokens: 4000,
@@ -279,6 +287,53 @@ test('buildStateSnapshot puts a local run’s spend on the goal it ran', async (
   // The count the goal page prints as "Agents" stays agents; the run is named beside it.
   assert.equal(issue?.spend?.agents, 0);
   assert.equal(issue?.spend?.localRuns, 1);
+  system.store.close();
+});
+
+/**
+ * The watch's readings and the runner's turn ride the run onto the snapshot — and
+ * only while the run is live. The watch clears its own readings, but a view that
+ * trusted that would draw a stale port beside a stopped run for the width of a tick.
+ */
+test('buildStateSnapshot ships the watch’s readings on a live run, and nothing on a settled one', async () => {
+  const git = new FakeGitObserver()
+    .setDivergence('issue/31', 'abc123', { ahead: 2, behind: 0 })
+    .setDivergence('issue/31', 'main', { ahead: 4, behind: 1 });
+  const ports = new FakePortLister().set(777, [5173]);
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    gitObserver: git,
+    portLister: ports,
+  });
+  system.connector.inject({ kind: 'new_issue', number: 31, title: 'A goal somebody looked at' });
+  system.store.setWorldBaseline(await system.connector.getState());
+  const run = system.store.beginLocalRun({
+    originRef: 'issue:31',
+    ref: 'issue/31',
+    dir: '/preview',
+    commit: 'abc123',
+    // No port, so nothing is probed: the lister is the half a test can script.
+    url: null,
+  });
+  system.store.markLocalRunPid(run.id, 777);
+  system.store.setLocalRunStatus(run.id, 'running');
+  await system.localRunWatch.tick();
+
+  const live = (await buildStateSnapshot(system)).localRun;
+  assert.deepEqual(live?.ports?.listening, [5173]);
+  assert.equal(live?.ports?.declared, null);
+  assert.equal(live?.freshness?.behindTip, 2);
+  // The goal's own branch with no pull request is based on the integration branch.
+  assert.deepEqual(live?.freshness?.base, { ref: 'main', behind: 1 });
+  assert.equal(live?.turn, null);
+  assert.equal(live?.holdsSession, false, 'nothing in this process spawned the session');
+  assert.equal(live?.commit, 'abc123');
+
+  system.store.setLocalRunStatus(run.id, 'stopped', 'done');
+  const settled = (await buildStateSnapshot(system)).localRun;
+  assert.equal(settled?.ports, null);
+  assert.equal(settled?.freshness, null);
   system.store.close();
 });
 

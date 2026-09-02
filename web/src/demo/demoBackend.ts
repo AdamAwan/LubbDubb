@@ -255,6 +255,27 @@ const BRINGUP: readonly { phase: string; lines: readonly string[] }[] = [
  * a dev environment is not a process tree — the containers a start brought up belong
  * to the Docker daemon and no signal the harness can send reaches them.
  */
+/** Where the demo's branches point: what a start checks out and what a refresh moves to. */
+const DEMO_TIP = 'e4f1c9a7b2d8503f6a19c4e7b0d2f8a1c3e5b7d9';
+
+/** A message turn: one phase and one answer, so the panel shows a turn in flight and then quiet. */
+const MESSAGE_TURN: readonly { phase: string; lines: readonly string[] }[] = [
+  {
+    phase: 'doing what you asked',
+    lines: toolLines('10:01:40', 'Bash', 'npm run db:migrate', '10:01:52', ['Applied 2 migrations', 'Done']),
+  },
+  { phase: 'done', lines: ['Ran the pending migrations; the API picked the schema up without a restart.'] },
+];
+
+/** A refresh turn: what the session does once the checkout has moved under it. */
+const REFRESH_TURN: readonly { phase: string; lines: readonly string[] }[] = [
+  {
+    phase: 'restarting the api',
+    lines: toolLines('10:03:02', 'Bash', 'npm run api:restart', '10:03:09', ['api  restarted on :5001']),
+  },
+  { phase: 'done', lines: ['Restarted the API for the schema change; the web app hot-reloaded on its own.'] },
+];
+
 const TEARDOWN: readonly { phase: string; lines: readonly string[] }[] = [
   {
     phase: 'stopping the web app and the services',
@@ -292,6 +313,8 @@ class DemoServer {
   private bringUp = BRINGUP.length;
   /** Which step of {@link TEARDOWN} is next. */
   private teardown = TEARDOWN.length;
+  /** Where a message or refresh turn's script is up to; past the end is quiet. */
+  private reply = MESSAGE_TURN.length;
   private deskBeats = 0;
   private seq = 1000;
 
@@ -1566,11 +1589,17 @@ class DemoServer {
       originRef: `issue:${String(issue)}`,
       ref: ref ?? facts?.ref ?? 'main',
       dir: '/Users/you/code/demo-shop/.lubbdubb/local-run',
+      commit: DEMO_TIP,
       pid: 48000 + issue,
       // `starting`, not `running`, because that is the state an operator spends the
       // minutes in and the one the panel had nothing to say about. The scripted
       // bring-up below walks out of it.
       status: 'starting',
+      turn: 'start',
+      holdsSession: true,
+      // Nothing read yet: the watch's first reading lands when the bring-up ends.
+      ports: null,
+      freshness: null,
       // Nothing reported yet: the figure appears with the session's first turn end,
       // which is what an unmeasured run looks like on the real thing too.
       costUsd: null,
@@ -1613,8 +1642,22 @@ class DemoServer {
     const step = BRINGUP[this.bringUp];
     if (step === undefined) {
       // The turn ending is the environment being up — the real runner's rule, and
-      // the reason `running` here carries no phase: nothing is in flight.
-      this.state.localRun = { ...run, status: 'running', phase: null, note: 'Up on http://localhost:5173.' };
+      // the reason `running` here carries no phase: nothing is in flight. The
+      // readings land with it, as the watch's nudge-on-status-change makes them.
+      const at = new Date().toISOString();
+      this.state.localRun = {
+        ...run,
+        status: 'running',
+        phase: null,
+        turn: null,
+        note: 'Up on http://localhost:5173.',
+        ports: {
+          checkedAt: at,
+          declared: { url: 'http://localhost:5173', host: 'localhost', port: 5173, answering: true },
+          listening: [5173, 5432],
+        },
+        freshness: { checkedAt: at, behindTip: 0, base: { ref: 'main', behind: 0 } },
+      };
       this.dirty();
       return;
     }
@@ -1633,12 +1676,72 @@ class DemoServer {
    */
   stopLocalRun(): Promise<{ ok: true }> {
     if (this.state.localRun !== null) {
-      this.state.localRun = { ...this.state.localRun, status: 'stopping', phase: null };
+      this.state.localRun = { ...this.state.localRun, status: 'stopping', turn: 'stop', phase: null };
       this.lines = [...this.lines, 'phase: stopping the containers'];
       this.teardown = 0;
       this.dirty();
     }
     return Promise.resolve({ ok: true as const });
+  }
+
+  /**
+   * Type into the session: the line is echoed as the real runner echoes it, the turn
+   * begins, and the next two looks carry a phase and then the answer.
+   */
+  messageLocalRun(text: string): Promise<{ ok: true }> {
+    const run = this.state.localRun;
+    if (run === null || run.status !== 'running' || run.turn !== null)
+      return Promise.reject(new Error('Nothing is running locally that can be told anything right now.'));
+    this.lines = [...this.lines, `› ${text}`];
+    this.state.localRun = { ...run, turn: 'message', phase: null };
+    this.reply = 0;
+    this.dirty();
+    return Promise.resolve({ ok: true as const });
+  }
+
+  /**
+   * Move the checkout to the tip and tell the session — the state half, exactly as
+   * the real one: the commit moves at once, the freshness reading says current, and
+   * the session's turn plays out over the next looks.
+   */
+  refreshLocalRun(): Promise<{ ok: true; run: LocalRunView }> {
+    const run = this.state.localRun;
+    if (run === null || run.status !== 'running' || run.turn !== null)
+      return Promise.reject(new Error('Nothing is running locally that can be refreshed right now.'));
+    if (run.freshness === null || run.freshness.behindTip === null || run.freshness.behindTip === 0)
+      return Promise.reject(
+        new Error(`The checkout is already at the tip of ${run.ref}; there is nothing to pick up.`),
+      );
+    const at = new Date().toISOString();
+    const refreshed: LocalRunView = {
+      ...run,
+      commit: DEMO_TIP,
+      turn: 'refresh',
+      phase: null,
+      freshness: { ...run.freshness, checkedAt: at, behindTip: 0 },
+    };
+    this.state.localRun = refreshed;
+    this.lines = [...this.lines, `phase: the checkout moved to ${DEMO_TIP.slice(0, 7)}`];
+    this.reply = 0;
+    this.dirty();
+    return Promise.resolve({ ok: true as const, run: refreshed });
+  }
+
+  /** A message or a refresh turn, one step per look: a phase, then what it did, then quiet. */
+  private advanceTurn(): void {
+    const run = this.state.localRun;
+    if (run === null || run.status !== 'running' || (run.turn !== 'message' && run.turn !== 'refresh')) return;
+    const script = run.turn === 'refresh' ? REFRESH_TURN : MESSAGE_TURN;
+    const step = script[this.reply];
+    if (step === undefined) {
+      this.state.localRun = { ...run, turn: null, phase: null };
+      this.dirty();
+      return;
+    }
+    this.reply += 1;
+    this.lines = [...this.lines, `phase: ${step.phase}`, ...step.lines];
+    this.state.localRun = { ...run, phase: step.phase, ...localRunSpent(run, 0.02) };
+    this.dirty();
   }
 
   /** The teardown, one step per look, exactly as {@link advanceBringUp} runs. */
@@ -1652,6 +1755,10 @@ class DemoServer {
         status: 'stopped',
         live: false,
         phase: null,
+        turn: null,
+        // Nothing is live, so nothing is read — the watch clears its readings too.
+        ports: null,
+        freshness: null,
         endedAt: new Date().toISOString(),
         note: 'stopped from the cockpit — 6 containers stopped, :5173 is free',
       };
@@ -1669,6 +1776,7 @@ class DemoServer {
   localRunOutput(): string[] {
     this.advanceBringUp();
     this.advanceTeardown();
+    this.advanceTurn();
     return [...this.lines];
   }
 
@@ -4563,6 +4671,8 @@ export const demoApi = {
   // the URL is the fixture's, and it will not answer.
   startLocalRun: (issue: number, ref?: string) => getServer().startLocalRun(issue, ref),
   stopLocalRun: () => getServer().stopLocalRun(),
+  messageLocalRun: (text: string) => getServer().messageLocalRun(text),
+  refreshLocalRun: () => getServer().refreshLocalRun(),
   localRunOutput: () => Promise.resolve({ lines: getServer().localRunOutput() }),
   killAgent: (id: string) => getServer().killAgent(id),
   completeAgent: (id: string) => getServer().completeAgent(id),

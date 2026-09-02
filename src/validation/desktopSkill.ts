@@ -161,6 +161,9 @@ happened.
 1. **Ask for it.** \`local_run\` with the goal number. The harness stops whatever
    was running, points its checkout at that goal's code, and starts the
    application. Called with no goal it starts nothing and just reports the state.
+   Called with a \`message\` it types that into the session holding the running
+   environment — the way to get a migration run or a service restarted without
+   starting over.
 2. **Say what came back.** Whether it is running, on what URL, and — if it is not
    — what the reply says went wrong. The output tail comes back with it, and that
    is where the reason for a failed start actually is.

@@ -9,6 +9,8 @@ import type {
   IssueInstruction,
   KnowledgeFact,
   LocalRun,
+  LocalRunReadings,
+  LocalRunTurn,
   PlanPart,
   Retrospective,
   ScratchPadSummary,
@@ -759,6 +761,7 @@ export function buildStateSections(
       // needs, and the cockpit's question is whether it can offer a start at all.
       localRunConfigured: config.localRun.instruction.trim() !== '',
       localRunStopConfigured: config.localRun.stopInstruction.trim() !== '',
+      localRunRefreshConfigured: config.localRun.refreshInstruction.trim() !== '',
       // The container policy itself, because the backlog draws a container as a
       // heading over its children rather than as a row beside them — a question
       // about the item's type that no per-item verdict answers.
@@ -805,7 +808,7 @@ export function buildStateSections(
     // "nothing is up, the last attempt failed like this" is an answer to it. `live`
     // is derived here rather than in the cockpit so which statuses count is decided
     // once, by the thing that sets them.
-    localRun: localRunView(system.localRun.current(), system.localRun.phase(), (ref, origin) =>
+    localRun: localRunView(system.localRun.current(), system.localRun, system.localRunWatch.reading(), (ref, origin) =>
       localRunRefFacts(ref, planPartsOf(origin), {
         prByBranch: prByBranch(),
         tasks,
@@ -1573,17 +1576,31 @@ function buildGoalWatchWindows(store: System['store'], environments: Environment
  * counts as a stage, are each one rule — and they belong beside the writer that
  * sets them rather than in a component deciding whether to draw a Stop button.
  *
- * The phase comes from the runner rather than the row because it is not durable and
- * should not be: it describes work in flight, and the process that was doing the
- * work is the only thing that can vouch for it. A restart correctly has none.
+ * The phase, the turn and whether a session is held come from the runner rather than
+ * the row because none is durable and none should be: each describes work in
+ * flight, and the process doing the work is the only thing that can vouch for it. A
+ * restart correctly has none. The readings come from the watch and are shipped only
+ * while the run is live — the watch clears them itself, but a view that trusted that
+ * would draw a stale port beside a stopped run for the width of one tick.
  */
 function localRunView(
   run: LocalRun | null,
-  phase: string | null,
+  runner: { phase(): string | null; turn(): LocalRunTurn | null; holdsSession(): boolean },
+  readings: LocalRunReadings,
   facts: (ref: string, origin: string) => LocalRunRefFacts,
 ): LocalRunView | null {
   if (run === null) return null;
-  return { ...run, live: localRunIsLive(run), phase, refFacts: facts(run.ref, run.originRef) };
+  const live = localRunIsLive(run);
+  return {
+    ...run,
+    live,
+    phase: runner.phase(),
+    turn: runner.turn(),
+    holdsSession: runner.holdsSession(),
+    ports: live ? readings.ports : null,
+    freshness: live ? readings.freshness : null,
+    refFacts: facts(run.ref, run.originRef),
+  };
 }
 
 /**

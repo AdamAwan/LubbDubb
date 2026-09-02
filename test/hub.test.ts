@@ -12,11 +12,13 @@ function fakeSystem(): {
   system: System;
   agents: EventEmitter;
   localRun: EventEmitter;
+  localRunWatch: EventEmitter;
   errors: EventEmitter;
   readying: EventEmitter;
 } {
   const agents = new EventEmitter();
   const localRun = new EventEmitter();
+  const localRunWatch = new EventEmitter();
   const errors = new EventEmitter();
   const readying = new EventEmitter();
   const system = {
@@ -25,11 +27,12 @@ function fakeSystem(): {
     escalations: new EventEmitter(),
     errors,
     localRun,
+    localRunWatch,
     readying,
     reviewPacks: new EventEmitter(),
     reviewPackChecker: new EventEmitter(),
   } as unknown as System;
-  return { system, agents, localRun, errors, readying };
+  return { system, agents, localRun, localRunWatch, errors, readying };
 }
 
 /** Fake ws socket that captures everything sent to it. */
@@ -137,6 +140,21 @@ test('the local run gets one coalesced refetch, however much it says', async () 
   // And it names its section: a bring-up printing an install log can move the
   // local-run panel and nothing else, so rebuilding the goals for it was work
   // thrown away. → `docs/spec/16-http-api.md#sections`
+  assert.deepEqual(sent, [{ type: 'dirty', sections: ['harness'] }]);
+});
+
+test('the watch’s readings ride the local run’s coalescer, not a second one', async () => {
+  const { system, localRun, localRunWatch } = fakeSystem();
+  const hub = new Hub(system);
+  const { socket, sent } = fakeSocket();
+  hub.add(socket);
+
+  // A port coming up in the same window as a phase line is one refetch: both ship on
+  // the same section, and two coalescers would be two snapshots for one change.
+  for (let i = 0; i < 50; i++) localRun.emit('changed');
+  for (let i = 0; i < 50; i++) localRunWatch.emit('changed');
+  assert.deepEqual(sent, []);
+  await new Promise((resolve) => setTimeout(resolve, 500));
   assert.deepEqual(sent, [{ type: 'dirty', sections: ['harness'] }]);
 });
 

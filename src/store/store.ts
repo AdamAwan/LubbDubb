@@ -1400,11 +1400,14 @@ export class Store {
 
   // -- The local run (the machine's one dev environment) --------------------
 
-  beginLocalRun(input: { originRef: string; ref: string; dir: string; url: string | null }): LocalRun {
+  beginLocalRun(input: { originRef: string; ref: string; dir: string; commit: string; url: string | null }): LocalRun {
     return this.localRuns.beginLocalRun(input);
   }
   markLocalRunPid(id: string, pid: number | null): void {
     this.localRuns.markLocalRunPid(id, pid);
+  }
+  setLocalRunCommit(id: string, commit: string): void {
+    this.localRuns.setLocalRunCommit(id, commit);
   }
   markLocalRunInterrupted(id: string, at: string | null): void {
     this.localRuns.markLocalRunInterrupted(id, at);

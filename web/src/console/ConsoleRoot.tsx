@@ -512,6 +512,7 @@ function panelBody(
           run={state.localRun}
           configured={state.config.localRunConfigured}
           stopConfigured={state.config.localRunStopConfigured}
+          refreshConfigured={state.config.localRunRefreshConfigured}
           // The goals the cockpit already has, watched ones first: what is startable
           // is what is being worked on, and a list of every issue the tracker has
           // ever held would bury it.
@@ -523,6 +524,8 @@ function panelBody(
           now={view.now}
           onStart={(issueNumber, ref) => actions.startLocalRun(issueNumber, ref)}
           onStop={() => actions.stopLocalRun()}
+          onMessage={(text) => actions.messageLocalRun(text)}
+          onRefresh={() => actions.refreshLocalRun()}
           fetchOutput={() => actions.localRunOutput()}
         />
       );

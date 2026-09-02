@@ -1419,6 +1419,12 @@ CREATE TABLE IF NOT EXISTS local_runs (
   origin_ref TEXT NOT NULL,
   ref        TEXT NOT NULL,     -- the git ref the checkout was pointed at
   dir        TEXT NOT NULL,
+  -- The commit the checkout stands at: written by the start, rewritten by a refresh.
+  -- What the watch measures freshness from, since a ref names a branch and a branch
+  -- moves. Null on a row from before the column -- where that checkout stood was
+  -- never written down, and the freshness reading says so rather than guessing.
+  -- Named commit_sha because COMMIT is a keyword.
+  commit_sha TEXT,
   pid        INTEGER,           -- the session whose *subtree* a stop has to reap
   status     TEXT NOT NULL,
   url        TEXT,              -- as configured when the run started, not as it reads now

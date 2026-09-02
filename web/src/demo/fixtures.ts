@@ -316,6 +316,7 @@ export function buildDemoState(): DemoSeed {
       // be the default; this is the state an operator who has set it up is in.
       localRunConfigured: true,
       localRunStopConfigured: true,
+      localRunRefreshConfigured: true,
       // The demo tracker's own vocabulary, coloured — the setting is invisible
       // until a deployment has used it, and the demo is where it is looked at.
       stateColours: { New: '#8a93a0', Ready: '#7fb3ff', Active: '#63d297', Closed: '#666b73' },
@@ -1282,8 +1283,20 @@ export function buildDemoState(): DemoSeed {
       originRef: 'issue:390',
       ref: 'issue/390/validate',
       dir: '/Users/you/code/demo-shop/.lubbdubb/local-run',
+      // Where the checkout stands — two commits behind the branch's tip, so the
+      // panel has its Code tile amber and a Refresh to offer. A demo at the tip would
+      // show the control's absence, which is the half that needs no explaining.
+      commit: '8b052b99c4d1e7f2a3b6c9d0e1f2a3b4c5d6e7f8',
       pid: 48211,
       status: 'running',
+      turn: null,
+      holdsSession: true,
+      ports: {
+        checkedAt: ago(0),
+        declared: { url: 'http://localhost:5173', host: 'localhost', port: 5173, answering: true },
+        listening: [5173, 5432, 9229],
+      },
+      freshness: { checkedAt: ago(0), behindTip: 2, base: { ref: 'issue/390/schema', behind: 0 } },
       url: 'http://localhost:5173',
       note: 'Up on :5173. Seeded the sample invoices — the instruction did not mention that step.',
       startedAt: ago(18),

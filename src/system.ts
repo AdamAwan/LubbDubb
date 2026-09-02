@@ -86,8 +86,11 @@ import { IngressInbox } from './ingress/inbox.js';
 import { RuntimeControl } from './runtimeControl.js';
 import { PetKeeper } from './pets/keeper.js';
 import { LocalRunner } from './localRun/runner.js';
+import { LocalRunWatch } from './localRun/watch.js';
+import { CommandPortLister, type PortLister } from './localRun/ports.js';
+import { FakePortLister } from './localRun/fakePortLister.js';
 import { localRunChoices } from './localRun/ref.js';
-import { planIssueNumber } from './plans/parts.js';
+import { bySlug, partBase, planIssueNumber } from './plans/parts.js';
 import { LiveConfig } from './configApply.js';
 import { ErrorLog } from './errorLog.js';
 import type { ErrorLogEntry } from './types.js';
@@ -226,6 +229,12 @@ export interface System {
    */
   localRun: LocalRunner;
   /**
+   * The readings on that environment — which ports answer, how far the checkout has
+   * fallen behind — on a timer of its own that `main.ts` arms. Exposed for the
+   * snapshot, the desktop tool and the hub; nothing on the pulse reads it.
+   */
+  localRunWatch: LocalRunWatch;
+  /**
    * Applies a reloaded config to this running process, and holds what is waiting
    * for a restart. The one apply path a cockpit save and a hand edit to
    * `lubbdubb.config.json` both go through.
@@ -339,6 +348,13 @@ interface BuildOptions {
    * `git fetch` off — a scripted observer has no remote to refresh.
    */
   gitObserver?: GitObserver;
+  /**
+   * Override how the local run's listening ports are read (tests inject
+   * `FakePortLister`). Defaulted to the fake whenever a fake transport is injected,
+   * for the reaper's reason: the real one walks a process tree from a pid the fake
+   * transports mint, and shells out to do it.
+   */
+  portLister?: PortLister;
   /**
    * Override the worktree manager code dispatch cuts branches through (tests
    * inject `FakeWorktreeManager`). Without it a test's `repoRoot` defaults to
@@ -733,6 +749,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     // Lazily, for `proposals`' reason: the runner is built further down, and both
     // this channel and the cockpit's panel must start *the same* run.
     localRun: (): LocalRunner => localRun,
+    localRunWatch: (): LocalRunWatch => localRunWatch,
     // Lazy for the fleet deps' reason a few lines above: `plan_amend` withdraws
     // the superseded approval card and puts the fresh one up, and both the desk
     // and the harness are built below this.
@@ -1462,6 +1479,33 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     reap: reapTree,
     errors,
   });
+  // The readings on that environment. Built here, armed in `main.ts`: the timer
+  // probes ports and asks git, and belongs only to a harness that is running — every
+  // test builds a `System`. The lister follows the reaper's rule, and the fetch the
+  // reconciler's: both are real only when nothing about the transport or the clone
+  // has been faked.
+  const localRunWatch = new LocalRunWatch({
+    runner: localRun,
+    git: gitObserver,
+    fetch: opts.gitObserver ? undefined : () => fetchRemote(config.repoRoot),
+    ports: opts.portLister ?? (realTransport ? new CommandPortLister(errors) : new FakePortLister()),
+    // The branch this ref was cut from, asked where the plan is: a part's base is the
+    // one unsettled dependency's branch or the integration branch (`partBase`), the
+    // goal's own branch is based wherever its pull request says, and the integration
+    // branch has no base at all.
+    baseFor: (originRef, ref) => {
+      if (ref === config.defaultBranch) return null;
+      const number = planIssueNumber(originRef);
+      const plan = store.getPlanByOrigin(originRef);
+      const parts = plan ? store.listPlanParts(plan.id) : [];
+      const part = parts.find((p) => p.branch === ref);
+      if (part !== undefined && number !== null) return partBase(part, bySlug(parts), number, config.defaultBranch);
+      const pr = store.getWorldBaseline()?.pullRequests.find((p) => p.branch === ref);
+      return pr?.baseBranch ?? config.defaultBranch;
+    },
+    fetchIntervalMs: config.planning.gitFetchIntervalMs,
+    errors,
+  });
   // A row saying `running` after a restart describes a process this harness never
   // spawned, so nothing may go on trusting it — but the machine it left behind is
   // half an environment rather than none, and what happens to both is
@@ -1496,6 +1540,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     runtimeControl,
     pets,
     localRun,
+    localRunWatch,
     liveConfig,
     configFile: opts.configFile ?? configFilePath(),
     projectConfigFile: opts.projectConfigFile ?? projectConfigFilePath(config.repoRoot),

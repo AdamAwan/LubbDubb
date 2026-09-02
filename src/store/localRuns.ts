@@ -14,6 +14,9 @@ export const LOCAL_RUN_COLUMNS: ColumnMigrations = {
     num_turns: 'INTEGER',
     interrupted_at: 'TEXT',
     last_seen_at: 'TEXT',
+    // `commit_sha`, not `commit`: COMMIT is a SQL keyword, and a column that has to be
+    // quoted in every statement is a column somebody will one day forget to quote.
+    commit_sha: 'TEXT',
   },
 };
 
@@ -61,13 +64,14 @@ export class LocalRunStore {
    * moment anything could have gone wrong in between — and a row already in
    * `starting` is what makes that failure visible rather than silent.
    */
-  beginLocalRun(input: { originRef: string; ref: string; dir: string; url: string | null }): LocalRun {
+  beginLocalRun(input: { originRef: string; ref: string; dir: string; commit: string; url: string | null }): LocalRun {
     const now = this.ctx.now();
     const run: LocalRun = {
       id: randomUUID(),
       originRef: input.originRef,
       ref: input.ref,
       dir: input.dir,
+      commit: input.commit,
       pid: null,
       status: 'starting',
       url: input.url,
@@ -93,13 +97,22 @@ export class LocalRunStore {
       this.ctx.db
         .prepare(
           `INSERT INTO local_runs (id, origin_ref, ref, dir, pid, status, url, note, started_at, ended_at,
-             last_seen_at)
-           VALUES (?, ?, ?, ?, NULL, 'starting', ?, NULL, ?, NULL, ?)`,
+             last_seen_at, commit_sha)
+           VALUES (?, ?, ?, ?, NULL, 'starting', ?, NULL, ?, NULL, ?, ?)`,
         )
-        .run(run.id, run.originRef, run.ref, run.dir, run.url, run.startedAt, run.startedAt);
+        .run(run.id, run.originRef, run.ref, run.dir, run.url, run.startedAt, run.startedAt, run.commit);
     });
     write();
     return run;
+  }
+
+  /**
+   * Record where the checkout now stands — a refresh moved it. The one column a
+   * running row has rewritten, and the reading the watch's freshness is measured
+   * from, so a refresh that forgot this would report itself as still behind.
+   */
+  setLocalRunCommit(id: string, commit: string): void {
+    this.ctx.db.prepare(`UPDATE local_runs SET commit_sha = ? WHERE id = ?`).run(commit, id);
   }
 
   /** Record the process holding the environment up, so a stop knows whose subtree to reap. */
@@ -267,6 +280,7 @@ interface LocalRunRow {
   ended_at: string | null;
   interrupted_at: string | null;
   last_seen_at: string | null;
+  commit_sha: string | null;
   cost_usd: number | null;
   input_tokens: number | null;
   output_tokens: number | null;
@@ -291,6 +305,8 @@ function toLocalRun(row: LocalRunRow): LocalRun {
     originRef: row.origin_ref,
     ref: row.ref,
     dir: row.dir,
+    // Null on a row from before the column: where that checkout stood was not written down.
+    commit: row.commit_sha ?? null,
     pid: row.pid,
     status: row.status as LocalRunStatus,
     url: row.url,

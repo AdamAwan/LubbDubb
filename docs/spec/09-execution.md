@@ -341,7 +341,7 @@ the fields the effect is about to be handed rather than trusting a round trip th
 | Act           | Effect                                                                                                  |
 | ------------- | ------------------------------------------------------------------------------------------------------- |
 | `merge`       | `sink.mergePr({prNumber, method})`                                                                      |
-| `reply_draft` | `sink.postPrReply({prNumber, commentId, body})`, then `sink.resolvePrThread(…)` when the act says to |
+| `reply_draft` | `sink.postPrReply({prNumber, commentId, body})`, then `sink.resolvePrThread(…)` when the act says to    |
 | `plan`        | `releasePlan(store, planId, originRef)` — publishes nothing; see [08](08-planning.md#the-approval-gate) |
 
 `plan` is checked **before** the PR number, or an approved decomposition audits as "names no PR
@@ -966,7 +966,11 @@ reads, and what `remove` is called with when the agent is reaped — and it neve
 ### The checkout a local run uses
 
 `ensurePreview(ref)` — one fixed directory under `localRunRoot`, detached at whatever `ref` resolves
-to, for the machine's one dev environment ([23](23-local-runs.md#the-checkout)).
+to, for the machine's one dev environment ([23](23-local-runs.md#the-checkout)). It reports the commit
+it put the checkout at as well as the directory: a ref names a branch and a branch moves, so the run
+records where it stands and the watch can say how far behind it has fallen. `previewCommit(ref)` is the
+same resolution with nothing touched — for a refresh to ask before it pays for a reset it may not need
+([23](23-local-runs.md#refreshing-the-code-under-a-running-environment)).
 
 On `WorktreeManager` because this class is the only thing that hands out a directory, and **not a pool
 slot** for three reasons that each matter. It is outside `worktreeRoot`, because `slots()` counts every
@@ -1200,7 +1204,7 @@ alone. It stops there rather than falling through to `-D`, which was always goin
 `cannot delete branch … used by worktree at …` names a path and no reason, and the desk records it
 once per pulse for the whole `closedPrWindowMs` window — so an operator who checked a merged branch
 out to read what the agent did got the same unactionable line for six hours. The refusal instead says
-which checkout is in the way, that the local ref *and* the remote copy both stay because of it, and
+which checkout is in the way, that the local ref _and_ the remote copy both stay because of it, and
 that one `git switch` clears it — the same shape as the `ensure` refusal for the same checkout. The
 outcome is unchanged: a throw, no `branch_reaps` row, retried next pulse.
 

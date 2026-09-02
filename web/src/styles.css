@@ -6022,7 +6022,7 @@ select:disabled {
 /* -- The build panel ------------------------------------------------------ */
 /* Tokens only, like every shared component: the console sheet must not reach in
    here, so this reads the same on any theme the console later takes. */
-/* The local run panel. One environment, so one state and a picker — see
+/* The local run panel. One environment, so one card and a picker — see
    LocalRunPanel. Every colour is a token: a hex here is a surface that stays dark
    when somebody switches to Light, which `test/cockpitTheme.test.ts` is the only
    thing in `check` that would catch. */
@@ -6031,16 +6031,70 @@ select:disabled {
   flex-direction: column;
   gap: 12px;
 }
+/* The environment card: the subject. Everything that moves while somebody watches
+   is inside this border, and the two folds below it are what they reach for less. */
+.lrun-env {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
 .lrun-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
 }
+.lrun-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
 .lrun-head h3 {
   margin: 0;
   font-size: 15px;
   font-weight: 600;
+}
+/* The clock beside the status word: mono, so it ticks in place rather than jittering
+   the line as the digits change width. */
+.lrun-clock {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+  margin-left: 6px;
+}
+/* The status dot. Green is up, amber is a turn in flight, red is a start that did
+   not work, muted is nothing or stopped — the same hues the rest of the cockpit means
+   by them. */
+.lrun-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  background: var(--muted);
+}
+.lrun-dot.up {
+  background: var(--green);
+}
+.lrun-dot.busy {
+  background: var(--amber);
+}
+.lrun-dot.bad {
+  background: var(--red);
+}
+/* The controls, together and to the right: Refresh (primary, only while stale) and
+   Stop (danger, two clicks). Nothing here is ever disabled — a control that would be
+   is not drawn, and the stage line says why. */
+.lrun-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
 }
 .lrun-meta {
   margin: 4px 0 0;
@@ -6051,13 +6105,25 @@ select:disabled {
   font-family: var(--font-mono);
   color: var(--link-ink);
 }
+.lrun-title {
+  color: var(--text);
+}
+.lrun-where {
+  margin-top: 2px;
+}
 /* What the session says it is doing. The one thing on this panel that moves while a
-   bring-up is in flight, so it gets a line of its own rather than being folded into
-   the status: the status is a state, this is an activity. */
+   turn is in flight, so it gets a line of its own rather than being folded into the
+   status: the status is a state, this is an activity. */
 .lrun-stage {
   margin: 6px 0 0;
   font-size: 12px;
   color: var(--text);
+}
+/* Which turn it is — starting, stopping, refreshing, replying — in the amber the dot
+   wears while it is. */
+.lrun-stage-turn {
+  color: var(--amber);
+  font-weight: 600;
 }
 /* The fallback — the session's last line, drawn when it never named a phase. In the
    mono face because that is what it is: raw output, not a caption. */
@@ -6072,35 +6138,155 @@ select:disabled {
   font-size: 12px;
   color: var(--muted);
 }
-/* The picker. Rows rather than a `select`, because what a row has to say — the ref,
-   the part, the pull request on that branch — does not fit in an option's label, and
-   a choice you cannot see is the thing this panel got wrong first. */
-.lrun-pick {
+/* The readings: URL, listening ports, code freshness, spend. Tiles rather than a
+   sentence, because four independent facts in one line is the status line this
+   panel used to have. */
+.lrun-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+.lrun-tile {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  border-top: 1px solid var(--border);
-  padding-top: 12px;
-  font-size: 12px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: var(--r-md);
+  background: var(--well);
+  border: 1px solid transparent;
 }
-.lrun-pick-head {
+/* The one tile that asks for something: the checkout is behind its branch, and the
+   Refresh above is what answers it. Amber, the hue for "needs a look". */
+.lrun-tile.stale {
+  background: var(--amber-fill);
+  border-color: var(--amber-line);
+}
+.lrun-tile.stale .lrun-tile-label,
+.lrun-tile.stale .lrun-tile-value,
+.lrun-tile.stale .lrun-tile-sub {
+  color: var(--amber);
+}
+.lrun-tile-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.lrun-tile-value {
+  font-size: 13px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.lrun-tile-value code {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+.lrun-tile-sub {
+  font-size: 11px;
+  color: var(--muted);
+}
+.lrun-tile-value .lrun-tile-sub {
+  margin-left: 6px;
+}
+.lrun-ok {
+  color: var(--green);
+}
+/* A reading the watch has not taken or could not: dim, never a zero. */
+.lrun-dim {
+  color: var(--muted);
+}
+/* The reply box, the drawer's for the one session that is not an agent. Its own
+   class through tokens: the console sheet must not reach a shared component's input. */
+.lrun-say {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+.lrun-say-row {
+  display: flex;
+  gap: 6px;
+}
+.lrun-say-row input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--text);
+  background: var(--well);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 6px 10px;
+}
+/* The two folds: the output and the picker. A `details`, so the browser owns the
+   toggle and the content is in the markup whichever way it stands. The summary is
+   the row an operator clicks, drawn as a heading with a hint beside it. */
+.lrun-fold > summary {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 6px;
-}
-.lrun-pick-head h4 {
-  margin: 0;
+  cursor: pointer;
+  list-style: none;
   font-size: 13px;
   font-weight: 600;
+  color: var(--text);
+  padding: 4px 0;
+}
+.lrun-fold > summary::-webkit-details-marker {
+  display: none;
+}
+.lrun-fold > summary::before {
+  content: '▸';
+  display: inline-block;
+  width: 14px;
+  color: var(--muted);
+}
+.lrun-fold[open] > summary::before {
+  content: '▾';
+}
+.lrun-fold > summary > span:first-of-type {
+  flex: 1 1 auto;
+}
+.lrun-fold-hint {
+  font-weight: 400;
+  font-size: 11.5px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60%;
+}
+.lrun-out {
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+}
+/* The picker. Rows rather than a `select`, because what a row has to say — the ref,
+   the part, the pull request on that branch — does not fit in an option's label, and
+   a choice you cannot see is the thing this panel got wrong first. */
+.lrun-pick {
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+  font-size: 12px;
+}
+.lrun-pick-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 4px;
 }
 .lrun-filter {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 6px;
   color: var(--muted);
   cursor: pointer;
+  margin-bottom: 4px;
 }
 .lrun-row {
   border: 1px solid transparent;
@@ -6199,9 +6385,6 @@ select:disabled {
    and the picker answer "what am I looking at" in one vocabulary. */
 .lrun-on {
   margin-top: 4px;
-}
-.lrun-hint {
-  color: var(--muted);
 }
 .build-panel {
   display: flex;

@@ -108,6 +108,7 @@ function localRun(id: string, originRef: string, over: Partial<LocalRun> = {}): 
     originRef,
     ref: 'issue/9/one',
     dir: '/preview',
+    commit: null,
     pid: 2,
     status: 'stopped',
     url: null,
