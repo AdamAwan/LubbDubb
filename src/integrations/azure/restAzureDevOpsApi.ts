@@ -779,11 +779,18 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     parentCommentId: number,
     content: string,
   ): Promise<AzCommentRef> {
-    await this.request(
+    // The created comment's own id comes back in the response body, and it is the
+    // id the next thread read will carry — the one thing that lets attribution
+    // recognise this reply as the fleet's rather than guess from its author.
+    // Left unset when Azure answers without one; the caller must not invent it.
+    const created = await this.request<{ id?: number }>(
       this.withApiVersion(`${this.repoUrl}/pullRequests/${pullRequestId}/threads/${threadId}/comments`),
       { method: 'POST', body: JSON.stringify({ content, parentCommentId, commentType: 'text' }) },
     );
-    return { url: `${this.projectUrl}/_git/${encodeURIComponent(this.repository)}/pullrequest/${pullRequestId}` };
+    return {
+      url: `${this.projectUrl}/_git/${encodeURIComponent(this.repository)}/pullrequest/${pullRequestId}`,
+      ...(typeof created?.id === 'number' ? { id: created.id } : {}),
+    };
   }
 
   /**
@@ -799,11 +806,18 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
   }
 
   async createThread(pullRequestId: number, content: string): Promise<AzCommentRef> {
-    await this.request(this.withApiVersion(`${this.repoUrl}/pullRequests/${pullRequestId}/threads`), {
-      method: 'POST',
-      body: JSON.stringify({ comments: [{ content, commentType: 'text' }], status: 'active' }),
-    });
-    return { url: `${this.projectUrl}/_git/${encodeURIComponent(this.repository)}/pullrequest/${pullRequestId}` };
+    // A *new* thread, so nothing here is a reply into an existing one and no
+    // attribution row is ever keyed on it. The id is still reported when Azure
+    // gives one, so the two create paths answer in one shape.
+    const created = await this.request<{ comments?: { id?: number }[] }>(
+      this.withApiVersion(`${this.repoUrl}/pullRequests/${pullRequestId}/threads`),
+      { method: 'POST', body: JSON.stringify({ comments: [{ content, commentType: 'text' }], status: 'active' }) },
+    );
+    const id = created?.comments?.[0]?.id;
+    return {
+      url: `${this.projectUrl}/_git/${encodeURIComponent(this.repository)}/pullrequest/${pullRequestId}`,
+      ...(typeof id === 'number' ? { id } : {}),
+    };
   }
 
   async completePullRequest(

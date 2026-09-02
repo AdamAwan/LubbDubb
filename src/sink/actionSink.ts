@@ -213,6 +213,24 @@ export interface SendResult {
   ok: boolean;
   /** A provider-side reference for the sent artifact (e.g. a comment id/URL), for the audit log. */
   ref?: string;
+  /**
+   * The provider's **own id** for a comment this call created, in the same
+   * vocabulary the read side puts on `PrThreadMessage.id` — so a reply the
+   * harness sent can be recognised in the thread it lands in.
+   *
+   * Separate from {@link ref}, which is a URL for a person to click in the audit
+   * log and matches nothing on a read. One field could not be both: GitHub's
+   * `html_url` and its comment id are different strings, and attribution that
+   * compared the wrong one would quietly never match — which reads exactly like
+   * the reply having never been sent.
+   *
+   * Absent when the provider will not name what it created. That is a real
+   * possibility rather than a theoretical one (Azure's reply POST is fire and
+   * forget on older API versions), and the harness must not fall back to the
+   * author when it happens: the thread stays unanswered and the miss is recorded.
+   * → `docs/spec/07-pull-requests.md#review-threads`
+   */
+  commentRef?: string;
 }
 
 export interface ActionSink {
