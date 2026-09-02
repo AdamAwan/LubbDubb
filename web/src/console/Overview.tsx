@@ -453,16 +453,25 @@ const IN_FLIGHT = new Set(['active', 'has_pr', 'planning', 'delivered']);
  * non-zero.
  */
 function GoalsInFlight({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
-  // The retained runs ride the same list, marked rather than dropped: a goal whose
-  // ticket left the tracker's open set — resolved, closed, or its watch tag gone —
-  // still has a run the harness holds, pull requests it is watching and money on
-  // it, and a list that lost the row the moment the tracker did was how a goal
-  // with all of that went unfindable except by address. `stale` is the marking,
-  // and it is the only difference between these rows and the live ones.
-  const goals = [
-    ...view.state.world.issues.filter((issue) => IN_FLIGHT.has(issue.pickup.status)),
-    ...(view.state.retainedRuns ?? []),
-  ];
+  const [showKept, setShowKept] = useState(false);
+  // A retained run rides the same list *while there is still work on it*, marked
+  // rather than dropped: a goal whose ticket left the tracker's open set —
+  // resolved, closed, or its watch tag gone — may still have parts to run, an
+  // agent on it and money going onto it, and a list that lost the row the moment
+  // the tracker did was how a goal with all of that went unfindable except by
+  // address. `stale` is the marking, and it is the only difference between those
+  // rows and the live ones.
+  //
+  // A retained run with *nothing* left in flight is a different reading, and it
+  // was the one drowning this card: a finished run on a closed ticket is not a
+  // goal in flight, it is a record waiting to be dismissed, and every deployment
+  // accumulates them forever. They go behind the header's disclosure — reachable
+  // in one click, out of the way of the goals the fleet is actually working, and
+  // counted at zero so the way in never moves.
+  const retained = view.state.retainedRuns ?? [];
+  const working = retained.filter((issue) => retainedWorkInFlight(issue, view));
+  const kept = retained.filter((issue) => !retainedWorkInFlight(issue, view));
+  const goals = [...view.state.world.issues.filter((issue) => IN_FLIGHT.has(issue.pickup.status)), ...working];
   // Beside the count and not folded into it, for the fleet card's reason: these
   // goals are in flight *and* missing from the backlog, so a single larger number
   // would be the wrong reading of both. Zero draws nothing — the ordinary case on
@@ -482,11 +491,50 @@ function GoalsInFlight({ view, actions }: { view: CockpitView; actions: CockpitA
             {orphans} with no Feature
           </i>
         )}
+        <button
+          type="button"
+          className={`cn-more ${kept.length === 0 ? 'cn-quiet' : ''}`}
+          onClick={() => setShowKept(!showKept)}
+          title="Runs the harness still holds on closed tickets, with nothing left in flight — open one to dismiss it"
+        >
+          {kept.length} kept {showKept ? '⌄' : '›'}
+        </button>
       </h3>
-      {goals.length === 0 && <p className="cn-empty">No goal is in flight.</p>}
-      <PanelRows rows={goals.map((issue) => goalRow(issue, view, actions))} />
+      {goals.length === 0 && !showKept && <p className="cn-empty">No goal is in flight.</p>}
+      {showKept && kept.length === 0 && <p className="cn-empty">No run is being kept.</p>}
+      <PanelRows
+        rows={[
+          ...goals.map((issue) => goalRow(issue, view, actions)),
+          // Below the goals in flight, for the fleet card's order: what the harness
+          // is working, then what it is only holding on to.
+          ...(showKept ? kept.map((issue) => goalRow(issue, view, actions)) : []),
+        ]}
+      />
     </section>
   );
+}
+
+/**
+ * Whether a retained run still has work in flight — the gate that keeps this card
+ * a list of goals being worked rather than a pile of closed tickets.
+ *
+ * Three ways it can be true, and they are the three ways any goal is somebody's
+ * business now: an agent is on it, the rail is holding an ask about it, or its
+ * plan has parts that are not finished. The parts are read through the same
+ * `buildGoalTrack` fold the row draws its track from, so what puts the row in the
+ * list and what the row then says about itself cannot disagree.
+ *
+ * A merged-out plan, or no plan at all, means the closed ticket is exactly what it
+ * looks like: a run to dismiss, not a goal in flight.
+ */
+function retainedWorkInFlight(issue: Issue, view: CockpitView): boolean {
+  const ref = `issue:${issue.number}`;
+  if (view.agentOnGoal.get(ref) !== undefined) return true;
+  if (view.needsYou.some((n) => n.goalRef === ref)) return true;
+  const page = buildGoalPage(view.state, ref, view.needsYou, null);
+  if (page === null) return false;
+  const track = buildGoalTrack(page.parts);
+  return track.now + track.held + track.waiting > 0;
 }
 
 function goalRow(issue: Issue, view: CockpitView, actions: CockpitActions): PanelRowModel {
