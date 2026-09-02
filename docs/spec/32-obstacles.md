@@ -57,8 +57,8 @@ An obstacle is identified by a **key**: a fact about the world, not a sentence a
 | `check` | The provider's own check name | the checks the provider is reporting |
 | `test` | File plus test name | the suite's own reporting |
 | `path` | A repository path | the tree |
-| `signature` | The normalised first line of an error — paths relativised, hex, numbers and timestamps blanked, lowercased | nothing; see below |
-| `cmd` | The command that failed | nothing; see below |
+| `signature` | The normalised first line of an error — paths relativised, hex, numbers and timestamps blanked, lowercased | nothing — [suggestion-only](#signature-and-cmd-do-not-bind) |
+| `cmd` | The command that failed | nothing — [suggestion-only](#signature-and-cmd-do-not-bind) |
 
 **A key resolves to exactly one obstacle**, which is what makes deduplication an index lookup rather
 than a judgement. The uniqueness constraint is on `(kind, value)` in _src/store/obstacles.ts_, and the
@@ -80,14 +80,36 @@ A key coarse enough to catch everything catches everything, and then the fleet i
 new failure is already owned. That failure is silent — the swallowed report is answered *stand down*,
 nobody fixes it, and nothing is red.
 
-So a `check` key **never binds on its own**. It must co-occur with a `test`, `path` or `signature` key
-to resolve an obstacle; a report carrying only a check name joins on containment or files fresh.
+So a `check` key **never binds on its own**. It must co-occur with a `test` or a `path` key to resolve
+an obstacle; a report carrying only a check name joins on containment or files fresh.
 _test/obstacleMatch.test.ts_ holds that, because it is the guard the rest of the design leans on.
+
+A `signature` does not rescue a bare `check`, and that is the pair of rules meeting rather than one of
+them having an exception: a key that cannot bind alone cannot make another one bind either, or "does
+not bind" would mean *binds when convenient*.
 
 Matching is exact and never a prefix, which is `priorRemedies`' choice
 ([07](07-pull-requests.md)) and the same fragility accepted for the same reason: a check name is a
 provider identifier, and a prefix match puts another job's history in front of an agent under a name
 it reads as its own.
+
+### `signature` and `cmd` do not bind
+
+The three keys the harness can check against something — `check`, `test`, `path` — bind. The two it
+cannot only ever **suggest**: they land in `near[]` and on the row, and an agent or an operator
+confirms them by id.
+
+A signature is a normalisation of somebody else's output, and the thing being normalised is outside
+this repository's control: a runner image changes its error prefix, a toolchain reformats a stack
+frame, and one obstacle silently becomes two — or, worse, two become one. That is the wrong-merge
+failure arriving through a key rather than through a model, and the [rule about visible
+mistakes](#what-may-be-decided-by-a-model-and-what-may-not) does not care which door it comes
+through.
+
+Suggestion-only is also how the question gets answered rather than argued: the rows record how often
+a signature suggestion was confirmed, and a signature that has been right for a quarter is promoted
+to binding by a change that says so. Starting bound and demoting later is not the same move — the bad
+merges it makes in the meantime are invisible.
 
 ### Where a key comes from
 
@@ -132,22 +154,48 @@ non-empty. It is the harness's secretary and it is deliberately not its judge.
 
 | State | Means | Reaches an agent |
 | --- | --- | --- |
-| `sighted` | One goal has said it. It may be that goal's own doing. | Nobody. |
-| `standing` | Two different **goals** have said it. | Every dispatch its keys match, and running agents. |
+| `sighted` | One voice has said it. It may be that goal's own doing. | Nobody. |
+| `standing` | **Two independent voices** have said it. | Every dispatch its keys match, and running agents. |
 | `owned` | Something is fixing it. | The same, plus *do not fix it*. |
 | `resolved` | The world was observed to clear it, or the owner landed. | Nobody. Keeps its keys. |
 | `dormant` | Nothing has re-reported it inside `obstacleDormantMs`. | Nobody. Keeps its keys. |
 | `muted` | You said never tell the fleet this. | Nobody. |
 
-**Two goals, counted as goals** — never origins and never agents. `pr:412:ci` and `pr:412:comments`
-are two origins of one observation, and a re-dispatch inheriting a session is one agent counted twice.
+**A voice is a goal, or [the harness itself](#the-harness-is-a-voice)** — and a goal is counted as a
+goal, never as an origin and never as an agent. `pr:412:ci` and `pr:412:comments` are two origins of
+one observation, and a re-dispatch inheriting a session is one agent counted twice.
 `corroborationGoal` in `src/knowledge/knowledge.ts` is the harness's one spelling of that collapse and
 survives unchanged.
 
+**Two voices, and they must be independent**, which is the whole of what the count is for. One goal
+saying a thing twice is one voice; the harness observing the same transition on ten pulses is one
+voice. Anything the count cannot tell apart from an echo is not a second voice.
+
 **One report is not evidence.** It is also the case the harness cannot tell apart from an agent
-mis-diagnosing its own breakage, which is why `sighted` reaches nobody. At this fleet's concurrency
-that is not a delay worth designing around: the second goal arrives in minutes. On a quiet fleet it
-is, and [that is an open question](#what-is-not-settled).
+mis-diagnosing its own breakage, which is why `sighted` reaches nobody.
+
+### The harness is a voice
+
+Waiting for a second **agent** to notice something the harness is already watching is the fleet paying
+twice for a reading it has. So the harness's own observation of the world counts as one of the two,
+on the same footing as a goal and by the same rule — an independent party said it.
+
+It is the better witness wherever it applies, because it is edge-triggered on a transition it
+watches rather than on somebody happening to run into it: a check going red on a branch other pull
+requests are based on, a check flapping red-then-green on one `headSha`. An obstacle the harness can
+see is `standing` from the first agent's report — or before any agent reports at all.
+
+**This is what makes the two-goal gate safe on a small fleet.** "Thirty agents in a minute" is what
+makes waiting for a second voice cheap, and a fleet running four agents does not have it. What that
+fleet still has is the world model, which is watching the same checks either way. What is left
+waiting is the class the harness genuinely cannot witness — a bug in code nobody is touching, a line
+of documentation the code stopped agreeing with — and none of those is costing an agent its session
+this minute.
+
+A harness voice is recorded as a sighting like any other, attributed to the harness rather than to a
+goal, and says which transition it saw. An operator reading why a row is standing must never find
+one voice that is really the same reading counted twice: the transition is the identity, so the same
+check going red once is one voice however many pulses observe it still red.
 
 **`resolved` and `dormant` are not deletions.** A matching report reopens the row at `standing` with
 its whole history. That is the only way a fix that did not stick is visible as a recurrence rather
@@ -199,7 +247,7 @@ had. It calls something the moment it is in pain, so the pain call returns the a
 trip, with no model call and no waiting:
 
 ```
-{ status, seen_by_goals, owner, directive, what_others_saw[], near[] }
+{ status, seen_by, owner, directive, what_others_saw[], near[] }
 ```
 
 `directive` is one imperative sentence, chosen by the harness and never by the agent:
@@ -207,7 +255,7 @@ trip, with no model call and no waiting:
 | Situation | Directive |
 | --- | --- |
 | `owned` | *#841 owns this. Do not fix it. Note it and return to your task.* |
-| `standing`, unowned | *Two other goals have hit this. It is not yours. Recorded — return to your task.* |
+| `standing`, unowned | *Two independent voices have hit this. It is not yours. Recorded — return to your task.* |
 | `sighted` | *Recorded. Nothing else has seen this, so it may be your own change: check your diff before deciding it is not. Either way, do not go fixing it.* |
 | The obstacle makes the task impossible | *You cannot finish. Conclude `blocked`, naming this obstacle.* |
 
@@ -281,7 +329,7 @@ A `standing` obstacle gets an owner one of two ways:
   for ([13](13-jobs-and-tickets.md#filing-a-ticket)). It then enters the normal funnel and is ranked
   and priced like any other goal.
 - **A repair dispatch**, for an obstacle blocking the fleet now — a base branch red, three or more
-  goals — through one bounded rule on origin `obstacle:<id>`. That origin is classified in
+  voices — through one bounded rule on origin `obstacle:<id>`. That origin is classified in
   `src/issueOrigins.ts`, without which it reads as `unrecognised`: it stops expanding under a goal's
   priority flag and its spend files under "other", and neither is red
   ([05](05-dispatcher.md#marking-a-goal-a-priority)).
@@ -341,6 +389,11 @@ and, next to it, **why it matched** — the key that bound it, or the suggestion
 last is the only place the matcher can be seen working or getting it wrong, and it is the reason the
 row expands at all.
 
+**The page draws what it counts and never what it would like to.** Sightings, goals cost, dispatches
+told and the rate agents call the tool are all observed. *Turns an agent did not spend* is the figure
+everyone wants and nothing measures, so it is not drawn — a number invented to sit beside four real
+ones is the one thing on the page that would be a lie, and it would be the one quoted.
+
 Four controls, none of them on any path: **mute**, **own it** (naming a ticket you are using),
 **retire**, and **write it down** for a note. Retiring is not rejecting and leaves the row saying what
 it said ([27](27-knowledge.md#retiring-is-not-rejecting)); nothing here bars a claim by name, because
@@ -370,16 +423,15 @@ nothing here is a durable statement about the repository to bar.
 
 ## What is not settled
 
-Stated rather than hidden, because each is a place this design could be wrong:
+One thing, and it is the one the rest of this document rests on: **whether agents call the tool at
+all.**
 
-- **Whether agents call the tool at all.** The whole thing rests on it. The mitigation is that the ask
-  is appended to every dispatch unconditionally — the [bootstrap trap](#what-went-wrong-last-time) is
-  the failure to avoid — and that the call rate is a number on the page rather than an assumption.
-- **Whether two goals is too slow on a quiet fleet.** "Thirty agents in a minute" is what makes
-  `sighted` cheap. A fleet running four agents may wait hours for a second voice, and the first agent
-  has already paid.
-- **Whether `signature` normalisation is stable enough across runners to be a key**, or whether it
-  drifts enough to be a suggestion only.
-- **Whether turns saved can be honestly measured.** Sightings, goals cost and dispatches told are
-  counted. *Turns an agent did not spend* is the number everyone wants and nothing observes, and a
-  figure invented to sit beside four real ones is worse than a blank.
+It cannot be settled by argument, because it is a fact about running agents rather than a decision
+about a design — which is why it is here and why the other three questions this document opened with
+are not. Two things make it answerable rather than merely risky. The ask is appended to **every**
+dispatch unconditionally, so the [bootstrap trap](#what-went-wrong-last-time) — an intake nobody was
+told about — cannot recur. And the call rate is a figure on the page from the first day, so the
+answer arrives as a number in a week rather than as an impression in a quarter.
+
+If the number is near zero, nothing further in this document is worth building, and that is the
+honest order to find it out in.
