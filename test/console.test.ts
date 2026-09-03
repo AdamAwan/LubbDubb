@@ -1024,13 +1024,13 @@ test('a goal can still be sent back for more work, not only marked done', () => 
 test('the goal header captions its groups and draws the run state as one control', () => {
   const html = render(goalView());
 
-  for (const caption of ['Run state', 'Steer the work', 'Elsewhere']) {
+  for (const caption of ['Run state', 'Steer the work', 'Leave this page']) {
     assert.ok(html.includes(caption), `the group caption "${caption}" is what explains the controls under it`);
   }
 
   // One segmented control, and every state in it — including the one the goal is
   // not in, which is how the control says what the alternatives are.
-  assert.match(html, /class="cn-runstate"/, 'the run states share one control');
+  assert.match(html, /class="cn-ctlseg"/, 'the run states share one control');
   for (const state of ['Working', 'Done']) {
     assert.ok(html.includes(state), `${state} is a segment of the run state`);
   }
