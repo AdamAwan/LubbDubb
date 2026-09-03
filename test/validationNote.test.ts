@@ -137,9 +137,9 @@ test('ending the run is one destructive control that confirms on every goal', ()
   // may fire on a stray click at a goal whose plan happens to be clear.
   for (const verdict of [FLAGGED, CLEAR, null]) {
     const html = render(goalWith(verdict));
-    assert.ok(html.includes('End the run…'), 'the control always says it will ask first');
-    assert.ok(!html.includes('>End the run<'), 'and never posts on the click itself');
-    assert.match(html, /cn-tgl cn-danger/, 'it is drawn as the destructive control it is');
+    assert.ok(html.includes('Abandon…'), 'the control always says it will ask first');
+    assert.ok(!html.includes('>Abandon<'), 'and never posts on the click itself');
+    assert.match(html, /cn-ctlsegb cn-danger/, 'it is drawn as the destructive control it is');
   }
 });
 

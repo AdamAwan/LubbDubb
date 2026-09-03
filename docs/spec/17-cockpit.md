@@ -1015,14 +1015,14 @@ third answer between drawn and gone, and the one that is true of a stage the goa
 `goalSectionsOpen(page)` (`web/src/view/goalPage.ts`) is where each section starts, and the order the
 defaults unlock is the order the questions are asked in:
 
-| Section        | Open from                                                                        |
-| -------------- | -------------------------------------------------------------------------------- |
-| `ticket`       | until the work starts — a plan, a pull request or an agent folds it               |
+| Section        | Open from                                                                             |
+| -------------- | ------------------------------------------------------------------------------------- |
+| `ticket`       | until the work starts — a plan, a pull request or an agent folds it                   |
 | `validation`   | the work reaching an environment **and** there being a check, or one anybody ruled on |
-| `signals`      | the same arrival **and** a declared check, or one awaiting the operator           |
-| `environments` | any environment reading that is not `absent`                                      |
-| `tail`         | a delivery, a shortfall, a write-up, or a shut ticket                             |
-| `record`       | never — it has no relevant moment, and folded away it fetches nothing             |
+| `signals`      | the same arrival **and** a declared check, or one awaiting the operator               |
+| `environments` | any environment reading that is not `absent`                                          |
+| `tail`         | a delivery, a shortfall, a write-up, or a shut ticket                                 |
+| `record`       | never — it has no relevant moment, and folded away it fetches nothing                 |
 
 **The arrival is what makes a card relevant; it is not what puts anything in it.** A goal that
 shipped without ever declaring a check reads `Validation · no checks` in its heading, and opening it to
@@ -1073,6 +1073,13 @@ end.
 2. **What anybody has decided about it** — the appraisal verdict with the appraiser's own summary in its
    title, the conclusion verdict, and the validation verdict as a settled count (absent when the goal
    has no checks: "no plan" is a third reading and not a synonym for clear, [20](20-validation.md)).
+   **Each chip is prefixed with what it is a reading of** — `Appraisal ·`, `Harness verdict ·` — or `Your verdict ·`, read off the
+   conclusion's own `by`, because telling an operator their override was the harness's is the same
+   fault pointed the other way —
+   `Validation · 2 of 5 settled` — because the two words the conclusion chip most often reads,
+   "more work", were also the name of a control an operator presses, and a chip that can be read as
+   either is the header's oldest confusion. The prefix is what makes a chip say _judgement_ before it
+   says anything else; the glyph beside it repeats that.
    Every chip quotes a reading the server already made; nothing here is a second opinion. The
    validation chip is the one that is a **button**: the checks are on this page, so the reading has
    somewhere to go, and a verdict you can act on should not be the only chip that does nothing. After
@@ -1086,23 +1093,107 @@ end.
 **How many parts have merged is deliberately not in row 2 any more.** It is the track's first stage,
 and stating it in both places is how a header and the card it summarises come to disagree.
 
+### The control kit
+
+**One button, one link, one dropdown, one group of grouped buttons, and the captioned group they sit
+in** — `web/src/components/controls.tsx`, dressed by the `.cn-ctl*` block in `console.css`. A surface
+that draws controls reaches for these rather than writing class strings.
+
+It exists because the goal header proved what the alternative costs. Nine controls were hand-written
+as `cn-tgl`, `cn-tgl cn-danger`, `cn-tgl ${on ? 'cn-watch' : ''}` — and three faults rode along,
+each invisible to every check the repo runs:
+
+- **`.cn button { font: inherit }` outranks a bare class.** The controls that were `<button>`s drew at
+  the console's 13px while the two that were `<a>`s drew at 11.5px. One row, two sizes, for as long as
+  the rule was spelled `.cn-tgl`. Anything in the kit that sets a control's font is scoped `.cn` first.
+- **The "on" tint reused `cn-watch`, which is also the environments _card_.** Nothing in `.cn-tgl`
+  resets a margin, so the card's `margin: 0 13px 10px 26px` and its 2px left border came with it — on
+  every watched, prioritised or instructed goal, which is to say on the goals an operator looks at
+  most. The tone is `cn-tglon` now, a name no card wants.
+- **A `<select>` sizes itself.** From the same padding it drew shorter than its neighbours, with the
+  platform's own caret, because the platform renders it. `ControlSelect` turns that off and draws the
+  glyph and the caret itself; the picker inside keeps owning its options.
+
+Every one of those is a class string being asked to remember something. A component remembers it once,
+which is the whole argument for the kit:
+
+| component                            | what it is                                                                                      |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| `ControlBar`                         | the row; groups wrap as units, never through one                                                |
+| `ControlGroup`                       | a captioned group, and the rule before it                                                       |
+| `ControlButton`                      | one control that acts, with an optional count pill                                              |
+| `ControlSegments` / `ControlSegment` | grouped buttons: mutually exclusive states sharing an edge                                      |
+| `ControlSelect`                      | the chrome a `<select>` wears to sit in a bar                                                   |
+| `CONTROL_CLASS`                      | the seam for `DesktopLink`, `TicketLink`, `PrLink` — components that already take a `className` |
+
+**Tone is a prop, never a class string**: `on` for an engaged toggle, `primary` for the one control a
+surface expects to be pressed, `danger` for one that destroys something. A caller cannot invent a
+fourth, which is what stops the next surface inventing a second vocabulary of its own. **One height,
+one edge, one size** — 28px, the same border, radius, padding and 11.5px lettering, whatever element
+the control is built from. And **an icon never appears without its label** ([`Icon`](#the-headers-controls)):
+the glyph finds a control faster for somebody who already knows the row; it is not the name of it.
+
+`CONTROL_CLASS` is `cn-tgl`, the class the pull-request page and the human-task actions already wear,
+so adopting the kit is a change of _who writes the class_ rather than a second control family beside
+the one the cockpit has.
+
+**The kit is the cockpit's, not the goal header's.** `cn-tgl` appears as a literal in exactly one
+place — `CONTROL_CLASS` — and every surface that draws a control reaches it from there: the goal
+header, the pull-request masthead and its thread controls, the retrospective and scratchpad openers. A
+change to how a control looks is then one edit, and every surface takes it.
+
+**`ProfilePicker` dresses itself through `ControlSelect`**, rather than each caller wrapping it. It is
+the cockpit's one dropdown and it is drawn in three places — the goal header, the plan sheet's parts,
+Up next's rows — which is exactly the shape that drifts: three callers, three answers to "how tall is a
+`<select>` next to a button". What the component keeps is the _options_; what the kit answers is the
+glyph, the caret and the height. `--cn-r-sm` is 4px for the same reason it is a token at all: one
+decision, made once, taken by the console's chips, inputs and controls alike.
+
 ### The header's controls
 
-Ask, watch, the priority flag, the profile pin, the conclusion, raising a bug, the ticket, and ending
-the run — **in three groups, with the destructive one held out of all three**.
+The run's state, what steers the work, and what happens somewhere other than this goal — **in three
+groups, each with a caption saying what the group is for**, drawn through [the control
+kit](#the-control-kit) rather than as class strings.
 
-| group  | controls                                      |
-| ------ | --------------------------------------------- |
-| read   | Ask ↗, Open ticket ↗ (always drawn)         |
-| steer  | Watch, Prioritise, the profile pin, More work |
-| settle | Mark done / Unfinish, Raise a bug             |
-| —      | End the run…, pushed to the far end           |
+| caption         | controls                                              |
+| --------------- | ----------------------------------------------------- |
+| Run state       | Working / Done / Abandon… — one segmented control     |
+| Steer the work  | Give instructions, Watch, Prioritise, the profile pin |
+| Leave this page | Ask Claude Code ↗, Open ticket ↗, File a new bug    |
 
 The row was nine controls at one weight that **wrapped**, so no control had a stable position and no
-muscle memory could form. The groups are the fix and they are ordered by what an operator reaches for:
-what only reads, what steers the work, what settles it. A group does not wrap internally, so a narrow
-page breaks _between_ groups rather than through one — a control never loses the neighbours that say
-what kind of control it is.
+muscle memory could form. Grouping was the first fix; the captions are the second, and they are the
+one that carries. A caption answers "how is this control different from that one" **once, for a whole
+group**, which is what lets the control names stay short — `Give instructions` does not have to defend
+itself against `File a new bug` when one is captioned _Steer the work_ and the other _Leave this
+page_. A group
+does not wrap internally, so a narrow page breaks _between_ captions rather than through a group.
+
+**Every control carries an icon, and no icon appears without its label** (`Icon`,
+`web/src/components/icons.tsx`). They are recognition aids for an operator who already knows the row —
+the glyph finds the control faster than the word does, once. Stripping the label to leave the glyph
+turns a legible row into a quiz, which is the trade this header cannot make: it is the surface an
+operator reaches when they are least sure what is going on.
+
+**The run's three states are one control, not two buttons at opposite ends of the row.** `Mark done`
+and `End the run…` (now `Abandon…`) looked alike and read alike, and what separated them — one writes a verdict and
+stops scheduling, the other kills the goal's live agents, cancels its queued jobs and settles its
+standing instructions — was stated nowhere either of them could be seen. As segments of a **Run
+state** they are obviously alternatives, and which one the goal is in is readable without pressing
+anything:
+
+- **Working** is pressed while no conclusion stands. Pressing it on a finished goal withdraws `done`,
+  which is what `Unfinish` was.
+- **Done** writes the `done` conclusion. Agents already running are left alone; nothing further is
+  scheduled.
+- **Abandon…** is drawn while the harness holds a run, and once one has been abandoned the segment
+  stays, **inert, reading `Abandoned`** — a control that vanished on being used would leave the state
+  control saying the run is still working.
+
+Ending still wears `cn-danger`'s red at rest rather than only on hover, and still opens `EndRunModal`
+rather than posting: being a segment of the state it ends does not soften what it does. What it lost
+is the `auto` margin that pushed it to the far end — distance was standing in for an explanation, and
+the caption is the explanation.
 
 **Open ticket is always drawn, and resolves through three keys in order of how much
 each can be trusted**: the item's own `url`, which is the provider's; then
@@ -1126,12 +1217,9 @@ fact worth stating, where a missing button says nothing and reads as the cockpit
 having forgotten. It stops being an `<a>` because a link that leads nowhere is the
 dead end [refs](#links) exists to prevent.
 
-**`End the run…` is in no group and sits at the far end**, on an `auto` margin. Distance is the half of
-the warning a colour cannot carry: `cn-danger` says what the control does, and being the only thing
-over there says it is not one of the others.
-
-- **Ask** is the row's one control that writes nothing, and it is first for that reason: everything
-  after it acts on the goal, and this one only asks about it. An `<a>` carrying
+- **Ask Claude Code** is the row's one control that writes nothing, and it is named for where it goes:
+  `Ask` alone said neither whom nor about what, on a control whose whole point is that the answer comes
+  from somewhere else. An `<a>` carrying
   `claude://code/new?q=/lubbdubb ask <n> &folder=<config.desktopFolder>`, built by the same
   `desktopDeepLink` the plan sheet's **Discuss…** and the validation card's **Run it in Claude Code**
   use ([20](20-validation.md#starting-a-run-from-the-cockpit)), so it opens the operator's own Claude
@@ -1160,12 +1248,12 @@ over there says it is not one of the others.
   slots, and it changes nothing about whether the goal is allowed to move. A goal held by a cooldown,
   a part cap or an unapproved plan is still held, flagged. The flagged state and its age are read off
   `Issue.priority`, so the button cannot claim a priority the dispatcher is not honouring.
-- **Three conclusion controls, not two.** `Mark done` / `Unfinish` writes or withdraws `done`. **More
-  work** opens `InstructionModal` and writes what the operator wants done next, in words — it is a
-  third control rather than the finished toggle's other end because what it writes is not the opposite
-  of `done`: it is an instruction, plus everything that puts the goal back in front of the harness once
-  no PR is open — the `more_work` verdict, which retracts a standing delivery, and a plan that had
-  rolled up `complete` sent back to a planner for the operator to approve again
+- **Give instructions** opens `InstructionModal` and writes what the operator wants done next, in
+  words. It is captioned under _Steer the work_ rather than sitting beside the conclusion, because what
+  it writes is not the opposite of `done`: it is an instruction, plus everything that puts the goal back
+  in front of the harness once no PR is open — the `more_work` verdict, which retracts a standing
+  delivery, and a plan that had rolled up `complete` sent back to a planner for the operator to approve
+  again
   ([06](06-issue-pickup.md#concluding-an-issue),
   [16](16-http-api.md#post-apiissuesnumberinstruction)). The modal says both, because a control that
   quietly unwinds a delivery is one an operator has to be able to predict. It is offered on any open ticket, **including
@@ -1180,16 +1268,19 @@ over there says it is not one of the others.
   is absent when empty — the empty-state rule ("a surface that vanishes when quiet is
   indistinguishable from one that broke") is about surfaces answering a standing question, and "has
   anyone written on this goal" is answered by the header's control, which is always drawn.
-- **Raise a bug** is gated on `config.canFileTickets` and opens the shared `RaiseBugModal`. It files
+- **File a new bug** is gated on `config.canFileTickets` and opens the shared `RaiseBugModal`. It files
   into the tracker rather than writing a verdict about the item, and it leaves the goal's own verdict
-  where it found it.
-- **End the run** is keyed on the run **existing and not yet ended**, never on anything else the page
+  where it found it — which is exactly why it is captioned **Leave this page**, beside the two
+  destinations,
+  and not beside `Give instructions`. The pair had no visible difference and one is a second ticket.
+- **Abandon** is keyed on the run **existing and not yet ended**, never on anything else the page
   is showing — the lesson `planId` and `retroRef` learned. It is how a retained run is ended, so it
   has to be reachable for exactly as long as the harness still holds one
   ([16](16-http-api.md#post-apiissuesnumberdismiss-run)). It is the header's one **destructive**
   control: it wears `cn-danger` (red at rest, not only on hover — the warning has to be there before
-  the pointer is), it reads `End the run…` on every goal, and it opens `EndRunModal` rather than
-  posting. That is unconditional now, and the change is earned by what the route became: ending a run
+  the pointer is), it reads `Abandon…` on every goal — the word the modal it opens uses, because a
+  control and the confirmation it raises disagreeing about what is about to happen is the one thing a
+  confirmation exists to prevent — and it opens `EndRunModal` rather than posting. That is unconditional now, and the change is earned by what the route became: ending a run
   kills the goal's live agents, cancels its queued jobs and settles its standing instructions, none of
   which can be undone. A one-click toggle that abandons work in flight is the friction rule pointed
   the wrong way — the rule is against friction nobody's decision asked for, and this is a decision.
