@@ -1668,10 +1668,18 @@ rack — whose row name is the way onto it — and from any `<Ref>` that names t
 ([links](#links)), and the crumb at its head draws the
 whole ladder — the tab, then the goal it was reached from, then the pull request. On one no ticket
 owns, which the harness works and which therefore reaches this page too, the middle rung is simply
-absent: the trail is as deep as the place is, never padded to a fixed shape. Leaving it
-(`selectPr(null)`) lands on the goal underneath, which the place never cleared; and because a `<Ref>`
-reaches this page from anywhere at all, the tab it hangs off is narrowed to one that lists pull
-requests on the way in → [nesting](#nesting). `web/src/console/PrPage.tsx` draws it; `web/src/view/prPage.ts`
+absent: the trail is as deep as the place is, never padded to a fixed shape. Leaving it with the
+page's own control (`selectPr(null)`) lands on the goal underneath, which the place never cleared;
+and because a `<Ref>` reaches this page from anywhere at all, the tab it hangs off is narrowed to one
+that lists pull requests on the way in → [nesting](#nesting).
+
+**The goal rung _selects_ the goal, rather than clearing the pull request over it.** The two are the
+same move only when the place already holds the goal, and it does not always: the overview's
+pull-request rack — and every `<Ref to="pr:…">` drawn away from a goal page — opens this page with
+`pr` and nothing under it. The rung is still drawn there, because the page derives what owns the
+pull request from the snapshot rather than from the place (`goalRef`, `web/src/view/prPage.ts`), so
+`selectPr(null)` fell through the rung the operator had just clicked and landed on the tab: a crumb
+that named the goal and went to the overview. `web/src/console/PrPage.tsx` draws it; `web/src/view/prPage.ts`
 derives what it draws.
 
 **It has no route of its own.** Every reading on it is one the harness has already made and already
