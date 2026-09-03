@@ -338,6 +338,24 @@ export function buildDemoState(): DemoSeed {
           merged: false,
           health: { blocked: true, reasons: ['CI failing', '1 unresolved comment'] },
           attention: { status: 'harness', reasons: ['an agent is working this branch'] },
+          // The six review states below are a roll-call like the pickup statuses'
+          // above: an operator learning the mark should meet every arm of it once.
+          review: {
+            status: 'findings',
+            mode: 'deep',
+            routeReason: 'Touches the ranker and the budget together, and the cut is what every answer is built from.',
+            summary: 'Trims the ranked section list to a global token budget before the answer is composed.',
+            findings: [
+              'The budget is read inside the rank loop, so a section that ties is dropped or kept by list order.',
+              'A flow whose sections all exceed the budget composes an answer from nothing, with no error.',
+              'No test covers a budget smaller than one section.',
+            ],
+            reviewedAt: ago(12),
+            routedAt: ago(38),
+            agentId: 'agent_7kqz1',
+            routeAgentId: 'agent_d02mn',
+            headSha: '2b8e4d1f9c',
+          },
         }),
         demoPr({
           id: 'pr-411',
@@ -367,6 +385,18 @@ export function buildDemoState(): DemoSeed {
           merged: false,
           health: { blocked: false, reasons: [] },
           attention: { status: 'you', reasons: ['a merge is waiting on your verdict'] },
+          review: {
+            status: 'clear',
+            mode: 'quick',
+            routeReason: 'One module, one cache key, and the embed path is covered end to end.',
+            summary: 'Keys cached embeddings on the section digest so an unchanged section is not re-embedded.',
+            findings: [],
+            reviewedAt: ago(41),
+            routedAt: ago(55),
+            agentId: 'agent_ab4sc',
+            routeAgentId: 'agent_d02mn',
+            headSha: '9f21c0e447',
+          },
         }),
         demoPr({
           id: 'pr-409',
@@ -393,6 +423,18 @@ export function buildDemoState(): DemoSeed {
           merged: false,
           health: { blocked: true, reasons: ['behind base branch'] },
           attention: { status: 'harness', reasons: ['queued for a base update'] },
+          review: {
+            status: 'routed',
+            mode: 'deep',
+            routeReason: 'Changes what counts as approval, which is the gate in front of every merge.',
+            summary: null,
+            findings: [],
+            reviewedAt: null,
+            routedAt: ago(6),
+            agentId: null,
+            routeAgentId: 'agent_d02mn',
+            headSha: null,
+          },
         }),
         // Green, clean, unapproved and nobody's turn but a reviewer's — the one
         // shape the review-wait age exists for. Dated three days back so it is
@@ -415,6 +457,18 @@ export function buildDemoState(): DemoSeed {
             reasons: ['waiting on review'],
             reviewWaitingSince: new Date(now - 3 * 24 * 60 * 60 * 1000).toISOString(),
           },
+          review: {
+            status: 'deciding',
+            mode: null,
+            routeReason: null,
+            summary: null,
+            findings: [],
+            reviewedAt: null,
+            routedAt: null,
+            agentId: null,
+            routeAgentId: null,
+            headSha: null,
+          },
         }),
         demoPr({
           id: 'pr-413',
@@ -430,6 +484,18 @@ export function buildDemoState(): DemoSeed {
           merged: false,
           health: { blocked: false, reasons: [] },
           attention: { status: 'you', reasons: ['a merge is waiting on your verdict'] },
+          review: {
+            status: 'skipped',
+            mode: null,
+            routeReason: 'Mechanical: every call site moves to the catalog’s own validator, no behaviour of its own.',
+            summary: null,
+            findings: [],
+            reviewedAt: null,
+            routedAt: ago(120),
+            agentId: null,
+            routeAgentId: 'agent_p91xr',
+            headSha: null,
+          },
         }),
         demoPr({
           id: 'pr-414',
@@ -445,6 +511,18 @@ export function buildDemoState(): DemoSeed {
           merged: false,
           health: { blocked: true, reasons: ['CI failing on base PR #413'] },
           attention: { status: 'elsewhere', reasons: ['waiting on PR #413'] },
+          review: {
+            status: 'elsewhere',
+            mode: null,
+            routeReason: null,
+            summary: null,
+            findings: [],
+            reviewedAt: null,
+            routedAt: null,
+            agentId: null,
+            routeAgentId: null,
+            headSha: null,
+          },
         }),
         // The ignore tag as a *state*, so the demo shows the one row the harness
         // will never touch: tagged, still listed with its health, drawn spent.
@@ -513,6 +591,21 @@ export function buildDemoState(): DemoSeed {
           merged: true,
           state: 'merged',
           closedAt: ago(52),
+          // A dead pull request keeps the one reading that is a record rather than
+          // a verdict about what happens next — which is what the page reached
+          // after a merge is usually opened to ask about.
+          review: {
+            status: 'clear',
+            mode: 'deep',
+            routeReason: 'Changes when a gap is considered closed, which nothing downstream re-checks.',
+            summary: 'Verifies the gap has no weak answers left before resolving it on merge.',
+            findings: [],
+            reviewedAt: ago(70),
+            routedAt: ago(96),
+            agentId: 'agent_6ttlw',
+            routeAgentId: 'agent_d02mn',
+            headSha: '4c7a91b2de',
+          },
         },
         {
           id: 'pr-406',

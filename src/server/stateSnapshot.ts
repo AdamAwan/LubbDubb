@@ -38,6 +38,8 @@ import { landedCount, landingFor, landingReadiness } from '../stacks/landing.js'
 import { prHealth, prState } from '../prHealth.js';
 import { applyThreadReopens } from '../prThreads.js';
 import { prAttentionStatus, type PrAttentionContext } from '../prAttention.js';
+import { reviewReading } from '../review/prReview.js';
+import { prReviewState } from '../review/prReviewState.js';
 import {
   effectivePickupStates,
   issuePickupStatus,
@@ -418,6 +420,15 @@ export function buildStateSections(
   // the rules ask, including the rejection expiry — the query is null (and the
   // read never happens) until an operator has actually rejected something, which
   // is the same shape `Harness.runCycle` and the executor use.
+  // The rows every reading of the fleet review is taken from, gathered once: the
+  // attention lens below asks whether one is still coming, and `reviewStateOf`
+  // asks what it said. Two reads of the same tables could answer differently
+  // across a pulse that lands between them.
+  const reviewRows = {
+    prReviews: new Map(store.listPrReviews().map((review) => [review.prNumber, review])),
+    prReviewRoutes: new Map(store.listPrReviewRoutes().map((route) => [route.prNumber, route])),
+    prReviewedElsewhere: store.prsReviewedElsewhere(),
+  };
   const signals = rejectionSignalQuery(proposals);
   const attentionCtx: PrAttentionContext = {
     // Unfiltered, exactly as `inheritedCiFailure`/`basePrOf` need it (and as the
@@ -441,9 +452,7 @@ export function buildStateSections(
     // The same two halves the dispatcher reads, so a row saying a review is
     // coming and a rule dispatching one are the same reading rather than two.
     review: config.review,
-    prReviews: new Map(store.listPrReviews().map((review) => [review.prNumber, review])),
-    prReviewRoutes: new Map(store.listPrReviewRoutes().map((route) => [route.prNumber, route])),
-    prReviewedElsewhere: store.prsReviewedElsewhere(),
+    ...reviewRows,
   };
   // The world's change history the Activity feed / Signals panels draw. Read here
   // rather than at the snapshot literal below because its entries carry structured
@@ -640,6 +649,23 @@ export function buildStateSections(
       validation: validationChecksFor(origin),
     };
   };
+  /**
+   * Where a pull request stands with the fleet's reviewer, off the same four rows
+   * the attention lens above reads — one reading, so the mark on a row and the
+   * clause holding its merge can never disagree. Undefined where the review is
+   * off, which is what draws no mark at all.
+   */
+  const reviewStateOf = (prNumber: number): PullRequest['review'] =>
+    prReviewState(prNumber, reviewReading(reviewRows, prNumber), config.review) ?? undefined;
+  /**
+   * The one enrichment a *dead* pull request gets, and the exception is
+   * deliberate: the other three verdicts answer what happens next, and nothing
+   * happens next on a merged row — this is the record of what was already read,
+   * and "why did this merge with three findings on it" is asked precisely after
+   * the merge.
+   */
+  const withReview = <T extends PullRequest>(pr: T): T => ({ ...pr, review: reviewStateOf(pr.number) });
+
   // The open pull requests with their three verdicts folded — hoisted out of the
   // `world` literal below because the local run's rows read the same rows: what has
   // happened on a branch has to be the same answer wherever it is asked, and
@@ -659,6 +685,7 @@ export function buildStateSections(
       // duplicate. That drift would fail silently — the cockpit saying *repair* while
       // the harness held. Same call the dispatcher makes, off the same policy.
       ciVerdict: classifyCiFailures(pr.ciChecks, config.ci, pr.ciChecksWithheld),
+      review: reviewStateOf(pr.number),
     })),
   );
   // Branch → the pull request on it, open rows first so a reopened branch reads as
@@ -836,6 +863,9 @@ export function buildStateSections(
       // merge" and attention answers "whose turn is it", and the two have
       // different right answers for the same PR (see `src/prAttention.ts`).
       pullRequests: openPullRequests(),
+      // The fleet review rides the closed rows too — see `withReview`. Nothing
+      // else about them is enriched.
+      closedPullRequests: world.closedPullRequests?.map(withReview),
       // `conclusion` sits beside `pickup` and does not feed it — the same
       // relationship `attention` has to `health` above. Pickup answers "would an
       // agent start on this next cycle", which the work-item state already
@@ -865,8 +895,10 @@ export function buildStateSections(
     // The closed pull requests kept past the world's window, so a goal's page can
     // still name what it shipped. Shipped whole rather than folded into `world`:
     // `closedPullRequests` means "recently", and every reader of it is entitled to
-    // keep meaning that. Nothing is enriched — no rule and no gate reads these.
-    archivedPullRequests,
+    // keep meaning that. Nothing is enriched but the fleet review's own record,
+    // which is a record rather than a verdict about what happens next — no rule
+    // and no gate reads any of it (see `withReview`).
+    archivedPullRequests: archivedPullRequests.map(withReview),
     // Chains of stacked pull requests, derived from the world rather than stored:
     // a plan *adopts* a stack, so a chain a human opened by hand is drawn on the
     // same terms as one a plan produced. The unfiltered open list, for the reason

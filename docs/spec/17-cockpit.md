@@ -5242,6 +5242,33 @@ inches from the first. The **lenses** that produce them — the work graph (`src
 `prAttentionStatus` and `overlaps` — stay read-only views out of `src/dispatcher/`, asserted
 structurally in `test/workGraph.test.ts`, `test/stacks.test.ts` and `test/prAttention.test.ts`.
 
+### The fleet review's mark
+
+The fourth per-item verdict, and the only one drawn as a **glyph alone**: the review mark
+(`web/src/components/ReviewMark.tsx`), one pair of spectacles on a pull request's row and in its
+masthead, tinted by what the reviewer said — green `clear`, red `findings`, amber `routed`, dashed
+blue `deciding`, faint `skipped` and `elsewhere`. It sits left of the CI ladder, so the two verdicts
+read in the order the harness produces them.
+
+**One badge slot on the glyph's shoulder, three meanings** — how many findings, a dash for a review
+that will not happen, an arrow for one that happened somewhere else. A mark drawn *through* the lenses
+is mud at 15px; a badge beside them holds at every size a row uses.
+
+**Everything else is in the tooltip**: the mode, the triage's reason in its own words, what the
+reviewer understood the diff to do, and its findings one line each. The cockpit's own element rather
+than the browser's `title`, which arrives a second late, cannot be styled and never arrives at all on
+a touch screen. The pull-request page draws the same record at full length in its rail, through
+`ReviewDetail` from the same module — the console owns the card, the shared component owns the words,
+so the two surfaces cannot come to word one record differently.
+
+**It is the exception to `icons.tsx`' rule that an icon never appears without its label**, and it
+earns it the way the CI ladder does: a dense list of pull requests, one recurring subject, the words
+one hover away. The `aria-label` carries the same sentence the tooltip heads with and the tooltip opens
+on keyboard focus, so the glyph is never the only channel. The glyph is deliberately not `eye`, which
+already means *watching* — reading a diff and watching an item are different claims.
+
+Absent where the deployment has no fleet review. → [07](07-pull-requests.md#where-the-operator-sees-it)
+
 ## What ships and nothing draws
 
 Stated rather than left to be discovered, because a snapshot field with no reader is indistinguishable

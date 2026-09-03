@@ -58,6 +58,7 @@ import type { PrAttention } from './prAttention.js';
 import type { PoolStatus } from './pool/poolDesk.js';
 import type { PoolRollup } from './pool/aggregate.js';
 import type { PrHealth } from './prHealth.js';
+import type { PrReviewState } from './review/prReviewState.js';
 import type { ControlState } from './runtimeControl.js';
 import type { RunningConfigGroup } from './server/runningConfig.js';
 import type { ConfigChange } from './configApply.js';
@@ -174,6 +175,19 @@ export interface PullRequest extends WorldPullRequest {
   attention?: PrAttention;
   /** What the harness will do about each *failing* check, from `classifyCiFailures`. */
   ciVerdict?: CiVerdict;
+  /**
+   * Where this pull request stands with the fleet's own reviewer — the mark on
+   * its row and the card on its page (`src/review/prReviewState.ts`).
+   *
+   * Optional for a reason the three above do not share: it is **absent on a
+   * deployment with the review off**, which is the default, and absent is what
+   * draws no mark. It rides the closed and archived rows too, where the other
+   * three do not: those are verdicts about what happens next, and nothing happens
+   * next on a merged pull request — this is a record of what was already read,
+   * and the page that asks why a diff merged with findings on it is exactly the
+   * page reached after the merge.
+   */
+  review?: PrReviewState;
 }
 
 /** An open pull request, where all three verdicts are always folded. */
@@ -2336,6 +2350,8 @@ export type { McpChannel } from './types.js';
 // what the store holds. → `docs/spec/28-cross-fleet-pool.md`
 export type { PoolClockKind, PoolDigestRow, PoolFleetReading, PoolPublication } from './types.js';
 export type { PoolStatus } from './pool/poolDesk.js';
+/** The fleet review as the cockpit draws it. → `docs/spec/07-pull-requests.md#the-fleet-review` */
+export type { PrReviewState, PrReviewStatus } from './review/prReviewState.js';
 export type { PoolRollup, PoolRollupRow } from './pool/aggregate.js';
 /** What `POST /api/issues/:number/dismiss-run` stopped on its way out. */
 export type { RunClearOut } from './floor/endRun.js';

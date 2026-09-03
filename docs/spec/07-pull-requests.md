@@ -1038,6 +1038,28 @@ request itself where `review.publish` is on — before they give the approval th
 `prAttentionStatus` reads the same two halves, so a row that says a review is coming and a rule that
 dispatches one are one reading rather than two.
 
+### Where the operator sees it
+
+One reading, `prReviewState` (`src/review/prReviewState.ts`), folded onto every pull request on the
+wire beside `health`, `attention` and `ciVerdict`, and drawn as the review mark
+([17](17-cockpit.md#the-fleet-reviews-mark)). It has six answers where the verdict has two, because the
+verdict is the half an operator sees **last**: `deciding` (no route, and the triage takes one),
+`routed` (a mode chosen, nothing read yet), `clear`, `findings`, `skipped` and `elsewhere`. A pull
+request nothing has read is the common case, and drawing that as an absent verdict says the review
+found nothing.
+
+**A lens, never a gate.** It reads the same four rows `reviewSatisfied` reads and decides nothing:
+every arm the gate stands down on is an arm the mark names in its own words, so the two cannot
+disagree about whether a review is coming. And it is folded on the server for `ciVerdict`'s reason —
+the arms read `config.review`, so a browser deciding which of them applies would be a second glob of
+policy sitting nowhere near the rule it duplicates.
+
+**Absent where the review is off**, which is the default, and absent is what draws no mark: a grey "no
+review" glyph on every row of every default deployment is a claim about a feature nobody turned on.
+It is the one reading a *closed* pull request keeps, because it is a record of what was read rather
+than a verdict about what happens next — and "why did this merge with three findings on it" is asked
+precisely after the merge.
+
 ### The reviewer's checkout
 
 A **read-only checkout of the pull request's branch** (`readOnlyDispatch`, `review/pr-<n>`), never the
