@@ -35,6 +35,7 @@ const { buildDemoState } = await import('../web/src/demo/fixtures.js');
 const { ConsoleRoot } = await import('../web/src/console/ConsoleRoot.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
 const { goalIssue } = await import('../web/src/view/goalPage.js');
+const { hasPrPage } = await import('../web/src/view/prPage.js');
 const { api } = await import('../web/src/api.js');
 
 const FLAGGED: ValidationVerdict = {
@@ -89,6 +90,8 @@ const render = (v: CockpitView) =>
       refUrls: v.state.refUrls,
       openGoal: () => undefined,
       hasGoal: (r: string) => goalIssue(v.state, r) !== undefined,
+      openPr: () => undefined,
+      hasPr: (n: number) => hasPrPage(v.state, n),
       children: createElement(ConsoleRoot, { view: v, actions }),
     }),
   );
@@ -134,9 +137,9 @@ test('ending the run is one destructive control that confirms on every goal', ()
   // may fire on a stray click at a goal whose plan happens to be clear.
   for (const verdict of [FLAGGED, CLEAR, null]) {
     const html = render(goalWith(verdict));
-    assert.ok(html.includes('End the run…'), 'the control always says it will ask first');
-    assert.ok(!html.includes('>End the run<'), 'and never posts on the click itself');
-    assert.match(html, /cn-tgl cn-danger/, 'it is drawn as the destructive control it is');
+    assert.ok(html.includes('Abandon…'), 'the control always says it will ask first');
+    assert.ok(!html.includes('>Abandon<'), 'and never posts on the click itself');
+    assert.match(html, /cn-ctlsegb cn-danger/, 'it is drawn as the destructive control it is');
   }
 });
 

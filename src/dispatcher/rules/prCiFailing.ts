@@ -15,7 +15,7 @@ import { mergeProposalRef, proposalHold } from '../../proposals/proposals.js';
 import { dispatchVerdict } from '../dispatchCooldown.js';
 import { concernUrgency, type DispatchRuleId } from '../rules.js';
 import {
-  prCommentOrigin,
+  prCommentSignalRef,
   prCommentsOrigin,
   reviewRecheckNote,
   reviewThreadNote,
@@ -209,8 +209,12 @@ export function prCiFailing(s: StageContext): void {
         originSummary: many
           ? `${unhandled.length} review threads on PR #${pr.number} from ${authors.join(', ')}`
           : `Review comment from ${authors[0]}: ${unhandled[0]!.body}`,
+        // Keyed on `prCommentSignalRef`, which moves when the thread gains a
+        // reply: a follow-up on a thread the running agent was already told about
+        // is a new thing to say, and the plain thread ref would have swallowed it
+        // as something already delivered.
         signals: unhandled.map((c) => ({
-          ref: prCommentOrigin(pr.number, c.id),
+          ref: prCommentSignalRef(pr.number, c),
           note: reviewThreadNote(pr.number, c),
         })),
       });

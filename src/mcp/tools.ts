@@ -8,11 +8,11 @@ import { concludePart } from './tools/concludePart.js';
 import { concludeWork } from './tools/concludeWork.js';
 import { escalate } from './tools/escalate.js';
 import { featureSummary } from './tools/featureSummary.js';
-import { knowledgeAsk } from './tools/knowledgeAsk.js';
 import { linkTicket } from './tools/linkTicket.js';
 import { noteProgress } from './tools/noteProgress.js';
 import { openPr } from './tools/openPr.js';
 import { planNotNeeded } from './tools/planNotNeeded.js';
+import { planCorrect } from './tools/planCorrect.js';
 import { planSubmit } from './tools/planSubmit.js';
 import { raise as raiseFact } from './tools/raise.js';
 import { reportRemedy } from './tools/reportRemedy.js';
@@ -49,6 +49,7 @@ import { worldRead } from './tools/worldRead.js';
  */
 const TOOLS: Record<McpToolName, ToolFactory> = {
   plan_submit: planSubmit,
+  plan_correct: planCorrect,
   plan_not_needed: planNotNeeded,
   escalate,
   world_read: worldRead,
@@ -73,7 +74,6 @@ const TOOLS: Record<McpToolName, ToolFactory> = {
   review_route: reviewRoute,
   report_remedy: reportRemedy,
   raise: raiseFact,
-  knowledge_ask: knowledgeAsk,
   review_pack_submit: reviewPackSubmit,
   review_pack_check: reviewPackCheck,
 };

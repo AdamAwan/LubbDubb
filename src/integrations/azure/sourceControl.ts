@@ -4,6 +4,7 @@ import type {
   CiCheckRequeueInput,
   MergeMethod,
   PrBaseInput,
+  PrCloseInput,
   PrCreateInput,
   PrLabelInput,
   PrMergeInput,
@@ -13,7 +14,7 @@ import type {
   SendResult,
 } from '../../sink/actionSink.js';
 import type { CiCheck, CiStatus, MergeableState, PrReviewThread, PullRequest, ViewerAssignment } from '../../types.js';
-import { threadComments, threadState } from '../../prThreads.js';
+import { ourReplyRefs, threadComments, threadState, type SentPrReplies } from '../../prThreads.js';
 import { EVIDENCE_LOG_TAIL_LINES, type CiEvidenceTarget, type CiFailureEvidence } from '../../ci/ciEvidence.js';
 import type {
   BranchDeleteCapable,
@@ -22,6 +23,7 @@ import type {
   CiEvidenceCapable,
   Integration,
   PrBaseCapable,
+  PrCloseCapable,
   PrCreateCapable,
   PrLabelCapable,
   PrMergeCapable,
@@ -70,6 +72,15 @@ interface AzureSourceControlOpts {
   closedPrWindowMs?: number;
   /** Injectable clock, so the retention window is testable without waiting for one. */
   now?: () => number;
+  /**
+   * The record of which replies this harness actually sent — what decides whether
+   * a reply is the fleet's. Threaded in from `src/system.ts` via the registry, on
+   * the same terms as the GitHub provider's: the two must not come to disagree
+   * about a thread, which is why there is one derivation in `src/prThreads.ts`.
+   * Unset means "no record", and every thread then reads as unanswered work.
+   * → `docs/spec/07-pull-requests.md#review-threads`
+   */
+  sentReplies?: SentPrReplies;
 }
 
 /**
@@ -86,6 +97,7 @@ export class AzureDevOpsSourceControlIntegration
     PrReplyCapable,
     PrThreadResolveCapable,
     PrMergeCapable,
+    PrCloseCapable,
     PrLabelCapable,
     PrCreateCapable,
     PrTitleCapable,
@@ -141,7 +153,7 @@ export class AzureDevOpsSourceControlIntegration
           (p) => sameIdentity(p.authorUniqueName, prAuthor) || viewerAssignment(p.reviewers, prAuthor) !== undefined,
         );
       }
-      const closedPullRequests = await this.recentlyClosed();
+      const closedPullRequests = await this.recentlyClosed(viewer);
 
       const pullRequests = await Promise.all(
         pulls.map(async (p): Promise<PullRequest> => {
@@ -161,7 +173,7 @@ export class AzureDevOpsSourceControlIntegration
             hydrationMaxAgeMs(plan, prReadRef(p.pullRequestId)),
           );
           this.mergeCommits.set(p.pullRequestId, p.lastMergeSourceCommit);
-          const reviewThreads = buildReviewThreads(threads, viewer);
+          const reviewThreads = buildReviewThreads(threads, ourReplyRefs(this.opts.sentReplies, p.pullRequestId));
           const pr: PullRequest = {
             id: `pr_${p.pullRequestId}`,
             number: p.pullRequestId,
@@ -192,6 +204,13 @@ export class AzureDevOpsSourceControlIntegration
           // the sentence simply drops the name.
           const author = p.authorDisplayName || p.authorUniqueName;
           if (author !== '') pr.author = author;
+          // Whose pull request this is, against `viewer` and never `prAuthor`, for
+          // the reason the assignment below is: the filter also admits the pull
+          // requests a colleague put the operator on as a reviewer, so reading it as
+          // ownership is what had the fleet working another team's review threads.
+          // Compared on the UPN — `displayName` is a label and two people may share
+          // one. → `src/prOwnership.ts`
+          if (viewer !== '' && p.authorUniqueName !== '') pr.viewerAuthored = sameIdentity(p.authorUniqueName, viewer);
           // Against `viewer` — who the credential *is* — and never against
           // `prAuthor`, which is a filter and is unset the moment a project turns
           // `ownWorkOnly` off. Read the other way round, turning the filter off
@@ -279,12 +298,21 @@ export class AzureDevOpsSourceControlIntegration
    * domain shape as an active one — minus every signal only an *open* PR has
    * (policy evaluations, threads, labels), which is what keeps this one request.
    */
-  private async recentlyClosed(): Promise<PullRequest[]> {
+  private async recentlyClosed(viewer: string): Promise<PullRequest[]> {
     const { api, prAuthor, closedPrWindowMs } = this.opts;
     if (!closedPrWindowMs || closedPrWindowMs <= 0) return [];
     const since = closedWindowStart((this.opts.now ?? Date.now)(), closedPrWindowMs);
     const closed = await api.listRecentlyClosedPullRequests(since);
-    return closed.filter((p) => !prAuthor || p.authorUniqueName === prAuthor).map(mapClosedPull);
+    return closed
+      .filter((p) => !prAuthor || p.authorUniqueName === prAuthor)
+      .map((p) => {
+        const pr = mapClosedPull(p);
+        // Answered on the closed list too, because the branch reap acts on it: a
+        // colleague's completed pull request whose branch the harness deleted is
+        // the same mistake as a rename, and irreversible.
+        if (viewer !== '' && p.authorUniqueName !== '') pr.viewerAuthored = sameIdentity(p.authorUniqueName, viewer);
+        return pr;
+      });
   }
 
   async postPrReply(input: PrReplyInput): Promise<SendResult> {
@@ -295,7 +323,10 @@ export class AzureDevOpsSourceControlIntegration
       input.commentId !== null
         ? await api.createThreadReply(input.prNumber, Number(input.commentId), 1, input.body)
         : await api.createThread(input.prNumber, input.body);
-    return { ok: true, ref: ref.url };
+    // The id, when Azure named one, is what the next thread read will call this
+    // comment — the whole of how a reply is recognised as the fleet's. The URL
+    // stays the audit line's reference.
+    return { ok: true, ref: ref.url, ...(ref.id === undefined ? {} : { commentRef: String(ref.id) }) };
   }
 
   /**
@@ -319,6 +350,17 @@ export class AzureDevOpsSourceControlIntegration
     const result = await this.opts.api.completePullRequest(input.prNumber, commit, input.method);
     const ok = result.status === 'completed' || result.status === 'queued';
     return { ok, ref: result.status };
+  }
+
+  /**
+   * Close a pull request that will not be merged — `abandoned` on Azure, which is
+   * the same word the closed-window read maps to `closed`. Unlike {@link mergePr}
+   * it needs no remembered head commit: Azure asks for one only to complete, so an
+   * abandon works on a pull request this process never snapshotted.
+   */
+  async closePr(input: PrCloseInput): Promise<SendResult> {
+    await this.opts.api.abandonPullRequest(input.prNumber);
+    return { ok: true, ref: `pr:${input.prNumber}` };
   }
 
   async setPrLabel(input: PrLabelInput): Promise<SendResult> {
@@ -778,25 +820,34 @@ export function computeApproved(votes: number[]): boolean {
  * beside it.
  *
  * A thread is `resolved` once Azure marks it so (fixed/closed/wontFix/byDesign)
- * and `answered` when the harness authored the latest **reply** in it — the
+ * and `answered` when the latest **reply** in it is one the harness recorded
+ * sending — the
  * network-native analogue of the fake's `markCommentHandled`, so the
  * deterministic loop settles one poll after a reply is posted. Both fold to
  * `handled` for the rules; they are kept apart because "the reviewer closed this"
  * and "we answered and nobody has come back" are different news for a person.
  * System comments (status changes, etc.) are ignored.
  *
- * The reply arm reads the thread's *position*, not merely its latest author, for
- * the reason spelled out on the GitHub side: `viewer` is whoever the harness
- * authenticates as, which on a single-operator deployment is the operator, so an
- * unanswered thread they opened themselves read as already handled and their
- * review was dropped before any rule saw it. A one-comment thread has no reply and
- * is therefore never `answered` by this arm, whoever wrote it — and for the same
- * reason a reply's `ours` is the position rather than an identity test.
+ * **The reply arm is a record, not an identity test**, and `ourReplies` carries
+ * it: the ids of the comments this harness actually posted (`PrReplyStore`). The
+ * PAT the harness authenticates as is the operator's own on a single-operator
+ * deployment, so asking whether the newest reply's author is `viewer` answered
+ * yes for the operator's own follow-up on their own thread — which flipped it to
+ * `answered`, folded to `PrComment.handled`, and dropped the comment before rule
+ * `pr-review-comment` ever saw it. Position was not enough either: a reviewer
+ * replies under their own root too. Only the record can tell the two apart, and it
+ * is the same record the GitHub provider reads, so the two cannot disagree about a
+ * thread.
+ *
+ * A one-comment thread has no reply and is never `answered` by this arm. An empty
+ * `ourReplies` — no record, or a reply from before the record existed — leaves
+ * every thread open, which is the safe direction: a re-dispatch is visible and
+ * cheap, a dropped review is neither.
  *
  * Azure's own `resolved` status is unaffected and stays the primary arm — it is a
  * real verdict from the reviewer rather than an inference about who spoke last.
  */
-export function buildReviewThreads(threads: AzThread[], viewer: string): PrReviewThread[] {
+export function buildReviewThreads(threads: AzThread[], ourReplies: ReadonlySet<string> = new Set()): PrReviewThread[] {
   const RESOLVED: ReadonlySet<string> = new Set(['fixed', 'closed', 'wontFix', 'byDesign']);
   const out: PrReviewThread[] = [];
   for (const thread of threads) {
@@ -811,16 +862,17 @@ export function buildReviewThreads(threads: AzThread[], viewer: string): PrRevie
       body: root.content,
       state: threadState({
         resolved: thread.status !== null && RESOLVED.has(thread.status),
-        answered: lastReply?.authorUniqueName === viewer,
+        answered: lastReply !== null && ourReplies.has(String(lastReply.id)),
       }),
       replies: replies.map((c) => ({
         id: String(c.id),
         author: c.authorUniqueName,
         body: c.content,
-        // Whoever the credential is: the harness only ever *replies*, so a reply
-        // from the viewer is the harness's even where the token is the operator's
-        // own — the same position argument the state's second arm rests on.
-        ours: c.authorUniqueName === viewer,
+        // The record of what the harness sent, never the author. Azure's PAT is
+        // the operator's own on a single-operator deployment, so an identity test
+        // badged their own replies as the fleet's and settled the thread under
+        // them — see `PrReplyStore`.
+        ours: ourReplies.has(String(c.id)),
       })),
     };
     // Where the thread hangs, when Azure reported it — a thread on the pull

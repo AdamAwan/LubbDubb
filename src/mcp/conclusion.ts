@@ -14,11 +14,32 @@ import type { IssueConclusionVerdict } from '../types.js';
  */
 
 /** The two verdicts an agent may cast. `undeclared` is the absence of a call, never an argument. */
-export const CONCLUSION_VERDICTS = ['done', 'more_work'] as const satisfies readonly IssueConclusionVerdict[];
+const CONCLUSION_VERDICTS = ['done', 'more_work'] as const satisfies readonly IssueConclusionVerdict[];
 
-export const CONCLUSION_VERDICT_HELP: Record<IssueConclusionVerdict, string> = {
+/**
+ * The third answer, which is **not** a verdict about the goal.
+ *
+ * `done` and `more_work` both say something about the work; this says the work
+ * could not be attempted, and names what stopped it. It is not a member of
+ * {@link IssueConclusionVerdict} and writes no conclusion row, because the two
+ * have different lifetimes and different readers: a conclusion is the agent's
+ * standing statement about its own run, and a block is a park whose exit is the
+ * **obstacle** rather than the issue — a desk lifts it when the board does, with
+ * nobody having declared anything about whether the goal is finished.
+ * → `docs/spec/27-obstacles.md#blocked-is-an-answer`
+ */
+export const BLOCKED_STATUS = 'blocked';
+
+/** Every status `conclude_work` accepts, which is the two verdicts plus the block. */
+export const CONCLUSION_STATUSES = [...CONCLUSION_VERDICTS, BLOCKED_STATUS] as const;
+
+export const CONCLUSION_VERDICT_HELP: Record<IssueConclusionVerdict | typeof BLOCKED_STATUS, string> = {
   done: 'everything the issue asked for is delivered and merged; nothing further should be scheduled for it',
   more_work: 'you delivered part of it, or found that more is needed — the issue should come back round',
+  blocked:
+    'you could not finish because of something that is not this goal, and you have raised it — name it with ' +
+    'obstacle: "<id>". The goal parks until that clears, rather than coming back round for another agent to ' +
+    'hit the same wall',
 };
 
 /** A note long enough that it is prose rather than a line, but not a pasted transcript. */
@@ -26,14 +47,30 @@ const MAX_CONCLUSION_NOTE = 2000;
 
 export function validateConclusion(
   args: Record<string, unknown>,
-): { ok: true; verdict: IssueConclusionVerdict; note: string } | { ok: false; error: string } {
+):
+  | { ok: true; verdict: IssueConclusionVerdict; note: string; obstacleId: null }
+  | { ok: true; verdict: typeof BLOCKED_STATUS; note: string; obstacleId: string }
+  | { ok: false; error: string } {
   const verdict = args.status;
-  if (typeof verdict !== 'string' || !CONCLUSION_VERDICTS.includes(verdict as IssueConclusionVerdict)) {
+  if (typeof verdict !== 'string' || !CONCLUSION_STATUSES.includes(verdict as (typeof CONCLUSION_STATUSES)[number])) {
     return {
       ok: false,
       error:
-        `status must be one of ${CONCLUSION_VERDICTS.join(', ')}. ` +
-        CONCLUSION_VERDICTS.map((v) => `${v}: ${CONCLUSION_VERDICT_HELP[v]}`).join('. '),
+        `status must be one of ${CONCLUSION_STATUSES.join(', ')}. ` +
+        CONCLUSION_STATUSES.map((v) => `${v}: ${CONCLUSION_VERDICT_HELP[v]}`).join('. '),
+    };
+  }
+  // Required, and refused rather than defaulted: a block with nothing named is a
+  // park with no exit — nothing to watch, and nothing for the desk that lifts it
+  // to read. The id is in the answer `raise` gave the agent a moment ago.
+  const obstacleId = typeof args.obstacle === 'string' ? args.obstacle.trim() : '';
+  if (verdict === BLOCKED_STATUS && obstacleId === '') {
+    return {
+      ok: false,
+      error:
+        'obstacle is required for blocked: the id of the obstacle that stopped you, which is the "id" in ' +
+        'the answer raise gave you. If you have not raised it, raise it first — a block that names nothing ' +
+        'parks your goal with nothing to lift it.',
     };
   }
   const note = typeof args.note === 'string' ? args.note.trim() : '';
@@ -41,14 +78,16 @@ export function validateConclusion(
     return {
       ok: false,
       error:
-        'note is required. Say what you delivered (for done) or what is still outstanding (for more_work) — ' +
-        'an operator decides what happens to the ticket from this note alone.',
+        'note is required. Say what you delivered (for done), what is still outstanding (for more_work), or ' +
+        'what you got as far as before the obstacle stopped you (for blocked) — an operator decides what ' +
+        'happens to the ticket from this note alone.',
     };
   }
   if (note.length > MAX_CONCLUSION_NOTE) {
     return { ok: false, error: `note is too long (${note.length} chars, max ${MAX_CONCLUSION_NOTE}). Summarise it.` };
   }
-  return { ok: true, verdict: verdict as IssueConclusionVerdict, note };
+  if (verdict === BLOCKED_STATUS) return { ok: true, verdict: BLOCKED_STATUS, note, obstacleId };
+  return { ok: true, verdict: verdict as IssueConclusionVerdict, note, obstacleId: null };
 }
 
 /**

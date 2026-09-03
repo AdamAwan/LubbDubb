@@ -384,7 +384,8 @@ test('accepting a plan-cause shortfall sends the decomposition back to a planner
   assert.equal(system.store.getPlanByOrigin('issue:12')!.status, 'active', 'and nothing moved before the click');
 
   const accepted = await system.proposals.accept(proposal!.id, 'agreed');
-  assert.equal(accepted!.outcome, 'performed');
+  assert.ok(accepted && 'outcome' in accepted, 'a shortfall raises no caveats, so nothing gates the accept');
+  assert.equal(accepted.outcome, 'performed');
   const plan = system.store.getPlanByOrigin('issue:12')!;
   assert.equal(plan.status, 'planning', 'which is the entire effect — rule `issue-plan` takes it from here');
   assert.match(plan.reason ?? '', /the split left out the CLI entirely/, 'the replanner is told what fell short');

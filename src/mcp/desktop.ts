@@ -3,7 +3,6 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { hostname } from 'node:os';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { ErrorRecorder } from '../errorLog.js';
 import {
   handleRequest,
   toolError,
@@ -13,7 +12,8 @@ import {
 } from './protocol.js';
 import { SocketChannel } from './socketChannel.js';
 import { buildCallLog, type McpCallLog } from './callLog.js';
-import { buildDesktopTools, type DesktopSession, type DesktopToolDeps } from './desktopTools.js';
+import type { DesktopSession, DesktopToolDeps } from './desktopContext.js';
+import { buildDesktopTools } from './desktopTools.js';
 
 /** Absolute path to the shipped stdio bridge. `--desktop` makes it read the credential file. */
 const BRIDGE_PATH = fileURLToPath(new URL('./bridge.mjs', import.meta.url));
@@ -24,7 +24,6 @@ interface McpDesktopServerOptions extends DesktopToolDeps {
   credentialPath: string;
   /** How long a recorded call's arguments are kept, in days. See `McpCallStore`. */
   argsRetentionDays?: number;
-  errors?: ErrorRecorder;
 }
 
 /**
@@ -48,9 +47,12 @@ interface McpDesktopServerOptions extends DesktopToolDeps {
  * so the command an operator pastes carries no secret, and a rotated token needs
  * no re-registration.
  *
- * **The tool set is three tools, narrowed by construction.** See
- * `src/mcp/desktopTools.ts`: this server never reaches `buildTools`, so there is
- * no path from a desktop connection to the rest of the harness.
+ * **The tool set is its own list, narrowed by construction.** See
+ * `src/mcp/names.ts` for the list and `src/mcp/desktopTools.ts` /
+ * `src/mcp/desktopOps.ts` for what builds it: this server never reaches
+ * `buildTools`, so there is no path from a desktop connection to the rest of the
+ * harness. The fleet half of the list steers — cap, pause, queue order, the
+ * inbox, the watch tag — and dispatches nothing.
  *
  * ## Fail open, as everywhere
  *

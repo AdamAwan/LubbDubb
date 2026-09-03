@@ -8,6 +8,7 @@ import { ScratchpadModal } from './components/ScratchpadModal.js';
 import { ReviewPackModal } from './components/ReviewPackModal.js';
 import { PlanModal } from './components/PlanModal.js';
 import { RefLinks } from './components/refs.js';
+import { hasPrPage } from './view/prPage.js';
 import { goalIssue } from './view/goalPage.js';
 
 /**
@@ -101,12 +102,14 @@ export function App() {
       onClose={() => status.actions.viewPlan(null)}
       onReplan={(id) => status.actions.replan(id)}
       onWatchProposal={(issueNumber, checkId, accept) => status.actions.ruleWatchProposal(issueNumber, checkId, accept)}
-      onDecide={(id, verdict, note) => status.actions.decideProposal(id, verdict, note)}
+      onDecide={(id, verdict, note, acknowledged) => status.actions.decideProposal(id, verdict, note, acknowledged)}
       onBackOut={(id, verdict, note) => status.actions.backOutProposal(id, verdict, note)}
       onCommentDraft={(id) => status.actions.proposalCommentDraft(id)}
       onOpenGoal={(ref) => status.actions.selectGoal(ref)}
       onAcceptance={(id, slug, criterion, met) => status.actions.setAcceptance(id, slug, criterion, met)}
       onPartProfile={(id, slug, profile) => status.actions.setPartProfile(id, slug, profile)}
+      onRestartPart={(id, slug) => status.actions.restartPart(id, slug)}
+      canClosePr={state.config.canClosePr}
       profiles={state.config.profiles}
       defaultProfile={state.config.defaultProfile}
       desktopFolder={state.config.desktopFolder}
@@ -123,6 +126,11 @@ export function App() {
       // link onto a goal the snapshot does not carry opens a surface that draws
       // nothing, and the tracker's page is the honest destination for one.
       hasGoal={(ref) => goalIssue(state, ref) !== undefined}
+      openPr={(prNumber) => status.actions.selectPr(prNumber)}
+      // The same question for a pull request, asked the same way and for the same
+      // reason: the page is built from the snapshot, so a pull request the world
+      // no longer carries has no page to open.
+      hasPr={(prNumber) => hasPrPage(state, prNumber)}
     >
       <ConsoleRoot view={status.view} actions={status.actions} />
       {planModal}

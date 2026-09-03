@@ -1,5 +1,5 @@
 import type { AppState, Issue, PrReviewThread, PrThreadState, PullRequest, TaskSummary } from '../types.js';
-import { goalOfPr } from './goalPage.js';
+import { closedPrs, goalOfPr } from './goalPage.js';
 
 /**
  * What the pull-request page draws, derived from the snapshot the cockpit already
@@ -38,6 +38,30 @@ export interface PrPageView {
 const STATE_ORDER: Record<PrThreadState, number> = { reopened: 0, open: 1, answered: 2, resolved: 3 };
 
 /**
+ * Whether the cockpit has a page for this pull request — the question
+ * `<Ref to="pr:412">` asks before it links inward, for `hasGoal`'s reason: a page
+ * keyed on a pull request the snapshot dropped renders nothing at all, and a link
+ * onto it is worse than the provider's own.
+ */
+export function hasPrPage(state: AppState, prNumber: number): boolean {
+  return findPr(state, prNumber) !== null;
+}
+
+/**
+ * The pull request under this number, open or closed, or null when nothing carries
+ * it. Closed means {@link closedPrs} — the world's window *and* the archive behind
+ * it — so a pull request reached from a goal page that keeps its closed rows for
+ * ever opens the page it links to rather than the gone screen.
+ */
+function findPr(state: AppState, prNumber: number): PullRequest | null {
+  return (
+    state.world.pullRequests.find((p) => p.number === prNumber) ??
+    closedPrs(state).find((p) => p.number === prNumber) ??
+    null
+  );
+}
+
+/**
  * Build the page, or null when the world carries no such pull request.
  *
  * Null rather than an empty page, for `buildGoalPage`'s reason: a page of empty
@@ -50,7 +74,7 @@ const STATE_ORDER: Record<PrThreadState, number> = { reopened: 0, open: 1, answe
  */
 export function buildPrPage(state: AppState, prNumber: number): PrPageView | null {
   const open = state.world.pullRequests.find((p) => p.number === prNumber) ?? null;
-  const pr = open ?? (state.world.closedPullRequests ?? []).find((p) => p.number === prNumber) ?? null;
+  const pr = open ?? findPr(state, prNumber);
   if (pr === null) return null;
 
   const goalRef = goalOfPr(state, prNumber);

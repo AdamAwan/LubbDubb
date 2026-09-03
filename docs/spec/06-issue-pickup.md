@@ -268,6 +268,7 @@ chip.
 | `escalated` | Attempt cap spent; parked on a human.                                                |
 | `delivered` | Assessed as delivered — parked until the world or the operator says otherwise.       |
 | `appraisal` | Its goal is being checked, or was found unworkable — nothing is dispatched for it.   |
+| `obstacle`  | An agent could not finish it and named what stopped it — parked until that clears.   |
 | `blocked`   | Eligible, but dispatch is paused or the cap is reached.                              |
 | `eligible`  | Would be picked up next cycle.                                                       |
 
@@ -296,6 +297,12 @@ delivered issue that somehow has an open PR is honestly `has_pr` — the PR rule
 with a live agent is honestly `active`. Saying "delivered" in either case would send the operator
 looking in the wrong place.
 
+The `obstacle` arm is asked in the same place and for the same reason as `delivered` — after
+`has_pr` and `active`, so a goal that somehow has an open PR or a live agent is reported honestly —
+and off the same pure `blockedGoals` the rule gates on and the ownership desk sweeps with, so the
+chip cannot promise what the next cycle refuses. Its exit is the **obstacle** and never the issue:
+nobody has to remember the goal, and `owned` still holds it, because being fixed is not fixed.
+
 The `appraisal` arm is asked **after** the intrinsic gates and **before** the plan funnel, which is
 exactly where rule `issue-appraisal` sits: an unwatched or state-parked issue is never appraised, so reporting an
 appraisal for one would promise something that cannot happen, while an appraisal that refused the goal is
@@ -311,7 +318,9 @@ An issue is picked up when:
 1. `issue.state === 'open'`, and
 2. `openPrForIssue(issue, allOpenPrs) === null`, and
 3. `isIssuePickupEligible(issue, policy).eligible`, and no standing `unclear` goal appraisal holds it
-   (see below), and
+   (see below), and no obstacle block does
+   ([27](27-obstacles.md#blocked-is-an-answer) — an agent concluded `blocked` naming something that is
+   not this goal, and the goal returns on its own when that obstacle stops reaching agents), and
 4. its plan route resolves to `unplanned` — the funnel failed open on it, which is the only arm this rule works — and
 5. no active task holds `issue:<n>`, and
 6. `dispatchVerdict` says `dispatch`.
@@ -760,9 +769,10 @@ complete set.
 
 ### The write is the harness's
 
-The appraiser proposes and does nothing else. Applying a proposal is a cockpit click →
-`POST /api/issues/:number/parent` or `/area-path` → `ActionSink` → the Azure adapter — the discipline
-`src/tickets/filing.ts` states, and for its reason: an instruction in a prompt is only as reliable as
+The appraiser proposes and does nothing else. Applying a proposal is an operator's answer — a cockpit
+click, or `goal_placement` on the desktop channel ([11](11-mcp-tools.md#the-escape-hatches-a-gate-has-to-have))
+— through `POST /api/issues/:number/parent` or `/area-path` → `ActionSink` → the Azure adapter, the
+discipline `src/tickets/filing.ts` states, and for its reason: an instruction in a prompt is only as reliable as
 one model's memory of one line. There is no `az boards work-item update` anywhere, and no shell command
 handed to a model.
 

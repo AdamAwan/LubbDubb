@@ -18,9 +18,10 @@ assembles them (see [How a tool is built](#how-a-tool-is-built)).
 
 | Tool                 | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `raise`              | The one door for anything an agent learns. Says what is true and what it saw; the harness works out where the claim goes and an operator settles what it is for. No kind, no lifetime word, no destination. → [27](27-knowledge.md#the-intake-asks-nothing-an-agent-cannot-answer)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `raise`              | The one door for anything in an agent's way that is not its goal, and anything true of the repository the repository does not say. Says what it hit and why it is not its own doing; the harness extracts the keys and answers with whether anybody else has hit it. **The call is the lookup.** → [27](27-obstacles.md#the-intake)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `plan_submit`        | Submit a decomposition verdict. Replaces writing `.lubbdubb/plan.json`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `plan_not_needed`    | The planner's other verdict: this goal is already met, so no plan is written at all. Records the delivery park, writes no plan row. Fenced to `issue:<n>:plan` origins, and refused on a replan. → [08](08-planning.md#when-there-is-nothing-to-plan)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `plan_correct`       | Propose a correction to the plan the agent is working under, when the repository does not match what it assumed. Records a proposal an operator answers; writes nothing, pauses nothing, and does not stop the agent's own part.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `escalate`           | Ask the human a question and park. The typed form of the WAITING sentinel.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `world_read`         | Read the harness's own view of a PR or issue.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `request_human_task` | Ask for work only a person can do. Files a durable work item, parks nobody, dispatches nobody.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
@@ -32,9 +33,9 @@ assembles them (see [How a tool is built](#how-a-tool-is-built)).
 | `conclude_part`      | Close **one plan part** that finished without a pull request — a report, or the determination that nothing needs building. Fenced to `issue:<n>:part:<slug>` origins.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `scratch_append`     | Leave a note on the shared scratchpad for the issue — or the pull request — this agent is working. Append-only, attributed from the credential. Refused outside an issue's or a pull request's subtree. An optional `decision` object `{chose, because, rejected: [{alternative, because}], paths}` marks the entry as a **fork** of the witness log ([31](31-review-packs.md#the-witness-log)); `chose` and `because` are required inside it, one line each, and a malformed one is refused by field name rather than stored as a note.                                                                                                                                                                                                                                                                                                                                                             |
 | `scratch_read`       | Read that pad — every note left by every agent on the goal, oldest first, each fork with its decision. Same access rule as the write. The operator reads the same trail in the cockpit's notepad modal (`GET /api/scratchpads/:ref`), which resolves a ref through the same `padOriginFor`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `retro_submit`       | Submit the retrospective for a delivered goal: what shipped, how the run went, and the claims it taught about working the repository — raised as facts like anything else. Fenced to `issue:<n>:retro` origins. → [27](27-knowledge.md)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `retro_submit`       | Submit the retrospective for a delivered goal: what shipped, and how the run went. One document, no second field — anything that outlives the goal goes through `raise`. Fenced to `issue:<n>:retro` origins. → [13](13-jobs-and-tickets.md)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `feature_summary`    | Say where a Feature has got to, for the person who asked for it: where it is, what of it is usable today and where, what is blocking, what is left. Four fields, only the first required. Fenced to `issue:<n>:summary` origins — a working agent has an opinion about one story and no view of the rest. → [17](17-cockpit.md#the-feature-summary)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `report_remedy`      | Account for one return to a pull request: why CI was red or why a reviewer asked for changes, what settled it, and what would have caught it earlier. Two enums and a line. Fenced to `pr:<n>:ci` and `pr:<n>:comments` origins, which are also where its `kind` comes from. May carry a claim, raised through the same intake `raise` writes to, and only when the guard is `undocumented`. → [18](18-observability.md#causes-why-the-fleet-came-back), [27](27-knowledge.md#the-remedy-arm)                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `report_remedy`      | Account for one return to a pull request: why CI was red or why a reviewer asked for changes, what settled it, and what would have caught it earlier. Two enums and a line. Fenced to `pr:<n>:ci` and `pr:<n>:comments` origins, which are also where its `kind` comes from. The event record and nothing else — what the round taught goes through `raise`. → [18](18-observability.md#causes-why-the-fleet-came-back)                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `validation_amend`   | Correct the validation plan for the goal this agent is working: add or amend checks, withdraw one with a reason, declare a resource. **Merge-only** — an omitted check is untouched. Open to every agent on the goal; refused to the planner, which has `plan_submit`. → [20](20-validation.md)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `watch_declare`      | Declare, or correct, what a running system would have to show for this goal's work to have done what it claimed — a `signal` counting something that should not be happening, or a `measure` reading one number against a threshold or against what the same query read before the work arrived. **Merge-only** on the check's slug, and refused to the planner, which has `plan_submit`. Nothing it writes is live: a declaration lands on the plan sheet as a pending change with accept and decline, because the query runs inside the operator's own command with the operator's own credential. → [29](29-post-deploy-watch.md#the-working-agent-at-conclude-time)                                                                                                                                                                                                                              |
 | `validation_report`  | Record the reading of the one validation check this agent was dispatched to run: `passed`, `failed`, or `handback` — could not run it, which records nothing and returns the check to the operator with the reason. Refused to every caller but that check's own agent, by name. → [20](20-validation.md#the-hand-over)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
@@ -42,11 +43,10 @@ assembles them (see [How a tool is built](#how-a-tool-is-built)).
 | `review_route`       | Choose which of the project's declared review modes a pull request gets — the triage's verdict, as a **name from an enum** rather than prose, because the reviewer's prompt, charter and model profile are all resolved from it before it runs. A name the project has not declared is refused. Where the project set `review.allowSkip`, it also carries `skip: true` — that the pull request needs no review at all — and that argument is offered **only** on those deployments: the one answer that waives the gate rather than sizing it is not left in front of a triage whose project never opened it. A skip and a mode together is refused, and the reason is required either way, because on a skip the row is the only account of why a change went in unread. Refused to any caller whose own origin is not `pr:<n>:review-triage`. → [07](07-pull-requests.md#choosing-how-to-review)   |
 | `review_pack_submit` | Hand back the review pack for the pull request this agent was dispatched to restate: the ideas, their claims and provenance, their walks — a hunk anchor by the id the prompt listed, a region anchor by path and lines — and the gists and notes. **The call is the pack**: the harness copies the pull request and head off the task, mints the idea ids (`plumbing` excepted), fills every hunk's range and code from the diff and every region's code from the tree, stamps witness notes from the entries they cite, reads `witnessed` off the log, and refuses a pack that leaves a hunk unowned or owns one twice, naming the hunks. Everything the checker owns — verdicts, attention, cues, the reading order — is set null and never taken. Fenced to `pr:<n>:pack` origins, by name. → [31](31-review-packs.md#when-a-pack-is-made)                                                       |
 | `review_pack_check`  | Record the checker's verdicts on the review pack this agent was dispatched to check, keyed to what its prompt handed out — the idea ids and the claim numbers — never a document back: per idea an `attention` label and its `cue`; per claim a `verdict` (`true`, `false`, `cant_tell`) with its `evidence` and, on a false one, a `finding` (headline, body, the step of the walk it is about, an optional `counter` range the harness reads off the tree); and the reading `order`. **The call is the check**: the desk merges it onto the stored document through a function that can reach only those fields, so nothing else in the pack — a claim's wording, an anchor, a `key` or `disputed` mark — can be changed from here. Complete or refused: every idea, every claim, the order naming each idea once. Fenced to `pr:<n>:check` origins, by name. → [31](31-review-packs.md#the-check) |
-| `knowledge_ask`      | Read what the fleet has learned, for this caller's own scopes or about a question. Answers only with claims two independent goals have seen or an operator has vouched for — never a bare proposal. → [27](27-knowledge.md)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `reply_to_review`    | Hand the harness your reply to a review thread, instead of posting it yourself — and say with `resolved` whether the thread is now dealt with, which is the only thing that closes one. Raises the same `reply_on_pr` act a rule raises and sends nothing: the operator's authority, the harness's signature and the audit row all follow from that. Fenced to `pr:<n>:comments` origins. → [09](09-execution.md#where-a-reply_on_pr-comes-from)                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `request_permission` | Harness-internal (issue #130). Claude Code calls it via `--permission-prompt-tool` to route an un-allowlisted tool call to the operator. The one tool an agent never calls itself, and the one whose response is **bare** (no `_status`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
-There is a **second, much shorter list** for the desktop channel below — six tools, none of them
+There is a **second, separate list** for the desktop channel below — nineteen tools, none of them
 the fleet's. See [The desktop channel](#the-desktop-channel).
 
 ### The `_status` envelope
@@ -126,6 +126,53 @@ delivering the issue, `conclude_part` for a part agent, `assess_issue` for an as
 It routes through `AgentManager.recordGoalMet` for the `goalMet` event, so the cockpit repaints on the
 verdict rather than on the next pulse.
 
+### `plan_correct`
+
+An agent's way of saying **the plan is wrong** without stopping the run.
+
+The agent working a part is the reader most likely to find out that the decomposition was written
+against a repository nobody had read closely enough — a dependency the other way round, a part that
+turns out to be two, a step the code already does. Until this existed the only things it could do with
+that were write it into a conclusion and hope, or park the whole goal for a replan; both cost the run,
+and the second re-derives a decomposition that was mostly right.
+
+It takes the **whole** document, like `plan_submit` and for the same reason — a part omitted is a part
+you are asking to drop, and the slug is the merge key — plus a `note` saying why. It changes nothing by
+itself: the row goes to `plan_amendments`, rule `plan-amendment` puts it to an operator, and the plan
+carries on scheduling in the meantime, **including the part this agent is working**, which is not
+stopped, held or re-dispatched by anything here. The reply says so outright and hands back the plan as
+it still stands, because the one thing an agent must not infer from a successful call is that the
+amended plan is in force.
+
+It is for the plan being wrong, never for the agent's part being hard: a part it cannot finish is an
+escalation, and one that turns out not to need building is `conclude_part` with a determination. →
+[08](08-planning.md#amending-a-running-plan)
+
+#### Why `plan_correct` and not a second `plan_amend`
+
+`validation_report` living on both channels is the trap this repo has already been caught by once — one
+name over two settlements, and an edit to "the tool" that silently reaches one of them. So the third
+name is deliberate, and it is not because the two acts differ: on an `active` plan they reach the same
+`proposePlanAmendment` and leave the same row.
+
+What differs is the **fence**, which is the half a shared name would erase. `plan_correct` is fenced by
+the origin its caller was dispatched on — it resolves the goal from `task.originRef` and refuses an
+agent that is not working a planned goal, so it can only correct the plan it is under. `plan_amend` is
+fenced by the plan's status and takes the goal number as an argument, because the session holding that
+credential is a person's own and may legitimately be asked about any goal. One is granted per dispatch
+to every part agent; the other is a long-lived credential in the operator's home directory. They also
+settle differently by status — `plan_amend` on `awaiting_approval` writes, which `plan_correct` never
+does at any status.
+
+Three names, then, for three fences: `plan_submit` writes the first document, `plan_amend` rewrites or
+proposes depending on the plan's life, and `plan_correct` can only ever propose. The document schema
+they genuinely do share is one export (`src/mcp/planDocumentSchema.ts`) rather than three literals, and
+the object handed to `validatePlanDocument` is built once per channel rather than at each call site.
+
+`plan_correct` is named in `MCP_PROTOCOL_ADDENDUM`, not at a point of use: an agent finds the plan wrong
+part-way through work nobody dispatched it to question, which is exactly the shape of tool the addendum
+exists for.
+
 ### `escalate`
 
 Arguments `{question, kind?: 'approve'|'choose'|'clarify'|'review', options?, detail?, questions?}`.
@@ -196,28 +243,27 @@ so it cannot reach another repository or project.
 
 ### `raise`
 
-Arguments `{claim, evidence, where?, ref?, until?, contradicts?, scope?}`. Two are required and the
-rest are the harness's routing read off what the caller supplied. The full argument is
-[27](27-knowledge.md#the-intake-asks-nothing-an-agent-cannot-answer); what belongs here is what the
-channel contributes to it:
+Arguments `{what, why_not_mine, fix_makes_it_go_away?, keys?, blocks_me?, until?}`. Two are required
+and the rest are the harness's routing read off what the caller supplied. The full argument is
+[27](27-obstacles.md#the-intake); what belongs here is what the channel contributes to it:
 
-- **It takes no author, no kind and no destination.** Identity is structural, as it is for every write
-  here (`token -> agent -> task -> origin`), and the scope resolves from the same chain — an agent
-  naming `goal` gets its own goal or a refusal, never somebody else's and never a silent widening to
-  `fleet`. What is left for the caller is what it saw.
-- **The routing is two reads of presence.** `contradicts` present routes to a contradiction with the
-  raised claim as the amendment; `until` present makes it a notice bounded by that clock. Neither is a
-  word an agent can pick wrongly, which is the whole reason the two tools they replace could be
-  collapsed at all.
-- **Both arms answer in the response, not only the description.** A claim that merged into a standing
-  one says so, so an agent does not read a returned id as proof it filed something new and say it
-  again, louder; a barred claim is refused by name with `contradicts` as the way back; and an id that
-  names nothing comes back as an error the agent can fix in the same turn rather than a success it
-  cannot tell from one.
-- **It queues nothing and parks nobody**, and says so in both places. An agent that raises a defect
-  and then assumes its fix is scheduled has been told something untrue about what it just did —
-  the claim intake's rule, and it holds here for that rule's reason: nothing in the dispatcher reads
-  this store at any reach.
+- **It takes no author, no goal and no destination.** Identity is structural, as it is for every write
+  here (`token -> agent -> task -> origin`), and the goal a voice is counted under resolves from the
+  same chain — an agent cannot report on somebody else's goal or corroborate itself. What is left for
+  the caller is what it saw.
+- **The routing is one boolean the agent can always answer.** `fix_makes_it_go_away` decides a column
+  on the row and never which store it lands in; `until` is a backstop clock and `blocks_me` chooses
+  the fourth directive. None of them is a word an agent can pick wrongly, which is the whole reason
+  the tools they replaced could be collapsed at all.
+- **The call is the lookup, and it answers in the response rather than only in the description.** It
+  comes back with the row's state, its owner, what other goals saw and the near-matches nothing
+  merged — in one round trip, with no model call. The report is filed either way and never held
+  pending a reply.
+- **It refuses a report of the agent's own breakage.** If the keys intersect the caller's own branch
+  diff the call is refused, the file is named, and nothing is recorded — the only enforcement of _an
+  agent fixes what its own session broke_ that is not a sentence in a prompt.
+- **It queues nothing and parks nobody**, and says so in both places. An agent that raises something
+  and then assumes its fix is scheduled has been told something untrue about what it just did.
 
 ### Retired tools
 
@@ -249,8 +295,8 @@ Three things turn on that pair of decisions:
 **A name is never removed from this list.** It costs one string; taking one out puts that deployment
 back on the silent failure the list exists to end — which is `PromptId`'s `retired: true` rule
 ([05](05-dispatcher.md#prompt-templates)), reached independently and for the same reason.
-
-→ [27](27-knowledge.md#the-doors-that-closed-and-what-is-left-of-them)
+`knowledge_ask` joined the list when the claim store went: there is no search tool now, and that is a
+decision rather than an omission → [27](27-obstacles.md#reporting-is-the-lookup).
 
 ### `request_human_task`
 
@@ -762,7 +808,8 @@ load-bearing both ways:
 ## The desktop channel
 
 `src/mcp/desktop.ts`. A second socket, for the operator's **own** Claude Code rather than for a
-spawned agent. Four jobs go there: a validation check needing a browser and a login the fleet does
+spawned agent. Five jobs go there — four about one goal, and
+[one about the harness itself](#watching-and-steering-the-fleet): a validation check needing a browser and a login the fleet does
 not have, run at their keyboard and reported onto the same row; a conversation about a plan, held
 where there is room to have one; asking for the application itself to be brought up, which most
 checks need before their first step is possible — the harness runs that one, so the tool asks rather
@@ -775,17 +822,34 @@ of what the channel costs a deployment that never uses it, and it is the price o
 deep links reaching something. [20](20-validation.md#the-desktop-channel) owns the check behaviour
 and [the run](20-validation.md#getting-the-application-up);
 [08](08-planning.md#discussing-a-plan) owns the plan one;
-[Answering a question about a goal](#answering-a-question-about-a-goal) below owns the fourth.
+[Answering a question about a goal](#answering-a-question-about-a-goal) below owns the fourth, and
+[Watching and steering the fleet](#watching-and-steering-the-fleet) the fifth.
 
-| Tool                | Purpose                                                                                                                                                                           |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `goal_read`         | The harness's whole record of one goal, for answering a question about it. Records nothing.                                                                                       |
-| `validation_read`   | Read a goal's validation plan, or one check's full procedure. Records nothing.                                                                                                    |
-| `validation_claim`  | Take the one check this session is about to run. One claim at a time, harness-wide.                                                                                               |
-| `validation_report` | Record what was seen: `passed`, `failed`, or `handback`. Reported against the claim, not an argument.                                                                             |
-| `plan_read`         | Read a goal's delivery plan: the verdict, the parts and their slugs, the agenda. Records nothing.                                                                                 |
-| `plan_amend`        | Rewrite it after talking it through. Refuses outside `awaiting_approval`; withdraws the stale card.                                                                               |
-| `local_run`         | The machine's dev environment: what is running and its readings; given a goal, start it on that goal's code; given a `message`, type it into the session holding the environment. |
+| Tool                | Purpose                                                                                                                                                                                                   |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `goal_read`         | The harness's whole record of one goal, for answering a question about it. Records nothing.                                                                                                               |
+| `validation_read`   | Read a goal's validation plan, or one check's full procedure. Records nothing.                                                                                                                            |
+| `validation_claim`  | Take the one check this session is about to run. One claim at a time, harness-wide.                                                                                                                       |
+| `validation_report` | Record what was seen: `passed`, `failed`, or `handback`. Reported against the claim, not an argument.                                                                                                     |
+| `plan_read`         | Read a goal's delivery plan: the verdict, the parts and their slugs, the agenda. Records nothing.                                                                                                         |
+| `plan_amend`        | Amend it after talking it through. On `awaiting_approval` a rewrite that withdraws the stale card; on `active` a proposal, with a required `note`. Refuses on anything else.                              |
+| `local_run`         | The machine's dev environment: what is running and its readings; given a goal, start it on that goal's code; given a `message`, type it into the session holding the environment.                         |
+| `fleet_status`      | The whole fleet in one read: cap, pause, headroom, every live agent, the Up next queue and why each row is held, queued jobs, the account's usage windows, open counts, recent failures.                  |
+| `attention_read`    | "Needs you" as one list — questions, blocked tool calls, proposals, human tasks, orphaned runs — each row naming its own kind and what settles it. Records nothing.                                       |
+| `agent_read`        | One agent close up: its row, the files it wrote, the tail of its transcript, and any question it is parked on. Records nothing.                                                                           |
+| `fleet_control`     | The three live dispatch controls: `cap`, `paused`, and `pulse`. In memory, exactly as the cockpit's are.                                                                                                  |
+| `queue_control`     | The Up next queue's three verbs: replace the pin set, cancel a still-queued job, and price one row with `origin` + `profile`.                                                                             |
+| `escalation_answer` | Settle one inbox row: `response`/`answers` for a question, `permission` for a blocked tool call. Refuses the other two kinds by name.                                                                     |
+| `human_task_settle` | Settle one bench row — work only a person can do: `done` once it has been, `declined` with a required note. Not an escalation, and not answered as one.                                                   |
+| `goal_control`      | The three standing marks on a goal: `watched` (the tracker tag, cascading), `priority` (the harness's own queue mark) and `profile` (the model tag, which also answers the appraiser's profile question). |
+| `goal_gate`         | The escape hatches a blocking gate has to have: override an `appraisal`, `overrule` a standing shortfall, release or re-apply the `environmentGate`.                                                      |
+| `goal_placement`    | The two placement questions: `parent` and `areaPath`. Either sent with no value answers "this goal wants no such thing" and settles it.                                                                   |
+| `goal_instruct`     | Say what you want on a goal, in your own words — it stands in front of every later dispatch and restarts the goal. `withdraw` takes one back.                                                             |
+| `proposal_read`     | One proposed act in full: its kind, what accepting it would actually do, and the caveats that gate it. Records nothing.                                                                                   |
+| `proposal_decide`   | `accept` performs the act; `reject` performs nothing; `close_ticket` / `hold_ticket` are a plan's two verdicts about the **ticket**.                                                                      |
+| `recovery_decide`   | `restore` / `requeue` / `remove` a run a crash orphaned.                                                                                                                                                  |
+| `job_create`        | Put work to the harness — filed as a watched ticket where a tracker is configured, queued directly otherwise.                                                                                             |
+| `agent_control`     | The six verbs on a live agent: respond, interrupt, complete, kill, extend a stall park, resume a usage-limit park.                                                                                        |
 
 ### Answering a question about a goal
 
@@ -837,6 +901,231 @@ the defence. What actually differs is who may write — the fleet's is fenced by
 was dispatched on, this one by the plan's own status — and what settles afterwards: `plan_amend`
 withdraws the superseded approval card (status write first, so `refusePlan` no-ops rather than
 retiring every unstarted part) and runs a cycle to put a fresh one up.
+
+### Watching and steering the fleet
+
+The other four jobs are about **one goal**. This one is about the **harness**: what it is running,
+what it is waiting on a person for, and the handful of things an operator changes between goals.
+
+It exists because the cockpit was the only way to do any of it, and the cockpit is a browser tab on
+one machine. An operator who wants their own agent keeping an eye on the fleet — noticing a park
+overnight, answering a question, lowering the cap when the account's five-hour window is nearly spent
+— had the bearer token and forty hand-rolled endpoints, or nothing.
+
+Four reads and twelve verbs. The reads:
+
+- **`fleet_status`** is the read, and it is one call rather than three because the decision it serves
+  is one decision. An operator's agent checking in is nearly always asking _is there room to run
+  more, or should the cap come down_, and the cap, the live count and the account window are the
+  three numbers that answer it. Split across tools, a session would routinely act on two of them.
+  **`headroom` is shipped rather than left to be derived**: a paused fleet with four free slots
+  dispatches nothing, and `cap` minus `running` is a reading that says there is room. **The account
+  window is three-valued in effect** — `null` means nothing has reported one since this harness
+  started, which is not the same as room to spare, and the hand-back note says so.
+- **`attention_read`** is the inbox, and every row names its own `kind` and its own `settledBy`. The
+  four kinds share a panel in the cockpit and are four different objects: a question an agent parked
+  on, a permission request it is blocked _inside_, an act proposed for approval, and a run orphaned
+  by a crash. The **human tasks** come back beside them as their own list, and they name
+  `human_task_settle` — see [below](#a-bench-row-is-not-an-escalation-and-does-not-answer-to-one).
+- **`agent_read`** is one agent close up, and it returns the **tail** of the transcript with the total
+  length beside it. A long run's transcript is megabytes; the question a session is answering — why is
+  this parked, what is it stuck on — is in the last few thousand characters, and an agent judged on a
+  truncated transcript it believed was whole is the failure worth naming in the payload.
+- **`proposal_read`** is the fourth, and it exists because of what its verb can do — see
+  [below](#what-it-may-do-and-what-it-may-not).
+
+The verbs are `fleet_control`, `queue_control`, `goal_control`, `goal_gate`, `goal_placement`,
+`goal_instruct`, `escalation_answer`, `human_task_settle`, `proposal_decide`, `recovery_decide`,
+`job_create` and `agent_control`.
+
+#### What it may do, and what it may not
+
+The channel started narrower than this: reads and four steering verbs, with the inbox's decisions and
+anything that put work in left to the cockpit. The operator asked for the rest, and the reason is the
+whole point of the channel — **the cockpit is a browser tab on one machine**, and an inbox with rows
+that can only be cleared there is an inbox that fills up while they are away. So the line moved, and
+it now sits here:
+
+**What this channel may do** is what the operator's own hands do in the cockpit: read everything,
+steer the queue and the cap, settle every row in "Needs you", put a brief in, and drive a live agent.
+
+**What it may not do** is the _fleet's_ surface. No tool here concludes a goal, writes a plan
+document, opens a pull request, or reports a validation reading on work it did itself. Those stay
+behind the origin an agent was dispatched on, because they are an agent's account of work it
+performed and this session performed none of it. `validation_report` is the one apparent exception
+and is not one: it reports a check this session **claimed and ran at the keyboard**, which is the
+whole reason the channel exists.
+
+**`job_create` is not a dispatch**, and the distinction is load-bearing rather than pedantic. A code
+brief on a deployment with a tracker is **filed as a watched ticket** and enters the planning funnel
+like any other issue — appraisal, plan, parts — so the harness still decides whether and when to work
+it. That is `POST /api/jobs`' behaviour since issue #198, reached through the same `submitBrief`
+(`src/jobs/brief.ts`) rather than a second account of it. The tool says so in what it hands back,
+because a session told only "created" would report that the work had started.
+
+**Two proposal kinds publish**, and this is the sharpest edge on the channel. `ProposalDesk.accept`
+is one door for five kinds: `plan` releases a decomposition, `plan_amendment` replaces a running
+plan's document, `shortfall` sends a goal back — and `reply_draft` **posts a comment** while `merge`
+**merges the pull request**. The last two reach outside the machine and cannot be taken back. The
+failure worth preventing is not a refusal but a session that accepts a `merge` believing it approved
+a plan, so `proposal_read` exists beside `proposal_decide` and answers exactly that in those words;
+both tools' descriptions say it, and so does every reply. **The caveat gate is not bypassed**: a plan
+that raises caveats is refused until the verdict names each id, and the refusal is a JSON reply
+carrying the unticked ones rather than an error, because the caller did nothing wrong and the next
+step is exact.
+
+**`agent_control` is the one place this channel touches a live process.** Each verb is
+`AgentManager`'s own, reached as the cockpit's button reaches it — `respond` through `respond`, which
+is also what clears the park, rather than writing to the session and leaving the agent answered and
+still parked. Each refuses an agent with no live session, and names the row's status rather than the
+map lookup that failed: a typo and an agent that has ended are different answers.
+
+The `connector` dep is still narrowed method by method rather than taking the whole `ActionSink` —
+`setIssueLabel` for the watch tag and the model pin, `canPlaceWorkItem` / `setWorkItemParent` /
+`setWorkItemAreaPath` for `goal_placement`. That is not undone by the above: each name widens the
+fence by exactly one verb, and every one of them is an operator answering a question the harness put
+to them about their own tracker item — which is a different thing from `mergePr`, `postPrReply` or
+`createIssue` sitting one line away from a channel whose whole claim is that it steers the fleet and
+never acts for it. A merge reached through `proposal_decide` is the same distinction from the other
+side: an act **the harness itself proposed** and an operator is approving, not a tool that can merge
+anything it names.
+
+#### Every write goes through the object the cockpit's click goes through
+
+`RuntimeControl.apply`, `EscalationInbox.answer`, `PermissionDesk.decide`, `ProposalDesk.accept` /
+`reject` / `backOut`, `RecoveryDesk.decide`, `AgentManager`'s six verbs, `submitBrief`,
+`Store.setPriorityOverrides`, `Store.cancelJob`, `Store.setGoalPriority`, `applyIssueWatch`,
+`applyProfilePin`, `settlePlacement`, `overruleShortfall`, `writeGoalInstruction` /
+`withdrawGoalInstruction` — never a second implementation beside one of them. A control surface that reached the store directly would be
+a second opinion about what a pause or a watch means, free to disagree with the cockpit on the next
+change to either. `fleet_control` does not even validate `cap`: which numbers are a legal cap is
+`RuntimeControl.apply`'s question, and a check in the handler would be two answers to one.
+
+Two extractions came out of that rule, and both were third-copy cases rather than tidying.
+`submitBrief` (`src/jobs/brief.ts`) is the ticket-or-job transform a brief goes through, now shared
+by `POST /api/jobs` and `job_create`: written twice, the copy without the watch label would file a
+ticket that is created, linked, shown complete in the cockpit and **never dispatched for**.
+
+The watch toggle is the other, and it cost the larger change. The cascade, the two label mirrors and
+the partial-failure report had grown **three** copies — the cockpit's route, the plan back-out's
+`hold`, and this tool would have been the third — so they are now `applyIssueWatch`
+(`src/issueWatch.ts`) and all three callers reach it. What each caller keeps is what is about its own
+surface: the route keeps its broadcast and reply shape, the back-out keeps the sentence it reports
+with, and `goal_control` keeps the note it hands back.
+
+#### A row that cannot be settled here says where it is settled
+
+`escalation_answer` makes the same three refusals `POST /api/escalations/:id/answer` makes, off the
+same three reads:
+
+| The row is                       | Refused because                                                                | Settled by                                     |
+| -------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------- |
+| a pending **proposal**           | free text cannot be branched on; answering settles the row and strands the act | the cockpit's accept / reject                  |
+| a **permission** request         | the agent is blocked inside a tool call, not at a prompt                       | this tool's `permission` arm                   |
+| an **orphaned** agent's question | the agent that asked it is dead; there is nothing to type into                 | the cockpit's recovery verdict, then this tool |
+
+Each refusal names the alternative, and `attention_read` names it per row before a session tries.
+A bare failure would leave the operator finding the row hours later.
+
+`permission` is an **arm of this tool rather than a second tool**, because it is a row in the same
+inbox: a session that has read `attention_read` has a list where the difference is a field, and a
+second name would be one more thing to get wrong about a row whose kind it already knows.
+
+#### A bench row is not an escalation, and does not answer to one
+
+`attention_read` has always returned the open human tasks beside the inbox, and for a release there
+was nothing on this channel that could settle one. A session that did the obvious thing — the row was
+in the reply, so it passed its id to the tool that settles rows — got `No escalation "hum_…"`, which
+reads as the harness having lost the row rather than as the wrong verb. What that produced is an
+operator told their bench item was _stuck or misclassified in LubbDubb_ and had to be cleared in the
+cockpit, about a row that was doing exactly what it was meant to.
+
+The fix is a second name rather than an arm on `escalation_answer`, and the reason is
+[13](13-jobs-and-tickets.md#it-is-not-an-escalation-and-the-difference-is-not-a-nuance): the two rows
+share only that a person is looked at. An escalation is a **question** one parked agent is blocked
+on, and it dies with the session; a human task is a **unit of work** that outlives its agent, blocks
+nothing unless a plan part names it, and settles when somebody has actually done or refused the
+thing. One name over both would be the `validation_report` trap again — one verb, two fences, an edit
+to either silently reaching one of them.
+
+`human_task_settle` takes `done` or `declined`, and **the settlement is the cockpit's**:
+`settleHumanTask` (`src/humanTaskSettle.ts`) is the one definition both surfaces call, so the
+close-out's required note, the part concluded on `done` and the part deliberately _not_ concluded on
+`declined` cannot differ by which surface answered. A second copy here would be free to release the
+dependents of work that was refused, with nothing red.
+
+`close_ticket` is not an arm. It writes to the tracker, which is an act rather than a record of one,
+and the fence above is what this channel is. A close-out settles here as `done` for a close taken
+elsewhere.
+
+Both directions are named rather than left to be inferred: the human-task rows carry
+`settledBy: human_task_settle`, and `escalation_answer` handed a human task's id says so and names
+this tool — the "no escalation" answer is now what an id nothing holds gets.
+
+#### The two marks on a goal are not the same kind of thing
+
+`goal_control` draws the difference rather than leaving a session to infer it:
+
+- **`watched` is a tag on the tracker item**, written through the provider, and a statement about the
+  _goal_ that a human reading the ticket sees. It cascades: watching a Feature tags every descendant,
+  because a container is never worked itself.
+- **`priority` is the harness's own record**, and deliberately not a label. It is a statement about
+  _this deployment's queue_ — what its fleet works next while it is short of slots — and a tag saying
+  so would claim something the tracker cannot honour, which every other deployment reading that board
+  would inherit. → [05](05-dispatcher.md#marking-a-goal-a-priority)
+
+**A deployment with no `labelPrefix` is told so rather than told "watched".** The gate is off there,
+everything is worked, and there is no tag to write; reporting the change would be reporting one that
+did not happen and could not have. **A tag the provider refused is an error, not a success** — an
+operator told "watched" would leave the ticket believing the fleet will pick it up, and it never
+will, with nothing red.
+
+#### The escape hatches a gate has to have
+
+`goal_control`'s two marks steer a goal the harness is willing to work. The **four decisions that
+decide whether it will work it at all** were, until `goal_gate` and the pin below, reachable only
+from a browser tab:
+
+| Hold                                                                                                    | What is waiting                               | Answered by                     |
+| ------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ------------------------------- |
+| An appraisal that came back `unclear` ([06](06-issue-pickup.md))                                        | somebody saying "work it anyway", or agreeing | `goal_gate` — `appraisal`       |
+| A profile the appraiser proposed and nobody confirmed                                                   | the model tag on the ticket                   | `goal_control` — `profile`      |
+| A shortfall standing against a goal that is actually finished                                           | somebody saying the assessment is wrong       | `goal_gate` — `overrule`        |
+| An environment gate on work that is never going to deploy ([24](24-environments.md#the-three-verdicts)) | somebody saying so, with a note               | `goal_gate` — `environmentGate` |
+
+Each of the four routes behind them describes itself, in the code, as "the escape hatch a blocking
+gate has to have". The gap this closes is the one they all leave open together: an operator away from
+that machine had a session that could **see** the hold — every one of them names itself in the queue
+reason `fleet_status` ships — and could do nothing about it. What that produced in practice is a
+session reaching for the nearest name that would take the call: told to answer a profile question, it
+called `human_task_settle`, cleared the wrapper task, reported the gate settled, and left it standing.
+
+**The profile pin is an arm of `goal_control` and not a fifth name**, because it is the same act as
+the watch tag beside it — a label on the ticket saying how the harness should work this goal — and
+the reply says whether it released a goal that was held on it. It writes through `applyProfilePin`
+(`src/intake/profilePin.ts`), shared with `POST /api/issues/:number/profile`, which is the third
+extraction under the rule [above](#every-write-goes-through-the-object-the-cockpits-click-goes-through)
+and the one that was already broken when it was made: the arm wrote `setProfileOverride` — the
+**queue's** per-origin price, a different record with a different lifetime — so it tagged nothing,
+settled nothing and reported a pin. That price is a real thing an operator wants, and it is now
+`queue_control`'s `origin` + `profile`, beside the pin set it belongs with.
+
+**`goal_placement` is its own name** because it is a different kind of act: `parent` and `areaPath`
+are the only decisions on this channel that **write to the tracker's own fields**, and neither holds
+any work — an unplaced goal is dispatched exactly as a placed one, and the questions exist because an
+item filed under nothing rolls up to nothing. Both go through `settlePlacement`
+(`src/intake/placementSettle.ts`) with the routes, which stamps the row **after** the write and never
+before. They are also why the `connector` dep widened by three methods; see
+[below](#what-it-may-do-and-what-it-may-not).
+
+**`goal_instruct` is input, not a verdict**, which is why it is neither an arm of `goal_gate` nor of
+`goal_control`. Writing one **restarts the goal**: the row that reaches the prompt, an operator
+`more_work` verdict that retracts a delivery, and a settled plan sent back to a planner are one act
+(`writeGoalInstruction`, `src/goalInstructions.ts`), because an instruction nothing is dispatched for
+is an operator being ignored in a way that looks exactly like being listened to. `withdraw` is the
+same object from the other end and is honest about the asymmetry: taking the words back clears the
+verdict they wrote, and does **not** put the delivery back or re-finish the plan.
+→ [13](13-jobs-and-tickets.md)
 
 Four things differ from the fleet channel, and each answers a way this credential is unlike an
 agent's:
@@ -922,8 +1211,8 @@ called. `open_pr` spent its first release exactly there.
 So every tool is named in one of two places, and which one is a decision, not a default:
 
 - **`MCP_PROTOCOL_ADDENDUM`** for the tools any agent may choose to call at any point in any dispatch:
-  `raise`, `escalate`, `plan_submit`, `world_read`, `open_pr`, `request_human_task`, `note_progress`
-  and `knowledge_ask`. Nothing else names these. `raise` and `knowledge_ask` are here because every
+  `raise`, `escalate`, `plan_submit`, `plan_correct`, `world_read`, `open_pr`, `request_human_task`,
+  `note_progress` and `knowledge_ask`. Nothing else names these. `raise` and `knowledge_ask` are here because every
   agent may write to that store and every agent may read it, so there is no one dispatch prompt that
   could name them — and `raise` most of all, since the whole of its value is being callable the moment
   an agent learns something rather than at a point somebody predicted.
@@ -972,14 +1261,13 @@ The general rule it is an instance of: **a new capability belongs on an existing
 of the same submission, and on its own tool when a different caller would reach for it.** Nobody but a
 retro agent proposes a lesson.
 
-The same rule decided the docs route the other way (#397). A fact about the repository is _not_ part of
-the retrospective's submission — any agent that learns one can file it, and the one that learns it
-first is rarely the one writing the retrospective — so it went on the claim intake rather than becoming
-a second field on `retro_submit`, and that intake is `raise`. Which also means no new tool, no new grant and
-no second cap: it reuses a row and a gate that already exist. What `retro_submit` still carries is what
-_working the goal_ taught, raised as a claim like any other and counted back as `lessonsFiled` — by what
-actually landed, because a claim an operator rejected is refused by name and reaches nobody however many
-times it is filed. → [27](27-knowledge.md)
+The same rule decided the docs route the other way (#397). Something true of the repository is _not_
+part of the retrospective's submission — any agent that learns one can file it, and the one that learns
+it first is rarely the one writing the retrospective — so it went on the one intake rather than becoming
+a second field on `retro_submit`, and that intake is `raise`. Which also means no new tool, no new grant
+and no second cap: it reuses a row and a gate that already exist. `retro_submit` carries the document
+alone, and its description says where the rest goes — a tool description always arrives, where an
+operator's template override may not. → [27](27-obstacles.md#the-intake)
 
 ## What is recorded
 

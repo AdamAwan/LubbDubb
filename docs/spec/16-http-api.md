@@ -27,7 +27,6 @@ is about.
 | `routes/ingress.ts`     | `/ingress/github` and `/ingress/azure` — the inbound webhook endpoint, its own body parser and its bounds                                                                                                                                       |
 | `routes/issues.ts`      | Watch, priority, conclusion, appraisal, delivered, shortfall, dismiss-run                                                                                                                                                                       |
 | `routes/jobs.ts`        | `/api/jobs`, `/api/jobs/:id/cancel`, `/api/upnext/order`, `/api/upnext/profile`                                                                                                                                                                 |
-| `routes/knowledge.ts`   | The whole claim store: writing one down, its observations and disputes, how far an operator says it carries, the three ways it leaves, and the answers to a contradiction                                                                       |
 | `routes/plans.ts`       | Plan history, replan, acceptance ticks, part model pins                                                                                                                                                                                         |
 | `routes/validation.ts`  | One validation check's current reading — result, defer, waive, reset — and who runs it                                                                                                                                                          |
 | `routes/watches.ts`     | The post-deploy watch's two operator verbs: ruling on a check an agent declared, and extending a window                                                                                                                                         |
@@ -204,9 +203,10 @@ Four properties hold across the surface:
   next is covered on the day it is written.
 
 - **Params are read first, then the query, then the body**, so a request naming no such item is
-  refused for that whatever else it got wrong. Where a route answers 404/409 off the store first (`/api/knowledge/facts/:id/exit`,
-  `/api/work/:ref/file`), it reads the params, asks the store, and reads the body after — a claim
-  that does not exist is a 404 whatever the body says. Those two apply `checked` **a second time,
+  refused for that whatever else it got wrong. Where a route answers 404/409 off the store first
+  (`/api/work/:ref/file`, `/api/issues/:number/bug`), it reads the params, asks the store, and reads
+  the body after — an item that does not exist is a 404 whatever the body says. Those two apply
+  `checked` **a second time,
   by hand**, inside the outer handler (`return checked({body: X}, inner)(req, reply)`) rather than
   reaching past it, so the ordering costs nothing in refusal paths.
 - **A missing body is read as `{}`**, so a route whose fields are all optional may be called with no
@@ -659,10 +659,17 @@ moves immediately.
 (by name, with the configured set listed — the boundary half of the boot rejection), and on a provider
 failure, which is recorded on the error log. Returns `{ok: true, profile, answered}`.
 
+The sweep, the refusal and the settlement are `applyProfilePin` (`src/intake/profilePin.ts`), shared
+with the desktop channel's `goal_control`
+([11](11-mcp-tools.md#the-escape-hatches-a-gate-has-to-have)); what stays here is the broadcast, the
+cycle and the reply's shape.
+
 ### `POST /api/issues/:number/parent` · `POST /api/issues/:number/area-path`
 
 Bodies `{parent?: number}` and `{areaPath?: string}`. Settle one of a goal's two **placement**
-questions — which container it hangs off, and which area node puts it on a team's board. Each takes
+questions — which container it hangs off, and which area node puts it on a team's board. The refusal,
+the write and the stamp are `settlePlacement` (`src/intake/placementSettle.ts`), shared with the
+desktop channel's `goal_placement`. Each takes
 the three answers the appraisal's proposal has: the value proposed, a different value the operator picked,
 or **absent**, which is "this goal wants no such thing". The route does not distinguish the first two,
 because nothing downstream does.
@@ -723,7 +730,10 @@ way to say it, and as what `null` clears.
 
 Body `{text}`, required and non-empty (max 4 000). What the operator wants done on this goal, in their
 own words — _change the button to primary_, _the permission is wrong_. This is what the cockpit's
-**More work** control writes, and what the bare `more_work` toggle became.
+**More work** control writes, and what the bare `more_work` toggle became. The three writes below are
+`writeGoalInstruction` (`src/goalInstructions.ts`), shared with the desktop channel's `goal_instruct`
+([11](11-mcp-tools.md#the-escape-hatches-a-gate-has-to-have)); the withdrawal below is
+`withdrawGoalInstruction` beside it.
 
 It writes the instruction and then **restarts the goal**, and those are two different jobs. The
 instruction is what reaches the agent, appended to every dispatch on the goal until one concludes it
@@ -813,7 +823,9 @@ on a release with no note, or a non-integer issue number.
 
 The escape hatch has to exist wherever a gate does: without it a goal that is never going to reach an
 environment sits delivered with an empty bench for good, which is the harness losing an obligation
-rather than holding one. → [24](24-environments.md#lifting-the-hold)
+rather than holding one. → [24](24-environments.md#lifting-the-hold). The desktop channel's `goal_gate`
+takes the same two answers and makes the same refusal on a release with no note
+([11](11-mcp-tools.md#the-escape-hatches-a-gate-has-to-have)).
 
 ### `POST /api/issues/:number/watch-proposals/:checkId`
 
@@ -874,7 +886,9 @@ into that card survives the loop either — `shortfallRef` is nobody's dispatch 
 `rejectionGuidance` reaches no agent with the note. Without this the operator has no way to say
 "that finding is mistaken" that anything reads.
 
-It writes **two** rows, `/instruction`'s arrangement for its reason — half of it does nothing.
+It writes **two** rows, `/instruction`'s arrangement for its reason — half of it does nothing. Both
+are `overruleShortfall` (`src/delivery/overrule.ts`), shared with the desktop channel's `goal_gate`,
+because two rows written together are a rule and a second copy of it is free to write one of them.
 
 The **delivery** is the verdict. It clears the shortfall through `VERDICT_EXCLUSIONS` rather than a
 `DELETE` of its own, parks the assessor that would otherwise re-derive the finding, and releases the
@@ -909,7 +923,9 @@ so "not appraised" has exactly one representation (which is also what a crashed 
 the fail-open). An operator verdict is fingerprinted against the issue as the last world snapshot saw
 it, so it expires on the next edit exactly as an agent's does; an issue absent from that snapshot is
 a 404 rather than a guess, since a verdict fingerprinted against an empty goal would be a silent
-no-op dressed as an override. 400 on a non-integer issue number or an unrecognised verdict.
+no-op dressed as an override. 400 on a non-integer issue number or an unrecognised verdict. The
+desktop channel's `goal_gate` takes the same three answers, with the same refusal on an issue the
+snapshot does not carry ([11](11-mcp-tools.md#the-escape-hatches-a-gate-has-to-have)).
 
 ### `POST /api/issues/:number/bug`
 
@@ -1292,16 +1308,16 @@ The window is resolved in the handler rather than inside the fold, so the `since
 and the `since` it is bucketed into are one value: a store read wider than the buckets drops rows
 silently at the fold, and a narrower one draws an empty first bucket that was never empty.
 
-### `GET /api/pool`, `GET /api/pool/insights`, `POST /api/knowledge/facts/:id/keep-local`
+### `GET /api/pool`, `GET /api/pool/insights`
 
-The [cross-fleet pool](28-cross-fleet-pool.md), and the shape of all three follows from the pool being a
+The [cross-fleet pool](28-cross-fleet-pool.md), and the shape of both follows from the pool being a
 **view** and never a database.
 
 `GET /api/pool` is this fleet's own side plus the mirror: what has been published and when, when the
-pool was last polled, which claims the secret backstop refused, and which fleets have been heard from —
-including the ones **ahead of this build**, which is a third verdict rather than a quiet absence. Its
-`status` is `null` on a deployment with no pool, and that null is load-bearing: a deployment on the
-`fake` default and a pool that has never published are different facts.
+pool was last polled, and which fleets have been heard from — including the ones **ahead of this
+build**, which is a third verdict rather than a quiet absence. Its `status` is `null` on a deployment
+with no pool, and that null is load-bearing: a deployment on the `fake` default and a pool that has
+never published are different facts.
 
 `GET /api/pool/insights` is the shared page: the mirror folded across fleets. It takes `?project=` and
 an optional `?since=` UTC day, and **no `?window=`** — the digest's bucket is a day and its retention is
@@ -1309,10 +1325,9 @@ ninety of them, so the Insights window bar is not the question anybody asks of i
 `null` unless a project was named, and that is the shape rather than a flag: a reader that forgot the
 filter would sum two unrelated pipelines, and null makes that unreachable rather than merely wrong.
 
-`POST /api/knowledge/facts/:id/keep-local` is the pool's only write: the per-claim opt-out. It writes
-the store and **never publishes** — a route that did the network write would make an operator's click
-wait on a push to another continent, and a failed push there is a 500 on a ruling that succeeded
-locally. It marks the document dirty; the desk's next pulse re-derives and puts it.
+The pool has **no write** any more: the per-claim opt-out went with the claims arm and the store
+behind it ([28](28-cross-fleet-pool.md)). What is left is derived from rows this fleet already holds,
+and the desk's own clock decides when it goes out.
 
 Neither read rides on `/api/state`, for `/api/mcp/usage`'s reason: the mirror is other teams' prose plus
 ninety days of rows per fleet, and the snapshot comes round every couple of seconds for every open
@@ -1678,146 +1693,6 @@ route's reason. Returns `{ ok: true, job, report }`.
 **404** when absent. The jobs it queued are untouched — they are its history, and they are ordinary
 jobs whether or not the intention behind them still stands. Returns `{ ok: true }`.
 
-### `POST /api/knowledge/facts`
-
-The operator writing a claim down themselves — the one write on the knowledge page that is not a
-ruling, and the arm `POST /api/lessons` used to be. Body `{claim, originRef?}`. **400** on an empty
-claim or one over `MAX_CLAIM_CHARS`, in `validateClaimText`'s words — one bound with three callers, so
-whichever writer is loosest cannot decide what an operator ends up being asked to read. **409** on a
-claim an operator has rejected, because a rejection is terminal for the person who made it too and the
-way back is an amendment naming it. Broadcasts `dirty` and returns `{ ok: true, fact }`.
-
-**It lands a `proposal`, like everything else.** The surface is one gate, not one gate and a bypass for
-whoever happens to be at the keyboard. The corroboration it writes carries the harness's own sentence
-rather than an `evidence` field the operator is asked for: a person writing down what they already know
-has no observation to give, and a required field they have nothing for comes back as "N/A". It is
-attributed to nobody it does not have — the goal, if they named one, and no agent, task or session.
-
-### `GET /api/knowledge/facts/:id`
-
-One claim with the observations behind it, in the observers' own words — plus the contradictions, each
-carrying the amendment filed with it: `{fact, corroborations, contradictions}`. Both sides, because
-answering a contradiction is choosing between the claim and the sentence offered in its place, and a
-payload with one of them would ask for that decision with half of it hidden. **404** when absent. Its own route rather than a field on the snapshot for the reason in
-[_Bulk text_](#bulk-text): the evidence for one claim runs to thousands of characters per
-observation, and the rows nobody opens should cost nothing per poll. Every count on the `fact` comes
-from `factCounts` — the same one read the snapshot's rows are built from — rather than being
-re-derived here from the lists fetched for their words: two of them are counts of _voices_ (two
-observations are one corroborator if they share a goal or a session), one is a division of those two,
-and one is a count of asks in a third table, so a second implementation of any of them would be a
-number that looks like the one drawn beside it on the page and is free to disagree. The `check:`
-staleness verdict is taken here too, for the same reason the rest of the row is: half a payload coming
-from a poll two seconds old is a row that disagrees with itself.
-
-### `POST /api/knowledge/facts/:id/reach`
-
-How far an operator says a claim carries. Body `{reach}`, one of `lookup`, `injected` or `rejected`
-— the wire's `FactRuling`, narrowed out of `FactReach` so the route and the cockpit cannot drift.
-**404** when absent, **400** on any other reach, and **409** on a claim that was rejected, in the
-words that name the way back: a rejection is terminal, and what lifts the bar is an amendment naming
-the claim, filed by an agent. Broadcasts `dirty` — nothing in the world moved — and returns
-`{ ok: true, fact }`.
-
-Two members of `FactReach` are deliberately not accepted. Nothing restores `proposal` ("nobody has
-agreed with this" is not a state an operator can put a claim back into), and `graduated` is an exit
-actually being taken ([27](27-knowledge.md#sending-a-claim-on)) — setting the reach without opening the
-work would take the claim out of every prompt while putting it nowhere. The two routes below are where
-that transition lives instead: one opens the work, and the sweep (or, for a reading the harness will
-not take, `/settle`) moves the reach when it lands.
-
-**Naming the reach a claim already has is a ruling rather than a no-op**, which is the one place this
-route departs from the 409-on-a-settled-row discipline every other verdict route uses. `lookup` is both
-where two agents agreeing puts a claim and where an operator parks one that is true but not worth
-every agent's context, so the store stamps `ruled_at` on any operator move whether or not the reach
-changed — without it the cockpit's **Needs you** section would ask again forever, and the only way to
-empty it would be a decision the operator does not agree with.
-
-### `POST /api/knowledge/contradictions/:id/resolve`
-
-The operator's answer to one contradiction (#27 phase 5). Body is a discriminated union on
-`resolution`: `amended` adopts the amendment at the claim's own reach and moves the claim to
-`superseded`; `narrowed` takes a `claim` and rewrites the original in place, superseding the
-amendments it answered; `dismissed` answers the one row and leaves the fact exactly where it was.
-**404** when absent, **400** on an unknown resolution or a `narrowed` with no claim, **409** on a
-contradiction already answered or a claim already gone. Broadcasts `dirty` and returns
-`{ ok: true, fact }`.
-
-**One route rather than two, and that is the point of it.** Promoting the amendment and superseding
-the claim it replaces are two halves of one decision, and two calls can half-land: the sharper claim
-injected beside the blunter one it was written to replace, both in the same block, saying different
-things to every agent until somebody notices. The store makes both writes in one transaction and this
-is the only way to reach it — there is no route that moves a fact to `superseded` on its own.
-
-`narrowed` carrying its claim in the body's _shape_ rather than as an optional field is the same
-discipline: a narrowing with nothing to narrow to is the one form of this call that could silently do
-nothing.
-
-### `POST /api/knowledge/facts/:id/exit`
-
-Send a claim on: open the work that takes it somewhere, and record that it is on its way. Body is
-discriminated on `exit`:
-
-| `exit`   | Body                                              | Queues                                        |
-| -------- | ------------------------------------------------- | --------------------------------------------- |
-| `docs`   | `{target: 'spec'}` or `{target: 'claudeMd', bar}` | A **code** job on the `docs-change` template. |
-| `job`    | `{title?, prompt?}`                               | A **code** job on the derived request.        |
-| `ticket` | `{title?}`                                        | A **desk** job on `finding-ticket`.           |
-
-**404** when the fact is absent — read before the body, so a claim that does not exist is a 404
-whatever the body says. **400** on an unknown exit, an unknown target, or a `claudeMd` with no `bar`.
-**409** on a claim the store will not send by that exit (`exitableFact`) and **409** when one exit is
-already going, whichever it is. Broadcasts `world:changed`, runs a manual cycle so the job dispatches
-on this click rather than the next heartbeat, and returns `{ok: true, fact, job, graduation, report}`.
-
-The job carries `originRef: fact.aboutRef` — the world item the claim is _about_, never the goal it was
-observed on. The graph adopts a job by its origin, so the other answer files the work under somebody
-else's goal.
-
-**One route, because it is one act** — _this claim belongs somewhere other than in front of the fleet_
-— and because two of the three were `POST /api/findings/:id/promote` and `/file`, which were that act
-implemented twice with the weaker one silent: it stamped a status and never learned what became of the
-job. Both are a `knowledge_graduations` row now, which is a row that ends.
-
-**One call, because opening the work and recording where it went are two halves of one decision**, and
-both half-landings are silent: work nothing links to lands and takes the claim out of no prompt, and a
-graduation naming no job draws a row on its way somewhere nothing is taking it. `Store.exitFact` makes
-both writes in one transaction and this route is the only way to reach it.
-
-**The reach does not move.** The claim is still injected or still answered on lookup, and still open to
-contradiction, until the exit is actually taken — a claim taken out of every prompt at the click is one
-the fleet stops being told for work that may never land. The `claudeMd` arm carrying its `bar` in the
-body's _shape_ is `narrowed`'s discipline above: that file is loaded into every agent's context on
-every dispatch and its length is asserted rather than intended, so the arm that could be taken by
-forgetting a field is the arm that gets taken.
-
-**What each exit will take differs**, which is why the check takes the exit. `docs` **asserts** the
-claim in a document, so it refuses a proposal nobody has agreed with and a notice that ends by itself;
-`job` and `ticket` **act on** it, which asserts nothing, so they refuse neither — a proposal is exactly
-what every finding was. Every exit refuses the terminal reaches.
-→ [27](27-knowledge.md#sending-a-claim-on)
-
-### `POST /api/knowledge/graduations/:id/settle`
-
-What became of a graduation the harness will not read for itself. Body `{outcome}`, `landed` or
-`abandoned`. **404** when absent, **400** on any other outcome, **409** when the graduation has already
-been answered — by an earlier click or by the sweep. `landed` moves the fact to `graduated` in the same
-transaction; `abandoned` moves nothing at all. Broadcasts `dirty` and returns `{ok: true, graduation, fact}`.
-
-This is the `graduated` verb the reach route does not carry, and the objection that keeps it out of
-there does not apply here: a pull request has already been opened, so saying it landed puts the claim
-in a place rather than nowhere. It exists because the sweep declines to guess — a pull request that left
-the world without ever being seen closed reads as merged only by _inference_
-([27](27-knowledge.md#how-the-landing-is-detected)), and without this route that reading would strand
-the graduation forever.
-
-**These are the whole write surface the cockpit has on this store.** Nothing here files a claim on an
-_agent's_ behalf, and nothing files an amendment: agents write both through the tool channel on a
-scoped MCP credential ([11](11-mcp-tools.md)), which is the split between an operator's arm and an
-agent's that both merged stores kept. The one write that is not a ruling is an operator typing their
-own claim, and it lands a proposal like every other. And nothing an agent can reach sends a claim
-anywhere: every exit is a dispatch a person opens, because an agent that could queue this work could
-put agents on the fleet ([13](13-jobs-and-tickets.md#filing-a-ticket)).
-
 ### `POST /api/human-tasks`
 
 Body `{title, detail?, originRef?}`. The operator's own arm beside the `request_human_task` tool; the
@@ -1885,8 +1760,19 @@ stops drawing it. Broadcasts `dirty`, `dismissFinding`'s reason — nothing in t
 
 ### `GET /api/plans/:id/history`
 
-404 when the plan is unknown. Ships `{ revisions, diff }` — every verdict this plan has had, oldest
-first, and the last amendment read as a change (`latestPlanDiff`, null on a plan with one verdict).
+404 when the plan is unknown. Ships `{ revisions, diff, pending }` — every verdict this plan has had,
+oldest first, the last amendment read as a change (`latestPlanDiff`, null on a plan with one verdict),
+and **the change still waiting on the operator**, if there is one.
+
+`pending` is a running plan's amendment as the sheet reads it: the note, the author, the warnings, and
+`proposedPlanDiff` against the latest revision — deliberately the same reading `latestPlanDiff` gives
+once it is applied, so a change does not look like a different kind of thing either side of the
+decision that applies it. Null is the ordinary case, and there is at most one — a second pending
+amendment is refused where it is proposed. The stored document is **not** shipped: the operator decides
+on the diff, which is what the card carries too, and it is the largest prose the store holds. A row
+that no longer validates degrades to its note and no diff rather than failing the whole history — a
+plan sheet that will not open is the worse failure, and `applyPlanAmendment` settles such a row where
+it is applied. → [08](08-planning.md#amending-a-running-plan)
 
 **A route of its own rather than a field on `/api/state`**, for the reason the work graph and the
 retrospective have theirs: it is read when a plan sheet is opened rather than on every poll, and the
@@ -1915,6 +1801,47 @@ Unlike the acceptance route above it **runs a cycle**, because this changes what
 pending part costs and an operator re-pricing one about to go out wants that to land before it does. A
 part already dispatched keeps what its task row stored, since resolution happens once, at dispatch.
 Returns `{ ok: true, part }`. → [02](02-configuration.md#pinning-one-goal-to-a-profile)
+
+### `POST /api/plans/:id/restart-part`
+
+`{ slug }`. Takes one plan part with an **in-flight pull request** back to `ready`, so rule
+`plan-part` works it again against the declaration the plan carries now — the operator's way out of an
+amendment that rewrote a part somebody is already halfway through building. 404 when the plan or the
+part is unknown.
+
+Three writes, in this order, and skipping any one of them makes it a no-op or worse:
+
+1. `ActionSink.closePr` — `observePartPr`'s first reading is "an open PR on the branch → `in_review`",
+   so a row reset on its own is undone by the reconciler on the very next pulse. This is the only step
+   that aborts the rest: it is the write on somebody else's system, and a part handed back to the
+   fleet with its pull request still open is one the reconciler drags back into review having deleted
+   its branch. On a failure nothing else has run, the part is exactly where it was, and the provider's
+   own sentence comes back as the 400.
+2. The branch, local then remote — `Worktrees.deleteBranch` (the lease _and_ the ref) and then
+   `ActionSink.deleteBranch`. `WorktreeManager.ensure` is reuse-first, so a branch left standing hands
+   the re-dispatched agent the commits the amendment just invalidated as its own starting point, and a
+   remote copy still carrying them refuses its push as a non-fast-forward. Both are best effort, as
+   [the reap](07-pull-requests.md#reaping-a-merged-branch)'s are: each failure is recorded and named in
+   `detail` rather than failing the restart.
+3. `Store.updatePlanPart` — `status: 'ready'`, `prNumber: null`, `branch: null` — **last**, so nothing
+   is dispatched until every step that could hold it back has been attempted.
+
+Then `world:changed` and a cycle, so the new run starts rather than waiting out a heartbeat. Returns
+`{ ok: true, part, detail }`, where `detail` is what actually happened in the operator's terms.
+
+Four refusals, all 400 and each naming its reason (`partRestartRefusal`, so the route and any surface
+that explains itself read one function):
+
+| Condition                         | Why                                                                                        |
+| --------------------------------- | ------------------------------------------------------------------------------------------ |
+| the part is `merged`/`concluded`  | restarting it asks the fleet to redo delivered work; amend the plan for a new part instead |
+| the part has no `prNumber`        | there is nothing to close, and it is already scheduled against the current declaration     |
+| a live agent on it                | the restart would delete the worktree an agent is sitting in                               |
+| `connector.canClosePr()` is false | `closePr` would throw, and the reconciler would put the part straight back into review     |
+
+**Nothing automatic reaches it.** Applying an amendment does not close a pull request: closing a
+reviewable one on the strength of a diff in a scope field is outward-facing and effectively
+irreversible, so it stays a person's act. → [08](08-planning.md#restarting-a-part)
 
 ### `POST /api/issues/:number/validation/:checkId/{result,defer,waive,reset}`
 
@@ -2026,6 +1953,22 @@ Resolves the blocked `--permission-prompt-tool` call with the operator's verdict
 item; the same live agent then continues (allow) or reads the denial (deny). 400 when `allow` is not a
 boolean; **409 when no pending permission request is attached** (already decided, or the agent died
 first). Returns `{ ok: true, allowed }`.
+
+### `POST /api/proposals/:id/accept`
+
+Body `{note?, acknowledged?: string[]}`. Authorizes the proposed act and performs it inline, through
+the same `ActionSink` auto-send would have used. `409` when the proposal is unknown or already decided;
+returns `{ok, proposal, outcome, detail}` otherwise, where `ok` is false for an act that was authorized
+and then failed.
+
+`acknowledged` is the caveat ids the operator ticked on a **plan** approval. A plan that raises caveats
+([08](08-planning.md#what-the-plan-raises-is-acknowledged-not-merely-rendered)) is refused with **400**
+and `{error, unacknowledged}` — the caveats still unticked — while any of them is unnamed. `ProposalDesk`
+asks **before** the compare-and-set, so a refusal decides nothing: the proposal is still `pending`, its
+inbox item still open, and the same click works once the boxes are ticked. Absent means none were
+ticked, which is the right reading of an older client — it releases a plan that raises nothing and
+refuses one that does, rather than waving through the case the gate exists for. Every other proposal
+kind ignores the field.
 
 ### `POST /api/proposals/:id/back-out`
 
@@ -2207,36 +2150,33 @@ read zero.
 `buildStateSnapshot(system)` assembles everything the cockpit needs in one response. Several values are
 read **once** and shared, so two parts of the UI cannot disagree.
 
-| Key                             | Contents                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `config`                        | `heartbeatIntervalMs`, `maxConcurrentAgents`, `watchLabel`, `containerTypes`, `canFileTickets`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `control`                       | The **live** cap and pause state. The cockpit reads these, not the frozen `config` block.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `worldObservedAt`               | When `world` was observed — the baseline's `takenAt`. **Null** before the first cycle, when `world` is empty.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `world`                         | The snapshot, with `health`, `attention` and `ciVerdict` per open PR and `pickup`, `conclusion`, `shortfall`, `appraisal`, `completion` and `spend` per issue.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `retainedRuns`                  | Runs whose issue the world has forgotten (#203, #234), rebuilt from their stored snapshots by the same `retainedRunIssues` the dispatcher unions into its issue list, through the same per-issue enrichment a live one takes — plus `stale`, the one field a live issue never carries: `lastSeenAt` (the last pulse the run row was refreshed by a live issue) and `tracker` (the ticket mirror's reading of the item's state, native state and last change, or null with no mirror row). The tracker's fields on the stub are the harness's copy from `lastSeenAt`; every other reading is current.                                                                                                                                                                                                                                                                                                                                             |
-| `plans`, `planParts`            | The plan graph — the same rows the per-issue chip reads, with `statusCommentRef` as a canonical ref.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `tasks`                         | The tasks the shipped `agents` were dispatched on, **without prompts** — `TaskSummary`, not `Task`, and not the all-time list. See _Bulk text_ and _Bulk collections_ below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `jobs`                          | Operator jobs, newest first.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `schedules`                     | Recurring briefs, oldest first — **every** one, paused included, since this is the only surface anywhere that says a paused one exists. What a firing produces is an ordinary entry in `jobs`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `agents`                        | Every **live** agent and the last `ENDED_AGENT_TAIL` to have ended, newest first, including usage and the progress note. A goal's older runs are `GET /api/issues/:number/agents`. See _Bulk collections_ below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `endedAgents`                   | How many agents have ended in all, tail or no tail — what the fleet card's "N shifts ended" counts, so the heading cannot settle at the cap and stay there.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `flags`                         | Every artifact chip, grouped by the cockpit onto agents.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `attachments`, `attachmentUrls` | Images an operator attached to a brief (#249), every ref in one list, plus the capability-carrying URL to load each one's bytes. The cockpit filters by `targetRef`: `job:<id>` while queued, `issue:<n>` once filed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `overlaps`                      | Paths two concurrently-live code agents wrote — read server-side over the newest `OVERLAP_AGENT_WINDOW` agents, never over the whole of `agent_files`. See [12](12-artifacts-and-files.md#file-overlap-detection).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `humanTasks`                    | Work only a person can do — open ones and a settled tail, newest first. Its own list rather than part of `escalations`: nobody is parked on one.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `knowledge`                     | Every fact the fleet has written down, newest first, **the rejected ones included** — each with the corroborator count that promotes it, the count of voices disputing it, the ratio between them, how many disputes are unanswered, how often it was asked for (`asks`, `lastAskedAt`) and whether its `check:` scope has stopped matching anything (`scopeStale`, `scopeLastMatchedAt`). Every one of those is taken server-side beside the rows it counts; the ratio in particular, because two counts of _voices_ divided in the browser would be arithmetic over numbers whose rule the view layer does not know — and the staleness verdict for the same reason, since a "days since" taken from `Date.now()` in the view layer would be a second implementation of it. All of them are readings and none of them acts ([27](27-knowledge.md#what-it-costs)). The evidence behind a claim is not here: see `GET /api/knowledge/facts/:id`. |
-| `knowledgeGraduations`          | Every attempt to send a claim on, newest first, the abandoned ones included — which `exit` it took, the job, the document a `docs` exit named, the pull request or ticket it produced, the outcome, and `reading`: what the sweep makes of that pull request right now (`waiting`, `landed`, `abandoned`, or `unknown` for one that left the world without ever being seen closed). The reading is `graduationReading`'s answer over the work graph, the same function the sweep settles on, taken server-side for `distinctCorroborators`' reason — a browser that worked out whether a pull request had landed would be a second implementation of the verdict that takes a claim out of every prompt ([27](27-knowledge.md#sending-a-claim-on)).                                                                                                                                                                                              |
-| `knowledgeDelivery`             | What that list actually sends: the system-prompt block verbatim against `knowledgeBlockChars`, the ids it carries and the ids the cap dropped, and the task-prompt append for each `check:`/`goal:` scope. Projected from the renderers that deliver it, never a second reading of them ([27](27-knowledge.md#in-the-cockpit)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `knowledgeCost`                 | What sending that block costs, over the window Insights opens on: the block's share of the fleet's own input applied to the fleet's own recorded spend, per dispatch and over the window, plus every figure the page needs to say why. Rides the polled snapshot rather than a route of its own because it is a fold over rows the snapshot already holds. Divided server-side for the ratio's reason, and **null** rather than zero when nothing in the window reported usage — unmeasured is never free ([27](27-knowledge.md#what-it-costs)).                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `escalations`                   | The escalations still waiting on a person — **open only**. See _Bulk text_ below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `recovery`                      | Work the previous run orphaned (a dead agent, or a task no agent ever started), each awaiting restore / requeue / remove. Non-empty ⇒ **the harness is running no cycles**.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `decisions`                     | The last 100 decisions, each with `subjectRef` — the one external thing the act is about (`issue:13`, `pr:42`), or null.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `upcoming`                      | The last cycle's ranked queue with the headroom cut. Null until a cycle has run.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `worldEvents`                   | The last 100 world events.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `errors`                        | The last 100 recorded failures.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `refUrls`                       | The `ref → URL` map.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `dispatchRules`                 | `DISPATCH_RULES` as data, so a decision row can expand into the rule that fired.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `usage`                         | `{windows: {fiveHourCostUsd, sevenDayCostUsd}, rateLimits, unattributedCostUsd}`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Key                             | Contents                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `config`                        | `heartbeatIntervalMs`, `maxConcurrentAgents`, `watchLabel`, `containerTypes`, `canFileTickets`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `control`                       | The **live** cap and pause state. The cockpit reads these, not the frozen `config` block.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `worldObservedAt`               | When `world` was observed — the baseline's `takenAt`. **Null** before the first cycle, when `world` is empty.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `world`                         | The snapshot, with `health`, `attention` and `ciVerdict` per open PR and `pickup`, `conclusion`, `shortfall`, `appraisal`, `completion` and `spend` per issue.                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `archivedPullRequests`          | Every pull request the world has reported closed, as it was last read — `world.closedPullRequests` is `closedPrWindowMs` wide, and these are the same rows kept past it in `pr_archive` ([14](14-persistence.md#the-closed-pull-request-archive)). No verdicts are folded, for the reason the world's closed list carries none: nothing acts on a dead pull request. Beside `world` rather than in it, so every reader entitled to take `closedPullRequests` for _recently_ still can.                                                                                                               |
+| `retainedRuns`                  | Runs whose issue the world has forgotten (#203, #234), rebuilt from their stored snapshots by the same `retainedRunIssues` the dispatcher unions into its issue list, through the same per-issue enrichment a live one takes — plus `stale`, the one field a live issue never carries: `lastSeenAt` (the last pulse the run row was refreshed by a live issue) and `tracker` (the ticket mirror's reading of the item's state, native state and last change, or null with no mirror row). The tracker's fields on the stub are the harness's copy from `lastSeenAt`; every other reading is current. |
+| `plans`, `planParts`            | The plan graph — the same rows the per-issue chip reads, with `statusCommentRef` as a canonical ref.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `tasks`                         | The tasks the shipped `agents` were dispatched on, **without prompts** — `TaskSummary`, not `Task`, and not the all-time list. See _Bulk text_ and _Bulk collections_ below.                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `jobs`                          | Operator jobs, newest first.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `schedules`                     | Recurring briefs, oldest first — **every** one, paused included, since this is the only surface anywhere that says a paused one exists. What a firing produces is an ordinary entry in `jobs`.                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `agents`                        | Every **live** agent and the last `ENDED_AGENT_TAIL` to have ended, newest first, including usage and the progress note. A goal's older runs are `GET /api/issues/:number/agents`. See _Bulk collections_ below.                                                                                                                                                                                                                                                                                                                                                                                     |
+| `endedAgents`                   | How many agents have ended in all, tail or no tail — what the fleet card's "N shifts ended" counts, so the heading cannot settle at the cap and stay there.                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `flags`                         | Every artifact chip, grouped by the cockpit onto agents.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `attachments`, `attachmentUrls` | Images an operator attached to a brief (#249), every ref in one list, plus the capability-carrying URL to load each one's bytes. The cockpit filters by `targetRef`: `job:<id>` while queued, `issue:<n>` once filed.                                                                                                                                                                                                                                                                                                                                                                                |
+| `overlaps`                      | Paths two concurrently-live code agents wrote — read server-side over the newest `OVERLAP_AGENT_WINDOW` agents, never over the whole of `agent_files`. See [12](12-artifacts-and-files.md#file-overlap-detection).                                                                                                                                                                                                                                                                                                                                                                                   |
+| `humanTasks`                    | Work only a person can do — open ones and a settled tail, newest first. Its own list rather than part of `escalations`: nobody is parked on one.                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `escalations`                   | The escalations still waiting on a person — **open only**. See _Bulk text_ below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `recovery`                      | Work the previous run orphaned (a dead agent, or a task no agent ever started), each awaiting restore / requeue / remove. Non-empty ⇒ **the harness is running no cycles**.                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `decisions`                     | The last 100 decisions, each with `subjectRef` — the one external thing the act is about (`issue:13`, `pr:42`), or null.                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `upcoming`                      | The last cycle's ranked queue with the headroom cut. Null until a cycle has run.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `worldEvents`                   | The last 100 world events.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `errors`                        | The last 100 recorded failures.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `refUrls`                       | The `ref → URL` map.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `dispatchRules`                 | `DISPATCH_RULES` as data, so a decision row can expand into the rule that fired.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `usage`                         | `{windows: {fiveHourCostUsd, sevenDayCostUsd}, rateLimits, unattributedCostUsd}`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 ### Sections
 
@@ -2246,17 +2186,16 @@ it lives in `src/wire.ts` while the list does not — the cockpit type-imports t
 value there would become server code in the SPA bundle
 ([the wire contract](#the-wire-contract)).
 
-| Section     | Holds                                                                                                                                                         |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `harness`   | `config`, `build`, `recovery`, `pets`, `localRun`, `localRunTargets`, `planning`, `dispatchRules`                                                             |
-| `control`   | `control`                                                                                                                                                     |
-| `goals`     | `worldObservedAt`, `world`, `retainedRuns`, `stacks`, `environmentReach`, `environmentArrivals`, `stackLandings`                                              |
-| `plans`     | `plans`, `planParts`, `validationChecks`, `validationResources`                                                                                               |
-| `fleet`     | `tasks`, `agents`, `endedAgents`, `parkedOnLimit`, `stallParks`, `flags`, `artifactUrls`, `attachments`, `attachmentUrls`, `overlaps`, `usage`, `runOutcomes` |
-| `knowledge` | `knowledge`, `knowledgeGraduations`, `knowledgeSimilarities`, `knowledgeDelivery`, `knowledgeCost`                                                            |
-| `queue`     | `jobs`, `schedules`, `upcoming`, `runway`                                                                                                                     |
-| `inbox`     | `escalations`, `proposals`, `humanTasks`, `bugFilings`                                                                                                        |
-| `activity`  | `decisions`, `worldEvents`, `errors`                                                                                                                          |
+| Section    | Holds                                                                                                                                                         |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `harness`  | `config`, `build`, `recovery`, `pets`, `localRun`, `localRunTargets`, `planning`, `dispatchRules`                                                             |
+| `control`  | `control`                                                                                                                                                     |
+| `goals`    | `worldObservedAt`, `world`, `archivedPullRequests`, `retainedRuns`, `stacks`, `environmentReach`, `environmentArrivals`, `stackLandings`                      |
+| `plans`    | `plans`, `planParts`, `validationChecks`, `validationResources`                                                                                               |
+| `fleet`    | `tasks`, `agents`, `endedAgents`, `parkedOnLimit`, `stallParks`, `flags`, `artifactUrls`, `attachments`, `attachmentUrls`, `overlaps`, `usage`, `runOutcomes` |
+| `queue`    | `jobs`, `schedules`, `upcoming`, `runway`                                                                                                                     |
+| `inbox`    | `escalations`, `proposals`, `humanTasks`, `bugFilings`                                                                                                        |
+| `activity` | `decisions`, `worldEvents`, `errors`                                                                                                                          |
 
 `refUrls` is in **all** of them and rides every response, whatever was asked for. Every other section
 names things the cockpit draws as links, and this is the map it resolves them in — a patch carrying
@@ -2306,7 +2245,7 @@ of the deployment.
 `buildStateSections(system, want, opts)` assembles one section literal per requested name. The shared
 reads keep the snapshot's "read once and share, so two parts of the UI cannot disagree" discipline;
 the derivations that only some sections need — the enriched open-PR list, the spend roll-up, the
-overlap detection, the knowledge block — are `once()` thunks, so a section nobody asked for pays for
+overlap detection, the spend roll-up — are `once()` thunks, so a section nobody asked for pays for
 nothing while a value two sections share is still taken once.
 
 The browser holds **one complete `AppState`** and merges each patch over it, so `buildViewModel` and
@@ -2350,7 +2289,7 @@ was 24 MB and took 6–15 s to serve; the third off a seeded profile built to fi
 
 The remaining collections were audited against the same rule and hold none: `agents` carries usage
 counters and a one-line progress note (its transcript is already a route), `decisions`, `worldEvents`
-and `errors` are capped at 100, and `knowledge`, `humanTasks` and `plans` carry short prose that is
+and `errors` are capped at 100, and `humanTasks` and `plans` carry short prose that is
 drawn in full.
 
 **The pattern for text a surface does need is a route of its own, fetched on open** —

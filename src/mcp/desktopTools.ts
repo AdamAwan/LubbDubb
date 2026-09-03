@@ -1,13 +1,10 @@
 import { allGoalReach } from '../environments/reach.js';
-import type { EnvironmentConfig } from '../environments/policy.js';
 import { validatePlanDocument } from '../plans/planDocument.js';
-import type { PrRefStyle } from '../prRef.js';
 import { ingestPlanDocument } from '../plans/planIngest.js';
+import { proposePlanAmendment } from '../plans/planAmendment.js';
 import { issueOrigin } from '../plans/planning.js';
-import { acceptanceCriteria, currentPlanSummary } from '../plans/parts.js';
+import { acceptanceCriteria, currentPlanSummary, planIssueNumber } from '../plans/parts.js';
 import { planProposalRef } from '../proposals/proposals.js';
-import type { ProposalDesk } from '../proposals/proposalDesk.js';
-import type { Store } from '../store/store.js';
 import type { LocalRunner } from '../localRun/runner.js';
 import type { LocalRunWatch } from '../localRun/watch.js';
 import { localRunIsLive } from '../store/localRuns.js';
@@ -25,97 +22,23 @@ import { checkBriefing } from '../validation/fleet.js';
 import { amendedReportReason, amendedSinceRunBegan, handbackReason, validateReport } from '../validation/report.js';
 import { validationGoalDir } from '../validation/resources.js';
 import { liveChecks } from '../validation/verdict.js';
+import { proposalDecide, proposalRead, recoveryDecide } from './desktopInbox.js';
+import {
+  agentRead,
+  attentionRead,
+  escalationAnswer,
+  fleetControl,
+  fleetStatus,
+  goalControl,
+  humanTaskSettle,
+  queueControl,
+} from './desktopOps.js';
+import { agentControl, jobCreate } from './desktopWork.js';
+import { goalGate, goalInstruct, goalPlacement } from './desktopGoal.js';
+import type { DesktopSession, DesktopToolDeps, DesktopToolFactory } from './desktopContext.js';
 import { DESKTOP_TOOL_NAMES, type DesktopToolName } from './names.js';
 import { PLAN_DOCUMENT_SCHEMA } from './planDocumentSchema.js';
-import { toolError, toolJson, type McpTool } from './protocol.js';
-
-/**
- * The six tools the operator's own Claude Code gets, and **only** these six.
- *
- * Narrowed by construction rather than by a filter over the fleet's set: there is
- * no code path from a desktop connection to `conclude_work`, `open_pr` or any of
- * the rest, because this module never reaches `buildTools` and the desktop server
- * never reaches anything else. That matters more here than it does for the fleet,
- * because this credential is long-lived, sits in the operator's home directory,
- * and is held by a session nobody dispatched — the blast radius of a filter that
- * stopped filtering would be the whole harness.
- *
- * Read a plan, argue with it, amend it; get the application up, take one check,
- * report what you saw. That is the entire surface.
- *
- * **`plan_amend` is not `plan_submit`.** They write the same document through the
- * same `ingestPlanDocument`, and they share the schema as one export rather than
- * two literals — but the names differ on purpose, because `validation_report`
- * living on both channels is the trap this repo has already been caught by once:
- * an edit to "the plan tool" that silently reaches only one side. What differs
- * here is who may write and what settles afterwards — the fleet's is fenced by
- * the origin it was dispatched on, and this one by the plan's own status plus the
- * proposal it has to withdraw.
- */
-export interface DesktopToolDeps {
-  store: Store;
-  /** `validation.desktopClaimMinutes`. */
-  claimMinutes: number;
-  /** `config.validationRoot` — where a goal's fixtures live, which the session has to be told. */
-  validationRoot: string;
-  /**
-   * `config.environments` — the deployments a goal's merged work travels to, in
-   * the order the operator declared them.
-   *
-   * Here because "is it on hallway yet" is one of the questions {@link goalRead}
-   * exists to answer, and the answer is a fold over the operator's own list: an
-   * environment nobody configured is not a place work can have failed to reach.
-   * Empty is the honest answer on a deployment that configured none, and the tool
-   * says so rather than drawing a verdict about nowhere.
-   */
-  environments: EnvironmentConfig[];
-  /**
-   * How the configured provider links a pull request in prose, so the plan
-   * rendering here names a part's pull request the way the operator's own
-   * session can follow it. Omitted means `#`, which is right everywhere but
-   * Azure DevOps. → `src/prRef.ts`
-   */
-  prRefStyle?: PrRefStyle;
-  /**
-   * The machine's one dev environment, lazily — the runner is built after this
-   * server in `system.ts`, the same thunk `proposals` uses for the same reason.
-   *
-   * A handle on the runner rather than a copy of what to run: this channel and the
-   * cockpit's panel both start a run, and they must be starting *the same thing*.
-   * The tool used to render an instruction and let the session act on it, which
-   * meant two definitions of what running meant and a harness that could not stop
-   * what it had told somebody to start.
-   */
-  localRun(): LocalRunner;
-  /**
-   * The run's readings — ports and freshness — lazily, for the runner's reason: the
-   * watch is built beside it, after this server.
-   */
-  localRunWatch(): LocalRunWatch;
-  /**
-   * The proposal desk, lazily — an amendment has to withdraw the card the
-   * operator would otherwise approve, and the desk is constructed after this
-   * server in `system.ts`. Same thunk the fleet deps use for `filing`.
-   */
-  proposals(): ProposalDesk;
-  /** A manual cycle, lazily and for the same reason: it is what puts the fresh card up. */
-  runCycle(): Promise<void>;
-  now(): string;
-}
-
-/**
- * What one desktop connection holds. Per-connection, not per-credential: two
- * terminals share one token, and a claim that belonged to the credential would
- * let the second report a reading against the first one's check.
- */
-export interface DesktopSession {
-  /** The label claims are taken under, as it appears in the cockpit. */
-  label: string;
-  /** The check this connection claimed, or null. Set by `validation_claim`. */
-  held: { originRef: string; checkId: string; claimedAt: string | null } | null;
-}
-
-type DesktopToolFactory = (deps: DesktopToolDeps, session: DesktopSession) => Omit<McpTool, 'name'>;
+import { toolError, toolJson, type McpTool, type ToolCallResult } from './protocol.js';
 
 /** The goal's validation plan, or the reason there isn't one to work from. */
 function planFor(
@@ -433,17 +356,73 @@ const planRead: DesktopToolFactory = (deps) => ({
   },
 });
 
+/**
+ * The document as the two paths both submit it — one object, built once.
+ *
+ * The awaiting-approval path validates it here and ingests it; the active path
+ * hands it to {@link proposePlanAmendment}, which validates it before it writes.
+ * Written out twice they would drift by a field — a `watch` block accepted on one
+ * route and dropped on the other, with the schema advertising it on both and
+ * nothing red — which is the same trap `PLAN_DOCUMENT_SCHEMA` exists to close on
+ * the description side.
+ */
+function submittedPlanDocument(args: Record<string, unknown>): Record<string, unknown> {
+  return {
+    version: 1,
+    reason: args.reason,
+    diagnosis: args.diagnosis,
+    approach: args.approach,
+    risks: args.risks,
+    outOfScope: args.outOfScope,
+    alternatives: args.alternatives,
+    openQuestions: args.openQuestions,
+    verification: args.verification,
+    evidence: args.evidence ?? [],
+    document: args.document,
+    parts: args.parts ?? [],
+    // Absent means "leave the existing checks alone"; `{checks: []}` would read
+    // as withdrawing every one somebody is halfway through running.
+    validation: args.validation,
+    watch: args.watch,
+  };
+}
+
+/**
+ * Amend a plan — and **which of the two amendments this is depends on the plan's
+ * status**, because the same conversation reaches both.
+ *
+ * `awaiting_approval` is a rewrite in place: nothing is scheduled off the plan
+ * yet, the operator is about to answer for it, and the change belongs in the plan
+ * they read. `active` is a proposal: parts are scheduling off a decision that has
+ * already been taken, so the amended document waits in `plan_amendments` while the
+ * plan carries on, and only the operator applies it
+ * (`src/plans/planAmendment.ts` states why).
+ *
+ * The old refusal on anything but `awaiting_approval` sent the session to the
+ * cockpit to replan, which was the wrong answer to the commonest case: a plan
+ * whose split turned out wrong is not a plan whose *shape* needs re-deriving, and
+ * a replan stops the whole goal to find that out.
+ */
 const planAmend: DesktopToolFactory = (deps) => ({
   description:
     'Rewrite the delivery plan for a goal after talking it through with the operator, as the whole document ' +
     'rather than a patch — keep every part slug you are not deliberately changing, since the slug is what an ' +
     'amendment merges on. Validated immediately: on rejection you get the reason back and can fix and ' +
-    'resubmit in the same turn. This schedules nothing; it puts the amended plan back in front of the ' +
-    'operator to approve.',
+    'resubmit in the same turn. This schedules nothing and stops nothing. On a plan still awaiting approval ' +
+    'it replaces the plan the operator is about to answer for; on one already running it records a proposed ' +
+    'change for them to accept — pass "note" saying why, and the plan keeps running either way until they do.',
   inputSchema: {
     ...PLAN_DOCUMENT_SCHEMA,
     properties: {
       issue: { type: 'number', description: 'The goal number whose plan you are amending, e.g. 284.' },
+      note: {
+        type: 'string',
+        description:
+          'Why the plan must change, in a few sentences. **Required on a plan that is already running**, ' +
+          'where it is the whole of what the operator reads beside the diff — a change to a plan agents are ' +
+          'working with no reason on it is one they cannot answer. Ignored on a plan still awaiting approval, ' +
+          'which they read whole anyway.',
+      },
       ...((PLAN_DOCUMENT_SCHEMA.properties ?? {}) as Record<string, unknown>),
     },
     required: ['issue', ...((PLAN_DOCUMENT_SCHEMA.required ?? []) as string[])],
@@ -455,39 +434,25 @@ const planAmend: DesktopToolFactory = (deps) => ({
     if (!found.ok) return toolError(found.error);
     const { plan, originRef } = found;
 
-    // The gate the `/discuss` route used to make, kept where the write is. A
-    // *released* plan has been through approval and its parts are scheduling;
-    // writing `awaiting_approval` back over it reopens a gate `plan-part` had
-    // cleared, and stops the rest of the work for a conversation nobody asked to
-    // be a hold. The cockpit only offers Discuss on an awaiting plan, so this
-    // agrees with the button rather than surprising it.
+    if (plan.status === 'active') return amendRunningPlan(deps, plan, args);
+
+    // The gate the `/discuss` route used to make, kept where the write is. Every
+    // other status is one where writing `awaiting_approval` back is wrong for a
+    // reason of its own — a planner already holds a `planning` plan, and a
+    // `complete` or `abandoned` one schedules nothing an amendment could keep
+    // running — so the refusal names the status rather than pretending there is a
+    // route.
     if (plan.status !== 'awaiting_approval') {
       return toolError(
-        `The plan for issue #${ref.issue} is "${plan.status}", not awaiting approval, so it is not yours to ` +
-          `amend: an operator has already decided about it and its parts schedule off that decision. If it ` +
-          `needs to change, they replan it from the cockpit — say that rather than writing over it.`,
+        `The plan for issue #${ref.issue} is "${plan.status}", so it is not yours to amend: it is neither ` +
+          `waiting on an approval you could rewrite nor running work a correction could be proposed against. ` +
+          `Say that rather than writing over it.`,
       );
     }
 
     // Validated before anything is written, so a rejection leaves the plan graph
     // exactly as it was and the retry is against an unchanged plan.
-    const parsed = validatePlanDocument({
-      version: 1,
-      reason: args.reason,
-      diagnosis: args.diagnosis,
-      approach: args.approach,
-      risks: args.risks,
-      outOfScope: args.outOfScope,
-      alternatives: args.alternatives,
-      openQuestions: args.openQuestions,
-      verification: args.verification,
-      evidence: args.evidence ?? [],
-      document: args.document,
-      parts: args.parts ?? [],
-      // Absent means "leave the existing checks alone"; `{checks: []}` would read
-      // as withdrawing every one somebody is halfway through running.
-      validation: args.validation,
-    });
+    const parsed = validatePlanDocument(submittedPlanDocument(args));
     if (!parsed.ok) return toolError(`Plan rejected: ${parsed.error}`);
 
     // The card the operator would otherwise walk back to is now about a plan that
@@ -540,11 +505,63 @@ const planAmend: DesktopToolFactory = (deps) => ({
   },
 });
 
+/**
+ * The running-plan half: a proposal, and **nothing else happens**.
+ *
+ * No cycle is run here, unlike the rewrite above. That one has to put a fresh
+ * approval card up in place of the one it withdrew; this one adds a card the
+ * `plan-amendment` rule raises on the next ordinary pulse, and nothing waits on
+ * it — the plan is still scheduling, which is the point.
+ */
+function amendRunningPlan(deps: DesktopToolDeps, plan: Plan, args: Record<string, unknown>): ToolCallResult {
+  const note = typeof args.note === 'string' ? args.note : '';
+  const proposed = proposePlanAmendment(deps.store, {
+    plan,
+    document: submittedPlanDocument(args),
+    note,
+    author: 'operator',
+    authorRef: null,
+  });
+  if (!proposed.ok) return toolError(proposed.error);
+
+  return toolJson({
+    proposed: true,
+    issue: planIssueNumber(plan.originRef),
+    amendmentId: proposed.proposed.amendment.id,
+    // Handed back so the session can tell the operator the change it actually
+    // described rather than the one it meant to.
+    changes: proposed.proposed.diff?.parts.filter((p) => p.kind !== 'unchanged').map((p) => `${p.kind} ${p.slug}`),
+    ...(proposed.proposed.warnings.length > 0 ? { warnings: proposed.proposed.warnings } : {}),
+    means:
+      'the amendment is recorded and waiting on the operator. **The plan has not changed**: every part that ' +
+      'was scheduling still is, no agent has been paused, stopped or re-dispatched, and nothing is ingested ' +
+      'until they accept it.',
+    next:
+      'Tell them, in your own words, that the change is waiting for them in the cockpit — on the goal’s ' +
+      'plan sheet, where it is drawn against the version they were reading — and that the plan carries on as ' +
+      'it is meanwhile. Do not propose a second amendment; there can only be one pending, and a further ' +
+      'change is folded into this one once they have answered.',
+  });
+}
+
+/**
+ * What to do with what `plan_read` just returned — and it turns on `status`,
+ * because `plan_amend` settles two different ways and a session that does not know
+ * which one it is doing will describe the wrong one to the operator.
+ *
+ * Said here rather than left to the tool's own reply: by the time that is read the
+ * write has happened, and "the plan is amended" told about a plan that is actually
+ * still running unchanged is the one sentence this surface must not produce.
+ */
 const PLAN_READ_NEXT =
   'Argue with it. Check the diagnosis against the code, and say plainly where you think the split is wrong ' +
   'rather than agreeing with a plan you have not tested. When you and the operator have settled on a change, ' +
   'call plan_amend once with the whole document — every part you are keeping included, under its existing ' +
-  'slug — and then stop and send them back to the cockpit to approve it.';
+  'slug. What that does depends on "status" above, so read it before you tell them anything: on ' +
+  '"awaiting_approval" the amended plan replaces the one they were about to answer for, and you send them ' +
+  'to the cockpit to approve it; on "active" the plan is already running and your amendment is a proposal ' +
+  'against it — pass "note" saying why, tell them it is waiting for them, and say plainly that nothing has ' +
+  'stopped and nothing has changed until they accept it.';
 
 const READ_NEXT =
   'Claim the one you are going to run with validation_claim before you start, then report it with ' +
@@ -842,6 +859,22 @@ const GOAL_READ_NEXT =
 
 const DESKTOP_TOOLS: Record<DesktopToolName, DesktopToolFactory> = {
   goal_read: goalRead,
+  fleet_status: fleetStatus,
+  fleet_control: fleetControl,
+  attention_read: attentionRead,
+  escalation_answer: escalationAnswer,
+  human_task_settle: humanTaskSettle,
+  agent_read: agentRead,
+  queue_control: queueControl,
+  goal_control: goalControl,
+  goal_gate: goalGate,
+  goal_placement: goalPlacement,
+  goal_instruct: goalInstruct,
+  proposal_read: proposalRead,
+  proposal_decide: proposalDecide,
+  recovery_decide: recoveryDecide,
+  job_create: jobCreate,
+  agent_control: agentControl,
   validation_read: validationRead,
   validation_claim: validationClaim,
   validation_report: validationReport,

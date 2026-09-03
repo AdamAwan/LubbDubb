@@ -75,7 +75,7 @@ export function planApprovalDetail(plan: Pick<Plan, 'diagnosis' | 'approach' | '
  * What approving and rejecting *this* verdict do — appended to the rendered ask,
  * never interpolated into it.
  *
- * Appending is `planApprovalWarnings`' rule and for its reason: `plan-approval` is
+ * Appending is `caveatNotice`'s rule and for its reason: `plan-approval` is
  * operator-overridable and `loadPromptTemplates` rejects only *unknown*
  * placeholders, so a `{settlement}` token would be silently dropped by exactly the
  * deployments that customised most. Appending has no fallback to get wrong.

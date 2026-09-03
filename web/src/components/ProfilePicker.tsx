@@ -1,4 +1,5 @@
 import type { JSX } from 'react';
+import { ControlSelect } from './controls.js';
 
 /**
  * Which model profile a goal or a plan part runs on, as a control (issue #342).
@@ -15,6 +16,12 @@ import type { JSX } from 'react';
  *   not choices between profiles: a cleared part follows its goal, so re-pinning
  *   the goal later moves it, while a part *named* the goal's current profile
  *   stays where it was put.
+ * - **It is dressed by the control kit, not by itself.** `ControlSelect`
+ *   ([`controls.tsx`](./controls.tsx)) draws the glyph, the caret and the height,
+ *   the same three a `<select>` otherwise takes from the platform — so the pin
+ *   matches the controls beside it on the goal header, in the plan sheet and in
+ *   Up next, and matches them again the next time the kit changes. What this
+ *   component keeps is the *options*.
  * - **The options come from the server.** `config.profiles` arrives ordered by
  *   the operator's own `rank`, cheapest first, and the cockpit never re-sorts it
  *   — a second opinion about which profile is deeper is exactly what `rank`
@@ -43,26 +50,28 @@ export function ProfilePicker({
   if (profiles.length === 0) return null;
   const chosen = value !== null && profiles.some((p) => p.name === value);
   return (
-    <select
-      className={`cn-profile ${chosen ? 'cn-profile-set' : ''}`}
-      value={chosen ? value : ''}
-      disabled={disabled === true}
-      onChange={(e) => onPick(e.target.value === '' ? null : e.target.value)}
-      title={
-        chosen
-          ? (profiles.find((p) => p.name === value)?.description ?? '')
-          : `${inheritLabel}${defaultProfile === null ? '' : ` — runs on each rule's own profile, or "${defaultProfile}"`}`
-      }
-    >
-      <option value="">
-        {inheritLabel}
-        {defaultProfile === null ? '' : ` (${defaultProfile})`}
-      </option>
-      {profiles.map((p) => (
-        <option key={p.name} value={p.name}>
-          {p.name}
+    <ControlSelect icon="layers">
+      <select
+        className={`cn-profile ${chosen ? 'cn-profile-set' : ''}`}
+        value={chosen ? value : ''}
+        disabled={disabled === true}
+        onChange={(e) => onPick(e.target.value === '' ? null : e.target.value)}
+        title={
+          chosen
+            ? (profiles.find((p) => p.name === value)?.description ?? '')
+            : `${inheritLabel}${defaultProfile === null ? '' : ` — runs on each rule's own profile, or "${defaultProfile}"`}`
+        }
+      >
+        <option value="">
+          {inheritLabel}
+          {defaultProfile === null ? '' : ` (${defaultProfile})`}
         </option>
-      ))}
-    </select>
+        {profiles.map((p) => (
+          <option key={p.name} value={p.name}>
+            {p.name}
+          </option>
+        ))}
+      </select>
+    </ControlSelect>
   );
 }

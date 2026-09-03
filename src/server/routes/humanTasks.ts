@@ -1,9 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import type { Store } from '../../store/store.js';
 import { validateHumanTask } from '../../mcp/humanTasks.js';
-import { closeOutIssueNumber, validationHeadline } from '../../delivery/closeOut.js';
-import { goalValidation } from '../../validation/goal.js';
+import { closeOutIssueNumber } from '../../delivery/closeOut.js';
+import { closeOutValidation, settleHumanTask } from '../../humanTaskSettle.js';
 import { checked, IdParams, optionalText, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
 
@@ -49,37 +48,22 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   // Done. A backing plan part concludes with it, which is what releases every
   // sibling that named it in `dependsOn` — on the next pulse, so a cycle is run
   // rather than left to the heartbeat.
+  //
+  // The note guard, the settle and the part conclusion are `settleHumanTask`'s —
+  // shared with `human_task_settle` on the desktop channel, so an operator
+  // answering a bench row from their own Claude settles it exactly as this does.
+  // Read there rather than folded into the store, because the harness settles this
+  // kind of task itself when the tracker closes the item; that path is not an
+  // operator deciding to move on.
   const DoneBody = z.object({ note: optionalText('note') });
   app.post(
     '/api/human-tasks/:id/done',
     checked({ params: IdParams, body: DoneBody }, async ({ params, body, reply }) => {
-      // Closing out a goal whose validation is not clear costs a sentence.
-      //
-      // The only place a validation verdict changes what an operator may do, and
-      // it still blocks nothing: it refuses a *silent* close, not the close. The
-      // discipline is `/decline`'s, for its reason — there must be no way out
-      // that costs nothing to say — and the note goes on the row, which is what
-      // a reader of this goal in a month actually finds.
-      //
-      // Read here rather than folded into the settle, because the harness settles
-      // this kind of task itself when the tracker closes the item. That path is
-      // not an operator deciding to move on, and putting the guard in the store
-      // would either stop the sweep or make its resolution the excuse.
-      const owed = closeOutValidation(store, params.id);
-      if (owed && body.note === undefined)
-        return reply.code(400).send({
-          error: `note is required — ${owed.headline} Say what you are doing about them, or waive them first.`,
-        });
-      const task = store.settleHumanTask(params.id, 'done', body.note ?? null);
-      if (!task) return reply.code(409).send({ error: 'human task not found or already settled' });
-      // Settle the task first, then the part: a failed part write leaves a settled
-      // task an operator can see, where the other order would leave a concluded
-      // part nothing accounts for. `concludeHumanPart` is compare-and-set, so a
-      // part somebody merged or retired underneath this is left alone.
-      const part = task.partId ? store.concludeHumanPart(task.partId, humanPartSummary(task)) : null;
+      const settled = settleHumanTask(store, { id: params.id, status: 'done', note: body.note });
+      if (!settled.ok) return reply.code(settled.code).send({ error: settled.error });
       hub.broadcast({ type: 'world:changed' });
-      const report = part ? await harness.runCycle('manual') : null;
-      return { ok: true, humanTask: task, part, report };
+      const report = settled.runCycle ? await harness.runCycle('manual') : null;
+      return { ok: true, humanTask: settled.task, part: settled.part, report };
     }),
   );
 
@@ -94,14 +78,11 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.post(
     '/api/human-tasks/:id/decline',
     checked({ params: IdParams, body: DeclineBody }, async ({ params, body, reply }) => {
-      const note = body.note.trim();
-      if (note.length === 0)
-        return reply.code(400).send({ error: 'note is required — say why, so a replan has something to go on' });
-      const task = store.settleHumanTask(params.id, 'declined', note);
-      if (!task) return reply.code(409).send({ error: 'human task not found or already settled' });
+      const settled = settleHumanTask(store, { id: params.id, status: 'declined', note: body.note });
+      if (!settled.ok) return reply.code(settled.code).send({ error: settled.error });
       hub.broadcast({ type: 'world:changed' });
-      const report = task.partId ? await harness.runCycle('manual') : null;
-      return { ok: true, humanTask: task, report };
+      const report = settled.runCycle ? await harness.runCycle('manual') : null;
+      return { ok: true, humanTask: settled.task, report };
     }),
   );
 
@@ -191,23 +172,6 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
 }
 
 /**
- * What a `close_out` task's goal still owes, or null when nothing does.
- *
- * Narrow on purpose, and each narrowing is deliberate. Only `close_out` — an
- * ordinary ask has nothing to do with a goal's validation plan, and asking a note
- * of somebody ticking off "plug the cable in" would be the friction that gets the
- * whole flag ignored. Only an open task, only one with an origin, and only a
- * flagged verdict.
- */
-function closeOutValidation(store: Store, taskId: string): { headline: string } | null {
-  const task = store.getHumanTask(taskId);
-  if (!task || task.kind !== 'close_out' || task.status !== 'open' || task.originRef === null) return null;
-  const validation = goalValidation(store, task.originRef);
-  if (!validation || validation.verdict.state === 'clear') return null;
-  return { headline: validationHeadline(validation.verdict) };
-}
-
-/**
  * What the row says once the operator closed the item from here.
  *
  * It names the act rather than the observation, because the two are different
@@ -221,14 +185,4 @@ function closeOutValidation(store: Store, taskId: string): { headline: string } 
 function closeTicketResolution(issueNumber: number, note: string | null): string {
   const closed = `Closed #${issueNumber} in the tracker from the cockpit.`;
   return note === null ? closed : `${closed} ${note}`;
-}
-
-/**
- * What a concluded human part records as its outcome. The operator's note when
- * they left one, else the ask itself — never empty, because `outcomeSummary` is
- * what the plan comment, the modal and the retro dossier all read to say what the
- * part achieved.
- */
-function humanPartSummary(task: { title: string; resolution: string | null }): string {
-  return task.resolution ?? `Done by hand: ${task.title}`;
 }

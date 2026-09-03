@@ -10,6 +10,7 @@ import type { RuntimeControl } from './runtimeControl.js';
 import { diffWorlds } from './world/worldDiff.js';
 import { buildReadPlan, type ReadLanes } from './world/readPlan.js';
 import { awaitingReview, isPrWatched } from './prHealth.js';
+import { isSomeoneElsesPr } from './prOwnership.js';
 
 import { rejectionSignalQuery } from './proposals/proposals.js';
 import { deliverySignalQuery } from './delivery/delivery.js';
@@ -34,7 +35,7 @@ import type { BranchReapDesk } from './branchReapDesk.js';
 import type { EnvironmentDesk } from './environments/environmentDesk.js';
 import type { ScheduleDesk } from './schedules/scheduleDesk.js';
 import type { WorkGraphRecorder } from './graph/workGraphRecorder.js';
-import type { Action, WorldEvent, WorldSnapshot } from './types.js';
+import type { Action, PullRequest, WorldEvent, WorldSnapshot } from './types.js';
 import { applyThreadReopens } from './prThreads.js';
 import type { UpcomingPlan } from './wire.js';
 import { isActiveTask } from './tasks.js';
@@ -288,6 +289,68 @@ interface HarnessDeps {
    */
   graduations?: { run(): void };
   clusters?: { run(): void };
+  /**
+   * Sends the obstacle notices owed to running agents. Absent = no mid-session
+   * channel (tests that do not care), and then an obstacle reaches an agent only
+   * through its own dispatch prompt or its own call to the tool.
+   *
+   * It writes `obstacle_notices` rows and types into live sessions. It staffs
+   * nobody, decides no dispatch, and no rule reads what it writes.
+   * → `docs/spec/27-obstacles.md#delivery`
+   */
+  obstacleNotices?: { run(): void };
+  /**
+   * Records the harness's own voice on the obstacle board: a check going red on a
+   * branch other pull requests are based on, a check flapping red-then-green on
+   * one `headSha`. Absent = the harness never speaks (tests that do not care), and
+   * then every row waits for two *agents* to hit it — which a fleet running four
+   * agents does not have.
+   *
+   * It writes `obstacles`, `obstacle_keys` and `obstacle_sightings` rows. It
+   * staffs nobody, decides no dispatch, and no rule reads what it writes.
+   * → `docs/spec/27-obstacles.md#the-harness-is-a-voice`
+   */
+  obstacleVoice?: { run(prev: WorldSnapshot | null, next: WorldSnapshot): void };
+  /**
+   * Reads what a model may decide about the rows nobody has read since somebody
+   * last said something about one: the keys in their prose, a merge the keys
+   * missed, what each row is *for*, and the ticket written from the sightings.
+   * Absent = nothing calls a model at all (tests, and every deployment with no
+   * reader wired), and then extraction stays the mechanical reading and the ticket
+   * the mechanical composition.
+   *
+   * It writes `obstacle_keys`, `obstacle_suggestions` and `obstacle_readings` rows
+   * and the one column that says which door a row is at. It moves no state, takes
+   * no owner and resolves nothing — it is the harness's secretary and deliberately
+   * not its judge.
+   * → `docs/spec/27-obstacles.md#what-may-be-decided-by-a-model-and-what-may-not`
+   */
+  obstacleDesk?: { run(): Promise<void> };
+  /**
+   * Gives a standing obstacle an owner — a ticket, or the repair dispatch rule
+   * `obstacle-repair` has already made — and lets a goal parked behind one back
+   * into pickup once the board stops reaching agents with it. Absent = nothing
+   * owns anything (tests that do not care), and then an obstacle two goals
+   * corroborated sits on the board for ever.
+   *
+   * It writes `obstacles` and `obstacle_blocks` rows and files tracker items. It
+   * staffs nobody: the repair dispatch is a rule's, proposed through the candidate
+   * list and subject to the headroom cut, and this desk only records that it
+   * happened. → `docs/spec/27-obstacles.md#ownership`
+   */
+  obstacleOwnership?: { run(world: WorldSnapshot): Promise<void> };
+  /**
+   * Ends an obstacle: a condition the harness watches met on two consecutive real
+   * readings, the owner landing, the reporter's clock running out, or nothing
+   * having said it for `obstacleDormantMs`. Absent = nothing ever ends (tests that
+   * do not care), and then a row stands where its sightings put it for ever.
+   *
+   * It writes `obstacles`, `obstacle_conditions` and `obstacle_writeups` rows, and
+   * queues one documentation job at a time for a standing note. It staffs nobody
+   * else and no rule reads what it writes.
+   * → `docs/spec/27-obstacles.md#how-an-obstacle-ends`
+   */
+  obstacleEndings?: { run(world: WorldSnapshot): void };
   /**
    * The cross-fleet pool's one desk: polls everybody else's documents into the
    * mirror, and publishes this fleet's when they have moved. Absent = no pool
@@ -714,6 +777,73 @@ export class Harness extends EventEmitter {
       // all: nothing waits on a cluster, it takes its own cadence, and the page an
       // operator opens is the only thing that reads what it writes.
       this.deps.clusters?.run();
+      // What the harness has seen for itself on the board the agents read: a check
+      // red on a branch other pull requests are based on, a check flapping
+      // red-then-green on one commit. **The harness is one of the two voices**, so
+      // a row it can see is standing from the first agent's report rather than the
+      // second — which is what makes the two-goal gate safe on a small fleet.
+      //
+      // **Skipped on a local cycle**, for the endings desk's reason rather than the
+      // provider-traffic one: it is handed the *pair* the diff was taken from, and
+      // a local cycle takes no diff. Run with `previousWorld === world` it would
+      // read every transition as new or as none.
+      //
+      // **Above the three desks below it**, and every half of that matters: a row
+      // filed here is one the notice desk may tell a running agent about, one the
+      // ownership desk may take up, and one the endings desk promises to watch a
+      // condition for — all on the pulse that saw it rather than the next.
+      if (readWorld) this.deps.obstacleVoice?.run(previousWorld, world);
+      // What a model may decide about the rows the board has not had read since a
+      // voice last landed words on one — the keys in their prose, a merge the keys
+      // missed, what each is for, and the ticket written from the sightings.
+      //
+      // **Not awaited**, alone among the desks here, and that is the whole of what
+      // its position in the pulse means. A model round trip is not a provider's:
+      // nothing below waits on a reading, and a pulse that blocked on one would
+      // hold every dispatch behind a call this subsystem makes for its own
+      // convenience. What it writes is read by the pulse that finds it written,
+      // which for a suggestion nobody is bound by and a ticket nobody has filed yet
+      // is a pulse either way. It runs one pass at a time and never rejects.
+      void this.deps.obstacleDesk?.run();
+      // What has changed about an obstacle since the agents now running were
+      // dispatched — their own reports being taken up or settled, and what a
+      // second voice has since corroborated on the checks they are working.
+      //
+      // **Above `decide` and above the executor**, for `notices`' reason exactly:
+      // the block a dispatch carries is rendered at launch a few lines below, so
+      // an agent dispatched on this pulse reads what is on the board rather than
+      // being told it again a moment later. Beside the other bookkeeping and not
+      // in the dispatcher for `closeOuts`' reason — it staffs nobody, and no rule
+      // reads what it writes.
+      this.deps.obstacleNotices?.run();
+      // Who owns each of them, and which goals the board has let back out.
+      //
+      // **Above `decide`**, and both halves matter: a block cleared here is a goal
+      // rule `issue-pickup` sees this pulse rather than next, and a row owned here
+      // reads as owned in the prompt of every dispatch composed a few lines below
+      // — an agent told *do not fix it, #841 has it* on the pulse the ticket was
+      // filed rather than a pulse later. Below the notices for the same reason
+      // they sit above `decide`: an agent whose report was taken up is told so by
+      // the pulse that took it. Awaited but never blocking — every failure inside
+      // is recorded and non-fatal, and a tracker that will not answer costs the
+      // ticket and nothing else.
+      await this.deps.obstacleOwnership?.run(world);
+      // And how each of them ends: a condition the harness promised to watch, the
+      // owner landing, the reporter's clock, or nothing having said it for a week.
+      //
+      // **Skipped on a local cycle, and not for the provider-traffic reason most of
+      // the others are.** A resolution fires on two consecutive *real* world
+      // readings, and the resolving read is never one the local cycle served: a
+      // local cycle re-serves the snapshot the last real one read, so counting it
+      // would take one reading twice and close an obstacle that is still live —
+      // the fleet then pays for it again, and nothing is red.
+      //
+      // **Below the ownership desk**, because it reads the owner the desk above may
+      // have just written, and above `decide` for the notice desk's reason: a row
+      // resolved here has left the prompt of every dispatch composed a few lines
+      // below, rather than being told to one more agent and taken back a pulse
+      // later. Every failure inside is recorded and non-fatal.
+      if (readWorld) this.deps.obstacleEndings?.run(world);
       // The distance above `fleet`: what other fleets have vouched for, landed here,
       // and what this fleet has vouched for, sent out.
       //
@@ -901,16 +1031,25 @@ export class Harness extends EventEmitter {
       const liveAgents = store.countLiveAgents();
       const headroom = this.deps.runtime.paused ? 0 : Math.max(0, this.deps.runtime.cap - liveAgents);
 
-      // A PR without the watch tag is one nobody opted in — the harness's own are
-      // tagged as they are opened (`src/prWatch.ts`), so what is left here is
-      // somebody else's work, or work an operator has taken off the fleet. Hide them
-      // from the dispatch view so *both* dispatchers leave them alone uniformly — no
-      // CI fix, base update, comment note, or merge. The world used for
-      // diffing/baseline above is untouched, and the cockpit snapshot reads the
-      // connector directly, so an unwatched PR stays fully visible (with its health
+      // Two reasons a pull request is not the fleet's to touch, and one gate.
+      //
+      // Without the watch tag nobody opted it in — the harness's own are tagged as
+      // they are opened (`src/prWatch.ts`), so what is left is work an operator has
+      // taken off the fleet. And a pull request a *colleague* opened is never the
+      // fleet's however it is tagged: `ownWorkOnly` widens the fetch to the ones
+      // somebody assigned the operator, which is how another team's review threads
+      // reached rule `pr-review-comment` and got answered by an agent. The provider
+      // says which those are (`PullRequest.viewerAuthored`); a provider that cannot
+      // say hides nothing, so the tag stays the only gate on those deployments.
+      //
+      // Hidden from the dispatch view so *both* dispatchers leave them alone
+      // uniformly — no CI fix, base update, comment note, reply or merge. The world
+      // used for diffing/baseline above is untouched, and the cockpit snapshot reads
+      // the connector directly, so a hidden PR stays fully visible (with its health
       // and its tags) — it is just not acted on.
       const label = this.deps.prWatchLabel;
-      const unwatchedPrs = world.pullRequests.filter((pr) => !isPrWatched(pr, label));
+      const actedOn = (pr: PullRequest): boolean => isPrWatched(pr, label) && !isSomeoneElsesPr(pr);
+      const hiddenPrs = world.pullRequests.filter((pr) => !actedOn(pr));
 
       // The other half of #234: the runs the tracker has forgotten join the
       // dispatcher's issue list, so a goal whose ticket was closed by the very PR
@@ -925,10 +1064,10 @@ export class Harness extends EventEmitter {
       // change removes without a test failing.
       const retainedIssues = retainedRunIssues(store.listIssueRuns(), world.issues);
       const dispatchWorld: WorldSnapshot =
-        unwatchedPrs.length > 0 || retainedIssues.length > 0
+        hiddenPrs.length > 0 || retainedIssues.length > 0
           ? {
               ...world,
-              pullRequests: world.pullRequests.filter((pr) => isPrWatched(pr, label)),
+              pullRequests: world.pullRequests.filter(actedOn),
               issues: [...world.issues, ...retainedIssues],
             }
           : world;
@@ -960,8 +1099,8 @@ export class Harness extends EventEmitter {
         // from one a provider set.
         retainedIssues: retainedIssues.map((i) => i.number),
         // Hidden from dispatch, but still open — the issue-pickup gate has to see
-        // them or an unwatched PR reads as merged and its issue gets a second agent.
-        unwatchedPrs,
+        // them or a hidden PR reads as merged and its issue gets a second agent.
+        hiddenPrs,
         tasks,
         agents,
         openEscalations,
@@ -969,6 +1108,11 @@ export class Harness extends EventEmitter {
         standingJobs,
         plans,
         planParts,
+        // Changes proposed to plans that are already running, waiting on the
+        // operator. Only the pending ones: rule `plan-amendment` reads nothing
+        // else, and a settled amendment is history the cockpit reads out of the
+        // plan sheet rather than off the pulse.
+        planAmendments: store.listPendingPlanAmendments(),
         // How anyone checks each goal was met. Rule `validate-check` reads only
         // whether a check was handed to the fleet and whether anybody has
         // recorded a reading against it — never what it says.
@@ -1007,6 +1151,14 @@ export class Harness extends EventEmitter {
         prReviews: store.listPrReviews(),
         prReviewRoutes: store.listPrReviewRoutes(),
         prReviewedElsewhere: store.prsReviewedElsewhere(),
+        // The obstacle board, and the goals parked behind one. Rule
+        // `obstacle-repair` is the only rule that reads the first; the second
+        // gates pickup, exactly as a delivery verdict does. Read here beside every
+        // other store read, so the cycle stays the only thing that touches the
+        // store — and read *after* the ownership desk above, so a block it cleared
+        // this pulse is a goal the funnel sees now.
+        obstacles: store.obstacleBoard(),
+        obstacleBlocks: store.listObstacleBlocks(),
         // The goal tags and the profiles they may name, so a dispatch on a pinned
         // issue is priced by the pin rather than by its rule.
         modelPins: this.deps.modelPins,
@@ -1235,6 +1387,14 @@ export class Harness extends EventEmitter {
     }
     this.prevWorld = world;
     store.setWorldBaseline(world);
+    // The window's rows, kept past the window. `closedPullRequests` carries a pull
+    // request for `closedPrWindowMs` and then forgets it, and a goal's page drew its
+    // closed rows off that list alone — so a goal delivered last month said no pull
+    // request had ever named it. Written here rather than on the merge itself for
+    // the reason `LandingDesk` sweeps: a hook on the transition loses every close
+    // that happened while the harness was down, while the window re-reports one for
+    // hours. → `docs/spec/14-persistence.md#the-closed-pull-request-archive`
+    store.archiveClosedPrs(world.closedPullRequests ?? []);
   }
 
   // Typed emit/on overrides for a nicer call site (repo convention).

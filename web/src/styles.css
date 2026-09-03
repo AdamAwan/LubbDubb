@@ -813,10 +813,48 @@ select:disabled {
 .ref-out.ref-out:hover {
   border-style: solid;
 }
+/* One reference with both its doors: the number opens the cockpit's page, the arm
+   opens the provider's. Not a fourth mark — the same box, fill and arrow, joined so
+   the pair reads as one token. What it replaces is two separate tokens carrying the
+   *same number*, which is what the pull-request rack drew: `#412` beside `#412`
+   reads as a repeat, and the reader who works out it is not one has still learnt
+   nothing about which door is which.
+
+   The joint is the dashed border-left on the arm, and it is doing the work the
+   dashed box does everywhere else in this vocabulary — beyond this line, you leave.
+   The two halves share one outer edge (the button gives up its right border), so
+   the pair is one shape at rest and two targets under the cursor. */
+.ref-pair.ref-pair {
+  display: inline-flex;
+  align-items: stretch;
+}
+.ref-pair.ref-pair > .ref-goal.ref-goal {
+  border-right: 0;
+}
+.ref-arm.ref-arm {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 5px;
+  border: 1px solid var(--link-line);
+  border-left-style: dashed;
+  line-height: 1.5;
+  font-size: 0.85em;
+  color: var(--muted);
+  background: none;
+  text-decoration: none;
+  cursor: pointer;
+}
+.ref-arm.ref-arm:hover {
+  border-color: var(--blue);
+  color: var(--link-ink);
+}
 /* `.ref-goal` is a `<button>` reset to look like a token, so the UA ring it would
    otherwise draw is gone — tabbing a row landed nowhere visible. Shaped like
-   `.pm-jump`'s, offset outward so the ring clears the box. */
+   `.pm-jump`'s, offset outward so the ring clears the box. The arm takes the same
+   ring: it is the second tab stop on every reference the cockpit draws, so a keyboard
+   that could reach it and not see it would be the same bug one target along. */
 .ext-ref.ext-ref:focus-visible,
+.ref-arm.ref-arm:focus-visible,
 .ref-goal.ref-goal:focus-visible {
   outline: 1px solid var(--blue);
   outline-offset: 2px;
@@ -1380,6 +1418,67 @@ select:disabled {
   min-width: 160px;
 }
 
+/* The caveats a plan raises, as boxes on the way to Approve. Amber rather than red:
+   this is a precondition on a verdict, not a fault — the plan may be perfectly
+   right and still say something its approver has to have read. Every colour is a
+   token, so it follows the theme (docs/spec/17-cockpit.md#tokens). */
+.caveat-ack {
+  margin-top: 10px;
+  padding: 8px 10px;
+  background: var(--amber-fill);
+  border: 1px solid var(--amber-line);
+  border-radius: var(--r-md);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.caveat-ack-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 10px;
+}
+.caveat-ack-count {
+  color: var(--amber);
+  font-variant-numeric: tabular-nums;
+}
+.caveat-ack-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.caveat-ack-item input {
+  margin-top: 3px;
+  flex: none;
+}
+/* Ticked reads as done rather than as gone: the sentence stays legible, because an
+   operator re-reading the card before they click must still be able to see what
+   they agreed to. */
+.caveat-ack-item.done .caveat-ack-text {
+  color: var(--muted);
+}
+.caveat-ack-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 72ch;
+  overflow-wrap: anywhere;
+}
+.caveat-ack-detail {
+  color: var(--muted);
+  font-size: 12px;
+}
+.caveat-ack-detail > :first-child {
+  margin-top: 0;
+}
+.caveat-ack-detail > :last-child {
+  margin-bottom: 0;
+}
+
 .world {
   background: var(--panel);
   border: 1px solid var(--border);
@@ -1861,377 +1960,6 @@ select:disabled {
   gap: 6px;
   margin-left: auto;
 }
-/* Knowledge — what the fleet knows, and how far each claim carries (#27 phase 2).
-   Drawn as the lessons are, because it is the same shape one axis wider: a claim,
-   who says so, an operator's ruling, and the tails the surface has to keep
-   visible to be a governance surface at all. Every colour here is a token: a
-   literal would be a face that stays dark when somebody switches to Light. */
-.kn {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.kn-note {
-  line-height: 1.5;
-  margin: 0;
-}
-
-/* The page's two controls: what it is showing, and how it is laid out. Drawn as
-   the tickets tab's filter bar is, in this page's own class names and the shared
-   token family it already uses — the two bars are one idiom and not one
-   stylesheet, so re-pointing either cannot silently re-point the other. */
-.kn-bar {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  background: var(--panel);
-}
-.kn-fgroup {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-}
-.kn-flabel {
-  font-size: 10.5px;
-  letter-spacing: 0.7px;
-  text-transform: uppercase;
-  color: var(--muted);
-  white-space: nowrap;
-}
-.kn-fdiv {
-  width: 1px;
-  height: 22px;
-  background: var(--border);
-}
-.kn-seg {
-  display: flex;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  overflow: hidden;
-  background: var(--panel-2);
-}
-.kn-seg button {
-  padding: 4px 10px;
-  font-size: 12px;
-  color: var(--muted);
-  border-right: 1px solid var(--border);
-  white-space: nowrap;
-}
-.kn-seg button:last-child {
-  border-right: 0;
-}
-.kn-seg button:hover {
-  color: var(--text);
-  background: var(--veil);
-}
-.kn-seg button.on {
-  background: var(--accent-fill);
-  color: var(--text);
-  box-shadow: inset 0 -2px 0 var(--accent);
-}
-/* A tail heading. The caret is the whole affordance, so the control is the
-   heading itself rather than a chevron beside it — two hit targets for one fold
-   is the row that opens something in two places. */
-.kn-fold {
-  font: inherit;
-  color: inherit;
-  text-align: left;
-}
-.kn-fold:hover {
-  color: var(--accent);
-}
-/* Why a claim is waiting on a person, where the heading above it does not already
-   say so. Amber because it is the one line on a card that asks for something —
-   and never red: nothing here is a fault, and nothing was demoted by it. */
-.kn-waiting {
-  color: var(--amber);
-  font-size: 11.5px;
-  line-height: 1.45;
-  margin: 6px 0 0;
-}
-/* The table. Its own scroller, so a store with long claims in it scrolls the
-   table and never the page. */
-.kn-tablewrap {
-  overflow-x: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  background: var(--panel);
-}
-.kn-table {
-  border-collapse: collapse;
-  width: 100%;
-  font-size: 12.5px;
-}
-.kn-table th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: var(--panel-2);
-  border-bottom: 1px solid var(--border);
-  padding: 6px 9px;
-  text-align: left;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.6px;
-  text-transform: uppercase;
-  color: var(--muted);
-  white-space: nowrap;
-}
-.kn-table th.num,
-.kn-table td.num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  width: 1%;
-}
-.kn-table td {
-  border-bottom: 1px solid var(--border);
-  padding: 5px 9px;
-  vertical-align: top;
-}
-.kn-table tbody tr:hover td {
-  background: var(--veil);
-}
-/* Waiting on somebody, marked in form as well as in the filter's count — a row
-   an operator can act on reads at a glance, whichever order the table is in. */
-.kn-trow.waiting td:first-child {
-  box-shadow: inset 3px 0 0 var(--accent);
-}
-.kn-trow.open td {
-  background: var(--well);
-}
-/* One line, clipped: the card it opens draws the same claim in full, as markdown
-   and with its references live. */
-.kn-tclaim {
-  display: block;
-  max-width: 62ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-align: left;
-}
-.kn-tclaim:hover {
-  color: var(--accent);
-}
-.kn-tdetail td {
-  background: var(--well);
-  padding: 8px;
-}
-.kn-section {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.kn-head {
-  font-size: 13px;
-  margin: 0;
-}
-/* The queue's one card, given the room a page's subject gets. Everything on it is
-   the section above's — a card, a heading, an act row — so this sets the spacing
-   and takes no colour of its own: a hex here would be a surface no theme can
-   reach. → docs/spec/17-cockpit.md#tokens */
-.kn-queue {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-.kn-section > p {
-  margin: 0;
-}
-.kn-card {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  padding: 8px 12px;
-  font-size: 13px;
-}
-/* A suggested cluster: the members drawn together, so four phrasings of one wall
-   read as four phrasings rather than as four rows a page apart. Bordered rather
-   than tinted — a merge has not happened, and a colour would say something has.
-   Every value here is a token for the sheet's one rule: a hex at a use site is a
-   surface no theme can reach. → docs/spec/17-cockpit.md#tokens */
-.kn-cluster {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  border-left: 2px solid var(--border);
-  padding-left: 8px;
-}
-.kn-cluster-member {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-/* Rejected and committed alike: settled, kept visible, and out of the way. */
-.kn-card.resolved {
-  opacity: 0.55;
-}
-.kn-claim {
-  overflow-wrap: anywhere;
-}
-.kn-claim > :first-child {
-  margin-top: 0;
-}
-.kn-claim > :last-child {
-  margin-bottom: 0;
-}
-.kn-foot {
-  align-items: center;
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  font-size: 11px;
-  margin-top: 6px;
-}
-.kn-acts {
-  align-items: center;
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin-top: 6px;
-}
-.kn-acts .spacer {
-  flex: 1;
-}
-.kn-seen {
-  border-top: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 8px;
-  padding-top: 8px;
-}
-.kn-obs {
-  background: var(--well);
-  border-radius: var(--r-sm);
-  padding: 6px 8px;
-}
-/* The observer's own words, never the claim restated — so they are set as prose
-   rather than as a caption. */
-.kn-words {
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
-}
-
-/* A dispute reads differently from an agreement, because it is asking for a
-   decision rather than recording one. The edge is amber for the same reason the
-   chip on the row is: it is the one observation on a claim that is waiting on the
-   operator, and an answered dispute drops back to the ground everything else sits
-   on. */
-.kn-dispute {
-  border-left: 2px solid var(--amber-line);
-}
-.kn-dispute.resolved {
-  border-left-color: var(--border);
-  opacity: 0.6;
-}
-/* The sentence being offered in place of the claim. Set apart from what the agent
-   saw, because they are two different things to read and the decision is between
-   the amendment and the claim above, not between the two halves of this row. */
-.kn-amendment {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  margin-top: 6px;
-  overflow-wrap: anywhere;
-  padding: 6px 8px;
-}
-.kn-narrow {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 6px;
-}
-.kn-narrow textarea {
-  width: 100%;
-}
-
-/* Committing a claim to the repository: the two places it can go, asked before
-   anything is opened. A panel rather than a row of buttons, because the choice is
-   the decision and the two answers are not equivalent — one of them is paid for on
-   every dispatch from then on, and a control that read as a toggle would hide
-   that. */
-.kn-commit {
-  background: var(--well);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 8px;
-  padding: 8px 10px;
-}
-.kn-commit-target {
-  align-items: flex-start;
-  cursor: pointer;
-  display: flex;
-  gap: 8px;
-}
-.kn-commit-target input {
-  margin-top: 3px;
-}
-/* The one field in the sheet that overrides the base's ground, because the panel
-   it sits in *is* the well — an inset box on an inset box is a border and nothing
-   else. Raised instead, which is what makes it read as the thing to type in. */
-.kn-commit textarea {
-  background: var(--panel);
-  width: 100%;
-}
-
-/* What the injected block costs against its cap. A bar rather than a bare pair of
-   numbers because the reading an operator wants is "how much room is left", which
-   a ratio answers at a glance and two figures do not. */
-.kn-budget {
-  align-items: center;
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-/* The cost is a sentence and the meter is a bar: on their own row rather than
-   beside each other, or the flex line squeezes the sentence into a column two
-   words wide. */
-.kn-cost {
-  flex-basis: 100%;
-  margin: 0;
-}
-.kn-meter {
-  background: var(--well);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  flex: 1;
-  height: 8px;
-  min-width: 120px;
-  overflow: hidden;
-}
-.kn-meter-fill {
-  background: var(--accent);
-  height: 100%;
-}
-/* Full is not an error — it is the cap doing its job — but it is the state where
-   something above is reaching nobody, so it is drawn as the thing to look at. */
-.kn-meter-fill.full {
-  background: var(--amber);
-}
-/* The prompt text verbatim. Pre-wrapped and scrollable in its own box: this is
-   what the agent reads, and re-flowing it would make it a paraphrase. */
-.kn-sent {
-  background: var(--well);
-  border-radius: var(--r-sm);
-  font-size: 12px;
-  margin: 6px 0 0;
-  max-height: 320px;
-  overflow: auto;
-  padding: 8px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
 .plan-part {
   display: flex;
   align-items: center;
@@ -2676,6 +2404,13 @@ select:disabled {
   color: var(--text);
   border-color: var(--accent);
 }
+/* A change waiting on the operator: the one control on this rail that is asking
+   them something, on the same amber the pending block below it uses. */
+.pm-jump.history.waiting {
+  color: var(--amber);
+  border-color: var(--amber-line);
+  background: var(--amber-fill);
+}
 
 /* The verdict band: the two questions side by side, so a long "what's wrong" does
    not push "what we'll do" off the first screen. One column below 800px, where
@@ -3062,6 +2797,41 @@ select:disabled {
 }
 
 /* -- What changed --------------------------------------------------------- */
+/* The pending amendment sits above the history and reads as a question, which is
+   what the amber is doing: it is the sheet's only asking element, and the diff
+   below it is a record. */
+.pm-pending {
+  border: 1px solid var(--amber-line);
+  background: var(--amber-fill);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+.pm-pending-head {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.pm-pending-head .pm-section-label {
+  margin-bottom: 0;
+  color: var(--amber);
+}
+.pm-pending-note {
+  margin: 7px 0 10px;
+  font-size: 13px;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+.pm-pending-warnings {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.pm-pending-warnings li {
+  margin-top: 4px;
+}
+
 .pm-revs {
   display: flex;
   gap: 6px;
@@ -4340,6 +4110,9 @@ select:disabled {
      first seven — so this one is mixed from two of them rather than written as a
      literal, which is what keeps it following the theme an operator picked. */
   --sp-local: color-mix(in srgb, var(--blue) 45%, var(--green));
+  /* The ninth, mixed for the eighth's reason and from the two it sits between: what
+     a repair costs reads as a red thing on somebody else's branch. */
+  --sp-obstacle: color-mix(in srgb, var(--red) 55%, var(--violet));
   --sp-job: var(--violet);
   --sp-other: var(--grey);
 }
@@ -9772,4 +9545,260 @@ select:disabled {
   margin: 10px 0 0;
   color: var(--text);
   font-size: 12.5px;
+}
+
+/* --- the fleet review's mark ---
+
+   One glyph, tinted by what the reviewer said, with the words in a tooltip of the
+   cockpit's own rather than the browser's `title` — which arrives a second late,
+   cannot be styled, and never arrives at all on a touch screen (the same reason
+   the allowance band has `.al-tip`).
+
+   It is drawn on three surfaces from one component, so everything below is on
+   `.rv` itself rather than on any surface's class: the mark has to sit in a
+   console row, a console masthead and a card without any of them reaching in.
+   → docs/spec/17-cockpit.md#the-fleet-reviews-mark */
+.rv {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  color: var(--muted);
+  cursor: help;
+  /* Room for the badge, which sits on the glyph's shoulder and outside the box:
+     without it the count crowds whatever the row draws next. */
+  margin-right: 3px;
+}
+
+.rv:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+
+.rv-clear {
+  color: var(--green);
+  background: var(--green-fill);
+  border-color: var(--green-line);
+}
+
+.rv-findings {
+  color: var(--red);
+  background: var(--red-fill);
+  border-color: var(--red-line);
+}
+
+.rv-routed {
+  color: var(--amber);
+  background: var(--amber-fill);
+  border-color: var(--amber-line);
+}
+
+/* Dashed, because a decision that has not been taken yet is the one state that is
+   about to change on its own. */
+.rv-deciding {
+  color: var(--blue);
+  background: var(--blue-fill);
+  border-color: var(--blue-line);
+  border-style: dashed;
+}
+
+.rv-skipped {
+  color: var(--grey);
+  border-color: var(--border);
+}
+
+/* Nothing read this one, and the glyph says so before the badge does. */
+.rv-skipped svg {
+  opacity: 0.55;
+}
+
+.rv-elsewhere {
+  color: var(--grey);
+  border-color: var(--border);
+  border-style: dotted;
+}
+
+/* One badge slot, three meanings — the count of findings, the dash of a review
+   that will not happen, the arrow of one that happened elsewhere. A badge rather
+   than a mark drawn *through* the lenses: a stroke across a 15px glyph is mud,
+   where this holds at every size a row uses. */
+.rv-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 13px;
+  height: 13px;
+  padding: 0 2px;
+  border: 1px solid var(--panel);
+  border-radius: var(--r-pill);
+  background: var(--panel-2);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 11px;
+  text-align: center;
+}
+
+.rv-findings .rv-badge {
+  background: var(--red);
+  border-color: var(--red-line);
+  color: var(--on-light);
+}
+
+/* The tooltip. Anchored to the mark's right edge because the mark sits near the
+   right of every row that draws it, so a centred one would leave the panel — and
+   *below* it, because the mark's other surface is a masthead a few pixels under
+   the top of the window, where a tooltip above is a tooltip nobody can read. */
+.rv-tip {
+  position: fixed;
+  z-index: 30;
+  width: 320px;
+  padding: 9px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  text-align: left;
+  white-space: normal;
+  text-transform: none;
+  letter-spacing: 0;
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  box-shadow: 0 4px 14px var(--shadow);
+  /* No pointer events: a tooltip that can be hovered is a tooltip that flickers,
+     the same rule the allowance readout takes. */
+  pointer-events: none;
+}
+
+.rv-tip b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.rv-said {
+  color: var(--text);
+}
+
+.rv-why i {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-style: normal;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--grey);
+}
+
+.rv-tip ul {
+  margin: 0;
+  padding-left: 16px;
+}
+
+.rv-foot {
+  margin-top: 3px;
+  padding-top: 7px;
+  border-top: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--grey);
+}
+
+/* --- the same record at full length, on the pull-request page --- */
+.rv-detail dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 5px 12px;
+}
+
+.rv-detail dt {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--grey);
+  line-height: 1.7;
+}
+
+.rv-detail dd {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.rv-quiet {
+  color: var(--muted);
+}
+
+.rv-word {
+  font-size: 12.5px;
+}
+
+.rv-word.rv-clear {
+  color: var(--green);
+  background: none;
+  border: 0;
+}
+
+.rv-word.rv-findings {
+  color: var(--red);
+  background: none;
+  border: 0;
+}
+
+.rv-word.rv-routed {
+  color: var(--amber);
+  background: none;
+  border: 0;
+}
+
+.rv-word.rv-deciding {
+  color: var(--blue);
+  background: none;
+  border: 0;
+}
+
+.rv-word.rv-skipped,
+.rv-word.rv-elsewhere {
+  color: var(--muted);
+  background: none;
+  border: 0;
+}
+
+.rv-found {
+  margin: 11px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.rv-found li {
+  padding: 7px 9px;
+  background: var(--well);
+  border-left: 2px solid var(--red-line);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.rv-detail-foot {
+  margin: 11px 0 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--grey);
+}
+
+/* The mark's slot with nothing in it, on a list where other rows have one. */
+.rv-none {
+  border-color: transparent;
 }

@@ -6,6 +6,8 @@ import type { CockpitActions, ConsoleTab } from '../cockpit/actions.js';
 import { FleetControl } from '../components/FleetControl.js';
 import { ExtLink, fmtUsd, relTime } from '../components/util.js';
 import { RaiseIssueModal } from '../components/RaiseIssueModal.js';
+import { DesktopLink } from '../components/DesktopLink.js';
+import { questionPrompt } from '../cockpit/desktopLink.js';
 import { untriagedCount } from '../worldBuckets.js';
 
 /**
@@ -18,12 +20,16 @@ import { untriagedCount } from '../worldBuckets.js';
  * passive. Insights is somewhere an operator goes several times a day and comes
  * back from.
  *
- * **Knowledge is the fourth, and it was a reading on this bar until it was one.**
- * A count that opened a panel said the fleet's written record was something you
- * glance at, and the panel drew over the rail an operator had just come from — but
- * ruling on a claim is triage, done in a sitting, several times a day, exactly like
- * the tickets tab beside it. What it needed was the situation area and a way back,
- * which is what a tab is. The count did not go: it is the badge on the button.
+ * **Obstacles is the fourth, and it holds the slot Knowledge held.** The board
+ * shipped reachable by URL only, and the operator lifted that; it takes Knowledge's
+ * slot rather than a fifth because Knowledge is the surface it replaces, and two
+ * tabs answering one question is how an operator ends up ruling on the same thing
+ * twice. It carries **no badge**, and that is the whole of it rather than an
+ * omission: a badge counts what is waiting on a decision, and nothing on the board
+ * is — every state there has an exit that is not you. Knowledge's badge was
+ * `factsNeedingYou`, over a queue only a person emptied, which is exactly the shape
+ * the board is arranged not to have.
+ * → `docs/spec/27-obstacles.md#in-the-cockpit`
  *
  * **Work was the second of these and is not here any more.** Every part of it had
  * found a better home — a goal's record onto its goal page, the unrecorded-work
@@ -36,7 +42,7 @@ import { untriagedCount } from '../worldBuckets.js';
  * and hidden — exactly as the rail's vivarium is: a tab that opens on a page
  * explaining a subsystem this cockpit does not draw is worse than no tab.
  */
-const TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'knowledge', 'insights'];
+const TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'obstacles', 'insights'];
 
 /**
  * Where a bug in LubbDubb goes when the harness cannot file one itself — fixed, and
@@ -65,7 +71,7 @@ const NEW_ISSUE_URL = 'https://github.com/AdamAwan/LubbDubb/issues/new';
 export const TAB_LABEL: Record<ConsoleTab, string> = {
   overview: 'Overview',
   tickets: 'Tickets',
-  knowledge: 'Knowledge',
+  obstacles: 'Obstacles',
   features: 'Features',
   insights: 'Insights',
   pets: 'Pets',
@@ -103,13 +109,13 @@ function Nav({ view, actions }: { view: CockpitView; actions: CockpitActions }):
   //
   // Features rides the same rule and is **inserted** rather than appended, because
   // it belongs beside Tickets: the two are the same backlog read at two altitudes,
-  // and a reader moving between them should not cross Knowledge to do it. It is
+  // and a reader moving between them should not cross the board to do it. It is
   // absent unless the deployment has a board at all — the operator's flag *and* a
   // provider with a hierarchy, folded server-side by `featureBoardOn` so the tab
   // and the route can never disagree. A tab that opens on a page explaining a
   // hierarchy this tracker does not have is worse than no tab.
   const withFeatures: readonly ConsoleTab[] = view.state.config.featureBoard
-    ? ['overview', 'tickets', 'features', 'knowledge', 'insights']
+    ? ['overview', 'tickets', 'features', 'obstacles', 'insights']
     : TABS;
   const tabs = view.state.pets === null ? withFeatures : [...withFeatures, 'pets' as const];
 
@@ -140,31 +146,28 @@ function Nav({ view, actions }: { view: CockpitView; actions: CockpitActions }):
  * What is waiting behind a nav button, as a number and the sentence that explains
  * it — or null, for a tab with no number that decides whether to look.
  *
- * **A badge, not a phrase.** Tickets read `2 to triage` and Knowledge was a count
- * on the readings strip; both are the same question — is there anything here for
- * me — and the answer is the digit. The words were a sentence in the one row an
- * operator glances at without reading, and they widened the button by however long
- * they happened to be, which is the thing the nav most has to not do. The sentence
- * survives as the button's `title`, where it costs no width and is there for
- * whoever wants it.
+ * **A badge, not a phrase.** Tickets reads `2 to triage`: the question is *is
+ * there anything here for me*, and the answer is the digit. The words were a
+ * sentence in the one row an operator glances at without reading, and they widened
+ * the button by however long they happened to be, which is the thing the nav most
+ * has to not do. The sentence survives as the button's `title`, where it costs no
+ * width and is there for whoever wants it.
  *
- * Hidden at zero, both of them: a badge that always shows is one nobody reads.
+ * Hidden at zero: a badge that always shows is one nobody reads.
  *
- * Each number is the *same* number the surface behind it draws — `untriagedCount`
- * over the watch bucket the tickets tab's Unwatched filter uses, and
- * `factsNeedingYou` over the corroborated claims the Knowledge page opens on — so
- * the badge and the rows behind it cannot differ.
+ * The number is the *same* number the surface behind it draws — `untriagedCount`
+ * over the watch bucket the tickets tab's Unwatched filter uses — so the badge and
+ * the rows behind it cannot differ.
+ *
+ * **Obstacles has none**, and never gains one: a badge counts what is waiting on a
+ * decision, the board has nothing that is, and a count there would be the first
+ * step back toward the queue only a person emptied that killed the store it
+ * replaced. → `docs/spec/27-obstacles.md#in-the-cockpit`
  */
 function navBadge(tab: ConsoleTab, view: CockpitView): { count: number; title: string } | null {
   if (tab === 'tickets') {
     const count = untriagedCount(view.state.world.issues, view.state.config.watchLabel);
     return count === 0 ? null : { count, title: `${count} untriaged — nothing has said whether the fleet works these` };
-  }
-  if (tab === 'knowledge') {
-    const count = view.factsNeedingYou;
-    return count === 0
-      ? null
-      : { count, title: `${count} claim${count === 1 ? '' : 's'} two agents agreed on that nobody has ruled on` };
   }
   return null;
 }
@@ -189,7 +192,7 @@ function navBadge(tab: ConsoleTab, view: CockpitView): { count: number; title: s
  *
  * The link sits here and not among the readings for the reason the readings are a
  * group at all — every one of them is a gauge on the fleet or on this build, read
- * left to right as one sentence about what is happening. "Raise an issue" answers
+ * left to right as one sentence about what is happening. "Issue!" answers
  * nothing about the fleet, and a tenth chip in a group that already wraps at laptop
  * widths would cost a line to say so.
  */
@@ -213,8 +216,16 @@ function Ident({ view, actions }: { view: CockpitView; actions: CockpitActions }
       LubbDubb
       {view.demo && <span style={{ color: 'var(--cn-fg-faint)', fontWeight: 400 }}>· demo</span>}
       {/* `.cn-issue` is the console's own hook for sizing the control out of the
-          wordmark — see `console.css`; it styles nothing `ExtLink` owns. */}
-      <span className="cn-issue">
+          wordmark, and `.cn-ident-act` is what makes it read as a control rather
+          than as more wordmark — see `console.css`. Both are on the *wrapper*: `ExtLink`
+          takes no class, and a rule on `.ext-ref` is the one thing this stylesheet
+          is tested not to do, so the chrome goes round the link rather than on it.
+
+          One word and a mark. `Raise an issue` and `Got a question?` were two
+          sentences in the same weight and the same ink, a hand's width apart, and
+          read as one run of small print; the punctuation is what tells them apart at
+          a glance, since it is the difference between them — one files, one asks. */}
+      <span className="cn-issue cn-ident-act">
         {canCompose ? (
           <button
             type="button"
@@ -222,17 +233,43 @@ function Ident({ view, actions }: { view: CockpitView; actions: CockpitActions }
             title="Write an issue about LubbDubb and file it on its own tracker, without leaving the cockpit"
             onClick={() => setComposing(true)}
           >
-            Raise an issue
+            Issue!
           </button>
         ) : (
           <ExtLink href={NEW_ISSUE_URL} title="Raise an issue on the LubbDubb repo">
-            Raise an issue
+            Issue!
           </ExtLink>
         )}
       </span>
       {/* Local state and not `Place`: a half-typed report is not somewhere you can
           come back to, so it is not somewhere the URL should be able to send you.
           `GoalPage`'s compose modals are held the same way. */}
+      {/* The bar's second way out, and the one that answers rather than files.
+          Most of what arrives as an issue about the fleet is not a fault in it —
+          it is "why has this not moved", which the harness's own record answers in
+          a sentence and which nobody asks because asking meant opening a client,
+          finding the checkout and remembering the skill. This is that, as a
+          control: a `DesktopLink` onto the repository the fleet works, with
+          `/lubbdubb ` in the composer and the question left to the operator.
+
+          Beside *Issue!* deliberately. The two are the same moment —
+          something looks wrong — and the cheaper reading of it is offered first;
+          drawn anywhere else, the expensive one stays the only one on the bar.
+
+          Unconditional, like every other deep link: it reaches only the machine
+          the browser is on, and `DesktopLink` puts the command in the title for
+          exactly the operator it cannot reach. */}
+      <span className="cn-issue cn-ident-act cn-ident-ask">
+        <DesktopLink
+          className="cn-ask-btn"
+          folder={view.state.config.desktopFolder}
+          prompt={questionPrompt()}
+          ready="waiting for your question"
+          explain="which answers it from the harness’s own record of the work, and says so when the record is silent."
+        >
+          Question?
+        </DesktopLink>
+      </span>
       {composing && (
         <RaiseIssueModal
           probe={actions.probeFilingTarget}
@@ -520,7 +557,7 @@ function Build({ view, actions }: { view: CockpitView; actions: CockpitActions }
  * Whether anything is running on this machine, and which goal's code it is.
  *
  * A reading rather than a nav tab: it is a state of the operator's own machine, not
- * a surface work happens on, and `TABS` is deliberately the three that are. Quiet
+ * a surface work happens on, and `TABS` is deliberately the ones that are. Quiet
  * when nothing is up — which is most of the time, and is the reading rather than
  * the absence of one.
  *

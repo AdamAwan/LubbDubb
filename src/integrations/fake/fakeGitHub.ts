@@ -4,6 +4,7 @@ import type {
   BranchDeleteInput,
   PrBaseInput,
   PrBaseUpdateInput,
+  PrCloseInput,
   PrCreateInput,
   PrLabelInput,
   PrMergeInput,
@@ -21,6 +22,7 @@ import type {
   Integration,
   PrBaseCapable,
   PrBaseUpdateCapable,
+  PrCloseCapable,
   PrCreateCapable,
   PrLabelCapable,
   PrMergeCapable,
@@ -56,6 +58,7 @@ export class FakeGitHubIntegration
     PrReplyCapable,
     PrThreadResolveCapable,
     PrMergeCapable,
+    PrCloseCapable,
     PrLabelCapable,
     PrCreateCapable,
     PrTitleCapable,
@@ -156,6 +159,12 @@ export class FakeGitHubIntegration
               merged: false,
               labels: event.labels ?? [],
               ...(event.headSha === undefined ? {} : { headSha: event.headSha }),
+              ...(event.author === undefined ? {} : { author: event.author }),
+              // Mirrored rather than derived: the real providers answer this by
+              // comparing the pull request's author against the credential, and a
+              // fake that guessed from the branch would let a test pass against a
+              // rule the shipped gate does not have. → `src/prOwnership.ts`
+              ...(event.viewerAuthored === undefined ? {} : { viewerAuthored: event.viewerAuthored }),
             });
           }
           break;
@@ -170,9 +179,13 @@ export class FakeGitHubIntegration
    * here instead.
    */
   async postPrReply(input: PrReplyInput): Promise<SendResult> {
-    if (input.commentId) this.markCommentHandled(input.prNumber, input.commentId, input.body);
+    const replyId = input.commentId ? this.markCommentHandled(input.prNumber, input.commentId, input.body) : null;
     const ref = `fake-reply_${nanoid(6)}`;
-    return { ok: true, ref };
+    // The id of the reply it just minted, in the same vocabulary its own threads
+    // carry — so the fake answers `commentRef` on the same terms a real provider
+    // does and a test driving it exercises the attribution record rather than a
+    // path only the fake has. Null when there was no thread to reply into.
+    return { ok: true, ref, ...(replyId === null ? {} : { commentRef: replyId }) };
   }
 
   /**
@@ -185,7 +198,7 @@ export class FakeGitHubIntegration
    * providers give.
    */
   async resolvePrThread(input: PrThreadResolveInput): Promise<SendResult> {
-    const found = this.setThreadState(input.prNumber, input.commentId, 'resolved');
+    const { found } = this.setThreadState(input.prNumber, input.commentId, 'resolved');
     return { ok: found, ref: found ? `fake-resolve_${nanoid(6)}` : undefined };
   }
 
@@ -198,6 +211,29 @@ export class FakeGitHubIntegration
     this.world.mutate((world) => mutatePr(world, input.prNumber, (pr) => (pr.merged = true)));
     const ref = `fake-merge_${nanoid(6)}`;
     return { ok: true, ref };
+  }
+
+  /**
+   * The outbound side of closing a pull request that will not be merged — the plan
+   * part restart (`src/plans/partRestart.ts`).
+   *
+   * Unlike {@link mergePr} this **moves the row**, exactly as the `pr_closed`
+   * injection does and for its reason: a closed pull request that stayed in the
+   * open list would be read by `observePartPr` as still `in_review`, which is the
+   * one thing the restart exists to get past — so a fake that only flagged it
+   * would let the whole feature pass its tests while doing nothing in production.
+   *
+   * Idempotent: a pull request the open list no longer carries is a success, which
+   * is what makes pressing restart twice safe.
+   */
+  closePr(input: PrCloseInput): Promise<SendResult> {
+    this.world.mutate((world) => {
+      const idx = world.pullRequests.findIndex((p) => p.number === input.prNumber);
+      if (idx === -1) return;
+      const [pr] = world.pullRequests.splice(idx, 1);
+      world.closedPullRequests.push({ ...pr!, merged: false, state: 'closed', closedAt: new Date().toISOString() });
+    });
+    return Promise.resolve({ ok: true, ref: `fake-close_${nanoid(6)}` });
   }
 
   /**
@@ -290,9 +326,13 @@ export class FakeGitHubIntegration
    * re-triggering: the thread is `answered` — the fleet spoke last and the
    * reviewer has not come back — and the reply is written into it when one was
    * given, so a surface drawing the conversation draws what was actually said.
+   *
+   * Answers the id of the reply it wrote, or null when the world carried no such
+   * thread — what `postPrReply` hands back as `commentRef`, so the fake's replies
+   * are attributable by record exactly as a real provider's are.
    */
-  markCommentHandled(prNumber: number, commentId: string, body?: string): void {
-    this.setThreadState(prNumber, commentId, 'answered', body);
+  markCommentHandled(prNumber: number, commentId: string, body?: string): string | null {
+    return this.setThreadState(prNumber, commentId, 'answered', body).replyId;
   }
 
   /**
@@ -300,8 +340,14 @@ export class FakeGitHubIntegration
    * fold, here as in both real providers. Answers whether the world carried the
    * thread at all.
    */
-  private setThreadState(prNumber: number, commentId: string, state: PrThreadState, reply?: string): boolean {
+  private setThreadState(
+    prNumber: number,
+    commentId: string,
+    state: PrThreadState,
+    reply?: string,
+  ): { found: boolean; replyId: string | null } {
     let found = false;
+    let replyId: string | null = null;
     this.world.mutate((world) => {
       mutatePr(world, prNumber, (pr) => {
         const threads = pr.reviewThreads ?? [];
@@ -310,13 +356,14 @@ export class FakeGitHubIntegration
         found = true;
         thread.state = state;
         if (reply !== undefined) {
-          thread.replies.push({ id: `r_${nanoid(6)}`, author: 'lubbdubb', body: reply, ours: true });
+          replyId = `r_${nanoid(6)}`;
+          thread.replies.push({ id: replyId, author: 'lubbdubb', body: reply, ours: true });
         }
         pr.reviewThreads = threads;
         pr.unresolvedComments = threadComments(threads);
       });
     });
-    return found;
+    return { found, replyId };
   }
 }
 

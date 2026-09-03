@@ -14,6 +14,7 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { McpDesktopServer } from '../src/mcp/desktop.js';
+import { desktopDeps } from './support/desktop.js';
 import { DESKTOP_TOOL_NAMES, MCP_TOOL_NAMES } from '../src/mcp/names.js';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
@@ -96,17 +97,12 @@ async function desk(
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-cred-'));
   const socketPath = over.socketPath ?? throwawaySocketPath();
   const server = new McpDesktopServer({
-    store: system.store,
+    ...desktopDeps(system),
     claimMinutes: over.claimMinutes ?? 60,
-    validationRoot: '/srv/validation',
     environments,
-    localRun: () => system.localRun,
-    localRunWatch: () => system.localRunWatch,
     now: over.now ?? ((): string => new Date().toISOString()),
     socketPath,
     credentialPath: join(dir, 'desktop.json'),
-    proposals: () => system.proposals,
-    runCycle: () => system.harness.runCycle('manual').then(() => undefined),
   });
   assert.ok(await server.listen(), 'the desktop channel starts on a throwaway path');
   return { server, dir, socketPath };
@@ -236,17 +232,10 @@ test('two harnesses do not fight over the stable socket', async () => {
   const system = build();
   const { server, dir, socketPath } = await desk(system);
   const second = new McpDesktopServer({
-    store: system.store,
-    claimMinutes: 60,
-    validationRoot: '/srv/validation',
-    environments: [],
-    localRun: () => system.localRun,
-    localRunWatch: () => system.localRunWatch,
+    ...desktopDeps(system),
     now: () => NOW,
     socketPath,
     credentialPath: join(dir, 'second.json'),
-    proposals: () => system.proposals,
-    runCycle: () => system.harness.runCycle('manual').then(() => undefined),
   });
   try {
     // The fleet socket carries a pid and unlinks whatever it finds. This one is
@@ -809,6 +798,37 @@ test('the skill installs, and says what it is for without restating the procedur
   // rather than pointed at a setting the loader refuses.
   assert.match(written, /rewritten from scratch every time the harness starts/);
   assert.doesNotMatch(written, /desktopSkill\b/);
+});
+
+/**
+ * The one thing in the file that is about *this machine* rather than about the
+ * channel, and the reason it is appended rather than spliced in.
+ *
+ * The session this skill is written for opens on `repoRoot` — the repository the
+ * fleet works on — and the cockpit's *Question?* control collects plenty of
+ * questions that are about the harness instead: why nothing picked a goal up, why
+ * a rule did not fire. Without a path, those are answered from the harness's
+ * output, which is the confident wrong answer the `ask` section already warns
+ * about; with one spliced into the body, there are two documents to keep in step.
+ */
+test('the skill names LubbDubb\u2019s own checkout when there is one, and is unchanged when there is not', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-skill-root-'));
+  const path = join(dir, 'SKILL.md');
+  assert.ok(installDesktopSkill(path, undefined, '/srv/lubbdubb'));
+  const written = readFileSync(path, 'utf8');
+  // Appended: the body arrives whole, and the note is behind it.
+  assert.ok(written.startsWith(DESKTOP_SKILL), 'the body is untouched');
+  assert.match(written, /\/srv\/lubbdubb/);
+  // The two halves that keep it from being read as an invitation: the record is
+  // still the answer, and that checkout is the running harness.
+  assert.match(written, /The record first, the source second/);
+  assert.match(written, /Change nothing there/);
+
+  // A deployment running from a tarball resolves no root, and a section naming a
+  // directory that is not there is worse than no section.
+  const bare = join(dir, 'BARE.md');
+  assert.ok(installDesktopSkill(bare, undefined, null));
+  assert.equal(readFileSync(bare, 'utf8'), DESKTOP_SKILL);
 });
 
 /**

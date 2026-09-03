@@ -46,7 +46,7 @@ import { isOrphanIssue } from '../issueRelations.js';
  */
 
 /** Which of the two placements a proposal or a dismissal is about. */
-type PlacementField = 'parent' | 'areaPath';
+export type PlacementField = 'parent' | 'areaPath';
 
 /**
  * The project's classification tree as the harness offers it: every node an item

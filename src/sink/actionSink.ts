@@ -36,6 +36,21 @@ export interface PrMergeInput {
   method: MergeMethod;
 }
 
+/**
+ * A pull request the operator is closing **without merging it** — the plan part
+ * restart's "this PR was built to a declaration that no longer stands"
+ * (`src/plans/partRestart.ts`).
+ *
+ * The number alone, for {@link IssueCloseInput}'s reason turned the other way up:
+ * a pull request has no close *reason* vocabulary on either provider — GitHub
+ * closes, Azure abandons — so there is nothing to state, and the account of why
+ * belongs in prose the harness posts as a comment or in the audit line rather than
+ * smuggled into a state change neither provider can carry it on.
+ */
+export interface PrCloseInput {
+  prNumber: number;
+}
+
 export interface PrLabelInput {
   prNumber: number;
   /** The label to add or remove. */
@@ -213,6 +228,24 @@ export interface SendResult {
   ok: boolean;
   /** A provider-side reference for the sent artifact (e.g. a comment id/URL), for the audit log. */
   ref?: string;
+  /**
+   * The provider's **own id** for a comment this call created, in the same
+   * vocabulary the read side puts on `PrThreadMessage.id` — so a reply the
+   * harness sent can be recognised in the thread it lands in.
+   *
+   * Separate from {@link ref}, which is a URL for a person to click in the audit
+   * log and matches nothing on a read. One field could not be both: GitHub's
+   * `html_url` and its comment id are different strings, and attribution that
+   * compared the wrong one would quietly never match — which reads exactly like
+   * the reply having never been sent.
+   *
+   * Absent when the provider will not name what it created. That is a real
+   * possibility rather than a theoretical one (Azure's reply POST is fire and
+   * forget on older API versions), and the harness must not fall back to the
+   * author when it happens: the thread stays unanswered and the miss is recorded.
+   * → `docs/spec/07-pull-requests.md#review-threads`
+   */
+  commentRef?: string;
 }
 
 export interface ActionSink {
@@ -240,6 +273,29 @@ export interface ActionSink {
   resolvePrThread(input: PrThreadResolveInput): Promise<SendResult>;
   /** Merge a pull request (the last step of the issue → PR → merge loop). Throws if the merge fails. */
   mergePr(input: PrMergeInput): Promise<SendResult>;
+  /**
+   * Whether any configured integration can close a pull request at all.
+   *
+   * Asked rather than inferred, for {@link canCloseIssue}'s reason exactly: the
+   * only caller **offers** the operation — the plan sheet's "restart this part",
+   * which closes the superseded pull request before it hands the part back to the
+   * fleet — and a surface that promised it where nothing implements it would take
+   * the part back to `ready` while the reconciler reads the still-open PR and puts
+   * it straight back to `in_review`. Where this is false the restart is refused
+   * whole rather than done in halves.
+   */
+  canClosePr(): boolean;
+  /**
+   * Close a pull request without merging it — the operator's "this was built to a
+   * plan that has since been amended".
+   *
+   * Idempotent: closing a pull request that is already closed is a success, which
+   * is what makes a restart safe to press twice. Throws if it fails, including
+   * where nothing implements it, which is why {@link canClosePr} exists. Never
+   * called by a rule: a reviewable pull request is only ever closed because a
+   * person said so. → `docs/spec/08-planning.md#restarting-a-part`
+   */
+  closePr(input: PrCloseInput): Promise<SendResult>;
   /** Add/remove a label on a PR — the operator's exclusion tag toggle. Throws if it fails. */
   setPrLabel(input: PrLabelInput): Promise<SendResult>;
   /** Add/remove a label on an issue / work item — the cockpit's watch/ignore toggle. Throws if it fails. */

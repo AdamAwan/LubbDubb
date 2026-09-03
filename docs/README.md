@@ -108,8 +108,8 @@ deliberately left unchecked, and why, is in
 | [24](spec/24-environments.md)        | Environments               | Where landed work has got to: merge attribution, the probe, the three verdicts, the lens                                |
 | [25](spec/25-supply.md)              | Supply and the runway      | Whether there is work left for the fleet, and whether the reason there is not is you                                    |
 | [26](spec/26-setup.md)               | Configuration health       | The checks that catch a silently-misconfigured harness, the fixes they carry, and the sheet that points it at a project |
-| [27](spec/27-knowledge.md)           | Knowledge                  | The one claim store: scope, reach, corroboration, delivery, and the three ways a claim leaves                           |
-| [28](spec/28-cross-fleet-pool.md)    | The cross-fleet pool       | The distance above `fleet`: one namespace per fleet, what a claim carries across, and the shared digest                 |
+| [27](spec/27-obstacles.md)           | Obstacles                  | What is in the fleet's way: keys, the two-voice gate, who owns it, and how an agent is told to stand down               |
+| [28](spec/28-cross-fleet-pool.md)    | The cross-fleet pool       | One namespace per fleet, and the shared digest of what each one spent                                                   |
 | [29](spec/29-post-deploy-watch.md)   | The post-deploy watch      | Whether shipped work behaves: the declaration, the dry run, the window, and the three verdicts                          |
 | [30](spec/30-ingress.md)             | Event-driven ingress       | The inbound webhook endpoint: what it verifies, what one delivery invalidates, and what it does not trust               |
 | [31](spec/31-review-packs.md)        | Review packs               | How a change is restated for a human: the witness log, the ideas, the claims, and the check                             |

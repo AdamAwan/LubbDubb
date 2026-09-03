@@ -48,7 +48,7 @@ export interface Stack {
 /**
  * Fold the open pull requests into stacks.
  *
- * Takes the **unfiltered** open list (the dispatch world plus `unwatchedPrs`), for
+ * Takes the **unfiltered** open list (the dispatch world plus `hiddenPrs`), for
  * the reason `inheritedCiFailure` and `prAttentionStatus` take it: an unwatched rung
  * would otherwise put a hole in the chain and misattribute everything above it.
  */

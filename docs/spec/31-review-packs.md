@@ -741,7 +741,7 @@ only while an author or a checker is on the pull request.
 **A refused ask is drawn beside the ask that was refused**, wherever it is drawn — the row control,
 the empty page, the stale line, the unchecked band — held by the shell (`ReviewPackModal`) exactly
 as the share's refusal is, because the page is a pure function of the payload and a refusal is about
-a click. It is drawn and not flashed for the reason the share's is: the sentence *is* the whole of
+a click. It is drawn and not flashed for the reason the share's is: the sentence _is_ the whole of
 what the reader can act on, and the four reasons the desk gives
 ([When a pack is made](#when-a-pack-is-made)) each have a different next move. Every ask also
 **re-reads the pack afterwards, refused or not** — a refusal usually names state that moved under
@@ -807,10 +807,9 @@ default costs the fleet its source.
 
 **A shared pack rides the pool's transport and nothing else about it.** `PoolTransport` in the
 provider registry already solves one-writer-per-namespace, unreachability and the commit hygiene; a
-pack is a third kind of document in the fleet's own namespace, beside `claims.json` and
-`digest.json`, with an HTML companion beside it the way the other two have a markdown one. It is
-**not** a claim: no corroboration, no vouch, no contradiction, no lifetime, and nothing about it is
-ever injected into an agent's prompt. → [27](27-knowledge.md)
+pack is a second kind of document in the fleet's own namespace, beside `digest.json`, with an HTML
+companion beside it the way the digest has a markdown one. It is **not** a claim: nothing about it is
+corroborated, vouched for, or injected into an agent's prompt.
 
 **One document per pull request**, at `fleets/<fleetId>/packs/pr-<n>.json` with its companion beside
 it, carrying the pack whole in the pool's own envelope
@@ -905,9 +904,9 @@ overrides are worth recording: given them the checker would calibrate to what re
 than to what is risky, and a label that has learned to agree with its reader has stopped being
 evidence ([Attention](#attention)). This is a page a person reads.
 
-**On Insights rather than Knowledge.** [27](27-knowledge.md) is what the fleet is _told_, and a pack
-produces none ([What was decided](#what-was-decided-and-why)) — a reading of packs filed there would
-draw a feedback path this subsystem deliberately does not have. Insights is where an operator reads
+**On Insights rather than on the obstacle board.** [27](27-obstacles.md) is what the fleet is _told_,
+and a pack produces nothing for it ([What was decided](#what-was-decided-and-why)) — a reading of packs
+filed there would draw a feedback path this subsystem deliberately does not have. Insights is where an operator reads
 whether the harness is working, which is exactly what these three are. It obeys that page's window
 like every other tab there, and it is fetched on the tab's first visit for a window rather than with
 the page: it folds every pack against every mark, which nothing on the top bar needs.
@@ -1121,16 +1120,15 @@ shared document. → [A pack is data](#a-pack-is-data-and-rendering-is-downstrea
 the fleet's own namespace, never its claims arm, and never by default. A shared pack is pruned on the
 pull request's own retention clock; the local one is kept. → [Sharing a pack](#sharing-a-pack)
 
-**A pack produces no knowledge.** "The checker keeps catching the same class of thing" was the
-argument for a lesson path into [27](27-knowledge.md), and it names an aggregator across packs that
-nothing is specified to be and that could not live in `src/dispatcher/`. Nobody needs it; the
-paragraph is gone.
+**A pack files nothing on the board.** "The checker keeps catching the same class of thing" was the
+argument for a path into [27](27-obstacles.md), and it names an aggregator across packs that nothing is
+specified to be and that could not live in `src/dispatcher/`. Nobody needs it; the paragraph is gone.
 
 **The three cross-pack readings are one surface, on Insights.** They were open questions separately
 and are one answer together: the overrides, the plumbing ratio and prominence all say the same kind
 of thing — the subsystem's own agents are drifting — and they point at the same act, a person editing
-one of two prompts. Filing them on [Knowledge](27-knowledge.md) was the alternative and would have
-drawn a feedback path into the fleet that this subsystem refuses to have.
+one of two prompts. Filing them on the [obstacle board](27-obstacles.md) was the alternative and would
+have drawn a feedback path into the fleet that this subsystem refuses to have.
 → [The operator's reading](#the-operators-reading)
 
 **`seen` is a third column on the mark row, not a table of its own.** It is keyed to the hunks an

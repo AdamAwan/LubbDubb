@@ -153,14 +153,14 @@ required `detail`, writes **no plan row at all**, and records the issue's delive
 
 It exists because the refusal above is right and still cannot say this. Every plan has at least one
 part, and work that is one pull request is a one-part plan — so a planner holding "there is nothing to
-build" has to encode it as *something*, and each way of doing that spends an agent to rediscover what
+build" has to encode it as _something_, and each way of doing that spends an agent to rediscover what
 this planner already knows:
 
-| What it does instead      | What it costs                                                                                                              |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Invents a part            | An agent, a branch and a worktree, to arrive at `conclude_part` with kind `determination`.                                  |
-| Writes a part that redoes it | The same, plus a pull request nobody wanted, against code that already does the thing.                                    |
-| Submits nothing           | Its attempts, and then the fail-open arm: `unplanned` puts rule `issue-pickup` on the issue, which is the first row again — with the planner's finding thrown away. |
+| What it does instead         | What it costs                                                                                                                                                       |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Invents a part               | An agent, a branch and a worktree, to arrive at `conclude_part` with kind `determination`.                                                                          |
+| Writes a part that redoes it | The same, plus a pull request nobody wanted, against code that already does the thing.                                                                              |
+| Submits nothing              | Its attempts, and then the fail-open arm: `unplanned` puts rule `issue-pickup` on the issue, which is the first row again — with the planner's finding thrown away. |
 
 All three end with a human being asked to approve, or review, work that did not need to happen. The
 verdict is cast where it is known instead.
@@ -168,7 +168,7 @@ verdict is cast where it is known instead.
 **Why a delivery row rather than a fifth thing.** `issue_deliveries` already means exactly this —
 "what the issue asked for is present, schedule nothing further" — and `deliveryHold` already filters
 `eligibleIssues`, which is the list both rule `issue-plan` and rule `issue-pickup` draw from. So one
-row stops the planner being re-dispatched *and* stops pickup taking the issue instead, with no new
+row stops the planner being re-dispatched _and_ stops pickup taking the issue instead, with no new
 gate anywhere. It is reversible by the operator and expires on world signal, which is the right
 lifetime for a claim about a goal nobody has worked: the moment the ticket moves or something links to
 it, the question is open again.
@@ -178,7 +178,7 @@ questions and both are silent if nobody asks them:
 
 - **A replan.** An issue that already has a plan row cannot be settled this way: the plan would go on
   owning the issue — `planInFlight` reads `planning` as more work, so the goal would read delivered
-  *and* mid-decomposition — and any part already dispatched or in review would keep running underneath
+  _and_ mid-decomposition — and any part already dispatched or in review would keep running underneath
   it. A replanner that believes the goal is met amends the plan, or raises it: the operator asked for
   this replan and it is theirs to end.
 - **A standing shortfall.** Writing a delivery clears one through the exclusion matrix
@@ -347,7 +347,7 @@ For an amendment:
    every time. An amendment lands the same way whatever it does to the part count.
 3. `store.upsertPlan`, then retire, then `store.upsertPlanParts` (which merges on slug and never
    deletes). **A slug the document re-declares is un-retired**, back to `pending` with its
-   `blocked_reason` cleared: retirement is a *declaration* verdict, not progress, so a document that
+   `blocked_reason` cleared: retirement is a _declaration_ verdict, not progress, so a document that
    declares a slug again is a plan delivering it again. Every other status is progress and survives
    untouched, which is the split `upsertPlanParts` is made of. Retirement is therefore reversible by
    the planner and by nothing else — the operator's Reject retires, and only the replan that follows
@@ -474,7 +474,7 @@ readiness then decides when the ask becomes actionable, exactly as it does for a
 `partSettled` answer true and release every dependent waiting on the thing that was refused — a plan
 completing on work nobody did. The dependents stay `pending`, the goal page draws the part under
 **Held** with the reason on it, and the way out is Replan, on the plan sheet. Nothing escalates for the
-decline itself: the operator is the one who declined, and the button is in front of them. What *does*
+decline itself: the operator is the one who declined, and the button is in front of them. What _does_
 ask is a decline that leaves other work stranded behind it — see [the wedge](#the-ref-collision-guard)
 below, which is a question about the plan rather than about the refusal.
 
@@ -488,7 +488,7 @@ claiming a collision that has been resolved or a refusal that was withdrawn.
 row rather than re-derived because the two blockers now have different consequences and the reconciler
 is the only thing that knows which it wrote: a reader sniffing `blocked_reason`'s prose to tell them
 apart would be one rewording away from escalating the operator's own refusal back at them. Null is
-*unattributed* — every blocked row on a database from before the column — and counts toward the wedge
+_unattributed_ — every blocked row on a database from before the column — and counts toward the wedge
 the way it did when there was nothing to count.
 
 `concluded` is **not** a kind of retirement. `retired` means "dropped by an amendment before anything
@@ -631,8 +631,8 @@ the first writes (`src/store/store.ts`):
 | The executor         | Creates an `approve_change` escalation plus a `plan` proposal with ref `issue:<n>:plan`, and re-asks the same hold (every path that reaches the executor is covered, not just the one that checks first).                                          |
 | Accept               | `ProposalDesk.accept` → `ActionExecutor.runAuthorized` → `releasePlan`: the plan becomes `active`, audited under `human:<proposal id>` as `authorized by you`.                                                                                     |
 | Reject               | `ProposalDesk.reject` → `refusePlan`, carrying the operator's note.                                                                                                                                                                                |
-| Close the ticket     | `ProposalDesk.backOut(id, 'close')` → `backOutOfPlan` → `declinePlan`: comment, close, un-watch, conclude, abandon. Below.                                                                                                                          |
-| Hold the ticket      | `ProposalDesk.backOut(id, 'hold')` → the watch tag comes off and the plan is refused, so watching it again gets a new one. Below.                                                                                                                   |
+| Close the ticket     | `ProposalDesk.backOut(id, 'close')` → `backOutOfPlan` → `declinePlan`: comment, close, un-watch, conclude, abandon. Below.                                                                                                                         |
+| Hold the ticket      | `ProposalDesk.backOut(id, 'hold')` → the watch tag comes off and the plan is refused, so watching it again gets a new one. Below.                                                                                                                  |
 | Replan               | `POST /api/plans/:id/replan` withdraws a pending proposal (below).                                                                                                                                                                                 |
 
 **What the ask says** is one template, a quoted block, and two appended paragraphs.
@@ -667,7 +667,54 @@ the harness answered by re-deriving a plan for work nobody wanted.
 was appended in the first place: a one-pull-request plan settled somewhere else entirely — approving
 it handed the issue to ordinary pickup, and refusing it had nowhere to fall back to — so a reader
 given the other arm's paragraph would answer the wrong question. Both settle identically, so there is
-no wrong paragraph left to hand anyone. `planApprovalWarnings` appends after that, unchanged.
+no wrong paragraph left to hand anyone. `caveatNotice` appends after that — see below.
+
+### What the plan raises is acknowledged, not merely rendered
+
+A plan approval starts every agent, branch and pull request the plan declares, and what an operator
+was told before that click was **prose**: the planner's own uncertainty on the plan sheet, and the
+`Before you decide:` paragraph appended to the ask when a part is already blocked or an unclaimed pull
+request is open on the issue. A paragraph above a primary button is the most skippable thing on a
+card, and nothing recorded whether it had been read — the careful approval and the blind one wrote
+identical rows.
+
+`src/plans/planCaveats.ts` turns that paragraph into a list of things the operator **ticks**, and the
+accept is refused while any of them is unticked.
+
+`planCaveats(plan, issue, parts, openPrs)` builds it from four sources, which are two kinds of thing:
+the planner's own `openQuestions` and `risks` — written for this moment and read at it — and two facts
+about the world the plan lands in, a part that is already blocked and a pull request open on the issue
+that belongs to no part of the plan (`wedgeReasons` and `unclaimedIssuePrs`, exported from
+`planWedge.ts` so the wedge escalation and the approval ask keep quoting one sentence).
+
+`outOfScope` and `alternatives` are deliberately **not** caveats. Both are the planner being explicit
+about the shape it chose, which is what the plan sheet is for; neither goes wrong if unread, and a gate
+that fires on every plan ever written is one operators learn to tick blind. A plan whose planner
+declared no uncertainty and whose issue is clear raises none, and approving it is the click it always
+was.
+
+**The list is stored on the action, never re-derived at accept time.** Rule `plan-approval` resolves it
+once and carries it on `propose_plan`, so `caveatNotice` renders the ask's prose from the same list the
+gate compares the operator's ticks against. Re-deriving it on the accept would ask a world that has
+moved since the card was drawn: a blocker cleared in that window would drop a caveat they ticked
+(harmless), and a pull request opened in it would add one they were never shown and refuse their accept
+for a sentence nobody put in front of them. The verdict is on what was proposed — the same principle as
+`Proposal.action` being kept verbatim.
+
+**The gate is on the desk, not on the route.** `ProposalDesk.accept(id, note, acknowledged)` asks
+`unacknowledgedCaveats` **before** the compare-and-set and returns what is still unticked, so a refused
+accept leaves the proposal `pending` and its inbox item open — the operator ticks the boxes and clicks
+again, rather than finding a verdict spent on a 400. `POST /api/proposals/:id/accept` turns that into a
+400 naming the outstanding caveats
+([16](16-http-api.md#post-apiproposalsidaccept)); the cockpit holds the button a step earlier
+([17](17-cockpit.md#how-an-escalation-card-is-laid-out)), which is the same answer given sooner and not
+the enforcement.
+
+**Only the accept is gated.** Reject, Hold and Close the ticket are all ways of _not_ releasing the
+work, and putting a reading list in front of them would be friction on the safe verdict.
+
+A tick is not proof of reading, and is not meant to be. What it does is make the skip **deliberate**,
+and give the harness a row that says the operator met the caveat rather than that the card rendered it.
 
 `planProposalHold(ref, proposals)` in `src/proposals/proposals.ts` holds on **`pending` only**, unlike
 `proposalHold`. A merge is proposed off world state that persists, so it needs a durable "no" and a
@@ -716,7 +763,7 @@ flight is a _replan_ being refused, and the work already running carries on whil
 around it.
 
 **The retirement lifts when the replan re-declares the slug**, and that is what makes the route a route
-rather than a dead end. A replan *must* reuse slugs — the slug is the merge key and has to survive one —
+rather than a dead end. A replan _must_ reuse slugs — the slug is the merge key and has to survive one —
 so a retirement that outlived a re-declaration would merge every part of the new plan onto a retired
 row and release a plan with nothing live in it: rule `plan-part` schedules nothing, `rollUpPlanStatus`
 returns early on no parts, `planIsWedged` is false because nothing is `blocked`, and the goal sits
@@ -789,12 +836,12 @@ watching the ticket again is what starts a planner — and what comes back is a 
 in the light of why it was held.
 
 Parking the plan at `awaiting_approval` instead was the first shape of this and is the wrong one: a
-hold says the thinking is not finished, so re-proposing the *same* decomposition weeks later asks the
+hold says the thinking is not finished, so re-proposing the _same_ decomposition weeks later asks the
 operator to approve a plan written before whatever they were waiting on happened. The plan they get
 back should be one that knows about it.
 
 Neither verdict widens `ProposalStatus`. Both settle the row as `rejected`, because that is what
-happened to the *act* — the plan was not authorized — and what distinguishes them lives where it can
+happened to the _act_ — the plan was not authorized — and what distinguishes them lives where it can
 be read: the decision detail, the plan's reason, and the conclusion.
 
 An operator who wants a _different_ plan without refusing this one can press Replan, on the same panel.
@@ -925,7 +972,7 @@ parked `blocked` and **one** clear error is recorded naming the branch to delete
 **A human part is outside the guard, because it is outside the branch namespace entirely.** It is
 never cut, so the flat branch is not in its way — the same reason the fold loop skips it, and the
 reason a plan of nothing but human steps records no collision at all and is not `planIsWedged` for
-one. Parked by it, such a part carries a reason that reads correctly and is *false about that part*:
+one. Parked by it, such a part carries a reason that reads correctly and is _false about that part_:
 the person is not waiting on git, and their step starts no sooner for the branch going away (it is
 settled by `Store.concludeHumanPart`, not by readiness).
 
@@ -982,7 +1029,7 @@ Replan — which is the way out of every plan that is wrong for any other reason
   live part blocked" while the collision was the only one — a collision blocks them together or not at
   all, so a mixture was a plan still making progress — and that reading broke in both directions once
   a decline could block one part alone. It escalated a one-part plan whose only part was a step the
-  operator had just refused; and it *missed* a real wedge as soon as one sibling had settled, since a
+  operator had just refused; and it _missed_ a real wedge as soon as one sibling had settled, since a
   merged part is not a blocked one and `every` then said no. `[merged, blocked, pending]` is the
   ordinary shape of that, and it stalled the goal permanently with nothing in "Needs you": `plan-part`
   finds no `ready` part, `rollUpPlanStatus` keeps the plan `active` so `issue-assess` skips it, and the
@@ -1000,14 +1047,16 @@ Replan — which is the way out of every plan that is wrong for any other reason
   offered only when something clearable is blocking them, because a decline is not a branch and
   clearing reaches nothing. It **names any open PR for the issue that no part claims** — its
   number, title and branch, and that it must be merged or abandoned before the branch can go. It is
-  the same `unclaimedIssuePrs` the approval warning uses, private to the module with two callers,
+  the same `unclaimedIssuePrs` the approval caveats use — exported from the module for that one reader,
   because approval can be days behind the moment the operator is standing in front of the wedge, and
   "clear what is blocking the parts" is unfollowable while a PR holds the branch open.
-- **Warning first** — `planApprovalWarnings(issue, parts, openPrs)` is **appended** to rule `plan-approval`'s ask
-  (never interpolated, for `ciFailureNote`'s reason) and names both the blocked parts and any open PR
-  for the issue that no part claims. It **warns and does not block**: refusing to approve would put a
-  git fact in front of a judgement about the _work_, the branch is one command from being gone, and
-  the operator's only exit would become the opposite verdict to the one they were giving.
+- **Warning first** — both readings feed `planCaveats`, whose prose (`caveatNotice`) is **appended** to
+  rule `plan-approval`'s ask (never interpolated, for `ciFailureNote`'s reason) and names both the
+  blocked parts and any open PR for the issue that no part claims. It **holds the accept until they are
+  acknowledged and refuses nothing else** — see _What the plan raises is acknowledged_ above. It does
+  not refuse the approval outright: that would put a git fact in front of a judgement about the _work_,
+  the branch is one command from being gone, and the operator's only exit would become the opposite
+  verdict to the one they were giving.
 
 There was a third thing, `abandonDecomposition` (`POST /api/plans/:id/abandon` and a control on the
 plan sheet), which retired the unstarted parts and worked the issue as one pull request. It was a
@@ -1161,17 +1210,29 @@ Two tools on the desktop channel do the rest (→ [11](11-mcp-tools.md#the-deskt
   argue about, which is the agenda unless the operator brings one), the parts through
   `currentPlanSummary` so every slug is in front of the session, the acceptance criteria, the live
   validation checks and the revision count.
-- **`plan_amend(issue, …plan document)`** — the same document as `plan_submit`, validated by
-  `validatePlanDocument` and written by `ingestPlanDocument`. The schema is one export
-  (`src/mcp/planDocumentSchema.ts`) shared by both tools rather than two literals.
+- **`plan_amend(issue, note?, …plan document)`** — the same document as `plan_submit`, validated by
+  `validatePlanDocument`. The schema is one export (`src/mcp/planDocumentSchema.ts`) shared by both
+  tools rather than two literals, and the object handed to `validatePlanDocument` is built once
+  (`submittedPlanDocument`) rather than at each of the two call sites below, so the two paths cannot
+  differ by a field.
 
-`plan_amend` gets three things right, and each of them is silent when wrong:
+**Which amendment `plan_amend` makes turns on the plan's status**, because the same conversation
+reaches both. On `awaiting_approval` it is a rewrite in place, specified here; on `active` it is a
+proposal, specified in [Amending a running plan](#amending-a-running-plan) below. Anything else is
+refused, naming the status — a `planning` plan is already with a planner whose document will replace
+this one, and a `complete` or `abandoned` one schedules nothing an amendment could keep running.
+`plan_read` says which of the two the session is about to do, in its `next`, because by the time the
+tool's own reply is read the write has happened.
 
-1. **It refuses unless the plan is `awaiting_approval`** — the gate the old `/discuss` route made, kept
-   next to the write. A released plan's parts schedule off a decision an operator already took;
-   writing `awaiting_approval` back over it reopens a gate rule `plan-part` had cleared and stops the
-   rest of the work. `PlanModal.tsx` offers Discuss only on `awaiting_approval`, so the control agrees
-   with the tool rather than surprising it.
+The rewrite gets three things right, and each of them is silent when wrong:
+
+1. **It is reached only on `awaiting_approval`** — the gate the old `/discuss` route made, kept next to
+   the write. A released plan's parts schedule off a decision an operator already took; writing
+   `awaiting_approval` back over it reopens a gate rule `plan-part` had cleared and stops the rest of
+   the work, which is why the released plan gets a proposal instead of this.
+   `PlanModal.tsx` offers **Discuss…** on exactly the two statuses `plan_amend` settles —
+   `awaiting_approval` and `active` — so the control never sends a session to argue about a plan it
+   cannot then change, and the sentence on the control says which of the two it is opening.
 2. **It withdraws the superseded proposal**, and **writes the status first**. A pending proposal holds
    rule `plan-approval` off the plan (`planProposalHold`), so an amendment that left the card up would
    send the operator back to approve the _pre-discussion_ decomposition. The order matters exactly as
@@ -1189,6 +1250,182 @@ and the retry is against an unchanged plan.
 
 **If they decide the plan was right after all**, the session amends nothing and the plan is approvable
 exactly as it was — there is no state to unwind, because none was written.
+
+## Amending a running plan
+
+The funnel's one answer to "this plan is wrong" was a replan, and it is the right answer to exactly
+one question: the _shape_ of the work was wrong. For everything else — a part whose scope drifted, a
+dependency that turns out to run the other way, a step the code already does — it is far too big a
+hammer. It parks the whole goal on a planner, re-derives a decomposition that was mostly right, and
+puts every part of it back through the approval gate. And the reader most likely to find one of those
+faults is an agent halfway through a part, which had nowhere at all to put it.
+
+An **amendment** is the other route: a proposal against a plan that is already `active`. The amended
+document waits in `plan_amendments` while the plan keeps scheduling; an operator accepts, and it is
+ingested over the running plan. `src/plans/planAmendment.ts` is the module, and the three properties
+that make it worth having are all properties of _not_ writing:
+
+- **The plan keeps scheduling while the question is open.** Nothing in the proposal touches `plans` or
+  `plan_parts`. The parts that were dispatchable stay dispatchable, agents already running are not
+  paused, stopped or re-dispatched, and the acceptance criteria a part is being judged on are still
+  the ones it was given. A replan's cost is the whole goal waiting; an amendment's cost is one card.
+- **Nobody but an operator applies it.** Both authors reach the same pending row — an agent through
+  the fleet's `plan_correct`, an operator's own Claude Code through `plan_amend` on an `active` plan.
+  A live plan that rewrote itself on an agent's say-so would change what other agents were dispatched
+  against mid-flight, which is precisely what the approval gate exists to stop happening once.
+- **Applying it is the ordinary ingestion.** `ingestPlanDocument` with `approved: true` — the plan
+  stays `active` and `rollUpPlanStatus` is asked, and that flag is the whole of the difference.
+  Without it the ingestion writes `awaiting_approval` back over a running plan and stops every part of
+  it. There is no second write path here that could disagree with the one every other plan takes.
+
+### The gates on proposing one
+
+`proposePlanAmendment` refuses outside `active`, and **each refusal names the route that does apply** —
+a caller told only "no" writes its correction into a comment nobody reads. `awaiting_approval` is
+amended in place (above), `planning` is already with a planner, and `complete` / `abandoned` have no
+schedule left for an amendment to keep running, which is the whole thing this holds open; more work on
+a delivered goal is an instruction on the goal ([16](16-http-api.md)).
+
+**One pending amendment per plan.** A second would put two cards in front of one operator, each
+describing the plan as if the other did not exist, and accepting both would apply the older
+document over the newer one — the plan the second author corrected would silently come back. The
+refusal quotes the standing one so the author can fold their change into it. The bar is one
+_pending_: once it is settled, the next is accepted.
+
+An amendment also **needs a reason**. The note is the whole of what an operator reads beside the diff,
+and a change to a plan agents are working with no reason on it is one they cannot answer. The document
+is validated before anything is written, so a rejection — a bad document, an empty note, the wrong
+status — leaves the plan graph and the table exactly as they were and the retry is against an
+unchanged plan.
+
+### What applying merges, and what it leaves running
+
+Ingestion merges on **slug**, so a part with a branch, a pull request or an outcome keeps all three
+and only its declaration is refreshed. A part the amendment no longer declares is retired only if
+nothing was started for it (`partsToRetire`). A part it adds is schedulable on the next pulse.
+
+That merge is what makes an amendment safe, and it is also the source of the three things the card
+warns about (`amendmentWarnings`) — the half of the reading a diff cannot give, because it is about
+the plan's _rows_ rather than its declarations:
+
+- **A dropped part that work has started on keeps running.** `partsToRetire` spares it, so the
+  amendment does not stop it; only the operator can end that run.
+- **A re-declared part that has already settled has its declaration rewritten while what it delivered
+  stays as it was** — so the plan would then describe delivered work in terms nobody delivered it
+  under.
+- **A re-declared part still in flight has its declaration rewritten under work that is neither
+  stopped nor re-dispatched.** The merge refreshes the row, rule `plan-part` produces no candidate for
+  a part that is already `dispatched`, and the agent — or the reviewer of the pull request open
+  against it — carries on to the declaration it was dispatched under. The warning names the part, its
+  status, its pull request if it has one, and which fields moved.
+
+Each part draws **at most one** of the three, and a settled part draws the second rather than the
+third: "neither stopped nor re-dispatched" is nonsense about a part that has finished.
+
+The in-flight warning is the one the surface was silent about while the warnings turned on
+`partSettled` alone, and the silence was observed rather than theoretical — an operator approved an
+amendment that rewrote the scope and acceptance of two parts that each had an open pull request built
+to the previous declaration, and nothing on the card said so. It is also the warning an operator is
+least able to reconstruct from the diff, which says what the plan _will_ say and not that somebody is
+already building the other thing.
+
+**"Materially changed" is what the work in flight was built to**, not everything the diff can name.
+The fields compared are the ones that reach the running work: `title`, `scope` and `acceptance` are
+rendered into the part's prompt (and `acceptance` is the checklist a reviewer is shown), `touches` is
+the path claim the agent is handed and a merged part's writes are checked against, `dependsOn` chose
+the branch the work was cut from, and `expectedKind` says what the part is meant to produce at all.
+`seq` (it moves whenever anything is inserted above a part), `rationale` (why this is its own pull
+request, never shown to the agent), `size` (a review estimate) and `profile` (read once, at dispatch,
+and a dispatched part keeps the agent it got) are not material. Prose is compared with runs of
+whitespace collapsed and a null `expectedKind` as `code`, so a re-wrapped paragraph or a spelled-out
+default is not a change. The narrowing is the point: a warning that fires on every amendment is one an
+operator learns to click past, and then the amendment that reverses an open PR's design reads exactly
+like the four before it that renamed a part.
+
+Applying compares-and-sets twice, against the amendment row _and_ the plan's status, for
+`releasePlan`'s reason: a verdict that arrives after the world moved must not write a document nobody
+was shown over a plan that is no longer the one it amends. A plan that has left `active` settles the
+row `superseded` rather than leaving it pending, because a row nothing can ever apply is one an
+operator is asked about for good. The stored document is re-validated rather than trusted — it may
+have been written by an older build, and a document the schema has since moved past is refused whole
+rather than ingested in halves.
+
+### Restarting a part
+
+An amendment that rewrites a part's scope does not stop the pull request already open against the old
+one. That is the design — "the plan keeps scheduling while the question is open" cuts both ways, and
+the merge on slug is what makes an amendment safe — but it leaves an operator holding a pull request
+built to a declaration nobody stands behind any more. Until this existed, ending that run meant
+closing the pull request by hand on the provider and deleting the branch by hand beside it.
+
+`POST /api/plans/:id/restart-part` ([16](16-http-api.md#post-apiplansidrestart-part)) is the
+affordance, and `src/plans/partRestart.ts` is the module. It makes three writes, and each one is load
+bearing:
+
+- **The pull request is closed** through `ActionSink.closePr`. Reset the row alone and the reconciler
+  puts it straight back: `observePartPr`'s first reading is "an open PR on the branch → `in_review`".
+- **The branch is dropped**, locally through `Worktrees.deleteBranch` — the lease and the ref together
+  — and then on the remote. `WorktreeManager.ensure` is reuse-first
+  ([09](09-execution.md#worktrees)), so a branch left standing is handed back to the re-dispatched
+  agent with the superseded commits on it, as its own starting point.
+- **The row goes back to `ready` with `prNumber` and `branch` cleared**, which is what makes rule
+  `plan-part` schedule it again — against the amended declaration, because the declaration is
+  whatever the plan holds when the prompt is rendered.
+
+**It is never automatic.** Applying an amendment reaches none of this. Closing a reviewable pull
+request on the strength of a diff in a scope field is outward-facing and effectively irreversible —
+somebody may be halfway through reviewing it — so the harness offers the act and an operator makes it.
+That is the same line the amendment itself draws: a live plan that rewrote itself on an agent's say-so
+would change what other agents were dispatched against mid-flight.
+
+It refuses four states, each naming its reason rather than the rule: a part that has already settled
+(amend the plan for a new part instead of redoing delivered work), a part with no pull request open, a
+part with a live agent on it (the restart would delete the worktree that agent is sitting in), and a
+deployment whose provider is not `PrCloseCapable` — where the whole control is absent from the plan
+sheet rather than drawn and refused, the way the board draws no drag where `canSetWorkItemState` is
+false ([15](15-integrations.md#outbound-is-many-small-interfaces-not-one-fat-one)).
+
+On the sheet it is a two-step confirm on a part in review, beside its PR chip: `in_review` is exactly
+the state that means an open pull request and no agent running, so the control is offered only where it
+applies. → [17](17-cockpit.md#the-plan-sheet)
+
+### What a rejection deliberately does not do
+
+**Nothing at all.** It is the one settlement in the funnel with no effect on the goal, and that is the
+design rather than an omission. A refused _plan_ has to leave the issue a route, because a plan is the
+only thing that schedules work for a planned issue; a refused amendment leaves the plan that was
+already scheduling it, which _is_ the route. Saying no to a correction is saying "carry on as
+planned" — the plan is not sent back to a planner, no part is retired, nothing is paused, and the
+agent that proposed it is not re-dispatched.
+
+The refusal still needs a write: `declinePlanAmendment` settles the row, because a row left pending
+would be re-proposed on the next pulse. It reaches `plan_amendments` even though it reaches nothing
+else.
+
+### When the world overtakes one
+
+A replan, a refusal or a back-out replaces the document the amendment was written against, so the
+question it puts to an operator is about a plan that no longer exists. `supersedePlanAmendments`
+settles every pending row for the plan, and the route withdraws its card. Leaving it standing would
+either sit in the inbox for good (applying refuses outside `active`) or be answered "yes" to no
+effect — and an operator who approved a change and saw nothing happen learns not to trust the card.
+
+**The rows are settled before the cards are withdrawn.** Rejecting a `plan_amendment` proposal runs
+`declinePlanAmendment`, so a card closed over a still-pending row writes `declined` — the terminal
+that means _an operator said no_, against a question nobody was asked. Settled first, the rejection
+finds the row already `superseded` and changes nothing about it, and the card closing is only the
+inbox item going away.
+
+### On the plan sheet
+
+`GET /api/plans/:id/history` carries the pending amendment beside the revision history: the note, the
+author, and `proposedPlanDiff` against the plan's latest revision — deliberately the same reading
+`latestPlanDiff` gives for an amendment already applied, so a change does not look like a different
+kind of thing either side of the decision that applies it. The sheet draws it above "What changed",
+and offers the control on a plan with a single revision, which a pending amendment is the one reason
+to. It carries no verdict: accepting or declining is the proposal's, on its card, and a second pair of
+buttons over one decision is two places for it to be answered differently.
+→ [17](17-cockpit.md#the-plan-sheet)
 
 ## What the prompts spend their words on
 
@@ -1210,4 +1447,5 @@ show.
 
 `test/issuePlan.test.ts`, `test/planIngestion.test.ts`, `test/planPart.test.ts`,
 `test/planApproval.test.ts`, `test/planReconcile.test.ts`, `test/planDiscussion.test.ts`,
-`test/planNarrative.test.ts`, `test/stackedPrs.test.ts`, `test/closedPrs.test.ts`.
+`test/planNarrative.test.ts`, `test/planAmendment.test.ts`, `test/stackedPrs.test.ts`,
+`test/closedPrs.test.ts`.

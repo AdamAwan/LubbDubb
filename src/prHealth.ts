@@ -1,5 +1,5 @@
 import { isWatched } from './watchLabels.js';
-import type { PrState, PullRequest } from './types.js';
+import type { CiCheck, PrState, PullRequest } from './types.js';
 
 /**
  * A PR's open/merged/closed state, tolerant of the two shapes that reach us: the
@@ -240,4 +240,41 @@ export function awaitingReview(pr: PullRequest, staffed: boolean): boolean {
     pr.ciStatus !== 'failing' &&
     !pr.unresolvedComments.some((c) => !c.handled)
   );
+}
+
+/**
+ * The checks that went red and then green **without the commit changing**.
+ *
+ * The commit is the whole of it. A red result followed by a green one is the
+ * ordinary shape of a fix, and calling that a flake would teach the fleet to
+ * disbelieve every check anybody ever repaired. What separates the two is whether
+ * anything was pushed in between, and `headSha` is the only thing in the snapshot
+ * that answers it.
+ *
+ * **A provider that does not report a head commit gets silence.** Absent on either
+ * reading means the harness cannot say, and a flake claimed on that basis would
+ * teach the fleet to ignore a check that is genuinely broken.
+ *
+ * Here rather than beside either of its readers, because it has two — the
+ * the knowledge notices that used to read them and the harness's own voice on
+ * the obstacle board (`docs/spec/27-obstacles.md#the-harness-is-a-voice`) — and a
+ * second copy of the reading is a second thing to be wrong about. Edge-triggered
+ * over a pair of snapshots, like every other reading either of them takes.
+ */
+export function recoveredOnSameCommit(before: PullRequest | undefined, now: PullRequest): CiCheck[] {
+  if (!before || !before.headSha || !now.headSha || before.headSha !== now.headSha) return [];
+  const was = new Map((before.ciChecks ?? []).map((c) => [c.name, c]));
+  return (now.ciChecks ?? []).filter(
+    (check) => !check.advisory && check.status === 'passing' && was.get(check.name)?.status === 'failing',
+  );
+}
+
+/** The checks that have just gone red on this pull request — a transition, never a state. */
+export function newlyFailingChecks(before: PullRequest | undefined, now: PullRequest): CiCheck[] {
+  if (!before) return [];
+  const was = new Map((before.ciChecks ?? []).map((c) => [c.name, c]));
+  return (now.ciChecks ?? []).filter((check) => {
+    const previously = was.get(check.name);
+    return !check.advisory && check.status === 'failing' && previously !== undefined && previously.status !== 'failing';
+  });
 }

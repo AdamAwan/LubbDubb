@@ -19,8 +19,10 @@ import { elapsed, fmtUsd, relTime } from '../components/util.js';
 import { Ref, RefText, refLabel } from '../components/refs.js';
 import { CiLadder, StaleChip, waitedFor } from './GoalPage.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
-import { PanelRows, type PanelRowModel } from './PanelRow.js';
+import { PanelRows, type PanelRowModel, type RowGroup } from './PanelRow.js';
+import { Who } from '../components/who.js';
 import { AgentOnIt } from '../components/AgentOnIt.js';
+import { ReviewMark } from '../components/ReviewMark.js';
 import { orphanCount, orphanGoal } from '../view/orphanGoal.js';
 
 /**
@@ -386,8 +388,12 @@ function OnWhat({ origin, view }: { origin: string | null; view: CockpitView }):
   const goal = pr ? goalOfPr(view.state, Number(pr[1])) : null;
   return (
     <>
-      {origin !== null && <Ref to={origin} label={pr ? `PR ${refLabel(origin)}` : refLabel(origin)} />}
-      {goal !== null && <Ref to={goal} />}
+      {origin !== null && <Ref to={origin} />}
+      {/* The relation is the pair's position, not a word between them: on a rail
+          this narrow the word cost more room than the two refs it joined, and the
+          refs group overran the reading slot beside it. Each ref keeps its own
+          hover, which is where the relation is said. */}
+      {goal !== null && <Ref to={goal} title={`Open the goal this pull request is delivering — ${refLabel(goal)}`} />}
     </>
   );
 }
@@ -790,6 +796,17 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
   const closed = view.state.world.closedPullRequests;
   const merged = closed === undefined ? null : closed.filter((pr) => pr.merged).length;
   const { watchLabel } = config;
+  // Yours first, then the fleet's — and only where there is a *yours* to put
+  // first. With nothing assigned, a band over the whole list is a heading that
+  // separates nothing and a column of identical hollow marks beside it, so the
+  // card takes back exactly the shape it had before the split existed.
+  const yours = open.filter(isYours);
+  const theirs = open.filter((pr) => !isYours(pr));
+  const grouped = yours.length > 0;
+  const ordered = grouped ? [...yours, ...theirs] : open;
+  // Whether the review's column exists on this card at all — see `ReviewMark`'s
+  // `reserve`. An unwatched pull request has no reading and must not bend it.
+  const anyReview = open.some((pr) => pr.review !== undefined);
 
   return (
     <section className="cn-card cn-span2">
@@ -798,16 +815,66 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
         {merged !== null && <span className="cn-more">{merged} merged</span>}
       </h3>
       {open.length === 0 && <p className="cn-empty">No pull request is open.</p>}
-      <PanelRows rows={open.map((pr) => prRow(pr, view, actions, watchLabel))} />
+      <PanelRows
+        rows={ordered.map((pr) => {
+          const row = prRow(pr, view, actions, watchLabel, anyReview);
+          if (!grouped) return row;
+          return { ...row, group: band(isYours(pr), yours.length, theirs.length), who: <Who name={whoAsked(pr)} /> };
+        })}
+      />
     </section>
   );
+}
+
+/**
+ * A pull request somebody handed you, off the server's verdict rather than off
+ * the court.
+ *
+ * `attention.status === 'you'` is the wrong predicate and reads almost right: a
+ * pending merge proposal and a conflict put a pull request in your court too,
+ * and neither is a colleague asking. `assignedToYou` is set on exactly the arm
+ * where an assignment *is* the court — which is the same field the queue rail
+ * keys on, so the two surfaces cannot come to disagree about whose it is.
+ * → [07](docs/spec/07-pull-requests.md#a-pull-request-a-person-put-on-you)
+ */
+function isYours(pr: OpenPullRequest): boolean {
+  return pr.attention.assignedToYou !== undefined;
+}
+
+/**
+ * Whose mark the row wears: the person who asked, or nobody.
+ *
+ * The author is only drawn on a row that is *yours*. On the fleet's own rows it
+ * would be the harness's login on every one of them — one repeated name, in a
+ * column whose whole job is to tell rows apart.
+ */
+function whoAsked(pr: OpenPullRequest): string | null {
+  const author = pr.author?.trim() ?? '';
+  return isYours(pr) && author !== '' ? author : null;
+}
+
+/**
+ * The two bands, with their counts. The counts are the reading the heading adds:
+ * "is anything mine" is answered by the band existing, and "how much" by the
+ * number, without the operator counting rows.
+ */
+function band(mine: boolean, yours: number, theirs: number): RowGroup {
+  return mine
+    ? { key: 'yours', label: 'Yours', note: `${yours}`, tone: 'ask' }
+    : { key: 'fleet', label: 'The fleet’s', note: `${theirs}` };
 }
 
 /**
  * One open pull request: its checks, whose court it is in, and the toggle that
  * takes it off the harness's books.
  */
-function prRow(pr: OpenPullRequest, view: CockpitView, actions: CockpitActions, watchLabel: string): PanelRowModel {
+function prRow(
+  pr: OpenPullRequest,
+  view: CockpitView,
+  actions: CockpitActions,
+  watchLabel: string,
+  anyReview: boolean,
+): PanelRowModel {
   // The server's verdict, not a second reading of the labels: `unwatched` is the
   // first arm `prAttentionStatus` takes, so on an open PR it *is* the absent tag.
   // Drawn as a spent row for the reason the backlog dims an unwatched goal — the
@@ -825,12 +892,29 @@ function prRow(pr: OpenPullRequest, view: CockpitView, actions: CockpitActions, 
     // The pull request's own number moves out of the title and into the refs
     // slot, where every other card keeps what a row names: as a prefix it was a
     // way somewhere that only this card put there.
+    //
+    // Both ways to the pull request are one token now (`<Ref>` draws the arm), not
+    // two tokens carrying the same number: the row raises two questions — what the
+    // harness makes of this, and what the diff says — but they are two doors onto
+    // one thing, and drawn apart they read as a repeat.
+    //
+    // The goal sits beside it as a second token rather than behind a word: the
+    // pair is always drawn in that order — the pull request, then what it
+    // delivers — and on a half-width card the word between them was the slot's
+    // widest thing, pushing the group over the reading column beside it. The
+    // relation is said in the goal ref's own hover.
     refs: (
       <>
         <Ref to={`pr:${pr.number}`} />
         {goal !== null && <Ref to={goal} title={`Open the goal this pull request is delivering — ${refLabel(goal)}`} />}
       </>
     ),
+    // The name is the way onto the pull request's page — its review threads, its
+    // checks and the work on its branch — which the rack named and offered no way
+    // to until the page existed. Every other card that names a thing with a page
+    // opens it from the title, and this is that.
+    open: () => actions.selectPr(pr.number),
+    openTitle: `Open pull request #${pr.number} — its review threads, its checks and the work on its branch`,
     facts: prFacts(pr, view.now),
     // Whose court it is in, which is the one question the card is for — the
     // server's word, with the server's own reasoning behind it. It was drawn
@@ -845,8 +929,15 @@ function prRow(pr: OpenPullRequest, view: CockpitView, actions: CockpitActions, 
     // reading of a commit that is being replaced. Only while one is actually on
     // it — every other row keeps its checks. The chip is `AgentOnIt`, the same one
     // a plan part draws, because it is the same sentence.
-    reading:
-      onIt === undefined ? <CiLadder pr={pr} /> : <AgentOnIt agentId={onIt.id} note={onIt.note} actions={actions} />,
+    reading: (
+      <>
+        {/* The fleet's own reading of the diff, beside whatever the row's checks
+            are saying — it survives an agent taking the ladder's place, because
+            what was already read does not change when a branch moves. */}
+        <ReviewMark review={pr.review} now={view.now} reserve={anyReview} />
+        {onIt === undefined ? <CiLadder pr={pr} /> : <AgentOnIt agentId={onIt.id} note={onIt.note} actions={actions} />}
+      </>
+    ),
     toggle: (
       <AsyncButton
         className="cn-eye"

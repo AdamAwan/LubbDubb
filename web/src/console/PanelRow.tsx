@@ -1,4 +1,4 @@
-import type { JSX, ReactNode } from 'react';
+import { Fragment, type JSX, type ReactNode } from 'react';
 
 /**
  * One row of a panel, as a value rather than as markup.
@@ -26,9 +26,50 @@ import type { JSX, ReactNode } from 'react';
  *
  * → docs/spec/17-cockpit.md#the-row-grammar
  */
+/**
+ * A band a card's rows sit under, and the heading that opens it.
+ *
+ * Position, where a chip would have been a colour. The rack's question is *is
+ * anything waiting on me* and its rows answered it one at a time, in a column of
+ * words an operator has to read down; a band answers it before any row is read,
+ * and it spends no hue on a card where five of them already mean five things.
+ *
+ * A card orders its own rows so that a band's members are contiguous — the
+ * heading is drawn where {@link key} changes, so a card that interleaves two
+ * groups draws the same heading twice, which is the honest rendering of rows in
+ * an order that contradicts their bands rather than a silent regrouping.
+ *
+ * → docs/spec/17-cockpit.md#yours-then-the-fleets
+ */
+export interface RowGroup {
+  /** What makes two adjacent rows one band. */
+  key: string;
+  /** The heading's word. */
+  label: string;
+  /** What is true of the whole band — a count, at the heading's right. */
+  note?: string;
+  /** `ask` where the band is your move; `quiet` is the plain heading. */
+  tone?: 'ask' | 'quiet';
+}
+
 export interface PanelRowModel {
   /** React's identity for the row, and the card's own natural id for it. */
   key: string;
+  /**
+   * The band this row belongs under. Absent on every row of a card that does not
+   * group — which is the shape a card takes back the moment its grouping has
+   * nothing to separate, rather than heading a single band over the whole list.
+   */
+  group?: RowGroup;
+  /**
+   * Who asked, as a mark — {@link Who}, never a name and never text.
+   *
+   * Its own slot rather than the {@link lamp}'s, because they are two different
+   * facts and a row can carry both: the lamp is the row's *state* and this is the
+   * row's *person*. A card that draws it draws it on every row, since the slot's
+   * whole value is being scannable down the column.
+   */
+  who?: ReactNode;
   /** The state lamp, where the row has a state. */
   lamp?: ReactNode;
   /**
@@ -174,6 +215,7 @@ interface RowFact {
 interface SlotsUsed {
   lamp: boolean;
   toggle: boolean;
+  who: boolean;
   why: boolean;
   /** Any row wearing a word, which is what the column has to be wide enough for. */
   whyLabel: boolean;
@@ -188,6 +230,7 @@ function slotsUsed(rows: readonly PanelRowModel[]): SlotsUsed {
   return {
     lamp: rows.some((row) => row.lamp !== undefined),
     toggle: rows.some((row) => row.toggle !== undefined),
+    who: rows.some((row) => row.who !== undefined),
     why: rows.some(asks),
     whyLabel: rows.some((row) => row.whyLabel !== undefined),
     reading: rows.some((row) => row.reading !== undefined),
@@ -216,6 +259,10 @@ function gridTemplate(has: SlotsUsed): string {
   return [
     has.lamp ? 'var(--cn-w-lamp)' : '',
     has.toggle ? 'var(--cn-w-eye)' : '',
+    // A mark, so it is a width and not a ceiling: it is the same glyph on every
+    // row, and a column that gives way would move the subject's left edge from
+    // card to card for nothing.
+    has.who ? 'var(--cn-w-who)' : '',
     // And the subject has a floor, which is what makes the ceilings bite: `1fr`
     // takes what is left over, so with nothing below it the title is the one track
     // that collapses and the rails never shrink at all.
@@ -251,11 +298,38 @@ export function PanelRows({ rows }: { rows: readonly PanelRowModel[] }): JSX.Ele
   // applies to nothing. It renders exactly as it did before — which is how this
   // was wrong for a whole build without looking wrong.
   const columns = gridTemplate(has);
+  // The band the last row was in, so a heading is drawn where it *changes* rather
+  // than once per row. An ungrouped row clears it, which is what lets a card
+  // group part of its list and leave the rest plain.
+  let band: string | undefined;
   return (
     <div className="cn-rows">
-      {rows.map((row) => (
-        <FactsRow key={row.key} row={row} has={has} columns={columns} />
-      ))}
+      {rows.map((row) => {
+        const opens = row.group !== undefined && row.group.key !== band;
+        band = row.group?.key;
+        return (
+          <Fragment key={row.key}>
+            {opens && row.group !== undefined && <GroupHead group={row.group} />}
+            <FactsRow row={row} has={has} columns={columns} />
+          </Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * A band's heading: the word, and what is true of the whole band.
+ *
+ * Not a row. It fills the card's width rather than sitting on the rail, because
+ * it names the rows under it and a heading that lined its word up with the
+ * subject column would read as a row whose every other slot is empty.
+ */
+function GroupHead({ group }: { group: RowGroup }): JSX.Element {
+  return (
+    <div className={group.tone === 'ask' ? 'cn-group cn-group-ask' : 'cn-group'}>
+      {group.label}
+      {group.note !== undefined && <span className="cn-group-n">{group.note}</span>}
     </div>
   );
 }
@@ -280,6 +354,7 @@ function FactsRow({ row, has, columns }: { row: PanelRowModel; has: SlotsUsed; c
     <div className={rowClass(row, 'cn-row cn-frow')} style={{ gridTemplateColumns: columns }} title={row.hint}>
       {has.lamp && <span className="cn-slot">{row.lamp}</span>}
       {has.toggle && <span className="cn-slot">{row.toggle}</span>}
+      {has.who && <span className="cn-slot">{row.who}</span>}
       <Subject row={row} />
       {has.why && (
         <span className={`cn-slot ${row.whyLabel === undefined ? 'cn-slot-why' : ''}`}>

@@ -131,7 +131,7 @@ export function readWorldItem(
 function prView(pr: PullRequest, world: WorldSnapshot): Record<string, unknown> {
   // The *unfiltered* open list: an unwatched PR is hidden from dispatch but is
   // still a real base, so attribution must see it — the same reason
-  // `DispatchContext` carries `unwatchedPrs` alongside the dispatch world.
+  // `DispatchContext` carries `hiddenPrs` alongside the dispatch world.
   const openPrs = world.pullRequests;
   const base = basePrOf(pr, openPrs);
   const inherited = inheritedCiFailure(pr, openPrs);
@@ -164,11 +164,17 @@ function prView(pr: PullRequest, world: WorldSnapshot): Record<string, unknown> 
     // Whose red CI this is. Non-null means the failure belongs to the PR below,
     // which is also why no agent was dispatched here to fix it.
     ciFailingOnBasePr: inherited?.number ?? null,
+    // The replies come with each thread. `body` is the root and nothing else, and
+    // the agent is told to compare this list against the one in its prompt to
+    // catch a review that moved while it worked — a move that is most often a
+    // *reply*, not a new thread. Serving roots alone made that re-check unable to
+    // see the commonest thing it exists to catch.
     unresolvedComments: pr.unresolvedComments.map((c) => ({
       id: c.id,
       author: c.author,
       body: c.body,
       handled: c.handled,
+      replies: (c.replies ?? []).map((r) => ({ id: r.id, author: r.author, body: r.body, ours: r.ours })),
     })),
   };
 }

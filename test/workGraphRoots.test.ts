@@ -657,50 +657,6 @@ test('the roots route reports unrecorded work beside the roots', async () => {
   system.store.close();
 });
 
-test('a promoted finding carries the ref it is about, so its job is never unrecorded', async () => {
-  // The ref was reaching the cockpit already — glued into the job's *title* by
-  // `findingJobRequest` — so the row read as having a tracker link while the
-  // predicate saw a parentless job and offered to file a second one.
-  const system = buildServed();
-  const task = system.store.createTask({
-    kind: 'code',
-    title: 'Resolve issue #12',
-    prompt: 'do it',
-    branch: 'issue/12',
-    originRef: 'issue:12',
-  });
-  system.agents.spawn(task, mkdtempSync(join(tmpdir(), 'lubbdubb-wt-')));
-  const raised = system.store.proposeFact(
-    {
-      claim: 'StatementParallelRunnerTests asserts wall-clock milliseconds',
-      scope: 'fleet',
-      lifetime: 'standing',
-      expiresInHours: null,
-      evidence: 'It failed on a loaded runner twice this week.',
-      supersedes: null,
-      resolvesWhen: null,
-      aboutRef: 'pr:41',
-      where: null,
-    },
-    { agentId: 'a1', taskId: task.id, goalRef: 'issue:12', sessionId: null, words: 'seen twice' },
-  );
-  assert.ok(raised.outcome !== 'barred');
-
-  const { app } = await buildApp(system);
-  const res = await app.inject({
-    method: 'POST',
-    url: `/api/knowledge/facts/${raised.fact.id}/exit`,
-    payload: { exit: 'job' },
-  });
-  assert.equal(res.statusCode, 200);
-  const job = (res.json() as { job: { originRef: string | null } }).job;
-  // What the claim is *about*, never the observing agent's own `issue:12`:
-  // attributing it there would file the work under somebody else's goal.
-  assert.equal(job.originRef, 'pr:41');
-  await app.close();
-  system.store.close();
-});
-
 test('filing creates the work item there and then, and a second click is refused', async () => {
   // `fake` has no tracker to file into, so this is the tracker-configured path.
   const system = buildWithTracker();
@@ -823,7 +779,6 @@ test('an agent on an unrelated job can link nothing, and is told which jobs can'
   const res = system.agents.linkTicket(agent.id, 'issue:314');
   assert.equal(res.ok, false);
   // Identity is the whole access check: there is no argument naming what to link.
-  assert.match(res.ok === false ? res.error : '', /file a claim/);
   assert.match(res.ok === false ? res.error : '', /raise a bug/);
   system.store.close();
 });

@@ -716,7 +716,7 @@ function watchChecks(config: Config, store: Store): SetupCheck[] {
  * `report_finding`, `knowledge_propose`, `knowledge_notice` and
  * `knowledge_contradict` are gone: `raise` is the one door now, and advertising
  * six ways to file one observation is the taxonomy the intake removed
- * ([27](27-knowledge.md)).
+ * ([27](../../docs/spec/27-obstacles.md#the-intake)).
  *
  * They spent a release registered-but-named-nowhere rather than deleted, for one
  * reason — an operator's override written before the intake may still name one,

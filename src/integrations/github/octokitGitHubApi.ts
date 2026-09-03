@@ -538,6 +538,10 @@ export class OctokitGitHubApi implements GitHubApi {
     return { sha: data.sha, merged: data.merged };
   }
 
+  async closePull(number: number): Promise<void> {
+    await this.octokit.pulls.update({ ...this.base, pull_number: number, state: 'closed' });
+  }
+
   async setPullLabel(number: number, label: string, present: boolean): Promise<void> {
     await this.setLabel(number, label, present);
   }

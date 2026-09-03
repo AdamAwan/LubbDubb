@@ -160,6 +160,8 @@ function render(p: ReviewPackPayload, openIdea: string | null = null, askRefusal
       refUrls: { 'pr:7': 'https://example.test/pull/7' },
       openGoal: () => undefined,
       hasGoal: () => false,
+      openPr: () => undefined,
+      hasPr: () => false,
       children: createElement(ReviewPackPage, {
         payload: p,
         marks: p.marks,
@@ -306,8 +308,9 @@ test('the page draws the masthead, then the gate, then the ideas — and the pul
   assert.match(html, /1 false claim/);
   assert.match(html, /The deleted constant is still read\. — idea 01\./);
   assert.match(html, /href="#rp-finding-1"/);
-  // The reference, drawn through <Ref>, boxed and leaving for the provider.
-  assert.match(html, /<a[^>]*href="https:\/\/example\.test\/pull\/7"[^>]*>#7<\/a>/);
+  // The reference, drawn through <Ref>, boxed and leaving for the provider — and
+  // naming its family, since the marks say only where a reference goes.
+  assert.match(html, /<a[^>]*href="https:\/\/example\.test\/pull\/7"[^>]*>PR 7<\/a>/);
   assert.match(html, /The module imports y\./);
   assert.match(html, /<strong>the import is the point<\/strong>/);
   assert.match(html, /~4 min/);

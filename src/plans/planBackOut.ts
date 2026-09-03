@@ -4,10 +4,9 @@ import type { ActionSink } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
 import type { Plan } from '../types.js';
 import { issueConclusionOrigin } from '../issueConclusion.js';
-import { watchCascadeTargets } from '../issueRelations.js';
+import { applyIssueWatch } from '../issueWatch.js';
 import { originIssueNumber } from './planning.js';
 import { declinePlan, planApprovalDetail, refusePlan } from './planApproval.js';
-import { watchLabelFor } from '../watchLabels.js';
 
 /**
  * The two ways out of a plan verdict that are not a verdict *on the plan*.
@@ -158,38 +157,20 @@ export function backOutCommentDraft(
  */
 async function unwatch(ctx: BackOutContext, issueNumber: number): Promise<string> {
   const { store, config, errors } = ctx;
-  const label = watchLabelFor(config.labelPrefix);
-  if (!label) return 'left the watch tag alone (this deployment configures no label prefix)';
-  const world = store.getWorldBaseline();
-  const issue = world?.issues.find((i) => i.number === issueNumber);
-  // An issue the snapshot does not carry still gets its own tag written — a world
-  // that has aged out must not stop the back-out — it simply has no tree to walk.
-  const targets =
-    issue === undefined ? [issueNumber] : watchCascadeTargets(issue, world?.issues ?? [], config.issueContainerTypes);
-
-  const landed: number[] = [];
-  const failed: number[] = [];
-  for (const target of targets) {
-    try {
-      await ctx.sink.setIssueLabel({ number: target, label, present: false });
-      landed.push(target);
-    } catch (err) {
-      failed.push(target);
-      errors.record({
-        source: 'server',
-        message: `Failed to drop the watch tag on #${target} while backing out of #${issueNumber}: ${(err as Error).message}`,
-      });
-    }
-  }
-  // Both mirrors, exactly as `POST /api/issues/:number/watch` patches them and for
-  // its reason: `/api/state` serves the baseline and the Tickets tab is built from
-  // `tracker_items`, so a cockpit redrawn before the next sweep would show the tag
-  // still on.
-  store.patchWorldLabels({ issues: landed, label, present: false });
-  store.patchTicketLabels({ numbers: landed, label, present: false });
-
+  // The cascade and both mirrors are `src/issueWatch.ts`, shared with the cockpit's
+  // toggle and the desktop channel: three copies of one write is three places for
+  // the Tickets mirror to be forgotten. What is this desk's own is the sentence it
+  // reports back with.
+  const outcome = await applyIssueWatch(
+    { store, sink: ctx.sink, errors, labelPrefix: config.labelPrefix, issueContainerTypes: config.issueContainerTypes },
+    issueNumber,
+    false,
+    `while backing out of #${issueNumber}`,
+  );
+  if (!outcome.label) return 'left the watch tag alone (this deployment configures no label prefix)';
+  const { targets, landed, failed } = outcome;
   if (failed.length === 0) return `dropped the watch tag on ${targets.length} item(s)`;
-  return `dropped the watch tag on ${landed.length} of ${targets.length} item(s) — #${failed.join(', #')} kept it`;
+  return `dropped the watch tag on ${landed.length} of ${targets.length} item(s) — #${failed.map((f) => f.number).join(', #')} kept it`;
 }
 
 /** The operator's words on the ticket itself. A fresh comment, never an edit of the plan's living one. */

@@ -706,8 +706,11 @@ deciding whether to re-run a check before closing a goal is deciding on exactly 
 
 ### The skill
 
-`/lubbdubb 284:C`, `/lubbdubb discuss 284`, `/lubbdubb run 284`, `/lubbdubb ask 284 …` — four jobs
-told apart by the argument, one file. The fourth is the only one that settles nothing:
+`/lubbdubb 284:C`, `/lubbdubb discuss 284`, `/lubbdubb run 284`, `/lubbdubb ask 284 …`,
+`/lubbdubb fleet` — five jobs told apart by the argument, one file. The fifth is about the harness
+rather than about a goal and is
+[owned by 11](11-mcp-tools.md#watching-and-steering-the-fleet); its section here is only that a
+question with no goal number in it is that job. The fourth settles nothing:
 [`goal_read`](11-mcp-tools.md#answering-a-question-about-a-goal) hands back the harness's record of a
 goal and the skill says what to do with it. Its longest section is about the one way a session with
 the repository open gets a question about a run wrong — reconstructing a plausible history from the
@@ -728,6 +731,18 @@ confidently — plus the one line that keeps the read a read: change nothing, an
 the answer turns out to be that the plan is wrong. Everything about
 _how_ to run a given check comes back from the tools, which read the live plan; a skill that restated
 any of it would be a second copy of the procedure, drifting.
+
+**One section is appended rather than written into the body**: where LubbDubb's _own_ checkout is,
+when `installRoot()` resolves one (`desktopSkillDocument`, handed the root by `src/server/main.ts`).
+The session this skill is written for opens on `repoRoot` — the repository the fleet **works on** —
+and the cockpit's [Question?](17-cockpit.md#the-top-bar-and-the-panels) control collects plenty of questions
+that are about the harness instead: why nothing picked a goal up, why a rule did not fire. Answered
+from the harness's output those get the shape of confident wrong answer the `ask` section already
+warns about. The note says to read the record first and the source second, and to change nothing in
+that checkout — it is the running harness, and the fleet cuts its worktrees from it. Appended and not
+spliced in, the prompt templates' rule: a path interpolated into the body is a second thing to keep
+in step. A deployment running from a tarball resolves no root and gets the body unchanged, because a
+section naming a directory that is not there is worse than no section.
 
 It is always overwritten, and says so in its own body — telling an operator's edits from a stale copy
 has no honest implementation, and a skill that silently stopped being refreshed would describe a

@@ -191,7 +191,54 @@ const ActionSchema = z.discriminatedUnion('type', [
      * words in a paragraph. Null when the planner wrote neither.
      */
     detail: z.string().min(1).nullable().default(null),
+    /**
+     * What the plan raises that has to be *read* before it may be released —
+     * `src/plans/planCaveats.ts`. Carried on the action rather than re-derived at
+     * accept time so the gate compares the operator's ticks against the list they
+     * were actually shown; empty is a plan that raises nothing, and no gate.
+     */
+    caveats: z
+      .array(
+        z.object({
+          id: z.string().min(1),
+          label: z.string().min(1),
+          detail: z.string().min(1).nullable().default(null),
+        }),
+      )
+      .default([]),
     /** What the operator is shown: what the plan is for, and what each verdict means. */
+    prompt: z.string().min(1),
+    ...base,
+  }),
+  /**
+   * Put a change to a **running** plan to a human (`src/plans/planAmendment.ts`).
+   * Like `propose_plan` it carries no act to publish: the executor turns it into an
+   * inbox item plus a `plan_amendment` proposal, and accepting that proposal
+   * ingests the amended document while the plan stays released.
+   *
+   * The document is deliberately **not** in the payload — it is on the
+   * `plan_amendments` row, which is also what the rule reads and what both
+   * settlements rewrite. An action carrying the document would be a second copy of
+   * it that could be accepted after the row it came from was superseded.
+   */
+  z.object({
+    type: z.literal('propose_plan_amendment'),
+    /** The pending amendment row; what accepting applies and rejecting settles. */
+    amendmentId: z.string().min(1),
+    /** The plan being amended — carried so the audit line can name it without a lookup. */
+    planId: z.string().min(1),
+    /** The goal the plan hangs off (`issue:12`). */
+    originRef: z.string().min(1),
+    /**
+     * What the operator is shown: what is being changed, and what each verdict
+     * does.
+     *
+     * There is no `detail` beside it, unlike every other proposing action. The
+     * card's body — why, what changes, what it will not change — is a *reading of
+     * the plan as it stands*, built by the executor from the store when the card
+     * is created, so it cannot describe a diff against a plan that has moved on
+     * since the rule ran.
+     */
     prompt: z.string().min(1),
     ...base,
   }),

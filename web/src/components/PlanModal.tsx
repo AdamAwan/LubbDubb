@@ -7,6 +7,7 @@ import type {
   PlanDiff,
   PlanEvidence,
   PlanHistory,
+  PendingPlanAmendment,
   PlanPartView,
   PlanningPolicy,
   Proposal,
@@ -16,7 +17,10 @@ import type {
 import { api } from '../api.js';
 import { discussPrompt } from '../cockpit/desktopLink.js';
 import { DesktopLink } from './DesktopLink.js';
+import { CaveatChecklist, heldTitle, useAcknowledgements } from './CaveatChecklist.js';
+import { planCaveatsOf } from '../planCaveats.js';
 import { AsyncButton } from './AsyncButton.js';
+import { ConfirmButton } from './ConfirmButton.js';
 import { renderMarkdown } from './markdown.js';
 import { PlanMap } from './PlanMap.js';
 import { ProfilePicker } from './ProfilePicker.js';
@@ -70,6 +74,8 @@ export function PlanModal({
   onOpenGoal,
   onAcceptance,
   onPartProfile,
+  onRestartPart,
+  canClosePr,
   profiles,
   defaultProfile,
   desktopFolder,
@@ -97,7 +103,17 @@ export function PlanModal({
   onReplan: (planId: string) => Promise<unknown> | unknown;
   /** The operator's ruling on a check `watch_declare` wrote — see {@link WatchDigest}. */
   onWatchProposal: (issueNumber: number, checkId: string, accept: boolean) => Promise<unknown> | unknown;
-  onDecide: (id: string, verdict: 'accept' | 'reject', note?: string) => Promise<unknown> | unknown;
+  /**
+   * The verdict, with the caveat ids the operator ticked. Approving a plan that
+   * raises caveats is refused server-side until they are named — see
+   * `web/src/components/CaveatChecklist.tsx`.
+   */
+  onDecide: (
+    id: string,
+    verdict: 'accept' | 'reject',
+    note?: string,
+    acknowledged?: string[],
+  ) => Promise<unknown> | unknown;
   /**
    * The two answers that are about the **ticket** rather than the plan — close it
    * with the note as its comment, or hold it by dropping the watch tag. Offered
@@ -113,6 +129,19 @@ export function PlanModal({
   onAcceptance: (planId: string, slug: string, criterion: string, met: boolean) => Promise<unknown> | unknown;
   /** Override which profile one part runs on, or clear it back to inheriting the goal's pin (#342). */
   onPartProfile: (planId: string, slug: string, profile: string | null) => Promise<unknown> | unknown;
+  /**
+   * Close a part's pull request, drop its branch and hand the part back to the
+   * fleet — the way out of an amendment that rewrote work already in review.
+   */
+  onRestartPart: (planId: string, slug: string) => Promise<unknown> | unknown;
+  /**
+   * `config.canClosePr` — whether this deployment's provider can close a pull
+   * request at all. False draws no restart control anywhere on the sheet, the way
+   * the board draws no drag where `canSetWorkItemState` is false: a button that
+   * closed nothing would take the part back to `ready` and let the reconciler put
+   * it straight back into review.
+   */
+  canClosePr: boolean;
   /** The profiles a part may be pinned to, cheapest first, and what an unpinned one falls back to. */
   profiles: { name: string; description: string }[];
   defaultProfile: string | null;
@@ -140,6 +169,14 @@ export function PlanModal({
   // it settles by *amending*, and the amendment withdraws this card and puts a
   // fresh one up, so the one drawn here is always about the plan on screen.
   const decidable = proposal?.status === 'pending' ? proposal : null;
+  // The same list the inbox card draws and the accept route enforces, read off the
+  // proposal rather than re-derived from the plan sheet's own caveat sections: the
+  // operator ticks ids, and two derivations of one list is the drift this repo has
+  // fixed before. Drawn here as well because this is the surface where the plan has
+  // actually been read, and it is the other button that releases it.
+  const caveats = planCaveatsOf(decidable ?? undefined);
+  const ack = useAcknowledgements(caveats);
+  const held = ack.outstanding.length > 0;
   // `approach` is the summary once a planner writes one; `reason` stands in for it
   // on every plan stored before the field existed, which is why the fallback is
   // here rather than in the store.
@@ -167,8 +204,14 @@ export function PlanModal({
   // sentence is written once here and handed to both. It used to be written twice
   // and said neither time what command the session would arrive with — the deep
   // link's standing rule, which `DesktopLink` now keeps rather than each site.
+  // And it forks on the status, because what the session can do at the end of the
+  // conversation does: a released plan is *proposed against*, and telling an
+  // operator their running work is about to be rewritten would be the wrong half
+  // of that.
   const discuss =
-    'so the plan is talked through with a session that can amend it — nothing is scheduled, and nothing changes until it does.';
+    plan.status === 'active'
+      ? 'so the plan is talked through with a session that can propose a change to it — the plan keeps running while you decide, and nothing changes until you accept.'
+      : 'so the plan is talked through with a session that can amend it — nothing is scheduled, and nothing changes until it does.';
 
   const jump = (key: string): void => {
     setView('plan');
@@ -232,13 +275,19 @@ export function PlanModal({
           </button>
           <span className="spacer" />
           {/* A view, not a jump — a different document, so it reads as a different
-              control. Absent until there is a second revision to be a change from. */}
-          {history !== null && history.revisions.length > 1 && (
+              control. Absent until there is a second revision to be a change from,
+              or a change waiting on the operator to be asked about. */}
+          {history !== null && (history.revisions.length > 1 || history.pending !== null) && (
             <button
-              className={`pm-jump history${view === 'history' ? ' on' : ''}`}
+              className={`pm-jump history${view === 'history' ? ' on' : ''}${history.pending ? ' waiting' : ''}`}
               onClick={() => setView(view === 'history' ? 'plan' : 'history')}
             >
-              {history.diff === null ? 'History' : 'What changed'} <i className="k">v{history.revisions.length}</i>
+              {/* A change waiting on the operator outranks the history it would
+                  become: it is the one thing on this sheet that is asking them
+                  something, and it is why the control is offered at all on a plan
+                  with a single revision. */}
+              {history.pending ? 'Change waiting' : history.diff === null ? 'History' : 'What changed'}{' '}
+              <i className="k">v{history.revisions.length}</i>
             </button>
           )}
         </div>
@@ -348,6 +397,7 @@ export function PlanModal({
                           onPin={(pin) => setPins({ ...pins, [part.slug]: pin })}
                           onAcceptance={(criterion, met) => onAcceptance(plan.id, part.slug, criterion, met)}
                           onPartProfile={(profile) => onPartProfile(plan.id, part.slug, profile)}
+                          onRestart={canClosePr ? () => onRestartPart(plan.id, part.slug) : undefined}
                           profiles={profiles}
                           defaultProfile={defaultProfile}
                         />
@@ -470,6 +520,9 @@ export function PlanModal({
               issueNumber={issueNumber}
             />
           )}
+          {decidable && (
+            <CaveatChecklist caveats={caveats} ticked={ack.ticked} onToggle={ack.toggle} refUrls={refUrls} />
+          )}
           <PinList pins={pins} parts={live} onClear={(slug) => setPins(without(pins, slug))} />
           <div className="pm-row">
             {decidable && (
@@ -538,8 +591,16 @@ export function PlanModal({
                 )}
                 <AsyncButton
                   className="primary"
-                  title="Release the plan — each part gets its own agent, branch and pull request"
-                  onClick={() => onDecide(decidable.id, 'accept', composeNote(pins, live, note))}
+                  // Held, not hidden: the checklist above says what is outstanding
+                  // and the hint on the button says how many. The route refuses it
+                  // either way — this is that answer, a step earlier.
+                  disabled={held}
+                  title={
+                    held
+                      ? heldTitle(ack.outstanding)
+                      : 'Release the plan — each part gets its own agent, branch and pull request'
+                  }
+                  onClick={() => onDecide(decidable.id, 'accept', composeNote(pins, live, note), ack.acknowledged)}
                 >
                   {approveLabel(live, queued, originOf)}
                 </AsyncButton>
@@ -555,19 +616,22 @@ export function PlanModal({
               </span>
             )}
             <span className="spacer" />
-            {/* `plan_amend` refuses outside `awaiting_approval` (amending a released
-                plan reopens an approval gate it has already been through), so the
-                control must not offer what the tool refuses. */}
-            {plan.status === 'awaiting_approval' && !decidable && issueNumber !== null && (
-              <DesktopLink
-                className="btn ghost"
-                folder={desktopFolder}
-                prompt={discussPrompt(issueNumber)}
-                explain={discuss}
-              >
-                Discuss…
-              </DesktopLink>
-            )}
+            {/* Offered on both statuses `plan_amend` settles, and no others: it
+                rewrites an `awaiting_approval` plan and proposes against a running
+                one. A control that offered what the tool refuses is a session sent
+                to argue about a plan it cannot then change. */}
+            {(plan.status === 'awaiting_approval' || plan.status === 'active') &&
+              !decidable &&
+              issueNumber !== null && (
+                <DesktopLink
+                  className="btn ghost"
+                  folder={desktopFolder}
+                  prompt={discussPrompt(issueNumber)}
+                  explain={discuss}
+                >
+                  Discuss…
+                </DesktopLink>
+              )}
             <AsyncButton
               className="ghost"
               title="Ask the planner again from the plan's current state. Nothing is torn down."
@@ -828,6 +892,7 @@ function PartBlock({
   onPin,
   onAcceptance,
   onPartProfile,
+  onRestart,
   profiles,
   defaultProfile,
 }: {
@@ -841,6 +906,11 @@ function PartBlock({
   onPin: (pin: Pin) => void;
   onAcceptance: (criterion: string, met: boolean) => Promise<unknown> | unknown;
   onPartProfile: (profile: string | null) => Promise<unknown> | unknown;
+  /**
+   * Undefined where this deployment's provider cannot close a pull request — the
+   * control is then absent rather than drawn and refused.
+   */
+  onRestart: (() => Promise<unknown> | unknown) | undefined;
   profiles: { name: string; description: string }[];
   defaultProfile: string | null;
 }) {
@@ -897,6 +967,19 @@ function PartBlock({
             >
               {queue.status === 'dispatching' ? '▶ now' : queue.status}
             </span>
+          )}
+          {/* Only where it applies: a part in review has a pull request open and no
+              agent on it (an agent still working is `dispatched`), which is exactly
+              the state an amendment overtakes. Two clicks, because closing somebody's
+              open pull request is not undoable from here. */}
+          {onRestart && part.status === 'in_review' && part.prNumber !== null && (
+            <ConfirmButton
+              className="small"
+              label="↺ restart"
+              confirmLabel="close the PR and restart"
+              title={`Close PR #${part.prNumber}, drop its branch, and put "${part.slug}" back to ready so it is worked again against the plan as it stands now.`}
+              onConfirm={onRestart}
+            />
           )}
           {pinnable && (
             <span className="pm-part-pins">
@@ -1044,10 +1127,14 @@ function Acceptance({
  */
 function HistoryView({ history, now }: { history: PlanHistory | null; now: number }) {
   if (history === null) return <p className="empty">The history for this plan could not be read.</p>;
-  const { diff, revisions } = history;
+  const { diff, pending, revisions } = history;
   const latest = revisions[revisions.length - 1];
   return (
     <>
+      {/* Above the history, because it is the only part of this view that is a
+          question rather than a record: a plan still scheduling, with a change
+          somebody is waiting on an answer to. */}
+      {pending !== null && <PendingAmendment pending={pending} now={now} />}
       <div className="pm-revs">
         {revisions.map((rev) => (
           <span className={`chip small${rev === latest ? ' ok' : ''}`} key={rev.id} title={rev.narrative.reason ?? ''}>
@@ -1061,6 +1148,57 @@ function HistoryView({ history, now }: { history: PlanHistory | null; now: numbe
         <DiffBody diff={diff} />
       )}
     </>
+  );
+}
+
+/**
+ * The change waiting on the operator, on the sheet where the plan is actually
+ * read.
+ *
+ * The inbox card asks the question; this says the same thing where somebody has
+ * gone to look at the plan itself, because the two readings would otherwise
+ * disagree by omission — a plan sheet that showed a running decomposition with no
+ * sign that a correction to it was pending reads as a plan nobody has questioned.
+ *
+ * **No verdict here.** Accepting or declining is the proposal's, on its card, and
+ * a second pair of buttons over one decision is two places for it to be answered
+ * differently. What this surface owes the reader is the case and its consequences.
+ *
+ * The diff is the server's `proposedPlanDiff` and is drawn through the same
+ * {@link DiffBody} as an applied one: a change must not look like a different kind
+ * of thing either side of the decision that applies it.
+ */
+function PendingAmendment({ pending, now }: { pending: PendingPlanAmendment; now: number }) {
+  return (
+    <section className="pm-pending">
+      <div className="pm-pending-head">
+        <span className="pm-section-label">Waiting on you</span>
+        <span className="chip small warn">amendment</span>
+        <span className="muted small">
+          proposed by {pending.author === 'operator' ? 'you' : 'an agent'} · {relTime(pending.createdAt, now)}
+        </span>
+      </div>
+      <p className="pm-pending-note">{pending.note}</p>
+      {pending.diff === null ? (
+        <p className="empty">There is no earlier version to compare this against.</p>
+      ) : (
+        <DiffBody diff={pending.diff} />
+      )}
+      {pending.warnings.length > 0 && (
+        <ul className="pm-pending-warnings">
+          {pending.warnings.map((w) => (
+            <li key={w}>{w}</li>
+          ))}
+        </ul>
+      )}
+      {/* Said rather than left to be inferred from the plan still drawing its
+          parts: the one thing an operator must not read off a pending amendment
+          is that the work is on hold while they decide. */}
+      <p className="muted small">
+        The plan is still running: every part that was scheduling still is, and nothing changes until you accept this on
+        its card. Decline it and the plan carries on exactly as it is.
+      </p>
+    </section>
   );
 }
 

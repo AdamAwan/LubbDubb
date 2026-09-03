@@ -58,13 +58,13 @@ one record an operator clears.
 
 ### Who records what
 
-| `source`   | Recorded by                                                                                                                                                                                                     |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cycle`    | The harness's cycle `catch` (message + stack); plan-reconciliation fetch and status-comment failures; the plan ref-collision guard.                                                                             |
-| `provider` | Provider snapshot `catch`es, via the optional `errors` in `IntegrationContext`; an Azure request that spent every retry (a recovered one records nothing); GitHub rate-limit notices.                                                                                                  |
+| `source`   | Recorded by                                                                                                                                                                                                   |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cycle`    | The harness's cycle `catch` (message + stack); plan-reconciliation fetch and status-comment failures; the plan ref-collision guard.                                                                           |
+| `provider` | Provider snapshot `catch`es, via the optional `errors` in `IntegrationContext`; an Azure request that spent every retry (a recovered one records nothing); GitHub rate-limit notices.                         |
 | `agent`    | Spawn failures; terminal `failed` agents (with the exit code and an output tail); worktree removal failures; terminal-runtime warnings; invalid or unreadable `plan.json`; MCP channel/config/frame failures. |
-| `server`   | The Fastify `setErrorHandler` (method, URL, message, stack).                                                                                                                                                    |
-| `boot`     | Each agent found orphaned at boot (a crash, not a clean shutdown); a failed restore.                                                                                                                            |
+| `server`   | The Fastify `setErrorHandler` (method, URL, message, stack).                                                                                                                                                  |
+| `boot`     | Each agent found orphaned at boot (a crash, not a clean shutdown); a failed restore.                                                                                                                          |
 
 **Do not add new swallowed `catch`es — route them here.** Tests silence the stderr mirror with
 `buildSystem(config, { errorMirror: () => {} })`.
@@ -328,7 +328,7 @@ what it does.
 ### The session window
 
 `session` is the one window here that is **not measured from `now`**. The other five are spans an
-operator picked; this one is a stretch the *account* is keeping, and the question it exists to answer —
+operator picked; this one is a stretch the _account_ is keeping, and the question it exists to answer —
 where did the five hours go — is only answerable against the account's own boundaries. A window that
 resets in ninety minutes opened three and a half hours ago, and a breakdown of the last five hours is
 a breakdown of a different five hours: overlapping, plausible, and not the one the limit is being
@@ -371,7 +371,7 @@ rather than at `now` puts each bar on the account's own boundaries, which is the
 the limit was ever applied over.
 
 **The anchor rides on `InsightsWindowView`**, so the page states which of the three cases it drew, when
-the window opened, when it resets, and what percentage the account reported *as the fold measured it*.
+the window opened, when it resets, and what percentage the account reported _as the fold measured it_.
 That last is not the top bar's figure and must not be taken from it: the chip is the freshest reading
 whenever it was read, and this is the one the rows underneath were actually anchored on.
 
@@ -385,14 +385,14 @@ is better made against the reading the fold anchored on than against a chip read
 **`limits` is a required argument to `resolveWindow`**, not an optional one, though five of the six keys
 ignore it. A route that forgot it would still answer `?window=session` — over a rolling five hours,
 labelled as the account's, with nothing red. A caller that genuinely has no reading passes `null` and
-says so; `defaultWindow` is that caller, because the default is never `session`.
+says so.
 
-**A reading with no control of its own takes the window the page opens on** (`defaultWindow`). The
-Knowledge page's cost figure ([27](27-knowledge.md#what-it-costs)) is the caller: it draws one number,
-has no time bar, and a second control there would be a second answer to "over what stretch" on a page
-whose whole argument is that one figure should be readable beside another. It is the one reading here
-that dates a run by **when it started** rather than by `runInstant`: the knowledge block is written
-into a launch's arguments once, at the top of the run, where money is spent throughout one.
+`defaultWindow` — the window a reading with no control of its own took — **went with its last caller**,
+the Knowledge page's cost figure. That page and the injected block it priced are gone
+([27](27-obstacles.md#what-the-claim-store-left-behind)), and every reading left here has a time bar of
+its own. A reading that needs one again brings it back rather than reaching for `resolveWindow`
+directly: a caller with no time bar quietly acquiring the `session` window is exactly what the required
+`limits` argument above exists to stop.
 
 **The window is shipped back on every payload** as `InsightsWindowView`, and the page draws that rather
 than the key it asked with. A caption computed in the browser from the key is free to disagree with the
@@ -413,8 +413,9 @@ splits of one pot of money, plus the coverage caveat:
 
 - **By phase** — `deliberation` (`:plan`, `:appraisal`), `build` (the pickup root and every `:part:`),
   `ci` (`pr:<n>:ci`, `pr:<n>:ci-gate`), `landing` (every other `pr:*`), `evidence` (`:assess`,
-  `:retro`), `local` (a local run), `job` (`job:*`) and `other`. A partition: they sum to the fleet
-  total. The issue-subtree phases are `issueOriginRole`'s vocabulary rather than a second one, so **a
+  `:retro`), `local` (a local run), `obstacle` (`obstacle:<id>` — a repair for something in the
+  fleet's way, [27](27-obstacles.md#ownership)), `job` (`job:*`) and `other`. A partition: they sum to
+  the fleet total. The issue-subtree phases are `issueOriginRole`'s vocabulary rather than a second one, so **a
   new origin suffix is classified in exactly one place** — an unrecognised suffix surfaces as `other`
   rather than being folded into whichever neighbour looked closest. `local` is the one phase that is
   **not** read off an origin ref, and `phaseOf` is not asked about it: a local run carries the goal's
@@ -640,7 +641,7 @@ the same rise apportioned to the goals that spent it, the weekly burn-down, and 
 change.
 
 **A percentage is apportioned, never measured, and the two words are not interchangeable.** A goal's
-*cost* is measured — every dollar has an agent's name on it. The account's percentage has no name on
+_cost_ is measured — every dollar has an agent's name on it. The account's percentage has no name on
 it at all: it is one global counter moved by every agent at once and by the operator's own Claude Code
 on the same credential, and no event says which turn moved it. Every per-goal figure on this reading
 is therefore a share, and the surfaces that draw it say so. A tab that printed an apportioned
@@ -651,7 +652,7 @@ cause.
 
 The rise is taken between **consecutive readings**, so the unit of attribution is the few minutes
 between two turns rather than the whole span. Each interval's rise is split between the goals whose
-agents reported cost inside *that* interval, by their share of it.
+agents reported cost inside _that_ interval, by their share of it.
 
 Per window instead — one division of the total by each goal's share of the window's spend — is the
 obvious shape and is wrong twice. It absorbs a model-mix shift silently, because the points-per-dollar
@@ -685,7 +686,7 @@ allowance refilled inside it.
 
 A **gap** is the opposite case and is treated the opposite way. A reading arrives only when an agent
 takes a turn, so an idle fleet produces none while the real window keeps moving. The rise across such
-a gap is *counted* — it happened — and attributes to nobody, which is exactly how the operator's own
+a gap is _counted_ — it happened — and attributes to nobody, which is exactly how the operator's own
 session shows up. What the gap changes is the drawing: `afterGap` tells the cockpit not to join two
 readings an hour apart with a line claiming to know what happened between them.
 
@@ -880,19 +881,16 @@ two from the caller's own task origin and refuses every other caller by name; th
 assert is a column reporting whatever each agent took it to mean, and the counts would be worth
 nothing.
 
-**`undocumented` is the one verdict that may carry a claim**, and it rides on the same call rather
-than a second tool — atomic, exactly as a retrospective's lessons are ([27](27-knowledge.md)).
-A claim on any other guard is **refused rather than dropped**: a claim reaches every later dispatch
-once it is vouched for, so the gate on what may become one has to be visible to the agent raising it.
-The claim goes to the knowledge base through the path `raise` uses, so a wall two other agents have
-already documented is recorded as agreement rather than as a third copy
-([27](27-knowledge.md#the-remedy-arm)). Its provenance is the pull request (`pr:<n>`), resolved from
-the credential rather than asserted.
+**`undocumented` names something written down nowhere, and what an agent does about that is `raise`
+it** — in its own call, on the board that keys and counts it ([27](27-obstacles.md#the-intake)). The
+remedy used to carry a `claim` field of its own, which meant the same sentence reached a different
+store, under a different gate and with no matching, depending on which tool the agent happened to be
+holding. One door, and this is not it: the remedy is the **event record** of one return to a pull
+request and nothing else.
 
-**The remedy row is untouched by any of it.** The account of an event and a durable claim are
-different animals: the row keeps its counts and its dollars, it lands whatever becomes of the claim —
-including under an operator's rejection of it — and nothing on this page is derived from the
-knowledge base.
+**The remedy row is the account of an event, and only that.** It keeps its counts and its dollars, it
+lands whatever an agent does or does not raise beside it, and nothing on this page is derived from the
+obstacle board.
 
 **An account is not a red, and not a run.** One agent that settled four reds in one dispatch files
 one row; a pull request that went red four times over four days collects four. So `accounts` is never

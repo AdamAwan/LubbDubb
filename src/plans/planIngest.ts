@@ -55,6 +55,18 @@ export function ingestPlanDocument(
     doc: PlanDocument;
     originRef: string;
     title: string;
+    /**
+     * The gate has already been answered for this document, so ingest it
+     * **released** — the one caller is an approved amendment to a plan that is
+     * already running (`src/plans/planAmendment.ts`).
+     *
+     * Writing `awaiting_approval` there would be the failure the amendment gate
+     * exists to prevent, one layer down: it reopens a gate rule `plan-part` had
+     * cleared and stops every part of a live plan for a change an operator has
+     * just said yes to. Defaults to false, so every planner-written document —
+     * both transports — still lands as a proposal.
+     */
+    approved?: boolean;
   },
 ): PlanIngestResult {
   const { doc, originRef, title } = input;
@@ -74,7 +86,11 @@ export function ingestPlanDocument(
   // this row rather than a policy re-read every pulse. Both transports (the
   // `plan.json` drain and `plan_submit`) reach this one function precisely so
   // neither can persist a verdict the other wouldn't.
-  const status: PlanStatus = 'awaiting_approval';
+  //
+  // The exception is a document an operator has *already* approved as an
+  // amendment to a running plan: the gate was answered on the amendment, and
+  // asking again would park the work it was answered about.
+  const status: PlanStatus = input.approved === true ? 'active' : 'awaiting_approval';
 
   const narrative = planNarrative(doc);
   const plan = store.upsertPlan({ originRef, title, status, ...narrative });
@@ -153,5 +169,12 @@ export function ingestPlanDocument(
   // only a caller can hand its refusal back to the author.
   if (doc.watch) store.ingestGoalWatch(originRef, watchCheckInputs(doc.watch));
 
-  return { plan, status, retired: retire.map((p) => p.slug) };
+  // An approved amendment can leave a plan whose parts are all settled — a
+  // correction to a decomposition that has already been delivered — and `active`
+  // would then be a plan nothing will ever finish. The roll-up is the one place
+  // that reading lives, so it is asked rather than re-derived here; it no-ops on
+  // an unreleased plan, which is every other caller.
+  const rolled = input.approved === true ? store.rollUpPlanStatus(plan.id) : null;
+
+  return { plan: rolled ?? plan, status: rolled?.status ?? status, retired: retire.map((p) => p.slug) };
 }

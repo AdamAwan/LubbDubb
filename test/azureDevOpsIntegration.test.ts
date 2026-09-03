@@ -114,6 +114,8 @@ interface Recorded {
   titleSets: Array<{ id: number; title: string }>;
   baseSets: Array<{ id: number; base: string }>;
   deletedBranches: string[];
+  /** Pull requests `abandonPullRequest` was called for — the restart's close. */
+  abandoned: number[];
 }
 
 function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded } {
@@ -144,6 +146,7 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     titleSets: [],
     baseSets: [],
     deletedBranches: [],
+    abandoned: [],
   };
   const api: AzureDevOpsApi = {
     async createPull(input) {
@@ -155,6 +158,9 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     },
     async setPullBase(id, base) {
       recorded.baseSets.push({ id, base });
+    },
+    async abandonPullRequest(pullRequestId) {
+      recorded.abandoned.push(pullRequestId);
     },
     async deleteBranch(branch) {
       recorded.deletedBranches.push(branch);
@@ -296,8 +302,8 @@ function pull(over: Partial<AzPull> = {}): AzPull {
 // --------------------------------------------------------------------------
 
 /** The comment list as the provider now ships it: the threads, folded — see the GitHub twin. */
-const buildUnresolvedComments = (threads: AzThread[], viewer: string): PrComment[] =>
-  threadComments(buildReviewThreads(threads, viewer));
+const buildUnresolvedComments = (threads: AzThread[], ourReplies: ReadonlySet<string>): PrComment[] =>
+  threadComments(buildReviewThreads(threads, ourReplies));
 
 test('stripRef removes the refs/heads/ prefix', () => {
   assert.equal(stripRef('refs/heads/feat/widget'), 'feat/widget');
@@ -538,7 +544,7 @@ test('buildUnresolvedComments: one entry per thread, keyed on the thread id, sys
       ],
     },
   ];
-  const out = buildUnresolvedComments(threads, 'bot@acme.com');
+  const out = buildUnresolvedComments(threads, new Set());
   assert.equal(out.length, 1);
   assert.equal(out[0]!.id, '300');
   assert.equal(out[0]!.author, 'bob@acme.com');
@@ -546,7 +552,7 @@ test('buildUnresolvedComments: one entry per thread, keyed on the thread id, sys
   assert.equal(out[0]!.handled, false);
 });
 
-test('buildUnresolvedComments: handled when the bot authored the latest comment', () => {
+test('buildUnresolvedComments: handled when the latest comment is a reply the harness recorded sending', () => {
   const threads: AzThread[] = [
     {
       id: 300,
@@ -557,14 +563,16 @@ test('buildUnresolvedComments: handled when the bot authored the latest comment'
       ],
     },
   ];
-  assert.equal(buildUnresolvedComments(threads, 'bot@acme.com')[0]!.handled, true);
+  assert.equal(buildUnresolvedComments(threads, new Set(['2']))[0]!.handled, true);
+  // The author is the same string either way — only the row tells the fleet's
+  // reply from the operator's, which is why identity is never consulted.
+  assert.equal(buildUnresolvedComments(threads, new Set())[0]!.handled, false);
 });
 
 test('buildUnresolvedComments: an unanswered thread the operator opened is not handled', () => {
-  // `viewer` is whoever the harness authenticates as, which on a single-operator
-  // deployment is the operator — so a one-comment thread they opened themselves
-  // read as already handled and their review never reached a rule. A thread with
-  // no reply is unanswered, whoever wrote it.
+  // The PAT is the operator's own on a single-operator deployment, so a thread
+  // they opened themselves read as already handled and their review never reached
+  // a rule. Nothing was sent here, so nothing is recorded, so nothing is ours.
   const threads: AzThread[] = [
     {
       id: 300,
@@ -574,7 +582,7 @@ test('buildUnresolvedComments: an unanswered thread the operator opened is not h
       ],
     },
   ];
-  assert.equal(buildUnresolvedComments(threads, 'bot@acme.com')[0]!.handled, false);
+  assert.equal(buildUnresolvedComments(threads, new Set())[0]!.handled, false);
 });
 
 test('buildUnresolvedComments: handled when Azure marks the thread resolved', () => {
@@ -587,7 +595,7 @@ test('buildUnresolvedComments: handled when Azure marks the thread resolved', ()
       ],
     },
   ];
-  assert.equal(buildUnresolvedComments(threads, 'bot@acme.com')[0]!.handled, true);
+  assert.equal(buildUnresolvedComments(threads, new Set())[0]!.handled, true);
 });
 
 test('buildUnresolvedComments: a purely-system thread contributes nothing', () => {
@@ -600,7 +608,7 @@ test('buildUnresolvedComments: a purely-system thread contributes nothing', () =
       ],
     },
   ];
-  assert.deepEqual(buildUnresolvedComments(threads, 'bot@acme.com'), []);
+  assert.deepEqual(buildUnresolvedComments(threads, new Set()), []);
 });
 
 test('mergeStrategyFor maps the domain method onto Azure completion strategies', () => {
@@ -970,6 +978,10 @@ test('a PR that names you as a reviewer is kept by the owner filter and reported
   assert.equal(prs.find((p) => p.number === 7)?.viewerAssignment, undefined);
   assert.equal(prs.find((p) => p.number === 8)?.viewerAssignment, 'reviewer-required');
   assert.equal(prs.find((p) => p.number === 9)?.viewerAssignment, 'reviewer-optional');
+  // And which of them are the fleet's to act on: the filter admits all three,
+  // authorship is what separates them. → `src/prOwnership.ts`
+  assert.equal(prs.find((p) => p.number === 7)?.viewerAuthored, true);
+  assert.equal(prs.find((p) => p.number === 8)?.viewerAuthored, false);
 });
 
 test('an assignment carries who asked, and your own vote is what ends it', async () => {
@@ -1355,6 +1367,17 @@ test('linkWorkItem hangs the pull request off the work item, provider-side', asy
   const res = await issues.linkWorkItem({ number: 101, prNumber: 88 });
   assert.equal(res.ok, true);
   assert.deepEqual(recorded.workItemLinks, [{ id: 101, pullRequestId: 88 }]);
+});
+
+test('closePr abandons a pull request, with no remembered merge commit', async () => {
+  const { api, recorded } = fakeApi();
+  const sc = new AzureDevOpsSourceControlIntegration({ api });
+
+  // Unlike `mergePr`, which refuses without the head commit a snapshot recorded:
+  // Azure asks for one only to *complete* a pull request, so an abandon works on
+  // one this process never read.
+  assert.deepEqual(await sc.closePr({ prNumber: 88 }), { ok: true, ref: 'pr:88' });
+  assert.deepEqual(recorded.abandoned, [88]);
 });
 
 test('deleteBranch reaps a merged branch, and an already-absent one is still a success', async () => {

@@ -8,8 +8,7 @@ import type {
   HumanTaskInput,
   IssueConclusion,
   IssueConclusionVerdict,
-  KnowledgeFact,
-  KnowledgeGraduation,
+  ObstacleBlock,
   PadDecision,
   PartOutcomeKind,
   PlanPart,
@@ -29,11 +28,9 @@ import type { AssessmentVerdict } from '../assessment.js';
 import type { GoalAppraisalVerdictName } from '../goalAppraisal.js';
 import type { AreaPathTree } from '../../intake/placement.js';
 import type { RemedySubmission } from '../../remedies/remedies.js';
-import type { FactContradiction, FactProposal } from '../../knowledge/knowledge.js';
 import type { FeatureSummaryInput } from '../../summaries/featureSummary.js';
 import type { ReviewPackAuthor } from '../../reviewPacks/author.js';
 import type { ReviewPackChecker } from '../../reviewPacks/checker.js';
-import type { FactAgreementOutcome, FactContradictionOutcome, FactProposalOutcome } from '../../store/knowledge.js';
 import { issueOrigin, originIssueNumber } from '../../plans/planning.js';
 import { type McpTool, toolJson, type ToolCallResult } from '../protocol.js';
 
@@ -41,7 +38,7 @@ import { type McpTool, toolJson, type ToolCallResult } from '../protocol.js';
  * What the tool layer needs from the fleet. Narrow on purpose, and every method
  * is here for the same reason: each has a fleet-side transition or event that
  * must not be bypassed. `ask` goes through the *same* park the WAITING sentinel
- * drives; `proposeFact` and `recordProgress` persist and then emit, so the
+ * drives; `recordProgress` persists and then emits, so the
  * cockpit hears the moment it happens rather than on the next pulse.
  */
 export interface AgentToolTarget {
@@ -56,21 +53,18 @@ export interface AgentToolTarget {
    * because the harness files it and a bug is created as a different type and
    * linked back to its story (issue #394).
    */
-  filingTarget(
-    agentId: string,
-  ): { ok: true; kind: 'claim' | 'bug'; storyNumber: number | null } | { ok: false; error: string };
-  linkTicket(
-    agentId: string,
-    ticketRef: string,
-  ):
-    | { ok: true; graduation: KnowledgeGraduation; bug?: undefined }
-    | { ok: true; bug: BugFiling; graduation?: undefined }
-    | { ok: false; error: string };
+  filingTarget(agentId: string): { ok: true; kind: 'bug'; storyNumber: number | null } | { ok: false; error: string };
+  linkTicket(agentId: string, ticketRef: string): { ok: true; bug: BugFiling } | { ok: false; error: string };
   recordConclusion(
     agentId: string,
     verdict: IssueConclusionVerdict,
     note: string,
   ): { ok: true; conclusion: IssueConclusion } | { ok: false; error: string };
+  recordBlocked(
+    agentId: string,
+    obstacleId: string,
+    note: string,
+  ): { ok: true; block: ObstacleBlock } | { ok: false; error: string };
   recordAssessment(
     agentId: string,
     verdict: AssessmentVerdict,
@@ -138,36 +132,11 @@ export interface AgentToolTarget {
     agentId: string,
     summary: string,
     document: string,
-    lessons: string[],
-  ): { ok: true; issueOrigin: string; lessonsFiled: number } | { ok: false; error: string };
+  ): { ok: true; issueOrigin: string } | { ok: false; error: string };
   recordRemedy(
     agentId: string,
     submission: RemedySubmission,
-  ): { ok: true; remedy: Remedy; raised: FactProposalOutcome | null } | { ok: false; error: string };
-  proposeFact(
-    agentId: string,
-    proposal: FactProposal,
-  ): { ok: true; outcome: FactProposalOutcome } | { ok: false; error: string };
-  agreeWithFact(
-    agentId: string,
-    factId: string,
-    evidence: string,
-  ): { ok: true; outcome: FactAgreementOutcome } | { ok: false; error: string };
-  contradictFact(
-    agentId: string,
-    contradiction: FactContradiction,
-  ): { ok: true; outcome: FactContradictionOutcome } | { ok: false; error: string };
-  askKnowledge(
-    agentId: string,
-    query: { question: string | null; scopes: readonly string[] | null },
-  ): { ok: true; scopes: string[]; facts: AnsweredFact[] } | { ok: false; error: string };
-}
-
-/** One fact as an asking agent reads it: the claim, and enough provenance to weigh it. */
-export interface AnsweredFact {
-  fact: KnowledgeFact;
-  /** How many independent goals have said they saw it. */
-  corroborations: number;
+  ): { ok: true; remedy: Remedy } | { ok: false; error: string };
 }
 
 export interface McpToolDeps {
@@ -274,6 +243,15 @@ export interface McpToolDeps {
    * and same floor as {@link McpToolDeps.reviewPacks}.
    */
   reviewPackChecker?: Pick<ReviewPackChecker, 'submit'>;
+  /**
+   * The checkout an obstacle's `path` key is validated against — `config.repoRoot`.
+   *
+   * Optional for {@link McpToolDeps.openPr}'s reason and with a floor of the same
+   * shape: unwired, no path key validates, so those keys are **dropped and the
+   * report is kept**. A refusal an agent cannot satisfy is a report that was never
+   * filed, and that is the one loss the board cannot recover from.
+   */
+  repoRoot?: string;
   errors?: ErrorRecorder;
 }
 

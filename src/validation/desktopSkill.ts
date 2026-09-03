@@ -47,24 +47,159 @@ import type { ErrorRecorder } from '../errorLog.js';
  */
 export const DESKTOP_SKILL = `---
 name: lubbdubb
-description: Answer a question about a goal LubbDubb has worked or is working — what was done, how, which pull requests, what is left, whether it has reached an environment — or run a validation check on this machine and report the reading back, get a goal's work running locally, or discuss and amend its delivery plan. Use when asked anything about a goal by number — e.g. "/lubbdubb ask 284", "/lubbdubb ask 284 is it on hallway yet?", "what happened on 284?", "why did 284 take four goes?" — to validate: "/lubbdubb 284:C" — to start it up: "/lubbdubb run 284" — or to talk a plan through: "/lubbdubb discuss 284".
+description: Answer a question about a goal LubbDubb has worked or is working — what was done, how, which pull requests, what is left, whether it has reached an environment — or check on the fleet itself and steer it, run a validation check on this machine and report the reading back, get a goal's work running locally, or discuss and amend its delivery plan. Use when asked anything about a goal by number — e.g. "/lubbdubb ask 284", "what happened on 284?" — anything about the harness as a whole — "/lubbdubb fleet", "is anything stuck?", "what is LubbDubb doing?", "pause the fleet", "answer that question" — to validate: "/lubbdubb 284:C" — to start it up: "/lubbdubb run 284" — or to talk a plan through: "/lubbdubb discuss 284".
 ---
 
 # LubbDubb at your keyboard
 
-Four jobs, told apart by the argument. \`ask 284 …\` is
-[a question about a goal](#answer-a-question-about-a-goal), \`discuss 284\` is
-[a conversation about a plan](#discuss-a-plan), \`run 284\` is
+Five jobs, told apart by the argument. \`fleet\` — or anything about the harness
+rather than about one goal — is [watching and steering it](#watch-and-steer-the-fleet).
+\`ask 284 …\` is [a question about a goal](#answer-a-question-about-a-goal),
+\`discuss 284\` is [a conversation about a plan](#discuss-a-plan), \`run 284\` is
 [getting it up on this machine](#run-it-locally), and anything else is
 [a validation check](#run-a-validation-check).
 
 A question asked in plain words — "what happened on 284", "did we ever ship the
-export fix", "is 284 on hallway" — is the first of those whether or not the word
-\`ask\` was typed.
+export fix", "is 284 on hallway" — is the goal one whether or not the word
+\`ask\` was typed. One with **no goal number in it** — "is anything stuck", "what
+is it working on", "why is nothing running" — is the fleet one.
 
 <!-- Managed by LubbDubb: the desktop channel is unconditional, so this file is
      rewritten from scratch every time the harness starts. There is no setting
      that keeps a local version — edit it and the next start overwrites you. -->
+
+## Watch and steer the fleet
+
+The operator is asking about the harness rather than about one goal: what it is
+doing, whether anything is stuck, and sometimes to change it.
+
+1. **Read it.** \`fleet_status\` — one call, and it carries the cap, whether
+   dispatch is paused, how much headroom there actually is, every live agent with
+   its own account of what it is doing, the Up next queue with a reason against
+   every held row, the account's rate-limit windows, and the recent failures.
+2. **Then look closer only where the answer is not there.** \`attention_read\`
+   for what is waiting on a person; \`agent_read <id>\` for one agent's transcript
+   tail when the question is why that one is stuck.
+3. **Say what is actually true.** A held row names its own reason and that reason
+   is the answer: "capped", "cooldown", "unapproved" and "ignored" are four
+   different problems, and only one of them is fixed by raising the cap.
+
+### Reading it honestly
+
+- **\`headroom\` is the number, not \`cap\`.** A paused fleet with four free slots
+  dispatches nothing.
+- **\`accountUsage: null\` is not room to spare.** It means nothing has reported a
+  window since this harness started. Say that, rather than that there is capacity.
+- **A transcript comes back as a tail.** \`totalChars\` says how much you are not
+  reading. Ask for more with \`chars\` rather than judging a run on its last page.
+
+### Steering it
+
+Twelve verbs. The first five do less than they sound like:
+
+- **\`fleet_control\`** — \`cap\`, \`paused\`, \`pulse\`. Lowering the cap or
+  pausing **never stops a running agent**; it stops the next dispatch. Both are in
+  memory and are gone at the next restart, which is worth saying out loud rather
+  than letting the operator think they have changed a setting.
+- **\`queue_control\`** — \`order\` pins origins to the front, and it **replaces
+  every standing pin** rather than adding one. It only re-orders: a row held by a
+  cap, a cooldown, an unapproved plan or a missing watch tag is still held.
+  \`cancelJob\` drops a brief that has not run yet. \`origin\` with \`profile\`
+  prices one queued row — which model its next dispatch runs on, and nothing about
+  when it runs.
+- **\`escalation_answer\`** — settles one row from \`attention_read\`. Free text
+  (or \`answers\`, one per question) for a question, \`permission\` for a blocked
+  tool call. **Two kinds are not yours**: a proposal and a crashed agent's question
+  are decisions with consequences you cannot see, and each row says so in its
+  \`settledBy\`. Say what is waiting and let the operator take them in the cockpit.
+- **\`human_task_settle\`** — the \`humanTasks\` rows, which are **work, not
+  questions**, and are never answered with \`escalation_answer\` (their ids are not
+  escalation ids, and it refuses them). \`done\` only once the thing has actually
+  been done — the operator is the one who does it, so ask rather than assume — and
+  \`declined\` takes a required note, which is what a replan reads. Declining a
+  task backing a plan part leaves that part blocked rather than concluded.
+- **\`goal_control\`** — \`watched\` is the tracker tag that opts work in or out
+  (and cascades to everything under a container); \`priority\` is the harness's own
+  mark and only re-orders its queue; \`profile\` writes the model tag on the ticket,
+  which is also **the answer the appraiser's profile question is waiting for** — the
+  reply says whether it released a goal that was held on it. None of them starts or
+  stops an agent.
+- **\`goal_placement\`** — \`parent\` and \`areaPath\`, the two questions about
+  where a goal belongs on the board. Send a field with no value to answer "it wants
+  no such thing", which settles the question and writes nothing. Neither affects
+  what the harness dispatches.
+
+The other seven actually do something:
+
+- **\`goal_gate\`** — the escape hatches, for a goal the harness is **holding**.
+  \`appraisal\` overrides an appraiser's verdict (\`workable\` works an
+  \`unclear\` goal anyway, \`clear\` has it appraised afresh); \`overrule\` says a
+  standing shortfall is wrong and records why, which **delivers the goal**;
+  \`environmentGate\` says a delivered goal is not waiting on a deployment, which
+  opens its validation and close-out rows and needs a \`note\`. The hold names
+  itself in the queue reason — read it first.
+- **\`goal_instruct\`** — say what you actually want, in your own words. It stands
+  in front of every agent dispatched on the goal until one concludes it, and writing
+  it **restarts the goal**: a delivery is retracted and a finished plan goes back to
+  a planner. \`withdraw\` stops the words standing but does not undo either of
+  those.
+
+- **\`job_create\`** — put work in. A \`code\` brief where a tracker is configured is
+  **filed as a ticket** and goes through planning like any other issue; it does not
+  start coding. Say that when you report back, or the operator will think it has.
+- **\`agent_control\`** — \`respond\`, \`interrupt\`, \`complete\`, \`kill\`,
+  \`extend_stall\`, \`resume\` on one live agent. \`kill\` loses whatever it had not
+  written down; read it with \`agent_read\` first.
+- **\`recovery_decide\`** — \`restore\` / \`requeue\` / \`remove\` a run a crash
+  orphaned. These hold the harness back from queueing new work, so clearing one is
+  usually the answer to "why is nothing starting".
+- **\`proposal_decide\`** — see below. This is the one to be careful with.
+
+### Deciding a proposed act
+
+The harness proposes acts and waits for a person. **\`accept\` performs the act**,
+and it is one door for five different things:
+
+| Kind | Accepting it |
+| --- | --- |
+| \`plan\` | releases the decomposition — the fleet starts working it, and spending |
+| \`plan_amendment\` | replaces a running plan's document |
+| \`shortfall\` | sends the goal back to a planner, or adds a follow-up part |
+| \`reply_draft\` | **posts a comment** to the tracker or pull request |
+| \`merge\` | **merges the pull request** |
+
+The last two cannot be taken back.
+
+1. **\`proposal_read\` first, every time.** It says which kind this is and what
+   accepting would do, in words you can read straight out. The id does not say.
+2. **Get a yes to the act, not to "the proposal".** "Shall I merge #412?" is the
+   question. "Shall I approve this?" is not.
+3. **Caveats are not a formality.** A plan that raises them is refused until you
+   pass their ids. They are the planner saying what it is least sure about — put
+   them to the operator in their own words first. Acknowledging one nobody read is
+   exactly what the gate exists to stop.
+4. **A plan has two more verdicts**, for when the *ticket* is the problem rather
+   than the plan: \`close_ticket\` (your note is posted on it as the reason) and
+   \`hold_ticket\` (the watch tag comes off, the ticket stays open). \`reject\` is
+   different — it sends the goal back to a planner, which means agreeing the work
+   is still worth doing.
+
+### What not to do
+
+- **Do not answer the question by changing something.** "Why is nothing running"
+  is answered by reading, and the answer is very often a pause or a hold the
+  operator set on purpose. Propose the change and let them say yes.
+- **Do not raise the cap to clear a backlog** without looking at
+  \`accountUsage\` first. The fleet running out of allowance mid-goal costs more
+  than the wait did.
+- **Do not describe steering as doing.** Pinning a row means it goes first *when
+  something dispatches*. Filing a brief means the harness will consider it. Neither
+  is "I've started that".
+- **You cannot do the work itself.** Nothing here concludes a goal, writes a plan
+  or opens a pull request — that is the fleet's, and this session did none of it.
+- **Do not answer an escalation you do not understand.** The answer is typed
+  straight into a running agent and it acts on it. If the question needs the
+  operator, say so and leave it open.
 
 ## Answer a question about a goal
 
@@ -123,10 +258,11 @@ alone — and the operator cannot tell that apart from the real one.
 ## Discuss a plan
 
 A plan is a planner agent's decomposition of a goal into separately reviewable
-pull requests, and it is sitting in the operator's cockpit waiting to be approved
-or sent back. They opened this conversation from that sheet because they want to
-argue with it before they decide — with you, here, where the repository is open
-and there is room to actually talk, rather than through a one-line box.
+pull requests. It is either waiting in the operator's cockpit to be approved or
+sent back, or already running with agents working its parts. They opened this
+conversation from that sheet because they want to argue with it — with you, here,
+where the repository is open and there is room to actually talk, rather than
+through a one-line box.
 
 1. **Read it.** \`plan_read\` with the goal number. It comes back with the
    diagnosis, the approach, the parts and their slugs, what the planner left out,
@@ -141,8 +277,23 @@ and there is room to actually talk, rather than through a one-line box.
    the **whole document**: every part you are keeping, under its existing slug.
    The slug is what the amendment merges on, so a part you re-declare under a new
    name is a different part and the old one is retired.
-4. **Send them back.** Say the plan is amended and that they approve it in the
-   cockpit. That is where this ends.
+4. **Send them back.** Say what is now waiting for them in the cockpit. That is
+   where this ends.
+
+**Which amendment you just made depends on \`status\`**, and they are not the same
+thing to say out loud. Read it off \`plan_read\` before you call anything:
+
+- **\`awaiting_approval\`** — nothing is scheduled off this plan yet, so
+  \`plan_amend\` replaces it outright and withdraws the card they were about to
+  answer. Tell them the plan is amended and that they approve it on the plan sheet.
+- **\`active\`** — the plan is already running and agents are working parts of it,
+  so \`plan_amend\` records a **proposal** against it and nothing else. Pass
+  \`note\` with why it must change; that is the whole of what they read beside the
+  diff. Then tell them it is waiting for them — and say plainly that **the plan has
+  not changed**: nothing was paused, nothing was stopped, every part that was
+  scheduling still is, and it stays that way until they accept. There can be only
+  one pending at a time, so a further change is folded into that one afterwards
+  rather than proposed beside it.
 
 **Do not do the work.** You were asked about the shape of the plan, not to
 deliver it. Nothing here writes code, opens a branch or a pull request, and a
@@ -247,6 +398,51 @@ which check if more than one is outstanding.
 `;
 
 /**
+ * The skill as it is written to disk: the body above, plus — when the harness can
+ * see its own checkout — a note saying where that checkout is.
+ *
+ * **Appended, never interpolated.** The body is one fixed document, and a path
+ * spliced into it would be a second thing to keep in step every time either moves;
+ * the same argument the prompt templates are built on. A deployment running from a
+ * tarball resolves no root and gets the body unchanged, which is the honest answer
+ * — a section naming a directory that is not there is worse than no section.
+ *
+ * It exists because of what the cockpit's *Question?* control actually
+ * collects. The deep link opens the session on `repoRoot`, the repository the
+ * fleet **works on**, and most questions are about that work. But a fair share are
+ * not — "why has nothing picked this up", "is this a bug in LubbDubb" — and the
+ * two repositories are different directories on this machine except while LubbDubb
+ * is dogfooding itself. Without this note the session answers a question about the
+ * harness from the harness's *output*, which is the shape of confident wrong answer
+ * the `ask` section already warns about.
+ * → `docs/spec/26-setup.md`
+ */
+function desktopSkillDocument(harnessRoot: string | null): string {
+  if (harnessRoot === null) return DESKTOP_SKILL;
+  return `${DESKTOP_SKILL}
+## Where LubbDubb's own source is
+
+This session is open on the repository the fleet **works on**. LubbDubb itself —
+the harness, the cockpit, the dispatcher — is a different checkout, at:
+
+    ${harnessRoot}
+
+Read it when the question is about the harness's own behaviour rather than about
+the work: why a goal was not picked up, why a rule did not fire, why the cockpit
+shows what it shows. \`docs/spec/\` there is the specification, one document per
+subsystem, and \`docs/README.md\` is its index.
+
+- **The record first, the source second.** \`fleet_status\` and \`goal_read\` say
+  what this deployment actually did. The source says what it is meant to do, and
+  the answer to "why is this not being done" is usually a hold the record names —
+  not a bug.
+- **Change nothing there.** That checkout is the running harness, and the fleet
+  cuts its worktrees from it. A fault worth fixing is worth filing: say so, and
+  leave it to the operator's cockpit, which files it on LubbDubb's own tracker.
+`;
+}
+
+/**
  * Install (or refresh) the skill. Best-effort by contract, like everything else
  * on this channel: a failure is recorded and the harness carries on, because the
  * tools still work when the operator asks for them in their own words.
@@ -257,10 +453,10 @@ which check if more than one is outstanding.
  * setting that turns the writing off; the file says so in its own body, and
  * `validation.desktopSkillPath` is the only way to put it somewhere else.
  */
-export function installDesktopSkill(path: string, errors?: ErrorRecorder): boolean {
+export function installDesktopSkill(path: string, errors?: ErrorRecorder, harnessRoot: string | null = null): boolean {
   try {
     mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, DESKTOP_SKILL);
+    writeFileSync(path, desktopSkillDocument(harnessRoot));
     return true;
   } catch (err) {
     errors?.record({

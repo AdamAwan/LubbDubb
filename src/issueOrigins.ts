@@ -89,3 +89,23 @@ export function issueOriginRole(issueNumber: number, originRef: string | null): 
   if (DELIBERATION_SUFFIXES.includes(suffix)) return 'deliberation';
   return 'unrecognised';
 }
+
+/**
+ * The obstacle a dispatch is a repair for, or null for any other origin.
+ *
+ * Here rather than beside the rule that raises it because this module is where an
+ * origin is **classified**, and an origin nothing classifies is one that reads as
+ * `unrecognised` wherever it is asked about: it stops expanding under a goal's
+ * priority flag, and its spend files under "other". Neither is red, which is the
+ * whole reason the classification lives in one place instead of in each predicate.
+ *
+ * `obstacle:<id>` is not under the `issue:<n>` subtree and so is not one of
+ * {@link issueOriginRole}'s answers — it names no issue. It is a second, tiny
+ * vocabulary rather than a member of the first, and the callers that ask about
+ * both ask both.
+ * → `docs/spec/27-obstacles.md#ownership`
+ */
+export function obstacleOriginId(originRef: string | null): string | null {
+  const match = /^obstacle:([A-Za-z0-9_-]+)$/.exec(originRef ?? '');
+  return match ? match[1]! : null;
+}

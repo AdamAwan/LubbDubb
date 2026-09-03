@@ -19,6 +19,7 @@ const { buildDemoState } = await import('../web/src/demo/fixtures.js');
 const { ConsoleRoot } = await import('../web/src/console/ConsoleRoot.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
 const { goalIssue } = await import('../web/src/view/goalPage.js');
+const { hasPrPage } = await import('../web/src/view/prPage.js');
 
 const actions = new Proxy({}, { get: () => () => undefined }) as CockpitActions;
 
@@ -83,6 +84,8 @@ const render = (v: CockpitView): string =>
       refUrls: v.state.refUrls,
       openGoal: () => undefined,
       hasGoal: (ref: string) => goalIssue(v.state, ref) !== undefined,
+      openPr: () => undefined,
+      hasPr: (n: number) => hasPrPage(v.state, n),
       children: createElement(ConsoleRoot, { view: v, actions }),
     }),
   );

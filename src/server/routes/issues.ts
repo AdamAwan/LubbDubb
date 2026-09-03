@@ -4,17 +4,19 @@ import { issueConclusionOrigin } from '../../issueConclusion.js';
 import { bugTicketFields } from '../../bugFiling.js';
 import { trackerCoordinates } from '../../mcp/findings.js';
 import { dedupeCandidates, renderCandidates } from '../../tickets/candidates.js';
-import { MAX_INSTRUCTION } from '../../goalInstructions.js';
+import { MAX_INSTRUCTION, withdrawGoalInstruction, writeGoalInstruction } from '../../goalInstructions.js';
 import { goalFingerprint } from '../../intake/appraisal.js';
 import { ShortfallBody } from '../../delivery/shortfall.js';
+import { overruleShortfall } from '../../delivery/overrule.js';
+import { applyProfilePin } from '../../intake/profilePin.js';
+import { settlePlacement } from '../../intake/placementSettle.js';
 import { GateReleaseBody } from '../../environments/arrival.js';
 import { validationHeadline } from '../../delivery/closeOut.js';
 import { goalValidation } from '../../validation/goal.js';
 import { clearGoalWork } from '../../floor/endRun.js';
+import { applyIssueWatch } from '../../issueWatch.js';
 import { watchLabelFor } from '../../watchLabels.js';
 import { fleetWorksUpstream, UPSTREAM_REPO } from '../../tickets/upstream.js';
-import { modelLabelsFor } from '../../modelLabels.js';
-import { watchCascadeTargets } from '../../issueRelations.js';
 import { checked, IssueNumberParams, optionalText, requiredBoolean, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
 import type { FilingTargetProbe, GoalAgentsPayload, IssueFiled } from '../../wire.js';
@@ -92,52 +94,32 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     checked({ params: IssueNumberParams, body: WatchBody }, async ({ params, body, reply }) => {
       const { number: issueNumber } = params;
       const { watched } = body;
-      const world = store.getWorldBaseline();
-      const issue = world?.issues.find((i) => i.number === issueNumber);
-      // An issue the snapshot does not carry still gets its own tag written — the
-      // toggle must keep working for a world that has aged out — it simply has no
-      // hierarchy to walk.
-      const targets =
-        issue === undefined
-          ? [issueNumber]
-          : watchCascadeTargets(issue, world?.issues ?? [], config.issueContainerTypes);
-
-      const failed: { number: number; message: string }[] = [];
-      for (const target of targets) {
-        try {
-          await connector.setIssueLabel({ number: target, label: watchLabel, present: watched });
-        } catch (err) {
-          const message = (err as Error).message;
-          failed.push({ number: target, message });
-          errors.record({
-            source: 'server',
-            message: `Failed to set the watch tag on #${target} while ${watched ? 'watching' : 'dropping'} #${issueNumber}: ${message}`,
-          });
-        }
-      }
+      // The cascade, the two mirrors and the partial-failure report are one
+      // behaviour shared with the plan back-out and the desktop channel's
+      // `goal_control` — `src/issueWatch.ts` holds it. What stays here is what is
+      // about *this* surface: the broadcast, the cycle, and the shape of the reply.
+      const outcome = await applyIssueWatch(
+        {
+          store,
+          sink: connector,
+          errors,
+          labelPrefix: config.labelPrefix,
+          issueContainerTypes: config.issueContainerTypes,
+        },
+        issueNumber,
+        watched,
+        `while ${watched ? 'watching' : 'dropping'} #${issueNumber}`,
+      );
+      const { targets, failed } = outcome;
 
       // Whatever landed, landed — the world is now different from the one the
       // cockpit is showing even on a partial failure, so it is republished before
       // the refusal rather than after a success only.
-      //
-      // Folded onto the baseline first, and that ordering is the whole of why the
-      // toggle changes under the click: `/api/state` serves the baseline, so a
-      // broadcast ahead of the write just makes the cockpit redraw the old state.
-      // The cycle below cannot be relied on for it either — it coalesces away to
-      // nothing while another is in flight, which is most clicks on a busy fleet.
-      // Only the targets whose write the provider took.
-      const landed = targets.filter((t) => !failed.some((f) => f.number === t));
-      store.patchWorldLabels({ issues: landed, label: watchLabel, present: watched });
-      // And the mirror, which is a *second* reading of the same tag rather than a
-      // copy of the first: the Tickets tab — the one surface with an explicit
-      // Unwatch — draws the toggle and its watch filter from `/api/tickets`, which
-      // is built from `tracker_items` and never from the baseline. Patched here
-      // for the reason the baseline is, and the same one twice over: the sweep
-      // that would otherwise carry it runs last in a cycle, and the cycle below
-      // coalesces away to nothing while another is in flight (issue #417).
-      store.patchTicketLabels({ numbers: landed, label: watchLabel, present: watched });
       hub.broadcast({ type: 'world:changed' });
-      if (failed.length === targets.length) {
+      // `targets` is empty only where the deployment configures no label prefix —
+      // the gate is off, everything is watched, and there was nothing to write. That
+      // is a success with nothing done, not a total failure.
+      if (targets.length > 0 && failed.length === targets.length) {
         return reply.code(400).send({ error: failed[0]?.message ?? 'no watch tag could be written' });
       }
       await harness.runCycle('manual');
@@ -148,7 +130,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
             `#${failed.map((f) => f.number).join(', #')} kept the old tag: ${failed[0]?.message ?? ''}`,
         });
       }
-      return { ok: true, watched, cascaded: targets.length - 1 };
+      return { ok: true, watched, cascaded: Math.max(targets.length - 1, 0) };
     }),
   );
 
@@ -210,23 +192,12 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
 
   // Pin this issue's work to a model profile, or clear the pin (issue #342).
   //
-  // The write is a **label on the ticket**, through the same seam and for the same
-  // reasons as the watch toggle above: it is visible where a human already looks,
-  // it survives the harness's database, and Azure DevOps needs no separate answer.
-  // Writing one profile clears the others, exactly as watch clears ignore — with
-  // more than two names the pair-write becomes a sweep, but the property is the
-  // same one, that the ticket carries at most one answer.
+  // The label sweep, the refusal by name and the settlement of the appraiser's
+  // question are `src/intake/profilePin.ts`'s — shared with the desktop channel's
+  // `goal_control`, whose own copy of half of it left the gate holding goals it
+  // reported as answered. What stays here is what is about *this* surface: the
+  // broadcast, the cycle and the shape of the reply.
   //
-  // It also **settles any standing proposal**, whichever way the operator went.
-  // That is the click the gate is waiting for, and it is why "keep mine" works:
-  // the tag deliberately goes on disagreeing with the appraiser, so a gate that
-  // re-read the disagreement would ask the same question for ever. What is stored
-  // is that the question was answered, never what it was answered with — that is
-  // the tag, and a second copy of it here would be free to drift.
-  //
-  // Unlike a hand-typed label, this cannot name a profile the deployment does not
-  // have: config is refused at boot by name, and this is refused at the boundary
-  // by name, which are the two halves of the same rule.
   // Absent or empty clears the pin, which is the same shape every other optional
   // text body in this file uses — and the right one here: "no profile" is the
   // state a ticket starts in, not a third value.
@@ -235,38 +206,20 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     '/api/issues/:number/profile',
     checked({ params: IssueNumberParams, body: ProfileBody }, async ({ params, body, reply }) => {
       const { number: issueNumber } = params;
-      const wanted = body.profile ?? null;
-      const labels = modelLabelsFor(config.labelPrefix, config.agentModels);
-      if (labels.length === 0)
-        return reply
-          .code(400)
-          .send({ error: 'This deployment configures no agentModels.profiles, so there is nothing to pin to.' });
-      if (wanted !== null && !labels.some((l) => l.profile === wanted))
-        return reply.code(400).send({
-          error: `"${wanted}" is not one of this deployment's profiles: ${labels.map((l) => l.profile).join(', ')}.`,
-        });
-
-      try {
-        for (const { profile, label } of labels)
-          await connector.setIssueLabel({ number: issueNumber, label, present: profile === wanted });
-      } catch (err) {
-        const message = (err as Error).message;
-        errors.record({ source: 'server', message: `Failed to set the model tag on #${issueNumber}: ${message}` });
+      const outcome = await applyProfilePin(
+        { store, sink: connector, errors, labelPrefix: config.labelPrefix, agentModels: config.agentModels },
+        issueNumber,
+        body.profile ?? null,
+      );
+      if (!outcome.ok) {
         // Republished before the refusal for the watch route's reason: a partial
         // sweep has already changed the world the cockpit is showing.
-        hub.broadcast({ type: 'world:changed' });
-        return reply.code(400).send({ error: message });
+        if (outcome.wrote) hub.broadcast({ type: 'world:changed' });
+        return reply.code(400).send({ error: outcome.error });
       }
-
-      // The answer, if a proposal was waiting on one. Keyed on the row's own
-      // fingerprint so it settles the question the operator was actually shown.
-      const origin = issueConclusionOrigin(issueNumber);
-      const appraisal = store.getAppraisal(origin);
-      const answered = appraisal !== null && store.answerAppraisalProfile(origin, appraisal.goalRef);
-
       hub.broadcast({ type: 'world:changed' });
       await harness.runCycle('manual');
-      return { ok: true, profile: wanted, answered };
+      return { ok: true, profile: outcome.profile, answered: outcome.answered };
     }),
   );
 
@@ -297,11 +250,13 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.post(
     '/api/issues/:number/parent',
     checked({ params: IssueNumberParams, body: PlacementBody }, async ({ params, body, reply }) => {
-      const outcome = await settlePlacement(params.number, 'parent', async () => {
+      const outcome = await settlePlacement({ store, connector, errors }, params.number, 'parent', async () => {
         if (body.parent === undefined) return;
         await connector.setWorkItemParent({ number: params.number, parentNumber: body.parent });
       });
       if (!outcome.ok) return reply.code(400).send({ error: outcome.error });
+      hub.broadcast({ type: 'world:changed' });
+      await harness.runCycle('manual');
       return { ok: true, parent: body.parent ?? null, settled: outcome.settled };
     }),
   );
@@ -310,55 +265,16 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.post(
     '/api/issues/:number/area-path',
     checked({ params: IssueNumberParams, body: AreaPathBody }, async ({ params, body, reply }) => {
-      const outcome = await settlePlacement(params.number, 'areaPath', async () => {
+      const outcome = await settlePlacement({ store, connector, errors }, params.number, 'areaPath', async () => {
         if (body.areaPath === undefined) return;
         await connector.setWorkItemAreaPath({ number: params.number, areaPath: body.areaPath });
       });
       if (!outcome.ok) return reply.code(400).send({ error: outcome.error });
+      hub.broadcast({ type: 'world:changed' });
+      await harness.runCycle('manual');
       return { ok: true, areaPath: body.areaPath ?? null, settled: outcome.settled };
     }),
   );
-
-  /**
-   * The half both placement routes share: refuse where nothing can write one, make
-   * the write, stamp the row the operator was looking at, and republish.
-   *
-   * The refusal is asked of the **connector** rather than inferred from the
-   * provider name, exactly as the work-item-state route asks: the one place that
-   * decides is the one the route asks. It is drawn nowhere either — the question
-   * is only ever raised where a proposal exists, and a proposal only exists on a
-   * tracker that has these fields — so this is the floor under that rather than a
-   * case anybody meets.
-   *
-   * The row is stamped **after** a successful write and not before: a stamp on a
-   * write that then failed would settle a question nobody answered, and the
-   * operator would be left with a tracker unchanged and a cockpit that had stopped
-   * asking.
-   */
-  async function settlePlacement(
-    issueNumber: number,
-    field: 'parent' | 'areaPath',
-    write: () => Promise<void>,
-  ): Promise<{ ok: true; settled: boolean } | { ok: false; error: string }> {
-    if (!connector.canPlaceWorkItem())
-      return {
-        ok: false,
-        error: "This deployment's tracker has no parent or area path to set.",
-      };
-    try {
-      await write();
-    } catch (err) {
-      const message = (err as Error).message;
-      errors.record({ source: 'server', message: `Failed to place #${issueNumber}: ${message}` });
-      return { ok: false, error: message };
-    }
-    const origin = issueConclusionOrigin(issueNumber);
-    const appraisal = store.getAppraisal(origin);
-    const settled = appraisal !== null && store.settleAppraisalPlacement(origin, appraisal.goalRef, field);
-    hub.broadcast({ type: 'world:changed' });
-    await harness.runCycle('manual');
-    return { ok: true, settled };
-  }
 
   // Mark this goal a priority, or clear the mark: everything the harness dispatches
   // under it ranks ahead of the natural cross-rule order until it is cleared.
@@ -510,20 +426,14 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.post(
     '/api/issues/:number/instruction',
     checked({ params: IssueNumberParams, body: InstructionBody }, async ({ params, body }) => {
-      const originRef = issueConclusionOrigin(params.number);
-      const instruction = store.addIssueInstruction({ originRef, text: body.text });
-      const conclusion = store.recordIssueConclusion({
-        originRef,
-        verdict: 'more_work',
-        note: 'The operator wrote an instruction for this goal — it is in front of the next agent.',
-        by: 'operator',
-      });
-      // Only a *settled* plan is sent back. One still in flight — `planning`,
-      // `awaiting_approval`, `active` — already has a next dispatch or a decision
-      // the operator owes, and rewinding it would throw away the decomposition
-      // they are in the middle of.
-      const plan = store.getPlanByOrigin(originRef);
-      const replanned = plan?.status === 'complete' ? store.setPlanStatus(plan.id, 'planning') : null;
+      // The row, the `more_work` verdict that retracts a delivery, and the settled
+      // plan sent back to a planner are one act — `writeGoalInstruction`'s, shared
+      // with the desktop channel's `goal_instruct`.
+      const { instruction, conclusion, replanned } = writeGoalInstruction(
+        store,
+        issueConclusionOrigin(params.number),
+        body.text,
+      );
       hub.broadcast({ type: 'world:changed' });
       await harness.runCycle('manual');
       return { ok: true, instruction, conclusion, replanned };
@@ -550,15 +460,10 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.delete(
     '/api/issues/:number/instruction/:id',
     checked({ params: InstructionParams }, async ({ params, reply }) => {
-      if (!store.withdrawInstruction(params.id))
-        return reply.code(409).send({ error: 'no standing instruction with that id' });
-      const originRef = issueConclusionOrigin(params.number);
-      const standing = store.listStandingInstructions(originRef);
-      const conclusion = store.getIssueConclusion(originRef);
-      if (standing.length === 0 && conclusion?.by === 'operator' && conclusion.verdict === 'more_work')
-        store.clearIssueConclusion(originRef);
+      const outcome = withdrawGoalInstruction(store, issueConclusionOrigin(params.number), params.id);
+      if (!outcome.ok) return reply.code(409).send({ error: 'no standing instruction with that id' });
       hub.broadcast({ type: 'world:changed' });
-      return { ok: true, standing: standing.length };
+      return { ok: true, standing: outcome.standing };
     }),
   );
 
@@ -785,14 +690,9 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.post(
     '/api/issues/:number/shortfall/overrule',
     checked({ params: IssueNumberParams, body: OverruleBody }, async ({ params, body, reply }) => {
-      const originRef = issueConclusionOrigin(params.number);
-      // Refused rather than degraded into a plain "mark it delivered": this route
-      // says one specific thing — *that* verdict is wrong — and with nothing
-      // standing there is no verdict to be wrong. An operator who means the plain
-      // thing has `/delivered` for it.
-      if (!store.getShortfall(originRef)) return reply.code(409).send({ error: 'no standing shortfall to overrule' });
-      const delivery = store.recordDelivery({ originRef, summary: body.text, by: 'operator' });
-      const instruction = store.addIssueInstruction({ originRef, text: body.text });
+      const outcome = overruleShortfall(store, issueConclusionOrigin(params.number), body.text);
+      if (!outcome.ok) return reply.code(409).send({ error: outcome.error });
+      const { delivery, instruction } = outcome;
       hub.broadcast({ type: 'world:changed' });
       // The retrospective this releases should be dispatched now rather than on the
       // next heartbeat — the operator has just answered the question that was

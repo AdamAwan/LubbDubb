@@ -8,7 +8,10 @@ import type {
   IssueDelivery,
   IssueShortfall,
   Job,
+  ObstacleBlock,
+  ObstacleStanding,
   Plan,
+  PlanAmendment,
   PlanPart,
   PriorityOverride,
   ProfileOverride,
@@ -31,12 +34,14 @@ import type { DispatchRuleId } from './rules.js';
 export interface DispatchContext {
   world: WorldSnapshot;
   /**
-   * Open PRs carrying no watch tag, hidden from `world.pullRequests`. No rule *acts*
-   * on them — that is the whole of being unwatched — but they are still open, so
-   * gates that must not read "absent from the world" as "merged" (issue pickup, the
-   * work-item state back-off) resolve against these too. Absent/empty = nothing hidden.
+   * Open PRs hidden from `world.pullRequests` — the ones carrying no watch tag, and
+   * the ones a colleague opened (`src/prOwnership.ts`). No rule *acts* on either:
+   * that is the whole of being unwatched, and the whole of the fleet staying off
+   * another person's pull request. But they are still open, so gates that must not
+   * read "absent from the world" as "merged" (issue pickup, the work-item state
+   * back-off) resolve against these too. Absent/empty = nothing hidden.
    */
-  unwatchedPrs?: PullRequest[];
+  hiddenPrs?: PullRequest[];
   /**
    * Which of `world.issues` are **retained runs** rather than the tracker's own
    * answer (issue #234): a goal the harness has worked, whose ticket the tracker
@@ -133,6 +138,13 @@ export interface DispatchContext {
    * that became ready during the pulse is dispatchable in the same pulse.
    */
   planParts?: PlanPart[];
+  /**
+   * Changes somebody has proposed to plans that are already running, still
+   * waiting on an operator (`plan_amendments`). Rule `plan-amendment` is the only
+   * reader; a plan with none — which is nearly all of them, nearly all the time —
+   * costs the rule one skipped loop. Absent/empty means nobody has proposed one.
+   */
+  planAmendments?: PlanAmendment[];
   /**
    * Every plan's validation checks — how anyone checks the *goal* was met. Rule
    * `validate-check` is the only reader, and it reads exactly two things off a
@@ -251,6 +263,24 @@ export interface DispatchContext {
    * been written, which holds nothing and summarises every Feature once.
    */
   featureSummaryKeys?: { originRef: string; standingKey: string }[];
+  /**
+   * The obstacle board — every row with its keys, its voice count and the goals
+   * that reported it (`Store.obstacleBoard`).
+   *
+   * Read by rule `obstacle-repair`, which is the one rule this subsystem has, and
+   * by the priority expansion. Absent/empty means the board is empty or nothing
+   * wired it, and then no repair is ever proposed — the safe absence: the fleet
+   * works around obstacles, which is what it did before this existed.
+   */
+  obstacles?: ObstacleStanding[];
+  /**
+   * The goals parked behind an obstacle — the `blocked` verdict's rows
+   * (`Store.listObstacleBlocks`). **This gates pickup**: an issue whose block still
+   * stands is not eligible for the funnel, exactly as a delivered one is not.
+   * Absent/empty means nothing is parked, which is every deployment until an agent
+   * concludes `blocked`.
+   */
+  obstacleBlocks?: ObstacleBlock[];
   /** How many more agents may be started this cycle (concurrency headroom). */
   agentHeadroom: number;
   /** Recent audit decisions, so a persistent PR signal isn't re-notified to an agent every cycle. */

@@ -16,8 +16,9 @@ import { liveParts, partBranch, partSettled } from './parts.js';
  * question in "Needs you", and no route out.
  *
  * Two separate things were missing and they are kept separate here: a way to
- * *notice* ({@link planIsWedged}) and a way to *warn before it happens*
- * ({@link planApprovalWarnings}). The way out is Replan, on the plan sheet, which
+ * *notice* ({@link planIsWedged}) and a way to *warn before it happens* — the
+ * approval caveats in `src/plans/planCaveats.ts`, which both of the readings below
+ * feed. The way out is Replan, on the plan sheet, which
  * is the way out of every plan that is wrong for any other reason too.
  *
  * ## What is deliberately not here
@@ -100,7 +101,7 @@ export function planIsWedged(parts: PlanPart[]): boolean {
  * the other. Deduplicated, because a collision writes the same sentence onto every
  * part it blocks.
  */
-function wedgeReasons(parts: PlanPart[]): string[] {
+export function wedgeReasons(parts: PlanPart[]): string[] {
   const seen = new Set<string>();
   for (const part of liveParts(parts)) if (part.blockedReason) seen.add(part.blockedReason);
   return [...seen];
@@ -116,7 +117,7 @@ function wedgeReasons(parts: PlanPart[]): string[] {
  * again when a part has claimed it — which is the ordinary case for a plan that is
  * working, where the sticky link points at whichever part opened last.
  */
-function unclaimedIssuePrs(issue: Issue, parts: PlanPart[], openPrs: PullRequest[]): PullRequest[] {
+export function unclaimedIssuePrs(issue: Issue, parts: PlanPart[], openPrs: PullRequest[]): PullRequest[] {
   const flat = issueBranch(issue.number);
   const live = liveParts(parts);
   const claimed = (pr: PullRequest): boolean =>
@@ -127,42 +128,10 @@ function unclaimedIssuePrs(issue: Issue, parts: PlanPart[], openPrs: PullRequest
 }
 
 /**
- * What an operator should know *before* releasing a plan — appended to the
- * approval ask, never interpolated into it.
- *
- * Appending is the rule the rejection note, the outstanding-work note and
- * `ciFailureNote` all follow, and for the same reason: `plan-approval` is
- * operator-overridable and `loadPromptTemplates` rejects only *unknown*
- * placeholders, so a `{warnings}` token would be silently dropped by exactly the
- * deployments that customised most — losing the warning on the installs most
- * likely to need it. Appending has no fallback to get wrong.
- *
- * It **warns and does not block**. Refusing to approve would put a git fact in
- * front of a judgement about *shape*: the decomposition may be exactly right, and
- * the branch is one command away from being gone, so a refusal would read as
- * permanent for a transient condition — and it would leave the operator's only
- * exit being a refusal, which is the opposite verdict to the one they were giving.
- *
- * Empty when there is nothing to say, so nothing is appended at all.
- */
-export function planApprovalWarnings(issue: Issue, parts: PlanPart[], openPrs: PullRequest[]): string {
-  const lines: string[] = [];
-  for (const reason of wedgeReasons(parts)) lines.push(`- Its parts are already blocked and cannot be cut. ${reason}`);
-  for (const pr of unclaimedIssuePrs(issue, parts, openPrs)) {
-    lines.push(
-      `- PR #${pr.number} ("${pr.title}", branch ${pr.branch}) is open for this issue and belongs to no part of ` +
-        `this plan. Approving does not close it, hand it to a part, or count it towards the plan — nothing here ` +
-        `knows which part, if any, it satisfies.`,
-    );
-  }
-  return lines.length === 0 ? '' : `\n\nBefore you decide:\n\n${lines.join('\n')}`;
-}
-
-/**
  * The question put to a human once a released plan turns out to be going nowhere.
  *
  * It names the unclaimed pull request too, and for the reason the whole escalation
- * exists: {@link planApprovalWarnings} already said it, but approval can be days
+ * exists: the approval caveats already said it, but approval can be days
  * behind the moment the operator is standing in front of the wedge, and "clear
  * what is blocking the parts" is unfollowable while a PR holds the branch open.
  * The one thing that is not said is which part the PR belongs to — see the header:

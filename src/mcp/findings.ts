@@ -4,10 +4,8 @@
  *
  * What used to be here — the four finding kinds, the three-field validation, and
  * the prompts a promoted or filed finding was worked from — went with the store it
- * belonged to. There is one claim store now
- * (`docs/spec/27-knowledge.md#what-the-three-stores-became`), so the validation is
- * the intake's, and what a claim becomes when an operator sends it somewhere is
- * `src/knowledge/graduation.ts`.
+ * belonged to, and that store has since gone too: the one door is `raise`, and what
+ * it files is a row on the obstacle board (`docs/spec/27-obstacles.md#the-intake`).
  *
  * The file keeps its name because both survivors have five callers between them
  * across the routes, the snapshot and the tool channel, and a rename is a diff

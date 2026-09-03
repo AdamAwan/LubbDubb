@@ -43,6 +43,8 @@ function draw(nodes: WorkNode[], refUrls: Record<string, string> = {}): string {
       refUrls,
       openGoal: () => undefined,
       hasGoal: () => false,
+      openPr: () => undefined,
+      hasPr: () => false,
       children: nodes.map((n) => createElement(WorkRow, { key: n.ref, node: n, nodes, now: Date.parse(n.lastSeenAt) })),
     }),
   );

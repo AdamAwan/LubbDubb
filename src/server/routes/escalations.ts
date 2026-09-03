@@ -167,11 +167,29 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   // it would have used had auto-send been on — this is the wire between "approve"
   // and "the approved thing happens" that issue #109 found missing. The verdict
   // transition is one-way, so a double-click merges once and the second call 409s.
+  //
+  // `acknowledged` is what the operator ticked. A plan that raises caveats
+  // (`src/plans/planCaveats.ts`) is not released until the verdict names each of
+  // them, and the refusal is a 400 carrying what is still unticked — the desk asks
+  // before the transition, so the proposal is still pending and the click can
+  // simply be made again. Absent means none were ticked, which is the right
+  // reading of an older client: it releases a plan that raises nothing and refuses
+  // one that does, rather than waving through the case the gate exists for.
+  const AcceptBody = NoteBody.extend({
+    acknowledged: z
+      .array(z.string().min(1), { invalid_type_error: 'acknowledged must be an array of caveat ids' })
+      .optional(),
+  });
   app.post(
     '/api/proposals/:id/accept',
-    checked({ params: IdParams, body: NoteBody }, async ({ params, body, reply }) => {
-      const result = await proposals.accept(params.id, body.note);
+    checked({ params: IdParams, body: AcceptBody }, async ({ params, body, reply }) => {
+      const result = await proposals.accept(params.id, body.note, body.acknowledged ?? []);
       if (!result) return reply.code(409).send({ error: 'proposal not found or already decided' });
+      if ('unacknowledged' in result)
+        return reply.code(400).send({
+          error: `this plan raises ${result.unacknowledged.length} thing(s) to acknowledge before it can be approved`,
+          unacknowledged: result.unacknowledged,
+        });
       hub.broadcast({ type: 'world:changed' });
       return { ok: result.outcome !== 'failed', ...result };
     }),

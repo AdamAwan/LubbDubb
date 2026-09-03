@@ -363,6 +363,7 @@ function relationApi(
     createPull: unused,
     setPullTitle: unused,
     setPullBase: unused,
+    abandonPullRequest: unused,
     deleteBranch: unused,
     getBuildTimeline: unused,
     requeuePolicyEvaluation: unused,

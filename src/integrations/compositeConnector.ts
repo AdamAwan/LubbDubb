@@ -9,6 +9,7 @@ import type {
   IssueLabelInput,
   PrBaseInput,
   PrBaseUpdateInput,
+  PrCloseInput,
   PrCreateInput,
   PrLabelInput,
   PrMergeInput,
@@ -37,6 +38,7 @@ import {
   isIssueLabelCapable,
   isPrBaseCapable,
   isPrBaseUpdateCapable,
+  isPrCloseCapable,
   isPrCreateCapable,
   isPrLabelCapable,
   isPrMergeCapable,
@@ -197,6 +199,22 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
     const handler = this.integrations.find(isPrMergeCapable);
     if (!handler) throw new Error('no integration can merge PRs (no sourceControl provider is PrMergeCapable)');
     return handler.mergePr(input);
+  }
+
+  canClosePr(): boolean {
+    return this.integrations.some(isPrCloseCapable);
+  }
+
+  /**
+   * Close a pull request without merging it. Throws where nothing serves it,
+   * exactly as {@link closeIssue} does and for its reason: the one caller asks
+   * {@link canClosePr} first and refuses the whole act, so reaching here with no
+   * handler is a wiring fault rather than a shape.
+   */
+  async closePr(input: PrCloseInput): Promise<SendResult> {
+    const handler = this.integrations.find(isPrCloseCapable);
+    if (!handler) throw new Error('no integration can close PRs (no sourceControl provider is PrCloseCapable)');
+    return handler.closePr(input);
   }
 
   async setPrLabel(input: PrLabelInput): Promise<SendResult> {

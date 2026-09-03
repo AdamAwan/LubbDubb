@@ -162,6 +162,13 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'How far back a provider looks for pull requests that have left the open set.',
   },
   {
+    path: 'obstacleDormantMs',
+    type: 'number',
+    ms: true,
+    access: 'plain',
+    why: 'How long an obstacle nobody re-reports and nothing owns stays on the board before it goes dormant. Its keys survive, so a re-report reopens it rather than filing a second one.',
+  },
+  {
     path: 'environments',
     type: 'json',
     // `fileOnly` for `whitelistedApprovals`' reason and not because the shape is
@@ -278,24 +285,6 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     type: 'number',
     access: 'plain',
     why: 'How many times a mid-run crash is re-attached before the run is failed.',
-  },
-  {
-    path: 'knowledgeBlockChars',
-    type: 'number',
-    access: 'plain',
-    why: 'Cap on the knowledge block an agent is launched with. Read at every launch.',
-  },
-  {
-    path: 'knowledgeScopeStaleDays',
-    type: 'number',
-    access: 'plain',
-    why: 'How long a check scope may match nothing before the Knowledge page says so. A reading — nothing is demoted by it. 0 turns it off.',
-  },
-  {
-    path: 'knowledgeColdDays',
-    type: 'number',
-    access: 'plain',
-    why: 'How long a proposal nobody agreed with and nobody asked for is drawn before the Knowledge page folds it away. A reading — nothing is demoted by it. 0 turns it off.',
   },
   {
     path: 'mcpArgsRetentionDays',
@@ -670,6 +659,19 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     ms: true,
     access: 'plain',
     why: 'How often the upstream tip is read.',
+  },
+  {
+    path: 'selfUpdate.autoUpdate',
+    type: 'boolean',
+    access: 'plain',
+    why: 'Take an update without being asked: drain, then hand off when the fleet is clear.',
+  },
+  {
+    path: 'selfUpdate.drainDeadlineMs',
+    type: 'number',
+    ms: true,
+    access: 'plain',
+    why: 'How long an automatic drain waits before interrupting what is left. Zero waits forever.',
   },
   {
     path: 'ci.checks',

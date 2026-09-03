@@ -440,6 +440,11 @@ export interface Config {
    * **On by default and cheap**: the steady state is one `ls-remote` an hour,
    * which transfers no objects, and a real fetch only once the tip has moved.
    * Deep-merged, so one field can be set alone.
+   *
+   * `autoUpdate` is the separate question of whether the harness takes what it
+   * finds. It is **off** by default, and on it does both halves — drain when an
+   * update lands, hand off when the fleet runs dry — because a drain nobody applies
+   * is a fleet that paused itself and stopped.
    */
   selfUpdate: SelfUpdatePolicy;
   /**
@@ -479,6 +484,24 @@ export interface Config {
    * every consumer falls back to the older "absence means merged" reading.
    */
   closedPrWindowMs: number;
+  /**
+   * How long an obstacle nobody re-reports and nothing owns stays on the board
+   * before it goes `dormant`.
+   *
+   * **Decay is one of the four endings, and the only one that covers what no
+   * reading can see** — a bug in code nobody is touching, a line of documentation
+   * the code stopped agreeing with. A row that only ever arrives is a board that
+   * only grows, and a board that only grows is read past: it is what the store this
+   * replaces died of.
+   *
+   * The keys survive it, so nothing is lost by decaying early — a matching report
+   * reopens the row at `standing` with its whole history rather than filing a
+   * second one, which is the only way a fix that did not stick is visible as a
+   * recurrence. So the number is chosen against the *other* cost: a week is long
+   * enough that a genuinely live obstacle nobody happened to hit over a weekend is
+   * still on the board on Monday. → `docs/spec/27-obstacles.md#how-an-obstacle-ends`
+   */
+  obstacleDormantMs: number;
   /**
    * The environments a goal's landed work travels to after it merges, and how to
    * ask each one whether it has a given commit.
@@ -703,63 +726,6 @@ export interface Config {
    * runtimes that cannot resume (mock, raw), which have no session to re-open.
    */
   agentResumeAttempts: number;
-  /**
-   * How many characters of the fleet's knowledge may ride in every agent's
-   * system-prompt append (issue #27 phase 3). `0` renders nothing at all.
-   *
-   * Characters rather than a count of claims, because the cost being bounded is
-   * **context** and a claim runs from one line to 2,000 characters — ten of one
-   * shape and ten of the other are not the same purchase. The block is a cached
-   * prefix, identical across the fleet, so it is paid once rather than per
-   * dispatch; the cap is what stops "paid once" turning into "unbounded and
-   * unread".
-   *
-   * Over it, whole facts are dropped **oldest-vouched first** — never a truncated
-   * claim, which would be a claim nobody vouched for. Unlike the lesson block
-   * this replaced, the agent **is** told how many claims it is not carrying and
-   * which tool asks for them: a partial list presented as whole is the failure
-   * this bound exists to prevent, and `knowledge_ask` is the way past it. The
-   * operator sees the same drop per row on the cockpit's Knowledge page.
-   */
-  knowledgeBlockChars: number;
-  /**
-   * How many days a `check:` scope may go without matching anything before the
-   * cockpit's Knowledge page says so (issue #27 phase 7). `0` turns the reading
-   * off.
-   *
-   * A **reading and never a trigger.** Nothing is demoted, lapsed or dropped from
-   * a prompt by it: a check scope that matched nothing may be a check that is
-   * simply not running this week, and a rule acting on this would delete the
-   * fleet's record of exactly the checks it sees least. What it surfaces is the one
-   * failure a check scope has that nothing else can show — a renamed or
-   * re-matrixed job stops matching *silently*, and the fact simply stops being
-   * delivered.
-   *
-   * Thirty days rather than a fortnight because the false positive is the
-   * expensive one here: a release job or a nightly leg can be three weeks between
-   * runs, and a page that called those drifted would teach an operator to ignore
-   * the reading. A check the provider is still reporting is never stale whatever
-   * this says.
-   */
-  knowledgeScopeStaleDays: number;
-  /**
-   * How many days a `proposal` nobody has agreed with and no agent has asked for
-   * may sit before the cockpit's Knowledge page stops **drawing** it. `0` turns the
-   * reading off.
-   *
-   * A **reading and never a trigger**, and narrower than `knowledgeScopeStaleDays`
-   * is: it is defined only over `proposal`, the one reach that reaches nobody, so
-   * there is no prompt it can take a claim out of and no reach it can move. A cold
-   * claim goes behind a counted fold rather than out of the store, and the next
-   * corroboration makes it warm again.
-   *
-   * Thirty days because the store has exactly one exit and it is a person: a fleet
-   * fills it at fleet speed and an operator drains it at operator speed, so over a
-   * long enough run the page is mostly claims nobody will ever rule on and the four
-   * that need a decision are somewhere in them. Derived from the rows the store
-   * already holds rather than recorded, for `knowledgeScopeStaleDays`' reason.
-   */
-  knowledgeColdDays: number;
   /**
    * How long a recorded MCP call keeps its **arguments**, in days. `0` records
    * none at all.
@@ -1092,11 +1058,21 @@ const DEFAULTS: Config = {
   // as a constant, because each of those numbers was also a way of writing a pet
   // into existence without doing anything.
   pets: { enabled: true, visible: true },
-  selfUpdate: { enabled: true, remote: 'origin', branch: 'main', checkIntervalMs: 60 * 60 * 1000 },
+  selfUpdate: {
+    enabled: true,
+    remote: 'origin',
+    branch: 'main',
+    checkIntervalMs: 60 * 60 * 1000,
+    // Off by default: taking a build out from under a fleet is a decision, and the
+    // deployment that wants it unattended is the one that says so.
+    autoUpdate: false,
+    drainDeadlineMs: 2 * 60 * 60 * 1000,
+  },
   validation: DEFAULT_VALIDATION,
   review: DEFAULT_PR_REVIEW,
   localRun: DEFAULT_LOCAL_RUN,
   closedPrWindowMs: 6 * 60 * 60 * 1000,
+  obstacleDormantMs: 7 * 24 * 60 * 60 * 1000,
   // Empty is the off switch, not an empty list of something switched on.
   environments: [],
   environmentProbeIntervalMs: 5 * 60 * 1000,
@@ -1127,9 +1103,6 @@ const DEFAULTS: Config = {
   agentStallExtendMs: 900_000,
   agentSilenceParkMs: 1_800_000,
   agentResumeAttempts: 3,
-  knowledgeBlockChars: 6_000,
-  knowledgeScopeStaleDays: 30,
-  knowledgeColdDays: 30,
   // A fortnight: long enough that "how is this tool actually being used" is a
   // question the tab can still answer about last sprint's work, short enough that
   // a deployment is not holding a year of agent arguments it will never read.
@@ -1331,7 +1304,11 @@ const RETIRED_KEYS: Readonly<Record<string, string>> = {
   'github.defaultAssignee': 'tickets the harness files are assigned to "userId"',
   'azureDevOps.defaultAssignee': 'tickets the harness files are assigned to "userId"',
   lessonBlockChars:
-    'the system prompt carries one block and it is the knowledge base\'s — a promoted lesson is mirrored in as an injected fleet claim, so "knowledgeBlockChars" is the one cap on what every agent reads',
+    'nothing is injected fleet-wide any more — the claim store this bounded is gone, and everything the obstacle board holds is keyed and delivered to the dispatches it is about',
+  knowledgeBlockChars:
+    'nothing is injected fleet-wide any more — the claim store this bounded is gone, and everything the obstacle board holds is keyed and delivered to the dispatches it is about',
+  knowledgeScopeStaleDays: 'the Knowledge page it was a reading for is gone with the claim store behind it',
+  knowledgeColdDays: 'the Knowledge page it was a reading for is gone with the claim store behind it',
   agentIdleWaitMs:
     'it was the removed "pty" runtime\'s silence watch, read off a terminal that had gone quiet — what replaced it is "agentSilenceParkMs", which reads the same silence off the stream protocol and parks on it, so a deployment that had tuned this figure boots on that key\'s default until somebody sets it',
   sessionTranscriptRoot:

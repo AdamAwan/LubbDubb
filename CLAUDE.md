@@ -52,6 +52,18 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
   ever picked up**, with nothing red. `FakeIssuesIntegration` mirrors `labels` into it for that reason.
   → [02](docs/spec/02-configuration.md#userid), [06](docs/spec/06-issue-pickup.md)
 
+### Review threads
+
+- **Whether a review reply is the fleet's is a _record_, never the reply's author.** `ours` and
+  `answered` read `pr_replies_sent` (`src/store/prReplies.ts`) — one row per reply that actually left
+  through `sink.postPrReply` — and `config.userId` is the credential the harness posts under, which on
+  a single-operator deployment is the operator's own account. Compare against it and the operator's
+  follow-up on their own thread reads as the harness's: `answered` folds to `PrComment.handled`, the
+  only bit rule `pr-review-comment` reads, so their comment is marked as work already done and never
+  dispatched for. Both providers must read the same record through `src/prThreads.ts`, and every
+  uncertainty — no comment ref, a reply from before the table — leaves the thread **unanswered**.
+  → [07](docs/spec/07-pull-requests.md#attribution-is-a-record-never-an-identity)
+
 ### Persistence
 
 - **A column added to an _existing_ table needs an additive `ALTER TABLE`**, guarded by
@@ -64,12 +76,14 @@ EXISTS` never alters an existing table, so a column without an `ensureColumns` e
   report of what it added. `pets.opened_at` null spells "still an egg", so the column alone turns
   every existing vivarium back into shells; a backfill on _every_ boot opens the eggs operators were
   saving. → [14](docs/spec/14-persistence.md#when-a-null-means-something)
-- **A one-shot id is never edited in place** — `VIVARIUM_RESET` in `src/pets/keeper.ts`, and every
-  id passed to `runOnce`. Changing it declares a _second_ pass, which every database that ran the
-  first runs again on the next boot. A further pass is a further id, added deliberately.
+- **A one-shot id is never edited in place** — `VIVARIUM_RESET` in `src/pets/keeper.ts`, and every id
+  a re-introduced `runOnce` is given. Changing one declares a _second_ pass, which every database that
+  ran the first runs again on the next boot. A further pass is a further id, added deliberately. There
+  is no `runOnce` right now: all three of its callers folded rows into the claim store and went with
+  it, so the mechanism comes back with the next migration that needs it.
   → [22](docs/spec/22-pets.md#clearing-the-vivarium), [14](docs/spec/14-persistence.md#a-migration-that-must-run-once)
-- **A pooled corroboration is upserted on `(fact_id, fleet_id)`; `PoolDesk` never lands its own
-  fleet's document.** Either appends a voice every pulse and looks like the pool working.
+- **`PoolDesk` never lands its own fleet's document.** It folds this fleet's own numbers back into the
+  aggregate as another fleet's, and looks exactly like the pool working.
   → [28](docs/spec/28-cross-fleet-pool.md)
 - **A new issue-verdict writer goes through `IssueVerdictStore.recordVerdict`, never a hand-rolled
   `DELETE`.** Which verdict tables may coexist is declared once in `src/store/verdicts.ts`; a writer
@@ -112,8 +126,11 @@ EXISTS` never alters an existing table, so a column without an `ensureColumns` e
   so an override that never learned your new `{token}` silently drops it — on exactly the
   deployments that customised most. → [09](docs/spec/09-execution.md), [05](docs/spec/05-dispatcher.md#prompt-templates)
 - **A `PromptId` is never deleted — it is marked `retired: true`.** Removing an id turns every
-  deployment that overrode it into a harness that will not boot.
-  → [05](docs/spec/05-dispatcher.md#prompt-templates)
+  deployment that overrode it into a harness that will not boot. The same holds one layer over, for a
+  **tool name**: a withdrawn name is added to `RETIRED_TOOL_NAMES` (`src/mcp/names.ts`) and answers
+  with a refusal that points at what replaced it, because a name that is simply gone comes back as an
+  unknown method — a broken channel rather than an out-of-date prompt, appearing in no reading at all.
+  → [05](docs/spec/05-dispatcher.md#prompt-templates), [11](docs/spec/11-mcp-tools.md#retired-tools)
 
 ### Filing a tracker item
 
@@ -137,7 +154,7 @@ EXISTS` never alters an existing table, so a column without an `ensureColumns` e
   `appraising` / `assessing` on the `StageContext` for later stages to read. Moving either below its
   readers silently puts two agents on one issue.
 - **Lenses stay out of `src/dispatcher/`.** The work graph, `buildStacks`, `prAttentionStatus`,
-  `knowledge`, `overlaps` and `src/features/` are read-only views for the cockpit. Asserted
+  `overlaps` and `src/features/` are read-only views for the cockpit. Asserted
   structurally — if one of those tests fails, fix the file it names, not the assertion.
 
 ### Agent runtimes

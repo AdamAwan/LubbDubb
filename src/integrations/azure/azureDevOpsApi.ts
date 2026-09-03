@@ -136,6 +136,12 @@ export interface AzureDevOpsApi {
     lastMergeSourceCommit: string,
     method: MergeMethod,
   ): Promise<AzMergeResult>;
+  /**
+   * Abandon a pull request — Azure's "closed without merging", which is a
+   * `status` patch rather than a verb of its own. Idempotent: a pull request
+   * already abandoned takes the same patch and stays abandoned.
+   */
+  abandonPullRequest(pullRequestId: number): Promise<void>;
   /** Add (`present`) or remove a label on a PR. Idempotent. */
   setPullLabel(pullRequestId: number, label: string, present: boolean): Promise<void>;
 
@@ -499,6 +505,17 @@ export interface AzWorkItemUpdate {
 
 export interface AzCommentRef {
   url: string;
+  /**
+   * Azure's own id for the comment created, as the thread read puts it on
+   * `AzComment.id` — what attribution matches a reply on
+   * (`docs/spec/07-pull-requests.md#review-threads`).
+   *
+   * Optional because the create endpoints answer with a body only on the API
+   * versions that return one, and a missing id must read as "cannot be named"
+   * rather than be invented: the harness then records nothing and the thread keeps
+   * reading as work.
+   */
+  id?: number;
 }
 
 export interface AzMergeResult {

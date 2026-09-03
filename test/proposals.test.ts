@@ -101,6 +101,10 @@ function countingSink(fail = false): ActionSink & { merges: number[]; replies: n
     merges,
     replies,
     canCloseIssue: () => false,
+    canClosePr: () => false,
+    closePr: (): never => {
+      throw new Error('closePr is not scripted in this test');
+    },
     canResolvePrThread: () => false,
     resolvePrThread: (): never => {
       throw new Error('resolvePrThread is not scripted in this test');
@@ -177,7 +181,8 @@ test('a gated merge becomes a pending proposal, and accepting it merges — once
   assert.equal(system.store.getEscalation(proposal.escalationId!)!.type, 'approve_change');
 
   const accepted = await system.proposals.accept(proposal.id, 'looks good');
-  assert.equal(accepted!.outcome, 'performed');
+  assert.ok(accepted && 'outcome' in accepted, 'a merge raises no caveats, so nothing gates the accept');
+  assert.equal(accepted.outcome, 'performed');
   assert.deepEqual(sink.merges, [42], 'accepting is what performs the act');
   assert.equal(system.store.getProposal(proposal.id)!.status, 'accepted');
   assert.equal(system.store.getProposal(proposal.id)!.decidedBy, 'human');
@@ -221,7 +226,8 @@ test('an accepted act whose send fails re-escalates rather than dropping', async
   const [proposal] = system.store.listProposals();
 
   const accepted = await system.proposals.accept(proposal!.id);
-  assert.equal(accepted!.outcome, 'failed');
+  assert.ok(accepted && 'outcome' in accepted, 'a merge raises no caveats, so nothing gates the accept');
+  assert.equal(accepted.outcome, 'failed');
   assert.deepEqual(sink.merges, [42], 'it was attempted');
 
   // The original inbox item is answered (you did decide), and the failure is a

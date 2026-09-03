@@ -70,7 +70,7 @@ export function WatchDigest({
               </div>
             </div>
             {check.why && <div className="pm-wwhy">{renderMarkdown(check.why, refUrls)}</div>}
-            {check.live && <Reading check={check} />}
+            {check.live && <WatchReadingLine check={check} />}
             <Pending check={check} onRule={onRule} />
           </div>
         </div>
@@ -87,7 +87,7 @@ export function WatchDigest({
  * or against what the same query read before the work arrived. One sentence over
  * both would have to be vague enough to be true of either.
  */
-function expectation(check: GoalWatchInput & { baselineValue?: number | null }): string {
+export function expectation(check: GoalWatchInput & { baselineValue?: number | null }): string {
   if (check.kind !== 'measure')
     return check.tolerate === 0
       ? 'No matching rows at all.'
@@ -110,20 +110,24 @@ function expectation(check: GoalWatchInput & { baselineValue?: number | null }):
 /**
  * What the environment said the one time it was asked.
  *
+ * Shared with the goal page's own card rather than written twice: the two surfaces
+ * draw the same reading, and a second copy of these words is one edit from two
+ * surfaces disagreeing about what `unknown` means.
+ *
  * **An `unknown` says why in words, and never in the vocabulary of a clean one.**
  * A failed observation, a timeout, a result that came back without the id echo and
  * a presence query answering zero are all the watch failing to *read* the
  * environment — and only a reading that came back can say anything about the work.
  */
-function Reading({ check }: { check: GoalWatch }) {
+export function WatchReadingLine({ check, className = 'pm-wread' }: { check: GoalWatch; className?: string }) {
   if (check.dryRunVerdict === null || check.dryRunEnvironment === null)
     return (
-      <p className="pm-wread muted small">
+      <p className={`${className} muted small`}>
         Not yet put to an environment. Nothing has been read, which is not the same as nothing being wrong.
       </p>
     );
   return (
-    <p className={`pm-wread ${check.dryRunVerdict}`}>
+    <p className={`${className} ${check.dryRunVerdict}`}>
       <b>{check.dryRunEnvironment}</b> · {readingWords(check.dryRunVerdict, check.dryRunRows, check.baselineValue)}
       {check.dryRunDetail !== null && <span className="pm-wdetail"> — {check.dryRunDetail}</span>}
     </p>

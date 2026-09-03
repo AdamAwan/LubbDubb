@@ -173,6 +173,7 @@ function fakeApi(evals: AzPolicyEvaluation[], requeue: RequeueScript = { asked: 
     createPull: unused('createPull'),
     setPullTitle: unused('setPullTitle'),
     setPullBase: unused('setPullBase'),
+    abandonPullRequest: unused('abandonPullRequest'),
     deleteBranch: unused('deleteBranch'),
     getBuildTimeline: unused('getBuildTimeline'),
     getBuildLog: unused('getBuildLog'),
@@ -200,6 +201,10 @@ function azureSink(evals: AzPolicyEvaluation[], requeue: RequeueScript): ActionS
   };
   return {
     canCloseIssue: () => false,
+    canClosePr: () => false,
+    closePr: (): never => {
+      throw new Error('closePr is not scripted in this test');
+    },
     canResolvePrThread: () => false,
     resolvePrThread: (): never => {
       throw new Error('resolvePrThread is not scripted in this test');

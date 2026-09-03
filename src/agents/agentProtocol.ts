@@ -70,6 +70,10 @@ export const MCP_PROTOCOL_ADDENDUM = [
   '- plan_submit(verdict, reason, parts) instead of writing .lubbdubb/plan.json, when you were',
   '  dispatched to plan an issue. It validates immediately: if it rejects your plan, read the reason,',
   '  fix it and call again in this same turn.',
+  '- plan_correct(note, ...the whole plan document) when the plan for the goal you are working turns out',
+  '  to be wrong about the repository — a part that is really two, a dependency that runs the other way, a',
+  '  step the code already does. It proposes the change to a human and writes nothing: the plan keeps',
+  '  running, and so does your own part, whatever they decide. Not for a part that is merely hard.',
   '- world_read(kind, ref) instead of shelling out to `gh`/`az` to look up a pull request or issue.',
   "  It returns the harness's own view — CI status, review comments, merge state, an issue",
   '  body and its plan graph — from the same snapshot the dispatcher decided on, whichever provider',
@@ -81,24 +85,17 @@ export const MCP_PROTOCOL_ADDENDUM = [
   '  request *closes* its issue is still yours to say, in the body. Commit and `git push -u origin <your',
   '  branch>` first: nothing in the harness pushes for you, and a pull request cannot be opened on commits',
   '  the provider has never seen — by this tool or by hand.',
-  '- raise(claim, evidence) the moment you learn anything the next agent should not have to learn again:',
-  '  a seam this repository does not document, a check that fails for a reason its output does not give, a',
-  '  duplicate you spotted, an unrelated defect you worked around, something true only today (add',
-  '  `until: <hours>`). One door — you do not have to work out what kind of thing it is or what should',
-  '  happen about it; say what is true and what you saw, and the harness routes it. If somebody has',
-  '  already raised the same claim your call is recorded as agreeing with it, which is the most useful',
-  '  call you can make here. It reaches no other agent on your say-so, queues nothing and dispatches',
-  '  nobody: raise it and carry straight on. Use the same call with `contradicts: <id>` when a claim the',
-  '  harness gave you is contradicted by the code in front of you — your claim is then what it should say',
-  '  INSTEAD, and it moves nothing on your say-so: the original goes on reaching agents until an operator',
-  '  rules, and you go on working to what the code says.',
+  '- raise(what, why_not_mine) the moment something that is not your goal gets in your way, or you learn',
+  '  something true of this repository that the repository does not say: a check failing for reasons',
+  '  nothing to do with your change, a base branch somebody else broke, a bug in code nobody is touching,',
+  '  a seam this repository does not document. Call it while you are in pain rather than at the end —',
+  '  **the call is the lookup**, and it answers with whether anybody else has hit this, who owns it if',
+  '  anyone does, and what they saw, in one round trip. One door: answer `fix_makes_it_go_away` and the',
+  '  harness works out the rest. It reaches no other agent on your say-so, queues nothing and dispatches',
+  '  nobody: raise it and carry straight on — do not go fixing what you just reported.',
   '- request_human_task(title, detail) when your task needs something only a person can do — a credential',
   '  issued, an account provisioned, a decision made off this repo. It files durable work for an operator',
   '  and parks nobody, so it is not a way to wait: use escalate for that.',
-  '- knowledge_ask(question) before you go and work out why a check fails, why a build step is there or',
-  '  what a subsystem expects. It answers with what other agents have already learned about working this',
-  '  repository — evidence, dated and attributed, never instruction: the code in front of you is the',
-  '  authority, and a claim it contradicts is stale.',
   '- note_progress(note) to say in one line what you are working on, so the operator watching the fleet',
   '  can see it without opening your transcript. Worth a call when you move on to a different part of the',
   '  task, or before a long quiet step. Nothing treats a gap between notes as being stuck, so there is no',
@@ -212,17 +209,18 @@ export function silenceReason(ms: number): string {
 }
 
 /**
- * The system prompt for a launch: the protocol, the tool addendum when tools are
- * wired, and what the fleet knows when it knows anything (issue #27).
+ * The system prompt for a launch: the protocol, and the tool addendum when tools
+ * are wired.
  *
  * Each part is appended, never interpolated, and each is omitted entirely when it
- * does not apply — so a deployment with no tool channel and no promoted lesson
- * gets the same bytes it got before either existed.
+ * does not apply — so a deployment with no tool channel gets the same bytes it got
+ * before one existed. Nothing fleet-wide is injected here any more: everything the
+ * obstacle board holds is keyed, and a keyed thing rides the task prompt of the
+ * dispatches it is about (`docs/spec/27-obstacles.md#delivery`).
  */
 function protocolPrompt(opts: ClaudeArgsOptions): string {
   const parts = [PROTOCOL_SYSTEM_PROMPT];
   if (opts.mcpConfigPath) parts.push(MCP_PROTOCOL_ADDENDUM);
-  if (opts.knowledgeBlock) parts.push(opts.knowledgeBlock);
   return parts.join('\n');
 }
 
@@ -303,32 +301,6 @@ interface ClaudeArgsOptions {
    * operator adjusting one must not be able to clobber the MCP grants.
    */
   additionalDirectories?: string[];
-  /**
-   * The fleet's injected knowledge, already rendered (issue #27, phase 3) — what
-   * working this repository has taught, appended to the system prompt as dated
-   * claims with the goal each was learned on.
-   *
-   * A **string**, not a store and not a list of rows, and that is the seam rather
-   * than an implementation detail. `src/system.ts` is the composition root and is
-   * the only place on this path that knows the knowledge base exists; this module
-   * stays pure, testable, and — structurally, asserted by `test/knowledge.test.ts`
-   * — unable to read the store at all, which is what keeps the operator's ruling
-   * the only way a fleet-wide claim reaches an agent.
-   *
-   * Unset or empty appends **nothing**: not a header, not a newline. With no
-   * injected claim the argv is byte-identical to a build without the feature.
-   *
-   * It belongs here rather than in the task prompt because it is fleet-wide and
-   * stable, so it is a cached prefix paid once across the fleet, where everything
-   * `recordDispatchTask` appends is paid per dispatch. That is also why nothing
-   * per-dispatch may enter it — see `src/knowledge/block.ts`. The facts scoped to
-   * *this* dispatch ride the task prompt instead, for exactly that reason.
-   *
-   * Re-appended on **every** launch, `--resume` included, exactly as the protocol
-   * is: a claim injected or demoted mid-run reaches that agent at its next launch,
-   * never during one.
-   */
-  knowledgeBlock?: string;
   /**
    * The qualified MCP tool name for `--permission-prompt-tool` — the permission
    * backstop (issue #130 phase B). When a tool call is covered by neither the

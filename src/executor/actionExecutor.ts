@@ -15,6 +15,8 @@ import type { DispatchResult } from '../dispatcher/dispatcher.js';
 import {
   authorityOf,
   mergeProposalRef,
+  planAmendmentHold,
+  planAmendmentProposalRef,
   planProposalHold,
   planProposalRef,
   proposalHold,
@@ -25,6 +27,9 @@ import {
   replyProposalRef,
 } from '../proposals/proposals.js';
 import { actOnShortfall, releasePlan } from '../plans/planApproval.js';
+import { amendmentWarnings, applyPlanAmendment, describeAmendment } from '../plans/planAmendment.js';
+import { proposedPlanDiff } from '../plans/planDiff.js';
+import { planNarrative, planPartInputs, validatePlanDocument } from '../plans/planDocument.js';
 import { shortfallRef } from '../delivery/shortfall.js';
 import { outstandingWorkNote } from '../mcp/conclusion.js';
 import { operatorInstructionsNote } from '../goalInstructions.js';
@@ -37,10 +42,12 @@ import { featureRecords, featureReach, renderFeatureDossier } from '../summaries
 import { neighbourSeedPaths, priorWorkBriefing } from '../briefing/priorWork.js';
 import { ciEvidenceNote, type CiEvidenceReader, type CiEvidenceTarget } from '../ci/ciEvidence.js';
 import { goalOriginFor, WITNESS_INSTRUCTION } from '../scratch/pad.js';
-import { dispatchFactScopes, KNOWLEDGE_READ_LIMIT, renderScopedKnowledgeNote } from '../knowledge/block.js';
+import { dispatchFactScopes } from '../knowledge/block.js';
+import { corroborationGoal } from '../knowledge/knowledge.js';
+import { obstaclesForDispatch, renderObstacleNote } from '../obstacles/delivery.js';
 import { retryNote, retryResumeFor, type RetryResume } from './retryResume.js';
 import { isActiveTask } from '../tasks.js';
-import type { Action, DecisionOutcome, Proposal, ProposalKind, Task, WorldEvent } from '../types.js';
+import type { Action, DecisionOutcome, PlanAmendment, Proposal, ProposalKind, Task, WorldEvent } from '../types.js';
 import type { FeatureBoardFacts } from '../summaries/featureRecord.js';
 
 interface ExecutorDeps {
@@ -372,6 +379,59 @@ export class ActionExecutor {
               'executed',
               `Proposed the plan for ${action.originRef} for approval: ${esc.id} / ${proposal.id}. ` +
                 `Accepting releases its parts; nothing is scheduled until then.`,
+            );
+            break;
+          }
+
+          case 'propose_plan_amendment': {
+            // Born here with the other proposals, from a validated action, for
+            // `propose_plan`'s reason — and the hold is re-asked here too, because
+            // every path that reaches the executor must be covered, not just the
+            // one that happens to check first.
+            const ref = planAmendmentProposalRef(action.amendmentId);
+            const heldBy = planAmendmentHold(ref, store.listProposals());
+            if (heldBy) {
+              record('skipped', `Skipped proposing the amendment to the plan for ${action.originRef}: ${heldBy}.`);
+              break;
+            }
+            const amendment = store.getPlanAmendment(action.amendmentId);
+            // Settled between the rule and here — an operator answered the card
+            // from another tab, or the plan was replanned under it. Skipped rather
+            // than proposed: a card for a settled amendment is one no answer can act
+            // on.
+            if (!amendment || amendment.status !== 'pending') {
+              record(
+                'skipped',
+                `Skipped proposing the amendment to the plan for ${action.originRef}: it is ` +
+                  `${amendment ? `"${amendment.status}"` : 'gone'}.`,
+              );
+              break;
+            }
+            const esc = this.deps.escalations.create({
+              type: 'approve_change',
+              prompt: action.prompt,
+              // The body is built here rather than in the rule because it is a
+              // reading of the plan out of the store: which parts the amendment
+              // moves, against the plan *as it stands when the card is created*,
+              // and what applying it would leave running either way.
+              context: {
+                originRef: action.originRef,
+                planId: action.planId,
+                amendmentId: amendment.id,
+                detail: describeAmendmentFor(store, amendment),
+                detailFrom: 'What the amendment changes',
+              },
+            });
+            const proposal = store.createProposal({
+              kind: 'plan_amendment',
+              ref,
+              action: action as unknown as Action,
+              escalationId: esc.id,
+            });
+            record(
+              'executed',
+              `Proposed a change to the running plan for ${action.originRef} for approval: ${esc.id} / ` +
+                `${proposal.id}. The plan keeps scheduling either way; accepting amends it in place.`,
             );
             break;
           }
@@ -807,6 +867,20 @@ export class ActionExecutor {
         ? audit('executed', `Approved the plan: ${settled.detail} — authorized by ${by} (${proposal.id}).`)
         : audit('skipped', `Nothing to release for ${act.originRef}: ${settled.detail} (${proposal.id}).`);
     }
+    // An amendment publishes nothing either: accepting it ingests the amended
+    // document over a plan that stays released, so the parts that were being
+    // worked carry on and the new declaration is what the next dispatch reads. It
+    // runs here for the plan act's reason — one place where an accepted proposal
+    // becomes both its effect and its audit row.
+    if (act.kind === 'plan_amendment') {
+      const settled = applyPlanAmendment(store, act.amendmentId);
+      return settled.ok
+        ? audit(
+            'executed',
+            `Approved the change to the plan: ${settled.detail} — authorized by ${by} (${proposal.id}).`,
+          )
+        : audit('skipped', `Nothing to amend for ${act.originRef}: ${settled.detail} (${proposal.id}).`);
+    }
     // A shortfall publishes nothing either: accepting it either sends the plan
     // back to a planner (rule `issue-plan` takes over) or appends one part for rule `plan-part` to
     // schedule. It runs here for the plan act's reason — this is the one place an
@@ -850,7 +924,10 @@ export class ActionExecutor {
       // rule would dispatch for it every pulse for as long as the pull request
       // lived. A no-op on a thread nobody reopened.
       // → `docs/spec/07-pull-requests.md#reopening-a-thread`
-      if (act.commentId !== null) this.deps.store.setPrThreadReopened(act.prNumber, act.commentId, false);
+      if (act.commentId !== null) {
+        this.deps.store.setPrThreadReopened(act.prNumber, act.commentId, false);
+        this.recordReplySent(act.prNumber, act.commentId, res.commentRef);
+      }
       const resolution = await this.resolveAnswered(act);
       return audit(
         'executed',
@@ -882,6 +959,40 @@ export class ActionExecutor {
         `Authorized ${act.kind === 'merge' ? `merge of PR #${act.prNumber}` : `reply on PR #${act.prNumber}`} failed (${message}); escalated so it isn't dropped: ${esc.id}.`,
       );
     }
+  }
+
+  /**
+   * Write down that the harness sent this reply — the sole place attribution is
+   * ever recorded, because this is the sole place a reply goes out.
+   *
+   * The record replaces an identity test that could not work: the credential the
+   * harness posts under is the operator's own on a single-operator deployment, so
+   * reading "the last reply's author is us" off the provider marked the operator's
+   * own follow-up as the fleet's answer and dropped their comment before any rule
+   * saw it. → `docs/spec/07-pull-requests.md#review-threads`
+   *
+   * **A send the provider would not name is recorded as a failure, never guessed
+   * at.** Without an id there is nothing to match on the next read, so the thread
+   * keeps reading as work and the fleet answers it again — a re-dispatch, which is
+   * visible and cheap. Falling back to the author would settle the thread and lose
+   * the reviewer, which is neither. The `errors.record` is what stops that
+   * re-dispatch loop being silent: it names the provider that will not say what it
+   * created, which is the actual fault.
+   */
+  private recordReplySent(prNumber: number, threadId: string, commentRef: string | undefined): void {
+    if (commentRef !== undefined && commentRef !== '') {
+      this.deps.store.recordPrReplySent(prNumber, threadId, commentRef);
+      return;
+    }
+    this.deps.errors.record({
+      source: 'provider',
+      message: `The reply on PR #${prNumber} went out, but the provider returned no comment id for it.`,
+      detail:
+        `Thread ${threadId} will keep reading as unanswered work and the fleet will answer it again, because ` +
+        `attribution is a record of what was sent and there is nothing to record. Identity is deliberately not ` +
+        `used as a fallback: the harness posts under the operator's own credential, so it cannot tell its own ` +
+        `reply from theirs.`,
+    });
   }
 
   /**
@@ -1089,17 +1200,17 @@ export class ActionExecutor {
     // the attachments rather than to the exact origin, and placed first among the
     // appended blocks: it is the only one of them that changes what the work is.
     const instructions = instructionsFor(action.originRef, store, this.deps.instructionTracker);
-    // What the fleet knows about *this* dispatch's own goal and checks (issue #27
-    // phase 3). Appended for the reason every block above it is — a `{knowledge}`
-    // placeholder would be dropped in silence by any operator template override
-    // written before this existed — and here rather than in a rule for the reason
-    // the attachments are: every dispatch passes through this method whatever
-    // composed it, and no rule, desk or gate may read a fact at all.
+    // What the fleet has already run into on the checks and files in front of
+    // this dispatch (`docs/spec/27-obstacles.md`). Appended for the reason every
+    // block above it is — a `{obstacles}` placeholder would be dropped in silence
+    // by any operator template override written before this existed — and here
+    // rather than in a rule, for the attachments' reason: every dispatch passes
+    // through this method whatever composed it.
     //
-    // The fleet-wide claims are **not** here. They ride the system prompt, where
-    // they are a cached prefix; only what varies per dispatch belongs in a task
-    // prompt, and that is the whole of the split.
-    const knowledge = knowledgeFor(action, store);
+    // **There is no fleet-wide block here and there never will be.** Everything
+    // on the board is keyed, and a keyed thing is delivered to the dispatches it
+    // is about.
+    const obstacles = obstaclesFor(action, store);
     // The witness log's one standing instruction: record the forks. Code agents
     // only — a desk agent moves no head, and a pack is written from the forks
     // behind one. Appended for the reason every block above it is, and last,
@@ -1111,7 +1222,7 @@ export class ActionExecutor {
       action.prompt,
       instructions,
       evidence,
-      knowledge,
+      obstacles,
       guidance,
       outstanding,
       prior,
@@ -1243,21 +1354,21 @@ function attachmentsFor(originRef: string | null | undefined, store: Store): str
 }
 
 /**
- * What the knowledge base has to say about this dispatch — or null when it has
- * nothing about this goal or these checks, which is most dispatches.
+ * What the obstacle board has to say about this dispatch — or null when it says
+ * nothing about these checks or these files, which is most dispatches.
  *
- * **The scopes are the dispatch's, not the origin's.** `dispatchFactScopes`
- * collapses `pr:412:ci` to the goal `pr:412`, so a claim filed by an agent on the
- * review concern reaches the one fixing CI: they are two origins of one goal, and
- * a fact scoped to a *concern* would be a fact almost nothing ever matched. The
- * check names come off the action, matched exactly for `priorRemedies`' reason.
+ * **The scopes are `dispatchFactScopes`' and never a second computation of
+ * them.** That is the existing reading of which scopes a dispatch matches, so the
+ * scope a row is delivered on and the scope it is judged against cannot drift;
+ * the paths are `listGoalFiles`, which is the list the intake grounds a key
+ * against for the same reason. Both are read for the **goal**, not the concern:
+ * `pr:412:ci` and `pr:412:comments` are two origins of one goal.
  *
- * **The store decides what is deliverable.** `askFacts` answers only from `lookup`
- * and `injected` and never with a lapsed row — a proposal one agent made is not
- * evidence, and reading one out here would be auto-promotion arriving through the
- * prompt instead of through the tool.
+ * **Only rows that reach agents.** `obstaclesForDispatch` asks the lifecycle,
+ * which answers *standing or owned* — a `sighted` row reaches nobody, because one
+ * report is not evidence.
  */
-function knowledgeFor(
+function obstaclesFor(
   action: ValidatedAction & { type: 'dispatch_code_agent' | 'dispatch_desk_agent' },
   store: Store,
 ): string | null {
@@ -1265,8 +1376,11 @@ function knowledgeFor(
     action.originRef ?? null,
     action.type === 'dispatch_code_agent' ? (action.ciChecks ?? null) : null,
   );
-  if (scopes.length === 0) return null;
-  return renderScopedKnowledgeNote(store.askFacts({ scopes, limit: KNOWLEDGE_READ_LIMIT })) || null;
+  const goal = corroborationGoal(action.originRef ?? null);
+  const paths = goal === null ? [] : store.listGoalFiles(goal).map((file) => file.path);
+  if (scopes.length === 0 && paths.length === 0) return null;
+  const rows = store.listObstacles().map((obstacle) => ({ obstacle, keys: store.listObstacleKeys(obstacle.id) }));
+  return renderObstacleNote(obstaclesForDispatch({ rows, scopes, paths })) || null;
 }
 
 /**
@@ -1444,6 +1558,40 @@ function safeJson(v: unknown): string {
  * that carry no title are worded here, from what they are: an action nobody can
  * name is a row an operator cannot place.
  */
+/**
+ * The body of an amendment card: the author's reason, what the change does to the
+ * plan, and what it leaves running whatever the answer.
+ *
+ * Built at card-creation time out of the store rather than carried on the action,
+ * because both halves are readings of the plan *now* — the diff is against the
+ * revision the plan currently stands at, and the warnings are about the part rows
+ * as they currently are. An amendment written before a part opened its pull
+ * request must not tell an operator that dropping it stops nothing.
+ *
+ * Degrades to the note alone rather than throwing: a document that no longer
+ * validates is refused where it would be applied, and a card with no diff on it is
+ * far better than a pulse that dies building one.
+ */
+function describeAmendmentFor(store: Store, amendment: PlanAmendment): string {
+  let document: unknown;
+  try {
+    document = JSON.parse(amendment.document);
+  } catch {
+    return describeAmendment({ note: amendment.note, diff: null, warnings: [] });
+  }
+  const parsed = validatePlanDocument(document);
+  if (!parsed.ok) return describeAmendment({ note: amendment.note, diff: null, warnings: [] });
+  const declared = planPartInputs(parsed.document);
+  return describeAmendment({
+    note: amendment.note,
+    diff: proposedPlanDiff(store.listPlanRevisions(amendment.planId), {
+      narrative: planNarrative(parsed.document),
+      parts: declared,
+    }),
+    warnings: amendmentWarnings(store.listPlanParts(amendment.planId), declared),
+  });
+}
+
 function readyingTitle(action: ValidatedAction): string {
   switch (action.type) {
     case 'dispatch_code_agent':
@@ -1459,6 +1607,8 @@ function readyingTitle(action: ValidatedAction): string {
       return `Answering agent ${action.agentId}`;
     case 'propose_plan':
       return 'Putting a plan to you';
+    case 'propose_plan_amendment':
+      return 'Putting a change to a plan to you';
     case 'propose_shortfall':
       return 'Putting a shortfall to you';
     default:

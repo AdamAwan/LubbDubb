@@ -4,6 +4,8 @@ import type {
   IssueAppraisal,
   IssueDelivery,
   IssueRun,
+  ObstacleBlock,
+  ObstacleStanding,
   Plan,
   PlanPart,
   PullRequest,
@@ -11,6 +13,7 @@ import type {
   WorldEvent,
 } from '../types.js';
 import { deliveryHold } from '../delivery/delivery.js';
+import { blockedGoals } from '../obstacles/blocked.js';
 import { containerPickupReason, isContainerIssue } from '../issueRelations.js';
 import { appraisalHold, appraisalOrigin, hasWorkStarted, isAppraised } from '../intake/appraisal.js';
 import { dispatchVerdict, type CooldownPolicy } from './dispatchCooldown.js';
@@ -146,7 +149,7 @@ export function issueBranch(number: number): string {
  *
  * `openPrs` must be **every** open PR — including the unwatched ones hidden from the
  * dispatch world (`Harness.runCycle` filters them out, so the dispatcher passes them
- * back in via `DispatchContext.unwatchedPrs`). Both providers list only open/active
+ * back in via `DispatchContext.hiddenPrs`). Both providers list only open/active
  * PRs, so absence otherwise reads as "merged" — and an unwatched PR would get its
  * issue re-picked and a second agent onto the very same branch.
  *
@@ -238,6 +241,7 @@ type IssuePickupStatusKind =
   | 'planning' // in the plan funnel — a verdict is owed, or it split into parts
   | 'delivered' // assessed as delivered — parked until the world or the operator says otherwise
   | 'appraisal' // its goal is being checked, or was found unworkable — nothing is dispatched for it
+  | 'obstacle' // an agent could not finish it, and named what stopped it: parked until that clears
   | 'cooldown' // attempted recently; waiting out the re-dispatch gap
   | 'escalated' // attempt cap spent; parked on a human
   | 'blocked' // eligible, but no capacity (paused or cap reached)
@@ -286,6 +290,14 @@ export interface IssuePickupContext {
    */
   appraisals?: IssueAppraisal[];
   appraisalSignals?: WorldEvent[];
+  /**
+   * The goals parked behind an obstacle and the board that lifts them — the same
+   * two lists the `eligibleIssues` filter gates on, so the chip predicts it.
+   * Absent = nothing parked, which is every deployment until an agent concludes
+   * `blocked`. → `docs/spec/27-obstacles.md#blocked-is-an-answer`
+   */
+  obstacleBlocks?: ObstacleBlock[];
+  obstacles?: ObstacleStanding[];
   /**
    * The harness's runs at each goal, so a closed issue can be told from a closed
    * *ticket* (issue #234). Absent = nothing retained, which reads exactly as it did
@@ -406,6 +418,21 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
     signals: ctx.deliverySignals,
   });
   if (held) return { eligible: false, status: 'delivered', reasons: [held] };
+
+  // The third park, beside the delivery above and the appraisal below, and the
+  // one whose exit is not the issue at all: an agent concluded `blocked` naming
+  // something that is not this goal, and the goal comes back when the board stops
+  // reaching agents with it. Asked through the same pure `blockedGoals` the rule
+  // gates on and the ownership desk sweeps with, so the chip cannot promise what
+  // the next cycle refuses. → `docs/spec/27-obstacles.md#blocked-is-an-answer`
+  const block = blockedGoals(ctx.obstacleBlocks ?? [], ctx.obstacles ?? []).get(origin);
+  if (block) {
+    return {
+      eligible: false,
+      status: 'obstacle',
+      reasons: [`blocked behind ${block.obstacleId}: ${block.note}`],
+    };
+  }
 
   const intrinsic = isIssuePickupEligible(issue, ctx.policy);
   if (!intrinsic.eligible) {

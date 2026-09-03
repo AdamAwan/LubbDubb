@@ -148,9 +148,6 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
       'agentStallExtendMs',
       'agentSilenceParkMs',
       'agentResumeAttempts',
-      'knowledgeBlockChars',
-      'knowledgeScopeStaleDays',
-      'knowledgeColdDays',
       'mcpArgsRetentionDays',
       'whitelistedApprovals',
       'claudeCommand',
@@ -202,6 +199,7 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
       'environmentProbeIntervalMs',
       'environmentHealthIntervalMs',
       'watchIntervalMs',
+      'obstacleDormantMs',
     ],
   },
   {

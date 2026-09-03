@@ -6,6 +6,7 @@ import type { AppliedFix } from '../view/needsYou.js';
 import { useNow } from '../hooks.js';
 import { buildViewModel, type CockpitView } from '../view/viewModel.js';
 import { useNavigation } from './useNavigation.js';
+import { homeTab } from './place.js';
 import type { CockpitActions } from './actions.js';
 import { fireNotifications, loadNotifyPrefs, notifiableChanges, notifySnapshot } from './notify.js';
 import { goalPrNumbers } from '../view/goalPage.js';
@@ -311,8 +312,8 @@ export function useCockpit(): CockpitStatus {
       answerEscalation: (id, text) => then(api.answerEscalation(id, text)),
       answerQuestions: (id, answers) => then(api.answerQuestions(id, answers)),
       dismissEscalation: (id, note) => then(api.dismissEscalation(id, note)),
-      decideProposal: (id, verdict, note) =>
-        then(verdict === 'accept' ? api.acceptProposal(id, note) : api.rejectProposal(id, note)),
+      decideProposal: (id, verdict, note, acknowledged) =>
+        then(verdict === 'accept' ? api.acceptProposal(id, note, acknowledged) : api.rejectProposal(id, note)),
       backOutProposal: (id, verdict, note) => then(api.backOutProposal(id, verdict, note)),
       // No refetch: nothing on the glass changes until the operator sends the
       // verdict, and the draft is the modal's own state until they do.
@@ -326,6 +327,15 @@ export function useCockpit(): CockpitStatus {
 
       replan: (planId) => then(api.replan(planId)),
       ruleWatchProposal: (issueNumber, checkId, accept) => then(api.ruleWatchProposal(issueNumber, checkId, accept)),
+      // Refetches like every other write, and hands the dry run's refusals back to
+      // the form that caused them: the check is saved either way, and what the
+      // environment could not answer about it is the operator's to act on.
+      saveWatchCheck: async (issueNumber, check) => {
+        const { dryRun } = await api.saveWatchCheck(issueNumber, check);
+        await refresh(null);
+        return dryRun;
+      },
+      deleteWatchCheck: (issueNumber, checkId) => then(api.deleteWatchCheck(issueNumber, checkId)),
       extendWatch: (issueNumber, environment) => then(api.extendWatch(issueNumber, environment)),
       setAcceptance: (planId, slug, criterion, met) => then(api.setAcceptance(planId, slug, criterion, met)),
       setValidation: (issueNumber, checkId, act) => then(api.setValidation(issueNumber, checkId, act)),
@@ -338,18 +348,30 @@ export function useCockpit(): CockpitStatus {
       viewReviewPack: (prNumber) =>
         go(prNumber === null ? { reviewPack: null, reviewIdea: null } : { reviewPack: prNumber }),
       openReviewIdea: (id) => go({ reviewIdea: id }),
-      viewFact: (id) => go({ fact: id }),
-      // One `go` for however many of the five moved: they are one place, and two
-      // calls would push two history entries for a single change of question.
-      setKnowledgeQuery: (next) => go(next),
+      // One `go` for both: which row is unfolded
+      // and whether the terminal tail is open are one place, and two calls would
+      // push two history entries for a single move.
+      setObstacleQuery: (next) => go(next),
+      muteObstacle: (id, muted) => then(api.muteObstacle(id, muted)),
+      ownObstacle: (id, ownerRef) => then(api.ownObstacle(id, ownerRef)),
+      retireObstacle: (id) => then(api.retireObstacle(id)),
+      writeDownObstacle: (id) => then(api.writeDownObstacle(id)),
       openConfig: (where) => go({ tab: 'config', goal: null, ...where }),
       // One `go` for both halves: the tab and the window are one place, and two
       // calls would push two history entries for a single change of question.
       openInsights: (where) => go({ tab: 'insights', goal: null, ...where }),
-      selectGoal: (ref) => go({ goal: ref, pr: null }),
+      // The tab comes with it, narrowed to one that could have led here. Nothing
+      // that opens a goal moves the nav — the rail is on every tab and a `<Ref>`
+      // opens one from anywhere — so left alone the crumb names wherever the nav
+      // last was, and a goal opened while reading Insights draws a way out that
+      // leads to a page it is not on. → `homeTab`
+      selectGoal: (ref) =>
+        go((current) => (ref === null ? { goal: null, pr: null } : { goal: ref, pr: null, tab: homeTab(current.tab) })),
       // The goal underneath is left where it was: it is what the crumb names and
-      // what leaving the page lands on.
-      selectPr: (prNumber) => go({ pr: prNumber }),
+      // what leaving the page lands on. The tab travels for `selectGoal`'s reason
+      // — a pull request is reached by a `<Ref>` from anywhere at all.
+      selectPr: (prNumber) =>
+        go((current) => (prNumber === null ? { pr: null } : { pr: prNumber, tab: homeTab(current.tab) })),
       reopenThread: (prNumber, threadId, reopened) => then(api.reopenPrThread(prNumber, threadId, reopened)),
       openPanel: (panel) => go({ panel }),
       openTab: (next) => go({ tab: next }),
@@ -362,11 +384,18 @@ export function useCockpit(): CockpitStatus {
             ? [...current.collapsed, issueNumber]
             : current.collapsed.filter((n) => n !== issueNumber),
         })),
+      // Written to *both* lists, always: a disclosure is the operator saying which
+      // way this card goes, and the default it is overriding moves as the goal does.
+      // Recording only the open half would leave "shut" meaning "whatever the goal's
+      // progress says", which is the card springing open under them a pulse later.
       openGoalSection: (section, open) =>
         go((current) => ({
           goalOpen: open
-            ? [...current.goalOpen, section].sort((a, b) => a.localeCompare(b))
+            ? [...current.goalOpen.filter((name) => name !== section), section].sort((a, b) => a.localeCompare(b))
             : current.goalOpen.filter((name) => name !== section),
+          goalShut: open
+            ? current.goalShut.filter((name) => name !== section)
+            : [...current.goalShut.filter((name) => name !== section), section].sort((a, b) => a.localeCompare(b)),
         })),
       reorderUpNext: (origins) => then(api.reorderUpNext(origins)),
       setUpNextProfile: (origin, profile) => then(api.setUpNextProfile(origin, profile)),
@@ -388,19 +417,6 @@ export function useCockpit(): CockpitStatus {
       renamePet: (id, name) => then(api.renamePet(id, name)),
       placePet: (id, placed) => then(api.placePet(id, placed)),
       blendPet: (id) => then(api.blendPet(id)),
-      setFactReach: (id, reach) => then(api.setFactReach(id, reach)),
-      mergeFacts: (id, members) => then(api.mergeFacts(id, members)),
-      // A store write and never a publish: the desk's next pulse re-derives the
-      // document and puts it, so an operator's click never waits on a push to
-      // another continent.
-      setFactKeepLocal: (id, keepLocal) => then(api.setFactKeepLocal(id, keepLocal)),
-      raiseFact: (claim, originRef) => then(api.raiseFact(claim, originRef)),
-      exitFact: (id, exit) => then(api.exitFact(id, exit)),
-      settleGraduation: (id, outcome) => then(api.settleGraduation(id, outcome)),
-      // A read, so no refetch: the evidence behind one claim rides its own route
-      // precisely because it must not be pulled along by the state poll.
-      factDetail: (id) => api.knowledgeFact(id),
-      resolveContradiction: (id, ruling) => then(api.resolveContradiction(id, ruling)),
       completeHumanTask: (id, note) => then(api.completeHumanTask(id, note)),
       declineHumanTask: (id, note) => then(api.declineHumanTask(id, note)),
       closeHumanTaskTicket: (id, note) => then(api.closeHumanTaskTicket(id, note)),
@@ -415,6 +431,7 @@ export function useCockpit(): CockpitStatus {
       setIssueParent: (n, parent) => then(api.setIssueParent(n, parent)),
       setIssueAreaPath: (n, areaPath) => then(api.setIssueAreaPath(n, areaPath)),
       setPartProfile: (planId, slug, profile) => then(api.setPartProfile(planId, slug, profile)),
+      restartPart: (planId, slug) => then(api.restartPart(planId, slug)),
       setIssueConclusion: (n, verdict) => then(api.setIssueConclusion(n, verdict)),
       setIssueAppraisal: (n, verdict) => then(api.setIssueAppraisal(n, verdict)),
       addInstruction: (n, text) => then(api.addInstruction(n, text)),
@@ -505,14 +522,8 @@ export function useCockpit(): CockpitStatus {
       viewingScratchpad: place.scratchpad,
       viewingReviewPack: place.reviewPack,
       reviewIdea: place.reviewIdea,
-      viewingFact: place.fact,
-      knowledgeView: place.knowledgeView,
-      knowledgeShow: place.knowledgeShow,
-      knowledgeSort: place.knowledgeSort,
-      knowledgeDesc: place.knowledgeDesc,
-      knowledgeFolded: place.knowledgeFolded,
-      knowledgeQueue: place.knowledgeQueue,
-      knowledgeOpen: place.knowledgeOpen,
+      viewingObstacle: place.obstacle,
+      obstacleEnded: place.obstacleEnded,
       insightsView: place.insightsView,
       insightsWindow: place.insightsWindow,
       poolProject: place.poolProject,
@@ -523,6 +534,7 @@ export function useCockpit(): CockpitStatus {
       tab: place.tab,
       collapsed: place.collapsed,
       goalOpen: place.goalOpen,
+      goalShut: place.goalShut,
       configTab: place.configTab,
       configGroup: place.configGroup,
       ticketWatch: place.ticketWatch,

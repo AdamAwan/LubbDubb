@@ -190,7 +190,7 @@ stack keeps its own. A status policy is evaluated per pull request, so each rung
 of its own to clear — suppressing those would park the whole stack on the bottom one, which is the
 mirror-image failure of the multiplication above.
 
-Both predicates take the **unfiltered** open list — the dispatch world plus `ctx.unwatchedPrs` — so an
+Both predicates take the **unfiltered** open list — the dispatch world plus `ctx.hiddenPrs` — so an
 unwatched base still attributes.
 
 ### `retargetsFor(openPrs, closedPrs, defaultBranch)`
@@ -368,6 +368,61 @@ the source-control half that went old; any stale source at all stops the settle.
 and the world, which is what keeps the lens out of the harness's per-pulse decision path. The only
 place the model is consulted is `landingScope`, at the click, in the route.
 
+## Whose pull request is it
+
+`isOurPr(pr, prAuthorConfigured)` / `isSomeoneElsesPr(pr)` (`src/prOwnership.ts`), asked in one place
+because several paths need it and two wordings of "which pull requests are mine" would drift.
+
+**`PullRequest.viewerAuthored` is the answer, and the provider is the only thing that can give it.**
+It is the pull request's author compared against the identity the credential actually is — the
+viewer — never against `filters.prAuthor`. Both providers set it on the open list and on the
+closed-PR window, at no extra request: the author rides on the payload the snapshot already reads.
+
+**`prAuthor` is not that answer**, and stopped being a usable proxy for it the day `ownWorkOnly`
+widened the fetch to the pull requests a colleague **assigned** the operator
+([#a-pull-request-a-person-put-on-you](#a-pull-request-a-person-put-on-you)). With the filter set,
+somebody else's pull request is in the world _by design_ — so reading "it was fetched" as "it is
+ours" had the harness renaming a colleague's pull request, tagging it for watching, reaping its
+branch on merge, and, through rule `pr-review-comment`, **dispatching an agent that answered their
+reviewers**. On a single-operator deployment nothing about that is red: the reply is posted under the
+operator's own account, so it reads to the other team as the operator talking.
+
+So the filter survives only as the fallback where authorship is unknown:
+
+| `viewerAuthored` | `isOurPr`                                         | `isSomeoneElsesPr` |
+| ---------------- | ------------------------------------------------- | ------------------ |
+| `true`           | yes                                               | no                 |
+| `false`          | no — under every arm, dispatch branch included    | **yes**            |
+| absent           | `prAuthor` configured, or a dispatch branch shape | no                 |
+
+**The two predicates are not each other's inverse, and must not be folded into one.** "Is this ours,
+so we may rename it" fails safe by saying no; "is this somebody else's, so hide it from every rule"
+has to fail safe by saying no as well — a provider that cannot name an author would otherwise take
+every watched pull request out of the dispatch world and stop the fleet with nothing red. That is why
+the absent row above answers `no` to both.
+
+`isHarnessBranch(branch)` is the unknown arm's second half: `issue/<n>`, `issue/<n>/<slug>` or
+`job/<id>`, the branch shapes only a dispatch cuts. Derived rather than stored — recording every
+opened PR number would be a second answer to a question the branch already answers.
+
+### What it gates
+
+- **The dispatch world.** `Harness.runCycle` hides a pull request somebody else opened from
+  `world.pullRequests` exactly as it hides an unwatched one, and hands both over as `ctx.hiddenPrs`
+  ([04](04-harness-cycle.md)). No rule fires on either — no CI fix, base update, review, reply or
+  merge — and the reasons are different but the requirement is one: the fleet works its own.
+- **The bookkeeping desks** — `renamablePrs`, `reapableBranches`, `prWorkItemLinks`, all through
+  `isOurPr`.
+- **The watch seeding.** `prsToSeedWatch` tags the fleet's own untagged pull requests off the branch
+  shape; a branch shape is evidence, not proof, so a pull request the provider says a colleague
+  opened is never tagged however it is named.
+
+Still fully visible in the cockpit, with its health, its threads and who opened it: the snapshot
+reads the connector directly. `prAttentionStatus` gives it `elsewhere`, and where a person **put** the
+operator on it, that assignment turns it straight back into `you`
+([#a-pull-request-a-person-put-on-you](#a-pull-request-a-person-put-on-you)) — a review a colleague
+asked for is the operator's to answer, and never the fleet's.
+
 ## Reaping a merged branch
 
 When a pull request merges, the branch behind it is deleted — the worktree and the local ref, then
@@ -381,8 +436,9 @@ A branch is reapable when all of:
 - **Its pull request merged.** `prState(pr) === 'merged'`, read from the closed-PR window. An
   **abandoned** PR's branch holds work that never landed, so deleting it destroys the only copy —
   the same line `retargetsFor` draws, and `prState` never invents `closed` from absence.
-- **The pull request is ours** — `isOurPr` (`src/prOwnership.ts`), the gate `renamablePrs` uses,
-  asked in one place because two wordings of "which pull requests are mine" would drift.
+- **The pull request is ours** — `isOurPr` ([#whose-pull-request-is-it](#whose-pull-request-is-it)),
+  the gate `renamablePrs` uses, asked in one place because two wordings of "which pull requests are
+  mine" would drift. A colleague's branch is never deleted, and that one is irreversible.
 - **Nothing still stands on the branch.** It is not `defaultBranch`, and no open pull request names
   it as `baseBranch`. **This is the load-bearing one**: deleting the base of an open PR orphans it,
   and GitHub closes it outright. `retargetsFor` moves a rung off its merged parent, but that write
@@ -462,16 +518,10 @@ it writes beside it is what actually satisfies the branch policy anyway (below).
 
 ### `renamablePrs(prs, ctx)` — and what may be renamed
 
-`userId` is the gate, because it is already the operator's answer to "which pull requests
-are mine", and both providers apply it **at fetch time**:
+`isOurPr` is the gate ([#whose-pull-request-is-it](#whose-pull-request-is-it)) — the same one the
+merged-branch reap asks, answered in one place.
 
-- **Set** — every PR in the world is theirs _by construction_; the provider never surfaced anyone
-  else's. All of them are renamable, and no attribution logic exists here at all.
-- **Unset** — the world holds everyone's PRs and the harness cannot tell them apart, so it falls back
-  to the branch shapes only a dispatch mints (`issue/<n>`, `issue/<n>/<slug>`). Derived rather than
-  stored: recording every opened PR number would be a second answer to a question the branch answers.
-
-**A colleague's pull request is renamed under neither arm.** A PR that resolves to no issue is left
+**A colleague's pull request is never renamed.** A PR that resolves to no issue is left
 alone — the convention is keyed on an issue number. A merged PR is never renamed. The render strips
 any prefix it would itself have written, so renaming twice does not stack prefixes.
 
@@ -497,6 +547,7 @@ folding them would make one of the two a lie every time they disagree.
 | ----------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `done`      | nobody — off the board        | `prState(pr) !== 'open'`.                                                                                                                                                                                                                                                                                                                                            |
 | `unwatched` | nobody — nobody opted it in   | `!isPrWatched(pr, watchLabel)`. First, because the harness filters these out of the dispatch world entirely — every arm below would describe rules that cannot fire.                                                                                                                                                                                                 |
+| `elsewhere` | somebody else's               | `isSomeoneElsesPr(pr)` ([#whose-pull-request-is-it](#whose-pull-request-is-it)) — hidden from the dispatch world beside the unwatched, so no rule below can fire either. Named `elsewhere` rather than a status of its own because the fold below turns it into `you` the moment they put the operator on it.                                                        |
 | `you`       | yours                         | A **pending proposal** whose ref names this PR; an agent on the branch **parked waiting**; a concern whose **attempt cap is spent** (rule `cooldown-escalate` did); or a failing check the **CI policy holds** (rule `pr-ci-blocked` handed it to a human) **with no other concern under it** — a held check that is one of two problems is a reason, not the court. |
 | `harness`   | the harness's                 | An agent is **running or queued** on the branch; an unstaffed **concern** (rules `pr-ci-failing`/`pr-ci-gate`/`pr-base-update`/`pr-base-update-conflict`/`pr-review-comment`) is dispatchable or on cooldown; the PR is **merge-ready** and the merge gate runs next cycle, or an accepted verdict is inside its settle window.                                      |
 | `settled`   | nobody — you already answered | Merge-ready, and a **rejection still stands** on `pr:<n>:merge`. The reason quotes the note you left.                                                                                                                                                                                                                                                                |
@@ -660,7 +711,7 @@ classified the PR first, and asking a pure function twice is one answer rather t
 ### What it reads, and what it deliberately does not
 
 - **The same lists the other predicates read**: the **unfiltered** open PR list (the dispatch world
-  plus `ctx.unwatchedPrs`), so an unwatched base still attributes, exactly as `inheritedCiFailure`
+  plus `ctx.hiddenPrs`), so an unwatched base still attributes, exactly as `inheritedCiFailure`
   requires; the tasks; the proposals in the store's newest-first order; the recent decision window;
   and the world snapshot's `takenAt` as "now".
 - **`proposalHold`, not the proposal row.** The `settled` arm asks the gate, so a rejection that
@@ -710,18 +761,20 @@ A pull request's review reaches the harness twice, from one reading.
 
 `unresolvedComments` is the fold every dispatch rule consumes: one `PrComment` per thread, keyed on
 the thread's root comment, carrying `handled` — the single bit that decides whether rule
-`pr-review-comment` has work. `reviewThreads` is the same threads with the conversation and the state
-kept: the replies, who wrote each one, where the thread hangs in the diff, and one of four states.
+`pr-review-comment` has work — with the thread's replies on it, so the fold is the whole conversation
+and not only its opening line ([below](#the-thread-is-the-conversation)). `reviewThreads` is the same
+threads with the state kept as well: who wrote each message, where the thread hangs in the diff, and
+one of four states.
 The providers build the threads and derive the comments from them (`threadComments` in
 `src/prThreads.ts`), so a thread the cockpit draws as open and a comment list that calls it handled
 cannot happen — there is one derivation, not two.
 
-| state | what it means | `handled` |
-| --- | --- | --- |
-| `open` | nobody from the fleet has answered | no |
-| `answered` | the harness wrote the last reply; it is with the reviewer | yes |
-| `resolved` | the reviewer closed the thread — their own verdict | yes |
-| `reopened` | the operator put it back to the fleet, whatever the provider says | no |
+| state      | what it means                                                                 | `handled` |
+| ---------- | ----------------------------------------------------------------------------- | --------- |
+| `open`     | no reply the harness recorded sending stands last in the thread               | no        |
+| `answered` | the newest reply is one the harness recorded sending; it is with the reviewer | yes       |
+| `resolved` | the reviewer closed the thread — their own verdict                            | yes       |
+| `reopened` | the operator put it back to the fleet, whatever the provider says             | no        |
 
 The first three are exactly the two arms `handled` always folded, said out loud. They are worth
 separating because the fold is right for dispatch and wrong for a person: "3 handled" cannot tell an
@@ -737,6 +790,89 @@ review comments to the GraphQL resolution read it was already making (`buildRevi
 the threads it already fetches (`src/integrations/azure/sourceControl.ts`). A provider that reports
 no file or line leaves `path`/`line` unset and the thread is drawn without a place rather than with
 a guessed one.
+
+### The thread is the conversation
+
+`PrComment` carries **`replies`** alongside the root's `body`, and `threadComments` fills it from the
+thread it folds. The root alone is not a review thread — it is where one started.
+
+This was the harness's second way of losing a reviewer's words, and it looked identical to the first
+from the outside. Everything an agent reads about a review is built off `unresolvedComments`: the
+thread list in the `pr-review-comment` prompt (`reviewThreadsNote`), the line a running agent gets
+when a thread moves (`reviewThreadNote`), and `world_read`. All three rendered `body`, which is the
+**root** and nothing else. So a reviewer's follow-up narrowing a finding, or an operator's reply
+saying which of a bot's five comments actually needs fixing and what the fix is, was read off the
+provider, recorded, drawn in the cockpit — and dropped on the way to the only reader that acts on it.
+The agent answered the opening comment of a conversation it could not see the rest of, which to the
+person who wrote the reply is indistinguishable from the fleet ignoring them, and is worse than the
+silence: an answer arrives, confidently, to a question nobody asked.
+
+`replies` is **absent rather than empty** on a thread nobody answered, so a provider that reports no
+replies and a thread that has none are one answer to every reader — neither is a conversation to
+render, and nothing that predates this changes shape.
+
+Three things follow from carrying it:
+
+- **The transcript names its authors, and marks the fleet's own replies.** Unmarked, an agent reads
+  the harness's last answer back as a fresh instruction and makes the same change twice. `ours` is
+  the record (above), so the badge is never on a person's message.
+- **The newest message is stated to be the live ask** (`lastWordNote`). A list of threads with
+  replies under them still reads as a list of comments to answer one by one; a reviewer who narrows
+  a finding replies rather than editing what they wrote first, so the opening comment is where the
+  thread started and not what it now wants. Appended only when some thread has a reply — a root-only
+  review renders exactly as it did before this existed.
+- **Notify de-dup keys on `prCommentSignalRef`, not on the thread ref.** De-dup asks "has this agent
+  already been told this", and keyed on the thread alone the answer is yes forever after the first
+  delivery — so a follow-up on a thread already in the running agent's prompt reached nobody, which
+  is precisely the feedback an operator gives while watching an agent work. The key is the thread ref
+  plus the id of its newest message, so it moves when the conversation does. It is a second function
+  rather than a change to `prCommentOrigin`, because that string is a *ref*: it is what a refused
+  `reply_draft` proposal is filed under and what `rejectionGuidance` matches whole, and it has to
+  stay the same across the life of a thread. A key that must move and a ref that must not are two
+  jobs.
+
+### Attribution is a record, never an identity
+
+`answered` and `PrThreadMessage.ours` both turn on one question — _did the fleet write this reply?_ —
+and the answer is a **row in `pr_replies_sent`**, written when the reply went out. Never the author.
+
+The identity rule it replaces read "the reply's author is `config.userId`". That identity is the
+credential the harness posts under, and on a single-operator deployment it is the operator's own
+account. Their follow-up on their own review thread therefore came back as the harness's: the cockpit
+drew a "fleet" badge on a message a person wrote, the thread flipped to `answered`, that folded to
+`PrComment.handled` — the only bit rule `pr-review-comment` reads — and their comment was marked as
+work already done and never dispatched for. Nothing went red, because by every type in the system
+nothing was wrong.
+
+Every reply the harness sends leaves through exactly one call site, `sink.postPrReply` in
+`src/executor/actionExecutor.ts`, and `SendResult.commentRef` carries the provider's own id for the
+comment it created — in the same vocabulary `PrThreadMessage.id` uses on the way back in.
+`PrReplyStore` (`src/store/prReplies.ts`) writes one row per reply, keyed on
+`(pr_number, comment_ref)`. Both providers read it through the same `SentPrReplies` seam, threaded in
+from `src/system.ts` via the registry, so the reply list a person reads and the comment list a rule
+dispatches on cannot come to disagree about a thread — which is why there is one derivation in
+`src/prThreads.ts` at all.
+
+`commentRef` is deliberately separate from `SendResult.ref`. `ref` is a URL for a person to click in
+the audit log and matches nothing on a read; comparing the wrong one would quietly never match, which
+reads exactly like the reply having never been sent.
+
+**Three cases fail toward the thread reading as unanswered work, on purpose.** A thread wrongly left
+open costs one dispatch, which is visible and cheap; a thread wrongly marked answered loses the
+reviewer's comment entirely, which is silent and permanent.
+
+- **The provider returned no usable comment ref.** No row is written and the thread keeps reading as
+  work. The miss goes through `errors.record`, so the operator is told which provider will not name
+  what it created rather than left with a thread the fleet answers every pulse for no visible reason.
+  There is no fallback to the author: that is the bug, not a degraded mode of it.
+- **A reply sent before this record existed.** No row, so the thread reads open once more and the
+  fleet answers it again. **There is no backfill**, and there cannot be one: the only evidence left on
+  such a thread is the author, and telling the operator's reply from the harness's by author is
+  exactly what does not work. The cost is one-off — the next reply _is_ recorded and the thread
+  settles.
+- **A row naming a comment the current reading does not carry** (a deleted reply, a recreated thread).
+  It matches nothing. Rows are never pruned on that basis; a read served from a stale cache would
+  otherwise throw the record away for good.
 
 ### Reopening a thread
 
@@ -858,7 +994,7 @@ have been a per-pull-request ledger stamping what was open on the pulse the revi
 its discriminating work happens exactly once, at adoption, after which it stamps every pull request
 eligible for ever: a table, a provider field for the pull request's age, and a predicate arm, all
 carrying a one-time problem. This command already answers the same question, permanently, and answers
-it *better* at the cutover, because the operator knows their own and the harness can only guess a
+it _better_ at the cutover, because the operator knows their own and the harness can only guess a
 window. `LUBBDUBB_PR` is in the environment, so the whole guard is `[ "$LUBBDUBB_PR" -lt 677 ]`,
 composed with whatever the real policy query is — a cutoff a team chose, at a precision they know,
 rather than two pulses the harness picked. What it does not soften is a backlog nobody has reviewed at
@@ -874,7 +1010,7 @@ thread is never asked about, because the pulse builds its reading exactly the wa
 ### Skipping a review altogether
 
 **Off** (`review.allowSkip`), and it is the one answer the triage can give that waives the gate rather
-than sizing it. Everything else it decides is about *how much* to read; this decides whether anything
+than sizing it. Everything else it decides is about _how much_ to read; this decides whether anything
 does, and with `review.blocking` it is also what lets the merge through. So a project asks for it
 deliberately or it is not on offer at all: `review_route` does not carry the argument, and
 `skipNote` puts nothing in the prompt.
@@ -885,7 +1021,7 @@ follows is read off the row by both halves, exactly as the intake is: `needsFlee
 nothing, and `reviewSatisfied` does not hold the merge. A skip that only did the first would make the
 triage's cheapest answer the one that wedges the branch.
 
-**It turns the triage on by itself.** `review.modes` is the switch for the *routing* question because a
+**It turns the triage on by itself.** `review.modes` is the switch for the _routing_ question because a
 decision with one option is not a decision — but with skipping allowed, one declared mode is two
 answers ("read it that way" or "do not"), so the triage runs. `triageRuns` is that reading, and every
 rule asks it rather than `routesBetweenModes`, which stays the narrower fact the triage's own prompt is
@@ -897,7 +1033,7 @@ something an agent said on purpose. And it is honoured only while the project st
 operator who turns `allowSkip` back off has every standing skip fall back to a review, the safe
 direction and the same one a route naming a removed mode takes.
 
-The prompt's wording pushes *against* the skip deliberately. A model asked to size a read and handed a
+The prompt's wording pushes _against_ the skip deliberately. A model asked to size a read and handed a
 "no read needed" option reaches for it more often than a team would, and the cost is asymmetric in
 exactly the way the fail-open default already accounts for.
 
@@ -943,6 +1079,28 @@ request itself where `review.publish` is on — before they give the approval th
 
 `prAttentionStatus` reads the same two halves, so a row that says a review is coming and a rule that
 dispatches one are one reading rather than two.
+
+### Where the operator sees it
+
+One reading, `prReviewState` (`src/review/prReviewState.ts`), folded onto every pull request on the
+wire beside `health`, `attention` and `ciVerdict`, and drawn as the review mark
+([17](17-cockpit.md#the-fleet-reviews-mark)). It has six answers where the verdict has two, because the
+verdict is the half an operator sees **last**: `deciding` (no route, and the triage takes one),
+`routed` (a mode chosen, nothing read yet), `clear`, `findings`, `skipped` and `elsewhere`. A pull
+request nothing has read is the common case, and drawing that as an absent verdict says the review
+found nothing.
+
+**A lens, never a gate.** It reads the same four rows `reviewSatisfied` reads and decides nothing:
+every arm the gate stands down on is an arm the mark names in its own words, so the two cannot
+disagree about whether a review is coming. And it is folded on the server for `ciVerdict`'s reason —
+the arms read `config.review`, so a browser deciding which of them applies would be a second glob of
+policy sitting nowhere near the rule it duplicates.
+
+**Absent where the review is off**, which is the default, and absent is what draws no mark: a grey "no
+review" glyph on every row of every default deployment is a claim about a feature nobody turned on.
+It is the one reading a *closed* pull request keeps, because it is a record of what was read rather
+than a verdict about what happens next — and "why did this merge with three findings on it" is asked
+precisely after the merge.
 
 ### The reviewer's checkout
 
@@ -1007,16 +1165,16 @@ Every field of `review` is written to be set by the **project** rather than by e
 what a team looks for in a diff belongs beside the code it is about. `lubbdubb.project.json` carries any
 key ([02](02-configuration.md#the-project-layer)), so all of it is committed once and shared.
 
-| Key                         | Default  | What it decides                                                                                                 |
-| --------------------------- | -------- | --------------------------------------------------------------------------------------------------------------- |
-| `review.enabled`            | `false`  | Whether the review runs at all. It switches both rules in and out of the pipeline.                              |
-| `review.blocking`           | `true`   | Whether an unreviewed pull request is held out of the merge gate. Off records the verdict and gates nothing.    |
-| `review.allowSkip`          | `false`  | Whether the triage may answer that a pull request needs no review at all. It also turns the triage on by itself. |
+| Key                         | Default  | What it decides                                                                                                                                                                                                 |
+| --------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `review.enabled`            | `false`  | Whether the review runs at all. It switches both rules in and out of the pipeline.                                                                                                                              |
+| `review.blocking`           | `true`   | Whether an unreviewed pull request is held out of the merge gate. Off records the verdict and gates nothing.                                                                                                    |
+| `review.allowSkip`          | `false`  | Whether the triage may answer that a pull request needs no review at all. It also turns the triage on by itself.                                                                                                |
 | `review.reviewedElsewhere`  | `null`   | A command asking whether a pull request has already been reviewed outside the harness — and the way a team adopts this without reviewing their backlog. Exit 0 = yes; anything else leaves the fleet reviewing. |
-| `review.publish`            | `'none'` | Whether the reviewer is told to post its findings on the pull request, through `reply_to_review` and only that. |
-| `review.modes`              | `{}`     | The ways this project reviews: `charterFile` and `profile` each. Two or more switches the triage on.            |
-| `review.defaultMode`        | `null`   | The mode a review falls back to when nothing routed it. Null takes the first declared.                          |
-| `review.routingCharterFile` | `null`   | The prose that decides between the modes, read by the triage.                                                   |
+| `review.publish`            | `'none'` | Whether the reviewer is told to post its findings on the pull request, through `reply_to_review` and only that.                                                                                                 |
+| `review.modes`              | `{}`     | The ways this project reviews: `charterFile` and `profile` each. Two or more switches the triage on.                                                                                                            |
+| `review.defaultMode`        | `null`   | The mode a review falls back to when nothing routed it. Null takes the first declared.                                                                                                                          |
+| `review.routingCharterFile` | `null`   | The prose that decides between the modes, read by the triage.                                                                                                                                                   |
 
 ```json
 {
@@ -1221,8 +1379,9 @@ Two things fall out, and both are load-bearing:
   rule `cooldown-escalate` had already handed to a human. One origin means one attempt cap means one
   reading of whose turn it is. Keyed on the origin alone, a
   reviewer's fourth comment would be swallowed by the origin the first three already claimed — the
-  signal an operator sends while reviewing an agent's work as it goes. `PrConcern.signals` carries the
-  thread refs; `dispatch_code_agent.signalRefs` records the ones a dispatch already put in an agent's
+  signal an operator sends while reviewing an agent's work as it goes. A *reply* on a thread the agent
+  already has is that same signal, which is why the key is `prCommentSignalRef` and not the thread ref
+  ([above](#the-thread-is-the-conversation)). `PrConcern.signals` carries those keys; `dispatch_code_agent.signalRefs` records the ones a dispatch already put in an agent's
   prompt, since `activeOrigins` sees task origins only and cannot tell that the running agent was
   launched with those threads (`dispatchedSignalsByBranch`).
 
@@ -1238,7 +1397,11 @@ against the cooldown cap, and at the cap a human instead of an agent.
 So the agent is asked to close that gap itself. `reviewRecheckNote` (`src/dispatcher/reviewThreads.ts`)
 is appended after the thread list and tells it to call `world_read("pr", "pr:<n>")` before finishing
 and compare `unresolvedComments` against the threads it was handed: a thread that is not in the
-prompt arrived after it started and is its to answer, and a body that no longer matches was edited.
+prompt arrived after it started and is its to answer, a body that no longer matches was edited, and a
+thread carrying a reply the prompt does not have was answered while it worked — that reply being the
+live ask on it now. The reading serves the replies for exactly this: a review moves by reply far more
+often than by a new thread, and roots-only this re-check could not see the commonest thing it exists
+to catch.
 It is the same snapshot the dispatch was decided against, carrying `observedAt`, so the note also
 says to read once more at the end of a long run. The agent then accounts for every thread by id,
 which is what makes a missed one visible rather than merely absent.

@@ -108,7 +108,7 @@
   --cn-hatch-flash: color-mix(in srgb, var(--cn-accent) 45%, #fff);
 
   --cn-r: 8px;
-  --cn-r-sm: 6px;
+  --cn-r-sm: 4px;
   --cn-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   --cn-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif;
 }
@@ -186,18 +186,62 @@
   font-weight: 400;
   letter-spacing: normal;
 }
-/* The compose control wears the link's face, because it is the same offer in the
-   same spot and the operator should not have to learn two of them: only where it
-   lands differs, and that is what the modal's head is for. It borrows `.ext-ref`'s
-   colours through the token layer rather than the class — `console.css` styling
-   `.ext-ref` directly is the one thing this stylesheet is tested not to do — and it
-   wears no `↗`, since it leaves for nowhere. */
+/* The compose control wears the same face as the link it replaces, because it is
+   the same offer in the same spot and the operator should not have to learn two of
+   them: only where it lands differs, and that is what the modal's head is for. It
+   sets padding and nothing else — the chip round it carries the chrome, and the ink
+   is the bar's own. It wears no `↗`, since it leaves for nowhere. */
 .cn-issue-btn {
-  color: var(--link-ink);
   padding: 0;
 }
-.cn-issue-btn:hover {
-  color: var(--text);
+/* The two ways out of the bar, drawn as controls rather than as more small print.
+   They sat side by side in one weight and one ink and read as a single run of
+   words: an operator scanning the bar saw neither, which is the whole failure for
+   a control whose value is being noticed at the moment something looks wrong.
+
+   The chrome is on the wrapper because one of the two faces is `ExtLink`, which
+   takes no class of its own — and `console.css` naming `.ext-ref` is the one thing
+   this stylesheet is tested not to do. The inner control keeps its own ink, so the
+   `↗` and the focus ring still come from the shared layer.
+
+   The question chip wears the console accent and the issue chip does not: they are
+   the same shape and the same size, and what separates them is the hue and the
+   punctuation. That is deliberate — the cheaper reading of "something looks wrong"
+   is the one that should catch the eye first.
+
+   `.cn-ident-act` and not `.cn-chip`: that class is taken, by the console's own
+   chip — mono, uppercase, square — and borrowing it dressed these two as readings
+   and, because a `<button>` does not take the inherited `text-transform` a
+   `<a>` does, drew one of the pair in sentence case beside the other in capitals. */
+.cn-ident-act {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border: 1px solid var(--cn-line-hi);
+  border-radius: 999px;
+  background: var(--cn-panel-2);
+}
+.cn-ident-act:hover {
+  background: var(--cn-hover);
+}
+.cn-ident-act.cn-ident-ask {
+  border-color: var(--cn-accent);
+}
+/* The question hand-off wears the same face as the compose control beside it —
+   same spot, same moment, and an operator should not have to learn two of them.
+   Its own class rather than a second `.cn-issue-btn`: that class is what
+   `console.test.ts` reads to tell the bar's two faces apart, and a deep link
+   answering to it would make the offline bar look like it could still compose. */
+/* `.cn`-prefixed, like `.cn .cn-tgl` above it and for the same reason: the
+   console's reset for its own markup is `.cn a` / `.cn button`, which counts as
+   (0,1,1) and beats a bare class — a rule that only said `.cn-ask-btn` would set
+   the accent and be overruled by `color: inherit`, which is a control that reads
+   exactly like the wordmark it sits beside. */
+.cn .cn-ask-btn {
+  color: var(--cn-accent);
+}
+.cn .cn-ask-btn:hover {
+  color: var(--cn-fg);
 }
 .cn-dot {
   width: 7px;
@@ -942,9 +986,22 @@
   line-height: 1.55;
   color: var(--cn-fg-dim);
 }
+/* One rung and the slash after it, kept together so a trail wrapping breaks
+   between rungs rather than orphaning a separator at the head of a line. */
+.cn-crumbstep {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+/* The mark that says *out*, drawn once at the head of the trail rather than on
+   each rung. It sits outside the buttons' hit targets, so the first label still
+   lands on the situation area's own left edge. */
+.cn-crumbback {
+  color: var(--cn-fg-faint);
+  margin-right: -3px;
+}
 .cn-crumb button {
-  padding: 3px 8px 3px 5px;
-  margin-left: -5px; /* the label sits on the situation area's own left edge */
+  padding: 3px 8px;
   border-radius: var(--cn-r-sm);
   color: var(--cn-fg-faint);
 }
@@ -1014,30 +1071,195 @@
   color: var(--cn-fg-faint);
   opacity: 0.85;
 }
-.cn-ghacts {
-  display: flex;
-  gap: 7px;
-  flex-wrap: wrap;
+/* A verdict chip carries the glyph that says whose reading it is, so it lays out
+   like a control even though it is not one. */
+.cn-ghverdict {
+  display: inline-flex;
   align-items: center;
-}
-/* A group wraps as a unit. `nowrap` inside is the whole point: a narrow page
-   breaks *between* read, steer and settle rather than through one of them, so a
-   control never loses the neighbours that say what kind of control it is. */
-.cn-ghgrp {
-  display: flex;
   gap: 5px;
+}
+/* ---------------------------------------------------------------------------
+ * The control kit
+ *
+ * The dressing for `web/src/components/controls.tsx`: one bar, one captioned
+ * group, one button, one group of grouped buttons, one dropdown. Every rule here
+ * is written *once* and reached only through a component, because the goal
+ * header proved what the alternative costs — nine controls hand-written as class
+ * strings, drawing at two sizes, one of them carrying an environments card's
+ * margin, and a `<select>` at a third height because the platform drew it.
+ *
+ * Two specificity traps are load-bearing and neither is obvious:
+ * `.cn button { font: inherit }` outranks a bare class, so anything here that
+ * sets a control's font is scoped `.cn` first; and `.cn-tgl` sets no margin, so
+ * a tone class must never be a name some *card* also uses.
+ * → docs/spec/17-cockpit.md#the-control-kit
+ * ------------------------------------------------------------------------- */
+
+.cn-ctlbar {
+  display: flex;
+  /* Wider than the gap between the rows above it, and with a little air over the
+     whole bar: three rows of small type stacked on one rhythm read as one dense
+     block, and the bar is the row you act on rather than read. */
+  margin-top: 5px;
+  gap: 12px;
+  flex-wrap: wrap;
+  /* Stretch, with each group pushing its controls to its own bottom: the captions
+     then share one line and so do the controls, however tall a group's own
+     controls happen to be. `flex-end` aligned the controls and left the captions
+     on as many baselines as there were groups. */
+  align-items: stretch;
+}
+/* A captioned group: the caption above, its controls below, wrapping as one
+   object. Never shrinks — the bar wraps a whole group to the next line rather
+   than squeezing one, which is the difference between a bar that reflows and a
+   segmented control crushed to a sliver. */
+.cn-ctlgrp {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 5px;
+  flex: none;
+}
+.cn-ctlcap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 500 10px/1 var(--cn-mono);
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+  padding-left: 1px;
+}
+/* The controls themselves. `nowrap` is the whole point: a narrow page breaks
+   *between* groups rather than through one, so a control never loses the
+   neighbours that say what kind of control it is. */
+.cn-ctlrow {
+  display: flex;
+  gap: 6px;
   align-items: center;
   flex-wrap: nowrap;
+  flex: none;
 }
-.cn-ghsep {
+.cn-ctlsep {
   width: 1px;
   align-self: stretch;
   background: var(--cn-line);
 }
-/* Distance is the half of the warning a colour cannot carry. `auto` margins put
-   it at the far end at any width, and the group before it keeps its own end. */
-.cn-ghend {
-  margin-left: auto;
+/* An icon rides its label rather than replacing it, so it never takes the
+   lettering's weight — a step back from the words it sits beside. */
+.cn-ic {
+  flex: none;
+  opacity: 0.85;
+}
+/* One height for every control in a bar, whatever element it is built from. A
+   `<select>`, a `<button>` and an `<a>` each size themselves differently from the
+   same padding, and three heights in one row is most of what "these controls
+   don't match" means. */
+.cn-ctlbar .cn-tgl,
+.cn-ctlbar .cn-ctlsegb,
+.cn-ctlsel .cn-profile {
+  min-height: 30px;
+  box-sizing: border-box;
+  font-size: 12px;
+  padding-left: 11px;
+  padding-right: 11px;
+}
+/* A count on the control it belongs to — how many instructions already stand, on
+   the control that adds one — rather than a second sentence somewhere else. */
+.cn-ctlcount {
+  font: 500 10px/15px var(--cn-mono);
+  font-style: normal;
+  border-radius: 999px;
+  padding: 0 5px;
+  background: var(--cn-track);
+}
+
+/* Grouped buttons. Segments share an edge — that is the whole statement: these
+   are alternatives, not separate things you might do. The pressed one carries a
+   ground rather than a border, so which state a thing is in reads without
+   pressing anything. */
+.cn-ctlseg {
+  display: inline-flex;
+  align-items: stretch;
+  flex: none;
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r-sm);
+  overflow: hidden;
+}
+.cn .cn-ctlsegb {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  border-right: 1px solid var(--cn-line);
+  background: var(--cn-panel-2);
+  color: var(--cn-fg-dim);
+  font: inherit;
+  font-size: 11.5px;
+  padding: 4px 10px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.cn-ctlsegb:last-child {
+  border-right: 0;
+}
+.cn-ctlsegb:hover {
+  background: var(--cn-hover);
+  color: var(--cn-fg);
+}
+.cn-ctlsegb[aria-pressed='true'] {
+  background: var(--cn-blue-fill);
+  color: var(--cn-fg);
+}
+.cn-ctlsegb.cn-tglon[aria-pressed='true'] {
+  background: var(--cn-green-fill);
+  color: var(--cn-green-ink);
+}
+/* Red at rest, not only on hover: a segment that destroys something is still the
+   one control an operator must not reach for by accident, and being part of the
+   state it ends does not soften what it does. */
+.cn-ctlsegb.cn-danger {
+  color: var(--cn-red-ink);
+  border-left: 1px solid var(--cn-red-line);
+}
+.cn-ctlsegb.cn-danger:hover {
+  background: var(--cn-red-fill);
+  color: var(--cn-red-ink);
+}
+.cn-ctlsegb[aria-disabled='true'],
+.cn-ctlsegb[aria-disabled='true']:hover {
+  background: var(--cn-red-fill);
+  cursor: default;
+}
+
+/* A dropdown, dressed to sit in a bar: the kit's glyph on the left, its own caret
+   on the right, and the platform's rendering off — so it stops being the one
+   control in the row somebody else draws. The picker inside keeps owning its
+   options. */
+.cn-ctlsel {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  color: var(--cn-fg-faint);
+}
+.cn-ctlsel .cn-ic,
+.cn-ctlsel::after {
+  position: absolute;
+  pointer-events: none;
+  color: var(--cn-fg-faint);
+}
+.cn-ctlsel .cn-ic {
+  left: 9px;
+}
+.cn-ctlsel::after {
+  content: '▾';
+  right: 9px;
+  font-size: 9px;
+}
+.cn-ctlsel .cn-profile {
+  appearance: none;
+  padding-left: 29px;
+  padding-right: 22px;
 }
 
 /* The goal's track: the pipeline in one row, each stretch a way to the section
@@ -1572,6 +1794,176 @@
   flex: 1;
   padding-left: 8px;
 }
+/* The signals card: one goal's declared checks, and the form that writes one.
+   Rows rather than a table, because a check is four things of different shapes —
+   a sentence, a query, an expectation and a reading — and only the first two are
+   the same width twice.
+
+   Every colour here is a token: the rail carries the dry run's verdict, and
+   `unknown` takes amber for `.cn-watch-row`'s reason — an environment nobody could
+   read is work, not an all-clear. A check awaiting a ruling takes the violet the
+   console already spends on "a thing that is not the fleet's own doing". */
+.cn-sig {
+  display: flex;
+  flex-direction: column;
+}
+.cn-sig-row {
+  display: grid;
+  grid-template-columns: 2px minmax(0, 1fr) auto;
+  gap: 0 12px;
+  align-items: start;
+  padding: 11px 13px 11px 0;
+  border-top: 1px solid var(--cn-line-soft);
+  min-width: 0;
+}
+.cn-sig-row:first-of-type {
+  border-top: 0;
+}
+.cn-sig-stripe {
+  align-self: stretch;
+  border-radius: var(--cn-r-sm);
+  background: var(--cn-inert);
+}
+.cn-sig-row.fires .cn-sig-stripe {
+  background: var(--cn-green-line);
+}
+.cn-sig-row.zero .cn-sig-stripe,
+.cn-sig-row.unknown .cn-sig-stripe {
+  background: var(--cn-amber-line);
+}
+.cn-sig-row.pending .cn-sig-stripe {
+  background: var(--cn-violet-line);
+}
+.cn-sig-row.editing {
+  background: var(--cn-panel-2);
+}
+.cn-sig-body,
+.cn-sig-form {
+  min-width: 0;
+  padding-left: 10px;
+}
+.cn-sig-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cn-sig-expect {
+  margin: 3px 0 0;
+  color: var(--cn-fg-dim);
+  font-size: 12px;
+}
+/* The query, and the presence query under it. Its own scroller: a Kusto line is
+   long, and a card that scrolls the page sideways to show one is a card nobody
+   reads twice. */
+.cn-sig-query {
+  margin: 6px 0 0;
+  padding: 6px 9px;
+  background: var(--cn-bg);
+  border: 1px solid var(--cn-line-soft);
+  border-radius: var(--cn-r-sm);
+  font: 11.5px/1.5 var(--cn-mono);
+  color: var(--cn-fg-dim);
+  overflow-x: auto;
+  white-space: pre;
+}
+.cn-sig-why {
+  margin-top: 6px;
+  color: var(--cn-fg-faint);
+  font-size: 12px;
+}
+.cn-sig-read {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--cn-fg-dim);
+}
+.cn-sig-read.fires {
+  color: var(--cn-green-ink);
+}
+.cn-sig-read.zero,
+.cn-sig-read.unknown {
+  color: var(--cn-amber-ink);
+}
+.cn-sig-ctrls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.cn-sig-row .cn-btn {
+  padding: 4px 10px;
+  font-size: 11.5px;
+}
+.cn-btn.cn-danger {
+  color: var(--cn-red-ink);
+}
+.cn-sig-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cn-sig-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.cn-sig-field > span {
+  font: 500 10px/1.4 var(--cn-mono);
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+}
+/* `.cn-in` carries the field itself — a class on the element and never `.cn input`,
+   which would reach inside every component the console embeds. This adds only what
+   is particular to a form inside a card row. */
+.cn-sig-field .cn-in {
+  width: 100%;
+}
+.cn-sig-field .cn-in:disabled {
+  color: var(--cn-fg-faint);
+}
+.cn-sig-area {
+  font-family: var(--cn-mono);
+  resize: vertical;
+}
+.cn-sig-narrow {
+  max-width: 120px;
+}
+.cn-sig-expects {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.cn-sig-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--cn-fg-dim);
+  padding-bottom: 5px;
+}
+/* A refusal, whether the form's own or the environment's. Amber and not red: the
+   check is written either way, and what is being said is that nothing has proved
+   it resolves — which is a thing to fix, not a failure. */
+.cn-sig-warn {
+  margin: 0;
+  padding-left: 8px;
+  border-left: 2px solid var(--cn-amber-line-hi);
+  font-size: 12px;
+  color: var(--cn-amber-ink);
+}
+.cn-sig-spacer {
+  margin-left: auto;
+}
+.cn-sig-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 11px 13px 2px 10px;
+  border-top: 1px solid var(--cn-line-soft);
+}
 .cn-grpname {
   display: flex;
   align-items: center;
@@ -1636,7 +2028,18 @@
 .cn-nested {
   padding-left: 41px;
 }
-.cn-tgl {
+/* Scoped to `.cn` on purpose, and this is load-bearing: `.cn button` sets
+   `font: inherit` at one specificity higher than a bare class, so for as long as
+   this rule was `.cn-tgl` the toggles that are *buttons* drew at the console's
+   13px while the two that are *links* drew at 11.5px — one row, two sizes, and
+   nothing red. → docs/spec/17-cockpit.md#the-headers-controls */
+.cn .cn-tgl {
+  /* Inline-flex on the class itself, not only on the anchors: every one of these
+     now carries a glyph beside its label, and an inline box would set them on the
+     text baseline with nothing between them. */
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   border: 1px solid var(--cn-line);
   background: var(--cn-panel-2);
   border-radius: var(--cn-r-sm);
@@ -1656,8 +2059,6 @@
    because nothing wearing it was a link when it was written; no colour is stated
    here, so it stays on the toggle's tokens in both themes. */
 a.cn-tgl {
-  display: inline-flex;
-  align-items: center;
   text-decoration: none;
 }
 /* A toggle with nowhere to go. Drawn rather than hidden — a control that comes and
@@ -1688,10 +2089,28 @@ a.cn-tgl {
   background: var(--cn-red);
   color: var(--cn-on-red);
 }
-.cn-tgl.cn-watch {
+/* The toggle's "on" tint. `cn-tglon` rather than `cn-watch`, which is also the
+   class on the environments card: nothing in `.cn-tgl` resets a margin, so the
+   card's `margin: 0 13px 10px 26px` and its 2px left border rode along on every
+   watched, prioritised or instructed goal — a control sitting 26px out of its own
+   group, on exactly the goals an operator looks at most. */
+.cn .cn-tgl.cn-tglon {
   border-color: var(--cn-blue-line-hi);
   color: var(--cn-blue-ink-hi);
   background: var(--cn-blue-bg);
+}
+/* The one control in the header an operator presses daily. Below `.cn-tgl` on
+   purpose: it overrides the toggle's own ground and edge, and at equal
+   specificity the later rule is the one that lands. */
+.cn .cn-tgl.cn-tglprim {
+  border-color: var(--cn-accent);
+  background: var(--cn-blue-bg);
+  color: var(--cn-fg);
+  font-weight: 500;
+}
+.cn .cn-tgl.cn-tglprim:hover {
+  background: var(--cn-blue-fill);
+  color: var(--cn-fg);
 }
 /* The console's own field, and the counterpart to `.cn-btn`. The shared sheet's
    element base draws every control in the *page's* family, which is a step lighter
@@ -1751,12 +2170,6 @@ a.cn-tgl {
   border-radius: 4px;
   padding: 2px 6px;
   white-space: nowrap;
-}
-.cn-crumbs {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
 }
 .cn-pill {
   padding: 4px 10px;
@@ -1856,6 +2269,10 @@ a.cn-tgl {
   /* The watch switch: a glyph and the room to press it, and no more — it is the
      one slot that is the same on every row, so its whole job is to be skippable. */
   --cn-w-eye: 22px;
+  /* The mark for who asked: a 20px disc and the gap that keeps it off the title.
+     A width rather than a ceiling — it is the same glyph on every row, so a rail
+     that gave way would move the subject's left edge from card to card. */
+  --cn-w-who: 24px;
   --cn-w-why: 16px;
   /* The same column when its rows wear a word instead of a marker: wide enough for
      the longest state the fleet card has ("at a keyboard"). */
@@ -1868,7 +2285,13 @@ a.cn-tgl {
      while an earlier one is in staging does. */
   --cn-w-chips: 148px;
   --cn-w-act: 124px;
-  --cn-w-refs: 108px;
+  /* Two references and the rule that fences them off — a pull request and the goal
+     it delivers, which is the widest this slot ever gets now that the word between
+     them is gone. At 108px the pair did not fit, and the group being `flex-end`
+     the overflow went *left*, painting over the reading slot beside it: the row's
+     `agent on it` chip read as `ag`. A ceiling, so a narrow card still takes it
+     back. */
+  --cn-w-refs: 152px;
   /* The subject's floor, and the only one of these that is a minimum rather than a
      ceiling. Every rail above gives way to it, because a title clipped to one word
      is the row saying nothing at all while the slots beside it keep room they do
@@ -2008,9 +2431,14 @@ button.cn-grow {
 }
 /* On the grid the column is the width, so the group stops setting its own — and
    it keeps its rule even when this row's is empty, because the rule is the
-   card's edge between what a row *is* and what it *names*, not this row's. */
+   card's edge between what a row *is* and what it *names*, not this row's.
+
+   Clipped, because the group packs to the right: content wider than its column
+   overflows to the *left*, over the slot beside it, and a reference painted on
+   top of a chip is worse than one cut off at the rule. */
 .cn-frow .cn-refs {
   min-width: 0;
+  overflow: hidden;
   border-left-color: var(--cn-line);
 }
 
@@ -2133,6 +2561,13 @@ button.cn-grow {
   background: var(--cn-red-fill);
   border-color: var(--cn-red-line);
   color: var(--cn-red-ink);
+}
+/* An id, drawn as the author typed it: these are lowercase kebab-case and are
+   typed back into a form, so the chip's own uppercase would be a lie about the
+   one string on the card that has to be copied exactly. */
+.cn-chip.cn-lower {
+  text-transform: none;
+  letter-spacing: 0;
 }
 .cn-chip.cn-mute {
   color: var(--cn-fg-faint);
@@ -3164,6 +3599,66 @@ button.cn-grow {
   }
 }
 
+/* ── The band, and who asked ──────────────────────────────────────────────────
+
+   Two readings the rack draws and no other card does yet, both about the same
+   question: which of these is *mine*. The band answers it for the card, the mark
+   answers it for the row, and neither spends a hue — the five the console already
+   has each mean something, and a sixth would be a word to learn.
+   → docs/spec/17-cockpit.md#yours-then-the-fleets */
+
+/* A heading over the rows under it, on the card's full width rather than on the
+   rail: lined up with the subject column it would read as a row whose every
+   other slot happened to be empty. */
+.cn-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 13px;
+  background: var(--cn-panel-2);
+  border-bottom: 1px solid var(--cn-line-soft);
+  font: 600 9.5px/1 var(--cn-mono);
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+}
+/* The band that is your move, in the tone the state column already says it in —
+   the same red an `ask` chip wears, at the band's weight rather than a chip's. */
+.cn-group.cn-group-ask {
+  background: var(--cn-red-fill);
+  color: var(--cn-red-ink);
+}
+.cn-group-n {
+  margin-left: auto;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Who asked, as a mark. A person is a filled disc carrying their initials; the
+   harness is a hollow dashed one, which is the *absence* of a person rather than
+   a second kind of one. */
+.cn-who {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font: 700 8.5px/1 var(--cn-mono);
+  letter-spacing: 0.2px;
+  cursor: default;
+}
+.cn-who-person {
+  background: color-mix(in srgb, var(--cn-red) 16%, var(--cn-panel));
+  border: 1px solid var(--cn-red-line);
+  color: var(--cn-red-ink);
+}
+.cn-who-none {
+  border: 1px dashed var(--cn-line-hi);
+  color: var(--cn-fg-faint);
+  font-weight: 400;
+}
+
 /* A row with work happening on it, as you read it.
    The edge says which row; the sweep says it is moving. Both green, the fleet
    lamp's own colour for a running agent, so this is the same reading that card
@@ -3276,24 +3771,41 @@ button.cn-grow {
   color: var(--cn-blue-ink);
 }
 
-/* ---------- review threads ---------- */
+/* ---------- review threads ----------
+   A thread is a conversation with a state, so it is drawn as a card rather than as
+   a row in a list: the run of hairlines it used to be put one thread's reply hard
+   against the next thread's question, and the amber wash on the two states that
+   are still work covered the whole card rather than marking it. State is the left
+   edge now — one glance down the edges says what is still owed — and the ground
+   stays tinted only where the answer is on us. */
 .cn-threads {
   display: flex;
   flex-direction: column;
+  gap: 9px;
+  padding: 2px 13px 13px;
 }
 .cn-thread {
-  border-bottom: 1px solid var(--cn-line-soft);
-  padding: 9px 13px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  border: 1px solid var(--cn-line-soft);
+  border-left: 3px solid var(--cn-inert);
+  border-radius: var(--cn-r-sm);
+  background: var(--cn-panel-2);
+  padding: 9px 11px 10px;
 }
-.cn-thread:last-child {
-  border-bottom: 0;
-}
-/* The two states that are still work carry a tint of the ground, so "what is on
-   us" reads off the shape of the list before any chip is read. A resolved thread
-   is drawn back rather than hidden — it is the record of what was asked. */
 .cn-thread.cn-th-open,
 .cn-thread.cn-th-reopened {
-  background: var(--cn-amber-bg);
+  border-left-color: var(--cn-amber);
+  background: var(--cn-amber-fill);
+}
+.cn-thread.cn-th-answered {
+  border-left-color: var(--cn-accent);
+}
+/* Drawn back rather than hidden — a resolved thread is the record of what was
+   asked, and the ask is what the page is for. */
+.cn-thread.cn-th-resolved {
+  border-left-color: var(--cn-green);
 }
 .cn-thread.cn-th-resolved .cn-thtext,
 .cn-thread.cn-th-resolved .cn-thwho {
@@ -3304,12 +3816,11 @@ button.cn-grow {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  margin-bottom: 6px;
 }
 /* Where the thread hangs. A path is the one thing here that can be longer than the
    column, so it scrolls inside itself rather than pushing the controls off the row. */
 .cn-thwhere {
-  font: 11px/1 var(--cn-mono);
+  font: 11px/1.35 var(--cn-mono);
   color: var(--cn-fg-dim);
   background: var(--cn-track);
   border-radius: 4px;
@@ -3319,29 +3830,51 @@ button.cn-grow {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* The thread's one control, and the one place `.cn-tgl` has to say its own border
+   out loud: the console's reset (`.cn button`) is more specific than the class, so
+   a toggle inside it draws as bare words — which on a card whose every other line
+   *is* words read as a label rather than as the thing you press. */
 .cn-throw .cn-tgl {
   margin-left: auto;
+  border: 1px solid var(--cn-line);
 }
+.cn-throw .cn-tgl:hover {
+  border-color: var(--cn-line-hi);
+}
+/* One message, as a card on the thread's ground. The bubble is what makes a
+   conversation read as one: the rail it replaced said where a message started and
+   nothing about where the one before it ended, so two replies ran together. */
 .cn-thmsg {
   display: flex;
-  gap: 9px;
-  padding: 4px 0 0 3px;
-}
-/* The rail is the thread's shape: one line down the side of every message, tinted
-   where the harness is the one speaking. */
-.cn-thrail {
-  width: 2px;
-  border-radius: 2px;
-  background: var(--cn-line-hi);
-  flex: none;
-}
-.cn-thours .cn-thrail {
-  background: var(--cn-violet);
-}
-.cn-thbody {
+  flex-direction: column;
+  gap: 3px;
+  border: 1px solid var(--cn-line-soft);
+  border-radius: var(--cn-r-sm);
+  background: var(--cn-panel);
+  padding: 7px 10px 8px;
   min-width: 0;
 }
+/* The harness speaking, in the violet it speaks in everywhere else. On a
+   single-operator deployment the fleet posts under the operator's own credential,
+   so the tint and the mark are the only things that say who is talking. */
+.cn-thmsg.cn-thours {
+  background: var(--cn-violet-fill);
+  border-color: var(--cn-violet-line);
+}
+/* The replies, indented under the comment they answer and strung on one line, so a
+   thread's shape says how far the conversation got before anything is read. */
+.cn-threplies {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-left: 9px;
+  padding-left: 11px;
+  border-left: 1px solid var(--cn-line);
+}
 .cn-thwho {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 11.5px;
   font-weight: 600;
   color: var(--cn-fg-dim);
@@ -3355,7 +3888,6 @@ button.cn-grow {
   background: var(--cn-violet-fill);
   padding: 2px 4px;
   border-radius: 3px;
-  margin-left: 6px;
 }
 .cn-thtext {
   font-size: 12.5px;
@@ -3365,6 +3897,294 @@ button.cn-grow {
 .cn-thtext p {
   margin: 3px 0;
 }
+.cn-thtext p:first-child {
+  margin-top: 0;
+}
+.cn-thtext p:last-child {
+  margin-bottom: 0;
+}
 .cn-thtext pre {
   overflow-x: auto;
+}
+
+/* ---------------------------------------------------------------------------
+   The obstacle board (docs/spec/27-obstacles.md#in-the-cockpit).
+
+   Every colour is a `var()`, never a literal, because a hex at a use site is a
+   surface that stays dark when somebody switches to Light and the only thing in
+   `check` that reads CSS at all is `test/cockpitTheme.test.ts`. Nothing new is
+   declared either: the board borrows the console's palette rather than growing
+   one that could drift from it — a row here is the same kind of thing as a row
+   anywhere else in the situation area, and a second vocabulary for it would be a
+   second thing to retune.
+   --------------------------------------------------------------------------- */
+.ob {
+  display: grid;
+  gap: 16px;
+  max-width: 1040px;
+}
+.ob-head > h2 {
+  margin: 0;
+  font: 600 15px/1.2 var(--cn-ui);
+}
+.ob-blurb {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--cn-fg-dim);
+  max-width: 80ch;
+}
+
+/* The four figures. Nothing here is derived — each is a count of rows something
+   actually wrote, and *turns an agent did not spend* is deliberately absent. */
+.ob-counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+.ob-tile {
+  border: 1px solid var(--cn-line);
+  background: var(--cn-panel);
+  padding: 8px 10px;
+}
+.ob-tile-wide {
+  grid-column: span 2;
+}
+.ob-tile-n {
+  font: 600 20px/1.1 var(--cn-ui);
+  color: var(--cn-fg);
+}
+.ob-tile-of {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--cn-fg-dim);
+}
+.ob-tile-l {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--cn-fg-dim);
+  margin-top: 2px;
+}
+.ob-tile-note {
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--cn-fg-faint);
+  margin-top: 4px;
+}
+
+.ob-section > h3 {
+  margin: 0;
+  font-size: 13px;
+}
+.ob-n {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--cn-fg-dim);
+}
+.ob-note {
+  margin: 2px 0 8px;
+  font-size: 12px;
+  color: var(--cn-fg-dim);
+  max-width: 88ch;
+}
+.ob-refusal {
+  margin: 0;
+  padding: 6px 8px;
+  font-size: 12px;
+  border: 1px solid var(--cn-red-line);
+  background: var(--cn-red-fill);
+  color: var(--cn-red-ink);
+}
+
+/* Sighted-once rows reach nobody, so they are drawn quieter than the ones being
+   told to the fleet. Dimming is the whole signal: they are not a lesser kind of
+   row, they are a row nothing is acting on yet. */
+.ob-dim .ob-row,
+.ob-row.dim {
+  opacity: 0.72;
+}
+
+.ob-fold {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: 600 13px/1.2 var(--cn-ui);
+  color: var(--cn-fg);
+  cursor: pointer;
+}
+.ob-fold:hover {
+  color: var(--cn-accent);
+}
+
+.ob-row {
+  border: 1px solid var(--cn-line);
+  background: var(--cn-panel);
+  padding: 8px 10px;
+  margin-bottom: 6px;
+}
+.ob-row.open {
+  border-color: var(--cn-line-hi);
+  background: var(--cn-panel-2);
+}
+.ob-row-top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ob-claim {
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  font: 500 13px/1.4 var(--cn-ui);
+  color: var(--cn-fg);
+  cursor: pointer;
+}
+.ob-claim:hover {
+  color: var(--cn-accent);
+}
+.ob-state {
+  font: 600 9.5px/1 var(--cn-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 4px;
+  border: 1px solid var(--cn-line-hi);
+  color: var(--cn-fg-dim);
+}
+.ob-state.s-standing {
+  border-color: var(--cn-amber-line);
+  background: var(--cn-amber-fill);
+  color: var(--cn-amber);
+}
+.ob-state.s-owned {
+  border-color: var(--cn-blue-line);
+  background: var(--cn-blue-fill);
+  color: var(--cn-blue-ink-hi);
+}
+.ob-state.s-resolved {
+  border-color: var(--cn-green-line);
+  background: var(--cn-green-fill);
+  color: var(--cn-green-ink);
+}
+.ob-kind {
+  font: 600 9.5px/1 var(--cn-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 4px;
+  border: 1px solid var(--cn-violet-line);
+  background: var(--cn-violet-fill);
+  color: var(--cn-violet);
+}
+
+.ob-row-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 5px;
+  font-size: 11.5px;
+  color: var(--cn-fg-dim);
+}
+.ob-keys {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.ob-key {
+  font: 11px/1.4 var(--cn-mono);
+  border: 1px solid var(--cn-line-hi);
+  background: var(--cn-bg);
+  padding: 1px 4px;
+  color: var(--cn-fg-dim);
+}
+/* A key that only suggests resolves nothing and delivers nothing, so it must not
+   be drawn like one that does — an operator reading a suggestion as an identity
+   is the wrong-merge failure arriving through the eyes. */
+.ob-key.suggests {
+  border-style: dashed;
+  color: var(--cn-fg-faint);
+}
+.ob-key.none {
+  font-style: italic;
+  border-color: var(--cn-red-line);
+  color: var(--cn-red-ink);
+}
+.ob-key-k {
+  color: var(--cn-fg-faint);
+  margin-right: 4px;
+}
+.ob-decay {
+  color: var(--cn-fg-faint);
+}
+.ob-ended {
+  color: var(--cn-green-ink);
+}
+
+.ob-open {
+  margin-top: 8px;
+  border-top: 1px solid var(--cn-line);
+  padding-top: 8px;
+}
+.ob-sightings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.ob-words {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.ob-why {
+  margin: 2px 0 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  color: var(--cn-fg-dim);
+}
+.ob-why code {
+  font: 11px/1.4 var(--cn-mono);
+  color: var(--cn-fg);
+}
+.ob-harness {
+  font-style: italic;
+}
+.ob-not-mine {
+  margin: 3px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--cn-fg-faint);
+  overflow-wrap: anywhere;
+}
+.ob-not-mine-l {
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-size: 10px;
+}
+
+.ob-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.ob-own {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.ob-own input {
+  font: 12px/1.4 var(--cn-mono);
+  padding: 3px 6px;
+  border: 1px solid var(--cn-line-hi);
+  background: var(--cn-bg);
+  color: var(--cn-fg);
+  min-width: 26ch;
 }

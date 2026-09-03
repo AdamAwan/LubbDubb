@@ -1,6 +1,7 @@
 import { loadDeploymentConfig } from '../config.js';
 import { watchConfigFile } from '../configWatch.js';
 import { UPGRADE_EXIT_CODE } from '../selfUpdate/handoff.js';
+import { installRoot } from '../selfUpdate/buildStanding.js';
 import { buildSystem } from '../system.js';
 import { installDesktopSkill } from '../validation/desktopSkill.js';
 import { buildApp } from './app.js';
@@ -56,7 +57,12 @@ async function main(): Promise<void> {
   // fleet's: a false return is a harness whose checks are all run by the fleet,
   // not a failed start, and the boot lines below say which of the two happened.
   const desktopReady = await system.desktop.listen();
-  if (desktopReady) installDesktopSkill(config.validation.desktopSkillPath, system.errors);
+  // The skill is handed the harness's *own* checkout as well, because the session
+  // it is written for opens on `repoRoot` — the repository the fleet works on — and
+  // the two are different directories except while LubbDubb is dogfooding itself.
+  // A question about the harness's behaviour answered from the harness's output is
+  // the confident wrong answer the skill's own `ask` section warns about.
+  if (desktopReady) installDesktopSkill(config.validation.desktopSkillPath, system.errors, installRoot());
 
   // Runs before the boot cycle, though the hold does not depend on that: the
   // harness re-asks every pulse, so what this ordering buys is only that the very
@@ -193,6 +199,19 @@ async function main(): Promise<void> {
   // asked. Anything it will not restore itself — a real crash inside the upgrade
   // window, a worktree that has gone — still holds the pulse and still needs a
   // verdict, so both halves are announced.
+  //
+  // First, though, what the fleet comes back *as*. `RuntimeControl` is not
+  // persisted, so every other boot seeds `paused` from `config.startPaused` — the
+  // right answer for a cold boot and the wrong one for a restart that is really one
+  // process handing the fleet to the next. Left to the default, an operator's own
+  // pause is dropped on the way through an upgrade and the fleet comes back
+  // dispatching; on a deployment that starts paused by policy, a fleet that was
+  // running a second ago comes back parked. Both are silent, and under
+  // `selfUpdate.autoUpdate` nobody is at the screen.
+  const pausedBack = system.updates.restorePause();
+  if (pausedBack !== null && pausedBack)
+    console.log('[lubbdubb] dispatch is still paused after the upgrade — it was paused before it');
+
   const upgrade = system.recovery.settleUpgrade();
   system.updates.clearIntent();
   for (const item of upgrade.restored)

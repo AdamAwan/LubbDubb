@@ -17,6 +17,7 @@ const { buildDemoState } = await import('../web/src/demo/fixtures.js');
 const { Overview } = await import('../web/src/console/Overview.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
 const { goalIssue } = await import('../web/src/view/goalPage.js');
+const { hasPrPage } = await import('../web/src/view/prPage.js');
 
 /**
  * The view model over the demo world, or over a doctored one.
@@ -67,6 +68,8 @@ const render = (v: CockpitView): string =>
       refUrls: v.state.refUrls,
       openGoal: () => undefined,
       hasGoal: (ref: string) => goalIssue(v.state, ref) !== undefined,
+      openPr: () => undefined,
+      hasPr: (n: number) => hasPrPage(v.state, n),
       children: createElement(Overview, { view: v, actions }),
     }),
   );
@@ -209,9 +212,17 @@ test('a pull-request row wears the court the server put it in', () => {
   const html = render(view());
   const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('Up next'));
   const rows = rack.split(ROW).slice(1);
-  assert.equal(rows.length, state.world.pullRequests.length, 'every open pull request is drawn');
+  // In the card's own order, not the world's: the rack puts the pull requests
+  // somebody handed you above the fleet's, so a positional match against
+  // `world.pullRequests` would be asserting against a list nothing draws.
+  const open = state.world.pullRequests;
+  const drawn = [
+    ...open.filter((pr) => pr.attention.assignedToYou !== undefined),
+    ...open.filter((pr) => pr.attention.assignedToYou === undefined),
+  ];
+  assert.equal(rows.length, open.length, 'every open pull request is drawn');
   for (const [i, row] of rows.entries()) {
-    const pr = state.world.pullRequests[i];
+    const pr = drawn[i];
     assert.ok(pr, 'the fixtures line up with the rows');
     assert.ok(
       row.includes(`>${pr.attention.status}</button>`),

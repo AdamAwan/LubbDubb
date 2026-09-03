@@ -171,40 +171,19 @@ test('a route that answers off the store still does so before reading its body',
   const system = build();
   const { app } = await buildApp(system);
 
-  // The exit route reads the claim first: one that does not exist is a 404 whatever
-  // the body says, which is the order the route it replaced answered in.
+  // The filing route reads the work node first: a ref that names nothing is a 404
+  // whatever the body says. The nested `checked` is what puts the body's refusal
+  // second while keeping it the same one refusal path as everywhere else.
   const missing = await app.inject({
     method: 'POST',
-    url: '/api/knowledge/facts/nope/exit',
-    payload: { exit: 'nonsense' },
+    url: '/api/work/pr:404/file',
+    payload: { title: 42 },
   });
   assert.equal(missing.statusCode, 404);
-
-  const raised = system.store.proposeFact(
-    {
-      claim: 'same as #41',
-      scope: 'fleet',
-      lifetime: 'standing',
-      expiresInHours: null,
-      evidence: 'both describe the same rate limiter',
-      supersedes: null,
-      resolvesWhen: null,
-      aboutRef: 'issue:41',
-      where: null,
-    },
-    { agentId: 'a1', taskId: 't1', goalRef: 'issue:12', sessionId: null, words: 'seen once' },
-  );
-  assert.ok(raised.outcome !== 'barred');
-  const badBody = await app.inject({
-    method: 'POST',
-    url: `/api/knowledge/facts/${raised.fact.id}/exit`,
-    payload: { exit: 'nonsense' },
-  });
-  assert.equal(badBody.statusCode, 400);
-  assert.match((badBody.json() as { error: string }).error, /exit must be one of docs/);
+  assert.equal((missing.json() as { error: string }).error, 'no such work item');
 
   await app.close();
-  system.store.close?.();
+  system.store.close();
 });
 
 test('the shortfall route keeps an absent cause and an explicit null apart', async () => {

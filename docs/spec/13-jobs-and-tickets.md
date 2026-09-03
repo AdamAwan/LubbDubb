@@ -5,13 +5,13 @@ for, done by an agent — queued by hand, or by a **schedule** on a clock. A **f
 handed to the tracker so it waits its turn there with everything else. A **human task** is work only
 a person can do, and the operator is the one who does it.
 
-**Two of what used to be here have gone.** A **finding** was a claim an agent filed and an operator
-ruled on; a **lesson** was a claim of a different kind — what working a goal taught about working
-this repository. Both were the same shape of thing said twice, and both are `knowledge_facts` rows
-now: raised through one intake, matched by one matcher, ruled on through one set of reaches, and
-drawn on one page. What they used to do about an operator's click — become a job, become a ticket —
-is [an exit](27-knowledge.md#sending-a-claim-on), and it is the same machinery this document
-describes below. → [27](27-knowledge.md#what-the-three-stores-became)
+**Three of what used to be here have gone.** A **finding** was a claim an agent filed and an operator
+ruled on; a **lesson** was a claim of a different kind — what working a goal taught about working this
+repository; both folded into one **claim store**, which has since gone too. What an agent hits or
+learns is a row on the obstacle board now, raised through one intake, matched on keys rather than on
+prose, and given an owner by the pulse rather than by a click. The **ticket** an obstacle gets is
+still filed by the machinery this document describes below.
+→ [27](27-obstacles.md#ownership)
 
 ## Jobs
 
@@ -212,8 +212,9 @@ knows or cares that a clock queued this one.
 
 That is the whole containment argument, and it is why there is no config key, no per-schedule
 concurrency limit and no "scheduled" flag anywhere downstream. A recurrence that could dispatch
-around the cap would be the capability escalation the claim store is careful not to be
-([27](27-knowledge.md#what-nothing-does)); one that queues is just an operator who is asleep.
+around the cap would be the capability escalation the obstacle board is careful to bound — one rule,
+in the pipeline, subject to the headroom cut ([27](27-obstacles.md#ownership)); one that queues is
+just an operator who is asleep.
 
 ### The expression
 
@@ -321,10 +322,11 @@ Tests: `test/jobSchedules.test.ts`.
 
 ## Filing a ticket
 
-Four cockpit clicks file a tracker item: a deferred **claim**
-([27](27-knowledge.md#sending-a-claim-on)), unrecorded **work**, a **brief**, and a **bug** an
-operator raised. All four go through `ActionSink.createIssue` ([15](15-integrations.md)), and none of
-them asks a model to run a `gh` / `az` command any more (issue #394).
+Four things file a tracker item: a standing **obstacle** the ownership desk gives an owner
+([27](27-obstacles.md#ownership)) — the one of the four the pulse takes rather than a click —
+unrecorded **work**, a **brief**, and a **bug** an operator raised. All four go through
+`ActionSink.createIssue` ([15](15-integrations.md)), and none of them asks a model to run a `gh` / `az`
+command any more (issue #394).
 
 - **What the harness must supply is the one thing nothing else can infer: which tracker.**
   `trackerCoordinates(config)` (pure, `src/mcp/findings.ts`) names it from the same config block the
@@ -343,38 +345,25 @@ them asks a model to run a `gh` / `az` command any more (issue #394).
 - **The wording stays operator-overridable**, because how a ticket reads _is_ house style. Two arms
   render a ticket **body** from the template book — `work-item-ticket-body`, `brief-ticket-body` —
   and two keep an agent to write one. Nothing about the change moves that judgement into the harness.
-- **Two arms keep a desk agent, and two do not.** Where the whole body is already harness- or
-  operator-composed text (unrecorded work, a brief), a desk agent was spending a slot on one API
-  call. Where the body is a judgement — verifying a claim against the repository, writing up a symptom
-  an operator observed — the agent stays, narrowed to composing the title and body and handing both to
-  `link_ticket` ([11](11-mcp-tools.md)).
+- **One arm keeps a desk agent, and three do not.** Where the whole body is already harness- or
+  operator-composed text (unrecorded work, a brief, an obstacle's sightings), a desk agent was
+  spending a slot on one API call. Where the body is a judgement — writing up a symptom an operator
+  observed, which no agent on the goal can derive because none of them ran it — the agent stays,
+  narrowed to composing the title and body and handing both to `link_ticket`
+  ([11](11-mcp-tools.md)).
 
-**A claim's arm is the one whose writing is most of the value**, which is why it kept its agent.
-The body is one agent's report, and turning that into something a stranger can act on — verifying
-what of it holds against the repository, and saying which parts are confirmed and which are the
-raising agent's word — is judgement, not mechanism. `finding-ticket` is an ordinary overridable entry
-in the template book, so how tickets are worded is changed by dropping a file in `promptTemplatesDir`
-rather than by patching a route. It still carries `{kind}` and `{kindHelp}` as placeholders, filled
-with what is true of every claim now, because a placeholder cannot be withdrawn the way a value can:
-`renderTemplate` leaves an unfilled `{token}` in the prompt verbatim, so an override written against
-the older book would ship a literal `{kind}` to the agent.
+**An obstacle's arm composes its body mechanically**, and that is the one thing about it worth
+stating: the row already carries every sighting in its author's own words, so there is nothing for an
+agent to assemble. `obstacleTicketFields` (`src/obstacles/ownership.ts`) builds the fields and the
+operator's `obstacle-ticket-body` template does the wording, which keeps house style overridable
+without spending a slot on it. Where the deployment has a reader wired, the model desk's ticket prose
+replaces the mechanical composition, so the ticket says one thing once
+([27](27-obstacles.md#what-may-be-decided-by-a-model-and-what-may-not)).
 
-**It is asynchronous, and that is why the exit is two states rather than one.** The click queues a
-desk job; the ticket exists only once the agent has written it and called `link_ticket`. An open
-`ticket` graduation is the honest reading in between, and the claim stays exactly where it was until
-the item exists — collapsing them would take it out of every prompt for a ticket that does not exist
-yet, and leave nothing to show for an agent that died before creating one. `link_ticket` closes it
-from the credential (`agent → task → its job:<id> origin → the graduation that job was created for`),
-so the tool takes no argument naming what it is filing, and idempotence lives in the write.
-
-- **A surviving agent is handed its dedupe candidates**, rather than told to go and search. The
-  harness mirrors the tracker ([14](14-persistence.md#the-ticket-mirror)), so the adjacent items are
-  computable: `dedupeCandidates` ranks the mirror by title-token overlap and `renderCandidates`
-  **appends** the shortlist after the rendered prompt — never a `{candidates}` placeholder, which
-  every override predating it would drop in silence. Closed items are candidates too; the mirror is the
-  only place the harness can see one at all.
-
-Tests: `test/ticketFiling.test.ts`.
+**The claim's own arm is gone with the store behind it.** `finding-ticket` is marked `retired: true`
+in the template book rather than deleted, which is the rule for every `PromptId`
+([05](05-dispatcher.md#prompt-templates)): removing an id turns every deployment that overrode it into
+a harness that will not boot.
 
 ### The other filing kind — a bug the operator raised
 
@@ -742,6 +731,20 @@ concluded part nothing accounts for.
 Settled tasks stay in the list rather than being deleted, for the reason a rejected claim does: a
 row that vanished on being settled would take the operator's own note with it, and on a decline that
 note is the whole account of why the work below it stopped.
+
+**Two surfaces settle a row, and the settlement is one function.** The routes above are the cockpit's;
+`human_task_settle` on the desktop channel ([11](11-mcp-tools.md#a-bench-row-is-not-an-escalation-and-does-not-answer-to-one))
+is the operator answering from their own Claude, and both call `settleHumanTask`
+(`src/humanTaskSettle.ts`). What is decided there is the whole of what settling means — the
+close-out's required note, the part concluded on `done`, the part deliberately left alone on
+`declined` — and the caller keeps only what is its own: the broadcast, and the cycle it runs when a
+part moved. A second copy on the channel would be free to conclude a part the cockpit would have left
+blocked, releasing the dependents of work that was refused with nothing red.
+
+**The bench row is answered by its own verb, on both surfaces.** `escalation_answer` handed a
+`hum_…` id says so and names `human_task_settle`, rather than the "no escalation" that reads as a
+lost row: the two objects are as different as the table above says, and a session that has just been
+shown both lists is exactly who reaches for the wrong one.
 
 ### Getting it off the bench — `POST /api/human-tasks/:id/dismiss`
 

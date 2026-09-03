@@ -9,7 +9,13 @@ import { EventEmitter } from 'node:events';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { UpdateDesk } from '../src/selfUpdate/updateDesk.js';
-import { applyUpgradeAction, buildReading, upgradability, IDLE_INTENT } from '../src/selfUpdate/upgradePlan.js';
+import {
+  applyUpgradeAction,
+  autoUpgradeStep,
+  buildReading,
+  upgradability,
+  IDLE_INTENT,
+} from '../src/selfUpdate/upgradePlan.js';
 import { readBuildStanding, type BuildStanding } from '../src/selfUpdate/buildStanding.js';
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
@@ -144,7 +150,11 @@ function ctx(over: { live: number; alreadyPaused?: boolean }) {
 // -- The desk, against a real store ----------------------------------------
 
 /** A desk on the system's own store, reading a standing the test dictates. */
-function deskFor(system: System, over: Partial<BuildStanding> = {}): UpdateDesk {
+function deskFor(
+  system: System,
+  over: Partial<BuildStanding> = {},
+  opts: { autoUpdate?: boolean; drainDeadlineMs?: number; supervised?: boolean; now?: () => string } = {},
+): UpdateDesk {
   return new UpdateDesk({
     store: system.store,
     runtimeControl: system.runtimeControl,
@@ -152,7 +162,10 @@ function deskFor(system: System, over: Partial<BuildStanding> = {}): UpdateDesk 
     remote: 'origin',
     branch: 'main',
     checkIntervalMs: 60_000,
-    supervised: true,
+    autoUpdate: opts.autoUpdate ?? false,
+    drainDeadlineMs: opts.drainDeadlineMs ?? 0,
+    supervised: opts.supervised ?? true,
+    ...(opts.now ? { now: opts.now } : {}),
     read: () => Promise.resolve(standing(over)),
   });
 }
@@ -382,4 +395,211 @@ test('a modified tracked file still refuses the upgrade, because the pull would 
   const standing = await readBuildStanding({ remote: 'origin', branch: 'main', now: at, root: install });
   assert.equal(standing.dirty, true);
   assert.match(upgradability(standing).blocked!, /uncommitted changes/);
+});
+
+// -- Taking it unasked -----------------------------------------------------
+
+function autoCtx(over: Partial<Parameters<typeof autoUpgradeStep>[0]> = {}) {
+  return {
+    intent: IDLE_INTENT,
+    upgradable: upgradability(standing()),
+    live: 0,
+    supervised: true,
+    drainDeadlineMs: 0,
+    drainingForMs: null,
+    ...over,
+  };
+}
+
+test("an automatic upgrade asks for the operator's two transitions, in order", () => {
+  assert.equal(autoUpgradeStep(autoCtx())?.action, 'drain');
+  const ready = { state: 'ready' as const, targetSha: 'bbbbbbb', requestedAt: null, pausedByDrain: true };
+  assert.equal(autoUpgradeStep(autoCtx({ intent: ready }))?.action, 'apply');
+  // And never the override: `autoUpdate` authorizes the ordinary path, not the forced one.
+  assert.equal(autoUpgradeStep(autoCtx({ intent: ready }))?.interrupt, undefined);
+});
+
+test('an automatic upgrade does nothing at all without a supervisor', () => {
+  // The handoff is an exit. With nothing in front of the process to relaunch it,
+  // that is the fleet going down and staying down, on a machine nobody is watching.
+  assert.equal(autoUpgradeStep(autoCtx({ supervised: false })), null);
+  const ready = { state: 'ready' as const, targetSha: null, requestedAt: null, pausedByDrain: true };
+  assert.equal(autoUpgradeStep(autoCtx({ intent: ready, supervised: false })), null);
+});
+
+test('an automatic upgrade still takes every refusal the button takes', () => {
+  assert.equal(autoUpgradeStep(autoCtx({ upgradable: upgradability(standing({ dirty: true })) })), null);
+  assert.equal(autoUpgradeStep(autoCtx({ upgradable: upgradability(standing({ ahead: 2 })) })), null);
+  assert.equal(autoUpgradeStep(autoCtx({ upgradable: upgradability(standing({ behind: 0 })) })), null);
+});
+
+test('a drain past its deadline stops waiting and interrupts what is left', () => {
+  const draining = {
+    state: 'draining' as const,
+    targetSha: 'bbbbbbb',
+    requestedAt: '2026-08-17T00:00:00.000Z',
+    pausedByDrain: true,
+  };
+  const base = { intent: draining, live: 1, drainDeadlineMs: 60 * 60 * 1000 };
+
+  // Inside the deadline it waits, which is the whole point of a drain.
+  assert.equal(autoUpgradeStep(autoCtx({ ...base, drainingForMs: 59 * 60 * 1000 })), null);
+
+  const forced = autoUpgradeStep(autoCtx({ ...base, drainingForMs: 61 * 60 * 1000 }));
+  assert.equal(forced?.action, 'apply');
+  assert.equal(forced?.interrupt, true, 'the agents it stops are restored on the way back up');
+
+  // Zero is "wait forever" — the behaviour before the deadline existed.
+  assert.equal(autoUpgradeStep(autoCtx({ ...base, drainDeadlineMs: 0, drainingForMs: 1e9 })), null);
+  // And a drain with no stamp to measure from waits rather than firing immediately.
+  assert.equal(autoUpgradeStep(autoCtx({ ...base, drainingForMs: null })), null);
+});
+
+test('an automatic upgrade reaches the handoff on one pulse when the fleet is clear', async () => {
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    streamSpawner: silentSpawner,
+    errorMirror: () => {},
+  });
+  const desk = deskFor(system, {}, { autoUpdate: true });
+  let handed = 0;
+  desk.onHandoff = () => {
+    handed++;
+  };
+
+  // Drain, ready and apply are one run of the machine, not three heartbeats: a
+  // state whose whole meaning is "go now" should not wait an hour to be left.
+  await desk.run();
+  assert.equal(system.store.readUpgradeIntent().state, 'applying');
+  assert.equal(handed, 1);
+  system.store.close();
+});
+
+test('an automatic upgrade waits for a live agent rather than interrupting it', async () => {
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    streamSpawner: silentSpawner,
+    errorMirror: () => {},
+  });
+  system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
+  await system.harness.runCycle('manual');
+  const agent = system.store.listAgentsByStatus('starting', 'running')[0]!;
+
+  const desk = deskFor(system, {}, { autoUpdate: true });
+  let handed = 0;
+  desk.onHandoff = () => {
+    handed++;
+  };
+
+  await desk.run();
+  assert.equal(system.store.readUpgradeIntent().state, 'draining');
+  assert.equal(handed, 0, 'nobody is interrupted for an update that landed mid-run');
+  assert.equal(system.runtimeControl.paused, true);
+
+  system.store.updateAgent(agent.id, { status: 'done', endedAt: new Date().toISOString() });
+  await desk.run();
+  assert.equal(system.store.readUpgradeIntent().state, 'applying');
+  assert.equal(handed, 1);
+  system.store.close();
+});
+
+test('the desk stops waiting once an automatic drain outruns its deadline', async () => {
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    streamSpawner: silentSpawner,
+    errorMirror: () => {},
+  });
+  system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
+  await system.harness.runCycle('manual');
+
+  let clock = '2026-08-17T00:00:00.000Z';
+  const desk = deskFor(system, {}, { autoUpdate: true, drainDeadlineMs: 60 * 60 * 1000, now: () => clock });
+  let handed = 0;
+  desk.onHandoff = () => {
+    handed++;
+  };
+
+  await desk.run();
+  assert.equal(system.store.readUpgradeIntent().state, 'draining');
+
+  clock = '2026-08-17T02:00:00.000Z';
+  await desk.run();
+  assert.equal(system.store.readUpgradeIntent().state, 'applying', 'the drain stopped waiting');
+  assert.equal(handed, 1);
+  system.store.close();
+});
+
+// -- The pause the upgrade must not lose -----------------------------------
+
+test('an upgrade hands the operator back the pause they had, not the configured one', async () => {
+  // `RuntimeControl` is not persisted, so without this the fleet comes back on
+  // `config.startPaused` — a cold-boot default overruling a live decision, in both
+  // directions and silently in each.
+  const system = buildSystem(testConfig({ startPaused: false }), {
+    worktrees: new FakeWorktreeManager(),
+    streamSpawner: silentSpawner,
+    errorMirror: () => {},
+  });
+  const desk = deskFor(system);
+  await desk.check(true);
+
+  // The operator had parked the fleet themselves before the upgrade.
+  system.runtimeControl.apply({ paused: true });
+  assert.ok(desk.request('drain').ok);
+  assert.ok(desk.request('apply').ok);
+
+  // The restart: a fresh control seeded from the config, as `buildSystem` does.
+  system.runtimeControl.apply({ paused: false });
+  assert.equal(desk.restorePause(), true, 'their pause survives the upgrade');
+  assert.equal(system.runtimeControl.paused, true);
+  system.store.close();
+});
+
+test('an upgrade the drain paused comes back dispatching', async () => {
+  const system = buildSystem(testConfig({ startPaused: true }), {
+    worktrees: new FakeWorktreeManager(),
+    streamSpawner: silentSpawner,
+    errorMirror: () => {},
+  });
+  const desk = deskFor(system);
+  await desk.check(true);
+
+  // The fleet was running; the drain is what stopped it. `startPaused` is a
+  // cold-boot policy and has no say in a restart that is really a handover.
+  system.runtimeControl.apply({ paused: false });
+  assert.ok(desk.request('drain').ok);
+  assert.ok(desk.request('apply').ok);
+
+  system.runtimeControl.apply({ paused: true });
+  assert.equal(desk.restorePause(), false);
+  assert.equal(system.runtimeControl.paused, false);
+  system.store.close();
+});
+
+test('an apply straight from idle records the pause it actually found', () => {
+  // There is no drain on this path to inherit the answer from, and the resting
+  // `false` would tell the next boot the operator had parked a fleet they had not.
+  const fresh = applyUpgradeAction(IDLE_INTENT, { action: 'apply', interrupt: true }, ctx({ live: 2 }));
+  assert.ok(fresh.ok);
+  assert.equal(fresh.intent.pausedByDrain, true);
+
+  const onPaused = applyUpgradeAction(
+    IDLE_INTENT,
+    { action: 'apply', interrupt: true },
+    ctx({ live: 2, alreadyPaused: true }),
+  );
+  assert.ok(onPaused.ok);
+  assert.equal(onPaused.intent.pausedByDrain, false);
+});
+
+test('a restart that was not an upgrade leaves the configured pause alone', async () => {
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    streamSpawner: silentSpawner,
+    errorMirror: () => {},
+  });
+  const desk = deskFor(system);
+  assert.equal(desk.restorePause(), null, 'an operator who killed the server is asking a different question');
+  assert.equal(system.runtimeControl.paused, false);
+  system.store.close();
 });

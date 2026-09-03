@@ -209,7 +209,7 @@ test('an ignored PR still counts as the base its children inherit from', async (
   const bottom = pr(40, 'issue/12/schema', { ciStatus: 'failing', labels: [] });
   const child = pr(41, 'issue/12/api', { baseBranch: 'issue/12/schema', ciStatus: 'failing' });
   const result = await new RuleDispatcher().decide({
-    ...context([], { unwatchedPrs: [bottom] }),
+    ...context([], { hiddenPrs: [bottom] }),
     world: world([], [child]),
   });
   assert.deepEqual(

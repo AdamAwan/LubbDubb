@@ -1,10 +1,25 @@
 import type { Store } from '../store/store.js';
 import type { EscalationInbox } from '../escalation/escalationInbox.js';
 import type { ActionExecutor } from '../executor/actionExecutor.js';
-import type { Proposal } from '../types.js';
+import type { PlanCaveat, Proposal } from '../types.js';
 import { refusePlan } from '../plans/planApproval.js';
+import { declinePlanAmendment } from '../plans/planAmendment.js';
+import { proposedCaveats, unacknowledgedCaveats } from '../plans/planCaveats.js';
 import { backOutOfPlan, type BackOutContext, type BackOutVerdict } from '../plans/planBackOut.js';
 import { readProposedAct } from './proposals.js';
+
+/**
+ * An accept that was **not given**: the plan raises things its approver has to have
+ * read, and the verdict named fewer of them than the row declares
+ * (`src/plans/planCaveats.ts`). Nothing is decided — the proposal is still pending
+ * and the caller is handed what is still unticked, so the refusal can say which.
+ *
+ * Its own shape rather than a `DecideResult` with `outcome: 'none'`, because that
+ * one means "the verdict was given and caused nothing" and this means the opposite.
+ */
+interface UnacknowledgedCaveats {
+  unacknowledged: PlanCaveat[];
+}
 
 interface DecideResult {
   proposal: Proposal;
@@ -54,8 +69,33 @@ export class ProposalDesk {
     private readonly backOutCtx: Omit<BackOutContext, 'store'>,
   ) {}
 
-  /** Authorize the act. Returns null if it was already decided (or never existed). */
-  async accept(id: string, note?: string): Promise<DecideResult | null> {
+  /**
+   * Authorize the act. Returns null if it was already decided (or never existed),
+   * and {@link UnacknowledgedCaveats} if the plan raises something the verdict has
+   * not said it read.
+   *
+   * The gate is here rather than in the route for the reason every other effect in
+   * this class is: the desk is where a human's verdict is applied, so a second way
+   * in — a script, a future route, the cockpit's other approve button — cannot
+   * reach the effect around the precondition. It is asked **before** the
+   * compare-and-set, so a refused accept leaves the proposal pending and the inbox
+   * item open: the operator ticks the boxes and clicks again, rather than finding
+   * a plan whose verdict was spent on a 400.
+   *
+   * Only an accept is gated. Rejecting, holding and closing the ticket are all
+   * ways of *not* releasing the work, and gating those would hold an operator on a
+   * reading list before they may say no.
+   */
+  async accept(
+    id: string,
+    note?: string,
+    acknowledged: readonly string[] = [],
+  ): Promise<DecideResult | UnacknowledgedCaveats | null> {
+    const standing = this.store.getProposal(id);
+    if (standing && standing.status === 'pending') {
+      const unacknowledged = unacknowledgedCaveats(proposedCaveats(standing), acknowledged);
+      if (unacknowledged.length > 0) return { unacknowledged };
+    }
     const proposal = this.store.decideProposal(id, 'accepted', note?.trim() || null, 'human');
     if (!proposal) return null;
     this.closeEscalation(proposal, `Accepted${proposal.note ? `: ${proposal.note}` : '.'}`);
@@ -143,6 +183,17 @@ export class ProposalDesk {
    * silently skipping the transition that leaves the issue a route.
    */
   private settlePlan(proposal: Proposal): string {
+    // A refused *amendment* is the one settlement in the funnel with no effect on
+    // the goal, and it still needs a write: the row it leaves pending would be
+    // re-proposed on the next pulse, so the refusal has to reach
+    // `plan_amendments` even though it reaches nothing else. The plan is untouched
+    // on purpose — carrying on as planned is what "no" means here.
+    if (proposal.kind === 'plan_amendment') {
+      const readAmendment = readProposedAct(proposal);
+      if (!readAmendment.ok || readAmendment.act.kind !== 'plan_amendment')
+        return `; the amendment could not be settled (${readAmendment.ok ? 'the row names no amendment' : readAmendment.error})`;
+      return `; ${declinePlanAmendment(this.store, readAmendment.act.amendmentId, proposal.note).detail}`;
+    }
     if (proposal.kind !== 'plan') return '';
     const read = readProposedAct(proposal);
     if (!read.ok || read.act.kind !== 'plan') return `; the plan could not be settled (${read.ok ? '' : read.error})`;

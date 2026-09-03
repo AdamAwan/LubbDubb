@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { foldPoolDigest } from '../../pool/aggregate.js';
 import type { PoolInsightsPayload, PoolStatePayload } from '../../wire.js';
-import { checked, IdParams } from '../validation.js';
+import { checked } from '../validation.js';
 import type { RouteContext } from './context.js';
 
 /**
@@ -29,7 +29,7 @@ import type { RouteContext } from './context.js';
  *
  * → `docs/spec/28-cross-fleet-pool.md#in-the-cockpit`, `docs/spec/16-http-api.md`
  */
-export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
+export function register(app: FastifyInstance, { system }: RouteContext): void {
   const { store } = system;
 
   app.get('/api/pool', async () => {
@@ -39,7 +39,6 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       // operator's words that something is broken. → the three verdicts, spec 24.
       status: system.pool?.status() ?? null,
       fleets: store.listPoolFleets(),
-      claims: store.listMirroredClaims(),
     } satisfies PoolStatePayload;
   });
 
@@ -64,31 +63,6 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         projects: [...new Set(store.listPoolFleets().flatMap((f) => (f.project === null ? [] : [f.project])))].sort(),
         fleets: store.listPoolFleets(),
       } satisfies PoolInsightsPayload;
-    }),
-  );
-
-  const KeepLocalBody = z.object({
-    // Named in its own refusal, the discipline every route here follows: zod's stock
-    // "Required" names no field, and a caller reading it learns nothing about which
-    // one it meant.
-    keepLocal: z.boolean({
-      required_error: 'keepLocal is required: true withholds this claim from the pool, false puts it back',
-      invalid_type_error: 'keepLocal must be a boolean — true withholds this claim from the pool, false puts it back',
-    }),
-  });
-
-  app.post(
-    '/api/knowledge/facts/:id/keep-local',
-    checked({ params: IdParams, body: KeepLocalBody }, async ({ params, body, reply }) => {
-      const fact = store.setFactKeepLocal(params.id, body.keepLocal);
-      if (!fact) return reply.code(404).send({ error: 'fact not found' });
-      // Withdrawal is one click and **immediate** — which means immediate in the
-      // next publish, not in this request. Marking dirty is the whole of it: the
-      // put is a whole replace, so the claim is simply not in the document the desk
-      // derives on the next pulse, with no tombstone and no delete verb.
-      store.markPoolDirty('claims');
-      hub.broadcast({ type: 'dirty' });
-      return { ok: true, fact };
     }),
   );
 }

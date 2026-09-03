@@ -246,8 +246,8 @@ Above both lanes sits `ReadPlan.fresh`: the refs this read must re-hydrate whate
 says and whatever lane they are on. It is asked before the lanes and answers an age bound of zero,
 which is always past, so the cache drops exactly those entries and re-reads them.
 
-It has two writers, and they name the same kind of fact — *something happened to this entity that its
-change token does not report*:
+It has two writers, and they name the same kind of fact — _something happened to this entity that its
+change token does not report_:
 
 - **An inbound delivery**, drained from the `IngressInbox` ([30](30-ingress.md#invalidating-precisely)).
 - **The fleet's own finished work** — the entities a task reached a terminal on since the last reading
@@ -424,7 +424,7 @@ flowchart TD
 
    Below the graph and the environment probes, and still above `decide`, `notices.run(prev, world)`
    raises the knowledge notices the harness can see for itself and ends the ones the world has settled
-   ([27](27-knowledge.md#what-the-harness-raises)). It is handed the **pair** step 2's diff was taken
+   ([27](27-obstacles.md#the-harness-is-a-voice)). It is handed the **pair** step 2's diff was taken
    from, read before the baseline moved on, so the two cannot come to be looking at different pulses.
    Its position is the point: the knowledge block a dispatch carries is rendered at launch, a few steps
    below, so a notice raised under that line would not reach the agents dispatched on this pulse and
@@ -455,7 +455,8 @@ flowchart TD
    decides no dispatch, and writes nothing over a clean inbox.
 10. **Compute headroom** — `paused ? 0 : max(0, cap - countLiveAgents())`, reading `cap` and `paused`
     **by reference** from `RuntimeControl` (never a copy taken at wiring time).
-11. **Split the PR world** — partition open PRs into the dispatch world and `unwatchedPrs` (below).
+11. **Split the PR world** — partition open PRs into the dispatch world and `hiddenPrs` (below), on
+    the watch tag and on whose pull request it is.
 12. **`dispatcher.decide(ctx)`** with the full `DispatchContext`.
 13. **Take the runway reading** — `runway.run()` asks whether there is anything left for the fleet to
     do, and whether the reason there is not is upstream of it ([25](25-supply.md)). Positioned
@@ -511,18 +512,22 @@ world the dispatch decision was made against.
 ## The watch split
 
 Pull requests are opt-in, exactly as issues are: only one carrying `${labelPrefix}-watch` is acted
-on. `isPrWatched(pr, label)` partitions the open list:
+on. Two predicates partition the open list — `isPrWatched(pr, label)`, and `isSomeoneElsesPr(pr)`,
+which takes out the pull requests a colleague opened however they are tagged
+([07](07-pull-requests.md#whose-pull-request-is-it)): `ownWorkOnly` deliberately fetches the ones a
+person **assigned** the operator, and without that second gate rule `pr-review-comment` answers
+another team's reviewers under the operator's own account.
 
-- `dispatchWorld.pullRequests` — the PRs rules may act on.
-- `ctx.unwatchedPrs` — the hidden ones, passed alongside.
+- `dispatchWorld.pullRequests` — the PRs rules may act on: watched, and the fleet's own.
+- `ctx.hiddenPrs` — the rest, passed alongside.
 
-Unwatched PRs are **hidden from dispatch but still open**, and that distinction matters: gates that
+Hidden PRs are **hidden from dispatch but still open**, and that distinction matters: gates that
 must not read "absent from the world" as "merged" — issue pickup (`openPrForIssue`), the work-item
-state back-off, base-PR attribution for stacks — resolve against the combined list. Without it, an
-unwatched PR would read as merged and its issue would get a second agent onto the very same branch.
+state back-off, base-PR attribution for stacks — resolve against the combined list. Without it, a
+hidden PR would read as merged and its issue would get a second agent onto the very same branch.
 
 The world used for diffing and for the baseline is untouched, and the cockpit's state snapshot reads
-the connector directly, so an unwatched PR stays fully visible with its health verdict and its tags.
+the connector directly, so a hidden PR stays fully visible with its health verdict and its tags.
 
 **The harness tags its own.** A gate this shape would otherwise stop the fleet acting on the pull
 requests it opened itself, so the pulse seeds the tag: `open_pr` writes it as it creates one, and
@@ -545,7 +550,7 @@ What the dispatcher gets to look at (`src/dispatcher/dispatcher.ts`):
 | Field                | Contents                                                                |
 | -------------------- | ----------------------------------------------------------------------- |
 | `world`              | The snapshot with excluded PRs removed.                                 |
-| `unwatchedPrs?`      | The removed ones, so "still open" stays knowable.                       |
+| `hiddenPrs?`         | The removed ones, so "still open" stays knowable.                       |
 | `tasks`, `agents`    | The full fleet, from the store.                                         |
 | `openEscalations`    | Open escalations.                                                       |
 | `queuedJobs`         | Operator jobs awaiting a slot, oldest first.                            |

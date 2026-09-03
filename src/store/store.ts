@@ -3,29 +3,13 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { SCHEMA } from './schema.js';
 import { systemClock, type Clock, type StoreContext } from './context.js';
-import { ensureColumns, rebuildTables, renameTables, runOnce } from './migrate.js';
+import { ensureColumns, rebuildTables, renameTables } from './migrate.js';
 import { PoolStore, type PoolDigestMirrorRow } from './pool.js';
 import { backfillTaskDispatchKind, TaskStore, TASK_COLUMNS } from './tasks.js';
 import { JobStore, JOB_COLUMNS } from './jobs.js';
 import { JobScheduleStore, JOB_SCHEDULE_COLUMNS } from './schedules.js';
 import { PriorityStore } from './priority.js';
 import { ProfileOverrideStore } from './profileOverrides.js';
-import { corroborationGoal } from '../knowledge/knowledge.js';
-import {
-  foldedFactId,
-  KnowledgeStore,
-  KNOWLEDGE_COLUMNS,
-  KNOWLEDGE_REBUILDS,
-  stampFactsWithProject,
-  stampGraduationsBeforeExits,
-  type ContradictionOutcome,
-  type FactContradictionOutcome,
-  type FactCounts,
-  type FactAgreementOutcome,
-  type FactMergeOutcome,
-  type FactProposalOutcome,
-  type FactQuery,
-} from './knowledge.js';
 import { RemedyStore } from './remedies.js';
 import { McpCallStore } from './mcpCalls.js';
 import { HumanTaskStore, HUMAN_TASK_COLUMNS } from './humanTasks.js';
@@ -53,6 +37,9 @@ import { PrReviewStore } from './prReviews.js';
 import { PrReviewRouteStore, PR_REVIEW_ROUTE_COLUMNS } from './prReviewRoutes.js';
 import { PrReviewExternalStore } from './prReviewExternals.js';
 import { PrThreadReopenStore } from './prThreadReopens.js';
+import { PrReplyStore } from './prReplies.js';
+import { PrArchiveStore } from './prArchive.js';
+import { ObstacleStore, OBSTACLE_COLUMNS, type ObstacleOutcome } from './obstacles.js';
 import type { PrThreadReopen } from '../prThreads.js';
 import { DecisionStore, DECISION_COLUMNS } from './decisions.js';
 import { WorldStore, type WorldLabelPatch } from './world.js';
@@ -93,8 +80,6 @@ import type {
   ErrorLogInput,
   Escalation,
   EscalationSpan,
-  FactExit,
-  FactReach,
   GoalFile,
   GoalNeighbour,
   HumanTask,
@@ -108,18 +93,10 @@ import type {
   Job,
   JobAttachment,
   JobSchedule,
-  ContradictionRuling,
-  GraduationOutcome,
-  KnowledgeContradiction,
-  KnowledgeCorroboration,
-  KnowledgeFact,
   PoolDigestDocument,
   PoolClockKind,
   PoolFleetReading,
-  PoolMirroredClaim,
   PoolPublication,
-  KnowledgeGraduation,
-  KnowledgeSimilarity,
   Remedy,
   RemedyInput,
   RemedyKind,
@@ -137,6 +114,8 @@ import type {
   Plan,
   PlanPart,
   PlanPartInput,
+  PullRequest,
+  PlanAmendment,
   PlanRevision,
   FeatureSummary,
   Retrospective,
@@ -177,6 +156,16 @@ import type {
   WorkNodeObservation,
   WorkItemFiling,
   BugFiling,
+  Obstacle,
+  ObstacleBlock,
+  ObstacleCondition,
+  ObstacleDeskReading,
+  ObstacleEnding,
+  ObstacleKey,
+  ObstacleSighting,
+  ObstacleStanding,
+  ObstacleWriteUp,
+  ObstacleWriteUpOutcome,
   WorldEvent,
   WorldEventInput,
   WorldEventKind,
@@ -210,7 +199,6 @@ export class Store {
   private readonly schedules: JobScheduleStore;
   private readonly priority: PriorityStore;
   private readonly profileOverrides: ProfileOverrideStore;
-  private readonly knowledge: KnowledgeStore;
   private readonly remedies: RemedyStore;
   private readonly mcpCalls: McpCallStore;
   private readonly humanTasks: HumanTaskStore;
@@ -236,6 +224,9 @@ export class Store {
   private readonly prReviewRoutes: PrReviewRouteStore;
   private readonly prReviewExternals: PrReviewExternalStore;
   private readonly threadReopens: PrThreadReopenStore;
+  private readonly prReplies: PrReplyStore;
+  private readonly prArchive: PrArchiveStore;
+  private readonly obstacles: ObstacleStore;
   private readonly decisions: DecisionStore;
   private readonly world: WorldStore;
   private readonly errors: ErrorStore;
@@ -247,13 +238,7 @@ export class Store {
   private readonly pets: PetStore;
   private readonly pool: PoolStore;
 
-  /**
-   * @param project The project name this deployment declares (`pool.project`), or
-   * undefined where it declares none. It is handed to the knowledge module so every
-   * fact is stamped with it as it is written, and it gates the one backfill the
-   * pool adds — see {@link stampFactsWithProject}.
-   */
-  constructor(dbPath: string, clock: Clock = systemClock, project?: string) {
+  constructor(dbPath: string, clock: Clock = systemClock) {
     if (dbPath !== ':memory:') mkdirSync(dirname(dbPath), { recursive: true });
     this.db = new Database(dbPath);
     this.db.pragma('journal_mode = WAL');
@@ -266,9 +251,7 @@ export class Store {
     // out of the way so `SCHEMA`'s own definition creates the new shape, then its
     // rows are copied across resolving the old key into the new one. All in one
     // transaction — a crash halfway leaves the old table exactly as it was.
-    rebuildTables(this.db, [...VALIDATION_REBUILDS, ...GRAPH_REBUILDS, ...KNOWLEDGE_REBUILDS], () =>
-      this.db.exec(SCHEMA),
-    );
+    rebuildTables(this.db, [...VALIDATION_REBUILDS, ...GRAPH_REBUILDS], () => this.db.exec(SCHEMA));
     // Before any module is constructed, let alone reads: a domain module reading
     // a migrated column on a database created by an older build reads `undefined`.
     const addedColumns: string[] = [];
@@ -286,12 +269,12 @@ export class Store {
       TICKET_COLUMNS,
       PET_COLUMNS,
       LOCAL_RUN_COLUMNS,
-      KNOWLEDGE_COLUMNS,
       ENVIRONMENT_COLUMNS,
       WATCH_COLUMNS,
       PR_REVIEW_ROUTE_COLUMNS,
       SCRATCH_COLUMNS,
       REVIEW_PACK_COLUMNS,
+      OBSTACLE_COLUMNS,
     ]) {
       addedColumns.push(...ensureColumns(this.db, columns));
     }
@@ -300,24 +283,7 @@ export class Store {
     // pet from before the shell existed is stamped as already opened, once. Run on
     // every boot instead, it would open the eggs an operator was saving.
     if (addedColumns.includes('pets.opened_at')) openPetsFromBeforeEggs(this.db);
-    // The second of the two, and the same shape: a graduation's `exit` is null on
-    // every row written before there were three of them, and null there is a value
-    // nothing recognises rather than a value that happens to be absent. Every one
-    // of those rows was a documentation pull request, which is what it is stamped.
-    // Run on every boot instead, it would rewrite the exit of every job and ticket
-    // graduation written since.
-    if (addedColumns.includes('knowledge_graduations.exit')) stampGraduationsBeforeExits(this.db);
-    // The third of the three, and the one whose null is *most* load-bearing:
-    // `knowledge_facts.project` null spells "no project", which would exclude every
-    // claim the store already holds from ever being published — and every one of
-    // them was in fact learned about the deployment's current project. Run on every
-    // boot instead, it would relabel every claim written since the day an operator
-    // pointed the harness at a second one. A deployment that declares no name stamps
-    // nothing, which is the honest answer rather than a guess.
-    if (addedColumns.includes('knowledge_facts.project') && project !== undefined) {
-      stampFactsWithProject(this.db, project);
-    }
-    // The fourth, and the same shape again: `local_runs.interrupted_at` null means
+    // The second, and the same shape again: `local_runs.interrupted_at` null means
     // nobody stamped this row, which a resume reads as "unknown, do not bring it
     // back". Right for a hard crash and wrong for the row this very boot is upgrading
     // over — left live by a fast stop a moment ago — so a live row is dated to now,
@@ -363,29 +329,12 @@ export class Store {
       this.db,
       partialGoalRefs.map((row) => row.goal_ref),
     );
-    // Every claim an agent ever filed and every lesson an operator ever wrote,
-    // carried into the one store that now holds all three — once per database, and
-    // gated on a name because both ways of getting that wrong are silent. See
-    // `foldClaimStores`.
-    foldClaimStores(this.db, clock());
-    // And the pet ledger's side of the same move: what an operator did about a
-    // claim used to be a `finding` action and is now a `claim` one, which is a
-    // different key — so without this every triaged finding and every promoted
-    // lesson in the deployment's history would look like an operator action nobody
-    // had ever been paid for. See `spendRuledClaims`.
-    spendRuledClaims(this.db, clock());
-    // And the graduations the first fold lost to a `NOT NULL` no `ALTER TABLE`
-    // could relax — a second pass, under a second id, because the first is
-    // stamped done and an id is never edited in place. See
-    // `refoldFindingGraduations`.
-    refoldFindingGraduations(this.db, clock());
     const ctx: StoreContext = { db: this.db, now: clock };
     this.tasksStore = new TaskStore(ctx);
     this.jobs = new JobStore(ctx);
     this.schedules = new JobScheduleStore(ctx);
     this.priority = new PriorityStore(ctx);
     this.profileOverrides = new ProfileOverrideStore(ctx);
-    this.knowledge = new KnowledgeStore(ctx, project ?? null);
     this.pool = new PoolStore(ctx);
     this.remedies = new RemedyStore(ctx);
     this.mcpCalls = new McpCallStore(ctx);
@@ -412,6 +361,9 @@ export class Store {
     this.prReviewRoutes = new PrReviewRouteStore(ctx);
     this.prReviewExternals = new PrReviewExternalStore(ctx);
     this.threadReopens = new PrThreadReopenStore(ctx);
+    this.prReplies = new PrReplyStore(ctx);
+    this.prArchive = new PrArchiveStore(ctx);
+    this.obstacles = new ObstacleStore(ctx);
     this.decisions = new DecisionStore(ctx);
     this.world = new WorldStore(ctx);
     this.errors = new ErrorStore(ctx);
@@ -568,138 +520,6 @@ export class Store {
     return this.priority.listGoalPriorities();
   }
 
-  // -- Findings (what an agent noticed outside its own task) ----------------
-
-  // -- Lessons (what working one goal taught, kept for the next) -------------
-
-  // -- Knowledge (what the fleet knows about this repository) -----------------
-
-  proposeFact(...args: Parameters<KnowledgeStore['proposeFact']>): FactProposalOutcome {
-    return this.knowledge.proposeFact(...args);
-  }
-  agreeWithFact(...args: Parameters<KnowledgeStore['agreeWithFact']>): FactAgreementOutcome {
-    return this.knowledge.agreeWithFact(...args);
-  }
-  recordSimilarities(...args: Parameters<KnowledgeStore['recordSimilarities']>): void {
-    this.knowledge.recordSimilarities(...args);
-  }
-  listSimilarities(): KnowledgeSimilarity[] {
-    return this.knowledge.listSimilarities();
-  }
-  mergeFacts(...args: Parameters<KnowledgeStore['mergeFacts']>): FactMergeOutcome {
-    return this.knowledge.mergeFacts(...args);
-  }
-  getFact(id: string): KnowledgeFact | null {
-    return this.knowledge.getFact(id);
-  }
-  listFacts(limit?: number): KnowledgeFact[] {
-    return this.knowledge.listFacts(limit);
-  }
-  listFactsForGoal(goalRef: string, limit?: number): KnowledgeFact[] {
-    return this.knowledge.listFactsForGoal(goalRef, limit);
-  }
-  factLabels(ids: string[]): Map<string, string> {
-    return this.knowledge.factLabels(ids);
-  }
-  listCorroborations(factId: string): KnowledgeCorroboration[] {
-    return this.knowledge.listCorroborations(factId);
-  }
-  factCounts(): Map<string, FactCounts> {
-    return this.knowledge.factCounts();
-  }
-  contradictFact(...args: Parameters<KnowledgeStore['contradictFact']>): FactContradictionOutcome {
-    return this.knowledge.contradictFact(...args);
-  }
-  listContradictions(factId: string): KnowledgeContradiction[] {
-    return this.knowledge.listContradictions(factId);
-  }
-  resolveContradiction(id: string, input: ContradictionRuling): ContradictionOutcome {
-    return this.knowledge.resolveContradiction(id, input);
-  }
-  askFacts(query: FactQuery): KnowledgeFact[] {
-    return this.knowledge.askFacts(query);
-  }
-  recordFactAsks(...args: Parameters<KnowledgeStore['recordFactAsks']>): void {
-    this.knowledge.recordFactAsks(...args);
-  }
-  setFactReach(id: string, reach: FactReach): KnowledgeFact | null {
-    return this.knowledge.setFactReach(id, reach);
-  }
-  listResolvableNotices(): KnowledgeFact[] {
-    return this.knowledge.listResolvableNotices();
-  }
-  resolveNotice(id: string): KnowledgeFact | null {
-    return this.knowledge.resolveNotice(id);
-  }
-
-  /**
-   * Open the work that takes a claim somewhere, and record that it was opened —
-   * **one transaction over two modules**.
-   *
-   * Here rather than in either of them because it is a cross-domain write and this
-   * is the caller that holds both: `jobs.ts` owns the queue and `knowledge.ts` owns
-   * the facts, and a store module reaching a sibling's tables is what
-   * `test/storeModules.test.ts` refuses.
-   *
-   * One transaction because both half-landings are silent. A job with no
-   * graduation naming it is work that lands and takes nothing out of any prompt —
-   * the fleet goes on paying for a sentence somebody else is already carrying. A
-   * graduation naming no job is a claim the page shows as on its way somewhere
-   * nothing is taking it.
-   *
-   * **One method for all three exits, and that is the whole of this change.** A
-   * documentation pull request and a promoted finding were two implementations of
-   * one act, and the weaker one was silent: it stamped a status and never learned
-   * what became of the job. Now both write the same row, and the same sweep reads
-   * it.
-   *
-   * The job carries **`originRef: fact.aboutRef`** — the world item the claim is
-   * *about*, and never the goal it was first observed on. The graph adopts a job by
-   * its origin, so attributing this one to the observer's goal would file the work
-   * under somebody else's issue, which is the defect `findingJobRequest` already
-   * refused by carrying a finding's `ref` rather than its `originRef`. A claim
-   * about nothing tracked has a null `aboutRef`, and a job with no origin stands in
-   * for nothing — which is exactly true of it.
-   */
-  exitFact(fact: KnowledgeFact, exit: FactExit, work: { title: string; prompt: string }): FactExited {
-    const write = this.db.transaction((): FactExited => {
-      const job = this.jobs.createJob({
-        title: work.title,
-        prompt: work.prompt,
-        // A `ticket` exit touches no repository — the agent writes a title and a
-        // body and hands them to `link_ticket` — so cutting a worktree and a
-        // branch for it would be pure cost. The other two write files in a tree:
-        // a documentation change has to be pushed to open a pull request from, and
-        // a job is the work itself.
-        kind: exit.exit === 'ticket' ? 'desk' : 'code',
-        originRef: fact.aboutRef,
-      });
-      return { job, graduation: this.knowledge.recordGraduation(fact.id, job.id, exit) };
-    });
-    return write();
-  }
-  findGraduationByJobId(jobId: string): KnowledgeGraduation | null {
-    return this.knowledge.findGraduationByJobId(jobId);
-  }
-  linkGraduationTicket(id: string, ticketRef: string): KnowledgeGraduation | null {
-    return this.knowledge.linkGraduationTicket(id, ticketRef);
-  }
-  listGraduations(limit?: number): KnowledgeGraduation[] {
-    return this.knowledge.listGraduations(limit);
-  }
-  openGraduations(): KnowledgeGraduation[] {
-    return this.knowledge.openGraduations();
-  }
-  getGraduation(id: string): KnowledgeGraduation | null {
-    return this.knowledge.getGraduation(id);
-  }
-  noteGraduationPr(id: string, prRef: string): void {
-    this.knowledge.noteGraduationPr(id, prRef);
-  }
-  settleGraduation(id: string, outcome: GraduationOutcome): KnowledgeGraduation | null {
-    return this.knowledge.settleGraduation(id, outcome);
-  }
-
   // -- Remedies (why the fleet came back to a PR, and what settled it) --------
 
   recordRemedy(input: RemedyInput): Remedy {
@@ -714,15 +534,6 @@ export class Store {
 
   // -- The cross-fleet pool (docs/spec/28-cross-fleet-pool.md) ----------------
 
-  listPublishableFacts(): KnowledgeFact[] {
-    return this.knowledge.listPublishableFacts();
-  }
-  setFactKeepLocal(id: string, keepLocal: boolean): KnowledgeFact | null {
-    return this.knowledge.setFactKeepLocal(id, keepLocal);
-  }
-  replacePoolFleetClaims(fleetId: string, claims: readonly PoolMirroredClaim[]): void {
-    this.pool.replaceFleetClaims(fleetId, claims);
-  }
   replacePoolFleetDigest(fleetId: string, project: string, document: PoolDigestDocument): void {
     this.pool.replaceFleetDigest(fleetId, project, document);
   }
@@ -731,12 +542,6 @@ export class Store {
   }
   listPoolFleets(): PoolFleetReading[] {
     return this.pool.listPoolFleets();
-  }
-  listMirroredClaims(): PoolMirroredClaim[] {
-    return this.pool.listMirroredClaims();
-  }
-  mirroredClaimsForFact(factId: string): PoolMirroredClaim[] {
-    return this.pool.mirroredClaimsForFact(factId);
   }
   listPoolDigestRows(project: string | null): PoolDigestMirrorRow[] {
     return this.pool.listDigestRows(project);
@@ -846,6 +651,25 @@ export class Store {
   }
   listPlanRevisions(planId: string): PlanRevision[] {
     return this.plans.listPlanRevisions(planId);
+  }
+  recordPlanAmendment(input: Parameters<PlanStore['recordPlanAmendment']>[0]): PlanAmendment {
+    return this.plans.recordPlanAmendment(input);
+  }
+  getPlanAmendment(id: string): PlanAmendment | null {
+    return this.plans.getPlanAmendment(id);
+  }
+  listPlanAmendments(planId: string): PlanAmendment[] {
+    return this.plans.listPlanAmendments(planId);
+  }
+  listPendingPlanAmendments(): PlanAmendment[] {
+    return this.plans.listPendingPlanAmendments();
+  }
+  settlePlanAmendment(
+    id: string,
+    status: Parameters<PlanStore['settlePlanAmendment']>[1],
+    resolution: string,
+  ): PlanAmendment | null {
+    return this.plans.settlePlanAmendment(id, status, resolution);
   }
   markPartDispatched(id: string, taskId: string, branch: string): PlanPart | null {
     return this.plans.markPartDispatched(id, taskId, branch);
@@ -1371,6 +1195,12 @@ export class Store {
   ruleOnWatchProposal(originRef: string, checkId: string, accept: boolean): GoalWatch | null {
     return this.watches.ruleOnWatchProposal(originRef, checkId, accept);
   }
+  saveOperatorWatch(originRef: string, check: Omit<GoalWatchInput, 'seq'>): GoalWatch {
+    return this.watches.saveOperatorWatch(originRef, check);
+  }
+  deleteGoalWatch(originRef: string, checkId: string): boolean {
+    return this.watches.deleteGoalWatch(originRef, checkId);
+  }
   openWatchWindow(input: { goalRef: string; environment: string; openedAt: string; settlesAt: string }): void {
     this.watches.openWatchWindow(input);
   }
@@ -1481,6 +1311,169 @@ export class Store {
   }
   prThreadReopens(): PrThreadReopen[] {
     return this.threadReopens.prThreadReopens();
+  }
+  recordPrReplySent(prNumber: number, threadId: string, commentRef: string): void {
+    this.prReplies.recordPrReplySent(prNumber, threadId, commentRef);
+  }
+  recordObstacleSighting(...args: Parameters<ObstacleStore['recordObstacleSighting']>): ObstacleOutcome {
+    return this.obstacles.recordObstacleSighting(...args);
+  }
+
+  getObstacle(id: string): Obstacle | null {
+    return this.obstacles.getObstacle(id);
+  }
+
+  listObstacles(): Obstacle[] {
+    return this.obstacles.listObstacles();
+  }
+
+  listObstacleKeys(obstacleId: string): ObstacleKey[] {
+    return this.obstacles.listObstacleKeys(obstacleId);
+  }
+
+  listObstacleSightings(obstacleId: string): ObstacleSighting[] {
+    return this.obstacles.listObstacleSightings(obstacleId);
+  }
+
+  claimObstacleNotice(obstacleId: string, agentId: string, reason: string): boolean {
+    return this.obstacles.claimObstacleNotice(obstacleId, agentId, reason);
+  }
+
+  obstaclesNoticedBy(agentId: string): Set<string> {
+    return this.obstacles.obstaclesNoticedBy(agentId);
+  }
+
+  obstacleNoticesSent(): number {
+    return this.obstacles.obstacleNoticesSent();
+  }
+
+  obstacleBoard(): ObstacleStanding[] {
+    return this.obstacles.obstacleBoard();
+  }
+
+  obstacleInbox(): ObstacleStanding[] {
+    return this.obstacles.obstacleInbox();
+  }
+
+  obstacleReading(obstacleId: string): ObstacleDeskReading | null {
+    return this.obstacles.obstacleReading(obstacleId);
+  }
+
+  recordObstacleReading(...args: Parameters<ObstacleStore['recordObstacleReading']>): void {
+    this.obstacles.recordObstacleReading(...args);
+  }
+
+  addObstacleKeys(...args: Parameters<ObstacleStore['addObstacleKeys']>): ReturnType<ObstacleStore['addObstacleKeys']> {
+    return this.obstacles.addObstacleKeys(...args);
+  }
+
+  suggestObstacleMerge(...args: Parameters<ObstacleStore['suggestObstacleMerge']>): void {
+    this.obstacles.suggestObstacleMerge(...args);
+  }
+
+  listObstacleSuggestions(obstacleId: string): ReturnType<ObstacleStore['listObstacleSuggestions']> {
+    return this.obstacles.listObstacleSuggestions(obstacleId);
+  }
+
+  setObstacleKind(...args: Parameters<ObstacleStore['setObstacleKind']>): boolean {
+    return this.obstacles.setObstacleKind(...args);
+  }
+
+  muteObstacle(id: string, muted: boolean): boolean {
+    return this.obstacles.muteObstacle(id, muted);
+  }
+
+  claimObstacle(id: string): boolean {
+    return this.obstacles.claimObstacle(id);
+  }
+
+  setObstacleOwner(id: string, ownerRef: string): void {
+    this.obstacles.setObstacleOwner(id, ownerRef);
+  }
+
+  releaseObstacle(id: string): void {
+    this.obstacles.releaseObstacle(id);
+  }
+
+  recordObstacleBlock(...args: Parameters<ObstacleStore['recordObstacleBlock']>): ObstacleBlock {
+    return this.obstacles.recordObstacleBlock(...args);
+  }
+
+  listObstacleBlocks(): ObstacleBlock[] {
+    return this.obstacles.listObstacleBlocks();
+  }
+
+  clearObstacleBlock(originRef: string): void {
+    this.obstacles.clearObstacleBlock(originRef);
+  }
+
+  endObstacle(id: string, state: 'resolved' | 'dormant', endedBy: ObstacleEnding): boolean {
+    return this.obstacles.endObstacle(id, state, endedBy);
+  }
+
+  watchObstacleCondition(...args: Parameters<ObstacleStore['watchObstacleCondition']>): void {
+    this.obstacles.watchObstacleCondition(...args);
+  }
+
+  listObstacleConditions(obstacleId: string): ObstacleCondition[] {
+    return this.obstacles.listObstacleConditions(obstacleId);
+  }
+
+  setObstacleConditionMet(id: string, met: boolean): void {
+    this.obstacles.setObstacleConditionMet(id, met);
+  }
+
+  /**
+   * Queue the documentation job a note is written up by, and record the write-up
+   * against it in the same transaction.
+   *
+   * One write for both, `exitFact`'s shape and for its reason: a job with no
+   * write-up is a documentation change nothing will ever settle a note from, and a
+   * write-up naming no job is a note the board shows as on its way somewhere
+   * nothing is taking it.
+   *
+   * The job carries **no origin**. A note is about the repository rather than about
+   * a world item, and the graph adopts a job by its origin — so attributing this
+   * one to whichever goal happened to hit the note first would file the work under
+   * somebody else's issue.
+   */
+  writeUpObstacle(obstacleId: string, work: { title: string; prompt: string }): Job {
+    const write = this.db.transaction((): Job => {
+      // A `code` job: it writes files in a tree, so it needs a worktree and a
+      // branch to open the pull request from.
+      const job = this.jobs.createJob({ title: work.title, prompt: work.prompt, kind: 'code' });
+      this.obstacles.recordObstacleWriteUp(obstacleId, job.id);
+      return job;
+    });
+    return write();
+  }
+
+  obstaclesWrittenUp(): Set<string> {
+    return this.obstacles.obstaclesWrittenUp();
+  }
+
+  openObstacleWriteUps(): ObstacleWriteUp[] {
+    return this.obstacles.openObstacleWriteUps();
+  }
+
+  noteObstacleWriteUpPr(obstacleId: string, prRef: string): void {
+    this.obstacles.noteObstacleWriteUpPr(obstacleId, prRef);
+  }
+
+  settleObstacleWriteUp(obstacleId: string, outcome: ObstacleWriteUpOutcome): boolean {
+    return this.obstacles.settleObstacleWriteUp(obstacleId, outcome);
+  }
+
+  prReplyRefs(prNumber: number): ReadonlySet<string> {
+    return this.prReplies.prReplyRefs(prNumber);
+  }
+
+  archiveClosedPrs(prs: readonly PullRequest[]): void {
+    this.prArchive.archiveClosedPrs(prs);
+  }
+
+  listArchivedPrs(): PullRequest[] {
+    return this.prArchive.listArchivedPrs();
   }
 
   // -- Decisions (audit) ---------------------------------------------------
@@ -1726,412 +1719,4 @@ export class Store {
   clearVivarium(id: string): PetReset {
     return this.pets.clearVivarium(id);
   }
-}
-
-/**
- * What sending a claim out produced: the job an agent will work, and the row that
- * links the two.
- *
- * Both, because the caller needs both — the route hands the job back so the
- * cockpit can watch it in Up next, and the graduation is what the page draws the
- * pull request or the ticket from once there is one.
- */
-interface FactExited {
-  job: Job;
-  graduation: KnowledgeGraduation;
-}
-
-/**
- * The name of the one-shot that folds `findings` and `lessons` into
- * `knowledge_facts`, and **never edited in place**.
- *
- * `VIVARIUM_RESET`'s rule, pointed the other way (CLAUDE.md, "Persistence"). That
- * constant names one clearance, so renaming it declares a *second* clearance that
- * runs on every database that already had the first. This names one fold, and
- * renaming it would re-fold every claim an operator has since ruled on — the
- * dismissed ones back as proposals, the promoted ones beside themselves — on the
- * boot after the build lands, with nothing red. A further pass is a further id.
- */
-const KNOWLEDGE_FOLD = 'findings-and-lessons-into-knowledge-facts';
-
-/**
- * Carry every `findings` and `lessons` row across into `knowledge_facts`, **once
- * per database**.
- *
- * ## Why it is gated on a name and not on a count
- *
- * The two failures are exact opposites and **both are silent**. A fold that runs
- * on every boot re-creates the rows an operator has since ruled on: a claim they
- * dismissed comes back as a proposal, a claim they retired comes back beside its
- * own retirement, and the page fills from underneath with decisions that were
- * already made. A fold that never runs loses every claim the deployment holds, on
- * the boot the operator takes the build — and a knowledge page that is simply
- * empty looks exactly like a deployment nobody has raised anything on yet.
- * Neither errors. So the gate is {@link runOnce} on a named id.
- *
- * It also cannot be gated on "did `ensureColumns` add a column", which is the
- * other one-shot gate this file uses. That test is true on exactly the boot a
- * column arrives, and this fold has no column of its own to arrive with: the
- * columns it writes into (`about_ref`, `where_at`) landed with the unified intake,
- * one release before the stores merged.
- *
- * ## Here rather than in a domain module
- *
- * It reads two domains' tables and writes a third's, which is the cross-domain
- * join `test/storeModules.test.ts` refuses inside a module and CLAUDE.md sends to
- * the composition root. This is that root.
- *
- * ## What it does not do
- *
- * **It copies, and deletes nothing.** The `findings` and `lessons` rows stay
- * exactly where they are, unread. A fold that got a row wrong is recoverable
- * while its source is still on disk and is not once the source is dropped, and
- * two dozen kilobytes of dead rows is a cheap price for that.
- */
-function foldClaimStores(db: Database.Database, at: string): void {
-  runOnce(db, KNOWLEDGE_FOLD, at, () => foldFindings(db) + foldLessons(db));
-}
-
-/**
- * The name of the one-shot that stamps every claim already ruled on as spent in
- * the pet ledger, and **never edited in place** for {@link KNOWLEDGE_FOLD}'s
- * reason.
- */
-const CLAIMS_SPENT = 'ruled-claims-into-pet-actions';
-
-/**
- * Record every claim an operator has **already** ruled on as a pet action that
- * paid nothing — once per database.
- *
- * ## What it is for
- *
- * A pet comes from an operator *acting*, and one of the acts is ruling on a claim
- * an agent raised. That used to be `finding:<finding id>` and is now
- * `claim:<fact id>`, because the three claim stores became one — and `pet_actions`
- * is keyed on exactly that pair. So on the boot a deployment takes this build,
- * every finding it ever triaged and every lesson it ever promoted arrives as a key
- * the scan has never seen, and the vivarium pays out for a year of decisions in one
- * afternoon.
- *
- * Nothing errors, and a burst of creatures looks exactly like the feature working —
- * which is the whole reason this is a gated migration rather than something the
- * scan could be trusted to notice.
- *
- * ## Why it writes rows rather than moving the watermark
- *
- * `pet_actions` already has a word for this: a row with a null `pet_id` is an
- * action that was seen and rolled nothing. The vivarium's own start would catch
- * only the rows older than it, and an operator who has been running this for a
- * month has a month of rulings inside that window. Writing the keys is the only
- * thing that answers "seen already" for exactly the set that was.
- *
- * `INSERT OR IGNORE`, so a claim the scan somehow reached first keeps whatever it
- * rolled — a stamp here must never overwrite a pet.
- */
-function spendRuledClaims(db: Database.Database, at: string): void {
-  runOnce(db, CLAIMS_SPENT, at, () => {
-    const rows = db.prepare(`SELECT id, ruled_at FROM knowledge_facts WHERE ruled_at IS NOT NULL`).all() as {
-      id: string;
-      ruled_at: string;
-    }[];
-    const insert = db.prepare(`INSERT OR IGNORE INTO pet_actions (kind, ref, at, pet_id) VALUES ('claim', ?, ?, NULL)`);
-    for (const row of rows) insert.run(row.id, row.ruled_at);
-    return rows.length;
-  });
-}
-
-/**
- * Every finding becomes a fact, its evidence becomes the corroboration behind it,
- * and what an operator did about it becomes a graduation.
- *
- * ## The kind does not become a column
- *
- * `FindingKind` was a prediction of **what an operator would do** — close a
- * duplicate, unblock the work, decide whether it becomes a job, open a docs pull
- * request — which is the operator's knowledge and not the reporting agent's. The
- * unified intake removed that question from the agent (`raise` takes no kind), so
- * nothing writes one any more, and a column only a migration ever fills is a
- * column that means *this row predates the intake* wearing a name that says
- * otherwise. The other reading — that it survives as an **operator-set label** —
- * is a real one and is argued in `docs/spec/27-knowledge.md`; what settles it here
- * is that no operator has ever set one, so a fold that made the column would be
- * inventing a labelling nobody did.
- *
- * The word is not lost. It goes into the corroboration's **words**, which is where
- * everything else about how an observation arrived already lives, and where an
- * operator reads it beside the evidence rather than as a chip claiming a taxonomy
- * the harness no longer keeps.
- *
- * ## A pre-split row keeps its blob
- *
- * A finding filed before `summary`/`where`/`detail` were three fields holds a
- * whole report in `summary` and null in the other two. It becomes a fact whose
- * claim is that whole report, **unsplit**: no content migration guesses at where
- * the seams were, which is the stance `docs/spec/13-jobs-and-tickets.md` took the
- * day the fields were split and which is if anything stronger here, since a claim
- * is matched against other claims by its text. The card clamps it, so an old row
- * reads as a slightly tall card rather than as a lie about its own structure.
- *
- * ## `SELECT *`, deliberately
- *
- * `where_at`, `detail` and `ticket_ref` are `ALTER TABLE` columns, so a database
- * old enough may not have them at all. Naming them in the `SELECT` would throw on
- * exactly the databases this exists for; `SELECT *` binds by name in the reader
- * below and reads a missing column as absent, which is what it is. (The warning
- * against `SELECT *` in `migrate.ts` is about a *copy* that binds by position —
- * a different hazard, and not this one.)
- */
-function foldFindings(db: Database.Database): number {
-  if (!hasTable(db, 'findings')) return 0;
-  const rows = db.prepare(`SELECT * FROM findings ORDER BY created_at ASC, rowid ASC`).all() as FoldedFinding[];
-  const fact = db.prepare(
-    `INSERT OR IGNORE INTO knowledge_facts
-       (id, claim, scope, lifetime, expires_at, reach, supersedes, origin_ref, ruled_at, resolves_when,
-        about_ref, where_at, created_at, updated_at)
-     VALUES (?, ?, 'fleet', 'standing', NULL, ?, NULL, ?, ?, NULL, ?, ?, ?, ?)`,
-  );
-  const voice = db.prepare(
-    `INSERT OR IGNORE INTO knowledge_corroborations
-       (id, fact_id, agent_id, task_id, goal_ref, session_id, words, created_at)
-     VALUES (?, ?, ?, ?, ?, NULL, ?, ?)`,
-  );
-  for (const row of rows) {
-    const id = foldedFactId(row.id);
-    const ruled = row.status === 'open' ? null : row.updated_at;
-    fact.run(
-      id,
-      row.summary,
-      findingReach(row.status),
-      row.origin_ref,
-      ruled,
-      row.ref,
-      row.where_at ?? null,
-      row.created_at,
-      row.updated_at,
-    );
-    voice.run(
-      `knc_${row.id}`,
-      id,
-      row.agent_id,
-      row.task_id,
-      corroborationGoal(row.origin_ref),
-      findingWords(row),
-      row.created_at,
-    );
-  }
-  foldFindingGraduations(db);
-  return rows.length;
-}
-
-/**
- * The graduation half of {@link foldFindings}, on its own — every finding whose
- * operator already chose an exit, as the row that now records one.
- *
- * A `promoted` or `filing` finding gets an **open** graduation, which is the whole
- * point of the merge: the finding stores stamped a status and never learned what
- * became of the job, and an open row is what the sweep reads. No job means no
- * graduation, and the pair cannot arise — `resolveFinding` took the job's id on
- * every arm that left `open`. If one somehow exists, the fact still takes the
- * reach the operator's verdict earned it, and there is simply nothing to draw
- * beside it.
- *
- * Its own function because it has to run **twice** on the databases #506 is about:
- * once inside the fold, and once again under {@link REFOLD_GRADUATIONS} for the
- * deployments whose first run wrote nothing. `INSERT OR IGNORE` keyed on
- * `kng_<finding id>` is what makes the second pass safe — it cannot double-write,
- * and it cannot disturb a graduation recorded since.
- */
-function foldFindingGraduations(db: Database.Database): number {
-  if (!hasTable(db, 'findings')) return 0;
-  const rows = db.prepare(`SELECT * FROM findings ORDER BY created_at ASC, rowid ASC`).all() as FoldedFinding[];
-  const exit = db.prepare(
-    `INSERT OR IGNORE INTO knowledge_graduations
-       (id, fact_id, exit, job_id, target, bar, pr_ref, ticket_ref, outcome, settled_at, created_at)
-     VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?)`,
-  );
-  let written = 0;
-  for (const row of rows) {
-    const kind = findingExit(row.status);
-    if (kind === null || row.job_id === null) continue;
-    const landed = row.status === 'filed';
-    written += exit.run(
-      `kng_${row.id}`,
-      foldedFactId(row.id),
-      kind,
-      row.job_id,
-      row.ticket_ref ?? null,
-      landed ? 'landed' : null,
-      landed ? row.updated_at : null,
-      row.updated_at,
-    ).changes;
-  }
-  return written;
-}
-
-/**
- * The name of the one-shot that re-runs the graduation half of the fold, and
- * **never edited in place** for {@link KNOWLEDGE_FOLD}'s reason — least of all by
- * renaming that one, which would re-fold every claim an operator has since ruled
- * on.
- */
-const REFOLD_GRADUATIONS = 'refold-finding-graduations';
-
-/**
- * Put back the graduations the first fold silently dropped — once per database.
- *
- * On every database created in `f07ddda`'s window, `knowledge_graduations.target`
- * is still `NOT NULL` (see `KNOWLEDGE_REBUILDS`), and the fold's `INSERT OR
- * IGNORE` — there for the primary-key collision with the lessons mirror —
- * swallowed the constraint failure on every one of these rows. `runOnce` then
- * stamped the fold as done, so the loss was permanent: facts sitting at reach
- * `graduated` with nothing beside them saying where they went, and no open
- * graduation for the sweep to attribute a pull request or a ticket back to.
- *
- * The `findings` rows are still on disk, because the fold copies and deletes
- * nothing — which is precisely the recoverability that decision paid for.
- *
- * Ordering: the rebuild pass runs at the top of the constructor, so by the time
- * this runs `target` is nullable and the insert can land.
- */
-function refoldFindingGraduations(db: Database.Database, at: string): void {
-  runOnce(db, REFOLD_GRADUATIONS, at, () => foldFindingGraduations(db));
-}
-
-/**
- * Every lesson becomes a fact — and the promoted ones **already are one**.
- *
- * `KnowledgeStore.adoptLessons` has been mirroring a promoted lesson in as an
- * injected fleet claim under an id derived from the lesson's since delivery moved,
- * so the fold cannot insert those again: it would either collide on the primary
- * key or, worse, write a second copy under a second id and put one sentence in the
- * block twice. It uses **the same derivation** and `INSERT OR IGNORE`, so an
- * already-mirrored row is left exactly as it stands, with whatever an operator has
- * since done to it.
- *
- * That is also why a retired lesson can land here as a fact still at `injected`.
- * The mirror only ever un-mirrored a row nobody had touched; one that had been
- * corroborated or amended stayed, because at that point it is a fact in its own
- * right and the lessons panel is not where it is governed. `INSERT OR IGNORE`
- * keeps that answer rather than overwriting it with a status the lessons table
- * still holds.
- *
- * The status map has one row worth reading twice: a retired lesson becomes
- * `retired` and **never** `rejected`. The two words meant opposite things in the
- * two stores — `lessons` called its prune "retired" and said outright that a
- * lesson retired in error is simply written again, while `knowledge_facts` bars a
- * rejected claim by name — so folding a prune into a bar would refuse, by name and
- * forever, every claim an operator had merely tidied.
- */
-function foldLessons(db: Database.Database): number {
-  if (!hasTable(db, 'lessons')) return 0;
-  const rows = db.prepare(`SELECT * FROM lessons ORDER BY created_at ASC, rowid ASC`).all() as FoldedLesson[];
-  const fact = db.prepare(
-    `INSERT OR IGNORE INTO knowledge_facts
-       (id, claim, scope, lifetime, expires_at, reach, supersedes, origin_ref, ruled_at, resolves_when,
-        about_ref, where_at, created_at, updated_at)
-     VALUES (?, ?, 'fleet', 'standing', NULL, ?, NULL, ?, ?, NULL, NULL, NULL, ?, ?)`,
-  );
-  const voice = db.prepare(
-    `INSERT OR IGNORE INTO knowledge_corroborations
-       (id, fact_id, agent_id, task_id, goal_ref, session_id, words, created_at)
-     VALUES (?, ?, NULL, NULL, ?, NULL, ?, ?)`,
-  );
-  for (const row of rows) {
-    const id = foldedFactId(row.id);
-    fact.run(
-      id,
-      row.text,
-      row.status === 'promoted' ? 'injected' : row.status === 'retired' ? 'retired' : 'proposal',
-      row.origin_ref,
-      row.status === 'proposed' ? null : row.updated_at,
-      row.created_at,
-      row.updated_at,
-    );
-    voice.run(
-      `knc_${row.id}`,
-      id,
-      corroborationGoal(row.origin_ref),
-      'Written down as a lesson about working this repository, before the knowledge base held them.',
-      row.created_at,
-    );
-  }
-  return rows.length;
-}
-
-/**
- * Where a finding's status puts the claim.
- *
- * The two that are not obvious are the two worth stating. `dismissed` becomes
- * `rejected` because that is what dismissing meant in `findings`: the store
- * already refused to fold a fresh report into a dismissed row, which is the
- * rejection bar under another name. And a `promoted` or `filing` finding stays a
- * **`proposal`** — an operator queueing work for a claim is not a ruling about how
- * far the claim carries, and a finding reached no agent at any status, so
- * anything else would put a sentence in front of the fleet that nobody vouched
- * for. What the operator did is the graduation row beside it.
- */
-function findingReach(status: string): string {
-  if (status === 'dismissed') return 'rejected';
-  if (status === 'filed') return 'graduated';
-  return 'proposal';
-}
-
-/** Which exit an operator's verdict on a finding was, or null when they took none. */
-function findingExit(status: string): string | null {
-  if (status === 'promoted') return 'job';
-  if (status === 'filing' || status === 'filed') return 'ticket';
-  return null;
-}
-
-/**
- * The observation behind a folded finding, in the terms an operator reads the
- * others in: what the agent actually saw, and how it arrived.
- *
- * The kind leads, because it is the one thing about a folded row that is not true
- * of anything raised since — it is a word the harness stopped asking for — and
- * because on a row with no `detail` it is the only thing there is to say beyond
- * the claim. A corroboration with no words at all would be a voice in the count
- * with nothing behind it, which is exactly what the corroborations table is a
- * table rather than a counter to avoid.
- */
-function findingWords(row: FoldedFinding): string {
-  const how = `Reported as a "${row.kind}" finding, before the claim stores merged.`;
-  return row.detail ? `${how}\n\n${row.detail}` : how;
-}
-
-/** Whether this database has a table at all — a fresh one has neither of the folded two. */
-function hasTable(db: Database.Database, table: string): boolean {
-  return db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`).get(table) !== undefined;
-}
-
-/**
- * A `findings` row as the fold reads it — every column optional past the ones that
- * shipped in the original `CREATE`, because a database old enough predates the
- * three-field split and the ticket ref alike.
- */
-interface FoldedFinding {
-  id: string;
-  agent_id: string;
-  task_id: string;
-  origin_ref: string | null;
-  kind: string;
-  ref: string | null;
-  summary: string;
-  status: string;
-  job_id: string | null;
-  where_at: string | null | undefined;
-  detail: string | null | undefined;
-  ticket_ref: string | null | undefined;
-  created_at: string;
-  updated_at: string;
-}
-
-/** A `lessons` row as the fold reads it. The table never gained a column. */
-interface FoldedLesson {
-  id: string;
-  text: string;
-  origin_ref: string | null;
-  status: string;
-  created_at: string;
-  updated_at: string;
 }

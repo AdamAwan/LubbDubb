@@ -15,7 +15,6 @@ import { TicketsPanel } from '../components/TicketsPanel.js';
 import { FeatureBoard } from '../components/FeatureBoard.js';
 import { ConfigPage } from '../components/ConfigPage.js';
 import { RecordPanel } from '../components/RecordPanel.js';
-import { KnowledgePanel } from '../components/KnowledgePanel.js';
 import { PoolStatus } from '../components/PoolStatus.js';
 import { LaunchPanel } from '../components/LaunchPanel.js';
 import { SetupPanel } from '../components/SetupPanel.js';
@@ -25,6 +24,7 @@ import { Vivarium } from './Vivarium.js';
 import { BuildPanel } from '../components/BuildPanel.js';
 import { LocalRunPanel } from '../components/LocalRunPanel.js';
 import { InsightsPage } from '../components/InsightsPage.js';
+import { ObstaclesPage } from '../components/ObstaclesPage.js';
 import { SchedulePanel } from '../components/SchedulePanel.js';
 import { InjectPanel } from '../components/InjectPanel.js';
 import { ConfirmButton } from '../components/ConfirmButton.js';
@@ -86,10 +86,13 @@ export function ConsoleRoot({ view, actions }: { view: CockpitView; actions: Coc
         <PrPage page={view.prPage} view={view} actions={actions} />
       </>
     ) : view.selectedPr !== null ? (
-      <PrGone number={view.selectedPr} tab={view.tab} actions={actions} />
+      <PrGone number={view.selectedPr} goalRef={view.selectedGoal} tab={view.tab} actions={actions} />
     ) : view.goalPage !== null ? (
       <>
-        <Crumb goal={view.goalPage.issue} tab={view.tab} actions={actions} />
+        <Crumb
+          trail={[tabStep(view.tab, actions)]}
+          here={`#${view.goalPage.issue.number} ${view.goalPage.issue.title}`}
+        />
         <GoalPage page={view.goalPage} view={view} actions={actions} />
       </>
     ) : view.selectedGoal !== null ? (
@@ -143,12 +146,23 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
       // still holds. The window and the open reading are handed in from `Place`
       // rather than held inside it, so a link to one carries both.
       return (
-        <InsightsPage
-          view={view.insightsView}
-          window={view.insightsWindow}
-          poolProject={view.poolProject}
-          actions={actions}
-        />
+        <>
+          {/* This fleet's own side of the cross-fleet pool, above the readings it is
+              about: what has been published, when the pool was last read, and which
+              fleets have been heard from. It sat above the claim store's page until
+              that page went, and Insights is where it belongs anyway — it is a
+              reading about what this fleet publishes and reads, on the tab that
+              answers what the fleet is costing and reaching. It draws nothing at all
+              when no pool is configured; an empty panel there would say something is
+              broken. → docs/spec/28-cross-fleet-pool.md#in-the-cockpit */}
+          <PoolStatus now={view.now} />
+          <InsightsPage
+            view={view.insightsView}
+            window={view.insightsWindow}
+            poolProject={view.poolProject}
+            actions={actions}
+          />
+        </>
       );
     case 'tickets':
       // Embedded exactly as Insights is, and for the same reason: it reaches its
@@ -183,67 +197,16 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
           now={view.now}
         />
       );
-    case 'knowledge':
-      // A destination since the nav gained it, and drawn here rather than in a
-      // panel for the reason the tickets tab is not one either: ruling on the
-      // fleet's claims is a sitting, and a panel does it over the top of the rail
-      // the ask that sent you here came from. The claim whose provenance is open
-      // rides in from `Place` (`view.viewingFact`), so a link to one opens on it.
+    case 'obstacles':
+      // Embedded exactly as Insights and the tickets tab are, and for the same
+      // reason: it reaches its own route, which `console/` may not, but rendering a
+      // component that does is not reaching. Which row is unfolded and whether the
+      // terminal tail is open ride in from `Place`, so a link to either opens on it.
       //
-      // One page and one card, because there is one store: what an agent noticed,
-      // what working a goal taught and what the fleet knows are the same act read
-      // by the same person, and three surfaces asking one question is how an
-      // operator ends up ruling on the same claim twice.
-      return (
-        <>
-          {/* This fleet's own side of the cross-fleet pool, above the claims it is
-              about: what has been published, when the pool was last read, and which
-              claims the secret backstop refused. It draws nothing at all when no pool
-              is configured — an empty panel there would say something is broken.
-              → docs/spec/28-cross-fleet-pool.md#in-the-cockpit */}
-          <PoolStatus now={view.now} />
-          <KnowledgePanel
-            facts={view.state.knowledge}
-            graduations={view.state.knowledgeGraduations}
-            similarities={view.state.knowledgeSimilarities}
-            delivery={view.state.knowledgeDelivery}
-            cost={view.state.knowledgeCost}
-            canFileTickets={view.state.config.canFileTickets}
-            now={view.now}
-            refUrls={view.state.refUrls}
-            viewingFact={view.viewingFact}
-            query={{
-              view: view.knowledgeView,
-              show: view.knowledgeShow,
-              sort: view.knowledgeSort,
-              desc: view.knowledgeDesc,
-              fold: view.knowledgeFolded,
-              standing: view.knowledgeQueue,
-              open: view.knowledgeOpen,
-            }}
-            onQuery={(next) =>
-              actions.setKnowledgeQuery({
-                ...(next.view !== undefined && { knowledgeView: next.view }),
-                ...(next.show !== undefined && { knowledgeShow: next.show }),
-                ...(next.sort !== undefined && { knowledgeSort: next.sort }),
-                ...(next.desc !== undefined && { knowledgeDesc: next.desc }),
-                ...(next.fold !== undefined && { knowledgeFolded: next.fold }),
-                ...(next.standing !== undefined && { knowledgeQueue: next.standing }),
-                ...(next.open !== undefined && { knowledgeOpen: next.open }),
-              })
-            }
-            onReach={(id, reach) => actions.setFactReach(id, reach)}
-            onExit={(id, exit) => actions.exitFact(id, exit)}
-            onRaise={(claim, originRef) => actions.raiseFact(claim, originRef)}
-            onSettleGraduation={(id, outcome) => actions.settleGraduation(id, outcome)}
-            onDetail={(id) => actions.factDetail(id)}
-            onResolveContradiction={(id, ruling) => actions.resolveContradiction(id, ruling)}
-            onViewFact={(id) => actions.viewFact(id)}
-            onKeepLocal={(id, keepLocal) => actions.setFactKeepLocal(id, keepLocal)}
-            onMerge={(id, members) => actions.mergeFacts(id, members)}
-          />
-        </>
-      );
+      // **In the nav**, in the slot Knowledge held: `TopBar`'s `TABS` carries it
+      // since the operator lifted the URL-only rule it shipped under.
+      // → docs/spec/27-obstacles.md#in-the-cockpit
+      return <ObstaclesPage open={view.viewingObstacle} ended={view.obstacleEnded} now={view.now} actions={actions} />;
     case 'features':
       // Gated exactly as the vivarium is, and for the same reason: a deployment
       // with no board has no tab to reach this, but a stale URL still can. The
@@ -301,13 +264,7 @@ function GoalGone({ ref_, tab, actions }: { ref_: string; tab: ConsoleTab; actio
   const number = /^issue:(\d+)$/.exec(ref_)?.[1] ?? null;
   return (
     <>
-      <nav className="cn-crumb">
-        <button type="button" onClick={() => actions.selectGoal(null)}>
-          ‹ {TAB_LABEL[tab]}
-        </button>
-        <span className="cn-crumbsep">/</span>
-        <span className="cn-crumbnow">{number === null ? ref_ : `#${number}`}</span>
-      </nav>
+      <Crumb trail={[tabStep(tab, actions)]} here={number === null ? ref_ : `#${number}`} />
       <section className="cn-gone">
         <h2>{number === null ? ref_ : `#${number}`} is not in the current world</h2>
         <p>
@@ -330,14 +287,24 @@ function GoalGone({ ref_, tab, actions }: { ref_: string; tab: ConsoleTab; actio
  * always one.
  */
 function PrCrumb({ page, tab, actions }: { page: PrPageView; tab: ConsoleTab; actions: CockpitActions }): JSX.Element {
+  const goalRef = page.goalRef;
   return (
-    <nav className="cn-crumb">
-      <button type="button" onClick={() => actions.selectPr(null)}>
-        ‹ {page.goal !== null ? `#${page.goal.number} ${page.goal.title}` : TAB_LABEL[tab]}
-      </button>
-      <span className="cn-crumbsep">/</span>
-      <span className="cn-crumbnow">PR #{page.pr.number}</span>
-    </nav>
+    <Crumb
+      trail={[
+        tabStep(tab, actions),
+        // The rung between, and only when there is one. It *selects* the goal
+        // rather than merely clearing the pull request: this page is reached by a
+        // `<Ref>` from anywhere — the overview's pull-request rack among them —
+        // and on that way in the place underneath holds no goal at all, so
+        // `selectPr(null)` alone lands on the tab and the rung the operator just
+        // clicked is skipped. The ref is the page's own reading of what owns it,
+        // which is what the rung is labelled off.
+        ...(page.goal !== null && goalRef !== null
+          ? [{ label: `#${page.goal.number} ${page.goal.title}`, go: () => actions.selectGoal(goalRef) }]
+          : []),
+      ]}
+      here={`PR #${page.pr.number}`}
+    />
   );
 }
 
@@ -348,16 +315,32 @@ function PrCrumb({ page, tab, actions }: { page: PrPageView; tab: ConsoleTab; ac
  * something the screen does not show is a click that reads as doing nothing. The
  * provider is where the answer actually is, so the reference is the offer.
  */
-function PrGone({ number, tab, actions }: { number: number; tab: ConsoleTab; actions: CockpitActions }): JSX.Element {
+function PrGone({
+  number,
+  goalRef,
+  tab,
+  actions,
+}: {
+  number: number;
+  goalRef: string | null;
+  tab: ConsoleTab;
+  actions: CockpitActions;
+}): JSX.Element {
   return (
     <>
-      <nav className="cn-crumb">
-        <button type="button" onClick={() => actions.selectPr(null)}>
-          ‹ {TAB_LABEL[tab]}
-        </button>
-        <span className="cn-crumbsep">/</span>
-        <span className="cn-crumbnow">PR #{number}</span>
-      </nav>
+      <Crumb
+        trail={[
+          tabStep(tab, actions),
+          // The goal is still on the *place* even though the pull request over it
+          // is not in the world, so the rung it was reached through is still real
+          // and is still drawn — off the ref rather than off a page, since the goal
+          // may be gone from the world too and the ref is what the place holds.
+          // Dropping it would make a stale link the one case where the trail is
+          // shorter than the ladder.
+          ...(goalRef !== null ? [{ label: goalLabel(goalRef), go: () => actions.selectPr(null) }] : []),
+        ]}
+        here={`PR #${number}`}
+      />
       <section className="cn-gone">
         <h2>PR #{number} is not in the current world</h2>
         <p>
@@ -372,24 +355,74 @@ function PrGone({ number, tab, actions }: { number: number; tab: ConsoleTab; act
   );
 }
 
-function Crumb({
-  goal,
-  tab,
-  actions,
-}: {
-  goal: { number: number; title: string };
-  tab: ConsoleTab;
-  actions: CockpitActions;
-}): JSX.Element {
+/** One rung on the trail: what it is called, and what standing on it again does. */
+interface CrumbStep {
+  label: string;
+  go: () => void;
+}
+
+/**
+ * The tab the situation area is drawn over — the foot of every trail.
+ *
+ * `selectGoal(null)` clears the pull request with it, so one call is the whole of
+ * the way out from either rung. The tab is never *set* here: it is already a tab
+ * that could have led to what is drawn, narrowed by `homeTab` at the moment of
+ * selection and again on the way in from the address bar.
+ * → `docs/spec/17-cockpit.md#nesting`
+ */
+function tabStep(tab: ConsoleTab, actions: CockpitActions): CrumbStep {
+  return { label: TAB_LABEL[tab], go: () => actions.selectGoal(null) };
+}
+
+/**
+ * What a goal is called on a trail when all that is to hand is its ref — the
+ * number, or the ref itself where it is not one the harness minted. `GoalGone`
+ * makes the same fallback for the same reason: a ref drawn as itself is still a
+ * rung an operator can stand on, where an empty one is a trail with a hole in it.
+ */
+function goalLabel(ref: string): string {
+  return `#${/^issue:(\d+)$/.exec(ref)?.[1] ?? ref}`;
+}
+
+/**
+ * The trail out of whatever the situation area drew over the tab.
+ *
+ * **A trail, and not the one back button it was.** The ladder is three rungs deep
+ * — tab, goal, pull request — and a single control labelled with the rung beneath
+ * it drew two of them, which left the tab a page was hanging off entirely absent
+ * from a pull request's page. That is the half of the failure a reader *sees*; the
+ * half they act on is that the one label was `TAB_LABEL[tab]`, and nothing that
+ * opens a goal or a pull request moved the nav, so it named wherever the nav
+ * happened to be last. A goal opened from the queue rail — which is drawn on every
+ * tab — while reading Insights offered *‹ Insights* as the way out of it, and a
+ * pull request under it a trail leading back there. No reading on that page
+ * contains that goal: the trail led somewhere the operator had not been.
+ *
+ * Both halves are fixed here and in `homeTab`, and they are one fix rather than
+ * two: drawing the whole ladder is what makes a wrong foot visible, and narrowing
+ * the foot to a tab that lists work is what makes drawing it worth doing.
+ *
+ * Every rung but the last is a control, because a trail whose middle is inert is a
+ * list of words that looks like navigation.
+ */
+function Crumb({ trail, here }: { trail: readonly CrumbStep[]; here: string }): JSX.Element {
   return (
-    <nav className="cn-crumb">
-      <button type="button" onClick={() => actions.selectGoal(null)}>
-        ‹ {TAB_LABEL[tab]}
-      </button>
-      <span className="cn-crumbsep">/</span>
-      <span className="cn-crumbnow">
-        #{goal.number} {goal.title}
+    <nav className="cn-crumb" aria-label="Breadcrumb">
+      {/* The mark that says *out*, once, at the head — not on each rung. On every
+          one it reads as a separator competing with the slash; on the last rung it
+          would point out of the page you are on. */}
+      <span className="cn-crumbback" aria-hidden="true">
+        ‹
       </span>
+      {trail.map((step) => (
+        <span key={step.label} className="cn-crumbstep">
+          <button type="button" onClick={step.go}>
+            {step.label}
+          </button>
+          <span className="cn-crumbsep">/</span>
+        </span>
+      ))}
+      <span className="cn-crumbnow">{here}</span>
     </nav>
   );
 }

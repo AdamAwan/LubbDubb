@@ -100,6 +100,15 @@ const RULES = [
       'A job the operator queued from the cockpit is drained before any world-driven rule, claiming the next free slot first — so a manual request takes priority, and simply waits in the queue when the fleet is at capacity.',
   },
 
+  // ---- The fleet's own way, before the work it is in the way of. -----------
+  {
+    id: 'obstacle-repair',
+    kind: 'rule',
+    name: 'Something is blocking the fleet',
+    description:
+      'An obstacle two or more agents reported — and which is blocking the fleet *now*, meaning a base branch is red or three independent voices have hit it — gets one code agent to fix it. It is the second of the two ways an obstacle gets an owner (the other is a ticket, filed by the ownership desk and ranked like any other goal), and it is a capability rather than a convenience: a store that can queue work can put agents on the fleet. So it is one rule, here where it can be seen, taking the headroom cut like every other candidate — and bounded on top of that to **one repair in flight at a time**, because the cut bounds how many agents run and not how many of them this rule may be. It sits above every world-driven rule because what it dispatches for is, by construction, in front of the work those rules are about to propose: an agent sent to a red base is an agent sent to the reason the next four dispatches would have failed. Nothing an agent calls reaches it — no agent stakes a claim on an obstacle, because a lock an agent takes is a lock an agent forgets. A repair that spends its attempt cap escalates rather than looping: an obstacle three agents could not clear is what an operator wants to be told about.',
+  },
+
   // ---- PR concerns. Four of these collect concerns for one branch; the ------
   // order they appear in here *is* the urgency order the fold reads.
   {
@@ -238,6 +247,13 @@ const RULES = [
     name: 'Plan needs your approval',
     description:
       '**Every** planner verdict is a proposal rather than work: the plan lands as `awaiting_approval`, this rule puts it to you once, and nothing is scheduled until you accept — `plan-part` holds a decomposition\'s parts, `issue-pickup` holds a single verdict\'s issue. Accepting releases the plan, to `active` for a decomposition or to `single` for one pull request. Rejecting a decomposition retires the parts nothing has started for and falls the issue back to a single pull request; rejecting a single verdict sends the plan back to a planner with your reason, since the single-PR route is what a rejected decomposition already falls back to. Either way a "no" leaves the issue a route instead of parking it. A replan asks again — the amended verdict is a new proposal, and the old one cannot release it. There is no deployment in which a verdict commits the moment the planner writes it. A `single` verdict the harness *overruled* — parts are already in flight — is never asked about: the collapse was refused, so there is no decision in it.',
+  },
+  {
+    id: 'plan-amendment',
+    kind: 'rule',
+    name: 'Change to a running plan needs your approval',
+    description:
+      'Somebody — an agent working the plan, or you at your own keyboard — has proposed a correction to a plan that is already running, and it waits here until you answer it. This is the alternative to a replan for the case a replan is wrong for: a part whose scope drifted, a dependency that turned out to be the other way round, a step nobody needs any more. **Nothing is paused while you decide.** The plan keeps scheduling exactly as it was, its agents keep working, and accepting ingests the amended document over it — merged on slug, so a part with a branch, a pull request or an outcome keeps all three and only its declaration is refreshed. Rejecting changes nothing at all, which is what "carry on as planned" means. One amendment per plan is asked about at a time.',
   },
   {
     id: 'plan-blocked',

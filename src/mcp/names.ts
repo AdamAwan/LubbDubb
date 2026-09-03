@@ -24,6 +24,7 @@ export const MCP_SERVER_ID = 'lubbdubb';
  */
 export const MCP_TOOL_NAMES = [
   'plan_submit',
+  'plan_correct',
   'plan_not_needed',
   'escalate',
   'world_read',
@@ -48,7 +49,6 @@ export const MCP_TOOL_NAMES = [
   'review_route',
   'report_remedy',
   'raise',
-  'knowledge_ask',
   'review_pack_submit',
   'review_pack_check',
 ] as const;
@@ -100,12 +100,14 @@ export const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use'> = {
   raise: 'addendum',
   escalate: 'addendum',
   plan_submit: 'addendum',
+  // Every agent working a planned goal may find the plan wrong, and no one
+  // dispatch prompt is where that happens — the appraiser, a part agent and a
+  // reviewer all reach it. An addendum tool nothing has called is a signal worth
+  // reading here: either no plan has been wrong, or the agents cannot see it.
+  plan_correct: 'addendum',
   world_read: 'addendum',
   open_pr: 'addendum',
   note_progress: 'addendum',
-  // Every agent may read the knowledge base, and it has no point of use to be named
-  // at: a tool named nowhere but in `tools/list` is a tool an agent finishes without.
-  knowledge_ask: 'addendum',
   // A request for a person to act rather than an observation, which is why it did
   // not fold into `raise` — and why it still needs naming.
   request_human_task: 'addendum',
@@ -179,15 +181,20 @@ export const RETIRED_TOOL_NAMES: readonly string[] = [
   'knowledge_propose',
   'knowledge_notice',
   'knowledge_contradict',
+  // The claim store's read side. It joined this list when the store went: there is
+  // no search tool now, and an agent reaching for one from an out-of-date prompt
+  // must be told that rather than met with an unknown method.
+  'knowledge_ask',
 ];
 
 /** What a call to a retired tool is told, so the answer names the door that replaced it. */
 export function retiredToolMessage(name: string): string {
   return (
-    `${name} has been retired. Everything it did is now one call: raise(claim, evidence) — say what you ` +
-    'learned and what you saw, and the harness works out where it goes. Add `contradicts: <id>` if you ' +
-    'are disputing a claim the harness gave you, or `until: <hours>` if it is only true for now. If you ' +
-    'reached this from a prompt that named it, that prompt is out of date.'
+    `${name} has been retired. Everything it did is now one call: raise(what, why_not_mine) — say what ` +
+    'you hit and why it is not your own change doing, and the harness works out the rest. **The call ' +
+    'is the lookup**: it comes back with whether anybody else has hit it, who owns it if anyone does, ' +
+    'and what they saw. There is no search tool; call raise the moment you are in pain. If you reached ' +
+    'this from a prompt that named it, that prompt is out of date.'
   );
 }
 
@@ -228,12 +235,42 @@ export const ALLOWED_MCP_TOOLS: string[] = MCP_TOOL_NAMES.map((name) => `mcp__${
  * from — the fleet's from the origin it was dispatched on, this one from what the
  * session claimed — and neither can be reached from the other's transport.
  *
- * `plan_amend` is deliberately **not** a second `plan_submit`. It writes the same
- * document through the same ingestion, but a shared name would make it the trap
+ * `plan_correct` is the fleet's tool for the same *sort* of act and is a third
+ * name again, deliberately. It proposes a change to a plan that is already
+ * running and **cannot write at all** — the row it leaves is answered by an
+ * operator. `plan_amend` reaches that same proposal on an `active` plan, which is
+ * not a reason to fold the two into one name: this one is fenced by the origin
+ * its caller was dispatched on and is offered to every agent working a part,
+ * while `plan_amend` is fenced by the plan's status and is offered to one
+ * long-lived credential in the operator's home directory. One name over two
+ * fences is the `validation_report` trap above, and the fences are exactly what
+ * an edit to "the plan tool" would silently reach past.
+ *
+ * `plan_amend` is deliberately **not** a second `plan_submit`. It carries the same
+ * document — rewriting an `awaiting_approval` plan through the same ingestion,
+ * proposing against an `active` one — but a shared name would make it the trap
  * above without the warning: an edit to "the plan tool" that silently reaches one
  * channel. A different name on each side is the whole of the defence, and the
  * document schema they genuinely do share is one export
  * (`src/mcp/planDocumentSchema.ts`) rather than two literals.
+ *
+ * **`goal_gate`, `goal_placement` and `goal_instruct` are the goal's own decisions**,
+ * and they are here because without them this channel could see a held goal and do
+ * nothing about it. Four of the cockpit's goal controls hold work — an appraisal
+ * that came back `unclear`, a model profile nobody confirmed, a shortfall against a
+ * goal that is finished, an environment gate on work that will never deploy — and
+ * every one of them was a click in a browser tab on one machine. A session asked to
+ * settle one reached for the nearest name that would take the call (`human_task_settle`
+ * clears the wrapper task), reported the gate settled, and left it standing.
+ *
+ * Three names rather than one, on {@link DESKTOP_TOOL_NAMES}'s own rule: `goal_gate`
+ * is the escape hatches, which hold work and are answered together; `goal_placement`
+ * is the two placement questions, which write to the tracker and hold nothing;
+ * `goal_instruct` is words in front of the next agent, which is input rather than a
+ * verdict and is the one of the three that restarts a goal. The profile pin is an arm
+ * of `goal_control` and not a fourth name, because it is the same act as the watch tag
+ * beside it — a label on the ticket that says how the harness should work this goal.
+ * → `src/mcp/desktopGoal.ts`
  *
  * `goal_read` is the one tool here that is *only* a read, and the only one whose
  * answer is not about a next step: it is what the harness kept about a goal — the
@@ -251,11 +288,65 @@ export const ALLOWED_MCP_TOOLS: string[] = MCP_TOOL_NAMES.map((name) => `mcp__${
  * is not a field on `validation_read` is that `validation_read` refuses a goal
  * with no checks, which is exactly the goal somebody most often wants to look at.
  *
+ * **The fleet half is twelve tools and it is a different job from the rest.** Every
+ * other name here is about one goal: read its plan, argue with it, take one of its
+ * checks. `fleet_status`, `attention_read` and `agent_read` are about the *harness*
+ * — what it is running, what it is waiting on a person for, what one agent is
+ * actually doing — and `fleet_control`, `queue_control`, `escalation_answer`,
+ * `human_task_settle` and `goal_control` are the verbs an operator reaches for
+ * between goals: change the cap or pause, re-order or drop from the queue, answer
+ * the thing in "Needs you", settle a row on the bench, and start or stop the fleet
+ * working a ticket.
+ *
+ * `human_task_settle` is a second name beside `escalation_answer` rather than an
+ * arm on it, because the two rows are not the same object: an escalation is a
+ * question one parked agent is blocked on, a human task is a unit of work that
+ * outlives its agent. One name over both is the `validation_report` trap again,
+ * and the failure it already produced was a bench row whose id `escalation_answer`
+ * refused as "No escalation" — a session reporting the harness broken when what it
+ * had was the wrong verb. → `docs/spec/13-jobs-and-tickets.md#it-is-not-an-escalation-and-the-difference-is-not-a-nuance`
+ *
+ * They exist because the cockpit was the only way to do any of it, and the cockpit
+ * is a browser tab on one machine. An operator who wants their own agent watching
+ * the fleet — noticing a park at 2am, answering a question, lowering the cap when
+ * the account's window is nearly spent — had no surface to do it through that was
+ * not the bearer token and forty hand-rolled endpoints.
+ *
+ * **Five of them act rather than steer, and they are named as such.**
+ * `proposal_read` / `proposal_decide` settle an act the harness proposed — which
+ * for a `merge` or a `reply_draft` publishes something that cannot be taken back;
+ * `recovery_decide` rules on a run a crash orphaned; `job_create` puts work in
+ * (filed as a watched ticket where a tracker is configured, so the funnel still
+ * decides when it runs); `agent_control` types into, interrupts, completes or
+ * stops a live agent. The channel is the operator's own hands at a distance, and
+ * these are what "run it from anywhere" actually needs.
+ *
+ * What none of them is, is the *fleet's* surface: no tool here concludes a goal,
+ * writes a plan document, opens a pull request or reports a validation reading on
+ * work it did itself. Those stay behind the origin an agent was dispatched on.
+ * → `docs/spec/11-mcp-tools.md#watching-and-steering-the-fleet`
+ *
  * No `ALLOWED_MCP_TOOLS` equivalent: the fleet's grants exist because nobody is
  * at the prompt to approve a call. Here somebody is, and it is their own machine.
  */
 export const DESKTOP_TOOL_NAMES = [
   'goal_read',
+  'fleet_status',
+  'fleet_control',
+  'attention_read',
+  'escalation_answer',
+  'human_task_settle',
+  'agent_read',
+  'queue_control',
+  'goal_control',
+  'goal_gate',
+  'goal_placement',
+  'goal_instruct',
+  'proposal_read',
+  'proposal_decide',
+  'recovery_decide',
+  'job_create',
+  'agent_control',
   'validation_read',
   'validation_claim',
   'validation_report',

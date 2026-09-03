@@ -80,7 +80,9 @@ test('the provider keeps the conversation and where it hangs, not just the root'
     { id: 101, authorLogin: 'lubbdubb-bot', body: 'because X', inReplyToId: 100 },
     { id: 102, authorLogin: 'bob', body: 'not convinced', inReplyToId: 100 },
   ];
-  const [built] = buildReviewThreads(comments, 'lubbdubb-bot');
+  // Comment 101 is the one the harness recorded sending; 102 came back from the
+  // reviewer. Attribution is that record, never the login on the message.
+  const [built] = buildReviewThreads(comments, [], new Set(['101']));
   assert.equal(built!.id, '100');
   assert.equal(built!.path, 'src/a.ts');
   assert.equal(built!.line, 42);
@@ -98,6 +100,30 @@ test('the provider keeps the conversation and where it hangs, not just the root'
   assert.equal(threadComments([built!])[0]!.handled, false);
 });
 
+test('the fold carries the conversation through to what a rule reads', () => {
+  // The fold used to stop at the root, and every surface an agent reads is built
+  // off it: the reviewer's follow-up existed in the world, in the store and in the
+  // cockpit, and reached the one reader that acts on it nowhere.
+  const built = thread({
+    state: 'open',
+    replies: [
+      { id: 'r1', author: 'lubbdubb-bot', body: 'because X', ours: true },
+      { id: 'r2', author: 'bob', body: 'not convinced — do it the other way', ours: false },
+    ],
+  });
+  const [comment] = threadComments([built]);
+  assert.deepEqual(
+    comment!.replies?.map((r) => [r.body, r.ours]),
+    [
+      ['because X', true],
+      ['not convinced — do it the other way', false],
+    ],
+  );
+  // Absent, not empty, on a thread nobody answered: "no replies" and "this
+  // provider does not report replies" are one answer to every reader downstream.
+  assert.equal(threadComments([thread()])[0]!.replies, undefined);
+});
+
 test('a thread the reviewer resolved is resolved, and one the fleet answered is answered', () => {
   const comments: GhReviewComment[] = [
     { id: 100, authorLogin: 'bob', body: 'rename', inReplyToId: null },
@@ -105,7 +131,9 @@ test('a thread the reviewer resolved is resolved, and one the fleet answered is 
     { id: 200, authorLogin: 'bob', body: 'and this', inReplyToId: null },
   ];
   const threads: GhReviewThread[] = [{ rootCommentId: 200, isResolved: true }];
-  const states = Object.fromEntries(buildReviewThreads(comments, 'lubbdubb-bot', threads).map((t) => [t.id, t.state]));
+  const states = Object.fromEntries(
+    buildReviewThreads(comments, threads, new Set(['101'])).map((t) => [t.id, t.state]),
+  );
   // Two words for what `handled` folded into one bit: the second is finished, the
   // first is waiting on a person who may yet come back.
   assert.deepEqual(states, { '100': 'answered', '200': 'resolved' });

@@ -34,7 +34,16 @@ import { fmtTokens, fmtUsd } from './util.js';
  */
 
 /** Reading order, matching the breakdown's — the legend and the band agree by construction. */
-const PHASE_ORDER: readonly SpendPhase[] = ['deliberation', 'build', 'ci', 'landing', 'evidence', 'job', 'other'];
+const PHASE_ORDER: readonly SpendPhase[] = [
+  'deliberation',
+  'build',
+  'ci',
+  'landing',
+  'evidence',
+  'obstacle',
+  'job',
+  'other',
+];
 
 /**
  * The plot box every chart shares, so one week sits at one x on all three — and
