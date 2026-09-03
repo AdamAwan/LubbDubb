@@ -9,6 +9,7 @@ import { RaiseIssueModal } from '../components/RaiseIssueModal.js';
 import { DesktopLink } from '../components/DesktopLink.js';
 import { questionPrompt } from '../cockpit/desktopLink.js';
 import { untriagedCount } from '../worldBuckets.js';
+import { useThemeUnsaved } from '../hooks.js';
 
 /**
  * The nav's destinations, in reading order — the order the tabs are drawn in.
@@ -510,6 +511,39 @@ function Cog(): JSX.Element {
 }
 
 /**
+ * The way in to Config, and the one place an unsaved theme edit is visible off the
+ * Theme section.
+ *
+ * The section's live preview persists when you leave it, on purpose, but the bar
+ * that states what that costs does not — so an unsaved theme was indistinguishable
+ * from a saved one everywhere else in the cockpit (issue #680). A dot on the cog
+ * keeps the preview's intent, which is to go and look at a real goal page in the
+ * theme you are building, and keeps its cost legible while you are there.
+ *
+ * A dot and not a count for `Cog`'s reason: this control measures nothing. What is
+ * pending is a fact, not a quantity, and the Theme tab inside Config carries the
+ * same mark so the dot leads somewhere.
+ */
+function ConfigCog({ actions }: { actions: CockpitActions }): JSX.Element {
+  const unsaved = useThemeUnsaved();
+  return (
+    <button
+      type="button"
+      className={`cn-read cn-act cn-icon${unsaved ? ' cn-pending' : ''}`}
+      onClick={() => actions.openConfig({})}
+      title={
+        unsaved
+          ? 'Config — an unsaved theme edit is pending; a reload drops it'
+          : 'Config — how this harness is configured'
+      }
+      aria-label={unsaved ? 'Config — unsaved theme edit' : 'Config'}
+    >
+      <Cog />
+    </button>
+  );
+}
+
+/**
  * Where the harness's own build stands — the one reading on this bar that is about
  * the process rather than the work.
  *
@@ -882,15 +916,7 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
           onOpen={() => actions.openPanel('record')}
           title="What the harness did, after the world snapshot forgot it — operator jobs, and the goals it has worked"
         />
-        <button
-          type="button"
-          className="cn-read cn-act cn-icon"
-          onClick={() => actions.openConfig({})}
-          title="Config — how this harness is configured"
-          aria-label="Config"
-        >
-          <Cog />
-        </button>
+        <ConfigCog actions={actions} />
       </div>
     </div>
   );

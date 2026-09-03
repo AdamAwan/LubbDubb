@@ -451,6 +451,26 @@
 .cn-read.cn-icon:hover .cn-cog {
   color: var(--cn-fg);
 }
+/* An unsaved theme edit, marked where the theme's own save bar cannot reach — a dot
+   on the cog rather than a count, since what is pending is a fact and this control
+   measures nothing. Drawn on the glyph's corner and not in the flow, so the bar's
+   readings do not shift the day one appears. */
+.cn-read.cn-icon.cn-pending {
+  position: relative;
+}
+.cn-read.cn-icon.cn-pending .cn-cog {
+  color: var(--cn-amber);
+}
+.cn-read.cn-icon.cn-pending::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--cn-amber);
+}
 
 /* the nav, in the bar: the page's primary navigation, so it is drawn at the
    bar's own size rather than the small type the readings wear — and it sits in
