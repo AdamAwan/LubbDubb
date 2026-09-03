@@ -199,13 +199,11 @@ async function run(command: string, args: string[]): Promise<string> {
   return stdout;
 }
 
-const WIN_SOCKETS =
-  'Get-NetTCPConnection -State Listen | Select-Object LocalPort,OwningProcess | ConvertTo-Json -Compress';
+const WIN_SOCKETS = 'Get-NetTCPConnection -State Listen | Select-Object LocalPort,OwningProcess';
 // CommandLine is the half that attributes a port, and it is null for a process this
 // session may not read — a `Select-Object` of three fields keeps that a blank rather
 // than a failure.
-const WIN_PROCESSES =
-  'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,CommandLine | ConvertTo-Json -Compress';
+const WIN_PROCESSES = 'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,CommandLine';
 
 async function windowsTables(): Promise<[ListeningRow[], ProcessRow[]]> {
   const [sockets, processes] = await Promise.all([powershell(WIN_SOCKETS), powershell(WIN_PROCESSES)]);
@@ -224,9 +222,34 @@ async function windowsTables(): Promise<[ListeningRow[], ProcessRow[]]> {
   ];
 }
 
-async function powershell(script: string): Promise<unknown> {
+/**
+ * Run `script` and read back what it selected, **base64 over the wire**.
+ *
+ * The JSON is exact by the time it reaches `ConvertTo-Json`: that cmdlet escapes
+ * every C0 character, including the ones a command line can carry, so a payload
+ * this refuses was corrupted on its way through stdout rather than built wrong.
+ * That is what an operator hit — `Bad control character in string literal ... at
+ * position 77337`, on a table PowerShell had serialised correctly — and it is a
+ * class of failure worth removing rather than diagnosing: what a console does to a
+ * 150KB line depends on the code page, the host and the redirection, and none of
+ * those is the harness's to pin down.
+ *
+ * Base64 is plain ASCII, so nothing between here and there has a byte it can
+ * mistranslate. The cost is a third again in payload, on a reading taken once every
+ * ten seconds while a run is up.
+ */
+async function powershell(select: string): Promise<unknown> {
+  const script = `[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([string](${select} | ConvertTo-Json -Compress)))`;
   const out = await run('powershell', ['-NoProfile', '-NonInteractive', '-Command', script]);
-  return out.trim() === '' ? [] : (JSON.parse(out) as unknown);
+  // Every newline taken out rather than left to the decoder: `Buffer.from` skips
+  // whitespace itself, and a payload that is only correct because of that is one
+  // wrapped line away from being silently half-read.
+  const encoded = out.replace(/\s+/g, '');
+  if (encoded === '') return [];
+  const json = Buffer.from(encoded, 'base64').toString('utf8').trim();
+  // `ConvertTo-Json` of nothing at all is an empty string, and of one `$null` is
+  // `null` — neither is a table, and both mean the same thing here.
+  return json === '' || json === 'null' ? [] : (JSON.parse(json) as unknown);
 }
 
 /** `ConvertTo-Json` prints one row as a bare object rather than a one-element array. */
