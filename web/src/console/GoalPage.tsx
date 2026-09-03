@@ -37,7 +37,6 @@ import {
   ControlGroup,
   ControlSegment,
   ControlSegments,
-  ControlSelect,
 } from '../components/controls.js';
 import { ValidationSection } from '../components/ValidationSection.js';
 import { SignalsSection } from '../components/SignalsSection.js';
@@ -607,18 +606,16 @@ function Header({
           {/* Which profile this goal's work runs on (#342). Beside the watch toggle
               because it is the same kind of statement about the same object — "work
               this" and "work this at this depth" — and because an operator who has
-              just read a hard ticket is already here. `ControlSelect` is the only
-              thing that knows how a `<select>` is dressed to sit in this row;
-              `ProfilePicker` keeps owning the options. */}
-          <ControlSelect icon="layers">
-            <ProfilePicker
-              profiles={config.profiles}
-              value={issue.modelPin.profile}
-              defaultProfile={config.defaultProfile}
-              inheritLabel="Not pinned"
-              onPick={(profile) => void actions.setIssueProfile(issue.number, profile)}
-            />
-          </ControlSelect>
+              just read a hard ticket is already here. It dresses itself through
+              the kit's `ControlSelect`, so this row says nothing about how a
+              `<select>` is made to match the controls beside it. */}
+          <ProfilePicker
+            profiles={config.profiles}
+            value={issue.modelPin.profile}
+            defaultProfile={config.defaultProfile}
+            inheritLabel="Not pinned"
+            onPick={(profile) => void actions.setIssueProfile(issue.number, profile)}
+          />
         </ControlGroup>
         {/* The three controls whose effect is not on this goal: two destinations,
             and the one that starts a second ticket about it. Grouping them is what
@@ -1148,7 +1145,7 @@ function Instructions({ issue, actions }: { issue: Issue; actions: CockpitAction
               <span className="cn-sub">{instruction.createdAt}</span>
             </span>
             <AsyncButton
-              className="cn-tgl"
+              className={CONTROL_CLASS}
               onClick={() => actions.withdrawInstruction(issue.number, instruction.id)}
               title="Take this back — it stops being sent to the next agent"
             >
@@ -1827,7 +1824,7 @@ function Tail({ issue, actions, fold }: { issue: Issue; actions: CockpitActions;
               <span className="cn-sub">{issue.retrospective?.summary ?? 'not written'}</span>
             </span>
             {issue.retrospective !== null && (
-              <button type="button" className="cn-tgl" onClick={() => actions.viewRetro(ref)}>
+              <button type="button" className={CONTROL_CLASS} onClick={() => actions.viewRetro(ref)}>
                 Read
               </button>
             )}
@@ -1848,7 +1845,7 @@ function Tail({ issue, actions, fold }: { issue: Issue; actions: CockpitActions;
               </span>
             </span>
             {issue.scratchpad !== null && (
-              <button type="button" className="cn-tgl" onClick={() => actions.viewScratchpad(ref)}>
+              <button type="button" className={CONTROL_CLASS} onClick={() => actions.viewScratchpad(ref)}>
                 Open
               </button>
             )}

@@ -4,6 +4,7 @@ import type { CockpitView } from '../view/viewModel.js';
 import type { PrPageView } from '../view/prPage.js';
 import type { OpenPullRequest, PrReviewThread, PrThreadMessage, PrThreadState, PullRequest } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
+import { CONTROL_CLASS } from '../components/controls.js';
 import { ReviewPackControl } from '../components/ReviewPackControl.js';
 import { PrLink, Ref } from '../components/refs.js';
 import { renderMarkdown } from '../components/markdown.js';
@@ -101,7 +102,7 @@ function Masthead({
           is not reaching. A closed pull request cannot be asked about; the pack it
           already has stays readable. */}
       <div className="cn-prpack">
-        <PrLink number={pr.number} className="cn-tgl">
+        <PrLink number={pr.number} className={CONTROL_CLASS}>
           Open pull request ↗
         </PrLink>
         <ReviewPackControl
@@ -220,7 +221,7 @@ function Thread({
         )}
         {canReopen && (
           <AsyncButton
-            className="cn-tgl"
+            className={CONTROL_CLASS}
             onClick={() => actions.reopenThread(page.pr.number, thread.id, !reopened)}
             title={
               reopened
@@ -359,7 +360,7 @@ function Work({ page, view, actions }: { page: PrPageView; view: CockpitView; ac
                 </span>
               </span>
               {task.agentId !== null && (
-                <button type="button" className="cn-tgl" onClick={() => actions.select(task.agentId)}>
+                <button type="button" className={CONTROL_CLASS} onClick={() => actions.select(task.agentId)}>
                   Read
                 </button>
               )}

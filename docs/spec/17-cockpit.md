@@ -1139,6 +1139,18 @@ the glyph finds a control faster for somebody who already knows the row; it is n
 so adopting the kit is a change of _who writes the class_ rather than a second control family beside
 the one the cockpit has.
 
+**The kit is the cockpit's, not the goal header's.** `cn-tgl` appears as a literal in exactly one
+place — `CONTROL_CLASS` — and every surface that draws a control reaches it from there: the goal
+header, the pull-request masthead and its thread controls, the retrospective and scratchpad openers. A
+change to how a control looks is then one edit, and every surface takes it.
+
+**`ProfilePicker` dresses itself through `ControlSelect`**, rather than each caller wrapping it. It is
+the cockpit's one dropdown and it is drawn in three places — the goal header, the plan sheet's parts,
+Up next's rows — which is exactly the shape that drifts: three callers, three answers to "how tall is a
+`<select>` next to a button". What the component keeps is the _options_; what the kit answers is the
+glyph, the caret and the height. `--cn-r-sm` is 4px for the same reason it is a token at all: one
+decision, made once, taken by the console's chips, inputs and controls alike.
+
 ### The header's controls
 
 The run's state, what steers the work, and what happens somewhere other than this goal — **in three
