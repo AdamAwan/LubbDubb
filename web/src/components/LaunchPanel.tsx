@@ -5,6 +5,7 @@ import { AttachmentStrip } from './AttachmentStrip.js';
 import { SubmitButton, AsyncButton, useAsyncAction } from './AsyncButton.js';
 import { relTime } from './util.js';
 import { Button } from './button.js';
+import { Tag } from './tag.js';
 
 /**
  * The brief sheet: a blue page with three written lines, drawn inline rather than
@@ -151,11 +152,7 @@ export function LaunchPanel({
           <BriefMark />
           {open ? '× New brief' : '+ New brief'}
         </Button>
-        {queued.length > 0 && (
-          <span className="chip small" title="Briefs waiting for a free slot">
-            {queued.length} queued
-          </span>
-        )}
+        {queued.length > 0 && <Tag title="Briefs waiting for a free slot">{queued.length} queued</Tag>}
       </div>
 
       {open && (
@@ -270,7 +267,7 @@ export function LaunchPanel({
               <span className="launch-title" title={job.prompt}>
                 {job.title}
               </span>
-              <span className="chip small">{job.kind}</span>
+              <Tag>{job.kind}</Tag>
               <span className="muted launch-age">{relTime(job.createdAt)}</span>
               <AsyncButton
                 ghost

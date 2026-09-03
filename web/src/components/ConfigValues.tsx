@@ -5,6 +5,7 @@ import { ColourField } from './ColourField.js';
 import type { ConfigChange, RunningConfigEntry, RunningConfigGroup, RunningConfigPayload } from '../types.js';
 import { Panel } from './panel.js';
 import { Button } from './button.js';
+import { Tag } from './tag.js';
 
 /**
  * The values section: every configurable leaf, grouped, editable.
@@ -218,10 +219,10 @@ export function ConfigValues({
           <Panel density="flush" className="cfg-card">
             <button className="cfg-advhead" onClick={() => setAdvanced(!advanced)} aria-expanded={advanced}>
               <span className="muted">{advanced ? '▾' : '▸'}</span> Advanced
-              <span className="chip small warn">
+              <Tag tone="amber">
                 {(shown?.entries ?? []).filter((entry) => entry.access === 'advanced').length} keys that can lock you
                 out
-              </span>
+              </Tag>
             </button>
             {advanced && (
               <>
@@ -346,7 +347,7 @@ function PendingCard({
             </Button>
           </span>
         ) : (
-          <span className="cfg-more chip small">no supervisor</span>
+          <span className="cfg-more tag">no supervisor</span>
         )}
       </h3>
       {pending.map((change) => (
@@ -591,7 +592,7 @@ function ColourMap({
             valid={isStateColour(colour)}
             onChange={(next) => write({ ...map, [state]: next })}
           />
-          <i className="tickets-state" style={{ color: colour, borderColor: colour }}>
+          <i className="tag" style={{ color: colour, borderColor: colour }}>
             {state}
           </i>
           <Button

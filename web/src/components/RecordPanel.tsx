@@ -4,6 +4,7 @@ import type { WorkNodeView } from '../types.js';
 import { Ref, RefLinksExtended } from './refs.js';
 import { WorkRow } from './workTree.js';
 import { Button } from './button.js';
+import { Tag } from './tag.js';
 
 /**
  * The durable record of what the harness did — the one surface that outlives the
@@ -92,7 +93,7 @@ export function RecordPanel({ now }: { now: number }) {
               {goals.map((root) => (
                 <div className="work-goal-row" key={root.ref}>
                   <span className="work-title">{root.title}</span>
-                  <span className={`chip small${root.terminal ? ' ok' : ''}`}>{root.status}</span>
+                  <Tag tone={root.terminal ? 'green' : undefined}>{root.status}</Tag>
                   <span className="cn-refs">
                     <Ref to={root.ref} />
                   </span>
@@ -107,7 +108,7 @@ export function RecordPanel({ now }: { now: number }) {
           <Button ghost className="work-root-head" onClick={() => setOpen(open === root.ref ? null : root.ref)}>
             <span className="work-caret">{open === root.ref ? '▾' : '▸'}</span>
             <span className="work-title">{root.title}</span>
-            <span className={`chip small${root.terminal ? ' ok' : ''}`}>{root.status}</span>
+            <Tag tone={root.terminal ? 'green' : undefined}>{root.status}</Tag>
             {/* Plain, not a link: the whole header is a toggle `<button>`, and an
                 `<a>` nested in one is invalid interactive content. The expanded
                 subtree draws this same root node with its ref linked. */}

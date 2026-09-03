@@ -31,6 +31,7 @@ import { Modal } from './Modal.js';
 import { Ref } from './refs.js';
 import { HeadRow } from './panel.js';
 import { buttonClass } from './button.js';
+import { Tag, type TagTone } from './tag.js';
 
 /**
  * The plan sheet — the whole plan, in one scroll, as the record of what was agreed.
@@ -238,19 +239,17 @@ export function PlanModal({
       lead={<Ref to={plan.originRef} />}
       chips={
         <>
-          <span className={`chip small${plan.status === 'complete' ? ' ok' : decidable ? ' warn' : ''}`}>
+          <Tag tone={plan.status === 'complete' ? 'green' : decidable ? 'amber' : undefined}>
             {plan.status.replace(/_/g, ' ')}
-          </span>
+          </Tag>
           {live.length > 0 && (
-            <span className="chip small">
+            <Tag>
               {settled}/{live.length} done
-            </span>
+            </Tag>
           )}
           {/* The one comment the plan keeps on the ticket — where everyone who is
               not looking at this sheet reads the plan. */}
-          {plan.statusCommentRef !== null && (
-            <span className="chip small">{refLink(plan.statusCommentRef, refUrls)}</span>
-          )}
+          {plan.statusCommentRef !== null && <Tag>{refLink(plan.statusCommentRef, refUrls)}</Tag>}
         </>
       }
       onClose={onClose}
@@ -916,23 +915,18 @@ function PartBlock({
       <div>
         <div className="pm-part-head">
           <span className="pm-part-title">{part.title}</span>
-          <span className="chip small mono">{part.slug}</span>
-          <span className="chip small">{part.status.replace('_', ' ')}</span>
+          <Tag lower>{part.slug}</Tag>
+          <Tag>{part.status.replace('_', ' ')}</Tag>
           {/* This is the surface plan approval exists for: seeing that step 3 is
               "write it up" rather than "build it" is what an operator is approving.
               Shown only when the kind is not code, which is the default. */}
           {kindOf(part) && (
-            <span
-              className="chip small"
-              title={part.status === 'concluded' ? 'What it produced' : 'What it will produce'}
-            >
-              {kindOf(part)}
-            </span>
+            <Tag title={part.status === 'concluded' ? 'What it produced' : 'What it will produce'}>{kindOf(part)}</Tag>
           )}
           {part.size !== null && (
-            <span className="chip small mono" title="How big this is to review, as the planner judged it">
+            <Tag lower title="How big this is to review, as the planner judged it">
               {part.size.toUpperCase()}
-            </span>
+            </Tag>
           )}
           {/* Which model profile this part runs on (#342) — the planner's own
               sizing of the part it just cut, edited. Beside the size chip because
@@ -946,23 +940,23 @@ function PartBlock({
             onPick={(profile) => void onPartProfile(profile)}
           />
           {part.prNumber !== null && (
-            <span className="chip small">
+            <Tag>
               <Ref to={`pr:${part.prNumber}`} />
-            </span>
+            </Tag>
           )}
           {queue && (
-            <span
-              className={`chip small${
+            <Tag
+              tone={
                 queue.status === 'dispatching'
-                  ? ' ok'
+                  ? 'green'
                   : queue.status === 'capped' || queue.status === 'unapproved'
-                    ? ' warn'
-                    : ''
-              }`}
+                    ? 'amber'
+                    : undefined
+              }
               title={queue.reason}
             >
               {queue.status === 'dispatching' ? '▶ now' : queue.status}
-            </span>
+            </Tag>
           )}
           {/* Only where it applies: a part in review has a pull request open and no
               agent on it (an agent still working is `dispatched`), which is exactly
@@ -1133,9 +1127,9 @@ function HistoryView({ history, now }: { history: PlanHistory | null; now: numbe
       {pending !== null && <PendingAmendment pending={pending} now={now} />}
       <div className="pm-revs">
         {revisions.map((rev) => (
-          <span className={`chip small${rev === latest ? ' ok' : ''}`} key={rev.id} title={rev.narrative.reason ?? ''}>
+          <Tag tone={rev === latest ? 'green' : undefined} key={rev.id} title={rev.narrative.reason ?? ''}>
             v{rev.seq} · {rev.parts.length} part{rev.parts.length === 1 ? '' : 's'} · {relTime(rev.at, now)}
-          </span>
+          </Tag>
         ))}
       </div>
       {diff === null ? (
@@ -1169,7 +1163,7 @@ function PendingAmendment({ pending, now }: { pending: PendingPlanAmendment; now
     <section className="pm-pending">
       <HeadRow align="baseline" className="pm-pending-head">
         <span className="pm-section-label">Waiting on you</span>
-        <span className="chip small warn">amendment</span>
+        <Tag tone="amber">amendment</Tag>
         <span className="muted small">
           proposed by {pending.author === 'operator' ? 'you' : 'an agent'} · {relTime(pending.createdAt, now)}
         </span>
@@ -1204,7 +1198,12 @@ function PendingAmendment({ pending, now }: { pending: PendingPlanAmendment; now
  * from. An unchanged part is never drawn here, and prose has no tone at all.
  * → docs/spec/17-cockpit.md#the-tag
  */
-const DIFF_TONE = { added: 't-green', dropped: 't-red', changed: 't-blue', unchanged: '' };
+const DIFF_TONE: Record<PlanDiff['parts'][number]['kind'], TagTone | undefined> = {
+  added: 'green',
+  dropped: 'red',
+  changed: 'blue',
+  unchanged: undefined,
+};
 
 function DiffBody({ diff }: { diff: PlanDiff }) {
   const moved = diff.parts.filter((p) => p.kind !== 'unchanged');
@@ -1215,18 +1214,18 @@ function DiffBody({ diff }: { diff: PlanDiff }) {
         <span className="pm-section-label">
           v{diff.seq} against v{diff.againstSeq}
         </span>
-        {moved.length === 0 && <span className="chip small">no part changed</span>}
-        {unchanged > 0 && <span className="chip small">{unchanged} unchanged</span>}
+        {moved.length === 0 && <Tag>no part changed</Tag>}
+        {unchanged > 0 && <Tag>{unchanged} unchanged</Tag>}
       </div>
       {moved.map((change) => (
         <div className="pm-diff-row" key={change.slug}>
-          <span className={`pm-dtag ${change.kind} ${DIFF_TONE[change.kind]}`}>
+          <Tag tone={DIFF_TONE[change.kind]} fill={DIFF_TONE[change.kind] !== undefined}>
             {change.kind === 'dropped' ? 'no longer' : change.kind}
-          </span>
+          </Tag>
           <div>
             <div className="pm-part-head">
               <span className="pm-part-title">{change.title}</span>
-              <span className="chip small mono">{change.slug}</span>
+              <Tag lower>{change.slug}</Tag>
             </div>
             {change.kind === 'dropped' && (
               <div className="pm-was">
@@ -1247,7 +1246,7 @@ function DiffBody({ diff }: { diff: PlanDiff }) {
       ))}
       {diff.narrative.length > 0 && (
         <div className="pm-diff-row">
-          <span className="pm-dtag prose">prose</span>
+          <Tag>prose</Tag>
           <div className="pm-was">
             {diff.narrative.map((n, i) => (
               <span key={n.field}>

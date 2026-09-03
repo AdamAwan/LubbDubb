@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { AsyncButton } from './AsyncButton.js';
 import { Modal } from './Modal.js';
 import { Button } from './button.js';
+import { Tag } from './tag.js';
 
 /**
  * The confirmation ending a run asks for — what it is about to destroy, and, on a
@@ -86,7 +87,7 @@ export function EndRunModal({
     <Modal
       face="modal"
       title="Abandon the run"
-      lead={<span className="chip small">#{issueNumber}</span>}
+      lead={<Tag>#{issueNumber}</Tag>}
       onClose={onClose}
       foot={
         <>

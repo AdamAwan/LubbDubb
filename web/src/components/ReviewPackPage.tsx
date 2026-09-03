@@ -347,16 +347,16 @@ function Share({
 }
 
 function Currency({ currency }: { currency: ReturnType<typeof packCurrency> }): JSX.Element {
-  if (currency.kind === 'current') return <span className="chip small ok">current</span>;
-  if (currency.kind === 'gone') return <span className="chip small">pull request gone</span>;
+  if (currency.kind === 'current') return <Tag tone="green">current</Tag>;
+  if (currency.kind === 'gone') return <Tag>pull request gone</Tag>;
   const behind =
     currency.commitsBehind === null
       ? 'unknown commits behind'
       : `${currency.commitsBehind} ${currency.commitsBehind === 1 ? 'commit' : 'commits'} behind`;
   return (
-    <span className="chip small warn" title={`the pull request is at ${currency.headSha}`}>
+    <Tag tone="amber" title={`the pull request is at ${currency.headSha}`}>
       stale · {behind}
-    </span>
+    </Tag>
   );
 }
 
@@ -380,7 +380,7 @@ function Unchecked({
   if (standing === 'checking') {
     return (
       <div className="rp-band rp-band-checking">
-        <span className="chip small info">being checked</span>
+        <Tag tone="blue">being checked</Tag>
         <p>
           A second agent is checking every claim against the tree. The attention labels, the verdicts and the reading
           order arrive when it finishes; until then the ideas are in the author’s order and every claim is unchecked.
@@ -390,7 +390,7 @@ function Unchecked({
   }
   return (
     <div className="rp-band rp-band-unchecked">
-      <span className="chip small warn">unchecked</span>
+      <Tag tone="amber">unchecked</Tag>
       <p>
         The checker never finished this pack — the fleet was paused between the two runs, or the checker failed; the
         error log says which. Nothing here has been verified, and nothing retries on its own. Asking again re-runs both
@@ -441,9 +441,9 @@ function Gate({ wrong }: { wrong: FalseClaim[] }): JSX.Element {
   const rest = wrong.length - 1;
   return (
     <div className="rp-gate" role="alert">
-      <span className="rp-gate-tag">
+      <Tag tone="red">
         {wrong.length} false {wrong.length === 1 ? 'claim' : 'claims'}
-      </span>
+      </Tag>
       <p>
         {first.claim.finding?.headline ?? first.claim.text} — idea {pad(first.number)}.{' '}
         <a href="#rp-finding-1">Read the finding</a> before anything else.

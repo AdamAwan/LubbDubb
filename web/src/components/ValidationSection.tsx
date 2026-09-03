@@ -6,6 +6,7 @@ import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 import { renderMarkdown } from './markdown.js';
 import { Button, buttonClass } from './button.js';
 import type { ButtonLook } from './button.js';
+import { Tag, type TagTone } from './tag.js';
 
 /**
  * Whether a resource's absence is worth drawing.
@@ -123,15 +124,15 @@ export function ValidationSection({
       {resources.length > 0 && (
         <div className="pm-vres">
           {resources.map((resource) => (
-            <span
+            <Tag
               key={resource.name}
-              className={`chip small${isMissingFile(resource) ? ' warn' : ''}`}
+              tone={isMissingFile(resource) ? 'amber' : undefined}
               title={`${resource.path}${resource.note === null ? '' : `\n\n${resource.note}`}`}
             >
               {resource.name}
               {resource.kind !== null && <i className="k">{resource.kind}</i>}
               {isMissingFile(resource) && <i className="k">missing</i>}
-            </span>
+            </Tag>
           ))}
         </div>
       )}
@@ -222,11 +223,11 @@ export function ValidationDigest({
           <div>
             <div className="pm-vhead">
               <span className="pm-vtitle">{check.title}</span>
-              <span className={`chip small${stateTone(check.state)}`}>{check.state}</span>
+              <Tag tone={stateTone(check.state)}>{check.state}</Tag>
               {check.covers.map((slug) => (
-                <span key={slug} className="chip small mono" title="A part this check exercises">
+                <Tag key={slug} lower title="A part this check exercises">
                   {slug}
-                </span>
+                </Tag>
               ))}
             </div>
             <div className="pm-vbody">
@@ -348,14 +349,14 @@ function CheckBlock({
       <div>
         <button className="pm-vhead" aria-expanded={open} onClick={() => setOpen(!open)}>
           <span className="pm-vtitle">{check.title}</span>
-          <span className="chip small mono">{check.id}</span>
-          <span className={`chip small${stateTone(check.state)}`}>{check.state}</span>
+          <Tag lower>{check.id}</Tag>
+          <Tag tone={stateTone(check.state)}>{check.state}</Tag>
           {/* The operator's own decision, drawn ahead of the planner's suggestion
               about it — one is what will happen, the other is an argument. */}
           {check.actor === 'fleet' && (
-            <span className="chip small warn" title="You handed this to the fleet; an agent will run it">
+            <Tag tone="amber" title="You handed this to the fleet; an agent will run it">
               with the fleet
-            </span>
+            </Tag>
           )}
           {/* Somebody is running this *now*, which is a different fact from who
               is expected to and is drawn ahead of both. Only a **live** claim
@@ -363,25 +364,22 @@ function CheckBlock({
               so this chip and the fleet list's keyboard entry appear and go
               together, and neither outlives what the rule reads. */}
           {check.claimedBy !== null && (
-            <span
-              className="chip small warn"
+            <Tag
+              tone="amber"
               title={`Claimed by a desktop session at ${check.claimedAt ?? 'an unknown time'} — the fleet will not run it while this stands, and it is drawn in the fleet list too`}
             >
               running at {check.claimedBy}
-            </span>
+            </Tag>
           )}
           {check.fleetCandidate && check.actor !== 'fleet' && (
-            <span
-              className="chip small"
-              title={check.candidateWhy ?? 'The planner thinks an agent could run this — you decide'}
-            >
+            <Tag title={check.candidateWhy ?? 'The planner thinks an agent could run this — you decide'}>
               an agent could run this
-            </span>
+            </Tag>
           )}
           {check.covers.map((slug) => (
-            <span key={slug} className="chip small mono" title="A part this check exercises">
+            <Tag key={slug} lower title="A part this check exercises">
               {slug}
-            </span>
+            </Tag>
           ))}
           <i className="pm-vcar" aria-hidden>
             ▸
@@ -412,14 +410,10 @@ function CheckBlock({
             {resources.length > 0 && (
               <div className="pm-vres">
                 {resources.map((resource) => (
-                  <span
-                    key={resource.name}
-                    className={`chip small${isMissingFile(resource) ? ' warn' : ''}`}
-                    title={resource.path}
-                  >
+                  <Tag key={resource.name} tone={isMissingFile(resource) ? 'amber' : undefined} title={resource.path}>
                     {resource.name}
                     {isMissingFile(resource) && <i className="k">missing</i>}
-                  </span>
+                  </Tag>
                 ))}
               </div>
             )}
@@ -599,10 +593,10 @@ function AmendBand({ check, refUrls }: { check: ValidationCheck; refUrls: Record
   );
 }
 
-/** The chip's tone. `deferred` is deliberately not `ok`: it is a check still owed. */
-function stateTone(state: ValidationCheckState): string {
-  if (state === 'passed') return ' ok';
-  if (state === 'failed') return ' bad';
-  if (state === 'unrun' || state === 'deferred') return ' warn';
-  return '';
+/** The tag's tone. `deferred` is deliberately not green: it is a check still owed. */
+function stateTone(state: ValidationCheckState): TagTone | undefined {
+  if (state === 'passed') return 'green';
+  if (state === 'failed') return 'red';
+  if (state === 'unrun' || state === 'deferred') return 'amber';
+  return undefined;
 }

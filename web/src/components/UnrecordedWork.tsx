@@ -4,6 +4,7 @@ import type { UnrecordedWorkView } from '../types.js';
 import { refLink, relTime } from './util.js';
 import { AsyncButton } from './AsyncButton.js';
 import { Button } from './button.js';
+import { Tag } from './tag.js';
 
 /**
  * What the harness did that nothing in the tracker accounts for — and the two
@@ -70,7 +71,7 @@ export function UnrecordedWork({ now, canFileTickets }: { now: number; canFileTi
         ) : (
           <>
             {item.filing !== null ? (
-              <span className="chip small">filing…</span>
+              <Tag>filing…</Tag>
             ) : (
               canFileTickets && (
                 <AsyncButton

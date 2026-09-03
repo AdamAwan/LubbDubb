@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import type { RunningConfigPayload } from '../types.js';
 import { Panel } from './panel.js';
 import { Button } from './button.js';
+import { Tag } from './tag.js';
 
 /**
  * The file, edited as a file.
@@ -105,7 +106,9 @@ export function RawConfigTab({
           <code>{payload.file}</code>
           <span className="cfg-rawacts">
             {verdict && (
-              <span className={`cfg-badge ${verdict.ok ? 'ok' : 'err'}`}>{verdict.ok ? 'valid' : 'refused'}</span>
+              <Tag tone={verdict.ok ? 'green' : 'red'} fill>
+                {verdict.ok ? 'valid' : 'refused'}
+              </Tag>
             )}
             <Button ghost size="small" disabled={!dirty} onClick={() => setText(payload.text)}>
               Discard edits
@@ -143,7 +146,9 @@ export function RawConfigTab({
         {dirty && !verdict && <p className="cfg-hint">Checking…</p>}
         {verdict && (
           <div className="cfg-mark">
-            <span className={`cfg-badge ${verdict.ok ? 'ok' : 'err'}`}>{verdict.ok ? 'valid' : 'refused'}</span>
+            <Tag tone={verdict.ok ? 'green' : 'red'} fill>
+              {verdict.ok ? 'valid' : 'refused'}
+            </Tag>
             <span className="cfg-markwhat">{verdict.message}</span>
           </div>
         )}

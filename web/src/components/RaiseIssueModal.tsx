@@ -4,6 +4,7 @@ import { AsyncButton } from './AsyncButton.js';
 import { ExtLink } from './util.js';
 import { Modal } from './Modal.js';
 import { Button } from './button.js';
+import { Tag } from './tag.js';
 
 /**
  * Which of the three readings the modal is showing, from the one piece of state
@@ -129,14 +130,14 @@ export function RaiseIssueModal({
         <>
           {/* The destination, stated in the head rather than the body, because it is
               the thing to have read before typing and not after. */}
-          {gate === 'checking' && <span className="chip small">checking where this would go…</span>}
+          {gate === 'checking' && <Tag>checking where this would go…</Tag>}
           {target?.available === true && (
-            <span className="chip small" title="Where this issue will be created, and the identity filing it">
+            <Tag title="Where this issue will be created, and the identity filing it">
               {target.target}
               {target.identity !== null && ` as ${target.identity}`}
-            </span>
+            </Tag>
           )}
-          {gate === 'unavailable' && <span className="chip small bad">cannot file from here</span>}
+          {gate === 'unavailable' && <Tag tone="red">cannot file from here</Tag>}
         </>
       }
       onClose={onClose}

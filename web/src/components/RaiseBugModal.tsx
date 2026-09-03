@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { AsyncButton } from './AsyncButton.js';
 import { Modal } from './Modal.js';
 import { Button } from './button.js';
+import { Tag } from './tag.js';
 
 /**
  * Where the operator says what is wrong.
@@ -65,7 +66,7 @@ export function RaiseBugModal({
     <Modal
       face="modal"
       title="Raise a bug"
-      lead={<span className="chip small">#{issueNumber}</span>}
+      lead={<Tag>#{issueNumber}</Tag>}
       onClose={onClose}
       foot={
         <>

@@ -10,6 +10,7 @@ import { Modal } from './Modal.js';
 import { FilesList } from './FilesList.js';
 import { TranscriptPane } from './TranscriptPane.js';
 import { Button } from './button.js';
+import { Tag } from './tag.js';
 
 /**
  * How often the drawer re-reads the persisted transcript while the run is live.
@@ -203,9 +204,9 @@ export function AgentDrawer({
               {/* The way back to what this agent was sent at — a goal's page,
                     or the pull request when no ticket owns the work. */}
               {task.originRef && (
-                <span className="chip small">
+                <Tag>
                   <Ref to={task.originRef} />
-                </span>
+                </Tag>
               )}
               <span>{task.originTitle}</span>
             </div>
@@ -232,8 +233,8 @@ export function AgentDrawer({
                     policy moves, and a finished run must keep saying what it was
                     dispatched under. */}
               {task.profile && (
-                <span
-                  className={`chip small${task.profileSource === 'pin' ? ' warn' : ''}`}
+                <Tag
+                  tone={task.profileSource === 'pin' ? 'amber' : undefined}
                   title={
                     task.profileSource === 'pin'
                       ? 'Pinned — this goal, its plan, or the Up next row it was priced on named this profile rather than taking its rule’s'
@@ -244,7 +245,7 @@ export function AgentDrawer({
                 >
                   {task.profile}
                   {task.profileSource === 'pin' ? ' · pinned' : ''}
-                </span>
+                </Tag>
               )}
             </div>
           )}

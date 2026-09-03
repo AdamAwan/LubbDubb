@@ -3,6 +3,7 @@ import { api, type ReviewPackReading } from '../api.js';
 import { packCurrency, packStanding } from '../view/reviewPack.js';
 import { AsyncButton } from './AsyncButton.js';
 import { Button } from './button.js';
+import { Tag } from './tag.js';
 
 /** The row re-reads on this clock while an author or a checker is on the pull request. */
 const AGENT_POLL_MS = 4000;
@@ -88,7 +89,7 @@ export function ReviewPackControl({
     if (reading.writing) {
       return (
         <span className="rp-ctl">
-          <span className="chip small info">pack · writing</span>
+          <Tag tone="blue">pack · writing</Tag>
         </span>
       );
     }
@@ -107,21 +108,21 @@ export function ReviewPackControl({
   const currency = packCurrency(reading.payload);
   const state =
     standing === 'checking' ? (
-      <span className="chip small info">pack · checking</span>
+      <Tag tone="blue">pack · checking</Tag>
     ) : standing === 'unchecked' ? (
-      <span className="chip small warn" title="the checker never finished; asking again re-runs both agents">
+      <Tag tone="amber" title="the checker never finished; asking again re-runs both agents">
         pack · unchecked
-      </span>
+      </Tag>
     ) : currency.kind === 'gone' ? (
-      <span className="chip small" title="the pull request is no longer in the world, so staleness cannot be decided">
+      <Tag title="the pull request is no longer in the world, so staleness cannot be decided">
         pack · pull request gone
-      </span>
+      </Tag>
     ) : currency.kind === 'stale' ? (
-      <span className="chip small warn" title={`written against ${reading.payload.pack.headSha}`}>
+      <Tag tone="amber" title={`written against ${reading.payload.pack.headSha}`}>
         pack · stale · {currency.commitsBehind === null ? 'unknown behind' : `${currency.commitsBehind} behind`}
-      </span>
+      </Tag>
     ) : (
-      <span className="chip small ok">pack · checked</span>
+      <Tag tone="green">pack · checked</Tag>
     );
   return (
     <span className="rp-ctl">

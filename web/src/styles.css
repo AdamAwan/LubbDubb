@@ -259,34 +259,6 @@ body {
   border-radius: var(--r-sm);
   padding: 1px 5px;
 }
-.chip {
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  color: var(--muted);
-  padding: 3px 9px;
-  border-radius: 20px;
-  font-size: 12px;
-}
-.chip.ok {
-  color: var(--green);
-  border-color: var(--green-line);
-}
-.chip.bad {
-  color: var(--red);
-  border-color: var(--red-line);
-}
-.chip.small {
-  padding: 1px 7px;
-  font-size: 11px;
-}
-.chip.warn {
-  color: var(--amber);
-  border-color: var(--amber-line);
-}
-.chip.info {
-  color: var(--blue);
-  border-color: var(--blue-line);
-}
 
 /* ---------- the eyebrow, and the two sizes every uppercase label reads through --
 
@@ -354,7 +326,6 @@ body {
 .species-odd dt,
 .species-table thead th,
 .flag-chip-kind,
-.lrun-tag,
 .cfg-effect,
 .species-band-head h4,
 .species-age b,
@@ -1221,18 +1192,15 @@ select:disabled {
   gap: 5px;
   margin-top: 8px;
 }
+/* A link that is a tag: it keeps the tag's box and adds only what a link owes —
+   an ellipsis for a long ref, and the pointer. The hue is the `t-blue` it wears
+   beside this and never a second copy of it here. */
 .flag-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
   max-width: 100%;
-  color: var(--blue);
-  border-color: var(--blue-line-2);
   text-decoration: none;
   cursor: pointer;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .flag-chip:hover {
   border-color: var(--blue);
@@ -1292,40 +1260,6 @@ select:disabled {
 }
 .file-row.promoted {
   color: var(--text);
-}
-
-.badge {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  padding: 2px 8px;
-  border-radius: 5px;
-  background: var(--panel-2);
-  color: var(--muted);
-}
-.badge.running,
-.badge.starting {
-  color: var(--blue);
-}
-.badge.waiting {
-  color: var(--amber);
-}
-.badge.done,
-.badge.executed {
-  color: var(--green);
-}
-.badge.failed,
-.badge.rejected,
-.badge.killed,
-.badge.interrupted {
-  color: var(--red);
-}
-.badge.deferred,
-.badge.skipped {
-  color: var(--amber);
-}
-.badge.escalate {
-  color: var(--accent);
 }
 
 .dot {
@@ -1822,10 +1756,6 @@ select:disabled {
   font-size: 12px;
   padding: 10px 0 2px;
 }
-/* A linked PR that has left the open list — dim, since it names no live work. */
-.chip.small.stale {
-  opacity: 0.6;
-}
 .world-row {
   display: flex;
   justify-content: space-between;
@@ -1890,15 +1820,6 @@ select:disabled {
    landing each button somewhere different depending on how long the title was. */
 .world-toggle ~ .world-toggle {
   margin-left: 0;
-}
-/* The pickup chip becomes clickable when its issue has a plan — strip every bit
-   of button chrome so it reads as the same chip, not a chip inside a button. */
-.chip-button {
-  background: none;
-  border: none;
-  padding: 0;
-  font: inherit;
-  cursor: pointer;
 }
 
 .drawer-backdrop {
@@ -2098,9 +2019,6 @@ select:disabled {
   box-shadow:
     0 0 0 1px var(--blue-line),
     0 0 22px -14px var(--blue);
-}
-.badge.issues {
-  color: var(--accent);
 }
 
 /* Findings — what agents noticed outside their own tasks, awaiting an operator. */
@@ -2337,21 +2255,6 @@ select:disabled {
 }
 .restore-blocked {
   font-size: 12px;
-}
-.badge.crashed {
-  background: color-mix(in srgb, var(--cn-red) 15%, transparent);
-  color: var(--red);
-}
-.badge.interrupted {
-  background: color-mix(in srgb, var(--ansi-gray) 15%, transparent);
-  color: var(--muted);
-}
-/* An orphan with no agent behind it: amber rather than red, because nothing
-   failed — a dispatch was recorded and never started. What it costs is the same,
-   though, so it is not muted either. */
-.badge.never_started {
-  background: color-mix(in srgb, var(--amber) 15%, transparent);
-  color: var(--amber);
 }
 /* The cog that opens the settings modal. */
 .settings-cog {
@@ -3144,26 +3047,6 @@ select:disabled {
   border: 1px solid var(--border);
   border-top: none;
 }
-.pm-dtag {
-  font-family: var(--font-display);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  padding: 3px 5px;
-  text-align: center;
-  border: 1px solid var(--border);
-  color: var(--grey);
-}
-/* One rule, three tones: the row carries a `t-*` alias and the triple is the
-   tag's. → docs/spec/17-cockpit.md#the-tag */
-.pm-dtag.added,
-.pm-dtag.dropped,
-.pm-dtag.changed {
-  color: var(--tone);
-  background: var(--tone-fill);
-  border-color: var(--tone-line);
-}
 .pm-was {
   font-size: 12px;
   color: var(--muted);
@@ -3591,14 +3474,14 @@ select:disabled {
 .pm-vrow.waived:not(.open) .pm-vnote {
   color: var(--muted);
 }
-.pm-vrow.passed:not(.open) .pm-vhead .chip,
-.pm-vrow.waived:not(.open) .pm-vhead .chip {
+.pm-vrow.passed:not(.open) .pm-vhead .tag,
+.pm-vrow.waived:not(.open) .pm-vhead .tag {
   opacity: 0.55;
 }
 .pm-vrow:not(.open) .pm-vhead:hover .pm-vtitle {
   color: var(--text);
 }
-.pm-vrow:not(.open) .pm-vhead:hover .chip {
+.pm-vrow:not(.open) .pm-vhead:hover .tag {
   opacity: 1;
 }
 .pm-vletter {
@@ -3943,10 +3826,6 @@ select:disabled {
  * the blue tint the rest of the cockpit uses for "the fleet's own reasoning".
  * Existing tokens only — a fork is not a new meaning for colour to carry.
  */
-.pad-fork-chip {
-  border-color: var(--blue-line-2);
-  color: var(--blue);
-}
 .pad-decision {
   margin-top: 6px;
   padding: 6px 8px;
@@ -5258,21 +5137,6 @@ select:disabled {
   border-style: dashed;
   color: var(--cn-fg-faint);
 }
-.tickets-state.open {
-  background: var(--cn-green-fill);
-  border-color: var(--cn-green-line);
-  color: var(--cn-green);
-}
-.tickets-state.closed {
-  background: transparent;
-  border-style: dashed;
-  color: var(--cn-fg-faint);
-}
-.tickets-verdict {
-  background: var(--cn-amber-fill);
-  border-color: var(--cn-amber-line);
-  color: var(--cn-amber);
-}
 
 /* The foot is a real state, not an absence: a list that simply stops reads as one
    that failed to load, and the floor under the history is a cap, so it is named. */
@@ -5671,35 +5535,6 @@ select:disabled {
 }
 .tickets-switch button:disabled {
   cursor: default;
-}
-
-/* The tracker's own word where there is one. Frozen wins over the state's own tone:
-   a closed item is a record, whatever the tracker calls the closing state. */
-.tickets-state {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 8px;
-  border-radius: 99px;
-  border: 1px solid var(--cn-line);
-  background: var(--cn-panel-2);
-  font-size: 11.5px;
-  color: var(--cn-fg-dim);
-  white-space: nowrap;
-  font-style: normal;
-}
-.tickets-state.frozen {
-  border-style: dashed;
-  color: var(--cn-fg-faint);
-}
-.tickets-state.ready,
-.tickets-state.active,
-.tickets-state.doing {
-  border-color: var(--cn-green-line);
-  color: var(--cn-green);
-}
-.tickets-state.inreview {
-  border-color: var(--cn-amber-line);
-  color: var(--cn-amber);
 }
 
 /* The feature cell, in the flat arrangement where there is no heading to say it. */
@@ -6305,9 +6140,6 @@ select:disabled {
 .lrun-warn {
   color: var(--amber);
 }
-.lrun-tag {
-  color: var(--green);
-}
 .lrun-refs {
   display: flex;
   align-items: center;
@@ -6695,7 +6527,7 @@ select:disabled {
 .cfg-colouradd .cfg-in {
   max-width: 180px;
 }
-.cfg-colour .tickets-state {
+.cfg-colour .tag {
   min-width: 90px;
   justify-content: center;
 }
@@ -6808,7 +6640,7 @@ select:disabled {
   text-align: left;
   cursor: pointer;
 }
-.cfg-advhead .chip {
+.cfg-advhead .tag {
   margin-left: auto;
 }
 .cfg-advwarn {
@@ -7008,24 +6840,6 @@ select:disabled {
   font-size: 12px;
   line-height: 1.55;
   color: var(--cn-fg-dim);
-}
-.cfg-badge {
-  flex: none;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font: 600 10px/1.5 var(--cn-mono);
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-}
-.cfg-badge.ok {
-  color: var(--cn-green);
-  border: 1px solid var(--cn-green-line);
-  background: var(--cn-green-bg);
-}
-.cfg-badge.err {
-  color: var(--cn-red);
-  border: 1px solid var(--cn-red-line);
-  background: var(--cn-red-fill);
 }
 
 /* ---------- colour field ---------- */
@@ -7926,19 +7740,6 @@ select:disabled {
   gap: 2px;
   padding: 7px 0;
   border-top: 1px solid var(--border);
-}
-/* The two enums as chips, coloured only on the guard axis. Colouring both would
-   put two competing readings on one line — the guard is the one that is a
-   verdict, and the cause is already the row's own words. */
-.rm-tag {
-  font-size: 11px;
-  padding: 1px 7px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  color: var(--muted);
-}
-.rm-tag.guard {
-  border-color: currentColor;
 }
 .rm-row .rm-when {
   margin-left: auto;
@@ -9115,18 +8916,6 @@ select:disabled {
   gap: 12px;
   align-items: baseline;
   flex-wrap: wrap;
-}
-.rp-gate-tag {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--red);
-  border: 1px solid var(--red);
-  border-radius: 2px;
-  padding: 3px 7px;
-  white-space: nowrap;
 }
 .rp-gate p {
   margin: 0;

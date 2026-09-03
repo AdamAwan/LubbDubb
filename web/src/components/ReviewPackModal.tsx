@@ -5,6 +5,7 @@ import { AsyncButton } from './AsyncButton.js';
 import { Modal } from './Modal.js';
 import { Ref } from './refs.js';
 import { ReviewPackPage } from './ReviewPackPage.js';
+import { Tag } from './tag.js';
 
 /**
  * How often the modal re-reads while an agent is on the pull request. The pack
@@ -241,7 +242,7 @@ function NoPack({
   if (writing) {
     return (
       <div className="rp rp-none">
-        <span className="chip small info">being written</span>
+        <Tag tone="blue">being written</Tag>
         <p>
           An author is reading the diff and the witness log for #{prNumber}. The pack arrives when its run ends, and the
           checker follows it; this page re-reads on its own until then.

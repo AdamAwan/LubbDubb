@@ -409,6 +409,13 @@ function Facts({ facts }: { facts?: readonly RowFact[] }): JSX.Element | null {
 }
 
 /**
+ * The three readings a row's own word can carry: something is being asked of you,
+ * something is held, or the row is simply going. `quiet` takes no tone — it is the
+ * absence of a verdict, not a fourth one.
+ */
+const WHY_TONE: Record<string, string> = { ask: 't-red tag-fill', hold: 't-amber tag-fill', quiet: '' };
+
+/**
  * What is going on with this row, and the sentence behind it.
  *
  * Wears the row's own word where it has one and a bare `?` where it does not. The
@@ -423,13 +430,6 @@ function Facts({ facts }: { facts?: readonly RowFact[] }): JSX.Element | null {
  * the button rather than its child, since a tooltip inside a control is read out
  * as part of the control's own name.
  */
-/**
- * The three readings a row's own word can carry: something is being asked of you,
- * something is held, or the row is simply going. `quiet` takes no tone — it is the
- * absence of a verdict, not a fourth one.
- */
-const WHY_TONE: Record<string, string> = { ask: 't-red tag-fill', hold: 't-amber tag-fill', quiet: '' };
-
 function Why({ row }: { row: PanelRowModel }): JSX.Element | null {
   const why = row.why != null && row.why !== '' ? row.why : null;
   const label = row.whyLabel;

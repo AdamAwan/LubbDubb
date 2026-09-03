@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { AsyncButton } from './AsyncButton.js';
 import { Modal } from './Modal.js';
 import { Button } from './button.js';
+import { Tag } from './tag.js';
 
 /**
  * Where the operator says what they want done next on a goal.
@@ -51,7 +52,7 @@ export function InstructionModal({
     <Modal
       face="modal"
       title="More work"
-      lead={<span className="chip small">#{issueNumber}</span>}
+      lead={<Tag>#{issueNumber}</Tag>}
       onClose={onClose}
       foot={
         <>
