@@ -43,6 +43,8 @@ import { neighbourSeedPaths, priorWorkBriefing } from '../briefing/priorWork.js'
 import { ciEvidenceNote, type CiEvidenceReader, type CiEvidenceTarget } from '../ci/ciEvidence.js';
 import { goalOriginFor, WITNESS_INSTRUCTION } from '../scratch/pad.js';
 import { dispatchFactScopes, KNOWLEDGE_READ_LIMIT, renderScopedKnowledgeNote } from '../knowledge/block.js';
+import { corroborationGoal } from '../knowledge/knowledge.js';
+import { obstaclesForDispatch, renderObstacleNote } from '../obstacles/delivery.js';
 import { retryNote, retryResumeFor, type RetryResume } from './retryResume.js';
 import { isActiveTask } from '../tasks.js';
 import type { Action, DecisionOutcome, PlanAmendment, Proposal, ProposalKind, Task, WorldEvent } from '../types.js';
@@ -1209,6 +1211,18 @@ export class ActionExecutor {
     // they are a cached prefix; only what varies per dispatch belongs in a task
     // prompt, and that is the whole of the split.
     const knowledge = knowledgeFor(action, store);
+    // What the fleet has already run into on the checks and files in front of
+    // this dispatch (`docs/spec/32-obstacles.md`, phase 2). Appended for the
+    // reason every block above it is — a `{obstacles}` placeholder would be
+    // dropped in silence by any operator template override written before this
+    // existed — and beside the knowledge note rather than in a rule, for the
+    // attachments' reason: every dispatch passes through this method whatever
+    // composed it.
+    //
+    // **There is no fleet-wide block here and there never will be.** Everything
+    // on the board is keyed, and a keyed thing is delivered to the dispatches it
+    // is about.
+    const obstacles = obstaclesFor(action, store);
     // The witness log's one standing instruction: record the forks. Code agents
     // only — a desk agent moves no head, and a pack is written from the forks
     // behind one. Appended for the reason every block above it is, and last,
@@ -1221,6 +1235,7 @@ export class ActionExecutor {
       instructions,
       evidence,
       knowledge,
+      obstacles,
       guidance,
       outstanding,
       prior,
@@ -1376,6 +1391,36 @@ function knowledgeFor(
   );
   if (scopes.length === 0) return null;
   return renderScopedKnowledgeNote(store.askFacts({ scopes, limit: KNOWLEDGE_READ_LIMIT })) || null;
+}
+
+/**
+ * What the obstacle board has to say about this dispatch — or null when it says
+ * nothing about these checks or these files, which is most dispatches.
+ *
+ * **The scopes are `dispatchFactScopes`' and never a second computation of
+ * them.** That is the existing reading of which scopes a dispatch matches, so the
+ * scope a row is delivered on and the scope it is judged against cannot drift;
+ * the paths are `listGoalFiles`, which is the list the intake grounds a key
+ * against for the same reason. Both are read for the **goal**, not the concern:
+ * `pr:412:ci` and `pr:412:comments` are two origins of one goal.
+ *
+ * **Only rows that reach agents.** `obstaclesForDispatch` asks the lifecycle,
+ * which answers *standing or owned* — a `sighted` row reaches nobody, because one
+ * report is not evidence.
+ */
+function obstaclesFor(
+  action: ValidatedAction & { type: 'dispatch_code_agent' | 'dispatch_desk_agent' },
+  store: Store,
+): string | null {
+  const scopes = dispatchFactScopes(
+    action.originRef ?? null,
+    action.type === 'dispatch_code_agent' ? (action.ciChecks ?? null) : null,
+  );
+  const goal = corroborationGoal(action.originRef ?? null);
+  const paths = goal === null ? [] : store.listGoalFiles(goal).map((file) => file.path);
+  if (scopes.length === 0 && paths.length === 0) return null;
+  const rows = store.listObstacles().map((obstacle) => ({ obstacle, keys: store.listObstacleKeys(obstacle.id) }));
+  return renderObstacleNote(obstaclesForDispatch({ rows, scopes, paths })) || null;
 }
 
 /**

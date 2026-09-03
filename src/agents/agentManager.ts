@@ -882,6 +882,32 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     this.emit('output', { agentId, delta: note });
   }
 
+  /**
+   * Type a harness message into a live agent, without touching what it is doing.
+   *
+   * The difference from {@link respond} is everything this does *not* do: no park
+   * is ended, no status is moved, no "it carried on anyway" is spent. Those all
+   * belong to an **answer** — a human replying to a question the agent asked —
+   * and an obstacle notice is not one: it is the harness volunteering something
+   * that changed, and an agent parked on an escalation is still parked after it.
+   *
+   * A parked agent is skipped outright rather than written to. It is waiting on a
+   * person, and typing past that would look to the runtime exactly like the
+   * answer arriving.
+   * → `docs/spec/32-obstacles.md#delivery`
+   */
+  notify(agentId: string, text: string): boolean {
+    const session = this.sessions.get(agentId);
+    if (!session || this.parked.has(agentId)) return false;
+    this.noteSent(agentId, session, text);
+    try {
+      session.send(text);
+    } catch {
+      return false; // the session went away between the read and the write
+    }
+    return true;
+  }
+
   /** Type text into a live agent (a human response or a follow-up prompt). */
   respond(agentId: string, text: string): boolean {
     const session = this.sessions.get(agentId);

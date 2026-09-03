@@ -1,11 +1,11 @@
 # 32 — Obstacles
 
 **Partly built.** The spine is running: the tables, the keys and their three gates, the matcher, the
-states, and the intake. What is not yet built carries its own marker, section by section — delivery,
-ownership, the `blocked` verdict, the ways an obstacle ends, and the cockpit tab. It supersedes
-[27](27-knowledge.md) on landing — that document describes the claim store this replaces, and what
-it says is true of the harness today; a **note** still lands there, through the same intake, until
-the last of these sections is built. The change that lands the last of them deletes
+states, the intake, and both delivery channels. What is not yet built carries its own marker,
+section by section — ownership, the `blocked` verdict, the ways an obstacle ends, and the cockpit
+tab. It supersedes [27](27-knowledge.md) on landing — that document describes the claim store this
+replaces, and what it says is true of the harness today; a **note** still lands there, through the
+same intake, until the last of these sections is built. The change that lands the last of them deletes
 [27](27-knowledge.md) and this document takes its number. Every path named here is italic until the
 file exists.
 
@@ -330,11 +330,9 @@ in a prompt is not an enforcement.
 
 ## Delivery
 
-**Not yet built.** Nothing in this section is running: an obstacle reaches an agent only by that
-agent's own call to the tool. `renderKnowledgeBlock` and the fleet-wide block it renders are
-[27](27-knowledge.md)'s and stay until the last of this document lands.
-
-Three channels, and the tool is none of them.
+Three channels, and the tool is none of them. `renderKnowledgeBlock` and the fleet-wide block it
+renders are [27](27-knowledge.md)'s and stay running until the last of this document lands — they are
+not this subsystem's, and nothing below is added to them.
 
 **At dispatch, scoped to the keys.** The obstacles whose keys intersect this dispatch — the checks it
 is about, the paths its goal touches — are **appended** to the rendered task prompt, never
@@ -342,24 +340,51 @@ interpolated. `loadPromptTemplates` rejects only _unknown_ placeholders, so an o
 this existed would silently drop a `{obstacles}` token on exactly the deployments that customised most
 ([05](05-dispatcher.md#prompt-templates)). `dispatchFactScopes` (`src/knowledge/block.ts`) is the
 existing computation of _which scopes this dispatch matches_ and is what the keys are read against, so
-the scope a row is delivered on and the scope it is judged against cannot drift.
+the scope a row is delivered on and the scope it is judged against cannot drift; the paths half is
+`Store.listGoalFiles`, which is the list the intake grounds a key against for the same reason. The
+scoping and the rendering are `src/obstacles/delivery.ts`, and the one call site is the executor's
+prompt assembly, where every dispatch passes whatever composed it.
+
+**Only what reaches agents is delivered** — `standing` and `owned`, asked of `reachesAgents`
+(`src/obstacles/lifecycle.ts`) rather than restated, so the states that reach a prompt and the states
+the intake answers _it is not yours_ on cannot drift. A `sighted` row reaches nobody. A `signature` or
+a `cmd` key delivers nothing either: a key that may not resolve an obstacle may not decide who is told
+about one, or "does not bind" would mean _binds when convenient_.
 
 **Mid-session, to a running agent.** A desk sends into a live session when — and only when — a state
 change alters what that agent should do: an obstacle it reported becomes `owned` or `resolved`, or one
 reaches `standing` whose keys match the checks its dispatch is about. It lands at the next turn
 boundary; a turn cannot be interrupted, and one turn is a latency worth accepting rather than
-designing around.
+designing around. The decision is `src/obstacles/notices.ts` and the desk that sends it is
+`src/obstacles/noticeDesk.ts`, on the pulse above `decide` for the reason the notice desk sits there:
+an agent dispatched on this pulse reads the board in its own prompt rather than being told it again a
+moment later.
 
-Three rules keep the channel worth reading. **Once per agent per obstacle, ever** — a notice that
-arrives twice reads as a second problem. **Never to the reporter or the owner** — telling the agent
-whose report created the row that the row exists is absurd. **Never for anything else**: a chatty
-channel is skimmed, and then the message that mattered is skimmed too.
+Three rules keep the channel worth reading, and `test/obstacleNotices.test.ts` fails when any of them
+is broken. **Once per agent per obstacle, ever** — a notice that arrives twice reads as a second
+problem. It is the primary key of `obstacle_notices` rather than a condition, and the row is claimed
+_before_ the message goes out: the other order sends twice after a crash, and this one loses a notice
+to an agent that is in all likelihood already gone. **Never to the reporter or the owner** — telling
+the agent whose report created the row that the row exists is absurd, and so is telling the agent
+dispatched to fix it to stand down from it. **Never for anything else**: a chatty channel is skimmed,
+and then the message that mattered is skimmed too.
+
+The reporter's arm is the asymmetry, and it is deliberate: what it is told is what became of **its own
+report**, which is the state change that alters what it does next and the one thing it asked for.
+Everybody else is told only about the transition to `standing`, and only on a check its own dispatch is
+about.
+
+**The channel is not an answer.** It types into a live session through `AgentManager.notify` and never
+`respond`: an answer ends a park, moves a status and spends the "it carried on anyway" record, and an
+agent parked on an escalation is still parked after a notice. A parked agent is skipped outright — it
+is waiting on a person, and typing past that would look to the runtime exactly like the answer
+arriving.
 
 **There is no fleet-wide injected block.** Everything here is keyed, and a keyed thing is delivered to
 the dispatches it is about. `renderKnowledgeBlock`, `knowledgeBlockChars` and the cost accounting over
-them go with it. Blanket context is the wrong instrument at the sizes this harness runs against: a
-large instruction file is skimmed rather than read, and adding to one makes every line in it worth
-less.
+them go with [27](27-knowledge.md) when it goes, and nothing here adds to them. Blanket context is the
+wrong instrument at the sizes this harness runs against: a large instruction file is skimmed rather
+than read, and adding to one makes every line in it worth less.
 
 ## Ownership
 

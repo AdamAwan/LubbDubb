@@ -7,7 +7,8 @@ import type { ColumnMigrations } from './migrate.js';
 import type { StoreContext } from './context.js';
 
 /**
- * The obstacle board: `obstacles`, `obstacle_keys`, `obstacle_sightings`.
+ * The obstacle board: `obstacles`, `obstacle_keys`, `obstacle_sightings`, and the
+ * ledger of who has been told what, `obstacle_notices`.
  *
  * **The uniqueness constraint is on a key's `value`, and not on `(kind, value)`.**
  * The value is the identity; the kind is a column beside it. Two agents may
@@ -21,7 +22,7 @@ import type { StoreContext } from './context.js';
  * report to the winner. Two agents reporting in the same millisecond cannot both
  * create a row, and neither waits.
  *
- * The three tables are new, so they need no {@link OBSTACLE_COLUMNS} entries — and
+ * The four tables are new, so they need no {@link OBSTACLE_COLUMNS} entries — and
  * being new *once* is what stops that keeping them exempt: the first column added
  * to any of them later belongs there. → `docs/spec/32-obstacles.md`
  */
@@ -168,6 +169,34 @@ export class ObstacleStore {
               }),
       };
     })();
+  }
+
+  /**
+   * Claim the one notice this agent may ever be sent about this obstacle, and say
+   * whether the claim was won.
+   *
+   * **The claim comes before the message, not after it.** *Once per agent per
+   * obstacle, ever* is the rule the mid-session channel is worth reading for, and
+   * the failure it guards against is a notice arriving twice — which reads as a
+   * second problem. A row written after a successful send would leave a crash
+   * between the two able to send it again; written first, the same crash loses a
+   * notice to an agent that is in all likelihood already gone. The primary key
+   * makes the same claim unwinnable twice, so two desks on one pulse cannot both
+   * take it either. → `docs/spec/32-obstacles.md#delivery`
+   */
+  claimObstacleNotice(obstacleId: string, agentId: string, reason: string): boolean {
+    const result = this.ctx.db
+      .prepare(`INSERT OR IGNORE INTO obstacle_notices (obstacle_id, agent_id, reason, created_at) VALUES (?,?,?,?)`)
+      .run(obstacleId, agentId, reason, this.ctx.now());
+    return result.changes > 0;
+  }
+
+  /** Every obstacle this agent has already been told about. */
+  obstaclesNoticedBy(agentId: string): Set<string> {
+    const rows = this.ctx.db.prepare(`SELECT obstacle_id FROM obstacle_notices WHERE agent_id=?`).all(agentId) as {
+      obstacle_id: string;
+    }[];
+    return new Set(rows.map((row) => row.obstacle_id));
   }
 
   getObstacle(id: string): Obstacle | null {

@@ -43,6 +43,7 @@ import { KNOWLEDGE_READ_LIMIT, renderKnowledgeBlock } from './knowledge/block.js
 import { KnowledgeClusterDesk } from './knowledge/cluster.js';
 import { KnowledgeGraduationDesk } from './knowledge/graduationDesk.js';
 import { KnowledgeNoticeDesk } from './knowledge/noticeDesk.js';
+import { ObstacleNoticeDesk } from './obstacles/noticeDesk.js';
 import { PrNamingDesk } from './prNamingDesk.js';
 import { DeliveryCloseOutDesk } from './delivery/closeOutDesk.js';
 import { ValidationAskDesk } from './validation/askDesk.js';
@@ -1210,6 +1211,13 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // will ever carry.
   const clusters = new KnowledgeClusterDesk({ store, errors });
 
+  // What has changed on the obstacle board since a running agent was dispatched
+  // (`docs/spec/32-obstacles.md`, phase 2). Always wired, like the three desks
+  // above: with an empty board it sends nothing, and a deployment without it is
+  // one where an agent goes on working around a thing the fleet has since taken
+  // ownership of, or spends its session on one two other goals have corroborated.
+  const obstacleNotices = new ObstacleNoticeDesk({ store, fleet: agents, errors });
+
   // The distance above `fleet` (issue #28): what this fleet has vouched for, carried
   // to the others, and a daily digest of what it spent. Wired **only when the pool
   // is selected** — unlike the two desks above, which are always on: with
@@ -1310,6 +1318,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     notices,
     graduations,
     clusters,
+    obstacleNotices,
     pool,
     heartbeatIntervalMs: config.heartbeatIntervalMs,
     idleHeartbeatIntervalMs: config.idleHeartbeatIntervalMs,

@@ -1731,6 +1731,20 @@ CREATE TABLE IF NOT EXISTS obstacle_sightings (
   created_at  TEXT NOT NULL
 );
 
+-- Which agents have already been told about which obstacle, one row per pair.
+--
+-- The primary key **is** the "once per agent per obstacle, ever" rule: a notice
+-- that arrives twice reads as a second problem, and a rule spelled as a
+-- constraint cannot be forgotten by a later writer the way a convention can. The
+-- reason is recorded for the page and read by nothing that decides.
+CREATE TABLE IF NOT EXISTS obstacle_notices (
+  obstacle_id TEXT NOT NULL,
+  agent_id    TEXT NOT NULL,
+  reason      TEXT NOT NULL,       -- standing | owned | resolved
+  created_at  TEXT NOT NULL,
+  PRIMARY KEY (obstacle_id, agent_id)
+);
+
 CREATE TABLE IF NOT EXISTS rate_limit_readings (
   captured_at               TEXT PRIMARY KEY,
   five_hour_used_percentage REAL,
@@ -1772,4 +1786,7 @@ CREATE INDEX IF NOT EXISTS idx_mcp_calls_args ON mcp_calls(args_dropped, created
 -- sightings behind it. The key *lookup* goes through the UNIQUE index on value.
 CREATE INDEX IF NOT EXISTS idx_obstacle_keys_obstacle ON obstacle_keys(obstacle_id);
 CREATE INDEX IF NOT EXISTS idx_obstacle_sightings_obstacle ON obstacle_sightings(obstacle_id);
+-- The mid-session desk asks one question per live agent: what has this one already
+-- been told? The primary key leads on the obstacle, so that read needs its own.
+CREATE INDEX IF NOT EXISTS idx_obstacle_notices_agent ON obstacle_notices(agent_id);
 `;
