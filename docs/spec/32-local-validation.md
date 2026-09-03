@@ -130,6 +130,16 @@ window is one every later validation inherits, and a persistent profile may only
 browser at a time — which is safe here, because there is one environment and therefore one
 validation.
 
+**The prompt offers it as a claim, not a fact.** Whether the server actually
+connected is not something config can know: it is fetched and launched at the same
+moment the agent is, so it can be missing because the machine is offline, because
+the package is blocked, or because there is no browser installed for it to drive —
+and the last of those does not surface until the first page. Nothing here reads the
+init event's `mcp_servers` list, so the agent is told to check before planning
+around it and told which answer a missing browser is: `blocked`, never `failed`. A
+failure dispatches a fix agent, and a browser that would not start is not a defect
+in the goal.
+
 **`null` is a real configuration.** An API-only project validates through the API and the logs
 perfectly well; the prompt says there is no browser and the agent reports `blocked` for any step that
 needs a screen rather than describing one it did not see.

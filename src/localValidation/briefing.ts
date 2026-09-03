@@ -122,8 +122,16 @@ function browserSection(browserKey: string | null, outputDir: string): string {
     );
   return (
     `### The browser\n\n` +
-    `You have one, on the \`${browserKey}\` MCP server. It opens in a window the operator can watch, and it ` +
-    `keeps its profile between runs — so a login somebody completed last time is probably still good.\n\n` +
+    `You **should** have one, on the \`${browserKey}\` MCP server. It opens in a window the operator can watch, ` +
+    `and it keeps its profile between runs — so a login somebody completed last time is probably still good.\n\n` +
+    `**Check that before you plan around it.** That sentence is read off this deployment's configuration and ` +
+    `not off anything anybody looked at: the server is fetched and launched at the same moment you are, so it ` +
+    `can be missing because the machine is offline, because the package is blocked, or because there is no ` +
+    `browser installed for it to drive — and the last of those does not surface until the first page you try ` +
+    `to open. If the \`${browserKey}\` tools are not there, or a navigation fails in a way that is about the ` +
+    `browser rather than about the application, **that is not a finding about this goal**: report \`blocked\`, ` +
+    `say the browser was unavailable and name it. Do not report \`failed\` — a failure dispatches an agent to ` +
+    `fix a defect, and there is no defect here.\n\n` +
     `Save a screenshot of anything you report, into \`${outputDir}\`. They are drawn beside your findings on ` +
     `the goal's page, and a finding with a picture is one nobody has to reproduce to believe.\n`
   );

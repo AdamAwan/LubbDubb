@@ -369,6 +369,23 @@ test('what the agent cannot act without is appended, never interpolated', async 
   assert.match(prompt, /is not evidence/);
 });
 
+test('a configured browser is offered as a claim to check, not as a fact', async () => {
+  const plan = await rules().decide(ctx());
+  const action = plan.actions.find((a) => 'originRef' in a && a.originRef === 'issue:12:validate-local:lv1');
+  const prompt = (action as unknown as { prompt: string }).prompt;
+
+  // The sentence is read off config, and config cannot know whether the server
+  // fetched, launched, or found a browser to drive — the last of which does not
+  // surface until the first page. So the agent is told to check before planning
+  // around it, and told which answer a missing browser is.
+  assert.match(prompt, /\*\*should\*\* have one/);
+  assert.match(prompt, /Check that before you plan around it/);
+  assert.match(prompt, /not a finding about this goal/);
+  // The direction that matters: `failed` dispatches an agent at a defect, so a
+  // missing browser reported as one puts work on a branch with nothing wrong.
+  assert.match(prompt, /Do not report `failed`/);
+});
+
 test('with no browser configured the prompt says so rather than leaving the agent to find out', async () => {
   const plan = await rules({ instruction: '', browser: null }).decide(ctx());
   const action = plan.actions.find((a) => 'originRef' in a && a.originRef === 'issue:12:validate-local:lv1');
