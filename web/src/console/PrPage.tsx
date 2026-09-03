@@ -12,6 +12,7 @@ import { renderMarkdown } from '../components/markdown.js';
 import { relTime } from '../components/util.js';
 import { CiLadder, CourtChip } from './GoalPage.js';
 import { HeadRow } from '../components/panel.js';
+import { Tag, type TagTone } from '../components/tag.js';
 
 /**
  * One pull request, in full — the page the review-pack control used to sit on a
@@ -52,7 +53,7 @@ export function PrPage({
 }
 
 /** The chip a pull request's own state takes. A closed one is spent; a merged one landed. */
-const STATE_TONE: Record<string, string> = { merged: 'cn-ok', closed: 'cn-mute', open: 'cn-info' };
+const STATE_TONE: Record<string, TagTone | undefined> = { merged: 'green', closed: undefined, open: 'blue' };
 
 function Masthead({
   page,
@@ -78,19 +79,27 @@ function Masthead({
         {pr.author !== undefined && <> · opened by {pr.author}</>}
       </div>
       <div className="cn-prchips">
-        <i className={`cn-chip ${STATE_TONE[state] ?? ''}`}>{state}</i>
+        <Tag tone={STATE_TONE[state]} fill={STATE_TONE[state] !== undefined}>
+          {state}
+        </Tag>
         <CiLadder pr={pr} />
         {/* The same mark the row carries, from the same record — the card in the
             rail is where its findings are read. */}
         <ReviewMark review={pr.review} now={view.now} />
-        {pr.approved === true && <i className="cn-chip cn-ok">approved</i>}
+        {pr.approved === true && (
+          <Tag tone="green" fill>
+            approved
+          </Tag>
+        )}
         {pr.mergeableState !== undefined && pr.mergeableState !== 'unknown' && (
-          <i className={`cn-chip ${pr.mergeableState === 'clean' ? 'cn-ok' : 'cn-warn'}`}>{pr.mergeableState}</i>
+          <Tag tone={pr.mergeableState === 'clean' ? 'green' : 'amber'} fill>
+            {pr.mergeableState}
+          </Tag>
         )}
         {page.waiting > 0 && (
-          <i className="cn-chip cn-warn">
+          <Tag tone="amber" fill>
             {page.waiting} thread{page.waiting === 1 ? '' : 's'} on us
-          </i>
+          </Tag>
         )}
         {/* Whose court, quoted from the server — only an open pull request has one,
             because nothing is waiting on anybody once it has left the open set. */}
@@ -128,11 +137,11 @@ function isOpenPr(pr: PullRequest): pr is OpenPullRequest {
 }
 
 /** What each thread state is called on the page, and the tone it carries. */
-const THREAD_TONE: Record<PrThreadState, string> = {
-  reopened: 'cn-warn',
-  open: 'cn-warn',
-  answered: 'cn-info',
-  resolved: 'cn-ok',
+const THREAD_TONE: Record<PrThreadState, TagTone> = {
+  reopened: 'amber',
+  open: 'amber',
+  answered: 'blue',
+  resolved: 'green',
 };
 
 /**
@@ -213,9 +222,9 @@ function Thread({
   return (
     <article className={`cn-thread cn-th-${thread.state}`}>
       <HeadRow className="cn-throw">
-        <i className={`cn-chip ${THREAD_TONE[thread.state]}`} title={THREAD_SAID[thread.state]}>
+        <Tag tone={THREAD_TONE[thread.state]} fill title={THREAD_SAID[thread.state]}>
           {thread.state}
-        </i>
+        </Tag>
         {thread.path !== undefined && (
           <span className="cn-thwhere" title={thread.path}>
             {thread.path}
@@ -264,7 +273,11 @@ function Message({ message, view }: { message: PrThreadMessage; view: CockpitVie
     <div className={`cn-thmsg ${message.ours ? 'cn-thours' : ''}`}>
       <span className="cn-thwho">
         {message.author}
-        {message.ours && <span className="cn-thmark">fleet</span>}
+        {message.ours && (
+          <Tag tone="violet" fill>
+            fleet
+          </Tag>
+        )}
       </span>
       <div className="cn-thtext">{renderMarkdown(message.body, view.state.refUrls)}</div>
     </div>
@@ -272,7 +285,7 @@ function Message({ message, view }: { message: PrThreadMessage; view: CockpitVie
 }
 
 /** The tone a check's classification takes — the policy's three categories, and the aggregate. */
-const CHECK_TONE: Record<string, string> = { dispatch: 'cn-bad', escalate: 'cn-warn', ignored: 'cn-mute' };
+const CHECK_TONE: Record<string, TagTone | undefined> = { dispatch: 'red', escalate: 'amber', ignored: undefined };
 
 /**
  * The checks behind the aggregate, in the policy's own three categories: what the
@@ -307,7 +320,9 @@ function Checks({ pr }: { pr: PullRequest }): JSX.Element {
               <span className="cn-grow">
                 <b className="cn-name">{row.name}</b>
               </span>
-              <i className={`cn-chip ${CHECK_TONE[row.kind] ?? ''}`}>{row.kind}</i>
+              <Tag tone={CHECK_TONE[row.kind]} fill={CHECK_TONE[row.kind] !== undefined}>
+                {row.kind}
+              </Tag>
             </div>
           ))}
         </div>

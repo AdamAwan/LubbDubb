@@ -164,9 +164,8 @@ test('the registry and the :root blocks name the same tokens', () => {
 /**
  * The tone aliases are aliases, and nothing else.
  *
- * `.t-*`, `.cn .t-*` and `.cn-t-*` are the tint vocabularies — the shared family's,
- * its rebinding onto the console's ground, and the console's own — and all three
- * work only because a tone block *renames* `:root` tokens
+ * `.t-*` is the tag's tint vocabulary and `.cn-t-*` the queue rail's, and both work
+ * only because a tone block *renames* `:root` tokens
  * rather than holding values. A declaration on `.t-red` shadows an inherited one
  * unconditionally, so a literal, a `color-mix`, or even a second `var()` fallback
  * written there is a colour the Theme section cannot reach *inside* a tone: every
@@ -183,7 +182,7 @@ test('every tone alias renames a :root token and holds no value of its own', () 
   let blocks = 0;
   for (const sheet of ['web/src/styles.css', 'web/src/console/console.css']) {
     const visible = withoutComments(readFileSync(sheet, 'utf8'));
-    for (const block of visible.matchAll(/^(?:\.cn )?\.((?:cn-)?t-[a-z0-9-]+)\s*\{([^}]*)\}/gm)) {
+    for (const block of visible.matchAll(/^\.((?:cn-)?t-[a-z0-9-]+)\s*\{([^}]*)\}/gm)) {
       blocks += 1;
       for (const line of block[2]!.split(';')) {
         const body = line.trim();
