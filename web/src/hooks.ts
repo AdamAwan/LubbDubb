@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { subscribeThemeUnsaved, themeUnsaved } from './cockpit/theme.js';
 
 /**
  * A clock that re-renders the caller every `intervalMs`. Used for live "elapsed"
@@ -12,4 +13,13 @@ export function useNow(intervalMs = 1000): number {
     return () => clearInterval(id);
   }, [intervalMs]);
   return now;
+}
+
+/**
+ * Whether the Theme section is holding an unsaved edit — the marker on the cog and
+ * on the Theme tab. Subscribes to the module store in `cockpit/theme.ts`, since the
+ * section that sets it is not an ancestor of either surface that draws it.
+ */
+export function useThemeUnsaved(): boolean {
+  return useSyncExternalStore(subscribeThemeUnsaved, themeUnsaved, themeUnsaved);
 }

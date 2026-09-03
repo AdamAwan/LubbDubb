@@ -226,7 +226,7 @@ Five surfaces and one shell.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│ ident Issue! Question? │ Overview Tickets② Obstacles Insights │ Fleet ⏸ 14s  Usage 5h 62% 7d 30% … ⚙ │ top bar
+│ ident │ Overview Tickets② Obstacles Insights │ Fleet ⏸ 14s │ Issue! Question?  62%⁵ʰ / 30%⁷ᵈ │ #390  ☰ │ top bar
 ├────────────────────────────────────────────────────────────────────────┤
 │ the recovery banner, when a previous run left work orphaned            │
 ├───────────────┬────────────────────────────────────────────────────────┤
@@ -363,11 +363,14 @@ the nav and asserts every label, so a tab added to the type and forgotten in the
 nothing can reach — and fails. It asserts `Work` is **not** among them for the mirror reason: a slot
 given back is given back.
 
-**Pets is the fifth, and it is conditional.** It is appended to the list only when
-`state.pets` is non-null — the same reading that decides whether the rail draws a vivarium at all —
-because a tab opening on a page that explains a subsystem this deployment does not run is worse
-than no tab. `tabBody` refuses it on the same reading, so a stale `?tab=pets` URL lands on a
-sentence rather than on an empty catalogue. → [22](22-pets.md#the-pets-page)
+**Pets was the fifth and is not a tab any more.** The vivarium is drawn at full size in the
+bottom-left corner already, on a strip that was itself a button, so the tab was a second way to a
+surface the eye lands on anyway — and a nav slot is the most expensive space in the cockpit. The
+[vivarium strip](22-pets.md#the-vivarium) carries the destination now, which also puts the way in
+where the thing it names is. It stays a `ConsoleTab` and stays on `Place`, because a destination has
+to round-trip whatever draws it; `tabBody` still refuses it where `state.pets` is null, so a stale
+`?tab=pets` URL on a deployment drawing no vivarium lands on a sentence rather than on an empty
+catalogue. → [22](22-pets.md#the-pets-page)
 
 ### The console at width
 
@@ -1391,17 +1394,28 @@ claim something is waiting while offering no way to answer it.
 #### A goal with no parent Feature
 
 Above every band and every card, between the header and the track, a goal that hangs off nothing gets
-an amber warning of its own. It is not one of the bands above and wears no tone class: the tone
+an amber warning of its own, wherever the tracker could be handed a parent — the feature board's flag
+is not part of this. It is not one of the bands above and wears no tone class: the tone
 families are the _needs-you_ palette, and a goal is an orphan whether or not the rail is holding a row
 about it.
 
 The reading is `orphanGoal` (`web/src/view/orphanGoal.ts`), and it is three facts read fresh on every
 draw:
 
-- **`config.featureBoard`** — the operator's flag _and_ a provider that can place a work item, the
-  same conjunction `featureBoardOn` gates the board itself on ([the two gates](#the-two-gates)). An
-  operator who has not asked for the tier above their stories has not asked to be told which stories
-  are missing from it, and where nothing can write a parent the warning would be a dead end.
+- **`config.canPlaceWorkItem`** — the connector's own answer to whether one item can be hung off
+  another, asked once on the server exactly as `canCloseIssue` and `canSetWorkItemState` are. Where it
+  is false the warning would be a dead end rather than a warning, and it is drawn nowhere.
+
+  It was **`config.featureBoard`**, which is that same probe _and_ the operator's own flag, folded by
+  `featureBoardOn` ([the two gates](#the-two-gates)). The argument for the conjunction was that
+  somebody who has not asked for the tier above their stories has not asked to be told which stories
+  are missing from it — but that argument is about a **tab**, and this band is about a fact: the goal
+  merges, closes, and rolls up to nothing. One flag was answering both questions with the tab's
+  answer, so a real Azure board with Features and Epics in it, six goals hanging off nothing, and a
+  tracker that would take the write said nothing at all, because nobody had asked for the tab. The
+  rail does not cover that gap either — its row rides inside `issue.appraisal`, and five of those six
+  had no appraisal row. → [#683](https://github.com/AdamAwan/LubbDubb/issues/683)
+
 - **`issue.parent === null`** — the tracker saying this item hangs off nothing. `undefined` is a
   provider that tracks no hierarchy at all, and folding the two together is the silent direction: an
   amber band on every goal of every GitHub deployment.
@@ -1684,8 +1698,30 @@ gives up, never the edge or the marker.
 The chip itself is **`web/src/components/AgentOnIt.tsx`, shared**, because it is one fact and the
 cockpit had been saying it two ways: the rack in the slot its checks would be in, and a plan part as
 `open the agent ↗` inside its dependency line — two wordings, two weights and two hovers for one
-sentence, which is how a reader learns to treat one of them as furniture. A part draws it while its
-agent is live and keeps the plain way in once that agent has finished, which is why `GoalPartView`
+sentence, which is how a reader learns to treat one of them as furniture.
+
+**It is a glyph and no words** — a pulsing green disc carrying the shared set's `play`, and the icon
+set's **one stated exception** to "an icon never appears without its label" (`Icon`,
+`web/src/components/icons.tsx`). It earns the exception on two counts. It is not a control an operator
+has to _find_: it appears in a fixed slot on rows they are already reading, and its job is to be
+countable down a column rather than read. And it _repeats_ — `agent on it` written out eight times down
+a rack is eight copies of one sentence, which is how the one row where it is news stops standing out.
+Nothing is lost: the sentence, and the agent's own last answer to "what are you doing" where the row has
+one, is the `title` and the `aria-label`.
+
+**It rides the lamp slot, at the head of the row, on both racks.** It stood in the reading slot on the
+pull-request rack — third of three glyphs — and in the chips group on the goal rack, behind the
+environment and the orphan chip; either way its distance along the row moved with whatever its
+neighbours happened to have to say, so the one mark that means _something is happening to this right
+now_ was the one an eye could not find twice in the same place. `PanelRow`'s lamp column is what that
+grammar is for: held open on every row of the card once any row fills it, so the mark is either there or
+visibly not. Both racks, because they sit one above the other and a glyph that means the same thing on
+both has to be in the same place on both. The column is **absent altogether** while no agent is out, so
+a quiet rack pays no gutter for it, and its width is the card's (`.cn-lamp-mark .cn-rows`, 30px) rather
+than the token's — every other rack's lamp really is an 8px dot, and the extra room is what keeps the
+chip off the watch eye beside it. → `test/panelRows.test.ts`
+
+A part draws it while its agent is live and keeps the plain way in once that agent has finished, which is why `GoalPartView`
 carries `agentLive` beside `agentId`: a finished agent is still the way to what happened there, and
 only a live one is a claim that something is happening now. Folded into one field, a merged part would
 pulse. → `test/goalPage.test.ts`
@@ -2120,9 +2156,10 @@ card is the drift `PanelRowModel` exists to end, one level up.
   track's moving segment counts `in_review` too and an open pull request is not somebody's hands on
   the work.
   **A goal wears the live treatment while an agent is on it**, the same edge, tint and sweep the rack
-  draws, and the same `AgentOnIt` chip — beside its environment rather than in place of its track: on a
-  pull request the marker supersedes the checks, because those are a verdict on a commit being
-  replaced, and a goal's track is how far the plan got, which an agent working does not make untrue.
+  draws, and the same `AgentOnIt` chip in the same lamp slot. Its **track survives it**, unlike a pull
+  request's checks: on a pull request the marker supersedes the ladder, because those are a verdict on a
+  commit being replaced, and a goal's track is how far the plan got, which an agent working does not
+  make untrue.
   Resolved off the dispatch's **origin** (`agentOnGoal`, through `goalOfOrigin`), not off a branch and
   not off the parts: an agent's origin is a pull request as often as the goal itself, so a reading that
   only understood `issue:<n>` would say nothing is happening on every goal whose work has reached a
@@ -2865,12 +2902,22 @@ lands somewhere else entirely, so Back returns to the filter and the list re-rea
 
 ## The top bar and the panels
 
-The strip carries the ident, the nav, the fleet gauge, and six readings: **Usage**, **Faults**,
-**Launch**, **Local**, **Build**, **Env** — then **Record**, then the Config cog. Findings and Lessons
-were two of these until the claim stores merged, and the merged store has since gone with the count
-that stood for all of it. Each is one subject
-stated once, in a plain label-and-number face. None reaches `api.js`: every one is a method on
-`CockpitActions`, and the fleet cap is the shared `FleetControl`, which is already on that seam.
+The strip carries the ident, the nav, the fleet gauge, the two ways off it to a tracker, **two
+gauges** — [Usage](#the-usage-chip) and **Local**, in one pill — and a **menu** holding the six
+ways-in that are not gauges: **Faults**, **Launch**, [**Build**](#the-build-gauge),
+[**Env**](#the-environments-gauge), [**Record**](#the-record-panel) and **Config**. Findings and
+Lessons were readings here too until the claim stores merged, and the merged store has since gone with
+the count that stood for all of it. Each is one subject stated once. None reaches `api.js`: every one
+is a method on `CockpitActions`, and the fleet cap is the shared `FleetControl`, which is already on
+that seam.
+
+**The cut between the strip and the menu is what a reading is _for_, not what it costs to draw.** Usage
+and Local are numbers that move on their own and are glanced at on every pulse. The six behind the
+button are counts that are usually zero (Faults, Launch), a state that is `current` nearly all its life
+(Build, Env) and two surfaces that are aimed at rather than read (Record, Config) — and spread across
+the strip they were what wrapped the bar to two rows at laptop widths. Folded, each keeps its count and
+its sentence; what the fold could have cost — noticing a fault or a waiting upgrade without opening
+anything — is bought back by the **dot on the button**, which appears whenever a row inside has a tint.
 
 **The fleet gauge holds the pulse countdown, beside the pause control** (`.cn-cap`, `.cn-countdown`).
 The two are one subject: Pause is the control that stops the next dispatch decision from happening, and
@@ -2894,33 +2941,57 @@ it was in. The sentence it carried is the `title`, which is where the two states
 countdown explain themselves. Its `line-height` is stated with its size rather than left to the shorthand
 because `.cn button` resets `font` to `inherit` at (0,1,1) and would otherwise hand it the bar's 1.45.
 
-**The last two state no number, and they sit together at the tail for that reason.** Every reading
-before them is a count or a state — a thing waiting on a person, or where this build stands — and is
-_glanced at_; [Record](#the-record-panel) and Config are destinations, _aimed at_, and interleaving them
-among numbers that change would put two things you look for in a fixed spot behind two things you read.
-Neither is in the nav, and it is one rule keeping both out: the nav is the surfaces work happens **on**,
-so a button beside them would say the archive is somewhere work happens and configuration is something
-you do rather than the thing you set up once. Record is on the bar rather than a tab for a second reason
-of its own — a selected goal outranks every tab, so as a tab the record could not be read beside the goal
-that sent you looking for it.
+### The bar's menu
 
-**Config is a cog, and it is the console's only icon** (`Cog`, `TopBar.tsx`; `.cn-read.cn-icon`,
-`.cn-cog`). It is the one control on this strip that measures nothing, and wearing the label-and-value
-face of the gauges beside it said otherwise — a word in a row of numbers reads as a subject whose number
-has gone quiet. A cog says "settings" without claiming to be a reading of anything, and it buys back the
-width of the word on a strip that wraps at laptop sizes. It is drawn inline in `currentColor` rather than
-reached for from an icon set, so it takes hover and the theme through the cascade like everything else
-here; a set would be a dependency and a second colour system for one glyph. The label is not lost — it is
-the `aria-label` and the head of the `title`.
+One button (`BarMenu`, `TopBar.tsx`; `.cn-menu-wrap`, `.cn-menu`, `.cn-menu-row`) and the six ways-in
+behind it, in reading order: Faults, Launch, Build, Env, Record, Config. Every row is a glyph, a word
+and — where it has one — a value, drawn at the right-hand edge so six rows of different word lengths
+still read as one column of numbers.
 
-**The ident carries the one way off this bar to a tracker**, and it has two faces onto _one_
-destination. Connected, `Issue!` is a button opening a compose modal and the issue is created
-directly; offline it is `↗ Issue!`, the external link it has always been. It sits in the ident
-rather than among the readings for the reason the readings are a group at all — each is a gauge on the
-fleet or on this build, read left to right as one sentence about what is happening, and "file an issue"
-answers nothing in it. `.cn-issue` sizes it out of the wordmark's weight through a console-owned wrapper
-and `.cn-issue-btn` takes the button's padding off, since `console.css` styling `.ext-ref` directly is
-what this stylesheet is tested not to do.
+**Every row names itself in words, and that is the difference between here and a rack.** A glyph in a
+fixed slot on a row somebody is already reading can go wordless — the agent mark is the icon
+set's one exception — but a row in a list an operator
+has just opened cannot, because nothing around it says what it is. The glyphs come from the shared set
+(`Icon`, `web/src/components/icons.tsx`) rather than being drawn inline here: the console has one icon
+set now, and a second one for six rows would be a second colour system for six glyphs.
+
+**A row's tint is on its value and its glyph, never on the row.** Faults above zero is red, a Build at
+`behind` or `ready` is amber, Env wears the tone `environmentsReading` gives it. A filled red or amber
+box among six list rows reads as a banner rather than as a reading, which is the opposite of what a
+tone is for.
+
+**A row can also be _pending_, which is a fact and not a quantity** (`MenuEntry.pending`) — an unsaved
+theme edit on Config, and so far only that. It draws a dot beside the word rather than a value, and it
+lights the menu's own button along with the tones: a mark visible only once the menu is open is the same
+invisibility the mark was added to fix. → [the theme](#the-theme)
+
+**A zero mutes a row; it never removes one.** The strip's own rule, carried into the fold — a row that
+vanished on the days it had nothing to say would be one an operator had to hunt for.
+
+**It closes on Escape and on focus leaving the group** — the pair a keyboard and a pointer each need.
+Not a document-level listener: that is a third thing to unsubscribe on a component the shell mounts and
+unmounts with the connection.
+
+**`menuEntries` is exported for `test/console.test.ts`**, as `usageReading` and `environmentsReading`
+are, and for a reason the fold shares with neither: the rows are behind a button, so a rendered bar says
+nothing about whether the list that fills them is right. Every assertion that used to read Faults,
+Launch, Env or Record off the bar's own markup reads the fold now.
+
+**Record and Config are in here rather than in the nav, and it is one rule keeping both out**: the nav
+is the surfaces work happens **on**, so a tab beside the others would say the archive is somewhere work
+happens and configuration is something you do rather than the thing you set up once. Record has a
+second reason of its own — a selected goal outranks every tab, so as a tab the record could not be read
+beside the goal that sent you looking for it.
+
+**The two ways off this bar to a tracker ride the readings' end, together** (`Asks`, `.cn-asks`), and
+`Issue!` has two faces onto _one_ destination. Connected it is a button opening a compose modal and the
+issue is created directly; offline it is `↗ Issue!`, the external link it has always been. They sit
+with the readings rather than against the wordmark because that is where every control on this strip
+is — the wordmark's job is to say where you are — and because inheriting the ident's 600 read them as a
+second half of the product name. They move as a **group**, so the pair cannot come apart when the strip
+wraps: the cheaper offer is only offered first while it is beside the other one. `.cn-issue` sizes them
+out of the bar's own face through a console-owned wrapper and `.cn-issue-btn` takes the button's padding
+off, since `console.css` styling `.ext-ref` directly is what this stylesheet is tested not to do.
 
 **Beside it is `Question?`, which answers instead of filing.** Most of what reaches the tracker
 as a complaint about the fleet is not a fault in it — it is _why has this not moved_, which the
@@ -3023,10 +3094,30 @@ that can stop everything: an allowance that runs out parks the whole fleet
 learning it afterwards. Beside the fleet cap it reads as the second half of one sentence — what the
 fleet is allowed to run, and what the account has left to run it on.
 
-**Both windows are on the chip, because either one parks the fleet.** `Usage 5h 62% 7d 30%`. A chip
+**Both windows are on the chip, because either one parks the fleet.** `62%⁵ʰ / 30%⁷ᵈ`. A chip
 carrying the five-hour alone reads fine on the morning a weekly allowance runs out, which is the failure
 a gauge exists to prevent — and the two are not a proxy for each other: a fleet with a whole five-hour
 window and no weekly left has plenty of room today and none by Thursday.
+
+**It carries no label of its own.** A percentage on this bar is the account, and nothing else here is
+one, so `Usage` was width spent restating what the figures already say — on a strip that wrapped to two
+rows at laptop widths. The name survives as the head of the `title`.
+
+**Each window keeps a two-character tag, as a superscript.** Position alone was tried and is not
+enough: the pair is always five-hour then weekly, but an operator glancing at _one_ number cannot tell
+which of the two they landed on, and "which window is that" is the whole question the chip answers. The
+tag is the smallest thing that settles it — 8.5px, faint, and set on the ascender the `%` leaves empty,
+so it costs the strip no width and does not move the figures off the baseline the readings share
+(`.cn-usage-win em`). Between the two is a faint `/` (`.cn-usage-sep`), which separates and does not
+measure.
+
+**Usage and Local are one pill** (`.cn-pill`, `.cn-pill-sep`), the fleet gauge's argument applied to
+the other two readings that are about the operator's own situation rather than about the work — what
+the allowance has left, and whether anything is up on this machine. Each is two or three characters
+wide, and two boxes around six characters was more chrome than reading. Each half keeps its **own
+button**, because they open different surfaces; what they lose is the border, the padding and the
+chevron. `.cn-sub` is (0,2,0) through the pill, which is how it beats the usage tone classes' border and
+background: inside the pill a tint is the value's, never a second box around it.
 
 **Five-hour left, weekly right, always — the weight says which one bites.** Ordering the pair by which
 is worse was the obvious alternative and is the one thing this chip must not do: the bar is the row an
@@ -3046,10 +3137,13 @@ auth, on an older CLI and on a fleet that has not taken a turn; `usage.windows` 
 always there. There is no pair to draw then, so the chip shows money rather than going blank — a hole in
 the bar on the deployments least able to spare one. It is never both: two subjects in one chip.
 
-**A stale reading is drawn stale.** The limits are turn-bound — they arrive only when an agent takes a
-turn, and an operator's own Claude Code spends from the same allowance — so an idle fleet's figures age
-while the real windows keep moving underneath them. Past ten minutes the chip grows the age beside them
-(`.cn-usage-age`) rather than hiding numbers that are still the best answer anyone has. No probe could
+**A stale reading is drawn stale, in the weight and not as a figure.** The limits are turn-bound —
+they arrive only when an agent takes a turn, and an operator's own Claude Code spends from the same
+allowance — so an idle fleet's figures age while the real windows keep moving underneath them. Past ten
+minutes both percentages go faint (`.cn-usage-old`) rather than hiding numbers that are still the best
+answer anyone has. It printed the age beside them for a while and that is the version to not go back
+to: `11m ago` next to `62% / 30%` is three numbers on a chip that has two measurements, and the one an
+operator does not want is the one that changes every minute. The age is the `title`'s. No probe could
 ask the account directly, so rendering the staleness is the whole of handling it.
 
 **Two tints and a mute, tinting only what wants acting on.** Amber from three quarters spent, red from
@@ -3058,8 +3152,8 @@ the five-hour is empty. The resting state is the plain reading its neighbours we
 through the token layer (`--cn-amber-*`, `--cn-red-*`), so a theme switch takes them with it.
 
 **The slots are `i`/`em`/`b` and not `span`, which is load-bearing.** `.cn-read span` is a _descendant_
-rule, so a wrapping `<span>` is lettered as a second chip label — uppercase, faint, 11px — and that face
-is the reading's own name, not a window's.
+rule, so a wrapping `<span>` is lettered as a chip label — uppercase, faint, 11px — and that face is a
+reading's own name, which is not what a window tag is.
 
 **It is the one reading here whose way-in is a whole page.** It carried no chevron for as long as the
 honest answer to "spent on what?" was nothing: the chip could give a percentage, and no surface had a
@@ -3076,8 +3170,9 @@ the whole fleet is no longer one that cannot be asked what spent it.
 
 ### The Build gauge
 
-The one reading on this bar that is about the process rather than the work: where the harness's own
-build stands against its upstream ([21](21-self-update.md)). It follows the mute rule above rather
+The one reading in [the bar's menu](#the-bars-menu) that is about the process rather than the work:
+where the harness's own build stands against its upstream ([21](21-self-update.md)). It follows the mute
+rule above rather
 than being an exception to it — `current`, muted, in a fixed place, is the state it is in almost all
 of the time, and that is the point. A notification that appears only when there is news is one an
 operator has to notice; a gauge in a fixed spot is one they can glance at.
@@ -3089,8 +3184,9 @@ nothing, so borrowing it would say something untrue — and after the second tim
 
 ### The Environments gauge
 
-The only reading on this bar about the world the work ships into rather than about the fleet or this
-build: whether any environment's health check says something out there is broken
+The only reading in [the bar's menu](#the-bars-menu) about the world the work ships into rather than
+about the fleet or this build: whether any environment's health check says something out there is
+broken
 ([24](24-environments.md#is-the-environment-well)). The Build gauge's argument applied to the subject
 that needed it more — health was drawn on one card on one tab, so an outage reached exactly the people
 already looking at it.
@@ -3110,10 +3206,12 @@ untiered unhealthy take `.cn-env-ill`; an orange and an `unknown` take `.cn-env-
 the word beside them rather than by a third colour claiming an answer the check did not give.
 
 **Absent, not zeroed, where no environment declares a check** — the Environments card's own exception,
-for its reason: a chip reading `0 well` on a deployment that configured none announces a feature as
-broken. It opens the **overview**, where the card is, rather than a panel of its own: the reasons, the
-ages and the per-environment rows are the card's, and a second surface drawing them is a second place
-for them to disagree.
+for its reason: a row reading `0 well` on a deployment that configured none announces a feature as
+broken. It is the one entry `menuEntries` omits rather than mutes, and `test/console.test.ts` asserts
+that on the fold rather than on the bar's markup, since a closed menu draws no rows at all. It opens the
+**overview**, where the card is, rather than a panel of its own: the reasons, the ages and the
+per-environment rows are the card's, and a second surface drawing them is a second place for them to
+disagree.
 
 Four panels open from the bar, the ask panel opens from a queue row ([the rail](#the-queue-rail--needs-you)), and Settings is a shell-owned modal beside them:
 
@@ -3826,6 +3924,26 @@ Three things about the drawing that are decisions rather than details:
   whose cleanup reverts it**, and the bar states the cost: a reload drops them. Saving is not a visual
   event — the colours are already on screen — so the bar has to make a statement, or a Save that appears
   to do nothing gets pressed twice.
+- **The bar's statement is carried off the section by a dot on the Config row.** The bar lives on the
+  Theme section and the preview does not, so once you leave, an unsaved theme is drawn exactly like a
+  saved one and nothing says an edit is pending — the cost stops being visible at the moment it starts to
+  matter. The section publishes `dirty` to a module store in `theme.ts` (`setThemeUnsaved`), which
+  [the bar's menu](#the-bars-menu) and the Theme tab inside Config read through `useThemeUnsaved`. It is
+  a module store and not React state because the two ends are not in one tree, and it is **not** on
+  `Place` and **not** persisted: an unsaved edit is a fact about this tab, not a destination, and a flag
+  surviving a reload would mark a draft the reload dropped. The publishing effect has **no cleanup**, for
+  the same reason the applier has none — unmounting the section must not clear the marker. A dot rather
+  than a count on every surface, because what is pending is one edit however many tokens it moved, and
+  Config carries no value at all.
+
+  **It reaches the menu's own button as well as the Config row inside it** — `MenuEntry.pending` is what
+  the row draws, and the button's flag dot reads it beside the tones. Config moved behind that button
+  after the mark shipped on a cog on the strip, and a mark visible only once the menu is open is the same
+  invisibility one fold further in, which is the whole of what #680 was.
+
+- **The dirty sentence never counts zero.** A preset change sets `dirty` but moves no token, so
+  "**0** tokens changed · unsaved" read as "nothing pending" and got left unsaved (issue #680). With no
+  token moved the bar names the preset instead: `Preset ‹label›, unsaved — a reload drops it`.
 - **A preview card cannot lie about its preset.** Each preset block in `theme.css` carries a second
   selector, `[data-theme-swatch='x']`, and a card is a `<span>` with that attribute whose swatches read
   `var(--bg)` and friends — so a card's colours arrive through the same declaration block as the theme.
@@ -5196,7 +5314,11 @@ other.
   and this is that answer where the operator is already looking. Reject, Hold and Close stay live: only
   releasing the work is gated. The same checklist is drawn on the plan sheet, above its own Approve,
   because that is the other surface the plan can be released from — and the surface where it has
-  actually been read.
+  actually been read. There it is **capped at ~28vh and scrolls itself**, and `.pm-body` keeps a
+  floor of its own: the sheet is one column whose middle scrolls between a fixed head and a fixed
+  decision bar, so every line the checklist grows by comes straight out of the plan being read —
+  a plan raising several caveats, each with the planner's words under it, otherwise leaves a slot a
+  few lines tall to read it in.
 
 A **shortfall proposal carries a third arm**, `Overrule the assessment`, beside Approve and Reject.
 The other two settle what to _do_ about the assessor's finding; this one settles the finding itself.
@@ -5280,7 +5402,7 @@ blue `deciding`, faint `skipped` and `elsewhere`. It sits left of the CI ladder,
 read in the order the harness produces them.
 
 **One badge slot on the glyph's shoulder, three meanings** — how many findings, a dash for a review
-that will not happen, an arrow for one that happened somewhere else. A mark drawn *through* the lenses
+that will not happen, an arrow for one that happened somewhere else. A mark drawn _through_ the lenses
 is mud at 15px; a badge beside them holds at every size a row uses.
 
 **Everything else is in the tooltip**: the mode, the triage's reason in its own words, what the
@@ -5294,7 +5416,7 @@ so the two surfaces cannot come to word one record differently.
 earns it the way the CI ladder does: a dense list of pull requests, one recurring subject, the words
 one hover away. The `aria-label` carries the same sentence the tooltip heads with and the tooltip opens
 on keyboard focus, so the glyph is never the only channel. The glyph is deliberately not `eye`, which
-already means *watching* — reading a diff and watching an item are different claims.
+already means _watching_ — reading a diff and watching an item are different claims.
 
 Absent where the deployment has no fleet review. → [07](07-pull-requests.md#where-the-operator-sees-it)
 

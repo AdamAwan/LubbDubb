@@ -280,6 +280,77 @@ test('a pull-request row draws the agent on its branch instead of its checks', (
 });
 
 /**
+ * The agent mark rides the **lamp slot**, at the head of the row, on both racks.
+ *
+ * It is the one mark on either card that says *something is happening to this
+ * right now*, and it was the one an eye could not find twice in the same place: on
+ * the pull-request rack it stood where the ladder stands, third of three glyphs,
+ * and on the goal rack it rode the chips group behind the environment and the
+ * orphan chip. Either way its distance along the row moved with whatever its
+ * neighbours happened to have to say.
+ *
+ * The lamp column is what `PanelRow`'s grammar keeps for this: held open on every
+ * row of the card once any row fills it, so the mark is either there or visibly
+ * not — and absent altogether while no agent is out, so a quiet rack pays no
+ * gutter for it.
+ *
+ * Both racks are asserted together, because they sit one above the other and a
+ * glyph that means the same thing on both has to be in the same place on both.
+ */
+test('the agent mark is the row’s first slot, on both racks', () => {
+  const state = buildDemoState().state;
+  const html = render(view());
+  const racks = {
+    'Goals in flight': html.slice(html.indexOf('Goals in flight'), html.indexOf('Pull requests')),
+    'Pull requests': html.slice(html.indexOf('Pull requests'), html.indexOf('Up next')),
+  };
+
+  // Both cards widen the lamp column, and only those two: every other rack's lamp
+  // really is an 8px dot, and the token is declared once for all of them.
+  assert.equal(html.split('cn-lamp-mark').length - 1, 2, 'the lamp column is widened on the wrong number of cards');
+
+  for (const [name, rack] of Object.entries(racks)) {
+    const staffed = rack.split(ROW).filter((row) => row.includes('cn-onit'));
+    assert.ok(staffed.length > 0, `the fixtures must put an agent on a row of ${name}`);
+    for (const row of staffed) {
+      // First slot on the row, ahead of the watch eye and the title. Measured
+      // rather than asserted by class order, since a slot that merely *exists*
+      // earlier in the markup is what the old arrangement also had.
+      assert.ok(row.indexOf('cn-onit') < row.indexOf('cn-grow'), `a ${name} row draws the mark after its subject`);
+      assert.ok(
+        !/cn-slot[^"]*">(?!<button[^>]*cn-onit)[\s\S]{1,80}?cn-onit/.test(row),
+        `a ${name} row puts something ahead of the mark in the row's first slot`,
+      );
+    }
+  }
+
+  // And the column goes away with the last agent: a gutter on a quiet rack is a
+  // column reserved for a mark nothing on the card can draw.
+  const quiet = render(
+    view({ agents: state.agents.map((a) => ({ ...a, endedAt: a.endedAt ?? new Date().toISOString() })) }),
+  );
+  assert.ok(!quiet.includes('cn-onit'), 'a finished agent still holds a row');
+});
+
+/**
+ * The mark is a **glyph and no words**, which is the icon set's one stated
+ * exception to "an icon never appears without its label".
+ *
+ * `agent on it` written out was one sentence repeated down a whole column, and the
+ * repetition is what stopped the row where it *is* news from standing out. Nothing
+ * is lost: the sentence — the agent's own last answer to "what are you doing",
+ * where the row has one — is the `title` and the `aria-label`, which is what a
+ * pointer and a screen reader each ask for.
+ */
+test('the agent mark says what it is without spelling it out', () => {
+  const html = render(view());
+  assert.ok(html.includes('cn-onit'), 'the fixtures must put an agent on a row');
+  assert.ok(!html.includes('agent on it'), 'the mark is back to spelling itself out on every row');
+  assert.match(html, /class="cn-onit"[^>]*aria-label="Agent on it/, 'the mark carries no accessible name');
+  assert.match(html, /class="cn-onit-dot"><svg/, 'the mark drew no glyph');
+});
+
+/**
  * The goal row's state column carries the pickup verdict, in words.
  *
  * Two things at once, and both were real bugs on the card: the verdict was a fact

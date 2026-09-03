@@ -752,6 +752,10 @@ export function buildStateSections(
       // And the same question about a pull request, which is a different provider
       // operation on both of them — the plan sheet's restart is its only reader.
       canClosePr: connector.canClosePr(),
+      // What the missing-parent warning is gated on. The same probe the placement
+      // asks and the placement routes ask, so the warning, the row and the write
+      // agree about whether this tracker has a parent to set.
+      canPlaceWorkItem: connector.canPlaceWorkItem(),
       // The flag and the provider's hierarchy, folded by the one predicate the
       // route refuses on — so the tab and the route can never disagree about
       // whether this deployment has a board.
