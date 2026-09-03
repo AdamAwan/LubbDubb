@@ -1,8 +1,23 @@
-import { mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join, posix, resolve } from 'node:path';
 import { runGit } from '../../git/gitCli.js';
 import { poolCompanion } from '../../pool/companion.js';
-import { poolDocumentAddress, poolPackPath, serialisePoolDocument } from '../../pool/document.js';
+import {
+  POOL_CLOCK_KINDS,
+  poolDocumentAddress,
+  poolPackPath,
+  poolRetiredPaths,
+  serialisePoolDocument,
+} from '../../pool/document.js';
 import { reviewPackCompanionPath } from '../../reviewPacks/companion.js';
 import type { PoolFetchedDocument, PoolPackRef, PoolTransport } from '../../pool/transport.js';
 import type { PoolDocument } from '../../types.js';
@@ -83,7 +98,32 @@ export class GitPoolTransport implements PoolTransport {
       mkdirSync(dirname(absolute), { recursive: true });
       writeFileSync(absolute, file.text, 'utf8');
     }
-    await this.commit(paths, `pool: ${this.deps.fleetId} ${document.kind}`);
+    await this.commit([...paths, ...this.clearRetired()], `pool: ${this.deps.fleetId} ${document.kind}`);
+  }
+
+  /**
+   * Clear what a retired kind left in this fleet's own namespace, and hand back the
+   * paths so the publish's own commit records the removal.
+   *
+   * **Only paths that are actually there.** `git add` on a path that never existed
+   * is a fatal pathspec error, which would turn every publish from a deployment that
+   * predates nothing into a failure — so the removal rides along on the one publish
+   * that finds the file, and afterwards this returns nothing and costs a pair of
+   * `existsSync` calls.
+   *
+   * Its own namespace and no other: one writer per namespace means another fleet's
+   * leftovers are not this fleet's to delete, and each clears its own as it upgrades.
+   * → `docs/spec/28-cross-fleet-pool.md#what-a-retired-kind-leaves-behind`
+   */
+  private clearRetired(): string[] {
+    const cleared: string[] = [];
+    for (const relative of poolRetiredPaths(this.deps.fleetId).map((path) => this.prefixed(path))) {
+      const absolute = join(this.deps.root, ...relative.split('/'));
+      if (!existsSync(absolute)) continue;
+      unlinkSync(absolute);
+      cleared.push(relative);
+    }
+    return cleared;
   }
 
   /**
@@ -146,7 +186,7 @@ export class GitPoolTransport implements PoolTransport {
     const fleetsDir = join(this.deps.root, ...this.prefixed('fleets').split('/'));
     const out: PoolFetchedDocument[] = [];
     for (const fleetId of listDirectories(fleetsDir)) {
-      for (const kind of ['claims', 'digest'] as const) {
+      for (const kind of POOL_CLOCK_KINDS) {
         const file = join(fleetsDir, fleetId, `${kind}.json`);
         const text = readIfFile(file);
         // The directory name is the address, which is what the body's `fleetId` is

@@ -25,6 +25,18 @@ import type { StoreContext } from './context.js';
  *
  * → `docs/spec/28-cross-fleet-pool.md`
  */
+/**
+ * What the claims arm left in the database when it went.
+ *
+ * `pool_claims` mirrored other fleets' vouched claims, rewritten whole on every
+ * poll. The arm is gone — nothing creates the table, nothing reads it — so on a
+ * database made since it is simply absent, and on one from before it holds a poll's
+ * worth of another team's prose that nothing will ever look at again. Dropped
+ * because the rows were derived and are worthless, never because the table is
+ * merely unused. → `docs/spec/28-cross-fleet-pool.md#the-mirrors-own-tables`
+ */
+export const POOL_RETIRED_TABLES: readonly string[] = ['pool_claims'];
+
 export class PoolStore {
   constructor(private readonly ctx: StoreContext) {}
 

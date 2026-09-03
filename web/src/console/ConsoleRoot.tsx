@@ -125,6 +125,10 @@ export function ConsoleRoot({ view, actions }: { view: CockpitView; actions: Coc
             runningAgents={view.state.agents.filter((a) => a.status === 'running').length}
             paused={view.state.control.paused}
             onOpen={() => actions.openPanel('pets')}
+            onOpenPage={() => {
+              actions.selectGoal(null);
+              actions.openTab('pets');
+            }}
             onHatch={(id) => actions.hatchEgg(id)}
           />
         )}

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   applyTheme,
   applyToken,
@@ -6,6 +6,7 @@ import {
   loadThemePrefs,
   PRESETS,
   saveThemePrefs,
+  setThemeUnsaved,
   type PresetId,
   type ThemePrefs,
 } from '../cockpit/theme.js';
@@ -36,6 +37,10 @@ import { ColourField } from './ColourField.js';
  * On purpose — the whole point is to go and look at a real goal page in the theme
  * you are building. So the applier is a plain call and **never an effect whose
  * cleanup reverts it**, and the bar says what that costs: a reload drops them.
+ *
+ * Which is also why {@link setThemeUnsaved} is published from an effect with **no
+ * cleanup**: the marker on the cog is the bar's sentence for everywhere the bar is
+ * not, so unmounting this section must not clear it.
  */
 const SEARCH_HINT = 'Search by name, by what it is called, or by what it does';
 
@@ -61,6 +66,10 @@ export function ThemeSettings() {
   const root = typeof document === 'undefined' ? null : document.documentElement;
 
   const dirty = preset !== saved.preset || THEME_TOKENS.some((t) => draft[t.name] !== saved.overrides[t.name]);
+
+  // No cleanup, on purpose — see the note above. Save and Revert both land here
+  // with `dirty` false, so nothing else has to clear it.
+  useEffect(() => setThemeUnsaved(dirty), [dirty]);
 
   const choosePreset = (id: PresetId): void => {
     setPreset(id);
@@ -234,9 +243,18 @@ export function ThemeSettings() {
       <div className="th-bar">
         <span className="th-barn">
           {dirty ? (
-            <>
-              <b>{changed}</b> token{changed === 1 ? '' : 's'} changed · unsaved, and a reload drops them
-            </>
+            /* A preset change sets `dirty` but moves no token, so the count would
+               read zero of the thing the sentence says is unsaved — which reads as
+               "nothing pending" (issue #680). The message names what changed. */
+            changed === 0 ? (
+              <>
+                Preset <b>{presetLabel}</b>, unsaved — a reload drops it
+              </>
+            ) : (
+              <>
+                <b>{changed}</b> token{changed === 1 ? '' : 's'} changed · unsaved, and a reload drops them
+              </>
+            )
           ) : justSaved ? (
             <>Saved · this browser only</>
           ) : (

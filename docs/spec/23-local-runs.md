@@ -354,13 +354,27 @@ into an empty list or a zero, which would draw a reading nothing took.
 
 - **Ports.** `localRun.url` parsed for a host and a port (the scheme's default where none is written),
   and a TCP connect with a one-second timeout: `declared.answering` is that the port is held, and nothing
-  more — not that the application behind it works. Beside it, every TCP port the session's own process
-  **subtree** is listening on, through a `PortLister` (`src/localRun/ports.ts`): PowerShell's
+  more — not that the application behind it works. Beside it, every TCP port **this run's own processes**
+  are listening on, through a `PortLister` (`src/localRun/ports.ts`): PowerShell's
   `Get-NetTCPConnection` and `Win32_Process` on Windows, `ss -ltnp` and `ps` on POSIX with `lsof`
-  behind `ss`, joined by a pure parent-pid walk. Containers never appear — a mapped port belongs to
-  the daemon, not to anything the session started. `listening: null` is the lister not being able to
-  say. The real lister follows the reaper's rule and is wired only beside a real transport: it walks a
-  tree from a pid, and a fake transport mints pids that belong to other people's processes.
+  behind `ss`, joined by `owners`. Containers never appear — a mapped port belongs to the daemon, not
+  to anything the session started. `listening: null` is the lister not being able to say. The real
+  lister follows the reaper's rule and is wired only beside a real transport: it reads the host's
+  process table, and a fake transport mints pids that belong to other people's processes.
+
+  **Which processes are the run's is decided by the checkout, not by the process tree**, and that is
+  the whole correctness of the reading. It was the tree first, and against a real dev environment it
+  reported nothing at all: the instruction launches each service in its own shell, that shell exits,
+  and Windows does not reparent an orphan — so every one of the NXG stack's six services recorded a
+  parent pid that no longer existed, and a walk from the session's pid reached none of them. A command
+  line naming `LocalRun.dir` survives that, and is the discriminator the operator's own runbook already
+  uses to tell one worktree's stack from another's. It is the sharper reading twice over: two checkouts
+  of one project on a laptop hold different ports and each is attributed to its own run, and a run whose
+  session this harness no longer holds — what a restart leaves — still reports its ports. The subtree
+  stays as a backstop for a process whose argv does not happen to name the path; it costs one field of
+  a table already being read. The match is case- and separator-insensitive, and requires a separator
+  after the directory, so a run in `…/local-run` never claims the ports of one in `…/local-run-2`.
+
 - **Freshness.** The run records the commit the checkout stands at (`commit_sha`, written by the start
   and rewritten by a refresh — `ensurePreview` reports it, and `previewCommit` resolves it without
   touching the tree). `behindTip` is `GitObserver.divergence(ref, commit).ahead`: the commits the branch

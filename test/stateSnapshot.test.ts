@@ -299,7 +299,7 @@ test('buildStateSnapshot ships the watch’s readings on a live run, and nothing
   const git = new FakeGitObserver()
     .setDivergence('issue/31', 'abc123', { ahead: 2, behind: 0 })
     .setDivergence('issue/31', 'main', { ahead: 4, behind: 1 });
-  const ports = new FakePortLister().set(777, [5173]);
+  const ports = new FakePortLister().set('/preview', [5173]);
   const system = buildSystem(testConfig(), {
     worktrees: new FakeWorktreeManager(),
     backend: new FakePtyBackend(),

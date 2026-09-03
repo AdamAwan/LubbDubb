@@ -171,10 +171,18 @@
   font-weight: 600;
   letter-spacing: 0.2px;
 }
-/* The tracker link, sized down out of the wordmark. `.cn-ident` is 600 for the
-   name and the link would inherit it, which reads as a second half of the wordmark
-   rather than as somewhere to go — the arrow `ExtLink` stamps is the mark that has
-   to carry that, and it cannot while the type says "title".
+/* The two ways out, at the readings' end of the bar. Their own group so the pair
+   never comes apart when the strip wraps — the cheaper offer is only offered first
+   if it is still beside the other one. */
+.cn-asks {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* The tracker link, sized down out of the bar's own face. It kept this rule when
+   the pair moved off the wordmark: the bar is 13px and the two controls are small
+   print beside the readings, not a third reading.
 
    It is a **wrapper the console owns** rather than a rule on `.ext-ref`, because
    `console.css` styling a shared component's class is the thing this stylesheet is
@@ -336,21 +344,60 @@
   color: var(--cn-amber-ink-hi);
 }
 
+/* The machine-and-account pill: the usage windows and the local run, in one box
+   with a rule between them.
+
+   The fleet gauge's argument, applied to the other two readings that are about the
+   operator's own situation rather than the work. Each half keeps its own button —
+   they open different surfaces — and loses its own border, padding and chevron, so
+   what used to be two chips of chrome around a handful of characters is one.
+
+   `.cn-sub` is (0,2,0) through the pill, which is how it beats the usage tone
+   classes' border and background: inside the pill a tint is the value's, never a
+   second box around it. */
+.cn-pill {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.cn-pill .cn-sub {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  white-space: nowrap;
+}
+.cn-pill .cn-sub:hover b {
+  color: var(--cn-fg);
+}
+.cn-pill-sep {
+  align-self: center;
+  width: 1px;
+  height: 13px;
+  background: var(--cn-line);
+}
+
 /* The Usage chip. Both account windows ride it — either one parks the fleet — with
    the five-hour on the left and the weekly on the right, always: ordering them by
    which is worse would move the number an operator glances at without reading. The
    *weight* carries which one bites instead.
 
+   The chip carries no label and the windows carry no lettering — two figures and a
+   `/`. Position is the label, since the order never changes, and the sentence that
+   names them is the `title`.
+
    The slots are `i`/`em`/`b` rather than `span`, and that is load-bearing:
    `.cn-read span` is a descendant rule, so a wrapping span would be lettered as a
-   second chip label — uppercase, faint, 11px — which is the reading's own name.
+   chip label — uppercase, faint, 11px — which is not what these are.
 
    Tabular figures and fixed slots, so the chip is the same width at 9% as at 93%
    and the four readings beside it never shuffle as an agent reports. */
 .cn-usage-pair {
   display: flex;
   align-items: baseline;
-  gap: 7px;
+  gap: 5px;
   font-style: normal;
   font-variant-numeric: tabular-nums;
 }
@@ -360,11 +407,26 @@
   gap: 3px;
   font-style: normal;
 }
+/* Which window a figure is, set as a superscript: it rides the ascender the `%`
+   leaves empty, so the tag is legible without widening the row or moving the
+   number off the baseline the readings beside it share. Faint, because it is the
+   figure's name and not a second reading. */
 .cn-usage-win em {
-  font: 500 9.5px/1 var(--cn-mono);
+  align-self: flex-start;
+  margin-left: -1px;
+  font: 500 8.5px/1.5 var(--cn-mono);
   font-style: normal;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.2px;
   color: var(--cn-fg-faint);
+}
+/* The divider between the two windows. Thin and faint: it separates, it does not
+   measure. */
+.cn-usage-sep {
+  padding-right: 2px;
+  font: 400 11px/1 var(--cn-mono);
+  font-style: normal;
+  color: var(--cn-fg-faint);
+  opacity: 0.7;
 }
 .cn-usage-win b {
   color: var(--cn-fg-dim);
@@ -392,12 +454,13 @@
 .cn-usage-spent .cn-usage-win.cn-binds b {
   color: var(--cn-red);
 }
-/* The age of a stale reading, drawn beside the figures rather than instead of them:
-   they are still the best answer anyone has, and the age is the caveat on them.
-   Faint and upright — it is not a third measurement. */
-.cn-usage-age {
-  font: 400 10px/1 var(--cn-mono);
-  font-style: normal;
+/* A reading that has gone stale. The figures are still the best answer anyone has,
+   so they stay — they lose their weight instead, which is the one thing the chip
+   was using to say "this is current". The age itself is the `title`'s: it is a
+   caveat, not a third measurement, and drawn it was the only number on the chip
+   that moved every minute. */
+.cn-usage-old .cn-usage-win b,
+.cn-usage-old .cn-usage-win.cn-binds b {
   color: var(--cn-fg-faint);
 }
 
@@ -437,19 +500,127 @@
   color: var(--cn-fg-faint);
 }
 
-/* An icon-only way-in — the Config cog, and so far the only one. Square rather than
-   the label-and-value box, since there is no value to leave room for. */
+/* An icon-only way-in — the bar's menu button, and so far the only one. Square
+   rather than the label-and-value box, since there is no value to leave room for. */
 .cn-read.cn-icon {
   padding: 5px 7px;
-}
-.cn-cog {
-  display: block;
-  width: 14px;
-  height: 14px;
   color: var(--cn-fg-faint);
 }
-.cn-read.cn-icon:hover .cn-cog {
+.cn-read.cn-icon:hover,
+.cn-read.cn-icon.cn-on {
   color: var(--cn-fg);
+}
+.cn-read.cn-icon .cn-ic {
+  display: block;
+}
+
+/* The bar's menu. Anchored to its button rather than the strip so it opens under
+   the glyph at every width the readings wrap to. */
+.cn-menu-wrap {
+  position: relative;
+  display: flex;
+}
+/* The dot the fold buys back: a row inside has a tint, and the button says so
+   without the operator opening it. Drawn on the corner rather than as a border so
+   the button keeps the same footprint whether or not anything is flagged. */
+.cn-menu-flag::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--cn-amber);
+  border: 1px solid var(--cn-bg);
+}
+.cn-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  min-width: 210px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--cn-bg);
+  border: 1px solid var(--cn-line-hi);
+  border-radius: var(--cn-r-sm);
+  box-shadow: 0 6px 20px var(--cn-scrim);
+}
+.cn-menu-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--cn-r-sm);
+  background: none;
+  color: var(--cn-fg-dim);
+  white-space: nowrap;
+  text-align: left;
+}
+.cn-menu-row:hover {
+  background: var(--cn-hover);
+  color: var(--cn-fg);
+}
+.cn-menu-row span {
+  font-size: 12px;
+  color: inherit;
+  letter-spacing: 0.2px;
+}
+/* The value sits at the far edge, so six rows of different word lengths still
+   read as one column of numbers. */
+.cn-menu-row b {
+  margin-left: auto;
+  font: 600 12px/1 var(--cn-mono);
+  color: var(--cn-fg-dim);
+}
+/* A zero, or a state saying nothing — dimmed, never removed. The strip's own rule,
+   carried into the menu: a row that vanished on the days it had nothing to say
+   would be one an operator had to hunt for. */
+.cn-menu-row.cn-quiet b {
+  color: var(--cn-fg-faint);
+}
+.cn-menu-row .cn-chev {
+  margin-left: auto;
+  color: var(--cn-fg-faint);
+  font-size: 11px;
+}
+.cn-menu-row b + .cn-chev {
+  margin-left: 0;
+}
+/* A row's tint is on its value alone — the row is one of six in a list, and a
+   filled red or amber box among them reads as a banner rather than a reading. */
+.cn-menu-row.cn-tone-ill b {
+  color: var(--cn-red-ink);
+}
+.cn-menu-row.cn-tone-ill .cn-ic {
+  color: var(--cn-red);
+}
+.cn-menu-row.cn-tone-watch b {
+  color: var(--cn-amber-ink-hi);
+}
+.cn-menu-row.cn-tone-watch .cn-ic {
+  color: var(--cn-amber);
+}
+/* An unsaved theme edit, marked where the theme's own save bar cannot reach — a dot
+   rather than a count, since what is pending is a fact and Config carries no value
+   at all. It is on the *row* and on the menu's own button, because a mark visible
+   only once the menu is open is the same invisibility one fold further in.
+   → issue #680 */
+.cn-menu-row.cn-pending .cn-ic {
+  color: var(--cn-amber);
+}
+.cn-menu-row.cn-pending span::after {
+  content: '';
+  display: inline-block;
+  margin-left: 6px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--cn-amber);
+  vertical-align: 1px;
 }
 
 /* the nav, in the bar: the page's primary navigation, so it is drawn at the
@@ -2325,6 +2496,22 @@ a.cn-tgl {
 .cn-slot-why {
   justify-content: center;
 }
+/* A card that puts a *mark* in the lamp slot rather than a dot — the agent-on-it
+   chip, at the head of the row where the eye finds it in the same place on every
+   line. Goals in flight and Pull requests both, because they sit one above the
+   other and a glyph that means the same thing on both has to be in the same place
+   on both.
+
+   The width is the card's because the token is the rack's: every other card's lamp
+   really is an 8px dot, and widening it globally would open a gutter on all of them
+   for a mark only these two draw. Wider than the 19px chip on purpose — the column
+   is up against the watch eye on the pull-request rack, and a chip that touches the
+   control beside it reads as part of it. → `prRow`, `goalRow` */
+/* On `.cn-rows` and not on the section: that is where the rail's widths are
+   declared, and a token set on an ancestor of the element that declares it loses. */
+.cn-lamp-mark .cn-rows {
+  --cn-w-lamp: 30px;
+}
 /* A track in a slot of its own is one bar, not a wrapping list. The goal row's
    own rule lets it wrap to keep it off the title beside it; on the rail the
    column already does that, and wrapping turns one reading into a stack of them.
@@ -3103,6 +3290,26 @@ button.cn-grow {
 }
 .cn-viv-bar:hover {
   color: var(--cn-fg-dim);
+  background: var(--cn-hover);
+}
+/* The destination's own name, at the head of the strip and at the weight the nav
+   drew it: the strip took the Pets tab, and a caption and a way somewhere look
+   identical until one of them is written like a control. The counts behind it stay
+   faint, which is what keeps the word the thing the eye lands on. */
+.cn-viv-name {
+  color: var(--cn-fg-dim);
+  font-weight: 700;
+}
+.cn-viv-bar:hover .cn-viv-name,
+.cn-viv-bar:hover .cn-viv-chev {
+  color: var(--cn-accent);
+}
+/* The mark that says the strip goes somewhere. It took the nav's Pets tab, and a
+   caption and a destination look identical without one. It sits after the beats
+   rather than at the far edge, because the beats already claim the auto margin. */
+.cn-viv-chev {
+  font-style: normal;
+  font-size: 12px;
 }
 .cn-viv-eggs {
   color: var(--cn-accent);
@@ -3558,7 +3765,11 @@ button.cn-grow {
 /* An agent on the branch, in the slot the checks would be in. Green, the fleet
    lamp's own colour for a running agent, so the reading is the same one the Fleet
    card gives — and it pulses because that is the difference it is drawn to make:
-   the checks beside it are static history, and this is happening now. */
+   the checks beside it are static history, and this is happening now.
+
+   A glyph and no words. `agent on it` spelled out was one sentence repeated down
+   a whole column, which is how the row where it is news stops standing out; the
+   sentence is the `title` and the `aria-label`. → `AgentOnIt` */
 .cn-onit {
   display: inline-flex;
   align-items: center;
@@ -3571,16 +3782,26 @@ button.cn-grow {
   white-space: nowrap;
   cursor: pointer;
 }
-.cn-onit:hover,
-.cn-onit:focus-visible {
-  text-decoration: underline;
-}
+/* The chip, now that the words are gone: a round green field with the robot in it,
+   which is the same disc the bare dot was — grown until a glyph fits. Round and
+   not square, because the pulse is a ring and a ring off a rectangle reads as a
+   focus outline. */
 .cn-onit-dot {
-  width: 6px;
-  height: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
   border-radius: 50%;
-  background: var(--cn-green);
+  border: 1px solid color-mix(in srgb, var(--cn-green) 40%, transparent);
+  background: color-mix(in srgb, var(--cn-green) 14%, transparent);
+  color: var(--cn-green-ink);
   animation: cn-onit-pulse 2s ease-in-out infinite;
+}
+.cn-onit:hover .cn-onit-dot,
+.cn-onit:focus-visible .cn-onit-dot {
+  border-color: var(--cn-green);
+  color: var(--cn-green);
 }
 @keyframes cn-onit-pulse {
   0%,
