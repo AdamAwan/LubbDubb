@@ -38,7 +38,7 @@ type TicketBody = (vars: Record<string, string>) => string;
  * On the pulse and not in `src/dispatcher/` for the notice desk's reason: it
  * staffs nobody itself and no rule reads what it writes — rule `obstacle-repair`
  * reads the **board**, which is the same board an agent's report writes.
- * → `docs/spec/32-obstacles.md#ownership`
+ * → `docs/spec/27-obstacles.md#ownership`
  */
 export class ObstacleOwnershipDesk {
   /**
@@ -153,10 +153,19 @@ export class ObstacleOwnershipDesk {
     if (!this.deps.store.claimObstacle(row.obstacle.id)) return;
     const sightings = this.deps.store.listObstacleSightings(row.obstacle.id);
     const fields = obstacleTicketFields(row, sightings);
+    // What the model desk wrote from the sightings, where it has read this row.
+    // **Writing the ticket is a job a model may do** — it is prose, read by
+    // whoever reads any other ticket, and a wrong one is a ticket rather than a
+    // silence. It replaces the mechanical composition rather than being appended
+    // to it, so the ticket says one thing once; a deployment with no reader wired
+    // gets the composition and the operator's own `obstacle-ticket-body` template
+    // exactly as before.
+    // → `docs/spec/27-obstacles.md#what-may-be-decided-by-a-model-and-what-may-not`
+    const written = this.deps.store.obstacleReading(row.obstacle.id);
     try {
       const ref = await filing({
-        title: fields.title,
-        body: this.deps.ticketBody ? this.deps.ticketBody(fields.vars) : plainBody(fields.vars),
+        title: written?.title ?? fields.title,
+        body: written?.body ?? (this.deps.ticketBody ? this.deps.ticketBody(fields.vars) : plainBody(fields.vars)),
         // Empty with the watch gate off (`labelPrefix: ''`), and an empty label
         // must never be written — the harness then acts on every open issue and
         // there is nothing to tag. Never a sentence in a prompt either way: a

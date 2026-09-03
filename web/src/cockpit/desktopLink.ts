@@ -94,3 +94,23 @@ export function askPrompt(issueNumber: number): string {
 export function checkPrompt(issueNumber: number, letter: string): string {
   return `/lubbdubb ${issueNumber}:${letter}`;
 }
+
+/**
+ * What the operator's Claude is asked when they hit *Question?* on the top
+ * bar — the skill's name and nothing else, with the cursor after it.
+ *
+ * **No argument, because the bar knows of no goal.** The other four controls are
+ * drawn beside the thing they are about and can address it; this one is drawn
+ * beside the wordmark and is the answer to the question nobody was asking anybody:
+ * *why is this not being done?* The skill routes on the words that follow — a
+ * question with a goal number in it is the goal job, one without is the fleet job
+ * — so the half worth prefilling is the skill, and the half only the operator has
+ * is the question.
+ *
+ * Unsent for {@link askPrompt}'s reason, one step further along: there is not even
+ * a subject here, so a click that sent anything would be a session opened on a
+ * question the operator has not had yet.
+ */
+export function questionPrompt(): string {
+  return '/lubbdubb ';
+}

@@ -19,7 +19,7 @@ import type { Obstacle, ObstacleKey } from '../src/types.js';
  * and a `sighted` row reaches nobody at all. And it is **appended** to the
  * rendered prompt rather than interpolated — an `{obstacles}` placeholder would
  * be dropped in silence by any operator override written before this existed.
- * → `docs/spec/32-obstacles.md#delivery`
+ * → `docs/spec/27-obstacles.md#delivery`
  */
 
 function build(): System {

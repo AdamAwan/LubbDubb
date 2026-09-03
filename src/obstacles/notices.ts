@@ -23,7 +23,7 @@ import { obstaclesForDispatch, type DeliverableObstacle } from './delivery.js';
  *
  * Pure — no I/O, no clock, no store. What is live and what has already been sent
  * arrive as arguments, so `test/obstacleNotices.test.ts` holds the three rules
- * without a fleet. → `docs/spec/32-obstacles.md#delivery`
+ * without a fleet. → `docs/spec/27-obstacles.md#delivery`
  */
 
 /** Why one notice is going out. Recorded, and read by nothing that decides. */

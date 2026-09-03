@@ -1,4 +1,5 @@
 import type { ConfigTab, ConsolePanel, ConsoleTab, InsightsView } from './actions.js';
+import { GOAL_SECTIONS } from '../view/goalPage.js';
 import { DEFAULT_TICKET_VIEW, type TicketView } from './ticketView.js';
 import type {
   InsightsWindow,
@@ -74,86 +75,48 @@ export interface Place {
    */
   reviewIdea: string | null;
   /**
-   * The claim whose provenance is open on the Knowledge page, by fact id.
+   * The obstacle whose sightings are unfolded on the Obstacles page, by id.
    *
-   * A place rather than a `useState` in the panel for the reason every field here
-   * is one: "look at what these two agents actually saw" is a thing an operator
-   * sends someone a link to, and a row held open in component state works right up
+   * A place rather than a `useState` in the page for the reason every field here is
+   * one, and this one twice over: the fold is the only place the matcher can be
+   * seen working or getting it wrong, so "look at what these three agents actually
+   * hit, and why the harness thought they were one thing" is exactly the link an
+   * operator sends someone — and a row held open in component state works right up
    * until the back button steps over it or a reload drops it.
-   * → `docs/spec/27-knowledge.md`
+   * → `docs/spec/27-obstacles.md#in-the-cockpit`
    */
-  fact: string | null;
+  obstacle: string | null;
   /**
-   * How the Knowledge page is drawn, narrowed and ordered.
+   * Whether the Obstacles page's terminal tail is **opened**.
    *
-   * On `Place` rather than in the panel for the reason every field here is one:
-   * "the claims waiting on me, as a table sorted by what the fleet keeps asking
-   * for" is a question somebody sends a link to, and a view held in a `useState`
-   * works right up until the back button steps over it or a reload drops it.
-   *
-   * The narrowing is a **filter and never a move**: a disputed claim stays under
-   * the heading its reach puts it in whatever this is set to, because lifting one
-   * out would draw a demotion that did not happen.
-   * → `docs/spec/27-knowledge.md#in-the-cockpit`
+   * Opened rather than folded away, so the default — the tail shut — is the empty
+   * value and a bare URL — and the trade is paid for the other way: what
+   * a fold could otherwise cost is paid for by the heading stating its own size, so
+   * a tail that names itself and its count can never let *resolved* read as
+   * *deleted*.
    */
-  knowledgeView: 'queue' | 'list' | 'table';
-  knowledgeShow: 'all' | 'waiting' | 'reaching' | 'settled';
-  knowledgeSort: 'reach' | 'claim' | 'scope' | 'observers' | 'disputes' | 'asks' | 'age';
-  knowledgeDesc: boolean;
+  obstacleEnded: boolean;
   /**
-   * The Knowledge tails an operator has **folded away**, by group id.
+   * The goal page's foldable sections the operator has **opened**, by name.
    *
-   * Folded rather than opened, for `collapsed`'s reason exactly: the default is
-   * every heading drawn — a retired claim that vanished would leave no way to tell
-   * a list you have finished with from one that lost rows, and *retired* would read
-   * as *deleted* — so the empty list is the page as it stands and a bare URL.
-   * → `docs/spec/27-knowledge.md#in-the-cockpit`
-   */
-  knowledgeFolded: string[];
-  /**
-   * Which claim the Knowledge **queue** is standing on, by fact id, or null for
-   * the oldest one that needs a ruling.
+   * Two lists rather than one, because a section's default is no longer *shut*: it
+   * is {@link goalSectionsOpen}'s reading of how far the goal has got, and that
+   * reading moves under the operator as the work does. One list could only say
+   * "not the default", so a card folded away while the goal was mid-flight would
+   * spring open the moment it shipped — and a card opened early would slam shut
+   * for the same reason. Two lists say which way the operator went, and both
+   * outrank the default.
    *
-   * On `Place` and not a `useState` for the reason every field here is one, and
-   * this one twice over: a reload has to land on the card the operator was ruling
-   * on rather than back at the top of a queue they have half drained, and *later*
-   * has to be a step the back button can step back through. Null rather than the
-   * first id, so a bare link to the tab is the queue as the harness orders it and
-   * never a claim pinned by whoever last shared the URL.
-   * → `docs/spec/27-knowledge.md#the-queue-is-the-page`
-   */
-  knowledgeQueue: string | null;
-  /**
-   * The Knowledge **queue's** three folds that an operator has opened, by id.
-   *
-   * Open rather than closed, which is the other way round from
-   * {@link knowledgeFolded} and deliberately a second field rather than the same
-   * one read backwards: the empty list has to be the page as it stands, and the
-   * queue's tails start shut where the list's start drawn. One field carrying both
-   * meanings would be a field that means the opposite thing depending on `?kn=`,
-   * which is the drift every parameter here is spelled apart to avoid.
-   *
-   * What the old rule protected is kept by the count on each heading: a fold that
-   * states its own size cannot let *retired* read as *deleted*, and it tells a list
-   * you have finished with from one that lost rows.
-   * → `docs/spec/27-knowledge.md#the-queue-is-the-page`
-   */
-  knowledgeOpen: string[];
-  /**
-   * The goal page's reference sections that are **open**, by name — `ticket` and
-   * `record`.
-   *
-   * Open rather than closed, which is the other way round from `collapsed` and
-   * `ticketColumns`, and for the same underlying rule: the empty list has to be
-   * the page as it stands. Both of these are drawn shut — neither is owed
-   * anything, and the ticket is read once at pickup — so "nothing open" is the
-   * default and a bare URL.
+   * The empty pair is still the page as it stands: a bare URL is every section at
+   * whatever the goal's own progress makes it.
    *
    * A place rather than a `useState` in the page for the reason every field here
    * is one: a disclosure opened and then stepped back out of has to come back, and
    * a link somebody sends to a goal's ticket body has to open on it.
    */
   goalOpen: string[];
+  /** The same, for the sections the operator has **folded away**. See {@link goalOpen}. */
+  goalShut: string[];
   /** Which section of the config page is in front. */
   configTab: ConfigTab;
   /** The config group the page is showing, or null for the first one. */
@@ -249,7 +212,7 @@ export interface Place {
  * question the console answers — see `ConsoleRoot`'s `tabBody`, which sends a
  * stale `?tab=features` to the overview on a deployment with no board.
  */
-const TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'knowledge', 'features', 'insights', 'pets', 'config'];
+const TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'obstacles', 'features', 'insights', 'pets', 'config'];
 
 /**
  * The tabs a goal or a pull request can hang off — the ones that *list* work.
@@ -330,18 +293,12 @@ export const NOWHERE: Place = {
   scratchpad: null,
   reviewPack: null,
   reviewIdea: null,
-  fact: null,
   goalOpen: [],
-  // The queue, which is what a bare link to the tab means: the page an operator
-  // opens several times a day answers *what is on me*, and the nine headings that
-  // answer *what is in this store* are a click away at `?kn=list`.
-  knowledgeView: 'queue',
-  knowledgeShow: 'all',
-  knowledgeSort: 'reach',
-  knowledgeDesc: false,
-  knowledgeFolded: [],
-  knowledgeQueue: null,
-  knowledgeOpen: [],
+  goalShut: [],
+  obstacle: null,
+  // Shut, which is what the tail's own count buys: the page as it stands is the
+  // empty value and a bare URL.
+  obstacleEnded: false,
   configTab: 'values',
   configGroup: null,
   insightsView: 'economics',
@@ -379,57 +336,54 @@ const CONFIG_TABS: readonly ConfigTab[] = ['values', 'raw', 'ci', 'prompts', 'mc
  * alias cannot open a panel, and of the two halves this is the one a saved link to
  * `?tab=work` was overwhelmingly about.
  */
-const TAB_ALIASES: Readonly<Record<string, ConsoleTab>> = { backlog: 'tickets', work: 'tickets' };
+const TAB_ALIASES: Readonly<Record<string, ConsoleTab>> = {
+  backlog: 'tickets',
+  work: 'tickets',
+  // Knowledge was a tab until the claim store behind it went, and every link an
+  // operator saved to it spells `?tab=knowledge`. It lands on the board that
+  // replaced it rather than on the overview: the question the page answered — what
+  // has the fleet run into that it should not pay for twice — is the obstacle
+  // board's, and a saved link parsing back to the overview with nothing saying so
+  // is the stranded link an alias is one entry against.
+  knowledge: 'obstacles',
+};
 
 /**
  * Panels that became destinations, and the tab each is now — the same apology
  * {@link TAB_ALIASES} makes, owed to the other half of the address bar.
  *
- * Knowledge was a panel, so every link an operator saved to a claim spells
- * `?panel=knowledge&fact=…`. `knowledge` is no longer a name `PANELS` knows, so
- * without this the panel parses back to null and the link opens the overview with
- * the fact id still in the URL — the shape of a stranded link, and silent.
+ * Knowledge was a panel before it was a tab, so every link an operator saved to a
+ * claim spells `?panel=knowledge&fact=…`, and `findings` and `lessons` were panels
+ * before that. None is a name `PANELS` knows, so without this each parses back to
+ * null and the link opens the overview — the shape of a stranded link, and silent.
+ *
+ * All three land where {@link TAB_ALIASES} sends `?tab=knowledge`: the obstacle
+ * board, which is the surface that replaced the store they named. The `fact` id
+ * beside them is dropped rather than carried, because there is no longer a row it
+ * could open — a parameter kept for a page that cannot honour it is the stranded
+ * link one layer down.
  *
  * It is consulted only when nothing else named a tab, so `?tab=tickets&panel=knowledge`
  * still lands on tickets: an explicit tab is the operator saying where they meant
  * to be, and an alias must not overrule one.
  */
 const PANEL_ALIASES: Readonly<Record<string, ConsoleTab>> = {
-  knowledge: 'knowledge',
-  // Findings and lessons became sections of the knowledge page rather than panels
-  // of their own, so every link an operator saved to either spells a panel name
-  // `PANELS` no longer knows. Aliased for the reason `knowledge` itself is: without
-  // this the panel parses back to null and the link opens the overview, which is
-  // the shape of a stranded link and is silent.
-  findings: 'knowledge',
-  lessons: 'knowledge',
+  knowledge: 'obstacles',
+  findings: 'obstacles',
+  lessons: 'obstacles',
 };
-const KNOWLEDGE_VIEW: readonly Place['knowledgeView'][] = ['queue', 'list', 'table'];
 /**
- * The queue's three folds, validated on the way in like every other parameter
- * here: a hand-edited `?see=` naming no fold is a section held open that does not
- * exist. Spelled here rather than imported from `knowledgeQuery.ts` because that
- * module names this one — the list is held to `QUEUE_FOLDS` by
- * `test/knowledgeQuery.test.ts`.
- */
-const KNOWLEDGE_QUEUE_FOLDS: readonly string[] = ['cold', 'settled', 'store'];
-const KNOWLEDGE_SHOW: readonly Place['knowledgeShow'][] = ['all', 'waiting', 'reaching', 'settled'];
-const KNOWLEDGE_SORT: readonly Place['knowledgeSort'][] = [
-  'reach',
-  'claim',
-  'scope',
-  'observers',
-  'disputes',
-  'asks',
-  'age',
-];
-/**
- * The goal page's two reference sections, validated like every other parameter
- * here: a name this list does not carry is dropped rather than carried, because a
+ * The goal page's foldable sections, validated like every other parameter here: a
+ * name this list does not carry is dropped rather than carried, because a
  * hand-edited `?open=` is an input an operator can type and an unknown entry would
  * be a section held open that does not exist.
+ *
+ * Read off {@link GOAL_SECTIONS} rather than written again, because the page's
+ * defaults are keyed on the same union: a section the page learned to fold and
+ * this list never learned about is one whose disclosure writes a parameter that is
+ * parsed straight back to nothing, so the fold works until you reload.
  */
-const GOAL_SECTIONS: readonly string[] = ['record', 'ticket'];
+const SECTIONS: readonly string[] = GOAL_SECTIONS;
 const TICKET_WATCH: readonly TicketWatchFilter[] = ['any', 'watched', 'unwatched'];
 const TICKET_TRACKING: readonly TicketTrackingFilter[] = ['any', 'live', 'frozen'];
 const TICKET_GROUP = ['feature', 'flat'] as const;
@@ -512,20 +466,10 @@ export function readPlace(search: string, remembered: TicketView = DEFAULT_TICKE
     hatch: param(query, 'hatch'),
     scratchpad: param(query, 'pad'),
     ...readReviewPack(param(query, 'pack'), param(query, 'idea')),
-    fact: param(query, 'fact'),
-    goalOpen: readStrings(param(query, 'open')).filter((name) => GOAL_SECTIONS.includes(name)),
-    // `kn`, not `view`: the tickets tab and the Insights page already share that
-    // parameter between them, and a third reader of it is a page that opens
-    // showing whatever one of the other two was last set to.
-    knowledgeView: KNOWLEDGE_VIEW.find((v) => v === param(query, 'kn')) ?? 'queue',
-    knowledgeShow: KNOWLEDGE_SHOW.find((s) => s === param(query, 'show')) ?? 'all',
-    ...readKnowledgeSort(param(query, 'sort')),
-    knowledgeFolded: readStrings(param(query, 'fold')),
-    knowledgeQueue: param(query, 'q'),
-    // `see`, not `open`: the goal page's disclosures already own that parameter,
-    // and two places reading one is a page that opens showing whatever the other
-    // one was set to.
-    knowledgeOpen: readStrings(param(query, 'see')).filter((id) => KNOWLEDGE_QUEUE_FOLDS.includes(id)),
+    goalOpen: readStrings(param(query, 'open')).filter((name) => SECTIONS.includes(name)),
+    goalShut: readStrings(param(query, 'shut')).filter((name) => SECTIONS.includes(name)),
+    obstacle: param(query, 'obs'),
+    obstacleEnded: query.has('ended'),
     configTab: CONFIG_TABS.find((t) => t === param(query, 'section')) ?? 'values',
     // `keys`, not `group`: the tickets tab already owns `?group=` (its feature
     // heading mode), and two places reading one parameter is a place that opens
@@ -658,26 +602,6 @@ export function widenedFor(
 }
 
 /**
- * A column and the end of it being read from, out of one parameter — `-asks` is
- * the most-asked-for first.
- *
- * Validated back into the union like every other parameter here: a hand-edited
- * `?sort=` naming no column is not an error worth a screen, it is an order that
- * does not exist, and the answer to that is the order the page opens in.
- */
-function readKnowledgeSort(value: string | null): {
-  knowledgeSort: Place['knowledgeSort'];
-  knowledgeDesc: boolean;
-} {
-  const desc = value !== null && value.startsWith('-');
-  const key = desc ? value.slice(1) : value;
-  const sort = KNOWLEDGE_SORT.find((s) => s === key);
-  return sort === undefined
-    ? { knowledgeSort: 'reach', knowledgeDesc: false }
-    : { knowledgeSort: sort, knowledgeDesc: desc };
-}
-
-/**
  * Which pull request's pack is open and which idea is unfolded in it. The number
  * is validated like every other parameter here — a hand-typed `?pack=abc` opens
  * nothing — and the idea is carried only under a pack, since without one it names
@@ -770,30 +694,13 @@ export function placeQuery(place: Place, remembered: TicketView = DEFAULT_TICKET
     query.set('pack', String(place.reviewPack));
     if (place.reviewIdea !== null) query.set('idea', place.reviewIdea);
   }
-  if (place.fact !== null) query.set('fact', place.fact);
   // `readStrings` already sorted these on the way in, so opening the ticket then
   // the record and the record then the ticket are one place rather than two
   // history entries.
   if (place.goalOpen.length > 0) query.set('open', place.goalOpen.join(','));
-  if (place.knowledgeView !== 'queue') query.set('kn', place.knowledgeView);
-  if (place.knowledgeQueue !== null) query.set('q', place.knowledgeQueue);
-  // Sorted on the way out as on the way in, so opening cold then settled and
-  // settled then cold are one place rather than two history entries.
-  if (place.knowledgeOpen.length > 0) {
-    query.set('see', [...place.knowledgeOpen].sort((a, b) => a.localeCompare(b)).join(','));
-  }
-  if (place.knowledgeShow !== 'all') query.set('show', place.knowledgeShow);
-  // One parameter for the pair, because they are one answer: a column and the end
-  // of it you are reading from. Two would make `?sort=asks&dir=desc` and
-  // `?dir=desc` both spellings of places, one of which sorts nothing.
-  if (place.knowledgeSort !== 'reach' || place.knowledgeDesc) {
-    query.set('sort', `${place.knowledgeDesc ? '-' : ''}${place.knowledgeSort}`);
-  }
-  // Sorted on the way out as on the way in, so folding A then B and B then A are
-  // one place rather than two history entries.
-  if (place.knowledgeFolded.length > 0) {
-    query.set('fold', [...place.knowledgeFolded].sort((a, b) => a.localeCompare(b)).join(','));
-  }
+  if (place.goalShut.length > 0) query.set('shut', place.goalShut.join(','));
+  if (place.obstacle !== null) query.set('obs', place.obstacle);
+  if (place.obstacleEnded) query.set('ended', '1');
   if (place.configTab !== 'values') query.set('section', place.configTab);
   if (place.configGroup !== null) query.set('keys', place.configGroup);
   if (place.insightsView !== 'economics') query.set('view', place.insightsView);

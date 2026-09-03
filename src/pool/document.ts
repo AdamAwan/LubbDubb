@@ -1,11 +1,5 @@
 import { createHash } from 'node:crypto';
-import type {
-  PoolClaimsDocument,
-  PoolClockDocument,
-  PoolClockKind,
-  PoolDigestDocument,
-  PoolDocument,
-} from '../types.js';
+import type { PoolClockDocument, PoolClockKind, PoolDigestDocument, PoolDocument } from '../types.js';
 
 /**
  * The schema version, **on the envelope and never inside the body**.
@@ -98,12 +92,12 @@ export function parsePoolDocument(text: string, expectFleetId?: string): PoolPar
   // build has no grammar for, and reading it would be guessing.
   if (version > POOL_SCHEMA_VERSION) return { ok: false, reason: 'ahead', version, fleetId };
   const kind = raw.kind;
-  // The two clock documents and nothing else. A shared review pack is a third kind
+  // The one clock document and nothing else. A shared review pack is a second kind
   // and lives under `packs/`, which `fetch` never names — it is published for a
   // person to read and is never polled, corroborated or landed
   // (`docs/spec/31-review-packs.md#sharing-a-pack`), so arriving here it is as
   // unreadable as any other stranger's file, and said so per document.
-  if (kind !== 'claims' && kind !== 'digest') {
+  if (kind !== 'digest') {
     return { ok: false, reason: 'malformed', detail: `unknown document kind ${JSON.stringify(kind)}` };
   }
   if (fleetId === null) return { ok: false, reason: 'malformed', detail: 'no "fleetId" in the body' };
@@ -120,28 +114,7 @@ export function parsePoolDocument(text: string, expectFleetId?: string): PoolPar
   if (typeof raw.publishedAt !== 'string') {
     return { ok: false, reason: 'malformed', detail: 'no "publishedAt" in the body' };
   }
-  return kind === 'claims' ? readClaims(raw) : readDigest(raw);
-}
-
-function readClaims(raw: Record<string, unknown>): PoolParse {
-  if (!Array.isArray(raw.claims)) return { ok: false, reason: 'malformed', detail: '"claims" is not a list' };
-  const claims = raw.claims.filter(isRecord).flatMap((entry) => {
-    if (typeof entry.id !== 'string' || typeof entry.claim !== 'string' || typeof entry.vouchedAt !== 'string') {
-      return [];
-    }
-    return [
-      {
-        id: entry.id,
-        claim: entry.claim,
-        where: typeof entry.where === 'string' ? entry.where : null,
-        vouchedAt: entry.vouchedAt,
-        corroborations: countOf(entry.corroborations),
-        disputes: countOf(entry.disputes),
-        evidence: Array.isArray(entry.evidence) ? entry.evidence.filter((w): w is string => typeof w === 'string') : [],
-      },
-    ];
-  });
-  return { ok: true, document: { ...(raw as unknown as PoolClaimsDocument), kind: 'claims', claims } };
+  return readDigest(raw);
 }
 
 function readDigest(raw: Record<string, unknown>): PoolParse {
@@ -218,9 +191,9 @@ export function poolDocumentPath(fleetId: string, kind: PoolClockKind): string {
 
 /**
  * Where one shared review pack lives: **in the fleet's own namespace**, beside
- * `claims.json` and `digest.json`, under a directory of its own because there is
+ * `digest.json`, under a directory of its own because there is
  * one per pull request rather than one per fleet. `fetch` names the two clock
- * documents by name and never walks, so nothing polls these.
+ * document by name and never walks, so nothing polls these.
  * → `docs/spec/31-review-packs.md#sharing-a-pack`
  */
 export function poolPackPath(fleetId: string, prNumber: number): string {

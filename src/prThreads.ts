@@ -46,9 +46,24 @@ function threadHandled(state: PrThreadState): boolean {
  * The comment list every dispatch rule reads, derived from the threads rather
  * than built beside them. One entry per thread, keyed on the same id, in the
  * order the provider gave them.
+ *
+ * **The replies come with it.** They used to stop here: the fold kept the root's
+ * body and the one `handled` bit, and every surface an agent reads — the
+ * `pr-review-comment` prompt, the branch-notify line, `world_read` — is built off
+ * this list. So a thread's follow-ups existed in the world, in the store and in
+ * the cockpit, and reached the one reader that acts on them nowhere. Carrying
+ * them on the fold is what keeps that from being possible again: there is still
+ * one derivation, and it now derives the whole conversation.
  */
 export function threadComments(threads: readonly PrReviewThread[]): PrComment[] {
-  return threads.map((t) => ({ id: t.id, author: t.author, body: t.body, handled: threadHandled(t.state) }));
+  return threads.map((t) => {
+    const comment: PrComment = { id: t.id, author: t.author, body: t.body, handled: threadHandled(t.state) };
+    // Absent rather than empty on a thread nobody answered: "no replies" and
+    // "this provider does not report replies" are the same answer to every reader
+    // downstream, and neither is a conversation to render.
+    if (t.replies.length > 0) comment.replies = t.replies;
+    return comment;
+  });
 }
 
 /**

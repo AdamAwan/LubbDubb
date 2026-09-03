@@ -69,11 +69,13 @@ const MAX_COMMITS = 10;
  * The git root the *harness itself* is running out of, or null when it is not
  * running out of one at all.
  *
- * Not exported: the only thing that should ever ask which directory the harness is
- * installed in is the reader below it, and a second caller would be a second answer.
- * Exported for the Setup reading, which asks a different question of the same
- * answer: whether the project an operator is about to point the fleet at is this
- * checkout. The two repositories coincide only when LubbDubb is dogfooding, and
+ * One answer, three readers, and that is why it is exported rather than kept to
+ * the reader below it: the Setup reading asks whether the project an operator is
+ * about to point the fleet at is this checkout, and the desktop skill tells the
+ * operator's own Claude where LubbDubb's source is when the question turns out to
+ * be about the harness rather than about the work
+ * (`src/validation/desktopSkill.ts`). A second implementation of the walk would be
+ * a second answer. The two repositories coincide only when LubbDubb is dogfooding, and
  * the one time they are the same directory is the one time the cockpit has to say
  * which it means. → `docs/spec/26-setup.md#two-repositories`
  *

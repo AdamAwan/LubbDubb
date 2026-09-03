@@ -25,9 +25,7 @@ import { appraiserOrigin } from '../src/mcp/goalAppraisal.js';
 import { conclusionOrigin } from '../src/issueConclusion.js';
 import { partConclusionOrigin } from '../src/mcp/partOutcome.js';
 import { planOriginIssue } from '../src/plans/planning.js';
-import { factJobRequest } from '../src/knowledge/graduation.js';
 import { MAX_NOTE_LENGTH, normaliseNote } from '../src/mcp/progress.js';
-import { validateClaimText } from '../src/knowledge/knowledge.js';
 import { buildTools } from '../src/mcp/tools.js';
 import { buildApp } from '../src/server/app.js';
 import { escalationTypeForAsk } from '../src/escalation/context.js';
@@ -180,7 +178,7 @@ test('the addendum names every tool an agent has to choose to call', () => {
 });
 
 test('a retired name is no longer a tool, and no longer granted', () => {
-  // The four `raise` replaced are gone: not in the list, not in the registry, and
+  // The five `raise` replaced are gone: not in the list, not in the registry, and
   // not in the grants. What is left of them is the *name*, which is the whole of
   // the withdrawal's safety — see the next two tests.
   for (const name of RETIRED_TOOL_NAMES) {
@@ -191,6 +189,9 @@ test('a retired name is no longer a tool, and no longer granted', () => {
     );
   }
   assert.ok(RETIRED_TOOL_NAMES.includes('report_finding'));
+  // The read side of the claim store, retired with it: there is no search tool now,
+  // and an agent reaching for one from an out-of-date prompt is told so.
+  assert.ok(RETIRED_TOOL_NAMES.includes('knowledge_ask'));
 });
 
 test('a retired name is answered, so an override that still names one is not a dead channel', () => {
@@ -359,7 +360,7 @@ function prPayload(item: Record<string, unknown>) {
     ciFailingOnBasePr: number | null;
     basePr: { number: number } | null;
     health: { blocked: boolean; reasons: string[] };
-    unresolvedComments: { body: string }[];
+    unresolvedComments: { body: string; replies: { id: string; author: string; body: string; ours: boolean }[] }[];
     state: string;
   };
 }
@@ -419,57 +420,6 @@ test('a bare number is refused rather than guessed at, unlike world_read', () =>
   assert.equal(parseItemRef('issue:main').ok, false);
 });
 
-test('a claim queued as a job carries its provenance into the job it becomes', () => {
-  const request = factJobRequest(
-    {
-      id: 'fact_1',
-      claim: 'The retry helper squares the delay instead of doubling it.',
-      scope: 'fleet',
-      lifetime: 'standing',
-      expiresAt: null,
-      reach: 'lookup',
-      supersedes: null,
-      originRef: 'pr:142',
-      ruledAt: null,
-      resolvesWhen: null,
-      aboutRef: 'issue:41',
-      where: 'src/net/backoff.ts:41',
-      createdAt: TAKEN_AT,
-      project: null,
-      keepLocal: false,
-      supersededBy: null,
-      updatedAt: TAKEN_AT,
-    },
-    [
-      {
-        id: 'knc_1',
-        factId: 'fact_1',
-        agentId: 'a1',
-        taskId: 't1',
-        goalRef: 'pr:142',
-        sessionId: null,
-        fleetId: null,
-        words: 'The 5th retry waits ~17 minutes.',
-        createdAt: TAKEN_AT,
-      },
-    ],
-  );
-  assert.match(request.title, /^issue:41 /);
-  // The title is the headline alone — the evidence must not leak into it.
-  assert.doesNotMatch(request.title, /17 minutes/);
-  // But the prompt carries the locator and the observation, so the queued agent
-  // starts where the observing one was standing.
-  assert.match(request.prompt, /src\/net\/backoff\.ts:41/);
-  assert.match(request.prompt, /~17 minutes/);
-  // Where it was first seen — the thing a PR comment could never be trusted to keep
-  // attached to the claim.
-  assert.match(request.prompt, /pr:142/);
-  assert.match(request.prompt, /squares the delay/);
-  // And it is a claim, not an instruction: the queued agent verifies first, which
-  // is what makes queueing a one-voice proposal safe.
-  assert.match(request.prompt, /Verify it before acting on it/);
-});
-
 // -- progress notes, as a pure normalisation --------------------------------
 
 test('a progress note is reduced to the one line the fleet card can render', () => {
@@ -489,11 +439,6 @@ test('an over-long note is kept and trimmed, where a malformed claim is refused'
   assert.equal(long.ok, true);
   assert.equal(long.note.length, MAX_NOTE_LENGTH);
   assert.equal(long.trimmed, true);
-  // The asymmetry is deliberate. A claim is testimony an operator acts on, so a
-  // malformed one must not land at all; a progress note is a status line whose
-  // whole value is being cheap and frequent, and a trimmed one still answers the
-  // question a refusal would have left blank.
-  assert.equal(validateClaimText('').ok, false);
 });
 
 test('an empty note is the one thing refused — there is nothing to store', () => {
@@ -909,7 +854,15 @@ test('world_read answers out of the harness view, with the status envelope on it
           branch: 'issue/12',
           baseBranch: 'main',
           ciStatus: 'failing',
-          unresolvedComments: [{ id: 'c1', author: 'rev', body: 'this leaks a handle', handled: false }],
+          unresolvedComments: [
+            {
+              id: 'c1',
+              author: 'rev',
+              body: 'this leaks a handle',
+              handled: false,
+              replies: [{ id: 'r1', author: 'rev', body: 'the one in the retry path, specifically', ours: false }],
+            },
+          ],
         }),
       ],
       issues: [fakeIssue(12, { labels: ['bug'], linkedPrNumber: 42 })],
@@ -930,6 +883,13 @@ test('world_read answers out of the harness view, with the status envelope on it
   assert.equal(payload.item.ciStatus, 'failing');
   assert.deepEqual(payload.item.health, { blocked: true, reasons: ['CI failing', '1 unresolved comment'] });
   assert.equal(prPayload(payload.item).unresolvedComments[0]?.body, 'this leaks a handle');
+  // The replies come with the thread. The agent is told to compare this list
+  // against the one in its prompt to catch a review that moved while it worked,
+  // and the commonest move is a reply — served roots-only, that re-check could
+  // not see the thing it exists for.
+  assert.deepEqual(prPayload(payload.item).unresolvedComments[0]?.replies, [
+    { id: 'r1', author: 'rev', body: 'the one in the retry path, specifically', ours: false },
+  ]);
   // A pulse-old reading, not a live fetch — and it says which.
   assert.equal(payload.observedAt, TAKEN_AT);
   assert.equal(payload._status.origin, 'pr:42:ci');
@@ -1036,287 +996,6 @@ test('a desk agent with no origin is told to name a ref rather than reading noth
 });
 
 // -- raise, end to end -------------------------------------------------------
-
-/**
- * The one door, end to end: an observation arriving from an agent and coming to
- * rest as a `knowledge_facts` row, bounded and located and matched by the
- * intake's own rules.
- *
- * These were written against `report_finding` while that was still a door of its
- * own. What they assert has never been about the door — it is about what the
- * claim store guarantees whatever knocks on it: attribution that cannot be
- * forged, a repeat that is agreement rather than a second row, a refusal that
- * names the field, and a filing that queues nothing. `report_finding` is retired,
- * so they are asked of `raise`, which is the only thing that can answer them now.
- */
-
-test('a raised claim lands attributed from the credential, and nothing else', async () => {
-  const system = build();
-  const agent = spawnAgent(system, 'pr:142:ci');
-
-  const res = await callTool(system, agent, 'raise', {
-    what: 'The retry helper squares the delay instead of doubling it.',
-    why_not_mine: 'The 5th retry waits ~17 minutes.',
-    ref: 'issue:41',
-  });
-  assert.equal(res.isError, false);
-
-  const [fact, ...rest] = system.store.listFacts();
-  assert.equal(rest.length, 0);
-  assert.equal(fact!.claim, 'The retry helper squares the delay instead of doubling it.');
-  assert.equal(fact!.aboutRef, 'issue:41');
-  // One voice, reaching nobody: filing has never been what puts a sentence in front
-  // of the fleet, and this door does not change that.
-  assert.equal(fact!.reach, 'proposal');
-  assert.equal(fact!.scope, 'fleet');
-
-  // Attribution is the caller's, and it is the *whole* attribution: the tool takes
-  // no agent, task or author argument, so this can only ever describe its caller.
-  const [voice] = system.store.listCorroborations(fact!.id);
-  assert.equal(voice!.agentId, agent.id);
-  assert.equal(voice!.taskId, agent.taskId);
-  // The goal, not the dispatch concern — `corroborationGoal`'s collapse, applied to
-  // this door like every other.
-  assert.equal(voice!.goalRef, 'pr:142');
-  // The evidence is the agent's own account, kept whole. It is what an operator
-  // reads to decide whether the claim should reach anybody, so nothing summarises
-  // it on the way in.
-  assert.match(voice!.words, /~17 minutes/);
-
-  const payload = JSON.parse(res.text) as {
-    recorded: boolean;
-    note: string;
-    fact: { id: string };
-    _status: Record<string, unknown>;
-  };
-  assert.equal(payload.recorded, true);
-  assert.equal(payload.fact.id, fact!.id);
-  // The response says it queues nothing, so an agent doesn't report a bug and then
-  // assume its fix is now scheduled.
-  assert.match(payload.note, /Nothing is queued/);
-  assert.equal(payload._status.origin, 'pr:142:ci');
-  system.store.close();
-});
-
-test('a claim is a write, so it stays structurally attributed — there is no argument to forge one with', async () => {
-  const system = build();
-  const one = spawnAgent(system, 'pr:142:ci');
-  const two = spawnAgent(system, 'issue:12');
-
-  // world_read relaxed the no-cross-origin rule because a read forges nothing.
-  // That reasoning does not carry: this write puts words in an agent's mouth in
-  // front of an operator, and a claim is read as testimony about work its author
-  // actually did. So the schema offers nothing that could name a different agent.
-  const schema = advertisedSchema(system, one, 'raise');
-  assert.deepEqual(Object.keys(schema.properties).sort(), [
-    // `agreeWith` names a *claim*, never an agent or a goal: the observer on the
-    // corroboration it writes is still the credential's, so agreeing on purpose
-    // widens what an agent can say and not who it can say it as.
-    'agreeWith',
-    // The reporter's answer about its **own task** — whether this stops it
-    // finishing. Not an author either: it names nobody, and what it changes is the
-    // directive this agent is answered with.
-    'blocks_me',
-    'contradicts',
-    // The obstacle board's discriminator, and the only classification the intake
-    // asks for: *would a fix make this go away?* Not a shelf, and not an author.
-    'fix_makes_it_go_away',
-    'keys',
-    'ref',
-    'scope',
-    'until',
-    'what',
-    'where',
-    'why_not_mine',
-  ]);
-
-  await callTool(system, one, 'raise', {
-    what: 'Upstream typings are wrong.',
-    why_not_mine: 'The field is on the wire and not in the .d.ts.',
-  });
-  await callTool(system, two, 'raise', {
-    what: 'Same as #41.',
-    why_not_mine: 'Both describe the same rate limiter.',
-    ref: 'issue:41',
-  });
-
-  const goals = system.store.listFacts().map((f) => f.originRef);
-  assert.deepEqual([...goals].sort(), ['issue:12', 'pr:142']);
-  system.store.close();
-});
-
-test('a claim carries where and the evidence through the channel, and a repeat is agreement', async () => {
-  const system = build();
-  const agent = spawnAgent(system, 'pr:142:ci');
-
-  await callTool(system, agent, 'raise', {
-    what: 'The retry helper squares the delay instead of doubling it',
-    where: 'src/net/backoff.ts:41',
-    why_not_mine: 'The 5th retry waits ~17 minutes.\n\n```\ndelay = base ** attempt\n```',
-  });
-  const filed = system.store.listFacts()[0]!;
-  assert.equal(filed.where, 'src/net/backoff.ts:41');
-  assert.match(system.store.listCorroborations(filed.id)[0]!.words, /```/);
-
-  // Same claim, a second observation. One row, two rows of evidence — where the
-  // findings store overwrote the thinner account, the claim store keeps both,
-  // because the words are what an operator reads to decide whether it should have
-  // carried.
-  await callTool(system, agent, 'raise', {
-    what: 'The retry helper squares the delay instead of doubling it',
-    why_not_mine: 'Confirmed: `ingest.flaky.test.ts` times out on the 4th retry.',
-  });
-  assert.equal(system.store.listFacts().length, 1, 'a repeat of the same claim is agreement, not a second row');
-  assert.equal(system.store.listCorroborations(filed.id).length, 2);
-  // And one voice, because it is one agent on one goal — which is what stops an
-  // agent that repeats itself every turn promoting its own claim.
-  assert.equal(system.store.factCounts().get(filed.id)?.corroborations, 1);
-  system.store.close();
-});
-
-test('a claim queues no work by itself; sending it on is the operator’s click', async () => {
-  const system = build();
-  const { app } = await buildApp(system);
-  const agent = spawnAgent(system, 'pr:142:ci');
-
-  await callTool(system, agent, 'raise', {
-    what: 'The retry helper squares the delay instead of doubling it.',
-    why_not_mine: 'Seen on the 5th retry.',
-  });
-  // The deliberate half of the design: an agent that could queue jobs could put
-  // agents on the fleet (rule `manual-job` dispatches a job ahead of every
-  // world-driven rule), so filing one changes nothing about what runs.
-  assert.deepEqual(system.store.listQueuedJobs(), []);
-
-  const fact = system.store.listFacts()[0]!;
-  const queued = await app.inject({
-    method: 'POST',
-    url: `/api/knowledge/facts/${fact.id}/exit`,
-    payload: { exit: 'job' },
-  });
-  assert.equal(queued.statusCode, 200);
-
-  const job = system.store.listJobs()[0]!;
-  assert.match(job.prompt, /squares the delay/);
-  // The claim itself has not moved. A proposal reaches nobody, and an operator
-  // queueing work for one is not a ruling about how far it carries — the graduation
-  // row beside it is what says what they did.
-  assert.equal(system.store.getFact(fact.id)?.reach, 'proposal');
-  assert.equal(system.store.listGraduations()[0]?.jobId, job.id);
-
-  // And only once: a second click can't spend a second slot on one claim.
-  const again = await app.inject({
-    method: 'POST',
-    url: `/api/knowledge/facts/${fact.id}/exit`,
-    payload: { exit: 'job' },
-  });
-  assert.equal(again.statusCode, 409);
-  assert.equal(system.store.listJobs().length, 1);
-  await app.close();
-  system.store.close();
-});
-
-test('a rejected claim stays rejected, and a verbatim repeat is refused by name', async () => {
-  const system = build();
-  const { app } = await buildApp(system);
-  const agent = spawnAgent(system, 'issue:12');
-  const report = (): Promise<{ isError: boolean; text: string }> =>
-    callTool(system, agent, 'raise', {
-      what: 'Same as #41.',
-      why_not_mine: 'Both describe the same rate limiter.',
-      ref: 'issue:41',
-    });
-
-  await report();
-  const fact = system.store.listFacts()[0]!;
-  const rejected = await app.inject({
-    method: 'POST',
-    url: `/api/knowledge/facts/${fact.id}/reach`,
-    payload: { reach: 'rejected' },
-  });
-  assert.equal(rejected.statusCode, 200);
-
-  // An operator has answered this claim, so a later report is not folded silently
-  // into it and it is not refiled either — it is refused, by name, with the way
-  // back. A silent refusal teaches the fleet nothing and it files it again tomorrow.
-  const again = await report();
-  assert.equal(again.isError, true);
-  assert.match(again.text, /rejected this claim/);
-  assert.equal(system.store.listFacts().length, 1);
-  assert.equal(system.store.getFact(fact.id)?.reach, 'rejected');
-
-  // A *different* claim is a different row, not a repeat.
-  await callTool(system, agent, 'raise', {
-    what: 'Also overlaps #7.',
-    why_not_mine: 'Different subsystem entirely.',
-  });
-  assert.equal(system.store.listFacts().length, 2);
-  await app.close();
-  system.store.close();
-});
-
-test('a malformed report is refused with the reason and stores nothing', async () => {
-  const system = build();
-  const agent = spawnAgent(system, 'issue:12');
-
-  // The only cheap moment to fix a malformed claim is the agent's own turn, and an
-  // unreadable row costs an operator every time they open it — so a claim is
-  // refused rather than trimmed, and the refusal names what is wrong with it.
-  // (`report_finding` also refused a multi-line summary outright; `raise` caps the
-  // length instead, and that rule went with the tool rather than moving.)
-  const noEvidence = await callTool(system, agent, 'raise', {
-    what: 'The retry helper squares the delay instead of doubling it.',
-  });
-  assert.equal(noEvidence.isError, true);
-  assert.match(noEvidence.text, /evidence is required/);
-  assert.deepEqual(system.store.listFacts(), []);
-
-  const badRef = await callTool(system, agent, 'raise', {
-    what: 'Same as 41.',
-    why_not_mine: 'both describe the same limiter',
-    ref: '41',
-  });
-  assert.equal(badRef.isError, true);
-  assert.match(badRef.text, /nothing here to tell issue #41 from pull request #41/);
-  assert.deepEqual(system.store.listFacts(), []);
-
-  // ...and the corrected retry lands, in the same turn.
-  const fixed = await callTool(system, agent, 'raise', {
-    what: 'Same as #41.',
-    why_not_mine: 'Both describe the same rate limiter.',
-    ref: 'issue:41',
-  });
-  assert.equal(fixed.isError, false);
-  assert.equal(system.store.listFacts().length, 1);
-  system.store.close();
-});
-
-test('the cockpit is shipped the claim and a link for the item it names', async () => {
-  const system = build();
-  const { app } = await buildApp(system);
-  const agent = spawnAgent(system, 'issue:12');
-  await callTool(system, agent, 'raise', {
-    what: 'Same as #41.',
-    why_not_mine: 'Both describe the same rate limiter.',
-    ref: 'issue:41',
-  });
-
-  const snap = (await (await app.inject({ method: 'GET', url: '/api/state' })).json()) as {
-    knowledge: { aboutRef: string | null; claim: string }[];
-    refUrls: Record<string, string>;
-  };
-  // A claim nobody sees is the PR comment it replaces.
-  assert.deepEqual(
-    snap.knowledge.map((f) => f.aboutRef),
-    ['issue:41'],
-  );
-  // Its ref is resolved directly rather than looked up off the world: #41 is a
-  // *closed* duplicate here, so it is in no snapshot list. (The `fake` provider
-  // resolves nothing, so the key is simply absent rather than wrong.)
-  assert.equal('issue:41' in snap.refUrls, false);
-  await app.close();
-  system.store.close();
-});
 
 test('note_progress lands on the agent row and hands back the status envelope', async () => {
   const system = build();

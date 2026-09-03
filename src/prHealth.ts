@@ -256,8 +256,8 @@ export function awaitingReview(pr: PullRequest, staffed: boolean): boolean {
  * teach the fleet to ignore a check that is genuinely broken.
  *
  * Here rather than beside either of its readers, because it has two — the
- * knowledge notices (`docs/spec/27-knowledge.md`) and the harness's own voice on
- * the obstacle board (`docs/spec/32-obstacles.md#the-harness-is-a-voice`) — and a
+ * the knowledge notices that used to read them and the harness's own voice on
+ * the obstacle board (`docs/spec/27-obstacles.md#the-harness-is-a-voice`) — and a
  * second copy of the reading is a second thing to be wrong about. Edge-triggered
  * over a pair of snapshots, like every other reading either of them takes.
  */

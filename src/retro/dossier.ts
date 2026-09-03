@@ -1,7 +1,6 @@
 import type {
   Decision,
   Escalation,
-  KnowledgeFact,
   IssueAppraisal,
   IssueConclusion,
   IssueDelivery,
@@ -42,7 +41,7 @@ import type {
  * three hundred mechanical rows writes a worse retrospective than one handed the arc.
  *
  * So every list here is capped, **per list rather than against one byte budget**: a
- * goal with three hundred decisions and two claims must not lose the claims.
+ * goal with three hundred decisions and two proposals must not lose the proposals.
  * `priorWork.ts` sets the pattern this follows — a stated maximum, and **what the cap
  * dropped is named**, because a truncated record read as a complete one is how a
  * write-up ends up explaining an absence that was never there.
@@ -62,7 +61,7 @@ export interface RetroDossierInput {
   closedPullRequests: PullRequest[];
   /**
    * Audit rows for this issue's origins, **oldest first** — as are `escalations`,
-   * `proposals` and `claims` below, and for the same reason.
+   * `proposals` below, and for the same reason.
    *
    * Chronological is the contract every capped list here is read under, because the
    * caps keep the *tail*: a list handed over newest-first keeps its oldest rows and
@@ -74,14 +73,6 @@ export interface RetroDossierInput {
   escalations: Escalation[];
   /** Oldest first, per {@link RetroDossierInput.decisions}. */
   proposals: Proposal[];
-  /**
-   * The claims agents raised while working this goal — what they noticed that was
-   * not their own task, and what the run taught. One list because there is one
-   * store: the write-up reads them as one section because an operator does.
-   *
-   * Oldest first, per {@link RetroDossierInput.decisions}.
-   */
-  claims: KnowledgeFact[];
   /** How many agents were spawned under this goal. */
   agentCount: number;
   delivery: IssueDelivery | null;
@@ -118,7 +109,6 @@ const MAX_ROUTINE_DECISIONS = 10;
 /** Sparse lists where each row is a thing a human did or an agent noticed. Newest survive. */
 const MAX_ESCALATIONS = 12;
 const MAX_PROPOSALS = 12;
-const MAX_CLAIMS = 15;
 
 /** What survived a cap, and how much did not. Which end goes is the caller's call. */
 interface Capped<T> {
@@ -295,13 +285,6 @@ export function retroDossier(input: RetroDossierInput): string {
       ? '- Spend was not reported by the runtime (PTY mode reports none) — that is missing detail, not zero.'
       : `- Reported spend: $${input.costUsd.toFixed(2)}.`,
   );
-
-  if (input.claims.length > 0) {
-    lines.push('', '### Raised while working this');
-    const claims = cap(input.claims, MAX_CLAIMS, 'oldest');
-    for (const f of claims.shown) lines.push(`- ${f.aboutRef ? `(${f.aboutRef}) ` : ''}${f.claim}`);
-    lines.push(...droppedNote(claims, 'claims', 'oldest'));
-  }
 
   return lines.join('\n');
 }

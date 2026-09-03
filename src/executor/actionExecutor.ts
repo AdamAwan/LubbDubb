@@ -42,7 +42,7 @@ import { featureRecords, featureReach, renderFeatureDossier } from '../summaries
 import { neighbourSeedPaths, priorWorkBriefing } from '../briefing/priorWork.js';
 import { ciEvidenceNote, type CiEvidenceReader, type CiEvidenceTarget } from '../ci/ciEvidence.js';
 import { goalOriginFor, WITNESS_INSTRUCTION } from '../scratch/pad.js';
-import { dispatchFactScopes, KNOWLEDGE_READ_LIMIT, renderScopedKnowledgeNote } from '../knowledge/block.js';
+import { dispatchFactScopes } from '../knowledge/block.js';
 import { corroborationGoal } from '../knowledge/knowledge.js';
 import { obstaclesForDispatch, renderObstacleNote } from '../obstacles/delivery.js';
 import { retryNote, retryResumeFor, type RetryResume } from './retryResume.js';
@@ -1200,24 +1200,12 @@ export class ActionExecutor {
     // the attachments rather than to the exact origin, and placed first among the
     // appended blocks: it is the only one of them that changes what the work is.
     const instructions = instructionsFor(action.originRef, store, this.deps.instructionTracker);
-    // What the fleet knows about *this* dispatch's own goal and checks (issue #27
-    // phase 3). Appended for the reason every block above it is — a `{knowledge}`
-    // placeholder would be dropped in silence by any operator template override
-    // written before this existed — and here rather than in a rule for the reason
-    // the attachments are: every dispatch passes through this method whatever
-    // composed it, and no rule, desk or gate may read a fact at all.
-    //
-    // The fleet-wide claims are **not** here. They ride the system prompt, where
-    // they are a cached prefix; only what varies per dispatch belongs in a task
-    // prompt, and that is the whole of the split.
-    const knowledge = knowledgeFor(action, store);
     // What the fleet has already run into on the checks and files in front of
-    // this dispatch (`docs/spec/32-obstacles.md`, phase 2). Appended for the
-    // reason every block above it is — a `{obstacles}` placeholder would be
-    // dropped in silence by any operator template override written before this
-    // existed — and beside the knowledge note rather than in a rule, for the
-    // attachments' reason: every dispatch passes through this method whatever
-    // composed it.
+    // this dispatch (`docs/spec/27-obstacles.md`). Appended for the reason every
+    // block above it is — a `{obstacles}` placeholder would be dropped in silence
+    // by any operator template override written before this existed — and here
+    // rather than in a rule, for the attachments' reason: every dispatch passes
+    // through this method whatever composed it.
     //
     // **There is no fleet-wide block here and there never will be.** Everything
     // on the board is keyed, and a keyed thing is delivered to the dispatches it
@@ -1234,7 +1222,6 @@ export class ActionExecutor {
       action.prompt,
       instructions,
       evidence,
-      knowledge,
       obstacles,
       guidance,
       outstanding,
@@ -1364,33 +1351,6 @@ export class ActionExecutor {
 function attachmentsFor(originRef: string | null | undefined, store: Store): string | null {
   if (!originRef) return null;
   return attachmentsNote(store.listAttachments(goalOriginFor(originRef) ?? originRef)) || null;
-}
-
-/**
- * What the knowledge base has to say about this dispatch — or null when it has
- * nothing about this goal or these checks, which is most dispatches.
- *
- * **The scopes are the dispatch's, not the origin's.** `dispatchFactScopes`
- * collapses `pr:412:ci` to the goal `pr:412`, so a claim filed by an agent on the
- * review concern reaches the one fixing CI: they are two origins of one goal, and
- * a fact scoped to a *concern* would be a fact almost nothing ever matched. The
- * check names come off the action, matched exactly for `priorRemedies`' reason.
- *
- * **The store decides what is deliverable.** `askFacts` answers only from `lookup`
- * and `injected` and never with a lapsed row — a proposal one agent made is not
- * evidence, and reading one out here would be auto-promotion arriving through the
- * prompt instead of through the tool.
- */
-function knowledgeFor(
-  action: ValidatedAction & { type: 'dispatch_code_agent' | 'dispatch_desk_agent' },
-  store: Store,
-): string | null {
-  const scopes = dispatchFactScopes(
-    action.originRef ?? null,
-    action.type === 'dispatch_code_agent' ? (action.ciChecks ?? null) : null,
-  );
-  if (scopes.length === 0) return null;
-  return renderScopedKnowledgeNote(store.askFacts({ scopes, limit: KNOWLEDGE_READ_LIMIT })) || null;
 }
 
 /**
@@ -1628,10 +1588,7 @@ function describeAmendmentFor(store: Store, amendment: PlanAmendment): string {
       narrative: planNarrative(parsed.document),
       parts: declared,
     }),
-    warnings: amendmentWarnings(
-      store.listPlanParts(amendment.planId),
-      declared.map((p) => p.slug),
-    ),
+    warnings: amendmentWarnings(store.listPlanParts(amendment.planId), declared),
   });
 }
 

@@ -39,10 +39,7 @@ import { StackLandingDesk } from './stacks/landingDesk.js';
 import { escalationTypeForAsk, recentOutputExcerpt } from './escalation/context.js';
 import { defaultConfigDir, defaultSocketPath, McpBridgeServer } from './mcp/server.js';
 import { McpDesktopServer } from './mcp/desktop.js';
-import { KNOWLEDGE_READ_LIMIT, renderKnowledgeBlock } from './knowledge/block.js';
-import { KnowledgeClusterDesk } from './knowledge/cluster.js';
-import { KnowledgeGraduationDesk } from './knowledge/graduationDesk.js';
-import { KnowledgeNoticeDesk } from './knowledge/noticeDesk.js';
+import { ObstacleModelDesk, type ObstacleReader } from './obstacles/desk.js';
 import { ObstacleEndingsDesk } from './obstacles/endingsDesk.js';
 import { ObstacleNoticeDesk } from './obstacles/noticeDesk.js';
 import { ObstacleOwnershipDesk } from './obstacles/ownershipDesk.js';
@@ -436,6 +433,14 @@ interface BuildOptions {
    */
   poolTransport?: PoolTransport;
   /**
+   * How one obstacle's prose is read by a model (tests inject a scripted reader).
+   * Wiring one **wires the model desk**, which is otherwise off entirely: without
+   * it nothing in this subsystem calls a model at all, and a test asserting what
+   * the desk does with a reading would otherwise depend on a model answering.
+   * → `docs/spec/27-obstacles.md#what-may-be-decided-by-a-model-and-what-may-not`
+   */
+  obstacleReader?: ObstacleReader;
+  /**
    * Override when crash recovery considers this process to have started (tests).
    * Everything older is a previous run's orphan; everything newer is a dispatch
    * this run is in the middle of. Defaults to module load.
@@ -449,10 +454,7 @@ interface BuildOptions {
  * in-memory store, the server builds a real one, and nothing else changes.
  */
 export function buildSystem(config: Config, opts: BuildOptions = {}): System {
-  // The project name goes in at construction because every fact is stamped with it
-  // as it is written, and because the one backfill the pool adds needs a name to
-  // assert rather than guess (`stampFactsWithProject`).
-  const store = new Store(config.dbPath, undefined, config.pool?.project);
+  const store = new Store(config.dbPath);
   // Recorded MCP-call arguments past their retention, cleared at boot as well as
   // on the write path. The write path alone would be a retention promise kept
   // only while the fleet is busy: a harness that goes quiet holds its arguments
@@ -583,28 +585,6 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // task's own resolved model (issue #321), so a builder that accepts it and
   // forgets to forward it type-checks clean and silently drops the flag.
 
-  // What the fleet knows, rendered (issue #27 phase 3). A **function**, read at
-  // each launch rather than a value fixed at wiring time: a claim an operator
-  // injected or demoted now must reach the next launch, not the next restart.
-  // Recomputing an identical string per launch is free; producing a *different*
-  // one would cost the fleet its cached prefix, which is why `renderKnowledgeBlock`
-  // takes nothing per-dispatch.
-  //
-  // The store decides what is *reachable* — `askFacts` answers only from `lookup`
-  // and `injected`, and never with a lapsed row — and the renderer decides which
-  // of those ride the system prompt. Two rules, each stated once.
-  //
-  // This closure is the whole of what knows the knowledge base exists on the
-  // launch path. `agentProtocol.ts` is handed the finished string and never sees
-  // the store — `test/knowledge.test.ts` asserts structurally that it cannot.
-  //
-  // Every scope is read, not just `fleet`: since notices (phase 4) an injected
-  // fact rides this block whatever its scope, and `renderKnowledgeBlock` is what
-  // decides which — narrowing the *query* here would be a second opinion about
-  // delivery, and the one that silently won.
-  const knowledgeBlock = (): string =>
-    renderKnowledgeBlock(store.askFacts({ limit: KNOWLEDGE_READ_LIMIT }), config.knowledgeBlockChars).text;
-
   type ArgsBuilder = (opts: {
     sessionId: string;
     resume: boolean;
@@ -631,7 +611,6 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
           permissionPromptTool,
           model: model ?? undefined,
           effort: effort ?? undefined,
-          knowledgeBlock: knowledgeBlock(),
         })) as ArgsBuilder,
       factory: streamFactory,
       initialInput: (task: Parameters<typeof buildInitialMessage>[0]) => buildInitialMessage(task),
@@ -1199,41 +1178,34 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // under `src/dispatcher/` reads it, and the tab it feeds is a lens.
   const tickets = new TicketSweep({ store, source: connector, errors });
 
-  // What the harness has seen for itself, written down where the fleet reads it
-  // (issue #27 phase 4). Always wired: with nothing to report it writes nothing,
-  // and there is no configuration under which the fleet is better off paying twice
-  // to rediscover a flake the pulse already watched happen.
-  const notices = new KnowledgeNoticeDesk({ store, errors });
-
-  // What became of the documentation work an operator opened for a claim (issue
-  // #27 phase 6). Always wired, like the notices above: with no graduation in
-  // flight it reads nothing, and a deployment without it is one where a landed
-  // pull request never takes its claim out of the fleet's prompts.
-  const graduations = new KnowledgeGraduationDesk({ store, errors });
-
-  // Which proposals look like one claim written twice (issue #27). Always wired,
-  // like the two desks above: it writes suggestions nobody is bound by, on a clock
-  // of its own rather than every pulse, and a deployment without it is one where
-  // two agents who hit one wall in their own words each file a singleton nothing
-  // will ever carry.
-  const clusters = new KnowledgeClusterDesk({ store, errors });
-
-  // The harness's own voice on the obstacle board (`docs/spec/32-obstacles.md`,
+  // The harness's own voice on the obstacle board (`docs/spec/27-obstacles.md`,
   // phase 5). Always wired, like the desks below: with nothing having changed
   // between two readings it writes nothing, and a deployment without it is one
   // where every row waits for a second *agent* to hit what the world model was
   // already watching — which a fleet running four agents does not have.
   const obstacleVoice = new ObstacleVoiceDesk({ store, errors });
 
+  // What a model may decide about a row nobody has read since a voice last landed
+  // words on it (`docs/spec/27-obstacles.md`, phase 6). Wired **only where a
+  // reader is injected**, unlike the desks around it: with none, every model call
+  // this subsystem could make is one it does not make, extraction stays the
+  // mechanical reading in `src/obstacles/keys.ts` and the ticket stays the
+  // mechanical composition — which is exactly what the harness did before this
+  // desk existed. The terms the ownership desk takes its tracker on, and the
+  // endings desk its prompt book.
+  const obstacleDesk = opts.obstacleReader
+    ? new ObstacleModelDesk({ store, reader: opts.obstacleReader, repoRoot: config.repoRoot, errors })
+    : undefined;
+
   // What has changed on the obstacle board since a running agent was dispatched
-  // (`docs/spec/32-obstacles.md`, phase 2). Always wired, like the three desks
+  // (`docs/spec/27-obstacles.md`, phase 2). Always wired, like the three desks
   // above: with an empty board it sends nothing, and a deployment without it is
   // one where an agent goes on working around a thing the fleet has since taken
   // ownership of, or spends its session on one two other goals have corroborated.
   const obstacleNotices = new ObstacleNoticeDesk({ store, fleet: agents, errors });
 
   // Who owns each standing obstacle, and which goals the board has let back out
-  // (`docs/spec/32-obstacles.md`, phase 3). Always wired, like the desks above:
+  // (`docs/spec/27-obstacles.md`, phase 3). Always wired, like the desks above:
   // with an empty board it does nothing, and a deployment without it is one where
   // an obstacle two goals corroborated sits on the board for ever with nobody on
   // it — which is the state the fleet was in before any of this existed.
@@ -1251,7 +1223,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     errors,
   });
 
-  // How each of them ends (`docs/spec/32-obstacles.md`, phase 4). Always wired,
+  // How each of them ends (`docs/spec/27-obstacles.md`, phase 4). Always wired,
   // like the two desks above: without it a row stands where its sightings put it
   // for ever, and a board that only grows is read past — which is what the store
   // this replaces died of.
@@ -1365,10 +1337,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     escalations,
     // Resumes the agents parked on a usage limit whose window has turned over.
     fleet: agents,
-    notices,
-    graduations,
-    clusters,
     obstacleVoice,
+    obstacleDesk,
     obstacleNotices,
     obstacleOwnership,
     obstacleEndings,

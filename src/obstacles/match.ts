@@ -12,7 +12,7 @@ import type { GatedKey } from './keys.js';
  *
  * Pure — no I/O, no clock, no store. The index arrives as a lookup function, which
  * is what lets `test/obstacleMatch.test.ts` hold the whole of the rule without a
- * database. → `docs/spec/32-obstacles.md#identity-is-a-key`
+ * database. → `docs/spec/27-obstacles.md#identity-is-a-key`
  */
 
 /** A row as the near-match pass reads it. */

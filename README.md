@@ -98,7 +98,7 @@ Grouped by where in the loop it sits. Each line links to the spec that owns it.
 | **Environments**         | Off by default. The commit each PR landed as, and whether each environment has it yet — asked with your own command, three-valued. → [24][s24]     |
 | **Arrivals**             | Arriving somewhere can be what opens what a delivered goal owes you, and what puts a line on the ticket. Both opt-in, per environment. → [24][s24] |
 | **Post-deploy watch**    | A goal declares what a running system must show; an arrival opens a window, and your telemetry is asked on a schedule. No model in it. → [29][s29] |
-| **Knowledge**            | One claim store for everything the fleet learns, four distances a fact can carry, and one block of it in every agent's system prompt. → [27][s27]  |
+| **Obstacles**            | What is in the fleet's way, keyed rather than matched on prose: two independent voices, an owner, and an exit that is never a person. → [27][s27]  |
 | **The cross-fleet pool** | The distance above `fleet`: one namespace per fleet in a shared repository, with a corroboration model and a digest. → [28][s28]                   |
 
 ### Watching the harness itself
@@ -390,6 +390,6 @@ security workflows, and the hosted GitHub Pages demo build.
 [s24]: docs/spec/24-environments.md
 [s25]: docs/spec/25-supply.md
 [s26]: docs/spec/26-setup.md
-[s27]: docs/spec/27-knowledge.md
+[s27]: docs/spec/27-obstacles.md
 [s28]: docs/spec/28-cross-fleet-pool.md
 [s29]: docs/spec/29-post-deploy-watch.md

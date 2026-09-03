@@ -1,11 +1,6 @@
 import type {
-  ContradictionRuling,
-  FactExit,
-  FactRuling,
   GoalWatchDeclaration,
-  GraduationOutcome,
   FilingTargetProbe,
-  KnowledgeFactPayload,
   InsightsWindow,
   IssueFiled,
   RecoveryVerdict,
@@ -79,7 +74,23 @@ export type ConsolePanel =
  * rather than a number glanced at, and a panel drew over the rail the operator came
  * from. `readPlace` aliases `?panel=knowledge` onto the tab for `work`'s reason.
  */
-export type ConsoleTab = 'overview' | 'tickets' | 'knowledge' | 'features' | 'insights' | 'pets' | 'config';
+export type ConsoleTab =
+  | 'overview'
+  | 'tickets'
+  /**
+   * The obstacle board — in the nav, in the slot Knowledge held.
+   *
+   * The operator lifted the URL-only rule the board shipped under, and it takes
+   * that slot rather than a fifth one: Knowledge is the tab it replaces, and two
+   * tabs answering one question is how an operator ends up ruling on the same
+   * thing twice. It carries **no badge** — nothing on the board is waiting on a
+   * decision. → `docs/spec/27-obstacles.md#in-the-cockpit`
+   */
+  | 'obstacles'
+  | 'features'
+  | 'insights'
+  | 'pets'
+  | 'config';
 
 /**
  * Which reading the Insights page is showing.
@@ -437,113 +448,39 @@ export interface CockpitActions {
   blendPet(id: string): Promise<void>;
 
   /**
-   * Narrow, re-order or re-draw the Knowledge page.
+   * Move about the obstacle board: which row's sightings are unfolded, and whether
+   * the terminal tail is open.
    *
-   * One method taking a partial rather than five, for `setTicketQuery`'s reason:
-   * they are one place, and switching to the table while a filter is on is a
-   * single move that must not push two history entries. It is on the seam at all —
-   * rather than a `useState` in the panel — because "the claims waiting on me" is
-   * a link an operator sends someone.
+   * One method taking a partial rather than two, for `setTicketQuery`'s reason:
+   * they are one place, and opening a row inside the tail is a single move that
+   * must not push two history entries. It is on the seam at all — rather than a
+   * `useState` in the page — because the fold is the only place the matcher can be
+   * seen working or getting it wrong, and that is a link an operator sends someone.
    */
-  setKnowledgeQuery(
-    next: Partial<
-      Pick<
-        Place,
-        | 'knowledgeView'
-        | 'knowledgeShow'
-        | 'knowledgeSort'
-        | 'knowledgeDesc'
-        | 'knowledgeFolded'
-        | 'knowledgeQueue'
-        | 'knowledgeOpen'
-      >
-    >,
-  ): void;
+  setObstacleQuery(next: Partial<Pick<Place, 'obstacle' | 'obstacleEnded'>>): void;
+
   /**
-   * Where a claim stands, on the operator's say-so (#27 phase 2) — promote,
-   * demote, reject, or keep it exactly where it is.
+   * The four controls on the obstacle board, and the whole of what an operator can
+   * say about a row that no reading can.
    *
-   * Nothing here files a claim on an *agent's* behalf: agents raise through the
-   * tool channel, and a page that could file one for them would be filing a claim
-   * with no observation behind it. Naming the reach a fact
-   * already has is a ruling rather than a no-op — it is how an operator says a
-   * corroborated claim belongs where it is, and the only way the page's "Needs
-   * you" section ever empties.
+   * **None of them is on any path.** The board runs itself — a row is filed by an
+   * agent, carried to `standing` by a second independent voice, owned by the pulse
+   * and ended by one of the four endings — and nothing here is a step in any of
+   * that. That is the invariant the subsystem is arranged around: *every state has
+   * an exit that is not you*, so a control the harness waited on would rebuild the
+   * queue only a human empties that killed the store this one replaces.
+   * → `docs/spec/27-obstacles.md#every-state-has-an-exit-that-is-not-you`
    */
-  setFactReach(id: string, reach: FactRuling): Promise<void>;
+  muteObstacle(id: string, muted: boolean): Promise<void>;
+  /** Name the ticket you are already using. Never an agent, and never a lock. */
+  ownObstacle(id: string, ownerRef: string): Promise<void>;
   /**
-   * Fold a suggested cluster into the claim the operator kept.
-   *
-   * **A ruling, and the only one a suggestion ever produces.** The pass writes
-   * pairs and the page draws a cluster; nothing merges itself, because a wrong
-   * merge hides one agent's report inside another's and a merge nobody approved is
-   * a wrong merge nobody can see. It rides `superseded` — the members are not
-   * deleted and not retired, since four phrasings of one wall are the evidence it
-   * was hit four times. → `docs/spec/27-knowledge.md#one-claim-written-two-ways`
+   * This is over and no reading is going to say so. **Retiring is not rejecting**:
+   * the row keeps what it said, and a matching report reopens it.
    */
-  mergeFacts(id: string, members: string[]): Promise<void>;
-  /**
-   * Withhold one claim from the cross-fleet pool, or put it back.
-   *
-   * **Not a ruling**: it changes nothing about who this fleet tells, only about who
-   * else may read it — so the claim stays exactly where the operator left it and
-   * `ruledAt` is untouched. It writes the store and never publishes; the desk's next
-   * pulse re-derives the document, which is a whole replace, so a withheld claim is
-   * simply not in it and there is nothing to retract.
-   * → `docs/spec/28-cross-fleet-pool.md#data-classification`
-   */
-  setFactKeepLocal(id: string, keepLocal: boolean): Promise<void>;
-  /**
-   * Write a claim down. The operator's own arm of the store, and the one write on
-   * this page that is not a ruling.
-   *
-   * It lands a **proposal**, like everything else: the surface is one gate, not one
-   * gate and a bypass for whoever happens to be at the keyboard. `originRef` is the
-   * goal it was learned on, or null when it was not learned on one — the provenance
-   * a reader dates the claim by, and the reason it is a parameter rather than
-   * something inferred from wherever the page was opened.
-   */
-  raiseFact(claim: string, originRef: string | null): Promise<void>;
-  /**
-   * Send a claim on: a documentation pull request, a job that works it now, or a
-   * ticket that files it for later.
-   *
-   * **One call, and the reach does not move.** The claim is still true and still
-   * delivered while the work is in flight — a page that took it out of every prompt
-   * at the click would stop the fleet being told something nobody has acted on and
-   * nobody can yet read. It reaches `graduated` when the exit is actually taken,
-   * which the harness sweeps for.
-   */
-  exitFact(id: string, exit: FactExit): Promise<void>;
-  /**
-   * Say what became of a graduation the harness will not guess about — a pull
-   * request that left the world without ever being seen closed.
-   *
-   * The one place `graduated` is an operator's own word rather than a reading, and
-   * it is available only where a pull request was actually opened.
-   */
-  settleGraduation(id: string, outcome: GraduationOutcome): Promise<void>;
-  /**
-   * One claim with the observations behind it, in the observers' own words.
-   *
-   * A read, so it refetches nothing — and its own fetch rather than a field on the
-   * snapshot for the transcript tail's reason: the evidence behind a claim runs to
-   * thousands of characters, and a polled snapshot should not carry it for every
-   * row nobody has opened.
-   */
-  factDetail(id: string): Promise<KnowledgeFactPayload>;
-  /**
-   * Answer one contradiction (#27 phase 5): adopt the agent's amendment and
-   * supersede the claim, narrow the claim yourself, or say the dispute is wrong.
-   *
-   * One call and not two, because the first of the three is one act — an amendment
-   * promoted without the claim it replaces being superseded leaves the two of them
-   * in the same block saying different things, and nothing would be red. Only the
-   * last leaves the fact where it was.
-   */
-  resolveContradiction(id: string, ruling: ContradictionRuling): Promise<void>;
-  /** Open one fact's provenance, or close it. A place, so a link to it lands on it. */
-  viewFact(id: string | null): void;
+  retireObstacle(id: string): Promise<void>;
+  /** Write a note into the repository now, rather than when the endings desk reaches it. */
+  writeDownObstacle(id: string): Promise<void>;
 
   /** `note` is required by the route on a close-out whose goal's validation is flagged. */
   completeHumanTask(id: string, note?: string): Promise<void>;
@@ -609,6 +546,17 @@ export interface CockpitActions {
    * inherits the goal's pin again.
    */
   setPartProfile(planId: string, slug: string, profile: string | null): Promise<void>;
+  /**
+   * Restart one plan part: close the pull request it has open, drop its branch,
+   * and hand the part back to the fleet against the declaration the plan carries
+   * now — the operator's answer to an amendment that rewrote a part somebody is
+   * already halfway through building.
+   *
+   * On the seam for every mutation's reason: `console/` may not import `api.js`.
+   * **Never automatic** — applying an amendment reaches nothing here; closing a
+   * reviewable pull request is a person's act.
+   */
+  restartPart(planId: string, slug: string): Promise<void>;
   setIssueConclusion(issueNumber: number, verdict: 'done' | 'more_work' | null): Promise<void>;
   /**
    * Override the goal appraisal's verdict (#158). On the seam rather than in the

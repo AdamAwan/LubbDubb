@@ -296,7 +296,7 @@ interface HarnessDeps {
    *
    * It writes `obstacle_notices` rows and types into live sessions. It staffs
    * nobody, decides no dispatch, and no rule reads what it writes.
-   * → `docs/spec/32-obstacles.md#delivery`
+   * → `docs/spec/27-obstacles.md#delivery`
    */
   obstacleNotices?: { run(): void };
   /**
@@ -308,9 +308,24 @@ interface HarnessDeps {
    *
    * It writes `obstacles`, `obstacle_keys` and `obstacle_sightings` rows. It
    * staffs nobody, decides no dispatch, and no rule reads what it writes.
-   * → `docs/spec/32-obstacles.md#the-harness-is-a-voice`
+   * → `docs/spec/27-obstacles.md#the-harness-is-a-voice`
    */
   obstacleVoice?: { run(prev: WorldSnapshot | null, next: WorldSnapshot): void };
+  /**
+   * Reads what a model may decide about the rows nobody has read since somebody
+   * last said something about one: the keys in their prose, a merge the keys
+   * missed, what each row is *for*, and the ticket written from the sightings.
+   * Absent = nothing calls a model at all (tests, and every deployment with no
+   * reader wired), and then extraction stays the mechanical reading and the ticket
+   * the mechanical composition.
+   *
+   * It writes `obstacle_keys`, `obstacle_suggestions` and `obstacle_readings` rows
+   * and the one column that says which door a row is at. It moves no state, takes
+   * no owner and resolves nothing — it is the harness's secretary and deliberately
+   * not its judge.
+   * → `docs/spec/27-obstacles.md#what-may-be-decided-by-a-model-and-what-may-not`
+   */
+  obstacleDesk?: { run(): Promise<void> };
   /**
    * Gives a standing obstacle an owner — a ticket, or the repair dispatch rule
    * `obstacle-repair` has already made — and lets a goal parked behind one back
@@ -321,7 +336,7 @@ interface HarnessDeps {
    * It writes `obstacles` and `obstacle_blocks` rows and files tracker items. It
    * staffs nobody: the repair dispatch is a rule's, proposed through the candidate
    * list and subject to the headroom cut, and this desk only records that it
-   * happened. → `docs/spec/32-obstacles.md#ownership`
+   * happened. → `docs/spec/27-obstacles.md#ownership`
    */
   obstacleOwnership?: { run(world: WorldSnapshot): Promise<void> };
   /**
@@ -333,7 +348,7 @@ interface HarnessDeps {
    * It writes `obstacles`, `obstacle_conditions` and `obstacle_writeups` rows, and
    * queues one documentation job at a time for a standing note. It staffs nobody
    * else and no rule reads what it writes.
-   * → `docs/spec/32-obstacles.md#how-an-obstacle-ends`
+   * → `docs/spec/27-obstacles.md#how-an-obstacle-ends`
    */
   obstacleEndings?: { run(world: WorldSnapshot): void };
   /**
@@ -778,6 +793,18 @@ export class Harness extends EventEmitter {
       // ownership desk may take up, and one the endings desk promises to watch a
       // condition for — all on the pulse that saw it rather than the next.
       if (readWorld) this.deps.obstacleVoice?.run(previousWorld, world);
+      // What a model may decide about the rows the board has not had read since a
+      // voice last landed words on one — the keys in their prose, a merge the keys
+      // missed, what each is for, and the ticket written from the sightings.
+      //
+      // **Not awaited**, alone among the desks here, and that is the whole of what
+      // its position in the pulse means. A model round trip is not a provider's:
+      // nothing below waits on a reading, and a pulse that blocked on one would
+      // hold every dispatch behind a call this subsystem makes for its own
+      // convenience. What it writes is read by the pulse that finds it written,
+      // which for a suggestion nobody is bound by and a ticket nobody has filed yet
+      // is a pulse either way. It runs one pass at a time and never rejects.
+      void this.deps.obstacleDesk?.run();
       // What has changed about an obstacle since the agents now running were
       // dispatched — their own reports being taken up or settled, and what a
       // second voice has since corroborated on the checks they are working.
@@ -1360,6 +1387,14 @@ export class Harness extends EventEmitter {
     }
     this.prevWorld = world;
     store.setWorldBaseline(world);
+    // The window's rows, kept past the window. `closedPullRequests` carries a pull
+    // request for `closedPrWindowMs` and then forgets it, and a goal's page drew its
+    // closed rows off that list alone — so a goal delivered last month said no pull
+    // request had ever named it. Written here rather than on the merge itself for
+    // the reason `LandingDesk` sweeps: a hook on the transition loses every close
+    // that happened while the harness was down, while the window re-reports one for
+    // hours. → `docs/spec/14-persistence.md#the-closed-pull-request-archive`
+    store.archiveClosedPrs(world.closedPullRequests ?? []);
   }
 
   // Typed emit/on overrides for a nicer call site (repo convention).

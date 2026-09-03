@@ -4,7 +4,9 @@ import type { CockpitView } from '../view/viewModel.js';
 import type { PrPageView } from '../view/prPage.js';
 import type { OpenPullRequest, PrReviewThread, PrThreadMessage, PrThreadState, PullRequest } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
+import { CONTROL_CLASS } from '../components/controls.js';
 import { ReviewPackControl } from '../components/ReviewPackControl.js';
+import { ReviewDetail, ReviewMark } from '../components/ReviewMark.js';
 import { PrLink, Ref } from '../components/refs.js';
 import { renderMarkdown } from '../components/markdown.js';
 import { relTime } from '../components/util.js';
@@ -38,6 +40,7 @@ export function PrPage({
       <div className="cn-gcols">
         <Threads page={page} view={view} actions={actions} />
         <div className="cn-gcol">
+          <Review page={page} view={view} />
           <Checks pr={page.pr} />
           <Merge page={page} />
           <Work page={page} view={view} actions={actions} />
@@ -76,6 +79,9 @@ function Masthead({
       <div className="cn-prchips">
         <i className={`cn-chip ${STATE_TONE[state] ?? ''}`}>{state}</i>
         <CiLadder pr={pr} />
+        {/* The same mark the row carries, from the same record — the card in the
+            rail is where its findings are read. */}
+        <ReviewMark review={pr.review} now={view.now} />
         {pr.approved === true && <i className="cn-chip cn-ok">approved</i>}
         {pr.mergeableState !== undefined && pr.mergeableState !== 'unknown' && (
           <i className={`cn-chip ${pr.mergeableState === 'clean' ? 'cn-ok' : 'cn-warn'}`}>{pr.mergeableState}</i>
@@ -101,7 +107,7 @@ function Masthead({
           is not reaching. A closed pull request cannot be asked about; the pack it
           already has stays readable. */}
       <div className="cn-prpack">
-        <PrLink number={pr.number} className="cn-tgl">
+        <PrLink number={pr.number} className={CONTROL_CLASS}>
           Open pull request ↗
         </PrLink>
         <ReviewPackControl
@@ -220,7 +226,7 @@ function Thread({
         )}
         {canReopen && (
           <AsyncButton
-            className="cn-tgl"
+            className={CONTROL_CLASS}
             onClick={() => actions.reopenThread(page.pr.number, thread.id, !reopened)}
             title={
               reopened
@@ -314,6 +320,30 @@ function Checks({ pr }: { pr: PullRequest }): JSX.Element {
  * nothing when it can. A card that said "healthy" on every green pull request
  * would be furniture; the masthead's chips already say the state.
  */
+/**
+ * What the fleet's reviewer said, in full — the mode, why the triage chose it,
+ * and what it found.
+ *
+ * Nothing at all where the deployment has no fleet review, which is the same
+ * silence the mark keeps: a card headed "Fleet review" saying nothing was
+ * reviewed is a claim about a feature nobody turned on. The console owns the card
+ * around it and the shared component owns what is in it, so the two surfaces that
+ * draw this record cannot come to word it differently.
+ */
+function Review({ page, view }: { page: PrPageView; view: CockpitView }): JSX.Element | null {
+  const review = page.pr.review;
+  if (review === undefined) return null;
+  return (
+    <section className="cn-card">
+      <h3>
+        Fleet review
+        {review.mode !== null && <i className="cn-n">{review.mode}</i>}
+      </h3>
+      <ReviewDetail review={review} now={view.now} />
+    </section>
+  );
+}
+
 function Merge({ page }: { page: PrPageView }): JSX.Element | null {
   const reasons = page.pr.health?.reasons ?? [];
   if (reasons.length === 0) return null;
@@ -359,7 +389,7 @@ function Work({ page, view, actions }: { page: PrPageView; view: CockpitView; ac
                 </span>
               </span>
               {task.agentId !== null && (
-                <button type="button" className="cn-tgl" onClick={() => actions.select(task.agentId)}>
+                <button type="button" className={CONTROL_CLASS} onClick={() => actions.select(task.agentId)}>
                   Read
                 </button>
               )}

@@ -9,10 +9,10 @@ import type { NearCandidate } from './match.js';
  *
  * One tool, and the discriminator is a single boolean an agent can always answer —
  * *would a fix make this go away?* Not two tools: an agent choosing a shelf is an
- * agent choosing wrongly, which `docs/spec/27-knowledge.md` established at the cost
+ * agent choosing wrongly, which the claim store this replaced established at the cost
  * of finding out.
  *
- * Pure — no I/O, no clock, no store. → `docs/spec/32-obstacles.md#the-intake`
+ * Pure — no I/O, no clock, no store. → `docs/spec/27-obstacles.md#the-intake`
  */
 
 /** How many prior sightings a standing row hands back. */
@@ -81,7 +81,7 @@ export function validateRaisedObstacle(
       what: framed.claim,
       words: what,
       whyNotMine,
-      keys: parseKeys(args.keys),
+      keys: parseKeyCandidates(args.keys),
       untilHours: typeof until === 'number' ? until : null,
       // Not validated and not second-guessed: whether this stops *this* task is a
       // fact about the task, which the harness has no reading of. Anything but an
@@ -91,8 +91,16 @@ export function validateRaisedObstacle(
   };
 }
 
-/** `["check:test (windows)", "path/src/x.ts"]` → candidates, dropping what is not one. */
-function parseKeys(raw: unknown): KeyCandidate[] {
+/**
+ * `["check:test (windows)", "path/src/x.ts"]` → candidates, dropping what is not
+ * one.
+ *
+ * Shared with the model desk rather than copied, because **every gate a model's
+ * output passes is the same gate an agent's report passes**: a second reader of
+ * the same spelling is a second thing to be wrong about, and the one that drifted
+ * would be the one nothing tests.
+ */
+export function parseKeyCandidates(raw: unknown): KeyCandidate[] {
   if (!Array.isArray(raw)) return [];
   const out: KeyCandidate[] = [];
   for (const entry of raw) {
@@ -139,7 +147,7 @@ function directiveFor(state: ObstacleState, ownerRef: string | null, blocksMe: b
   // telling it to carry on makes it spin. It is the one thing here the harness
   // cannot judge for itself — whether this stops *this* task is a fact about the
   // task — so the agent says it, exactly as it says whether a fix would end the
-  // thing. → `docs/spec/32-obstacles.md#blocked-is-an-answer`
+  // thing. → `docs/spec/27-obstacles.md#blocked-is-an-answer`
   if (blocksMe) {
     return (
       'You cannot finish. Conclude `blocked`, naming this obstacle by the id in this answer. Your goal ' +

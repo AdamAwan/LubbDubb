@@ -197,164 +197,6 @@ CREATE TABLE IF NOT EXISTS agent_files (
   UNIQUE (agent_id, path)
 );
 
--- What the fleet knows about working *this repository* (docs/spec/27-knowledge.md).
--- One row per claim, carrying three independent axes that are the thing most
--- easily folded into one enum: who it is relevant to (scope), how it ends
--- (lifetime), and how far it carries (reach). "A flaky check" and "fleet-wide" are
--- not two values of one field — the first says how long a fact lives, the second
--- who it applies to.
---
--- Nothing in the dispatcher reads this table: no rule, desk or gate consults a
--- fact, exactly as none consults a remedy. It feeds prompts and a panel.
---
--- This is the one claim store. What an agent noticed outside its own task and what
--- working a goal taught were the findings and lessons tables; both are rows here,
--- carried across once by the fold in Store's constructor and never written again.
-CREATE TABLE IF NOT EXISTS knowledge_facts (
-  id         TEXT PRIMARY KEY,
-  claim      TEXT NOT NULL,        -- the claim itself, markdown
-  scope      TEXT NOT NULL,        -- fleet | check:<name> | goal:<ref>
-  lifetime   TEXT NOT NULL,        -- standing | expiring
-  expires_at TEXT,                 -- when an expiring fact lapses; null for a standing one
-  reach      TEXT NOT NULL,        -- proposal | lookup | injected | graduated | superseded | retired | rejected
-  supersedes TEXT,                 -- the fact this amends; exempts it from that fact's rejection bar
-  superseded_by TEXT,              -- which claim stands in this one's place, once one does; null while none is
-  origin_ref TEXT,                 -- the goal it was first observed on, or null for an operator's own
-  ruled_at   TEXT,                 -- when an operator last moved it; null means nobody has ruled on it yet
-  resolves_when TEXT,              -- JSON: what settles a notice before its clock; null = the clock is the whole of it
-  about_ref  TEXT,                 -- the world item the claim is about ("pr:412"); never the observer's own origin
-  where_at   TEXT,                 -- what locates it: file and line, package, service
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-
--- Who says a fact is true, one row per observation, each carrying the observer's
--- own words. Never a counter on the fact: the count is what promotes a claim, and
--- the words are what an operator reads to decide whether it should have.
---
--- goal_ref is the *goal* rather than the dispatch origin, because pr:412:ci and
--- pr:412:comments are two origins and one observation; session_id is carried so an
--- agent that inherited a conversation through a re-dispatch is not counted twice.
-CREATE TABLE IF NOT EXISTS knowledge_corroborations (
-  id         TEXT PRIMARY KEY,
-  fact_id    TEXT NOT NULL,
-  agent_id   TEXT,                 -- null for an operator's own observation
-  task_id    TEXT,
-  goal_ref   TEXT,                 -- the goal it was observed on, collapsed from the origin
-  session_id TEXT,
-  words      TEXT NOT NULL,        -- what the observer actually saw
-  created_at TEXT NOT NULL
-);
-
--- Who says a fact is *wrong*, and what they say it should say instead: one row per
--- contradiction, each naming the amendment filed with it.
---
--- Its own table rather than a stance column on knowledge_corroborations, whose
--- shape it otherwise shares exactly. distinctCorroborators counts the rows of that
--- table, so a discriminated row would be counted as agreement by any reader that
--- forgot the filter — a contradiction promoting the claim it disputes, with
--- nothing red. Two tables make that unreachable rather than merely wrong.
---
--- Nothing here demotes, lapses or deletes the fact named: the resolution column is
--- an operator's answer, and the reach machine is still the only thing that moves a
--- claim.
-CREATE TABLE IF NOT EXISTS knowledge_contradictions (
-  id           TEXT PRIMARY KEY,
-  fact_id      TEXT NOT NULL,      -- the claim being disputed
-  amendment_id TEXT NOT NULL,      -- the fact filed as what it should say instead; supersedes fact_id
-  agent_id     TEXT,
-  task_id      TEXT,
-  goal_ref     TEXT,               -- the goal it was seen on — the unit the contradiction ratio counts over
-  session_id   TEXT,
-  words        TEXT NOT NULL,      -- what the agent saw that the claim does not fit
-  resolution   TEXT,               -- amended | narrowed | dismissed; null while it is still open
-  resolved_at  TEXT,
-  created_at   TEXT NOT NULL
-);
-
--- How often a claim was actually *wanted*: one row per fact answered to a
--- knowledge_ask (#27 phase 7). The count is a reading and never a trigger —
--- nothing is demoted, lapsed or dropped from the block because nobody asked for
--- it, and a claim nobody wanted this month may be the one that saves the next
--- agent a day.
---
--- A row rather than a counter on the fact, for the corroborations table's reason
--- with one word changed: a corroboration carries words because the words are what
--- an operator reads, and an ask has none to give — so what a row carries instead
--- is *who and when*, which is the difference between "asked 40 times" and "asked
--- 40 times by one agent in a loop last March".
---
--- Written only from the credentialed tool path (AgentManager.askKnowledge), never
--- from KnowledgeStore.askFacts: the cockpit reads that same method twice on every
--- poll to project the delivery view, so a counter inside the store would grow
--- fastest while nobody was looking at the page. The observer columns are what keeps
--- it out — the cockpit has no agent, task, goal or session to give.
-CREATE TABLE IF NOT EXISTS knowledge_asks (
-  id         TEXT PRIMARY KEY,
-  fact_id    TEXT NOT NULL,
-  agent_id   TEXT NOT NULL,        -- the asker; there is no uncredentialed ask
-  task_id    TEXT,
-  goal_ref   TEXT,                 -- the goal it was asked on, collapsed from the origin
-  session_id TEXT,
-  created_at TEXT NOT NULL
-);
-
--- Which two claims a machine thinks are one claim: a pair, the score that matched
--- them, and when the pass was taken (docs/spec/27-knowledge.md#one-claim-written-two-ways).
---
--- A **suggestion table**. Nothing here joins, promotes, merges or bars anything —
--- proposeFact and the rejection bar go on asking claimsMatch, which is strict
--- and untouched — and the operator's click on the cluster is what moves a claim. A
--- wrong merge is worse than a duplicate because it hides one agent's report inside
--- another's, so a merge nobody approved is a wrong merge nobody can see.
---
--- Rows rather than a read taken on the page, for the reason every other count that
--- page draws is server-side: a similarity recomputed in the browser is free to
--- disagree with the one an operator acted on. And because the pass is over the
--- whole proposal set, which is the part of the store that grows.
---
--- The pair is stored in one order — the older id first — so one likeness is one
--- row however the pass happened to walk the set.
-CREATE TABLE IF NOT EXISTS knowledge_similarities (
-  id         TEXT PRIMARY KEY,
-  left_id    TEXT NOT NULL,       -- the older of the two claims
-  right_id   TEXT NOT NULL,
-  score      REAL NOT NULL,       -- claimOverlap's answer, and a suggestion's whole weight
-  created_at TEXT NOT NULL        -- when the pass that saw it was taken
-);
-CREATE UNIQUE INDEX IF NOT EXISTS knowledge_similarities_pair ON knowledge_similarities (left_id, right_id);
-
--- One attempt to put a claim somewhere other than in front of the fleet: the job
--- an operator opened for it, which exit it took, and where it got to. Three exits,
--- one shape: a documentation pull request, a job that works the claim now, or a
--- ticket that files it for later.
---
--- Its own table rather than columns on knowledge_facts, because a fact can have
--- more than one of these. An attempt that does not land leaves the claim exactly
--- where it was and the operator free to try again, and columns would overwrite the
--- record of the attempt that failed — which is the one thing somebody deciding
--- whether to try again needs to read.
---
--- Deliberately not a reach. The claim is still true and still delivered while its
--- pull request sits in review; a reach that took it out of every prompt at the
--- click would stop the fleet being told something nobody has acted on and nobody
--- can yet read, and — if the attempt never landed — would stop telling them
--- forever with nothing red. The reach moves to graduated only when the sweep, or
--- the filing agent, says the exit was actually taken.
-CREATE TABLE IF NOT EXISTS knowledge_graduations (
-  id         TEXT PRIMARY KEY,
-  fact_id    TEXT NOT NULL,
-  exit       TEXT NOT NULL,        -- docs | job | ticket; which way the claim left
-  job_id     TEXT NOT NULL,        -- the job; its branch finds the PR, its origin finds this row back
-  target     TEXT,                 -- spec | claudeMd for a docs exit; null on a job or a ticket
-  bar        TEXT,                 -- the operator's reason it meets CLAUDE.md's bar; null otherwise
-  pr_ref     TEXT,                 -- pr:<n>, stamped when the work graph first shows one
-  ticket_ref TEXT,                 -- issue:<n>, reported by a filing agent through link_ticket
-  outcome    TEXT,                 -- landed | abandoned; null while it is still going
-  settled_at TEXT,
-  created_at TEXT NOT NULL
-);
-
 -- Why the fleet had to come back to a pull request, and what settled it: one row
 -- per CI failure or review round an agent answered, written by that agent through
 -- the report_remedy tool.
@@ -1053,6 +895,26 @@ CREATE TABLE IF NOT EXISTS pr_replies_sent (
   PRIMARY KEY (pr_number, comment_ref)
 );
 
+-- The last reading of every pull request that has left the open set (see
+-- PrArchiveStore), kept for good. WorldSnapshot.closedPullRequests is a window --
+-- it carries a merge for closedPrWindowMs and then forgets it -- and the goal
+-- page's closed rows were drawn straight off it, so a goal's pull requests
+-- disappeared from its page hours after they merged. A row here is a fact about
+-- the past and never a reading of the present: nothing re-fetches it and nothing
+-- acts on it. Upserted on the number, so the window re-reporting the same merge
+-- every pulse refreshes the row rather than appending to it. The table is new, so
+-- it needs no ColumnMigrations entry -- but a table being new once does not keep
+-- it exempt, and a column added later will.
+CREATE TABLE IF NOT EXISTS pr_archive (
+  number        INTEGER PRIMARY KEY,
+  -- The provider's own instant, NULL when it never dated the close. The sort falls
+  -- back to first_seen_at so such a row still lands beside its neighbours.
+  closed_at     TEXT,
+  first_seen_at TEXT NOT NULL,  -- when the harness first archived it; survives every later replace
+  updated_at    TEXT NOT NULL,
+  snapshot      TEXT NOT NULL   -- the whole PullRequest as the world last reported it, JSON
+);
+
 CREATE TABLE IF NOT EXISTS decisions (
   id         TEXT PRIMARY KEY,
   cycle_id   TEXT NOT NULL,
@@ -1129,10 +991,6 @@ CREATE TABLE IF NOT EXISTS work_nodes (
 -- asynchronous, so 'filing' means an agent is creating it and 'filed' is the one
 -- carrying a ref.
 --
--- Not a knowledge_facts row: a claim is testimony, attributed to the agent that
--- raised it through a corroboration taken structurally from a credential. A
--- harness-authored row has no agent behind it, and forging one is the lie
--- structural identity exists to prevent.
 CREATE TABLE IF NOT EXISTS work_item_filings (
   target_ref TEXT PRIMARY KEY,
   status     TEXT NOT NULL,          -- filing | filed
@@ -1554,31 +1412,8 @@ CREATE TABLE IF NOT EXISTS mcp_calls (
 -- authoritative locally — every fleet's own SQLite stays the truth about that
 -- fleet, and everything here is re-derivable from the documents.
 --
--- Keyed on (fleet_id, fact_id): the origin's own fact id inside the origin's
--- namespace, which is the only identity that survives the crossing. Nothing reads
--- this into a prompt and no tool answers from it — an agent asking knowledge_ask
--- is answered from knowledge_facts exactly as it was before the pool existed.
-CREATE TABLE IF NOT EXISTS pool_claims (
-  fleet_id       TEXT NOT NULL,      -- the fleet that published it
-  fact_id        TEXT NOT NULL,      -- the origin's own fact id; never minted here
-  project        TEXT NOT NULL,      -- the project the origin learned it about
-  claim          TEXT NOT NULL,
-  where_at       TEXT,               -- what locates it, in the origin's words
-  vouched_at     TEXT NOT NULL,      -- when an operator over there ruled on it
-  corroborations INTEGER NOT NULL,   -- the origin's count, a reading and never a trigger
-  disputes       INTEGER NOT NULL,   -- likewise, and the more useful of the two
-  evidence       TEXT NOT NULL,      -- JSON array of the corroborators' own words, capped
-  -- The local fact this arrival was proposed onto, or null when it matched nothing
-  -- local and the project did not permit proposing it. Null is the "held in the
-  -- mirror, proposed to nobody" row of the project-name table.
-  local_fact_id  TEXT,
-  published_at   TEXT NOT NULL,      -- the document's own stamp
-  seen_at        TEXT NOT NULL,      -- when this poll wrote the row
-  PRIMARY KEY (fleet_id, fact_id)
-);
-
 -- Everybody else's digests, one row per (fleet, day, section key). Replaced whole
--- on every poll for pool_claims' reason: it is a mirror, not a ledger.
+-- on every poll for that reason: it is a mirror, not a ledger.
 --
 -- "section" and "key" rather than a column per dimension, because the sections do
 -- not share a key space — byPhase is a SpendPhase, byCause is a kind/cause/guard
@@ -1604,7 +1439,6 @@ CREATE TABLE IF NOT EXISTS pool_digest_rows (
 CREATE TABLE IF NOT EXISTS pool_fleets (
   fleet_id      TEXT PRIMARY KEY,
   project       TEXT,
-  claims_at     TEXT,                -- publishedAt of its claims document, or null
   digest_at     TEXT,                -- publishedAt of its digest document, or null
   ahead         INTEGER NOT NULL,    -- 1 when it wrote a schema version this build skips
   seen_at       TEXT NOT NULL
@@ -1618,14 +1452,13 @@ CREATE TABLE IF NOT EXISTS pool_fleets (
 -- dirty. "content_hash" is the truth — the slow clock re-derives both documents and
 -- compares, so anything the flag loses to a crash self-heals within the hour.
 CREATE TABLE IF NOT EXISTS pool_publications (
-  kind          TEXT PRIMARY KEY,    -- claims | digest
+  kind          TEXT PRIMARY KEY,    -- digest
   content_hash  TEXT,                -- of the document last published successfully
   published_at  TEXT,
   dirty         INTEGER NOT NULL,
   checked_at    TEXT                 -- when the backstop last re-derived and compared
 );
 
-CREATE INDEX IF NOT EXISTS idx_pool_claims_fleet ON pool_claims(fleet_id);
 CREATE INDEX IF NOT EXISTS idx_pool_digest_project ON pool_digest_rows(project, day);
 
 CREATE INDEX IF NOT EXISTS idx_local_run_cost_deltas_at ON local_run_cost_deltas(at);
@@ -1665,7 +1498,7 @@ CREATE TABLE IF NOT EXISTS account_rate_limits (
 -- reporting the identical instant are reporting one reading of one account. The
 -- windows are independently nullable here for the same reason they are above.
 -- ---------------------------------------------------------------------------
--- The obstacle board (docs/spec/32-obstacles.md). Something broken now, which a
+-- The obstacle board (docs/spec/27-obstacles.md). Something broken now, which a
 -- fix ends — a red base branch, a wedged runner, a flaking check — or a note:
 -- something true of the repository the repository does not say.
 --
@@ -1804,6 +1637,47 @@ CREATE TABLE IF NOT EXISTS obstacle_writeups (
   settled_at  TEXT
 );
 
+-- What the model desk read off one obstacle's prose, and when it read it
+-- (docs/spec/27-obstacles.md#what-may-be-decided-by-a-model-and-what-may-not).
+--
+-- One row per obstacle, upserted: a reading is a restatement of the whole row
+-- rather than a log, and an operator asking what the desk made of something is
+-- asking about the sightings it holds now.
+--
+-- read_at is the obstacle's own last_seen_at as it stood when the desk read it,
+-- which is what makes the inbox a comparison rather than a clock: a row nobody has
+-- said anything new about is a row already read, and a row a further voice has
+-- landed words on is back in the inbox. purpose, title and body are the desk's
+-- prose and its answer to what the row is for; every one of them is nullable,
+-- because a reading that came back without one is dropped in that half and kept in
+-- the rest — the gates' own rule.
+CREATE TABLE IF NOT EXISTS obstacle_readings (
+  obstacle_id TEXT PRIMARY KEY,
+  read_at     TEXT NOT NULL,      -- the last_seen_at this reading was taken from
+  taken_at    TEXT NOT NULL,
+  purpose     TEXT,               -- ticket | docs; what the desk says the row is for
+  title       TEXT,               -- the ticket's title, written from the sightings
+  body        TEXT                -- and its body; null leaves the mechanical composition
+);
+
+-- Two rows something thinks are one obstacle, which is the one thing here nothing
+-- may act on.
+--
+-- **A suggestion and never a merge.** Deciding two reports are one obstacle is the
+-- job no model may do: a wrong merge hides one agent's report inside another's,
+-- the swallowed report is answered "already owned", nobody fixes it, and nothing
+-- is red. So the pair lands here, is answered into the intake's near[], and an
+-- agent or an operator confirms it by id — or nobody does and the rows stay apart.
+-- source says what proposed it: the desk's own reading, or a key it extracted that
+-- another row already holds.
+CREATE TABLE IF NOT EXISTS obstacle_suggestions (
+  obstacle_id  TEXT NOT NULL,
+  suggested_id TEXT NOT NULL,
+  source       TEXT NOT NULL,     -- model | key
+  created_at   TEXT NOT NULL,
+  PRIMARY KEY (obstacle_id, suggested_id)
+);
+
 CREATE TABLE IF NOT EXISTS rate_limit_readings (
   captured_at               TEXT PRIMARY KEY,
   five_hour_used_percentage REAL,
@@ -1848,6 +1722,10 @@ CREATE INDEX IF NOT EXISTS idx_obstacle_sightings_obstacle ON obstacle_sightings
 -- The mid-session desk asks one question per live agent: what has this one already
 -- been told? The primary key leads on the obstacle, so that read needs its own.
 CREATE INDEX IF NOT EXISTS idx_obstacle_notices_agent ON obstacle_notices(agent_id);
+-- A suggestion is read from both ends — the intake answers near[] on the row a
+-- report landed on, and the pair may have been proposed the other way round — so
+-- the trailing column of the primary key needs its own.
+CREATE INDEX IF NOT EXISTS idx_obstacle_suggestions_suggested ON obstacle_suggestions(suggested_id);
 -- obstacle_conditions needs no index of its own: every read of it is by
 -- obstacle_id, which is the leading column of the UNIQUE above.
 `;

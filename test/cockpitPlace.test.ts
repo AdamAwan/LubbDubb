@@ -11,6 +11,7 @@ import {
   type Place,
 } from '../web/src/cockpit/place.js';
 import { DEFAULT_TICKET_VIEW, readTicketView } from '../web/src/cockpit/ticketView.js';
+import { GOAL_SECTIONS } from '../web/src/view/goalPage.js';
 
 const at = (over: Partial<Place> = {}): Place => ({ ...NOWHERE, ...over });
 
@@ -32,24 +33,9 @@ test('every place round-trips through the query string', () => {
     at({ panel: 'record' }),
     at({ goal: 'issue:142' }),
     at({ tab: 'tickets', goal: 'issue:142', agent: 'agent-7' }),
-    at({ tab: 'knowledge' }),
-    at({ tab: 'knowledge', knowledgeView: 'table' }),
-    at({ tab: 'knowledge', knowledgeShow: 'waiting' }),
-    at({ tab: 'knowledge', knowledgeSort: 'asks', knowledgeDesc: true }),
-    at({ tab: 'knowledge', knowledgeSort: 'claim' }),
-    // A column read from the other end while it is the one the page opens on: the
-    // pair is one parameter, so `reach` ascending is a bare URL and `reach`
-    // descending has to still be a place.
-    at({ tab: 'knowledge', knowledgeDesc: true }),
-    at({ tab: 'knowledge', knowledgeFolded: ['rejected', 'retired'] }),
-    at({
-      tab: 'knowledge',
-      knowledgeView: 'table',
-      knowledgeShow: 'settled',
-      knowledgeSort: 'disputes',
-      knowledgeDesc: true,
-    }),
-    at({ tab: 'knowledge', fact: 'fact_abc', knowledgeFolded: ['graduated'] }),
+    at({ tab: 'obstacles' }),
+    at({ tab: 'obstacles', obstacle: 'obs_abc' }),
+    at({ tab: 'obstacles', obstacle: 'obs_abc', obstacleEnded: true }),
     at({ panel: 'faults' }),
     at({ panel: 'launch' }),
     at({ panel: { ask: 'esc-9' } }),
@@ -72,6 +58,7 @@ test('every place round-trips through the query string', () => {
     at({ tab: 'insights' }),
     at({ tab: 'insights', insightsView: 'causes', insightsWindow: '24h' }),
     at({ tab: 'insights', insightsWindow: 'all' }),
+    at({ goal: 'issue:142', goalOpen: ['signals'], goalShut: ['ticket'] }),
   ];
   for (const place of places) assert.deepEqual(readPlace(placeQuery(place)), place, placeQuery(place));
 });
@@ -155,7 +142,7 @@ test('a place has exactly one spelling', () => {
  * the goal. → `docs/spec/17-cockpit.md#nesting`
  */
 test('a goal or a pull request is read under a tab that could have led to it', () => {
-  for (const tab of ['insights', 'knowledge', 'pets', 'config']) {
+  for (const tab of ['insights', 'obstacles', 'pets', 'config']) {
     assert.equal(readPlace(`?tab=${tab}&goal=issue:142`).tab, 'overview', `${tab} does not list goals`);
     assert.equal(readPlace(`?tab=${tab}&pr=706`).tab, 'overview', `${tab} does not list pull requests`);
   }
@@ -224,19 +211,22 @@ test('a link to the retired work tab lands where its triage went', () => {
 });
 
 /**
- * Findings and lessons became sections of the knowledge page rather than panels of
- * their own, and every saved link to either spells a panel name `PANELS` no longer
- * knows.
+ * Knowledge, findings and lessons all named the claim store, which is gone. Every
+ * saved link to any of them — a tab, a panel, or a panel with a `fact` id beside
+ * it — lands on the obstacle board, which is the surface that replaced it.
  *
- * Without the alias an unknown panel parses back to null and the link opens the
- * overview with the rest of the place still in the URL — a stranded link, and a
- * silent one. It is a panel alias rather than a tab one for the same reason
- * `knowledge` is: an explicit tab is the operator saying where they meant to be,
- * and an alias must never overrule one.
+ * Without the alias an unknown tab or panel parses back to the overview with the
+ * rest of the place still in the URL — a stranded link, and a silent one. The
+ * panel arm is a panel alias rather than a tab one for `work`'s reason: an
+ * explicit tab is the operator saying where they meant to be, and an alias must
+ * never overrule one.
  */
-test('links to the retired findings and lessons panels land on the knowledge page', () => {
-  assert.equal(readPlace('?panel=findings').tab, 'knowledge');
-  assert.equal(readPlace('?panel=lessons').tab, 'knowledge');
+test('links to the retired knowledge, findings and lessons surfaces land on the obstacle board', () => {
+  assert.equal(readPlace('?tab=knowledge').tab, 'obstacles');
+  assert.equal(readPlace('?panel=knowledge').tab, 'obstacles');
+  assert.equal(readPlace('?panel=knowledge&fact=fact_abc').tab, 'obstacles', 'the fact id is simply dropped');
+  assert.equal(readPlace('?panel=findings').tab, 'obstacles');
+  assert.equal(readPlace('?panel=lessons').tab, 'obstacles');
   assert.equal(readPlace('?panel=findings').panel, null, 'and open no panel over it');
   assert.equal(
     readPlace('?panel=lessons&goal=issue:142').goal,
@@ -441,4 +431,32 @@ test('a blank entry in the hidden list is dropped rather than hiding a nameless 
   // Encoding it would be a second grammar in the address bar; dropping the empty
   // part is the same treatment every other junk value gets.
   assert.deepEqual(readPlace('?tab=tickets&hide=Closed,,%20%20,Removed').ticketColumns, ['Closed', 'Removed']);
+});
+
+/**
+ * Every foldable section of the goal page survives the query string, in both
+ * directions.
+ *
+ * Read off {@link GOAL_SECTIONS} rather than listed here, for the panel test's
+ * reason: `place.ts` validates the two lists against that union, so a section
+ * added to the page and not to it writes a parameter that is parsed straight back
+ * to nothing — the fold works until the next place change, then springs back.
+ *
+ * Both lists, because neither is the default: where a card starts is a reading of
+ * how far the goal has got, and only `?shut=` can say the operator folded one the
+ * goal's own progress would have opened.
+ */
+test('every foldable goal section round-trips, opened or folded', () => {
+  for (const section of GOAL_SECTIONS) {
+    const opened = at({ goal: 'issue:142', goalOpen: [section] });
+    assert.deepEqual(readPlace(placeQuery(opened)), opened, section);
+    const folded = at({ goal: 'issue:142', goalShut: [section] });
+    assert.deepEqual(readPlace(placeQuery(folded)), folded, section);
+  }
+});
+
+test('a hand-edited fold list drops a section that does not exist', () => {
+  const place = readPlace('?goal=issue:142&open=ticket,nonesuch&shut=signals,nonesuch');
+  assert.deepEqual(place.goalOpen, ['ticket']);
+  assert.deepEqual(place.goalShut, ['signals']);
 });

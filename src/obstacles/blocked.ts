@@ -15,7 +15,7 @@ import { reachesAgents } from './lifecycle.js';
  * verdicts about whether a goal's work is finished (`src/store/verdicts.ts`) and
  * clears none of them: it answers whether the work can be *attempted* right now.
  *
- * Pure — no I/O, no clock, no store. → `docs/spec/32-obstacles.md#blocked-is-an-answer`
+ * Pure — no I/O, no clock, no store. → `docs/spec/27-obstacles.md#blocked-is-an-answer`
  */
 
 /**

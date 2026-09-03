@@ -28,7 +28,7 @@ interface NoticeFleet {
  *
  * On the pulse and not in `src/dispatcher/` for `notices`' reason: it staffs
  * nobody, holds nothing, and no rule reads what it writes.
- * → `docs/spec/32-obstacles.md#delivery`
+ * → `docs/spec/27-obstacles.md#delivery`
  */
 export class ObstacleNoticeDesk {
   constructor(private readonly deps: { store: Store; fleet: NoticeFleet; errors?: ErrorRecorder }) {}

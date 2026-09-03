@@ -5,10 +5,12 @@ import type { GatedKey } from '../obstacles/keys.js';
 import type {
   Obstacle,
   ObstacleBlock,
+  ObstacleDeskReading,
   ObstacleCondition,
   ObstacleEnding,
   ObstacleKey,
   ObstacleKind,
+  ObstaclePurpose,
   ObstacleSighting,
   ObstacleStanding,
   ObstacleState,
@@ -37,7 +39,7 @@ import type { StoreContext } from './context.js';
  *
  * The tables were new once, and being new *once* is what stops that keeping them
  * exempt: `obstacles.ended_by` is the first column added to one of them after the
- * fact, so it is declared below. → `docs/spec/32-obstacles.md`
+ * fact, so it is declared below. → `docs/spec/27-obstacles.md`
  *
  * **It needs no backfill, and that is a reading rather than an omission.** A null
  * `ended_by` means *this row has not ended*, which is true of every row in every
@@ -149,6 +151,15 @@ interface SightingRow {
   created_at: string;
 }
 
+interface ReadingRow {
+  obstacle_id: string;
+  read_at: string;
+  taken_at: string;
+  purpose: string | null;
+  title: string | null;
+  body: string | null;
+}
+
 interface BlockRow {
   origin_ref: string;
   obstacle_id: string;
@@ -205,8 +216,8 @@ export class ObstacleStore {
         // Only where nothing bound. A report that joined a row has already found
         // the one it meant, and offering it neighbours would be inviting a second
         // guess at a question the keys answered.
-        near:
-          matched !== null
+        near: [
+          ...(matched !== null
             ? []
             : nearMatches({
                 what: report.what,
@@ -214,7 +225,15 @@ export class ObstacleStore {
                 rows: this.listObstacles().map((o) => ({ id: o.id, what: o.what })),
                 lookup,
                 exclude: home.id,
-              }),
+              })),
+          // The suggestions standing *on the row this landed on*, which are
+          // answered whether or not a key bound. They are not a second guess at
+          // the question the keys answered: they are a merge somebody — the model
+          // desk, or a key another row already held — proposed about this row
+          // itself, and an agent's answer is the only place one is ever offered
+          // for confirmation. It is still only a suggestion, confirmed by id.
+          ...this.listObstacleSuggestions(home.id),
+        ],
       };
     })();
   }
@@ -230,7 +249,7 @@ export class ObstacleStore {
    * between the two able to send it again; written first, the same crash loses a
    * notice to an agent that is in all likelihood already gone. The primary key
    * makes the same claim unwinnable twice, so two desks on one pulse cannot both
-   * take it either. → `docs/spec/32-obstacles.md#delivery`
+   * take it either. → `docs/spec/27-obstacles.md#delivery`
    */
   claimObstacleNotice(obstacleId: string, agentId: string, reason: string): boolean {
     const result = this.ctx.db
@@ -248,6 +267,20 @@ export class ObstacleStore {
   }
 
   /**
+   * How many notices have actually gone out, over the whole board and all time.
+   *
+   * The one *told* this subsystem keeps a record of. Dispatch-time delivery
+   * (`src/obstacles/delivery.ts`) writes nothing — it is a paragraph appended to a
+   * prompt — so a page that summed the two would be drawing a number half of which
+   * nothing counted. Read only by the cockpit, and drawn under the name of what it
+   * actually counts. → `docs/spec/27-obstacles.md#in-the-cockpit`
+   */
+  obstacleNoticesSent(): number {
+    const row = this.ctx.db.prepare(`SELECT COUNT(*) AS n FROM obstacle_notices`).get() as { n: number };
+    return row.n;
+  }
+
+  /**
    * Take a standing row for the harness, or say it was already taken.
    *
    * **The claim is the transition, made transactionally on `owner IS NULL`** — so
@@ -262,7 +295,7 @@ export class ObstacleStore {
    * `owned` with no owner is released by {@link releaseObstacle} at the top of the
    * next pass, so a crash mid-filing costs a pulse rather than a row nobody can
    * ever own.
-   * → `docs/spec/32-obstacles.md#ownership`
+   * → `docs/spec/27-obstacles.md#ownership`
    */
   claimObstacle(id: string): boolean {
     const at = this.ctx.now();
@@ -348,7 +381,7 @@ export class ObstacleStore {
    *
    * `dormant` narrows further, in the caller's own predicate as well as here: decay
    * is *nothing has said it*, which an owned row cannot be.
-   * → `docs/spec/32-obstacles.md#how-an-obstacle-ends`
+   * → `docs/spec/27-obstacles.md#how-an-obstacle-ends`
    */
   endObstacle(id: string, state: 'resolved' | 'dormant', endedBy: ObstacleEnding): boolean {
     const result = this.ctx.db
@@ -357,6 +390,38 @@ export class ObstacleStore {
            WHERE id=? AND state IN ('sighted','standing','owned')`,
       )
       .run(state, endedBy, this.ctx.now(), id);
+    return result.changes > 0;
+  }
+
+  /**
+   * Say never tell the fleet this, or take it back — the one control on this
+   * board that is a person's and only a person's.
+   *
+   * **It is the one state whose exit is you**, carved out by name in
+   * `OBSTACLE_STATES_A_PERSON_MUST_LEAVE`, so both halves are here rather than one
+   * of them being a state a sweep could reach. Guarded on the states
+   * `OBSTACLE_EXITS` actually declares the transition from, which is what keeps
+   * this from becoming a general `setState`: a row that has already ended is not
+   * reaching anybody to be silenced, and un-muting lands on `standing` because
+   * that is where the exits say it goes — an operator taking the silence off is
+   * saying tell the fleet again, and `sighted` would say the opposite.
+   *
+   * `ended_by` is cleared with the move for {@link setState}'s reason: a row being
+   * told to the fleet must not go on naming an ending that took it.
+   * → `docs/spec/27-obstacles.md#states`
+   */
+  muteObstacle(id: string, muted: boolean): boolean {
+    const at = this.ctx.now();
+    const result = muted
+      ? this.ctx.db
+          .prepare(
+            `UPDATE obstacles SET state='muted', ended_by=NULL, updated_at=?
+               WHERE id=? AND state IN ('sighted','standing','owned')`,
+          )
+          .run(at, id)
+      : this.ctx.db
+          .prepare(`UPDATE obstacles SET state='standing', ended_by=NULL, updated_at=? WHERE id=? AND state='muted'`)
+          .run(at, id);
     return result.changes > 0;
   }
 
@@ -464,6 +529,182 @@ export class ObstacleStore {
   /** Let a goal back into pickup. The desk's whole act — nothing else is written. */
   clearObstacleBlock(originRef: string): void {
     this.ctx.db.prepare(`DELETE FROM obstacle_blocks WHERE origin_ref=?`).run(originRef);
+  }
+
+  /**
+   * The rows the model desk has not read since somebody last said something about
+   * one.
+   *
+   * **The inbox is a comparison and never a clock.** A reading records the row's
+   * own `lastSeenAt`, so a row is back in the inbox exactly when a further voice
+   * has landed words on it — which is the only thing that gives the desk anything
+   * new to read. A pass over a board nobody has said anything about is a pass that
+   * calls no model at all, which is what "only where the inbox is non-empty" buys.
+   *
+   * `sighted` and `standing` only. An `owned` row has its ticket, and a terminal
+   * or muted row is owed nothing by anybody — reading either would be spending a
+   * model call on prose nothing will ever be written from.
+   *
+   * **And only a row an agent has actually said something about.** Extraction is a
+   * language judgement over an agent's prose; the harness's own voice is *gated but
+   * never extracted*, because a prose pass over its sentence would happily turn the
+   * branch name in it into a `path` key that the check beside it then grounds —
+   * which is the harness carrying a row to `standing` on its own reading, through a
+   * door the rules close everywhere else.
+   * → `docs/spec/27-obstacles.md#the-harness-is-a-voice`
+   */
+  obstacleInbox(): ObstacleStanding[] {
+    const read = new Map(
+      (this.ctx.db.prepare(`SELECT obstacle_id, read_at FROM obstacle_readings`).all() as ReadingRow[]).map((row) => [
+        row.obstacle_id,
+        row.read_at,
+      ]),
+    );
+    const spoken = new Set(
+      (
+        this.ctx.db.prepare(`SELECT DISTINCT obstacle_id FROM obstacle_sightings WHERE transition IS NULL`).all() as {
+          obstacle_id: string;
+        }[]
+      ).map((row) => row.obstacle_id),
+    );
+    return this.obstacleBoard().filter(
+      ({ obstacle }) =>
+        (obstacle.state === 'sighted' || obstacle.state === 'standing') &&
+        spoken.has(obstacle.id) &&
+        read.get(obstacle.id) !== obstacle.lastSeenAt,
+    );
+  }
+
+  /** What the desk made of one row, or null while nothing has read it. */
+  obstacleReading(obstacleId: string): ObstacleDeskReading | null {
+    const row = this.ctx.db.prepare(`SELECT * FROM obstacle_readings WHERE obstacle_id=?`).get(obstacleId) as
+      | ReadingRow
+      | undefined;
+    return row ? toReading(row) : null;
+  }
+
+  /**
+   * Record what the desk read, and that it has read this much of the row.
+   *
+   * Upserted rather than appended: a reading is a restatement of the whole row as
+   * its sightings stand now, and an operator asking what the desk made of
+   * something is asking about the words it holds today. The stamp is written even
+   * where every half of the reading came back empty — a row the desk could make
+   * nothing of is still a row it has read, and re-reading it every pulse would be
+   * the subsystem whose point is not spending the fleet twice on one thing
+   * spending it on itself.
+   */
+  recordObstacleReading(input: {
+    obstacleId: string;
+    readAt: string;
+    purpose: ObstaclePurpose | null;
+    title: string | null;
+    body: string | null;
+  }): void {
+    this.ctx.db
+      .prepare(
+        `INSERT INTO obstacle_readings (obstacle_id, read_at, taken_at, purpose, title, body)
+           VALUES (?,?,?,?,?,?)
+         ON CONFLICT(obstacle_id) DO UPDATE SET
+           read_at=excluded.read_at, taken_at=excluded.taken_at,
+           purpose=excluded.purpose, title=excluded.title, body=excluded.body`,
+      )
+      .run(input.obstacleId, input.readAt, this.ctx.now(), input.purpose, input.title, input.body);
+  }
+
+  /**
+   * Attach keys the desk read out of a row's own prose, and answer which of them
+   * named something another row already holds.
+   *
+   * **It never merges, and that is the whole of what makes this door safe.** A
+   * value another obstacle owns is left exactly where it is and reported back, so
+   * the desk can record it as a *suggestion* — deciding two reports are one
+   * obstacle is the job no model may do, and a key arriving from a model is not a
+   * back door to it. A value this row already holds is a no-op.
+   *
+   * The keys have been through the same three gates an agent's report goes
+   * through (`src/obstacles/keys.ts`), so a wrong one fails to resolve and falls
+   * back to prose.
+   */
+  addObstacleKeys(obstacleId: string, keys: readonly GatedKey[]): { added: number; taken: string[] } {
+    return this.ctx.db.transaction((): { added: number; taken: string[] } => {
+      const at = this.ctx.now();
+      const insert = this.ctx.db.prepare(
+        `INSERT OR IGNORE INTO obstacle_keys (id, obstacle_id, kind, value, binds, confirmations, created_at)
+         VALUES (?,?,?,?,?,0,?)`,
+      );
+      let added = 0;
+      const taken: string[] = [];
+      for (const key of keys) {
+        const owner = this.obstacleIdForKey(key.value);
+        if (owner === obstacleId) continue;
+        if (owner !== null) {
+          taken.push(owner);
+          continue;
+        }
+        insert.run(`obk-${nanoid(8)}`, obstacleId, key.kind, key.value, key.binds ? 1 : 0, at);
+        added += 1;
+      }
+      return { added, taken: [...new Set(taken)] };
+    })();
+  }
+
+  /**
+   * Record that something thinks two rows are one obstacle.
+   *
+   * **A suggestion and never a merge**, which is why it is a row of its own rather
+   * than a key moving: a wrong merge hides one agent's report inside another's,
+   * and the swallowed report is answered *already owned* with nobody fixing it. An
+   * agent or an operator confirms this by id, or nobody does and the rows stay
+   * apart.
+   */
+  suggestObstacleMerge(obstacleId: string, suggestedId: string, source: 'model' | 'key'): void {
+    if (obstacleId === suggestedId) return;
+    if (this.getObstacle(suggestedId) === null) return;
+    this.ctx.db
+      .prepare(
+        `INSERT OR IGNORE INTO obstacle_suggestions (obstacle_id, suggested_id, source, created_at) VALUES (?,?,?,?)`,
+      )
+      .run(obstacleId, suggestedId, source, this.ctx.now());
+  }
+
+  /**
+   * The rows suggested as this one, from **either** end of the pair.
+   *
+   * The pair is one suggestion however it was proposed: a desk reading row A and
+   * naming row B says nothing different from the same reading arriving the other
+   * way round, and an agent that landed on B is owed the line either way.
+   */
+  listObstacleSuggestions(obstacleId: string): NearCandidate[] {
+    const rows = this.ctx.db
+      .prepare(
+        `SELECT o.id AS id, o.what AS what FROM obstacle_suggestions s
+           JOIN obstacles o ON o.id = CASE WHEN s.obstacle_id=? THEN s.suggested_id ELSE s.obstacle_id END
+         WHERE s.obstacle_id=? OR s.suggested_id=?
+         ORDER BY s.created_at ASC`,
+      )
+      .all(obstacleId, obstacleId, obstacleId) as NearCandidate[];
+    return rows;
+  }
+
+  /**
+   * Say what a row is *for* — a ticket somebody fixes, or a documentation change.
+   *
+   * Guarded on the row being one nothing has taken yet, which is what keeps this
+   * from being a state move wearing another name: a row an owner is on has a
+   * ticket filed against it, and turning that into a note would leave an agent
+   * dispatched for something the board no longer says exists. It answers whether
+   * the write took.
+   */
+  setObstacleKind(id: string, kind: ObstacleKind): boolean {
+    const result = this.ctx.db
+      .prepare(
+        `UPDATE obstacles SET kind=?, updated_at=?
+           WHERE id=? AND kind<>? AND owner_ref IS NULL AND state IN ('sighted','standing')
+             AND NOT EXISTS (SELECT 1 FROM obstacle_writeups WHERE obstacle_id=?)`,
+      )
+      .run(kind, this.ctx.now(), id, kind, id);
+    return result.changes > 0;
   }
 
   /**
@@ -688,6 +929,17 @@ function toObstacle(row: ObstacleRow): Obstacle {
     updatedAt: row.updated_at,
     lastSeenAt: row.last_seen_at,
     endedBy: (row.ended_by as ObstacleEnding | null) ?? null,
+  };
+}
+
+function toReading(row: ReadingRow): ObstacleDeskReading {
+  return {
+    obstacleId: row.obstacle_id,
+    readAt: row.read_at,
+    takenAt: row.taken_at,
+    purpose: (row.purpose as ObstaclePurpose | null) ?? null,
+    title: row.title,
+    body: row.body,
   };
 }
 

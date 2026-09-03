@@ -9,7 +9,8 @@ import { fileURLToPath } from 'node:url';
 // violation of the rule it pins would have merged green on that platform.
 
 import * as React from 'react';
-import { createElement } from 'react';
+import { createElement, isValidElement } from 'react';
+import type { ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { buildViewModel } from '../web/src/view/viewModel.js';
 import type { CockpitView } from '../web/src/view/viewModel.js';
@@ -749,13 +750,19 @@ function goalRef(): string {
 function goalView(
   mutate: (state: CockpitView['state']) => void = () => {},
   ref: string = goalRef(),
-  /** The reference footer's disclosures to open — `[]` is the page as it arrives. */
+  /**
+   * The sections the operator has opened — `[]` is the page at whatever the goal's
+   * own progress makes it, which is what a bare URL means.
+   */
   goalOpen: readonly string[] = [],
+  /** And the ones they have folded away. Both, because neither is the default. */
+  goalShut: readonly string[] = [],
 ): CockpitView {
   const state = buildDemoState().state;
   mutate(state);
   return buildViewModel({
     goalOpen,
+    goalShut,
     state,
     now: Date.now(),
     connected: true,
@@ -784,7 +791,7 @@ function goalView(
  * that is how it is actually reached, and the crumb naming the goal is half of what
  * makes the page a rung of the ladder rather than a fourth destination.
  */
-function prView(prNumber: number, ref: string = 'issue:412'): CockpitView {
+function prView(prNumber: number, ref: string | null = 'issue:412'): CockpitView {
   const state = buildDemoState().state;
   return buildViewModel({
     state,
@@ -841,6 +848,60 @@ test('the crumb draws every rung of the ladder, not just the one beneath', () =>
   // of words that looks like navigation.
   assert.equal((crumb.match(/<button/g) ?? []).length, 2, 'both rungs above are controls');
   assert.ok(/cn-crumbnow[^>]*>PR #412/.test(crumb), 'and the page you are on is not one');
+});
+
+/**
+ * The first element of a named component in a rendered tree, without a DOM.
+ *
+ * `renderToStaticMarkup` answers what a page *looks* like; a crumb rung is a
+ * handler, and what it does is only visible by holding the element. Components
+ * are not called on the way down — the tree above a crumb is host elements and
+ * fragments, and calling the rest would run hooks with no renderer under them.
+ */
+function findComponent(node: unknown, name: string): ReactElement | null {
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const hit = findComponent(child, name);
+      if (hit !== null) return hit;
+    }
+    return null;
+  }
+  if (!isValidElement(node)) return null;
+  if (typeof node.type === 'function' && node.type.name === name) return node;
+  return findComponent((node.props as { children?: unknown }).children, name);
+}
+
+/**
+ * The middle rung has to *go* to the goal, not merely leave the pull request.
+ *
+ * The overview's pull-request rack opens this page with no goal underneath — the
+ * place holds `pr` and nothing else — so `selectPr(null)`, which relies on the
+ * goal already being there, dropped straight past the rung the operator had just
+ * clicked and landed on the tab. The label said "the goal" and the click said
+ * "the overview". → `docs/spec/17-cockpit.md#the-pull-request-page`
+ */
+test('the goal rung leads to the goal even when the page was opened without one', () => {
+  const view = prView(412, null);
+  const goal = view.prPage?.goal;
+  assert.ok(goal, 'the pull request still knows the goal that owns it');
+  const calls: Array<[string, unknown]> = [];
+  const recorder = new Proxy(
+    {},
+    { get: (_t, name: string) => (arg: unknown) => calls.push([name, arg]) },
+  ) as CockpitActions;
+
+  // Called rather than rendered: `ConsoleRoot` holds no hooks, and one call is
+  // the whole of the way to the element that carries the handler.
+  const crumb = findComponent(ConsoleRoot({ view, actions: recorder }), 'PrCrumb');
+  assert.ok(crumb, 'the pull request page draws its crumb');
+  const trail = (crumb.type as (props: unknown) => ReactElement)(crumb.props).props.trail as ReadonlyArray<{
+    label: string;
+    go: () => void;
+  }>;
+  const rung = trail.find((step) => step.label.startsWith(`#${goal.number}`));
+  assert.ok(rung, 'the goal is a rung on the trail');
+  rung.go();
+  assert.deepEqual(calls, [['selectGoal', view.prPage?.goalRef]], 'and standing on it opens that goal');
 });
 
 /**
@@ -916,7 +977,7 @@ test('a goal draws its own durable record, not only the live snapshot', () => {
 });
 
 /**
- * "More work" is how an operator says what they want done next, in words — and
+ * "Give instructions" is how an operator says what they want done next, in words — and
  * the verdict it writes is what puts the goal back in front of pickup once no PR
  * is open. Losing the control loses both, silently and with every type still
  * checking. The floor carried the verdict; this pins that the goal page carries
@@ -924,7 +985,7 @@ test('a goal draws its own durable record, not only the live snapshot', () => {
  */
 test('a goal can still be sent back for more work, not only marked done', () => {
   const html = render(goalView());
-  assert.ok(html.includes('More work'), 'the goal page must offer the way to say what is left');
+  assert.ok(html.includes('Give instructions'), 'the goal page must offer the way to say what is left');
 
   // Offered *again* on a goal already sent back, unlike the verdict-only control
   // it replaced: a second thing the operator wants is a second instruction, and a
@@ -944,9 +1005,39 @@ test('a goal can still be sent back for more work, not only marked done', () => 
     ];
   });
   const standing = render(already);
-  assert.ok(standing.includes('More work'), 'and it still is once one stands');
+  assert.ok(standing.includes('Give instructions'), 'and it still is once one stands');
   assert.ok(standing.includes('change the button to primary'), 'what was asked for is drawn, not just counted');
   assert.ok(standing.includes('Withdraw'), 'and there is a way to take it back');
+});
+
+/**
+ * The header's three groups say what they are for, in words, above their
+ * controls — and the run's three states are one control rather than two buttons
+ * at opposite ends of the row.
+ *
+ * Both halves were confusions nothing could catch: `Mark done` and `End the run…`
+ * looked alike and read alike while one writes a verdict and the other kills the
+ * goal's agents, and `More work` was the name of a control *and* of the verdict
+ * the chip above it draws, pointing opposite ways. A rename or a regrouping that
+ * quietly drops a caption puts both back, with every type still checking.
+ */
+test('the goal header captions its groups and draws the run state as one control', () => {
+  const html = render(goalView());
+
+  for (const caption of ['Run state', 'Steer the work', 'Leave this page']) {
+    assert.ok(html.includes(caption), `the group caption "${caption}" is what explains the controls under it`);
+  }
+
+  // One segmented control, and every state in it — including the one the goal is
+  // not in, which is how the control says what the alternatives are.
+  assert.match(html, /class="cn-ctlseg"/, 'the run states share one control');
+  for (const state of ['Working', 'Done']) {
+    assert.ok(html.includes(state), `${state} is a segment of the run state`);
+  }
+
+  // The verdict chip is prefixed, so "more work" as a reading can never be
+  // mistaken for "Give instructions" as a control.
+  assert.ok(!html.includes('More work'), 'no control or chip carries the old ambiguous words');
 });
 
 /**
@@ -1216,25 +1307,84 @@ test('the ticket is drawn as HTML when the tracker wrote HTML', () => {
 });
 
 /**
- * The reference footer arrives shut, and its state is the address bar's.
+ * The ticket arrives folded on a goal already under way, and its state is the
+ * address bar's.
  *
- * Both halves are the point. Shut, because neither surface is owed anything — the
- * ticket is read once at pickup and the record is what is left after the snapshot
- * forgets — and between them they used to put a screen and a half of prose in
- * front of everything still moving. Named while shut, because a section that
- * vanished would be a page that had lost it.
+ * Folded, because it has been read: on a goal with a plan, pull requests and a
+ * validation sheet it is a screen of prose between the track and the work. Named
+ * while folded, because a section that vanished would be a page that had lost it.
  *
  * And it is a `Place`, so a link to a goal's ticket body opens on it and the back
  * button steps out of a disclosure it stepped into. Held in a `useState` all of
  * that fails silently, which is why it is pinned here rather than left to reading.
  */
-test('the reference footer arrives shut, and opens from the place', () => {
+test('the ticket arrives folded on a goal under way, and opens from the place', () => {
   const shut = render(goalView());
   assert.ok(shut.includes('The ticket'), 'the ticket is named even while it is folded away');
   assert.ok(!shut.includes('as it stood at pickup</span><div class="cn-tick"'), 'and its body is not drawn');
 
   const open = render(goalView(() => {}, goalRef(), ['ticket']));
-  assert.ok(open.includes('cn-tick'), 'the place is what opens it');
+  assert.ok(open.includes('class="cn-tick"'), 'the place is what opens it');
+});
+
+/**
+ * The other half of the same rule: a goal nobody has planned yet opens *on* its
+ * ticket, because that is the only thing on the page with anything in it.
+ *
+ * And the operator's word outranks the reading in both directions — `?shut=ticket`
+ * folds the one the goal's own progress would have opened. Without that arm the
+ * two lists collapse to one and a card folded away springs back the moment the
+ * goal moves, which is the silent half of this change.
+ */
+test('a goal nobody has planned opens on its ticket, unless the operator folded it', () => {
+  const fresh = goalView((s) => {
+    s.plans = [];
+    s.planParts = [];
+    s.agents = [];
+    s.world = { ...s.world, pullRequests: [] };
+  });
+  const page = fresh.goalPage;
+  assert.ok(page, 'the fixture goal must resolve to a page');
+  const bare = { ...fresh, goalPage: { ...page, plan: null, parts: [], openPullRequests: [], agents: [] } };
+  assert.ok(render(bare).includes('class="cn-tick"'), 'the ticket is the page on a goal with nothing else on it');
+
+  assert.ok(
+    !render({ ...bare, goalShut: new Set(['ticket']) }).includes('class="cn-tick"'),
+    'and the operator folding it outranks that reading',
+  );
+});
+
+/**
+ * The pipeline cards a goal has not reached yet are named and shut, and the
+ * track's own jump is what opens one.
+ *
+ * A card drawn open on "no checks", "nothing declared" and "not shipped" is three
+ * screens of furniture between the plan and the work; a card that *vanished* would
+ * be a feature announcing itself as broken. Folded is the third answer, and the
+ * heading still carries the count.
+ */
+test('validation and signals are folded on a goal that has not shipped', () => {
+  const v = goalView();
+  const page = v.goalPage;
+  assert.ok(page, 'the fixture goal must resolve to a page');
+  const nowhere = {
+    ...v,
+    goalPage: {
+      ...page,
+      checks: [],
+      signals: page.signals.map((s) => ({ ...s, live: true, proposal: null })),
+      environments: [
+        { environment: 'prod' as const, status: 'absent' as const, landed: 0, total: 2, at: null, opens: [] },
+      ],
+    },
+  };
+  const html = render(nowhere);
+  assert.ok(html.includes('Validation'), 'the card is named — a surface that vanishes when quiet looks broken');
+  assert.ok(!html.includes('cn-vin'), 'and its body is not drawn while there is nothing in it');
+  assert.ok(html.includes('0/1 reached'), 'a folded environments card still says how far the work has got');
+
+  const open = render({ ...nowhere, goalOpen: new Set(['validation']) });
+  assert.ok(open.includes('cn-vin'), 'the place is what opens it');
 });
 
 test('a held goal is a way into the goal it names', () => {
@@ -1833,42 +1983,6 @@ test('the local run panel offers the message box only while something holds an i
   assert.ok(busy.includes('replying'), 'and the stage line says which turn is in flight');
 });
 
-test('the knowledge page draws the retired claims too', () => {
-  // The load-bearing half of the prune surface: a claim that vanished on being
-  // retired would leave no way to tell a list you have finished with from one that
-  // lost rows, and "retired" would read as "deleted" — which is exactly the
-  // collision the two words were separated to avoid.
-  //
-  // Asserted on the list, which is the surface the rule is about: nothing there is
-  // folded by default, and the retired tail is drawn open. The queue revises that
-  // for itself and is asserted below on what the revision actually rests on.
-  const v = view({ tab: 'knowledge', knowledgeView: 'list' });
-  const retired = v.state.knowledge.find((f) => f.reach === 'retired');
-  assert.ok(retired, 'the demo fixtures must carry a retired claim to draw');
-  // The first plain run of the fixture's text: markdown renders its inline code
-  // into its own element, so a longer slice would be split across nodes.
-  assert.ok(decode(render(v)).includes(retired.claim.slice(0, 28)), 'a pruned claim stays visible');
-});
-
-test('the knowledge queue folds the settled tail, and the fold says what it holds', () => {
-  // What "nothing is folded by default" was protecting, kept by the thing that
-  // replaces it: the queue draws one claim and puts the tails behind folds, and a
-  // fold that states its own size cannot let *retired* read as *deleted* — the tail
-  // is named, its count is on the heading, and one click has it back.
-  const v = view({ tab: 'knowledge' });
-  const html = decode(render(v));
-  const settled = v.state.knowledge.filter(
-    (f) => f.reach === 'graduated' || f.reach === 'superseded' || f.reach === 'retired' || f.reach === 'rejected',
-  );
-  assert.ok(settled.length > 0, 'the demo fixtures must carry a settled tail to count');
-  assert.ok(html.includes('Settled'), 'the fold has to be named on the page it is folding');
-  assert.ok(html.includes(`· ${settled.length}`), 'and it has to say how many rows it holds');
-  // The three headings that reach an agent carry no fold on the list and are not
-  // folded here either — a page that can hide what the fleet is being told is not a
-  // governance surface. They are what an empty queue draws.
-  assert.ok(!html.includes('▸ Live notices'), 'what reaches an agent is never behind a fold');
-});
-
 /**
  * The demo carries no goal-less ask on purpose — every fixture pull request has a
  * ticket that owns it — so the orphan is built here: the state the harness does
@@ -1964,7 +2078,7 @@ test('each tab replaces the last, and a selected goal outranks every one of them
  */
 test('the work graph is a panel reached from the bar, not a nav destination', () => {
   const nav = render(view()).split('</nav>')[0] ?? '';
-  for (const label of ['Overview', 'Tickets', 'Knowledge', 'Insights']) {
+  for (const label of ['Overview', 'Tickets', 'Obstacles', 'Insights']) {
     assert.ok(nav.includes(`>${label}`), `the nav is missing ${label}`);
   }
   assert.ok(!nav.includes('>Work'), 'the record is not a nav destination — it is the Record reading');
@@ -2059,7 +2173,7 @@ test('the way to the tracker is always drawn, and prefers the unambiguous key', 
   // Read off the control itself rather than off the page: `#<n>` is a ref other
   // surfaces here legitimately draw, so a whole-page search would pass on their
   // links and never see this one.
-  const opener = /<a[^>]*href="([^"]*)"[^>]*>Open ticket/.exec(both);
+  const opener = /<a[^>]*href="([^"]*)"[^>]*>(?:<svg(?:(?!<\/svg>)[\s\S])*<\/svg>)?Open ticket/.exec(both);
   assert.ok(opener, 'the control is drawn as a link when there is somewhere to go');
   assert.equal(opener[1], 'https://tracker/browse/right', 'the goal’s own ref wins over the number a PR shares');
 
@@ -2068,7 +2182,7 @@ test('the way to the tracker is always drawn, and prefers the unambiguous key', 
   assert.ok(nowhere.includes('Open ticket'), 'the row’s shape must not depend on what a provider resolved');
   assert.ok(nowhere.includes('aria-disabled="true"'), 'and it says it is unavailable rather than pretending');
   assert.ok(
-    !/<a[^>]*>Open ticket/.test(nowhere),
+    !/<a[^>]*>(?:<svg(?:(?!<\/svg>)[\s\S])*<\/svg>)?Open ticket/.test(nowhere),
     'a link that leads nowhere is the dead end refs exist to prevent, so it stops being one',
   );
 });

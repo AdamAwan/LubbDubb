@@ -7,7 +7,6 @@ import { Store } from '../src/store/store.js';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import { MAX_RETRO_DOCUMENT, retroOrigin, retroSubmitOrigin, validateRetrospective } from '../src/retro/retro.js';
-import { MAX_CLAIM_CHARS } from '../src/knowledge/knowledge.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
@@ -158,123 +157,6 @@ test('a submission with no summary is refused, and an over-long document is kept
   assert.equal(long.isError, false);
   assert.match(long.text, /"trimmed":\s*true/);
   assert.equal(system.store.getRetrospective('issue:9')?.document.length, MAX_RETRO_DOCUMENT);
-  system.store.close();
-});
-
-// -- lessons (issue #355 phase 2) ---------------------------------------------
-
-test('lessons are optional, bounded, and dropped rather than trimmed', () => {
-  const none = validateRetrospective({ summary: 'ok', document: 'd' });
-  assert.equal(none.ok, true);
-  if (!none.ok) return;
-  // A run that taught nothing general is the ordinary case, and it must not be a
-  // refusal: the write-up is the thing at stake.
-  assert.deepEqual(none.lessons, []);
-  assert.equal(none.lessonsDropped, 0);
-  assert.deepEqual(validateRetrospective({ summary: 'ok', document: 'd', lessons: 'not a list' }).ok, true);
-
-  const parsed = validateRetrospective({
-    summary: 'ok',
-    document: 'd',
-    lessons: ['  The suite wants a built web bundle first.  ', '', 'x'.repeat(MAX_CLAIM_CHARS + 1), 42],
-  });
-  assert.equal(parsed.ok, true);
-  if (!parsed.ok) return;
-  // The over-long one is *gone*, not truncated: half a lesson is a different
-  // claim, still promotable, and the gate is a person reading the claim.
-  assert.deepEqual(parsed.lessons, ['The suite wants a built web bundle first.']);
-  assert.equal(parsed.lessonsDropped, 3, 'an empty, an over-long and a non-string each count as a drop');
-});
-
-test('the lesson count is capped, and the overflow is counted rather than silent', () => {
-  const parsed = validateRetrospective({
-    summary: 'ok',
-    document: 'd',
-    lessons: Array.from({ length: 9 }, (_, i) => `lesson ${i}`),
-  });
-  assert.equal(parsed.ok, true);
-  if (!parsed.ok) return;
-  assert.ok(parsed.lessons.length < 9, 'a write-up that files nine has stopped discriminating');
-  assert.equal(parsed.lessonsDropped, 9 - parsed.lessons.length);
-  assert.deepEqual(parsed.lessons[0], 'lesson 0', 'the ones it led with are the ones it keeps');
-});
-
-test('a retro files its lessons as proposals against the goal it wrote up', async () => {
-  const system = build();
-  const retro = spawnAgent(system, 'issue:12:retro');
-
-  const filed = await callTool(system, retro, 'retro_submit', {
-    summary: 'Three parts, one red base.',
-    document: '# What shipped\n\nThe schema part.',
-    lessons: ['The suite wants a built web bundle first.', 'Tickets naming only a symptom under-specify a planner.'],
-  });
-  assert.equal(filed.isError, false);
-  assert.match(filed.text, /"lessonsFiled":\s*2/);
-
-  const claims = system.store.listFacts();
-  assert.equal(claims.length, 2);
-  for (const claim of claims) {
-    // The gate, asserted from the writer's side: an agent's own claim lands a
-    // `proposal` and there is no argument it can pass to land it anywhere else.
-    assert.equal(claim.reach, 'proposal');
-    assert.equal(claim.scope, 'fleet');
-    // Provenance is the goal, not the retro origin: the goal is what taught it,
-    // and `issue:12:retro` is an implementation detail of who wrote it down —
-    // which is `corroborationGoal`'s collapse, applied here like everywhere else.
-    assert.equal(claim.originRef, 'issue:12');
-    // And the corroboration says where it came from, because a retrospective has
-    // no separate observation to give: the write-up beside it is the observation.
-    assert.match(system.store.listCorroborations(claim.id)[0]!.words, /retrospective/);
-  }
-  system.store.close();
-});
-
-test('a resubmission revises the write-up without doubling its lessons', async () => {
-  const system = build();
-  const retro = spawnAgent(system, 'issue:12:retro');
-  const lessons = ['The suite wants a built web bundle first.'];
-
-  await callTool(system, retro, 'retro_submit', { summary: 'first', document: 'first', lessons });
-  const again = await callTool(system, retro, 'retro_submit', { summary: 'revised', document: 'revised', lessons });
-
-  assert.equal(again.isError, false);
-  assert.equal(system.store.getRetrospective('issue:12')?.summary, 'revised', 'the document is upserted');
-  // `claimsMatch` is what folds the second submission's claim onto the first's row
-  // — the matching every writer gets now, rather than the exact-text dedupe on one
-  // goal `proposeLesson` did.
-  assert.equal(system.store.listFacts().length, 1, 'the lessons are not appended a second time');
-  // Told the truth about what the operator will see, rather than "0 filed" — which
-  // would read as two of them having failed.
-  assert.match(again.text, /"lessonsFiled":\s*1/);
-  system.store.close();
-});
-
-test('a submission whose lessons are all refused still lands its write-up', async () => {
-  const system = build();
-  const retro = spawnAgent(system, 'issue:9:retro');
-
-  const filed = await callTool(system, retro, 'retro_submit', {
-    summary: 'ok',
-    document: 'the whole story',
-    lessons: ['y'.repeat(MAX_CLAIM_CHARS + 1)],
-  });
-  assert.equal(filed.isError, false, 'a lesson that does not fit never sinks the retrospective');
-  assert.match(filed.text, /"lessonsDropped":\s*1/, 'and the drop is named rather than silent');
-  assert.match(system.store.getRetrospective('issue:9')?.document ?? '', /whole story/);
-  assert.deepEqual(system.store.listFacts(), []);
-  system.store.close();
-});
-
-test('a working agent cannot file a lesson through the retro tool', async () => {
-  const system = build();
-  const worker = spawnAgent(system, 'issue:12');
-  const refused = await callTool(system, worker, 'retro_submit', {
-    summary: 'mine',
-    document: 'mine',
-    lessons: ['I should be able to tell the fleet things.'],
-  });
-  assert.equal(refused.isError, true);
-  assert.deepEqual(system.store.listFacts(), [], 'the origin check gates the lessons with the document');
   system.store.close();
 });
 
@@ -517,20 +399,6 @@ function busyFleet(system: System, rows: number): void {
       outcome: 'executed',
       detail: `somebody else’s decision ${i}`,
     });
-    system.store.proposeFact(
-      {
-        claim: `somebody else’s claim ${i}, which is nothing to do with the goal being written up.`,
-        scope: 'fleet',
-        lifetime: 'standing',
-        expiresInHours: null,
-        evidence: 'saw it',
-        supersedes: null,
-        resolvesWhen: null,
-        aboutRef: null,
-        where: null,
-      },
-      { agentId: null, taskId: null, goalRef: 'issue:19', sessionId: null, words: 'saw it' },
-    );
   }
 }
 
@@ -577,7 +445,7 @@ test('the harness’s own asks reach the dossier, and stop at the goal’s ref b
   store.close();
 });
 
-test('a busy fleet does not erase a goal’s decisions and its claims', async () => {
+test('a busy fleet does not erase a goal’s decisions', async () => {
   // Both reads were capped fleet-wide *before* the goal filter could run, so a
   // goal's rows survived only while nobody else wrote 200 on top of them — and the
   // decision section renders a confident denial rather than a short list.
@@ -592,20 +460,6 @@ test('a busy fleet does not erase a goal’s decisions and its claims', async ()
     outcome: 'deferred',
     detail: 'the decision this goal is about',
   });
-  store.proposeFact(
-    {
-      claim: 'the retry loop never backs off, which is the claim this goal raised.',
-      scope: 'fleet',
-      lifetime: 'standing',
-      expiresInHours: null,
-      evidence: 'read it',
-      supersedes: null,
-      resolvesWhen: null,
-      aboutRef: null,
-      where: null,
-    },
-    { agentId: null, taskId: null, goalRef: 'issue:1', sessionId: null, words: 'read it' },
-  );
   busyFleet(system, 250);
 
   store.recordDelivery({
@@ -622,8 +476,6 @@ test('a busy fleet does not erase a goal’s decisions and its claims', async ()
   assert.ok(retroTask, 'rule `issue-retro` dispatched a retrospective agent');
   assert.match(retroTask.prompt, /the decision this goal is about/);
   assert.doesNotMatch(retroTask.prompt, /No decisions are recorded against this issue/);
-  assert.match(retroTask.prompt, /### Raised while working this/, 'the section is gated on the list being non-empty');
-  assert.match(retroTask.prompt, /the retry loop never backs off/);
   assert.doesNotMatch(retroTask.prompt, /somebody else’s/, 'a goal-scoped read is scoped, not merely bigger');
 
   store.close();
@@ -650,20 +502,6 @@ test('the dossier’s caps keep the newest rows of every list it bounds', async 
       action: { type: 'propose_plan', reason: 'test', originRef: 'issue:1', planId: `plan_${i}` },
       escalationId: null,
     });
-    store.proposeFact(
-      {
-        claim: `CLAIM-${String(i).padStart(2, '0')} is a thing an agent noticed on the way past.`,
-        scope: 'fleet',
-        lifetime: 'standing',
-        expiresInHours: null,
-        evidence: 'saw it',
-        supersedes: null,
-        resolvesWhen: null,
-        aboutRef: null,
-        where: null,
-      },
-      { agentId: null, taskId: null, goalRef: 'issue:1', sessionId: null, words: 'saw it' },
-    );
   }
 
   store.recordDelivery({
@@ -682,7 +520,6 @@ test('the dossier’s caps keep the newest rows of every list it bounds', async 
     // list, row prefix, how many the cap keeps, what the note says was dropped
     ['escalations', 'ESCALATION-', 12, 8],
     ['proposals', 'issue:1:plan:p', 12, 8],
-    ['claims', 'CLAIM-', 15, 5],
   ];
   for (const [noun, prefix, max, dropped] of kept) {
     for (let i = 20 - max; i < 20; i++) {

@@ -10,6 +10,7 @@ import type {
   IssueLabelInput,
   PrBaseInput,
   PrBaseUpdateInput,
+  PrCloseInput,
   PrCreateInput,
   PrLabelInput,
   PrMergeInput,
@@ -70,6 +71,14 @@ export class FakeConnector implements Connector, ActionSink {
 
   mergePr(input: PrMergeInput): Promise<SendResult> {
     return this.composite.mergePr(input);
+  }
+
+  canClosePr(): boolean {
+    return this.composite.canClosePr();
+  }
+
+  closePr(input: PrCloseInput): Promise<SendResult> {
+    return this.composite.closePr(input);
   }
 
   setPrLabel(input: PrLabelInput): Promise<SendResult> {

@@ -839,6 +839,19 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     return { status: data.status ?? 'unknown' };
   }
 
+  /**
+   * Abandon a pull request. The same PATCH `completePullRequest` makes, with the
+   * one field that matters and none of the merge machinery — no
+   * `lastMergeSourceCommit`, because nothing is being merged and Azure does not
+   * ask for one to abandon.
+   */
+  async abandonPullRequest(pullRequestId: number): Promise<void> {
+    await this.request(this.withApiVersion(`${this.repoUrl}/pullrequests/${pullRequestId}`), {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'abandoned' }),
+    });
+  }
+
   async setWorkItemState(id: number, state: string): Promise<void> {
     // Work item updates are a JSON Patch document, not a plain JSON body — the
     // dedicated content type is required or Azure rejects the request. `add` on an

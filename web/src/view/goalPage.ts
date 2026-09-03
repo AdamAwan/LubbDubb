@@ -183,6 +183,29 @@ function reachesGoal(state: AppState, origin: string | null, ref: string): boole
 }
 
 /**
+ * Every pull request the cockpit knows to be closed: the world's window and the
+ * archive behind it, as one list.
+ *
+ * `world.closedPullRequests` is `closedPrWindowMs` wide, so drawn off it alone a
+ * goal's pull requests vanished from its page a few hours after they merged and
+ * the page of a goal delivered last month said nothing had ever named it. The
+ * archive (`state.archivedPullRequests`) is those same rows kept for good.
+ *
+ * The window is written **second** so its row wins a collision: the two carry the
+ * same pull request whenever one has closed recently, and the window's copy is the
+ * fresher reading of the two. Everything the archive adds is older than the window
+ * and therefore stale by construction — which is the whole of what it claims to be.
+ *
+ * @public shared with prPage, which resolves a pull request through the same pair
+ */
+export function closedPrs(state: AppState): PullRequest[] {
+  const byNumber = new Map<number, PullRequest>();
+  for (const pr of state.archivedPullRequests ?? []) byNumber.set(pr.number, pr);
+  for (const pr of state.world.closedPullRequests ?? []) byNumber.set(pr.number, pr);
+  return [...byNumber.values()];
+}
+
+/**
  * The pull requests this goal owns, by number — what the goal page names when it
  * asks the server for the goal's whole run history.
  *
@@ -195,7 +218,7 @@ function reachesGoal(state: AppState, origin: string | null, ref: string): boole
 export function goalPrNumbers(state: AppState, ref: string): number[] {
   const plan = (state.plans ?? []).find((p) => p.originRef === ref) ?? null;
   const parts = plan === null ? [] : (state.planParts ?? []).filter((p) => p.planId === plan.id).map((p) => p.prNumber);
-  const world = [...state.world.pullRequests, ...(state.world.closedPullRequests ?? [])];
+  const world = [...state.world.pullRequests, ...closedPrs(state)];
   return [
     ...new Set([
       ...parts.flatMap((n) => (n === null ? [] : [n])),
@@ -254,9 +277,7 @@ export function goalOfPr(state: AppState, prNumber: number): string | null {
   const linked = state.world.issues.find((i) => i.linkedPrNumber === prNumber);
   if (linked) return `issue:${linked.number}`;
 
-  const pr = [...state.world.pullRequests, ...(state.world.closedPullRequests ?? [])].find(
-    (p) => p.number === prNumber,
-  );
+  const pr = [...state.world.pullRequests, ...closedPrs(state)].find((p) => p.number === prNumber);
   return pr ? branchGoal(pr.branch) : null;
 }
 
@@ -396,7 +417,7 @@ export function buildGoalPage(
     parts,
     retiredParts,
     openPullRequests: state.world.pullRequests.filter((pr) => ownsPr(pr, issue, partPrs)),
-    closedPullRequests: (state.world.closedPullRequests ?? []).filter((pr) => ownsPr(pr, issue, partPrs)),
+    closedPullRequests: closedPrs(state).filter((pr) => ownsPr(pr, issue, partPrs)),
     agents: goalAgents.map<GoalAgentView>((agent) => {
       const origin = originOf(agent);
       const pr = origin === null ? null : /^pr:(\d+)$/.exec(origin);
@@ -629,4 +650,89 @@ function tailStage(page: GoalPageView): GoalStage {
   if (issue.shortfall) return { ...base, reading: 'fell short', tone: 'amber', done: null };
   if (issue.delivery) return { ...base, reading: 'delivered, ticket open', tone: 'blue', done: null };
   return { ...base, reading: 'not reached', tone: 'grey', done: null };
+}
+
+/**
+ * A section of the goal page that folds, by name. The names are what `Place`
+ * round-trips in `?open=` and `?shut=`, so a section added here without a draw
+ * site is a name the address bar accepts and nothing honours — and one added at
+ * the draw site without an entry here cannot be linked to at all.
+ */
+export const GOAL_SECTIONS = ['ticket', 'validation', 'signals', 'environments', 'tail', 'record'] as const;
+
+export type GoalSection = (typeof GOAL_SECTIONS)[number];
+
+/**
+ * Which of the goal page's foldable sections are worth opening *at this point in
+ * the goal's life* — the page's own answer to what is relevant yet, before the
+ * operator has said anything.
+ *
+ * A goal page draws the whole pipeline whether or not the goal has reached any of
+ * it, which is the rule that keeps a quiet surface distinguishable from a broken
+ * one. Drawn *open*, though, that rule costs three screens of "no checks",
+ * "nothing declared", "not shipped" between the plan and the work — so the cards
+ * stay, and the ones with nothing in them yet stay **shut**. The heading is the
+ * reading: every one of these carries its count or its state beside its name, so a
+ * folded card still says what it would have said.
+ *
+ * **Default, never state.** What is returned is where a section starts; `?open=`
+ * and `?shut=` are the operator's own word about one, and they outrank this in
+ * both directions. So a card the operator folded stays folded when the goal ships,
+ * and one they opened early does not close under them.
+ *
+ * The order the questions are asked in is the order the defaults unlock:
+ * validation is *did we build it*, signals are *did it do anything in production*,
+ * and neither is answerable until the work is somewhere. The ticket is the mirror
+ * image — read once, at pickup, and furniture from the moment there is a plan.
+ */
+export function goalSectionsOpen(page: GoalPageView): Record<GoalSection, boolean> {
+  return {
+    ticket: !workStarted(page),
+    // The arrival is what makes these two relevant, and a card with nothing in it
+    // is not made relevant by anything: a goal that shipped without ever declaring
+    // a check reads "no checks" in its heading, and opening it to say so at length
+    // is the emptiness the fold exists to spare. Either way the second arm opens it
+    // regardless of where the work is — a check somebody has already ruled on, or
+    // one waiting on the operator, is a card with something in it.
+    validation: (shipped(page) && liveChecks(page) > 0) || page.checks.some((c) => c.state !== 'unrun'),
+    signals: (shipped(page) && page.signals.length > 0) || page.signals.some((s) => !s.live || s.proposal !== null),
+    environments: page.environments.some((e) => e.status !== 'absent'),
+    tail: tailBegun(page),
+    // The work record is what is *left* of the goal once the snapshot has
+    // forgotten it, and it fetches its own route on open. Nothing about the goal's
+    // progress makes it owed, so it is the one section with no relevant moment.
+    record: false,
+  };
+}
+
+/**
+ * Whether anything has happened on this goal yet. A plan is the first thing that
+ * does, and either of the others without one is a goal being worked outside its
+ * plan — which is still work started.
+ */
+function workStarted(page: GoalPageView): boolean {
+  return page.plan !== null || page.openPullRequests.length > 0 || page.agents.length > 0;
+}
+
+/**
+ * Whether any of this goal's work is anywhere. `partial` counts: half the work
+ * being in an environment is what the validation card is most needed for, and
+ * folding it in with `absent` would hold the card shut through exactly the
+ * deployment an operator is chasing. `unknown` does not — a probe that could not
+ * say is not a reading that the work arrived.
+ * → docs/spec/24-environments.md#the-three-verdicts
+ */
+function shipped(page: GoalPageView): boolean {
+  return page.environments.some((e) => e.status === 'reached' || e.status === 'partial');
+}
+
+/** The checks an amendment has not withdrawn — what the card would actually draw. */
+function liveChecks(page: GoalPageView): number {
+  return page.checks.filter((c) => c.supersededReason === null).length;
+}
+
+/** Whether anything in the tail has happened — a verdict on the goal, a write-up, or a shut ticket. */
+function tailBegun(page: GoalPageView): boolean {
+  const { issue } = page;
+  return issue.state !== 'open' || Boolean(issue.delivery) || Boolean(issue.shortfall) || Boolean(issue.retrospective);
 }

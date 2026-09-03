@@ -45,12 +45,12 @@ this action_, which is the honest answer to why the queue appears to stall: `ciE
 `authorize` are awaited in the same serial loop, and a plan whose first action is a merge waiting on an
 authorization read holds its dispatches exactly as a handover does. The step says which wait it is:
 
-| Step            | What it is waiting on                                                           |
-| --------------- | ------------------------------------------------------------------------------- |
-| `picked-up`     | Nothing yet — the action is in hand and has not reached an await.                |
-| `ci-evidence`   | `ciEvidenceFor`: the failing check output, read out of the provider.             |
-| `slot-handover` | `workingDirectory` → `WorktreeManager.ensure`. The minutes-long one.             |
-| `authorizing`   | `authorize`: whether the outbound act is already authorized. A read.             |
+| Step            | What it is waiting on                                                |
+| --------------- | -------------------------------------------------------------------- |
+| `picked-up`     | Nothing yet — the action is in hand and has not reached an await.    |
+| `ci-evidence`   | `ciEvidenceFor`: the failing check output, read out of the provider. |
+| `slot-handover` | `workingDirectory` → `WorktreeManager.ensure`. The minutes-long one. |
+| `authorizing`   | `authorize`: whether the outbound act is already authorized. A read. |
 
 The synchronous steps between them are deliberately unnamed: nothing yields there, so no reader can
 observe one. An action whose whole body is synchronous therefore goes on and off the board inside a
@@ -609,44 +609,36 @@ dispatch prompt whenever the goal carries an instruction nobody has concluded ye
 - **An untouched goal appends nothing**, so its prompt is byte-identical to one composed before this
   existed.
 
-## What the fleet knows about this goal reaches the agent
+## What the fleet has already run into reaches the agent
 
-`recordDispatchTask` appends `renderScopedKnowledgeNote(...)` (`src/knowledge/block.ts`, pure) — the
-knowledge base's claims whose **scope matches this dispatch**: the `goal:` claims for the goal it is
-for, and the `check:` claims for the checks it answers → [27](27-knowledge.md#delivery-two-prompts-not-one).
+`recordDispatchTask` appends the obstacles whose **keys intersect this dispatch** — the checks it is
+about, the paths its goal touches — through `src/obstacles/delivery.ts`
+→ [27](27-obstacles.md#delivery).
 
-- **Here rather than in the system prompt**, and that split is the whole of delivery. The injected
-  claims are identical for every agent, so they are a cached prefix paid once
-  ([10](10-agent-runtimes.md#the-knowledge-block)); these vary per dispatch by construction and would
-  destroy that prefix. What varies goes in the task prompt, always.
-- **Whatever the block is already carrying is not here.** Since #27 phase 4 an injected claim rides
-  the system prompt whatever its scope — a check that flakes flakes for the agent about to run it, not
-  only for the one dispatched to fix it — so what this appends is the `lookup` claims in scope, plus
-  the goal's own, which never ride the block. One predicate decides both, `ridesSystemPrompt`, read
-  here inverted: two lists that merely agreed today would send one sentence twice or drop it entirely,
-  and neither is visible from either renderer alone.
-- **In the executor rather than in a rule**, the attachments' placement for the attachments' reason —
-  every dispatch passes through `recordDispatchTask` whatever composed it — and for one more: **no
-  rule, desk or gate reads a fact**, asserted structurally over `src/dispatcher/` by
-  `test/knowledge.test.ts`. Nothing is dispatched, held or ranked because of a claim.
+- **There is no fleet-wide block, and there is no system-prompt half.** Everything the board holds is
+  keyed, and a keyed thing is delivered to the dispatches it is about. The claim store that did inject
+  one fleet-wide is gone ([27](27-obstacles.md#what-the-claim-store-left-behind)), and what replaced
+  it deliberately did not rebuild it: blanket context at these sizes is skimmed rather than read, and
+  adding to it makes every line already in it worth less.
+- **In the executor rather than in a rule**, the attachments' placement for the attachments' reason:
+  every dispatch passes through `recordDispatchTask` whatever composed it. **No rule, desk or gate
+  reads the board to decide a dispatch** — the one exception is the bounded repair rule, which is a
+  candidate in the pipeline like any other ([05](05-dispatcher.md#the-rule-book)).
 - **The scope is the goal, not the concern.** `dispatchFactScopes` collapses `pr:412:ci` to
-  `goal:pr:412` through `corroborationGoal` — the same collapse a corroboration is counted under, so
-  the scope a fact is written under and the scope a dispatch is read under cannot drift. `pr:412:ci`
-  and `pr:412:comments` are two origins of one goal.
+  `goal:pr:412` through `corroborationGoal` — the same collapse a voice is counted under, so the scope
+  a row is delivered on and the scope it is judged against cannot drift. `pr:412:ci` and
+  `pr:412:comments` are two origins of one goal.
 - **A check name is matched exactly**, `priorRemedies`' choice and the same fragility for the same
   reason: a prefix match would put another job's history in front of an agent under a name it would
-  read as its own. When a job is renamed the claim silently stops being delivered, which the cockpit's
-  Knowledge page says out loud where a check scope is drawn.
+  read as its own.
+- **Only what reaches agents is delivered** — `standing` and `owned`, asked of `reachesAgents` rather
+  than restated, so the states that reach a prompt and the states the intake answers _it is not yours_
+  on cannot drift. A `signature` or a `cmd` key delivers nothing: a key that may not resolve an
+  obstacle may not decide who is told about one.
 - **Appended, never interpolated.** Prompt templates are operator-overridable and `loadPromptTemplates`
-  rejects only _unknown_ placeholders, so a `{knowledge}` token would be dropped in silence by every
+  rejects only _unknown_ placeholders, so an `{obstacles}` token would be dropped in silence by every
   override written before this existed — on exactly the deployments that customised most.
-- **`lookup` means _not injected everywhere_, not _never injected_.** A `check:format:check` claim
-  costs nothing on a dispatch about anything else and is in front of the agent that needs it without
-  anyone asking. What the store will not deliver at all is a `proposal` — one agent's claim nothing has
-  agreed with — a `committed` one, which is in the repository now, and a lapsed expiring one.
-- **Bounded, and it says what it dropped**, `priorRemedies`' rule: an agent that reads a partial record
-  as a whole one concludes something from the absence of an entry that was merely trimmed.
-- **A goal nothing has been written about appends nothing**, so its prompt is byte-identical to one
+- **A dispatch nothing on the board matches appends nothing**, so its prompt is byte-identical to one
   composed before this existed.
 
 ## An operator's attachments reach the agent
