@@ -114,12 +114,12 @@ test('watching a container says what else the click will tag', () => {
 });
 
 test('a type tone is the family, whatever casing and spacing the tracker uses', () => {
-  assert.equal(issueTypeTone('Bug'), 'bug');
-  assert.equal(issueTypeTone('  user story '), 'story');
-  assert.equal(issueTypeTone('Product Backlog Item'), 'story');
-  assert.equal(issueTypeTone('Tech Debt'), 'debt');
-  assert.equal(issueTypeTone('Epic'), 'container');
-  assert.equal(issueTypeTone('Task'), 'task');
+  assert.equal(issueTypeTone('Bug'), 'red');
+  assert.equal(issueTypeTone('  user story '), 'green');
+  assert.equal(issueTypeTone('Product Backlog Item'), 'green');
+  assert.equal(issueTypeTone('Tech Debt'), 'amber');
+  assert.equal(issueTypeTone('Epic'), 'violet');
+  assert.equal(issueTypeTone('Task'), 'blue');
 });
 
 /**
@@ -128,10 +128,10 @@ test('a type tone is the family, whatever casing and spacing the tracker uses', 
  * were tones rather than being coloured as something it is not.
  */
 test('a type the cockpit has no opinion about carries no tone', () => {
-  assert.equal(issueTypeTone('Capability'), '');
-  assert.equal(issueTypeTone(''), '');
-  assert.equal(issueTypeTone(null), '');
-  assert.equal(issueTypeTone(undefined), '');
+  assert.equal(issueTypeTone('Capability'), undefined);
+  assert.equal(issueTypeTone(''), undefined);
+  assert.equal(issueTypeTone(null), undefined);
+  assert.equal(issueTypeTone(undefined), undefined);
 });
 
 test('the watch toggle believes the world, not the mirror it is drawn beside', () => {

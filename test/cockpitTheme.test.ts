@@ -697,5 +697,11 @@ test('uppercase text outside a badge takes its size from the label ramp', () => 
     }
   }
   assert.deepEqual(offenders, [], `a label size nobody chose:\n${offenders.join('\n')}`);
-  assert.ok(labels > 10, `only ${labels} uppercase rules found — the sweep is not reaching them`);
+  // A canary on the sweep itself, not a floor on the sheets: it fails if `ruleBlocks`
+  // stops parsing or the `text-transform` lookup stops matching, which would make the
+  // assertion above vacuously true. The number is deliberately well under the count —
+  // it was twenty-odd while every badge family declared its own uppercase, and folding
+  // them into the one tag is exactly the kind of change that should not have to move a
+  // threshold. → docs/spec/17-cockpit.md#the-tag
+  assert.ok(labels > 5, `only ${labels} uppercase rules found — the sweep is not reaching them`);
 });
