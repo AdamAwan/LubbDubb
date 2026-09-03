@@ -554,3 +554,81 @@ test('no command configured spawns nothing at all', async () => {
   );
   system.store.close();
 });
+
+/**
+ * The review leads the PR concerns, and leading means the concerns below it wait
+ * — not merely that it sorts above them when it happens to be on the list.
+ * → `docs/spec/07-pull-requests.md#when-it-runs`
+ */
+test('a red build waits for the review rather than taking the branch under it', async () => {
+  const { system } = build({ enabled: true });
+  system.connector.inject({ kind: 'new_pr', number: 60, title: 'A change', branch: 'feature-60' });
+  system.connector.inject({ kind: 'ci_failed', prNumber: 60 });
+  await system.harness.runCycle('manual');
+
+  assert.ok(
+    findTask(system.store, (t) => t.originRef === 'pr:60:review'),
+    'the review took the pulse',
+  );
+  assert.equal(
+    findTask(system.store, (t) => t.originRef === 'pr:60:ci'),
+    undefined,
+    'the CI fix would rewrite the diff the reviewer is about to read',
+  );
+  system.store.close();
+});
+
+test('and it waits through the routing too, rather than inheriting the top slot', async () => {
+  // The bug this is about: the routing wait suppressed the *review* concern and
+  // nothing else, so the CI fix became the leading concern and took the branch
+  // in the gap — the review then landed on a diff the harness had rewritten.
+  const { system } = build({ enabled: true, allowSkip: true });
+  system.connector.inject({ kind: 'new_pr', number: 61, title: 'A change', branch: 'feature-61' });
+  system.connector.inject({ kind: 'ci_failed', prNumber: 61 });
+  await system.harness.runCycle('manual');
+
+  assert.ok(
+    findTask(system.store, (t) => t.originRef === 'pr:61:review-triage'),
+    'the routing is what runs',
+  );
+  assert.equal(
+    findTask(system.store, (t) => t.originRef === 'pr:61:ci'),
+    undefined,
+    'a routing still to come is a review still to come, and the pull request contributes no other candidate',
+  );
+  system.store.close();
+});
+
+/**
+ * The reviewer takes a read-only checkout of the branch precisely so it is not in
+ * the queue for it. → `docs/spec/07-pull-requests.md#the-reviewers-checkout`
+ */
+test('an agent on the pull request branch neither blocks the review nor is told to do it', async () => {
+  const { system } = build({ enabled: true });
+  // A human thread stands the review down and puts an agent on the branch; the
+  // reply handles it, and the review falls due with that agent still working.
+  system.connector.inject({ kind: 'new_pr', number: 63, title: 'A change', branch: 'feature-63' });
+  system.connector.inject({ kind: 'pr_comment', prNumber: 63, author: 'bob', body: 'Rename this.' });
+  await system.harness.runCycle('manual');
+  const worker = findTask(system.store, (t) => t.originRef === 'pr:63:comments');
+  assert.equal(worker?.branch, 'feature-63', 'the comment agent holds the pull request branch');
+
+  const thread = (await system.connector.getState()).pullRequests[0]!.unresolvedComments[0]!;
+  await system.connector.postPrReply({ prNumber: 63, commentId: thread.id, body: 'Done.' });
+  system.connector.inject({ kind: 'ci_failed', prNumber: 63 });
+  await system.harness.runCycle('manual');
+
+  const review = findTask(system.store, (t) => t.originRef === 'pr:63:review');
+  assert.ok(review, 'the review takes its own checkout, so the branch agent is not in its way');
+  assert.equal(review!.branch, 'review/pr-63');
+
+  // And it was never delivered as a note instead: that agent's origin is not
+  // `pr:63:review`, so `review_report` would refuse and the read would happen
+  // with nothing recording it. The ordinary signals still reach it.
+  const notes = system.store
+    .listDecisions()
+    .filter((d) => d.action.type === 'respond_to_agent')
+    .flatMap((d) => (d.action as { originRefs?: string[] }).originRefs ?? []);
+  assert.deepEqual(notes, ['pr:63:ci'], 'the review is a dispatch of its own or it is nothing');
+  system.store.close();
+});
