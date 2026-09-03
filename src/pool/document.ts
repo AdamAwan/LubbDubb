@@ -17,6 +17,39 @@ import type { PoolClockDocument, PoolClockKind, PoolDigestDocument, PoolDocument
 export const POOL_SCHEMA_VERSION = 1;
 
 /**
+ * The clock kinds a fetch names, and the only kinds it will parse.
+ *
+ * A list rather than the literal at the call site because a **retired** kind must
+ * leave both at once. `claims` did not: the arm went, `PoolClockKind` narrowed to
+ * `digest`, and the git transport went on naming `claims.json` in every fleet's
+ * directory — so every pool that had ever run the old build fetched its own stale
+ * file and recorded `unknown document kind "claims"` on every pulse, forever.
+ * → `docs/spec/28-cross-fleet-pool.md#one-writer-per-namespace`
+ */
+export const POOL_CLOCK_KINDS: readonly PoolClockKind[] = ['digest'];
+
+/**
+ * The clock kinds that once existed here, and the files a fleet must clear out of
+ * its **own** namespace.
+ *
+ * A retired kind's document is not merely unread: it stays in the pool repository,
+ * and its companion stays in the wiki as a page about an arm that is gone. Nobody
+ * else can remove it — one writer per namespace cuts both ways — so each fleet
+ * clears its own, on the next publish, and a pool heals as its fleets upgrade.
+ *
+ * A kind is added here when it leaves {@link POOL_CLOCK_KINDS} and never removed
+ * from it afterwards: the deployment that has not published since the retirement is
+ * exactly the one still holding the file.
+ * → `docs/spec/28-cross-fleet-pool.md#what-a-retired-kind-leaves-behind`
+ */
+const POOL_RETIRED_CLOCK_KINDS: readonly string[] = ['claims'];
+
+/** Both files a retired kind left in one fleet's namespace: the document and its companion. */
+export function poolRetiredPaths(fleetId: string): string[] {
+  return POOL_RETIRED_CLOCK_KINDS.flatMap((kind) => [`fleets/${fleetId}/${kind}.json`, `fleets/${fleetId}/${kind}.md`]);
+}
+
+/**
  * The pool's payload layer: what a document is, how one is read back, and what
  * makes two of them the same document.
  *

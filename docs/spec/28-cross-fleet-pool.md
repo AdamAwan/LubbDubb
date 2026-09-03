@@ -252,6 +252,30 @@ address is the transport's, and a text substrate may have none that survives a r
 publishing under another fleet's name is the single thing that can break one writer per namespace, so
 it is checked rather than assumed.
 
+### What a retired kind leaves behind
+
+**A kind that leaves the union must leave `fetch` in the same change, and the list is the one place
+that says which kinds exist** (`POOL_CLOCK_KINDS`). `claims` did not: the arm went, the type narrowed
+to `digest`, the parser lost its grammar for it — and the git transport went on naming `claims.json`
+in every fleet's directory. Every pool that had ever run the old build then fetched its own stale
+file, failed to parse it, and recorded `unknown document kind "claims"` on every pulse, for as long
+as the file existed. Nothing was broken and nothing was red; the error log simply filled up with one
+sentence about a document nobody had published in months.
+
+**The files themselves are cleared by the fleet that wrote them, on its next publish**
+(`POOL_RETIRED_CLOCK_KINDS`, `poolRetiredPaths`). Nobody else can: one writer per namespace cuts both
+ways, and another fleet's leftovers are not this fleet's to delete — so a pool heals as its fleets
+upgrade, each clearing its own document and its own companion. The companion matters as much as the
+document, because a wiki that keeps a page about an arm that is gone describes a harness nobody is
+running.
+
+Two properties keep that safe. **Only paths that are actually there** are unlinked and staged — `git
+add` on a path that never existed is a fatal pathspec error, so a deployment that predates nothing
+would otherwise fail every publish. And the removal rides along on the publish's own commit, inside
+the write set that is already exactly `<path>/fleets/<fleetId>/`. A retired kind is **added** to the
+retired list and never removed from it afterwards: the deployment that has not published since the
+retirement is exactly the one still holding the file.
+
 ## The human-readable companion
 
 A pool lives where people already are — a team's wiki, a repository somebody browses on the web. What
