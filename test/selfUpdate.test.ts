@@ -57,7 +57,14 @@ function standing(over: Partial<BuildStanding> = {}): BuildStanding {
     upstream: 'bbbbbbb',
     behind: 3,
     ahead: 0,
-    commits: [{ sha: 'bbbbbbb', subject: 'Tidy the questions a dead agent leaves' }],
+    commits: [
+      {
+        sha: 'bbbbbbb',
+        author: 'A Contributor',
+        authoredAt: '2026-08-16T09:00:00.000Z',
+        subject: 'Tidy the questions a dead agent leaves',
+      },
+    ],
     dirty: false,
     branch: 'main',
     checkedAt: '2026-08-17T00:00:00.000Z',
@@ -386,6 +393,158 @@ test('an untracked file in the install directory does not take the upgrade away'
   assert.equal(standing.behind, 3);
   assert.equal(standing.dirty, false);
   assert.equal(upgradability(standing).can, true);
+});
+
+/**
+ * A desk watching a project checkout as well as its own install, each answering
+ * with its own standing. The reader is told apart by `root`, which is the only
+ * thing that differs between the two calls the desk makes in one pass.
+ */
+function deskWithProject(
+  system: System,
+  project: Partial<BuildStanding>,
+  pull: (opts: {
+    root: string;
+    remote: string;
+    branch: string;
+  }) => Promise<{ ok: true } | { ok: false; error: string }>,
+): UpdateDesk {
+  return new UpdateDesk({
+    store: system.store,
+    runtimeControl: system.runtimeControl,
+    errors: system.errors,
+    remote: 'origin',
+    branch: 'release',
+    checkIntervalMs: 60_000,
+    autoUpdate: false,
+    drainDeadlineMs: 0,
+    supervised: true,
+    project: { root: '/repo', remote: 'origin', branch: 'main' },
+    read: (opts) => Promise.resolve(opts.root === '/repo' ? standing(project) : standing()),
+    pull: (opts) => pull(opts),
+  });
+}
+
+test('pulling the project fast-forwards it, and re-reads so the card stops saying it is behind', async () => {
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    streamSpawner: silentSpawner,
+    errorMirror: () => {},
+  });
+  let pulled: { root: string; remote: string; branch: string } | null = null;
+  let caughtUp = false;
+  const desk = new UpdateDesk({
+    store: system.store,
+    runtimeControl: system.runtimeControl,
+    errors: system.errors,
+    remote: 'origin',
+    branch: 'release',
+    checkIntervalMs: 60_000,
+    autoUpdate: false,
+    drainDeadlineMs: 0,
+    supervised: true,
+    project: { root: '/repo', remote: 'origin', branch: 'main' },
+    read: (opts) =>
+      Promise.resolve(opts.root === '/repo' ? standing({ behind: caughtUp ? 0 : 3, commits: [] }) : standing()),
+    pull: (opts) => {
+      pulled = opts;
+      caughtUp = true;
+      return Promise.resolve({ ok: true as const });
+    },
+  });
+  await desk.check(true);
+
+  const result = await desk.pullProject();
+
+  assert.ok(result.ok);
+  assert.deepEqual(pulled, { root: '/repo', remote: 'origin', branch: 'main' });
+  // Forced, not left to the interval: the whole point of the click was to change
+  // the answer, and a card still saying three are waiting is a button that looks
+  // like it did nothing.
+  assert.equal(result.build.project?.behind, 0);
+  assert.equal(result.build.projectPull.can, false);
+
+  system.store.close();
+});
+
+test('a pull is refused on a checkout that is not on the branch, dirty, or already current', async () => {
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    streamSpawner: silentSpawner,
+    errorMirror: () => {},
+  });
+  const never = () => Promise.reject(new Error('the pull must not run'));
+
+  // On another branch: `pull --ff-only origin main` here merges origin/main into
+  // whatever is checked out, which is a different and unasked-for operation.
+  const elsewhere = deskWithProject(system, { branch: 'spike/indexes' }, never);
+  await elsewhere.check(true);
+  const onSpike = await elsewhere.pullProject();
+  assert.equal(onSpike.ok, false);
+  assert.match(onSpike.ok ? '' : onSpike.error, /not main/);
+
+  const messy = deskWithProject(system, { dirty: true }, never);
+  await messy.check(true);
+  const onDirty = await messy.pullProject();
+  assert.equal(onDirty.ok, false);
+  assert.match(onDirty.ok ? '' : onDirty.error, /uncommitted changes/);
+
+  const current = deskWithProject(system, { behind: 0 }, never);
+  await current.check(true);
+  const onCurrent = await current.pullProject();
+  assert.equal(onCurrent.ok, false);
+  assert.match(onCurrent.ok ? '' : onCurrent.error, /nothing to pull/);
+
+  system.store.close();
+});
+
+test('a dirty project checkout refuses the upgrade, and an unreadable one does not', () => {
+  // The restart is what makes this the build's business: it interrupts the agents
+  // working from that checkout, and uncommitted work sitting in it is work nobody
+  // has claimed.
+  const dirtyProject = upgradability(standing(), standing({ dirty: true }));
+  assert.equal(dirtyProject.can, false);
+  assert.match(dirtyProject.blocked!, /project checkout has uncommitted changes/);
+
+  // A project reading nobody could take is a second opinion about a different
+  // repository. Letting it take the button away would park a fleet over a fact
+  // that has nothing to do with the build.
+  assert.equal(upgradability(standing(), standing({ unavailable: 'could not reach origin/main' })).can, true);
+  assert.equal(upgradability(standing(), null).can, true);
+  assert.equal(upgradability(standing()).can, true);
+});
+
+test('the reading carries the project standing beside the build it gates', () => {
+  const project = standing({ dirty: true, behind: 2 });
+  const reading = buildReading({ standing: standing(), intent: IDLE_INTENT, live: 0, supervised: true, project });
+
+  assert.equal(reading.project, project);
+  assert.equal(reading.upgradable, false);
+  // The card beside it draws `blocked`, and it has to name the *other* checkout —
+  // a Build card with no buttons and no reason is the refusal the panel was built
+  // to word going missing.
+  assert.match(reading.blocked!, /project checkout/);
+  // Absent, nothing about the build changes.
+  assert.equal(buildReading({ standing: standing(), intent: IDLE_INTENT, live: 0, supervised: true }).project, null);
+});
+
+test('each waiting commit carries who wrote it and when, newest first', async () => {
+  const { install } = behindCheckout();
+
+  const standing = await readBuildStanding({ remote: 'origin', branch: 'main', now: at, root: install });
+
+  // The changelog is the card's whole reason to exist, and a subject with no name
+  // and no age beside it is the gauge again with more words.
+  assert.deepEqual(
+    standing.commits.map((c) => c.subject),
+    ['release 4', 'release 3', 'release 2'],
+  );
+  for (const commit of standing.commits) {
+    assert.equal(commit.author, 'Test');
+    // Parseable rather than a fixed string: the checkout stamps its own clock, and
+    // what the cockpit needs is something `relTime` can subtract.
+    assert.ok(Number.isFinite(new Date(commit.authoredAt).getTime()), commit.authoredAt);
+  }
 });
 
 test('a modified tracked file still refuses the upgrade, because the pull would fail', async () => {

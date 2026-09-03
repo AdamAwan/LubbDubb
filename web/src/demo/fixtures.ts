@@ -2059,28 +2059,142 @@ export function buildDemoState(): DemoSeed {
     // omitted because the wire sends them unconditionally — a demo that left them
     // out was a payload the real cockpit never receives.
     recovery: [],
-    // A current build, which is the state the gauge is in almost always and the
-    // one worth demonstrating: muted, in its fixed place, saying nothing. The demo
-    // has no process to upgrade, so the panel behind it is a reading and no controls.
+    // A build a day behind, which is the state the Build card exists for: current
+    // is one muted line and teaches nothing, and the changelog — what changed, who
+    // wrote it, how long it has been sitting — is the whole reason the card beats
+    // the gauge it replaced. `behind` is 14 against ten commits carried, because
+    // the reading itself caps at ten (`MAX_COMMITS`) and a demo that never showed
+    // a capped list would leave the card's "…and N more" line undrawn on the one
+    // surface built to rehearse it.
+    //
+    // The subjects are LubbDubb's own, not Markdown Magpie's: this is the harness
+    // watching the process it runs inside, and it is the one card on the Overview
+    // that is not about the codebase the fleet is pointed at.
     build: {
-      state: 'current',
-      label: 'current',
-      live: 0,
-      upgradable: false,
-      blocked: 'this build is current — there is nothing to take',
-      supervised: false,
+      state: 'behind',
+      label: '14 behind',
+      live: 3,
+      upgradable: true,
+      blocked: null,
+      supervised: true,
       standing: {
         head: '4f2a91c7e0d3b6a58f1c0e9d7b4a2c85f36e0d19',
-        upstream: '4f2a91c7e0d3b6a58f1c0e9d7b4a2c85f36e0d19',
-        behind: 0,
+        upstream: 'b7d40e2af95c118d3e6a70c249fb8e0136ad5c74',
+        behind: 14,
         ahead: 0,
-        commits: [],
+        commits: [
+          {
+            sha: '59d88e1',
+            author: 'Priya Raman',
+            authoredAt: ago(4 * 60),
+            subject: "Hold a pull request's other concerns until its review is done",
+          },
+          {
+            sha: '0b49e6f',
+            author: 'Priya Raman',
+            authoredAt: ago(6 * 60),
+            subject: 'Fold the top bar down to two gauges and a menu',
+          },
+          {
+            sha: 'fc58a06',
+            author: 'Tomas Weir',
+            authoredAt: ago(9 * 60),
+            subject: 'Gate the orphan band on a goal that still exists',
+          },
+          {
+            sha: '7058ee6',
+            author: 'Tomas Weir',
+            authoredAt: ago(11 * 60),
+            subject: 'Stop fetching a retired kind, and clear what it left behind',
+          },
+          {
+            sha: 'ffbcf02',
+            author: 'Priya Raman',
+            authoredAt: ago(13 * 60),
+            subject: 'Ask the tracker, not the Features tab, whether to warn about no parent',
+          },
+          {
+            sha: 'a91c3d5',
+            author: 'Dele Okonjo',
+            authoredAt: ago(16 * 60),
+            subject: 'Reap the process subtree before signalling the agent',
+          },
+          {
+            sha: '2e7b410',
+            author: 'Dele Okonjo',
+            authoredAt: ago(18 * 60),
+            subject: 'Keep the drain deadline off an unreadable timestamp',
+          },
+          {
+            sha: 'd03f88a',
+            author: 'Priya Raman',
+            authoredAt: ago(20 * 60),
+            subject: 'Draw a reference beside the control, never inside it',
+          },
+          {
+            sha: '6ca7192',
+            author: 'Tomas Weir',
+            authoredAt: ago(22 * 60),
+            subject: 'Record a landing by sweeping for unattributed merges',
+          },
+          {
+            sha: 'bb15e4c',
+            author: 'Dele Okonjo',
+            authoredAt: ago(25 * 60),
+            subject: 'Seed the pause from the intent when the upgrade brought us back',
+          },
+        ],
         dirty: false,
         branch: 'main',
-        checkedAt: ago(12),
+        checkedAt: ago(2),
         unavailable: null,
       },
       intent: { state: 'idle', targetSha: null, requestedAt: null, pausedByDrain: false },
+      // The *worked* repository, read on the same timer by the same reader. Three
+      // commits on Markdown Magpie's `main` that this clone has not got — two of
+      // them the fleet's own merges, one a hand-landed hotfix, which is the case
+      // the card exists for: work in the project that no goal, pull request or
+      // arrival on this page accounts for.
+      //
+      // Clean, and that is load-bearing rather than incidental: `upgradability`
+      // refuses an upgrade over uncommitted changes in *either* checkout, so a
+      // dirty fixture here would draw a Build card with no controls and hide the
+      // feature the demo is showing.
+      project: {
+        head: 'c18a6f30b94d27e5a0f3d81c6b52e9047fa13d6e',
+        upstream: '5d9e0c41a7b8362fd05e1749cb3a806e2f4d91b7',
+        behind: 3,
+        ahead: 0,
+        commits: [
+          {
+            sha: '5d9e0c4',
+            author: 'lubbdubb',
+            authoredAt: ago(52),
+            subject: 'Merge PR #406 — Cap the retrieval context at the token budget',
+          },
+          {
+            sha: 'a4c71b8',
+            author: 'Priya Raman',
+            authoredAt: ago(3 * 60),
+            subject: 'Hotfix: stop the indexer retrying a 404 forever',
+          },
+          {
+            sha: '90ffd22',
+            author: 'lubbdubb',
+            authoredAt: ago(5 * 60),
+            subject: 'Merge PR #390 — Validate job payloads in the catalog',
+          },
+        ],
+        dirty: false,
+        branch: 'main',
+        checkedAt: ago(2),
+        unavailable: null,
+      },
+      // The server folds this from the standing above (`projectPullability`); the
+      // fixture states it, because `web/src/` may name no server module but
+      // `src/wire.ts`. It has to agree with the standing by hand, which is the
+      // price of that rule and the reason the demo keeps the two adjacent.
+      projectPull: { can: true, blocked: null },
     },
     // Left the tracker's open set — moved to Resolved in Azure — while the
     // harness still holds its run: the state that separates "the ticket is

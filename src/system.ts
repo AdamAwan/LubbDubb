@@ -1162,6 +1162,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     checkIntervalMs: config.selfUpdate.checkIntervalMs,
     autoUpdate: config.selfUpdate.autoUpdate,
     drainDeadlineMs: config.selfUpdate.drainDeadlineMs,
+    // The worked repository, on the same timer. `defaultBranch` and not
+    // `selfUpdate.branch`: this is the branch the fleet integrates onto, which is
+    // a different repository's different question.
+    project: { root: config.repoRoot, remote: 'origin', branch: config.defaultBranch },
   });
 
   // How the harness files a tracker item: three of the four filing arms call this

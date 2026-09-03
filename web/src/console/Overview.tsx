@@ -15,6 +15,7 @@ import type {
 } from '../types.js';
 import { buildGoalPage, buildGoalTrack, furthestEnvironment, goalOfPr, type GoalTrack } from '../view/goalPage.js';
 import { AsyncButton } from '../components/AsyncButton.js';
+import { Icon } from '../components/icons.js';
 import { elapsed, fmtUsd, relTime } from '../components/util.js';
 import { Ref, RefText, refLabel } from '../components/refs.js';
 import { CiLadder, StaleChip, waitedFor } from './GoalPage.js';
@@ -26,14 +27,19 @@ import { ReviewMark } from '../components/ReviewMark.js';
 import { orphanCount, orphanGoal } from '../view/orphanGoal.js';
 
 /**
- * What is shown when no goal is selected: six cards, rows rather than pictures.
+ * What is shown when no goal is selected: eight cards, rows rather than pictures.
  *
  * Document order is reading order — Fleet, Goals in flight, Pull requests, Up
- * next, World signals, Environments — and no card carries a CSS `order`, so the
- * DOM and the page agree at every width. The arrangement across tracks is
- * `.cn-grid`'s business alone.
+ * next, World signals, Environments, Build, Project — and no card carries a CSS
+ * `order`, so the DOM and the page agree at every width. The arrangement across
+ * tracks is `.cn-grid`'s business alone.
  *
- * Two rules run through all six. **Nothing here re-decides what the server
+ * The last two are a pair and are last because neither is about the fleet's
+ * work: everything above them is what the fleet did, Build is the process the
+ * fleet runs inside, and Project is the repository it is pointed at — two
+ * different checkouts, read on one timer.
+ *
+ * Two rules run through all eight. **Nothing here re-decides what the server
  * decided**: a PR's court is `attention.status`, its checks are `ciVerdict`, a
  * queued item's hold is the queue's own sentence, and a goal's state is its
  * `pickup.status` — every one quoted, none parsed. And **an empty card still
@@ -49,9 +55,311 @@ export function Overview({ view, actions }: { view: CockpitView; actions: Cockpi
       <UpNext view={view} actions={actions} />
       <WorldSignals view={view} />
       <Environments view={view} />
+      <Build view={view} actions={actions} />
+      <Project view={view} actions={actions} />
     </div>
   );
 }
+
+/**
+ * The harness's own build: what is waiting for it, who wrote it, and how to take
+ * it.
+ *
+ * **The only card here that is not about the fleet's work**, which is why it is
+ * last and why it is a card at all. Being behind is a *standing condition* — true
+ * continuously, for weeks if nobody looks — and the rail is for asks that settle
+ * when they are answered. A row that cannot be discharged is the furniture that
+ * teaches an operator to skim the whole queue, so the standing lives on a surface
+ * you visit and the rail keeps only the states where a decision is actually
+ * pending. → docs/spec/21-self-update.md
+ *
+ * The changelog is the whole reason this beats the gauge it replaces: "10 behind"
+ * answers how far, and never why you would want it. The commits arrive with the
+ * reading at no extra cost ({@link BuildStanding.commits}) and are capped at ten
+ * there, so the card says when it is showing a window rather than the history —
+ * a cap that does not admit to being one reads as the whole truth on exactly the
+ * deployment furthest behind.
+ *
+ * Empty still draws, muted, like every other card: a build that is current is a
+ * line saying so, not an absence.
+ */
+function Build({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
+  const build = view.state.build;
+  const standing = build.standing;
+  const commits = standing.commits.slice(0, CHANGELOG_ROWS);
+  const shown = commits.length;
+  const waiting = build.intent.state === 'draining' || build.intent.state === 'ready';
+  return (
+    <section className="cn-card cn-span2">
+      <h3>
+        Build <i className="cn-n">{standing.behind === 0 ? 'current' : `${standing.behind} behind`}</i>
+        <CheckNow actions={actions} />
+        {/* When the reading was taken, in the header's own right-hand slot — the
+            same place Fleet keeps its ended-shift count. Every number on these two
+            cards is "as of" this one, and a card carrying a stale answer without
+            saying how stale is the gauge's old failure with more words. */}
+        <i className="cn-more">{checkedStamp(standing, view.now)}</i>
+      </h3>
+      <p className="cn-empty">{buildLine(build)}</p>
+      {shown > 0 && <PanelRows rows={commits.map((commit) => commitRow(commit, view.now))} />}
+      {standing.behind > shown && (
+        <p className="cn-empty">…and {standing.behind - shown} more, listed on the build panel.</p>
+      )}
+      {/* Why there are no buttons, whenever there is something to take and it
+          cannot be. The panel words every refusal in full; this is the one line
+          that stops the card reading as a changelog nobody can act on — and since
+          one of the refusals is now the *project* checkout being dirty, the reason
+          is not even on this card's own subject. */}
+      {standing.behind > 0 && !build.upgradable && build.blocked !== null && (
+        <p className="cn-empty">{build.blocked}</p>
+      )}
+      {/* The refusals — a dirty install, a build ahead of its upstream, a reading
+          nobody could take — are the *panel's* to word: they are the answer to
+          "why is the button off", and the button is not here to be off. This card
+          draws controls when there is something to take and none when there is
+          not. */}
+      {build.upgradable && (
+        <div className="cn-acts">
+          {/* The controls follow the *intent*, not the standing: a drain already
+              in progress is cancelled or applied, and offering to queue a second
+              one is a button whose own state says it has nothing to do. */}
+          {waiting ? (
+            <>
+              <AsyncButton className="cn-btn cn-primary" onClick={() => actions.upgrade('apply')}>
+                Apply now
+              </AsyncButton>
+              <AsyncButton className="cn-btn" onClick={() => actions.upgrade('cancel')}>
+                Cancel
+              </AsyncButton>
+            </>
+          ) : (
+            <AsyncButton className="cn-btn cn-primary" onClick={() => actions.upgrade('drain')}>
+              Queue upgrade
+            </AsyncButton>
+          )}
+          {/* Last, and **secondary**: interrupting is not lossy — every agent is
+              reaped, recorded and restored on the way back up — so the danger tone
+              put an alarm colour on an ordinary decision, beside the safe path it
+              is only a variant of. Weight separates the two here, never hue. */}
+          <AsyncButton className="cn-btn" onClick={() => actions.upgrade('apply', { interrupt: true })}>
+            Force upgrade
+          </AsyncButton>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/**
+ * The **worked** repository: what has landed on the branch the fleet integrates
+ * onto that this clone has not got, and whether the checkout is clean.
+ *
+ * Beside Build and read on the same timer by the same reader, because they are
+ * two answers to one question an operator asks once. What makes it worth its own
+ * card rather than a second line on Build's is that the two are different
+ * repositories — `repoRoot` and the install directory coincide only when the
+ * harness is dogfooding itself ([21](../../../docs/spec/21-self-update.md)).
+ *
+ * It answers the one thing the six cards above it cannot: **what changed in the
+ * project that the fleet did not do.** Every other card on this page is the
+ * fleet's own work — its goals, its pull requests, its landings. A colleague's
+ * hotfix landing on `main` appears on none of them.
+ *
+ * **The git status is on the glass, not behind a marker**, because it is not
+ * merely informative here: an upgrade is refused over uncommitted changes in
+ * *either* checkout, so this line is half of the answer to why the Build card
+ * beside it has no buttons.
+ *
+ * No controls. There is nothing the cockpit should do to the operator's own
+ * checkout, and a card that only reports is the honest shape for one.
+ */
+function Project({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
+  const standing = view.state.build.project;
+  const commits = standing?.commits.slice(0, CHANGELOG_ROWS) ?? [];
+  return (
+    <section className="cn-card cn-span2">
+      <h3>
+        Project <i className="cn-n">{projectCount(standing)}</i>
+        <CheckNow actions={actions} />
+        <i className="cn-more">{checkedStamp(standing, view.now)}</i>
+      </h3>
+      <p className="cn-empty">{projectLine(view, standing)}</p>
+      {commits.length > 0 && <PanelRows rows={commits.map((commit) => commitRow(commit, view.now))} />}
+      {standing !== null && standing.behind > commits.length && (
+        <p className="cn-empty">…and {standing.behind - commits.length} more.</p>
+      )}
+      {/* The one control the cockpit offers on a repository it does not own, and
+          the reason it is here rather than left to a terminal: the project layer
+          of the config arrives by exactly this pull, so a clone days behind is a
+          harness running a policy the team has already changed.
+          → docs/spec/02-configuration.md#the-project-layer
+
+          Drawn only when the server says it would work. Every refusal — a dirty
+          checkout, a branch that is not the integration branch, a clone carrying
+          its own commits — is the *reason* in its place, because "why is the
+          button gone" is the only question a missing control ever raises. */}
+      {view.state.build.projectPull.can ? (
+        <div className="cn-acts">
+          <AsyncButton className="cn-btn cn-primary" onClick={() => actions.pullProject()}>
+            Pull
+          </AsyncButton>
+        </div>
+      ) : (
+        standing !== null &&
+        standing.behind > 0 &&
+        view.state.build.projectPull.blocked !== null && (
+          <p className="cn-empty">{view.state.build.projectPull.blocked}</p>
+        )
+      )}
+    </section>
+  );
+}
+
+/**
+ * Take the reading again, as a glyph in the card header beside the count it
+ * refreshes.
+ *
+ * **In the header rather than in the controls row**, because it is not a
+ * decision: the row below holds the two acts that change something — queue the
+ * upgrade, pull the project — and a third button that only re-reads made them
+ * three of a kind. Beside the count is also where it says what it does without a
+ * word, since the count and the stamp are exactly what it moves.
+ *
+ * **One act on both cards, not two.** `check(true)` takes the build's reading and
+ * the project's in a single pass, so either glyph refreshes both — the same act
+ * reached from two places, on {@link needBody}'s terms, rather than two controls
+ * that could ever disagree about when the harness last looked.
+ */
+function CheckNow({ actions }: { actions: CockpitActions }): JSX.Element {
+  return (
+    <AsyncButton
+      className="cn-disc"
+      aria-label="Check for updates now"
+      title="Check for updates now"
+      pendingLabel={<span className="spinner" aria-hidden />}
+      onClick={() => actions.checkBuild()}
+    >
+      <Icon name="refresh" size={12} />
+    </AsyncButton>
+  );
+}
+
+/**
+ * When the reading was taken, for a card header's right-hand slot.
+ *
+ * One helper for both cards because they are one reading taken in one pass: two
+ * stamps that could ever disagree would say the harness had checked twice, which
+ * it never does. → docs/spec/21-self-update.md#the-project-reading
+ */
+function checkedStamp(standing: BuildStandingReading | null, now: number): string {
+  if (standing === null) return 'not watched';
+  return `checked ${relTime(standing.checkedAt, now)}`;
+}
+
+/** The chip: how far behind, or the one word that stands in for a count there is none of. */
+function projectCount(standing: BuildStandingReading | null): string {
+  if (standing === null || standing.unavailable !== null) return 'unknown';
+  return standing.behind === 0 ? 'current' : `${standing.behind} behind`;
+}
+
+/**
+ * What the checkout is and how it stands, in one sentence.
+ *
+ * The repository is named from `desktopFolder`'s last segment — the path is
+ * already on the wire for the deep link, and a card about a checkout that does not
+ * say *which* checkout is a card an operator has to guess at. A path that ends in
+ * a separator, or is empty, falls back to the plain noun rather than to an empty
+ * pair of quotes.
+ */
+function projectLine(view: CockpitView, standing: BuildStandingReading | null): string {
+  const name = projectName(view.state.config.desktopFolder);
+  if (standing === null) return `${name} is not being watched — no reading of the project checkout is configured.`;
+  if (standing.unavailable !== null) return standing.unavailable;
+  const on = standing.branch === null ? '' : ` on ${standing.branch}`;
+  // Said in the words of what it costs, never as the bare adjective: `dirty` is a
+  // git term for a state whose consequence here is that the harness will not
+  // upgrade, and the consequence is the half worth reading.
+  const status = standing.dirty
+    ? 'uncommitted changes to tracked files, which hold the upgrade beside this'
+    : 'the checkout is clean';
+  const waiting =
+    standing.behind === 0
+      ? 'up to date with its remote'
+      : `${standing.behind} commit${standing.behind === 1 ? '' : 's'} waiting`;
+  return `${name}${on} — ${waiting}, ${status}.`;
+}
+
+/** The last segment of a path, under either separator, or the plain noun. */
+function projectName(folder: string): string {
+  const parts = folder
+    .replace(/\\/g, '/')
+    .split('/')
+    .filter((p) => p !== '');
+  return parts[parts.length - 1] ?? 'The project';
+}
+
+/**
+ * How much of the changelog the card carries.
+ *
+ * Five rather than the reading's own ten: this is a card on a page of seven, and
+ * the newest handful is what answers "is there anything in this for me". The rest
+ * are a click away on the panel, and the line saying how many says so.
+ */
+const CHANGELOG_ROWS = 5;
+
+/**
+ * The one sentence under the heading: what is running, and what the fleet is
+ * doing about it.
+ *
+ * `live` is in it whenever a drain would have to wait, because it is the fact
+ * that decides which button — queueing with three agents out is a wind-down that
+ * may take hours, and the same click with an empty fleet is immediate.
+ */
+function buildLine(build: CockpitView['state']['build']): string {
+  const { standing } = build;
+  if (standing.unavailable !== null) return standing.unavailable;
+  const head = standing.head === null ? 'This build' : `Running ${standing.head.slice(0, 7)}`;
+  const on = standing.branch === null ? ' (detached)' : ` on ${standing.branch}`;
+  if (build.intent.state === 'draining') return `${head}${on} — draining for the upgrade, ${build.live} still running.`;
+  if (build.intent.state === 'ready') return `${head}${on} — nothing is live, and the upgrade is ready to apply.`;
+  if (standing.behind === 0) return `${head}${on}, up to date with upstream.`;
+  const live = build.live === 0 ? 'nothing is live' : `${build.live} live`;
+  return `${head}${on}, and ${live}.`;
+}
+
+/**
+ * One waiting commit, as a row.
+ *
+ * `refs` is null and that is the decision, not an omission: the reading carries a
+ * short sha and no URL, and the install's remote is not the repository the
+ * cockpit's refs point at. A commit here has nowhere in the cockpit to go.
+ *
+ * The author is a fact rather than a {@link PanelRowModel.who} mark, because the
+ * mark is for people the harness knows — a reviewer, an assignee — and these are
+ * whoever wrote LubbDubb, who are nobody in this deployment's world.
+ */
+function commitRow(commit: BuildStandingCommit, now: number): PanelRowModel {
+  return {
+    key: commit.sha,
+    title: commit.subject,
+    refs: null,
+    facts: [
+      { label: 'commit', value: commit.sha },
+      { label: 'by', value: commit.author },
+      { label: 'written', value: relTime(commit.authoredAt, now) },
+    ],
+  };
+}
+
+/**
+ * The shape of one commit on the wire, read off the reading rather than imported:
+ * `UpstreamCommit` is internal to `src/selfUpdate/buildStanding.ts`, and the
+ * cockpit's one server import is `src/wire.ts`.
+ */
+type BuildStandingCommit = CockpitView['state']['build']['standing']['commits'][number];
+
+/** The same, for a whole reading — the build's own, or the project's beside it. */
+type BuildStandingReading = CockpitView['state']['build']['standing'];
 
 /**
  * Who is out, what they are on, and what it has cost so far.

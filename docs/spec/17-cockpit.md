@@ -1939,11 +1939,24 @@ this page's job is to say when it has not done it well enough.
 
 ## The overview
 
-What the situation area shows when no goal is selected: six cards, rows rather than pictures, in
+What the situation area shows when no goal is selected: eight cards, rows rather than pictures, in
 reading order — **Fleet**, **Goals in flight**, **Pull requests**, **Up next**, **World signals**,
-**Environments**. The
-fleet's **runway** is a band along the foot of the first of them rather than a sixth card, because "who
+**Environments**, **Build**, **Project**. The
+fleet's **runway** is a band along the foot of the first of them rather than a card of its own, because "who
 is out" and "what is behind them" are one thought.
+
+**Build and Project are last, and they are the two cards not about the fleet's work** — Build is the
+process the fleet runs inside and Project is the repository it is pointed at, two different checkouts
+read on one timer. Project is the only card that reports a git status on the glass, because that
+status is half the answer to why Build beside it has no buttons — and it carries the one control the
+cockpit offers on a repository the harness does not own, because the project config arrives by that
+pull. Both headers carry a refresh glyph beside the count and the time the reading was taken.
+→ [21](21-self-update.md#where-it-lands-in-the-cockpit)
+
+Build is a card rather than a rail row because being behind is a _standing condition_: true
+continuously, for weeks if nobody looks, and answerable only by upgrading. The rail is for asks that
+settle when they are answered, and a row that cannot be discharged is the furniture that teaches an
+operator to skim the whole queue. → [21](21-self-update.md#where-it-lands-in-the-cockpit)
 
 Two rules run through all five. **Nothing here re-decides what the server decided**: a PR's court is
 `attention.status`, its checks are `ciVerdict`, a queued item's hold is the queue's own sentence, and a

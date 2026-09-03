@@ -4,7 +4,8 @@ import { checked, requiredBoolean } from '../validation.js';
 import type { RouteContext } from './context.js';
 
 /**
- * The harness's own build: take a reading, and drive a deliberate upgrade of it.
+ * The harness's own build and the checkout it works on: take a reading, drive a
+ * deliberate upgrade of the first, and fast-forward the second.
  *
  * Its own module rather than three more routes on `control.ts` for the reason
  * `app.ts`'s `ROUTE_MODULES` exists: that file owns the *fleet's* live controls —
@@ -29,6 +30,20 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     // of all of them, and a reading one operator took is a fact for the others too.
     hub.broadcast({ type: 'dirty' });
     return { ok: true, build: updates.reading() };
+  });
+
+  // Fast-forwarding the *worked* checkout. Rate-limited on `/upgrade/check`'s
+  // terms and harder, because this one reaches the network **and writes**: it is
+  // a `git pull` in the operator's own repository, and a button somebody can lean
+  // on is a repository being pulled forty times a minute.
+  app.post('/api/project/pull', { config: { rateLimit: { max: 6, timeWindow: '1 minute' } } }, async (_req, reply) => {
+    const result = await updates.pullProject();
+    if (!result.ok) return reply.code(409).send({ error: result.error });
+    // The project config the pull may have just moved is picked up by the watcher
+    // in `main.ts`, which broadcasts `config:changed` of its own. This one is for
+    // the reading: the card has to stop saying three commits are waiting.
+    hub.broadcast({ type: 'dirty' });
+    return { ok: true, build: result.build };
   });
 
   const UpgradeBody = z.object({

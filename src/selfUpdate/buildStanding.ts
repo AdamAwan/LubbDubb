@@ -25,6 +25,18 @@ import { runGit } from '../git/gitCli.js';
 /** One commit on upstream that the running build does not have. */
 interface UpstreamCommit {
   sha: string;
+  /**
+   * Who wrote it, through `.mailmap` (`%aN`) rather than the raw header: a fork
+   * where one person has committed under two spellings is one name in the
+   * changelog rather than two contributors.
+   */
+  author: string;
+  /**
+   * When they wrote it. The commit's own age, which is not the reading's — a
+   * check taken a minute ago can be carrying a commit from a fortnight back, and
+   * the changelog is read for the second number.
+   */
+  authoredAt: string;
   subject: string;
 }
 
@@ -134,6 +146,13 @@ export async function readBuildStanding(opts: {
   now: () => string;
   /** The install directory, for the test that stands in a checkout it controls. */
   root?: string;
+  /**
+   * What to call the checkout in a message an operator reads. The default is the
+   * install directory because that is what this was written for; the project
+   * reading aims the same passes at `repoRoot` and must not report a failure
+   * there as a failure of the harness's own build.
+   */
+  subject?: string;
 }): Promise<BuildStanding> {
   const at = opts.now();
   const root = opts.root ?? installRoot();
@@ -159,7 +178,7 @@ export async function readBuildStanding(opts: {
     // pipe, which came back as "could not read the install directory".
     dirty = (await runGit(root, ['status', '--porcelain', '--untracked-files=no'])).stdout.trim().length > 0;
   } catch (err) {
-    return noReading(`could not read the install directory: ${(err as Error).message}`, at);
+    return noReading(`could not read ${opts.subject ?? 'the install directory'}: ${(err as Error).message}`, at);
   }
 
   const upstream = await gitOrNull(root, ['ls-remote', '--exit-code', opts.remote, `refs/heads/${opts.branch}`]).then(
@@ -198,18 +217,48 @@ export async function readBuildStanding(opts: {
     `--max-count=${MAX_COMMITS}`,
     // A unit separator, because a commit subject may contain anything a person
     // can type — including whatever single character seemed safe.
-    '--format=%h%x1f%s',
+    '--format=%h%x1f%aN%x1f%aI%x1f%s',
     `${head}..${upstream}`,
   ]);
   const commits = (log ?? '')
     .split('\n')
     .filter((line) => line.length > 0)
     .map((line) => {
-      const [sha, ...rest] = line.split('\x1f');
-      return { sha: sha ?? '', subject: rest.join('\x1f') };
+      const [sha, author, authoredAt, ...rest] = line.split('\x1f');
+      return { sha: sha ?? '', author: author ?? '', authoredAt: authoredAt ?? '', subject: rest.join('\x1f') };
     });
 
   return { ...current, ahead: ahead!, behind: behind!, commits };
+}
+
+/**
+ * Fast-forward a checkout onto its remote branch.
+ *
+ * The one **write** in this module, and it lives here because this is where the
+ * repository's network policy already lives: the reader beside it fetches, and a
+ * second module reaching into the same checkout with its own idea of when to
+ * touch the remote is how two policies become none.
+ *
+ * `--ff-only` and never a merge, for the reason the supervisor uses it on the
+ * install: a merge can conflict, and a conflict left in the operator's own
+ * checkout by a button they pressed in a browser is a repository they now have to
+ * repair before the fleet can cut a worktree. Refusing is the better failure.
+ *
+ * A failure comes back as words rather than a throw — every caller of this is
+ * answering "why did the button not work", and git's own message is the truest
+ * answer there is.
+ */
+export async function pullFastForward(opts: {
+  root: string;
+  remote: string;
+  branch: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await runGit(opts.root, ['pull', '--ff-only', opts.remote, opts.branch]);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: `the pull failed: ${(err as Error).message}` };
+  }
 }
 
 /**

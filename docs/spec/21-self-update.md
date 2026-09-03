@@ -27,14 +27,14 @@ There is deliberately no key that points the watch at an arbitrary directory.
 `readBuildStanding` in `src/selfUpdate/buildStanding.ts`. One `BuildStanding`, all of it "as of
 `checkedAt`":
 
-| Field              | What it is                                                                  |
-| ------------------ | --------------------------------------------------------------------------- |
-| `head` / `branch`  | The install directory's HEAD, and the branch it is on (null when detached). |
-| `upstream`         | The remote's tip for `selfUpdate.branch`, as `ls-remote` reports it.        |
-| `behind` / `ahead` | Commits each side carries that the other does not.                          |
-| `commits`          | What is waiting, newest first, capped at ten.                               |
-| `dirty`            | Uncommitted changes to **tracked** files in the install directory.          |
-| `unavailable`      | Why no reading could be taken, in the operator's words, or null.            |
+| Field              | What it is                                                                    |
+| ------------------ | ----------------------------------------------------------------------------- |
+| `head` / `branch`  | The install directory's HEAD, and the branch it is on (null when detached).   |
+| `upstream`         | The remote's tip for `selfUpdate.branch`, as `ls-remote` reports it.          |
+| `behind` / `ahead` | Commits each side carries that the other does not.                            |
+| `commits`          | What is waiting, newest first, capped at ten — each with its author and date. |
+| `dirty`            | Uncommitted changes to **tracked** files in the install directory.            |
+| `unavailable`      | Why no reading could be taken, in the operator's words, or null.              |
 
 **A failed reading is a value, not a throw.** A tarball install, an air-gapped machine and a checkout
 with no `origin` are each a legitimate deployment; every one of them reads as `unknown` on the gauge
@@ -66,12 +66,13 @@ owns its own network policy, so it is a separate reader rather than a method the
 `upgradability`, pure, in `src/selfUpdate/upgradePlan.ts`. Four refusals, each carrying its reason in
 words — "why is the button off" is the whole of what an operator asks a screen that will not upgrade:
 
-| Refusal        | Why                                                                               |
-| -------------- | --------------------------------------------------------------------------------- |
-| `unavailable`  | No reading was taken, so there is nothing to know.                                |
-| `behind === 0` | The build is current.                                                             |
-| `dirty`        | A pull over uncommitted changes to tracked files is not safe.                     |
-| `ahead > 0`    | The update is not a fast-forward, and the supervisor applies it with `--ff-only`. |
+| Refusal         | Why                                                                               |
+| --------------- | --------------------------------------------------------------------------------- |
+| `unavailable`   | No reading was taken, so there is nothing to know.                                |
+| `behind === 0`  | The build is current.                                                             |
+| `dirty`         | A pull over uncommitted changes to tracked files is not safe.                     |
+| `project.dirty` | The **worked** checkout has uncommitted changes — see below.                      |
+| `ahead > 0`     | The update is not a fast-forward, and the supervisor applies it with `--ff-only`. |
 
 `dirty` is read with `status --porcelain --untracked-files=no`, and the flag is load-bearing. The
 supervisor applies an update with `pull --ff-only`, which an untracked file does not stand in the way
@@ -85,6 +86,16 @@ refuses in the supervisor, which leaves the old build in place and starts it aga
 
 `ahead > 0` is a **refusal rather than a warning** deliberately. Offering a button that will fail in a
 process the operator is no longer watching is worse than not offering it.
+
+**A dirty _project_ checkout refuses too**, and the reason is the restart rather than the pull: an
+upgrade interrupts the agents whose worktrees were cut from `repoRoot`, and uncommitted work sitting
+in that checkout is work nobody has claimed and the upgrade is about to walk over. Untracked files
+are not counted, for the reason they are not counted above.
+
+A project reading that could not be **taken** is not a refusal. The install's own `unavailable` is,
+because it is the thing being upgraded; the project's is a second opinion about a different
+repository, and letting an unreachable project remote take the upgrade button away would park a fleet
+over a fact with nothing to do with the build.
 
 Note what is not here: whether anything is running. That is a question about _when_ to apply, not
 whether, and it is the whole of what the drain answers.
@@ -355,6 +366,94 @@ before the boot cycle's dispatches. They used to be installed at the very end, w
 covering exactly those two things in which a Ctrl-C took Node's default path: no handler, so the
 agents were not interrupted, not reaped and not recorded. Real orphans, holding their worktrees open,
 with rows still claiming to be live.
+
+## The project reading
+
+`BuildReading.project`, a second `BuildStanding` taken by the **same reader** against `config.repoRoot`
+and its own `defaultBranch` — the branch the fleet integrates onto, which is a different repository's
+different question from `selfUpdate.branch`.
+
+**On the same timer as the build's**, in one pass of `UpdateDesk.check`. Two `ls-remote`s answering
+one question an operator asks once ("is anything waiting"), and two schedules would put the harness on
+the network twice as often to tell them apart. It is a field on the build's reading rather than a wire
+list of its own for the same reason: they are taken together, drawn together and folded into one
+verdict, and a second top-level field would let a cockpit show one without the other.
+
+`readBuildStanding` takes a `subject` for its messages so a failure to read `repoRoot` does not report
+itself as a failure of the harness's own build.
+
+### Pulling it
+
+`UpdateDesk.pullProject`, `POST /api/project/pull`, and the Pull control on the Project card.
+
+**Why the cockpit has a button for a repository the harness does not own.** The project layer of the
+config — `lubbdubb.project.json`, the team's committed policy — is read from `repoRoot`
+([02](02-configuration.md#the-project-layer)), so a clone three days behind is a harness running a
+config the team has already changed. `src/server/main.ts` watches that file precisely because "it
+arrives by `git pull`"; this is the pull, and that watcher picks the change up on its own poll a
+second or two later. **Nothing on this path reloads the config**, and nothing should: one path applies
+a config change, and it is the one an operator's own `git pull` already goes through.
+
+`projectPullability` refuses on four counts, three of them `upgradability`'s worded for the other
+repository — unavailable, current, dirty, ahead. The fourth has no counterpart there because the
+install directory cannot be in that state and `repoRoot` routinely is: **the checkout must be on the
+branch being pulled.** `git pull --ff-only origin main` on a clone sitting on some other branch does
+not fast-forward `main`; it merges `origin/main` into whatever is checked out. `behind`, `ahead` and
+`dirty` are all read against that same HEAD, so this arm is checked before any conclusion is drawn
+from the others.
+
+`pullFastForward` lives beside the reader in `buildStanding.ts` — the one **write** in that module,
+and there because that is where this repository's network policy already lives. `--ff-only` and never
+a merge, for the reason the supervisor uses it on the install: a conflict left in the operator's own
+checkout by a button they pressed in a browser is a repository they have to repair before the fleet
+can cut a worktree. The reading is re-taken **forced** on success, because the click's whole purpose
+was to change the answer.
+
+Rate-limited harder than `/upgrade/check` — six a minute against thirty — because this one reaches the
+network _and writes_.
+
+## Where it lands in the cockpit
+
+Two surfaces, and the split is between a standing and a decision.
+
+The **Build card** on the Overview ([17](17-cockpit.md#the-overview)) carries the standing: what is
+running, how far behind it is, and the newest five commits waiting — each with **who wrote it and how
+long ago**. The changelog is the whole reason the card beats a count. "10 behind" answers how far and
+never why you would want it, and the commits already arrive with the reading at no extra cost, so
+`%aN` (through `.mailmap`, so one person under two spellings stays one name) and `%aI` are two more
+fields on a `git log` that was already being run. The card's list is capped at five against the
+reading's ten, and says how many it is not showing; the rest are on the panel.
+
+Empty still draws, muted, like every other card on that page: a build that is current is a line
+saying so, not an absence.
+
+The **Project card** sits beside it and is the same reading of the other checkout: what has landed on
+the integration branch that this clone has not got, and whether the checkout is clean. It answers the
+one thing the six cards above it cannot — _what changed in the project that the fleet did not do_,
+since every other card on that page is the fleet's own work. Its git status is on the glass rather
+than behind a marker, because it is half the answer to why the Build card beside it has no buttons.
+It carries no controls: there is nothing the cockpit should do to the operator's own checkout.
+
+Its one control is **Pull**, drawn only when the server says it would work; every refusal is the
+reason in its place, because "why is the button gone" is the only question a missing control raises.
+
+**`Check now` is a refresh glyph in each card's header, beside the count it moves** — not a third
+button in the controls row. The row holds the acts that change something (queue the upgrade, pull the
+project) and a button that only re-reads made them three of a kind. One act reached from two places
+rather than two controls: `check(true)` takes both readings in one pass, so either glyph refreshes
+both and they cannot disagree about when the harness last looked. Each header also carries **when the
+reading was taken**, in the right-hand slot Fleet keeps its ended-shift count in — every number on
+these two cards is "as of" that stamp.
+
+**Force upgrade is secondary, not danger-toned.** Interrupting is not lossy — every agent is reaped,
+recorded and restored on the way back up — so an alarm colour put a warning on an ordinary decision
+beside the safe path it is only a variant of. Weight separates the two, never hue.
+
+The **panel** keeps everything the card is not for — the full ten and the worded refusals. A dirty install, a build ahead of its upstream and an unavailable reading are the answer to
+"why is the button off", and the card draws no controls at all rather than off ones.
+
+Note what does **not** go on the Needs you rail: being behind. That is a standing condition and the
+rail is for asks that settle when they are answered — see [17](17-cockpit.md#the-overview).
 
 ## The gauge
 

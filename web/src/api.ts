@@ -710,6 +710,9 @@ const realApi = {
   // the expected outcome rather than a failure — the cockpit's reconnect is what
   // reports the new build.
   checkBuild: () => post<{ ok: true; build: BuildReading }>('/api/upgrade/check'),
+  // The one call on this surface that *writes* to a repository — a fast-forward
+  // of the worked checkout, which is how the project layer of the config arrives.
+  pullProject: () => post<{ ok: true; build: BuildReading }>('/api/project/pull'),
   upgrade: (action: UpgradeAction, opts?: { interrupt?: boolean }) =>
     post<{ ok: true; build: BuildReading }>('/api/upgrade', { action, ...opts }),
   // The machine's one dev environment. `startLocalRun` is also the swap: there is

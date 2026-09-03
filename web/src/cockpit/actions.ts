@@ -352,6 +352,14 @@ export interface CockpitActions {
   /** Take a fresh reading of the build, rather than waiting for the pulse's. */
   checkBuild(): Promise<void>;
   /**
+   * Fast-forward the *worked* checkout onto its remote branch.
+   *
+   * The one action here that writes to a repository the harness does not own, and
+   * it is offered because `lubbdubb.project.json` arrives that way: a clone days
+   * behind is a harness running a config the team has already changed.
+   */
+  pullProject(): Promise<void>;
+  /**
    * Start `issueNumber`'s work in the machine's one dev environment — **and stop
    * whatever was in it**, because there is only one. One method rather than a start
    * and a swap: two names for one transition are two things to keep in step, and
