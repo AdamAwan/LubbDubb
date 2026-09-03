@@ -78,7 +78,7 @@ supervisor applies an update with `pull --ff-only`, which an untracked file does
 of — so counting one would take the upgrade button away, permanently and with no way back, over a
 note an operator left in the install directory or a path a newer build writes that this checkout's
 older `.gitignore` never learned. That falls hardest on the deployment furthest behind, which is the
-one collecting stray files and the one that most needs the button. (It also kept the *reading* off a
+one collecting stray files and the one that most needs the button. (It also kept the _reading_ off a
 checkout with enough untracked files to overrun the pipe, which surfaced as "could not read the
 install directory".) An untracked file the incoming commits would overwrite still refuses — but it
 refuses in the supervisor, which leaves the old build in place and starts it again.
@@ -191,7 +191,7 @@ Left to the configured value it goes both ways, and both are silent:
 - A deployment that starts paused by policy parks a fleet that was running a second ago, and the
   operator finds out from the queue not moving.
 
-`pausedByDrain` is already the fact needed — it records whether the *drain* is what paused dispatch,
+`pausedByDrain` is already the fact needed — it records whether the _drain_ is what paused dispatch,
 so its negation is what the operator had — and it is on the one row written to outlive the process.
 So the boot reads it: under `applying`, and only under it, `paused` is seeded from the intent rather
 than from the config. Any other state means this restart was not the upgrade's and the configured
@@ -204,7 +204,7 @@ default would tell the next boot the operator had parked a fleet they had not.
 
 ## Applying it
 
-The server does not upgrade itself, and cannot. Applying means `git pull` and `npm ci`, and `npm ci`
+The server does not upgrade itself, and cannot. Applying means `git pull` and an install, and `npm ci`
 deletes and rebuilds `node_modules` — including `better-sqlite3` and `node-pty`, which the running
 process has open, and which on Windows it cannot even attempt. It also means releasing the port, the
 SQLite handle and the MCP socket before the replacement claims them.
@@ -218,8 +218,8 @@ So the split is:
 3. Shutdown runs as it does for any signal: the harness stops, `interruptAll` reaps each agent's
    process subtree and records the rows `interrupted`, and the process exits **75**
    (`UPGRADE_EXIT_CODE`, `src/selfUpdate/handoff.ts`).
-4. `scripts/serve.ts` sees that code, runs `git pull --ff-only`, runs `npm ci` **only if the pull
-   moved `package-lock.json`**, rebuilds the cockpit bundle, and relaunches.
+4. `scripts/serve.ts` sees that code, runs `git pull --ff-only`, installs dependencies **only if the
+   pull moved `package-lock.json`**, rebuilds the cockpit bundle, and relaunches.
 
 The cockpit rebuild is **unconditional**, unlike the install beside it. The server needs no build
 step — tsx runs it from source — but the SPA does, `web/dist` is gitignored, and the server serves
@@ -228,6 +228,26 @@ whatever is there on an `existsSync` check with no version stamp and no comparis
 _previous_ cockpit with nothing anywhere saying so, which is the one failure this feature must not
 introduce: the reason they upgraded is usually something they expect to see. Gating it on `web/`
 having changed would be a second opinion about what Vite reads, and being wrong about it is silent.
+
+### The install is `npm ci`, and `npm install` when that fails
+
+`npm ci` deletes `node_modules` **before** it installs, which makes its failure the one step here
+that is not the recoverable direction: it can leave the checkout with no `tsx` to relaunch through,
+which is a harness that will not start rather than one on the previous build. Windows makes that the
+likely case rather than the exotic one — an `esbuild.exe` from the cockpit build still held by a
+lingering service process or a virus scanner fails the `unlink` `EPERM`, halfway through the delete.
+
+So a failed `ci` falls back to `npm install`, which reconciles the tree in place: it replaces only
+what the lockfile says is wrong, so it both heals a half-deleted `node_modules` and has far less to
+touch that something else might be holding. `ci` stays the first choice — it is the one that
+guarantees the tree is exactly the lockfile — but a reconciled tree is the only outcome here that
+beats no tree at all.
+
+If both fail the supervisor **refuses to relaunch**, and says so. `tsx` is the loader on the
+relaunch's command line, so an empty `node_modules` fails `ERR_MODULE_NOT_FOUND` before a line of the
+server runs: the operator gets a resolver stack trace where the reason is twenty lines above, and the
+supervisor exits on it looking like the server crashed. The refusal is checked on `node_modules/tsx`
+and names what to run.
 
 On Windows the `npm` steps are spawned **through a shell**. `npm` there is `npm.cmd`, a batch file,
 and since Node's CVE-2024-27980 fix `spawn` refuses to run one without `shell: true` — it fails
@@ -254,12 +274,14 @@ A failed `pull` starts the **previous** build again and says so. That is the rec
 the fleet comes back on the code it went down on.
 
 Past the pull there is no previous build to come back to — the checkout is already on the new commit —
-so the two halves are reported apart. A failed cockpit build reruns `npm ci` and tries the build once
+so the two halves are reported apart. A failed cockpit build reruns the install and tries the build once
 more, because on a machine that was serving a minute ago the overwhelmingly likely reason is
 `node_modules` not matching the tree that was just pulled, and that is exactly the install the
 lockfile gate decided to skip. If it still fails the relaunch happens anyway, saying in as many words
 that the server is coming back on the new code behind the **previous** cockpit and what to run — the
-stale bundle is only survivable while something says it is there.
+stale bundle is only survivable while something says it is there. The one exception is an install
+that left no `node_modules` to run through at all, which is [refused](#the-install-is-npm-ci-and-npm-install-when-that-fails)
+rather than relaunched into.
 
 Every failure names its reason. A command that never started — npm off the `PATH`, a fork the kernel
 refused, the OOM killer — reports a null status _and_ a null signal, with the cause only on `error`;
