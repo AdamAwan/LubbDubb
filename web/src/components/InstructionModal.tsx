@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { AsyncButton } from './AsyncButton.js';
+import { Modal } from './Modal.js';
 
 /**
  * Where the operator says what they want done next on a goal.
@@ -46,46 +47,13 @@ export function InstructionModal({
   }
 
   return (
-    <div className="plan-modal-backdrop" onClick={onClose}>
-      <div className="plan-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="pm-head">
-          <span className="chip small">#{issueNumber}</span>
-          <span className="pm-title">More work</span>
-          <button className="btn ghost pm-close" onClick={onClose}>
-            close
-          </button>
-        </div>
-        <p className="rb-intro">
-          On “{issueTitle}”. Say what you want done — it goes in front of the next agent on this goal, word for word,
-          and the goal goes back in front of the harness once no pull request is open for it. If it was already marked
-          delivered that verdict is retracted, and if its plan had finished it goes back to a planner, which draws a new
-          one for you to approve. The agent updates the ticket itself when what you say changes what the goal asks for.
-        </p>
-        <label className="rb-label" htmlFor="ins-text">
-          What needs doing
-        </label>
-        <textarea
-          id="ins-text"
-          className="rb-text"
-          rows={5}
-          autoFocus
-          value={text}
-          placeholder="Change the button to primary — it reads as a cancel next to the one beside it."
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            // ⌘/Ctrl+Enter submits, matching the composer and the bug modal.
-            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-              e.preventDefault();
-              void submit();
-            }
-          }}
-        />
-        {failed && (
-          <p className="launch-error" role="alert">
-            That didn’t go through. Your text is still here — try again.
-          </p>
-        )}
-        <div className="pm-foot">
+    <Modal
+      face="modal"
+      title="More work"
+      lead={<span className="chip small">#{issueNumber}</span>}
+      onClose={onClose}
+      foot={
+        <>
           <span className="spacer" />
           <button className="btn ghost" onClick={onClose}>
             cancel
@@ -93,8 +61,39 @@ export function InstructionModal({
           <AsyncButton className="primary" disabled={text.trim().length === 0} onClick={submit}>
             send to the fleet
           </AsyncButton>
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    >
+      <p className="rb-intro">
+        On “{issueTitle}”. Say what you want done — it goes in front of the next agent on this goal, word for word, and
+        the goal goes back in front of the harness once no pull request is open for it. If it was already marked
+        delivered that verdict is retracted, and if its plan had finished it goes back to a planner, which draws a new
+        one for you to approve. The agent updates the ticket itself when what you say changes what the goal asks for.
+      </p>
+      <label className="rb-label" htmlFor="ins-text">
+        What needs doing
+      </label>
+      <textarea
+        id="ins-text"
+        className="rb-text"
+        rows={5}
+        autoFocus
+        value={text}
+        placeholder="Change the button to primary — it reads as a cancel next to the one beside it."
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          // ⌘/Ctrl+Enter submits, matching the composer and the bug modal.
+          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+            e.preventDefault();
+            void submit();
+          }
+        }}
+      />
+      {failed && (
+        <p className="launch-error" role="alert">
+          That didn’t go through. Your text is still here — try again.
+        </p>
+      )}
+    </Modal>
   );
 }

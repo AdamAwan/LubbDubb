@@ -272,6 +272,13 @@ export const THEME_TOKENS: readonly ThemeToken[] = [
     why: 'The ground of the recovery banner',
   },
   {
+    name: '--accent-line',
+    label: 'Accent border',
+    group: 'tints',
+    kind: 'colour',
+    why: 'The edge of an accent-tinted box',
+  },
+  {
     name: '--green-line',
     label: 'Green border',
     group: 'tints',

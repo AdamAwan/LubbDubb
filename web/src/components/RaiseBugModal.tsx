@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { AsyncButton } from './AsyncButton.js';
+import { Modal } from './Modal.js';
 
 /**
  * Where the operator says what is wrong.
@@ -60,49 +61,13 @@ export function RaiseBugModal({
   }
 
   return (
-    <div className="plan-modal-backdrop" onClick={onClose}>
-      <div className="plan-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="pm-head">
-          <span className="chip small">#{issueNumber}</span>
-          <span className="pm-title">Raise a bug</span>
-          <button className="btn ghost pm-close" onClick={onClose}>
-            close
-          </button>
-        </div>
-        <p className="rb-intro">
-          Against “{issueTitle}”. Say what you did and what happened instead. An agent writes it up as a bug in the
-          tracker, linked back to this item, and checks for a duplicate first — this does not change this item’s own
-          state.
-        </p>
-        <label className="rb-label" htmlFor="rb-summary">
-          What’s wrong
-        </label>
-        <textarea
-          id="rb-summary"
-          className="rb-text"
-          rows={6}
-          autoFocus
-          value={summary}
-          placeholder="The export button still 404s on Safari — worked in the PR preview, not on main."
-          onChange={(e) => setSummary(e.target.value)}
-          onKeyDown={(e) => {
-            // ⌘/Ctrl+Enter submits, matching the composer and the drawer's respond box.
-            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-              e.preventDefault();
-              void submit();
-            }
-          }}
-        />
-        <label className="rb-label" htmlFor="rb-title">
-          Job title <span className="rb-hint">optional — the agent titles the bug itself</span>
-        </label>
-        <input id="rb-title" className="pm-note" value={title} onChange={(e) => setTitle(e.target.value)} />
-        {failed && (
-          <p className="launch-error" role="alert">
-            That didn’t go through. Your text is still here — try again.
-          </p>
-        )}
-        <div className="pm-foot">
+    <Modal
+      face="modal"
+      title="Raise a bug"
+      lead={<span className="chip small">#{issueNumber}</span>}
+      onClose={onClose}
+      foot={
+        <>
           <span className="spacer" />
           <button className="btn ghost" onClick={onClose}>
             cancel
@@ -110,8 +75,42 @@ export function RaiseBugModal({
           <AsyncButton className="primary" disabled={summary.trim().length === 0} onClick={submit}>
             raise bug
           </AsyncButton>
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    >
+      <p className="rb-intro">
+        Against “{issueTitle}”. Say what you did and what happened instead. An agent writes it up as a bug in the
+        tracker, linked back to this item, and checks for a duplicate first — this does not change this item’s own
+        state.
+      </p>
+      <label className="rb-label" htmlFor="rb-summary">
+        What’s wrong
+      </label>
+      <textarea
+        id="rb-summary"
+        className="rb-text"
+        rows={6}
+        autoFocus
+        value={summary}
+        placeholder="The export button still 404s on Safari — worked in the PR preview, not on main."
+        onChange={(e) => setSummary(e.target.value)}
+        onKeyDown={(e) => {
+          // ⌘/Ctrl+Enter submits, matching the composer and the drawer's respond box.
+          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+            e.preventDefault();
+            void submit();
+          }
+        }}
+      />
+      <label className="rb-label" htmlFor="rb-title">
+        Job title <span className="rb-hint">optional — the agent titles the bug itself</span>
+      </label>
+      <input id="rb-title" className="pm-note" value={title} onChange={(e) => setTitle(e.target.value)} />
+      {failed && (
+        <p className="launch-error" role="alert">
+          That didn’t go through. Your text is still here — try again.
+        </p>
+      )}
+    </Modal>
   );
 }

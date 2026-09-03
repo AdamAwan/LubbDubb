@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { AsyncButton } from './AsyncButton.js';
+import { Modal } from './Modal.js';
 
 /**
  * The confirmation ending a run asks for — what it is about to destroy, and, on a
@@ -81,67 +82,13 @@ export function EndRunModal({
   }
 
   return (
-    <div className="plan-modal-backdrop" onClick={onClose}>
-      <div className="plan-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="pm-head">
-          <span className="chip small">#{issueNumber}</span>
-          <span className="pm-title">Abandon the run</span>
-          <button className="btn ghost pm-close" onClick={onClose}>
-            close
-          </button>
-        </div>
-        <p className="rb-intro">
-          On “{issueTitle}”. This abandons the harness’s run at the goal — one way, and terminal for the dispatcher, so
-          nothing is scheduled for it again, though the report stays readable.
-        </p>
-        <ul className="rb-costs">
-          <li>
-            {agents === 0 ? 'No agent is running on this goal.' : `${count(agents, 'running agent')} killed mid-turn.`}
-          </li>
-          {prAgents > 0 && (
-            <li>
-              {count(prAgents, 'agent')} on this goal’s pull requests {prAgents === 1 ? 'keeps' : 'keep'} running — end
-              {prAgents === 1 ? ' it' : ' them'} from the fleet if you want {prAgents === 1 ? 'it' : 'them'} stopped
-              too.
-            </li>
-          )}
-          <li>Any queued job standing in for this goal’s work is cancelled.</li>
-          <li>
-            {instructions === 0
-              ? 'Nothing you have asked for is still standing.'
-              : `${count(instructions, 'standing instruction')} settled unread.`}
-          </li>
-        </ul>
-        {outstanding !== null && <p className="rb-intro">{outstanding}</p>}
-        <label className="rb-label" htmlFor="end-run-note">
-          {required ? 'What about the outstanding checks?' : 'Why, for the record? (optional)'}
-        </label>
-        <textarea
-          id="end-run-note"
-          className="rb-text"
-          rows={3}
-          autoFocus
-          value={note}
-          placeholder={
-            required
-              ? 'Shipping it — B and C run on Monday’s regression pass, and A is covered by the smoke test.'
-              : 'Superseded by #512; nothing here is worth finishing.'
-          }
-          onChange={(e) => setNote(e.target.value)}
-          onKeyDown={(e) => {
-            // ⌘/Ctrl+Enter submits, matching the composer and the other modals.
-            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-              e.preventDefault();
-              void submit();
-            }
-          }}
-        />
-        {refusal !== null && (
-          <p className="launch-error" role="alert">
-            {refusal}
-          </p>
-        )}
-        <div className="pm-foot">
+    <Modal
+      face="modal"
+      title="Abandon the run"
+      lead={<span className="chip small">#{issueNumber}</span>}
+      onClose={onClose}
+      foot={
+        <>
           <span className="spacer" />
           <button className="btn ghost" onClick={onClose}>
             cancel
@@ -154,9 +101,60 @@ export function EndRunModal({
           >
             abandon the run
           </AsyncButton>
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    >
+      <p className="rb-intro">
+        On “{issueTitle}”. This abandons the harness’s run at the goal — one way, and terminal for the dispatcher, so
+        nothing is scheduled for it again, though the report stays readable.
+      </p>
+      <ul className="rb-costs">
+        <li>
+          {agents === 0 ? 'No agent is running on this goal.' : `${count(agents, 'running agent')} killed mid-turn.`}
+        </li>
+        {prAgents > 0 && (
+          <li>
+            {count(prAgents, 'agent')} on this goal’s pull requests {prAgents === 1 ? 'keeps' : 'keep'} running — end
+            {prAgents === 1 ? ' it' : ' them'} from the fleet if you want {prAgents === 1 ? 'it' : 'them'} stopped too.
+          </li>
+        )}
+        <li>Any queued job standing in for this goal’s work is cancelled.</li>
+        <li>
+          {instructions === 0
+            ? 'Nothing you have asked for is still standing.'
+            : `${count(instructions, 'standing instruction')} settled unread.`}
+        </li>
+      </ul>
+      {outstanding !== null && <p className="rb-intro">{outstanding}</p>}
+      <label className="rb-label" htmlFor="end-run-note">
+        {required ? 'What about the outstanding checks?' : 'Why, for the record? (optional)'}
+      </label>
+      <textarea
+        id="end-run-note"
+        className="rb-text"
+        rows={3}
+        autoFocus
+        value={note}
+        placeholder={
+          required
+            ? 'Shipping it — B and C run on Monday’s regression pass, and A is covered by the smoke test.'
+            : 'Superseded by #512; nothing here is worth finishing.'
+        }
+        onChange={(e) => setNote(e.target.value)}
+        onKeyDown={(e) => {
+          // ⌘/Ctrl+Enter submits, matching the composer and the other modals.
+          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+            e.preventDefault();
+            void submit();
+          }
+        }}
+      />
+      {refusal !== null && (
+        <p className="launch-error" role="alert">
+          {refusal}
+        </p>
+      )}
+    </Modal>
   );
 }
 

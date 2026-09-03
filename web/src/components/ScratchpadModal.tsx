@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ScratchEntryView } from '../types.js';
 import { api } from '../api.js';
 import { relTime } from './util.js';
+import { Modal } from './Modal.js';
 
 /**
  * A goal's shared scratchpad — what the agents working it left each other, in the
@@ -56,82 +57,81 @@ export function ScratchpadModal({ issueRef, onClose }: { issueRef: string; onClo
   const issueNumber = /^issue:(\d+)/.exec(issueRef)?.[1] ?? null;
 
   return (
-    <div className="plan-modal-backdrop" onClick={onClose}>
-      <div className="plan-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="pm-head">
-          {issueNumber && <span className="chip small">#{issueNumber}</span>}
-          <span className="pm-title">Notepad</span>
-          {state === 'ready' && entries.length > 0 && (
-            <span className="chip small">
-              {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
-            </span>
-          )}
-          <button className="btn ghost small pm-close" onClick={onClose}>
-            close
-          </button>
-        </div>
-        <div className="pm-note-line">
-          What the agents on this goal wrote each other, oldest first. Nothing here is edited or removed.
-        </div>
-        {state === 'loading' && <p className="empty">Loading…</p>}
-        {state === 'failed' && <p className="empty">Could not load the notepad.</p>}
-        {state === 'ready' && entries.length === 0 && <p className="empty">Nothing has been written on this pad.</p>}
-        {state === 'ready' && entries.length > 0 && (
-          <div className="pm-doc">
-            {entries.map((entry) => (
-              <div key={entry.id} className="pad-entry">
-                <div className="pad-entry-head">
-                  {/* The author's origin, not its agent id: which *part* of the
+    <Modal
+      face="modal"
+      title="Notepad"
+      lead={issueNumber && <span className="chip small">#{issueNumber}</span>}
+      chips={
+        state === 'ready' &&
+        entries.length > 0 && (
+          <span className="chip small">
+            {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
+          </span>
+        )
+      }
+      onClose={onClose}
+    >
+      <div className="pm-note-line">
+        What the agents on this goal wrote each other, oldest first. Nothing here is edited or removed.
+      </div>
+      {state === 'loading' && <p className="empty">Loading…</p>}
+      {state === 'failed' && <p className="empty">Could not load the notepad.</p>}
+      {state === 'ready' && entries.length === 0 && <p className="empty">Nothing has been written on this pad.</p>}
+      {state === 'ready' && entries.length > 0 && (
+        <div className="pm-doc">
+          {entries.map((entry) => (
+            <div key={entry.id} className="pad-entry">
+              <div className="pad-entry-head">
+                {/* The author's origin, not its agent id: which *part* of the
                       goal wrote this is what a reader is placing the note by, and
                       an agent id is gone the moment the fleet turns over. */}
-                  <span className="chip small">{entry.authorOriginRef}</span>
-                  {entry.decision && <span className="chip small pad-fork-chip">fork</span>}
-                  {entry.topic && <span className="chip small">{entry.topic}</span>}
-                  <span className="muted" title={entry.createdAt}>
-                    {relTime(entry.createdAt)}
-                  </span>
-                </div>
-                {/* Plain text, deliberately: a pad note keeps its newlines because
+                <span className="chip small">{entry.authorOriginRef}</span>
+                {entry.decision && <span className="chip small pad-fork-chip">fork</span>}
+                {entry.topic && <span className="chip small">{entry.topic}</span>}
+                <span className="muted" title={entry.createdAt}>
+                  {relTime(entry.createdAt)}
+                </span>
+              </div>
+              {/* Plain text, deliberately: a pad note keeps its newlines because
                     it is prose a human reads, and rendering it as markdown would
                     let an agent's stray backtick or hash change what its own
                     testimony looks like. */}
-                <div className="pad-entry-note">{entry.note}</div>
-                {entry.decision && (
-                  <div className="pad-decision">
-                    <div className="pad-decision-row">
-                      <span className="pad-decision-label">Chose</span>
-                      <span>{entry.decision.chose}</span>
-                    </div>
-                    <div className="pad-decision-row">
-                      <span className="pad-decision-label">Because</span>
-                      <span>{entry.decision.because}</span>
-                    </div>
-                    {entry.decision.rejected.length > 0 && (
-                      <div className="pad-decision-row">
-                        <span className="pad-decision-label">Rejected</span>
-                        <ul className="pad-decision-rejected">
-                          {entry.decision.rejected.map((r, i) => (
-                            <li key={i}>
-                              <span>{r.alternative}</span>
-                              <span className="muted"> — {r.because}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    {entry.decision.paths.length > 0 && (
-                      <div className="pad-decision-row">
-                        <span className="pad-decision-label">Paths</span>
-                        <span className="pad-decision-paths">{entry.decision.paths.join(', ')}</span>
-                      </div>
-                    )}
+              <div className="pad-entry-note">{entry.note}</div>
+              {entry.decision && (
+                <div className="pad-decision">
+                  <div className="pad-decision-row">
+                    <span className="pad-decision-label">Chose</span>
+                    <span>{entry.decision.chose}</span>
                   </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+                  <div className="pad-decision-row">
+                    <span className="pad-decision-label">Because</span>
+                    <span>{entry.decision.because}</span>
+                  </div>
+                  {entry.decision.rejected.length > 0 && (
+                    <div className="pad-decision-row">
+                      <span className="pad-decision-label">Rejected</span>
+                      <ul className="pad-decision-rejected">
+                        {entry.decision.rejected.map((r, i) => (
+                          <li key={i}>
+                            <span>{r.alternative}</span>
+                            <span className="muted"> — {r.because}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {entry.decision.paths.length > 0 && (
+                    <div className="pad-decision-row">
+                      <span className="pad-decision-label">Paths</span>
+                      <span className="pad-decision-paths">{entry.decision.paths.join(', ')}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </Modal>
   );
 }

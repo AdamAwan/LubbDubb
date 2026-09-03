@@ -162,6 +162,46 @@ test('the registry and the :root blocks name the same tokens', () => {
 });
 
 /**
+ * The tone aliases are aliases, and nothing else.
+ *
+ * `.t-*` and `.cn-t-*` are the two tint vocabularies — the shared family's and the
+ * console's — and both work only because a tone block *renames* `:root` tokens
+ * rather than holding values. A declaration on `.t-red` shadows an inherited one
+ * unconditionally, so a literal, a `color-mix`, or even a second `var()` fallback
+ * written there is a colour the Theme section cannot reach *inside* a tone: every
+ * tag on the page keeps the sheet's tint while everything around it moves.
+ *
+ * The literal guard above does not catch it — `color-mix(in srgb, var(--red) 40%,
+ * var(--well))` has no hex in it — so this asserts the shape directly: a tone
+ * property, and a bare `var()` naming a token `:root` declares.
+ * → docs/spec/17-cockpit.md#the-tag
+ */
+test('every tone alias renames a :root token and holds no value of its own', () => {
+  const root = rootProperties();
+  const offenders: string[] = [];
+  let blocks = 0;
+  for (const sheet of ['web/src/styles.css', 'web/src/console/console.css']) {
+    const visible = withoutComments(readFileSync(sheet, 'utf8'));
+    for (const block of visible.matchAll(/^\.((?:cn-)?t-[a-z0-9-]+)\s*\{([^}]*)\}/gm)) {
+      blocks += 1;
+      for (const line of block[2]!.split(';')) {
+        const body = line.trim();
+        if (body === '') continue;
+        const alias = /^(--(?:cn-)?tone[a-z-]*)\s*:\s*var\((--[a-z0-9-]+)\)$/.exec(body);
+        if (alias === null) {
+          offenders.push(`${sheet} .${block[1]} → ${body}`);
+        } else if (!root.has(alias[2]!)) {
+          offenders.push(`${sheet} .${block[1]} → ${alias[2]} is declared on no :root`);
+        }
+      }
+    }
+  }
+  assert.deepEqual(offenders, [], `a tone that a theme cannot reach:\n${offenders.join('\n')}`);
+  // Both families, or the regex stopped matching one of them and asserted nothing.
+  assert.ok(blocks >= 10, `only ${blocks} tone blocks found — the sweep is not reaching them`);
+});
+
+/**
  * A token's `kind` decides which control edits it and which grammar accepts its
  * value, so a wrong one is doubly silent: the row loses its colour input, and every
  * hex the operator types is refused as malformed. Checking it against the value the

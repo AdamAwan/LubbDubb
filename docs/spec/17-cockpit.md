@@ -102,8 +102,9 @@ only thing in `npm run check` that does.
 
 Three consequences worth stating, because each is a thing a reasonable change would undo:
 
-- **The tokens live in exactly two `:root` blocks**, and the four scoped families — `--cn-tone-*` on
-  `.cn-t-*`, `--sp-*` on `.sp`, `--rl-*` on `.rl` — are **pure aliases** of them. They have to be. A
+- **The tokens live in exactly two `:root` blocks**, and the scoped families — `--cn-tone-*` on
+  `.cn-t-*`, [`--tone-*` on `.t-*`](#the-tag), `--sp-*` on `.sp`, `--rl-*` on `.rl` — are **pure
+  aliases** of them. They have to be. A
   declaration on `.cn-t-red` shadows an inherited value unconditionally, so while those tints were
   written there a theme setting them on the root could not reach inside a tone at all. The alias form
   also keeps their names, which matters more than it looks: `--sp-*` and `--rl-*` are never `var()`-ed
@@ -1151,6 +1152,122 @@ Up next's rows — which is exactly the shape that drifts: three callers, three 
 `<select>` next to a button". What the component keeps is the _options_; what the kit answers is the
 glyph, the caret and the height. `--cn-r-sm` is 4px for the same reason it is a token at all: one
 decision, made once, taken by the console's chips, inputs and controls alike.
+
+### The modal
+
+**One overlay** — `Modal` in `web/src/components/Modal.tsx`. Every sheet that covers the cockpit is
+drawn through it: the plan sheet, the goal's three composers, the questionnaire, the review pack, the
+retrospective and notepad readers, the issue and bug filers, the agent drawer, the console's panels,
+the prompt-template viewer and the hatching ceremony.
+
+It exists for the same reason the control kit does, and the copy it replaced cost more. Thirteen
+surfaces hand-wrote the same three lines — a `plan-modal-backdrop` with `onClick={onClose}`, a
+surface with an `onClick={(e) => e.stopPropagation()}` guard, a `pm-head` and a `pm-foot` — and the
+copy dropped something on eleven of them:
+
+> **Escape closed two of the thirteen.** `HatchModal` and the prompt viewer registered a key
+> listener; nothing else did. So the sheet covering the goal an operator is reading could only be
+> dismissed by finding one small button, on every modal but two — and the sheet rendered correctly,
+> the CSS was right, and every check in `npm run check` was green about it.
+
+**Three ways out, always**: the backdrop, the close control, and Escape. That is the rule
+`console/Panel.tsx` already stated for itself — a thing that covers the console must not have exactly
+one exit — and the overlay is that rule made general rather than a claim each file makes separately.
+
+**The face is a prop, never a class string.** The `--cn-*` console family and the shared family are a
+real distinction rather than a namespace ([Tokens](#tokens)), so `face` names which pair of classes
+the overlay wears and neither sheet has to learn the other's names. There are six, and a caller
+cannot mint a seventh:
+
+| face     | backdrop                | surface       | drawn for                                     |
+| -------- | ----------------------- | ------------- | --------------------------------------------- |
+| `modal`  | `.plan-modal-backdrop`  | `.plan-modal` | the composers, the readers, the filers        |
+| `sheet`  | `.plan-modal-backdrop`  | `.plan-sheet` | the plan, which is wider and scrolls its middle |
+| `drawer` | `.drawer-backdrop`      | `.drawer`     | the agent drawer, pinned to an edge           |
+| `panel`  | `.cn-backdrop`          | `.cn-panel`   | the console's panels — a `<section>`          |
+| `hatch`  | `.cn-backdrop`          | `.cn-hatch`   | the hatching ceremony                         |
+| `prompt` | `.prompt-backdrop`      | `.prompt-modal` | the prompt-template viewer                  |
+
+The classes are the ones those surfaces already wore, so adopting the overlay is a change of _who
+writes the class_ and not a restyling: the two sheets are untouched.
+
+**The head and the foot are props, and both are optional.** `title` draws the `pm-head` — `lead`
+before it for what the modal is _about_ (the goal's number, a `Ref`), `chips` after it for what state
+it is in, then the one close control, spelled the same way everywhere it appears. `foot` draws the
+`pm-foot` as the last child of the surface, so a decision bar never scrolls away from the thing being
+decided. A face with a head of its own — the drawer's, the console panel's, the viewer's `<header>` —
+passes it as a child instead, because those are three genuinely different heads rather than one
+drifting.
+
+**Escape closes the layer on top, never the one behind it.** The dismissable layers are a stack and
+only its last entry answers the key. A nested modal — the template viewer inside the settings page, a
+questionnaire inside a "Needs you" panel — is always the one opened last, so registration order _is_
+depth. `PromptsTab` used to rely on nobody else listening for that, which was true only for as long
+as it stayed true; it is a rule now.
+
+`test/modal.test.ts` pins all of it, including from the sharp end: **no `.tsx` outside `Modal.tsx`
+may write a backdrop class.** A fourteenth modal written the old way is a modal Escape does not
+close, and nothing else in `npm run check` would see it.
+
+### The tag
+
+**One tinted badge** — `Tag` in `web/src/components/tag.tsx`, dressed by the `.tag` and `.t-*` blocks
+in `styles.css`. It is the control kit's argument one layer down, in the sheet rather than in the
+markup.
+
+A tinted badge is **three values that have to move together**: the hue, the border that reads as the
+hue without competing with the word, and the ground the filled weight sits on. That triple was written
+out by hand at twenty class names — `rp-att-read`, `rp-v-false`, `rp-tag-disputed`, `rv-routed`,
+`pm-dtag.added` and the rest — and the copies had already drifted. `rp-att-read` bordered in
+`--red-line` and `rp-v-false` in `--red`, so two tags a hand's width apart on the review pack were the
+same statement in two weights, with nothing saying which was meant. Nothing catches that: the sheet is
+valid, both tags render, and the drift is visible only to somebody holding the two up together.
+
+**Tone is a prop, never a class string**, the same rule the [control kit](#the-control-kit) keeps:
+
+| Tone     | What it says                                            |
+| -------- | ------------------------------------------------------- |
+| `red`    | a fault, or a claim that did not hold                   |
+| `amber`  | a gate — a call somebody has to make                    |
+| `green`  | something landed, or held                               |
+| `blue`   | something to read                                       |
+| `accent` | the one thing on this surface worth going to first      |
+| `grey`   | a label rather than a verdict — and the default, omitted |
+
+**Weight is `fill`, not a second hue.** The outlined and the filled tag are the same box in the same
+colour and the ground is what ranks them, which is the bargain [the rail](#hue-is-the-kind-weight-is-the-group)
+already makes with `cn-parked`: opacity within one hue rather than a colour per weight, so the two
+readings cannot drift apart. **`dashed` is the box that is not the plain case** — a region outside the
+diff being walked, a label a person overrode the checker on.
+
+The tint itself is six alias blocks — `.t-red`, `.t-amber`, `.t-green`, `.t-blue`, `.t-accent`,
+`.t-grey` — each setting `--tone`, `--tone-line` and `--tone-fill` from `:root` and from nowhere else,
+for exactly the reason [`.cn-t-*` is an alias](#tokens): a declaration on a tone class shadows an
+inherited value unconditionally, so a tint written there is a tint no theme can reach *inside* a tone.
+`--accent-line` was owed by this and is new — the one tag drawn in the accent bordered in `--accent`
+itself, at full strength, and out-shouted the red one beside it.
+
+**The two families stay two.** `--accent` is orange and `--cn-accent` is blue, so `.t-*` is the shared
+family's mirror of the console's `.cn-t-*` and not a merge with it: a console-family tag stays
+`cn-tag` under a `cn-t-*` row, and `Tag` draws the shared family only.
+
+**The alias is reusable without the component**, and two surfaces take it that way. The [review
+mark](#the-fleet-reviews-mark) and the plan sheet's diff rows each carry their own arm class *beside* a
+`t-*` alias — `rv-clear t-green`, `pm-dtag dropped t-red` — because those elements have descendants
+tinted by the arm (the mark's count badge) or a shape of their own; what they give up is the copy of
+the triple, which is the thing that drifts. Four `.rv-*` rules and three `.pm-dtag` rules collapse to
+one apiece.
+
+**What deliberately keeps its own class.** `.chip` is the cockpit's other badge and is not this: its
+tinted arms set a colour and a border and never a ground, so there is no triple to unify, and it is
+drawn at a hundred call sites. The console's `.cn-tag` already has the mechanism. The rest of the
+named badges — `.cfg-badge`, `.flag-chip`, `.lrun-tag`, `.rm-tag`, `.tickets-fchip`, `.pet-stage` and
+the others — are shapes of their own that happen to be small, and renaming them would be a diff about
+names rather than about the tint.
+
+`test/cockpitTheme.test.ts` holds the aliases pure: a `.t-*` or `.cn-t-*` block may declare tone
+properties and their values must every one be a bare `var(--token)`. It is the only test in
+`npm run check` that reads CSS at all.
 
 ### The header's controls
 

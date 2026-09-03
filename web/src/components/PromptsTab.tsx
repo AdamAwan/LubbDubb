@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import type { PromptTemplateView } from '../types.js';
+import { Modal } from './Modal.js';
 
 /**
  * What the harness says to its agents. Every agent-facing prompt the rule
@@ -46,9 +47,9 @@ export function PromptsTab() {
   return (
     <>
       <PromptList book={book} onShow={setShown} />
-      {/* Nested inside the settings modal on purpose: its own Escape listener and
-          backdrop close *this* layer, and the settings modal registers neither,
-          so dismissing a template cannot take the modal behind it down too. */}
+      {/* Nested on purpose: Escape closes *this* layer and nothing behind it,
+          which is the shared overlay's stack rule rather than this file's
+          knowing that nobody else listens. → components/Modal.tsx */}
       {shown && <PromptModal prompt={shown} dir={book.dir} onClose={() => setShown(null)} />}
     </>
   );
@@ -110,61 +111,43 @@ function PromptModal({
   dir: string | null;
   onClose: () => void;
 }) {
-  // Escape closes, and the backdrop click does too. Both because a modal that can
-  // only be dismissed by hitting one small button is the thing people complain
-  // about, and the panel behind it is a reference an operator dips into.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
   return (
-    <div className="prompt-backdrop" onClick={onClose} role="presentation">
-      <div className="prompt-modal" role="dialog" aria-modal="true" aria-label={prompt.id} onClick={stop}>
-        <header>
-          <code className="prompt-id">{prompt.id}</code>
-          {prompt.overridden && <span className="chip warn">overridden</span>}
-          {prompt.retired && <span className="chip">retired</span>}
-          <button className="btn ghost prompt-close" onClick={onClose} aria-label="Close">
-            ✕
-          </button>
-        </header>
-        <p className="muted">{prompt.doc}</p>
-        {prompt.retired && (
-          <p className="muted prompts-note">
-            The harness no longer renders this prompt. It stays in the book so a deployment that overrode it still boots
-            — an override here is simply not sent.
-          </p>
-        )}
+    <Modal face="prompt" label={prompt.id} onClose={onClose}>
+      <header>
+        <code className="prompt-id">{prompt.id}</code>
+        {prompt.overridden && <span className="chip warn">overridden</span>}
+        {prompt.retired && <span className="chip">retired</span>}
+        <button className="btn ghost prompt-close" onClick={onClose} aria-label="Close">
+          ✕
+        </button>
+      </header>
+      <p className="muted">{prompt.doc}</p>
+      {prompt.retired && (
         <p className="muted prompts-note">
-          {prompt.overridden ? 'Overridden by ' : 'Override it by creating '}
-          <code>{overridePath(dir, prompt.id)}</code>
-          {prompt.placeholders.length > 0 && (
-            <>
-              , which may use{' '}
-              {prompt.placeholders.map((p, i) => (
-                <span key={p}>
-                  {i > 0 && ' '}
-                  <code>{`{${p}}`}</code>
-                </span>
-              ))}
-            </>
-          )}
-          .
+          The harness no longer renders this prompt. It stays in the book so a deployment that overrode it still boots —
+          an override here is simply not sent.
         </p>
-        {/* pre-wrap, like the transcript pane: a template is long prose carrying
+      )}
+      <p className="muted prompts-note">
+        {prompt.overridden ? 'Overridden by ' : 'Override it by creating '}
+        <code>{overridePath(dir, prompt.id)}</code>
+        {prompt.placeholders.length > 0 && (
+          <>
+            , which may use{' '}
+            {prompt.placeholders.map((p, i) => (
+              <span key={p}>
+                {i > 0 && ' '}
+                <code>{`{${p}}`}</code>
+              </span>
+            ))}
+          </>
+        )}
+        .
+      </p>
+      {/* pre-wrap, like the transcript pane: a template is long prose carrying
             its own hard newlines, so it must wrap on word boundaries and never
             scroll the page sideways. */}
-        <pre className="prompt-text">{prompt.template}</pre>
-      </div>
-    </div>
+      <pre className="prompt-text">{prompt.template}</pre>
+    </Modal>
   );
-}
-
-/** Keeps a click inside the dialog from reaching the backdrop's close handler. */
-function stop(e: { stopPropagation: () => void }) {
-  e.stopPropagation();
 }
