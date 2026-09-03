@@ -267,6 +267,20 @@ export class ObstacleStore {
   }
 
   /**
+   * How many notices have actually gone out, over the whole board and all time.
+   *
+   * The one *told* this subsystem keeps a record of. Dispatch-time delivery
+   * (`src/obstacles/delivery.ts`) writes nothing — it is a paragraph appended to a
+   * prompt — so a page that summed the two would be drawing a number half of which
+   * nothing counted. Read only by the cockpit, and drawn under the name of what it
+   * actually counts. → `docs/spec/32-obstacles.md#in-the-cockpit`
+   */
+  obstacleNoticesSent(): number {
+    const row = this.ctx.db.prepare(`SELECT COUNT(*) AS n FROM obstacle_notices`).get() as { n: number };
+    return row.n;
+  }
+
+  /**
    * Take a standing row for the harness, or say it was already taken.
    *
    * **The claim is the transition, made transactionally on `owner IS NULL`** — so
@@ -376,6 +390,38 @@ export class ObstacleStore {
            WHERE id=? AND state IN ('sighted','standing','owned')`,
       )
       .run(state, endedBy, this.ctx.now(), id);
+    return result.changes > 0;
+  }
+
+  /**
+   * Say never tell the fleet this, or take it back — the one control on this
+   * board that is a person's and only a person's.
+   *
+   * **It is the one state whose exit is you**, carved out by name in
+   * `OBSTACLE_STATES_A_PERSON_MUST_LEAVE`, so both halves are here rather than one
+   * of them being a state a sweep could reach. Guarded on the states
+   * `OBSTACLE_EXITS` actually declares the transition from, which is what keeps
+   * this from becoming a general `setState`: a row that has already ended is not
+   * reaching anybody to be silenced, and un-muting lands on `standing` because
+   * that is where the exits say it goes — an operator taking the silence off is
+   * saying tell the fleet again, and `sighted` would say the opposite.
+   *
+   * `ended_by` is cleared with the move for {@link setState}'s reason: a row being
+   * told to the fleet must not go on naming an ending that took it.
+   * → `docs/spec/32-obstacles.md#states`
+   */
+  muteObstacle(id: string, muted: boolean): boolean {
+    const at = this.ctx.now();
+    const result = muted
+      ? this.ctx.db
+          .prepare(
+            `UPDATE obstacles SET state='muted', ended_by=NULL, updated_at=?
+               WHERE id=? AND state IN ('sighted','standing','owned')`,
+          )
+          .run(at, id)
+      : this.ctx.db
+          .prepare(`UPDATE obstacles SET state='standing', ended_by=NULL, updated_at=? WHERE id=? AND state='muted'`)
+          .run(at, id);
     return result.changes > 0;
   }
 

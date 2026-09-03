@@ -4392,6 +4392,9 @@ function demoSetupResolution(answers: { email: string; repoRoot: string }): Setu
   };
 }
 
+/** Why every obstacle control refuses in the demo: there is no board behind it. */
+const DEMO_NO_BOARD = 'the demo has no obstacle board to act on';
+
 export const demoApi = {
   getState: () => getServer().getState(),
   getTranscript: (agentId: string, from = 0) => getServer().getTranscript(agentId, from),
@@ -4496,6 +4499,30 @@ export const demoApi = {
   // pool reads answer *nothing published* rather than inventing other people's
   // fleets. An invented one would be the demo asserting a cross-company reading
   // that no deployment on the `fake` default ever has.
+  // The obstacle board. The demo's world is built fresh in the browser each load,
+  // so no agent has ever raised anything against it — an empty board is the honest
+  // answer, and this exists to keep the two API shapes interchangeable, exactly as
+  // the empty work graph above does. The counts are zeroes because they are counts
+  // of nothing, which is the one reading the page most has to be able to draw.
+  getObstacles: () =>
+    Promise.resolve({
+      rows: [],
+      counts: {
+        sightings: 0,
+        goals: 0,
+        told: 0,
+        window: { since: new Date().toISOString(), calls: 0, callers: 0, agents: 0 },
+      },
+      dormantMs: 7 * 24 * 60 * 60 * 1000,
+      canFileTickets: false,
+    }),
+  // The four controls answer rather than pretending: there is no board here to act
+  // on, and a resolving no-op would leave the page reporting a success it did not
+  // have — the shape `injectDemoEvent` takes for the same reason.
+  muteObstacle: (_id: string, _muted: boolean) => Promise.reject(new Error(DEMO_NO_BOARD)),
+  ownObstacle: (_id: string, _ownerRef: string) => Promise.reject(new Error(DEMO_NO_BOARD)),
+  retireObstacle: (_id: string) => Promise.reject(new Error(DEMO_NO_BOARD)),
+  writeDownObstacle: (_id: string) => Promise.reject(new Error(DEMO_NO_BOARD)),
   getPoolInsights: (project: string | null) =>
     Promise.resolve({
       rollup: {

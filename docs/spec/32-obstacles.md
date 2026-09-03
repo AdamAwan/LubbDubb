@@ -1,14 +1,15 @@
 # 32 — Obstacles
 
-**Partly built.** The spine is running: the tables, the keys and their three gates, the matcher, the
-states, the intake, both delivery channels, ownership, the `blocked` verdict, the four ways an
-obstacle ends, the harness's own voice and the model desk. What is not yet built carries its own
-marker — the cockpit tab, which is the last of it.
-It supersedes [27](27-knowledge.md) on landing — that document describes the claim store this
-replaces, and what it says is true of the harness today; a **note** still lands there, through the
-same intake, until the last of these sections is built. The change that lands the last of them deletes
-[27](27-knowledge.md) and this document takes its number. Every path named here is italic until the
-file exists.
+**Built.** The tables, the keys and their three gates, the matcher, the states, the intake, both
+delivery channels, ownership, the `blocked` verdict, the four ways an obstacle ends, the harness's own
+voice, the model desk and the cockpit tab are all running.
+
+It supersedes [27](27-knowledge.md), and that supersession has **not been taken**: `renderKnowledgeBlock`,
+`knowledgeBlockChars` and the cost accounting over them are still running, a **note** still lands
+there through the same intake, and 27 still describes the harness as it is today. Deleting that
+document and taking its number is a change an operator asks for, not one that falls out of this one —
+the two stores are live side by side until then, which is a state worth being able to read rather
+than a step somebody forgot.
 
 An agent working a goal runs into something that is not its goal: a test that fails for reasons that
 have nothing to do with its change, a base branch someone else broke, a bug in code nobody is
@@ -537,6 +538,10 @@ Four endings, on the pulse, in `src/obstacles/endings.ts` (the readings) and
 the owner that desk may have just written. Which one took a row is recorded on it as `endedBy`,
 because the four are not interchangeable to anybody reading the board afterwards.
 
+The operator's own [**retire**](#in-the-cockpit) is a fifth value of that column and not a fifth
+ending: nothing here reaches it, and it exists so the board can never say a clock or the world ended a
+row a person did.
+
 - **A condition the harness can evaluate**, written by the harness and never by an agent. Settling one
   means reading a world object pulse after pulse, and the only party that can promise to do that is the
   one already reading it — an agent naming a condition would be naming something nothing watches. One
@@ -589,32 +594,70 @@ a row is the first one that did, not whichever sweep noticed second.
 
 ## In the cockpit
 
-**Not yet built.** There is no tab and no route. When there is, it is reachable by URL only —
-deliberately not registered in the navbar until the operator says otherwise.
+One tab (`web/src/components/ObstaclesPage.tsx`, over `GET /api/obstacles` in
+`src/server/routes/obstacles.ts`), and it is **reachable by URL only** — deliberately not registered in
+the navbar until the operator says otherwise. `TABS` in `web/src/cockpit/place.ts` carries it so the
+address bar round-trips it; `TABS` in `web/src/console/TopBar.tsx` does not, and the two being separate
+lists is what makes that a decision rather than an omission
+([17](17-cockpit.md#nesting)).
 
-One tab, and it is **read-mostly**: _what is blocking the fleet, and what owns each one_. Not a queue,
-not a triage surface, and no badge counting things that are waiting on a decision — because nothing is.
+It is **read-mostly**: _what is blocking the fleet, and what owns each one_. Not a queue, not a triage
+surface, and no badge counting things that are waiting on a decision — because nothing is. That is
+[every state has an exit that is not you](#every-state-has-an-exit-that-is-not-you) arriving at the
+surface: the store this replaces gated every durable claim on an operator's click, so its output when
+nobody visited the page was exactly zero, and a badge here would be the first step back toward that.
 
 Two sections. **Standing**, which is what reaches agents, and **Sighted once**, which reaches nobody,
-drawn dimmed and saying when it will go dormant. Everything terminal is behind a fold that states its
-own size — a tail that names itself and its count cannot be mistaken for rows that went missing, which
-is what [27](27-knowledge.md#the-queue-is-the-page) spent nine open sections buying.
+drawn dimmed and saying when it will go dormant — the instant, from `lastSeenAt` plus the deployment's
+own `obstacleDormantMs`, which the payload ships rather than the page assuming. Everything terminal is
+behind a fold that states its own size — a tail that names itself and its count cannot be mistaken for
+rows that went missing, which is what [27](27-knowledge.md#the-queue-is-the-page) spent nine open
+sections buying.
 
 A row carries the claim, its keys, how many goals it cost, its owner as a reference, its state and when
-it was last seen. Opening one shows the sightings **in their authors' own words**, each with its goal
-and, next to it, **why it matched** — the key that bound it, or the suggestion that was confirmed. That
-last is the only place the matcher can be seen working or getting it wrong, and it is the reason the
-row expands at all.
+it was last seen. A key that only ever **suggests** is drawn apart from one that binds, because an
+operator reading a suggestion as an identity is the wrong-merge failure arriving through the eyes.
+Opening one shows the sightings **in their authors' own words**, each with its goal and, next to it,
+**why it matched** — the key that bound it, or `fresh` where nothing did. That last is the only place
+the matcher can be seen working or getting it wrong, and it is the reason the row expands at all; it is
+also why the sightings ride on the board rather than behind a second fetch, so the fold is a fold and
+not a request that can half-open.
 
-**The page draws what it counts and never what it would like to.** Sightings, goals cost, dispatches
-told and the rate agents call the tool are all observed. _Turns an agent did not spend_ is the figure
+**The page draws what it counts and never what it would like to.** Sightings, goals cost, agents told
+and the rate agents call the tool are all observed. _Turns an agent did not spend_ is the figure
 everyone wants and nothing measures, so it is not drawn — a number invented to sit beside four real
 ones is the one thing on the page that would be a lie, and it would be the one quoted.
 
+Two of the four are worth stating precisely, because a looser reading of either would be that lie.
+**Agents told** is `obstacle_notices`, the mid-session channel's own ledger, and it is drawn under that
+name: [dispatch-time delivery](#delivery) appends a paragraph to a prompt and records nothing, so
+summing the two would be a figure half of which nothing counted. **The call rate** is drawn as its
+three counts — calls, the agents that made them, and the agents that reached the tool channel at all —
+over the same span a row is given before it decays, because a ratio hides the denominator and the
+denominator is the half that answers [the one thing this document leaves
+unsettled](#what-is-not-settled).
+
 Four controls, none of them on any path: **mute**, **own it** (naming a ticket you are using),
-**retire**, and **write it down** for a note. Retiring is not rejecting and leaves the row saying what
-it said ([27](27-knowledge.md#retiring-is-not-rejecting)); nothing here bars a claim by name, because
-nothing here is a durable statement about the repository to bar.
+**retire**, and **write it down** for a note.
+
+- **Mute** and its way back are the only writes that move a state a reading could not, which is the
+  carve-out `OBSTACLE_STATES_A_PERSON_MUST_LEAVE` names.
+- **Own it** goes through `Store.claimObstacle` — the same `UPDATE … WHERE owner_ref IS NULL` the
+  ownership desk takes — so an operator and the pulse racing for one row is a uniqueness constraint
+  rather than a rule either of them remembers.
+- **Retire** is recorded as its own `endedBy`, because the board must never say a clock or the world
+  ended a row a person did. It is **not rejecting**: the row keeps its claim, its keys and its
+  sightings, and a matching report reopens it at `standing` like any other terminal row
+  ([27](27-knowledge.md#retiring-is-not-rejecting)). Nothing here bars a claim by name, because nothing
+  here is a durable statement about the repository to bar.
+- **Write it down** queues a note's documentation change now rather than when the endings desk reaches
+  it, through `noteWriteUpFields` (`src/obstacles/endings.ts`) — one composer for both doors, because a
+  note written up two ways is two documents claiming to be the fleet's one statement of the same thing.
+  It takes the desk's bound with it: one write-up in flight across the whole fleet, and one per note,
+  ever.
+
+`test/obstacleBoardRoute.test.ts` holds the properties that fail silently — the counts are counts of
+rows something wrote, the claim is a uniqueness constraint, and a retired row reopens.
 
 ## What nothing does
 
@@ -649,7 +692,9 @@ what the rest of these sections are — and this is the one that no amount of de
 things make it answerable rather than merely risky. The ask is appended to **every** dispatch
 unconditionally, so the [bootstrap trap](#what-went-wrong-last-time) — an intake nobody was told
 about — cannot recur. And the call rate is a figure on the page from the first day, so the
-answer arrives as a number in a week rather than as an impression in a quarter.
+answer arrives as a number in a week rather than as an impression in a quarter — the three counts in
+the [cockpit tab](#in-the-cockpit)'s fourth tile, which is the one figure on that page the rest of this
+document depends on.
 
 If the number is near zero, nothing further in this document is worth building, and that is the
 honest order to find it out in.

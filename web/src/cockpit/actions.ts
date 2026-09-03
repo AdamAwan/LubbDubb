@@ -79,7 +79,25 @@ export type ConsolePanel =
  * rather than a number glanced at, and a panel drew over the rail the operator came
  * from. `readPlace` aliases `?panel=knowledge` onto the tab for `work`'s reason.
  */
-export type ConsoleTab = 'overview' | 'tickets' | 'knowledge' | 'features' | 'insights' | 'pets' | 'config';
+export type ConsoleTab =
+  | 'overview'
+  | 'tickets'
+  | 'knowledge'
+  /**
+   * The obstacle board (#32 phase 7) — **reachable by URL only**.
+   *
+   * It is a member here, and `TABS` in `place.ts` round-trips it, precisely so the
+   * address bar can carry it; what it is deliberately *not* in is `TABS` in
+   * `TopBar.tsx`, which is the nav. That is the operator's call and stands until
+   * they lift it in writing: the board is a reading about a subsystem whose one
+   * unsettled question is whether agents call its tool at all, and a nav slot is the
+   * most expensive space in the cockpit to spend on finding that out.
+   */
+  | 'obstacles'
+  | 'features'
+  | 'insights'
+  | 'pets'
+  | 'config';
 
 /**
  * Which reading the Insights page is showing.
@@ -459,6 +477,41 @@ export interface CockpitActions {
       >
     >,
   ): void;
+
+  /**
+   * Move about the obstacle board: which row's sightings are unfolded, and whether
+   * the terminal tail is open.
+   *
+   * One method taking a partial rather than two, for `setKnowledgeQuery`'s reason:
+   * they are one place, and opening a row inside the tail is a single move that
+   * must not push two history entries. It is on the seam at all — rather than a
+   * `useState` in the page — because the fold is the only place the matcher can be
+   * seen working or getting it wrong, and that is a link an operator sends someone.
+   */
+  setObstacleQuery(next: Partial<Pick<Place, 'obstacle' | 'obstacleEnded'>>): void;
+
+  /**
+   * The four controls on the obstacle board, and the whole of what an operator can
+   * say about a row that no reading can.
+   *
+   * **None of them is on any path.** The board runs itself — a row is filed by an
+   * agent, carried to `standing` by a second independent voice, owned by the pulse
+   * and ended by one of the four endings — and nothing here is a step in any of
+   * that. That is the invariant the subsystem is arranged around: *every state has
+   * an exit that is not you*, so a control the harness waited on would rebuild the
+   * queue only a human empties that killed the store this one replaces.
+   * → `docs/spec/32-obstacles.md#every-state-has-an-exit-that-is-not-you`
+   */
+  muteObstacle(id: string, muted: boolean): Promise<void>;
+  /** Name the ticket you are already using. Never an agent, and never a lock. */
+  ownObstacle(id: string, ownerRef: string): Promise<void>;
+  /**
+   * This is over and no reading is going to say so. **Retiring is not rejecting**:
+   * the row keeps what it said, and a matching report reopens it.
+   */
+  retireObstacle(id: string): Promise<void>;
+  /** Write a note into the repository now, rather than when the endings desk reaches it. */
+  writeDownObstacle(id: string): Promise<void>;
   /**
    * Where a claim stands, on the operator's say-so (#27 phase 2) — promote,
    * demote, reject, or keep it exactly where it is.

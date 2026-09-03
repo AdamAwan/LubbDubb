@@ -1560,6 +1560,10 @@ export class Store {
     return this.obstacles.obstaclesNoticedBy(agentId);
   }
 
+  obstacleNoticesSent(): number {
+    return this.obstacles.obstacleNoticesSent();
+  }
+
   obstacleBoard(): ObstacleStanding[] {
     return this.obstacles.obstacleBoard();
   }
@@ -1590,6 +1594,10 @@ export class Store {
 
   setObstacleKind(...args: Parameters<ObstacleStore['setObstacleKind']>): boolean {
     return this.obstacles.setObstacleKind(...args);
+  }
+
+  muteObstacle(id: string, muted: boolean): boolean {
+    return this.obstacles.muteObstacle(id, muted);
   }
 
   claimObstacle(id: string): boolean {

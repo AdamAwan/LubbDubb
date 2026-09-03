@@ -352,6 +352,14 @@ export function useCockpit(): CockpitStatus {
       // One `go` for however many of the five moved: they are one place, and two
       // calls would push two history entries for a single change of question.
       setKnowledgeQuery: (next) => go(next),
+      // One `go` for both, for `setKnowledgeQuery`'s reason: which row is unfolded
+      // and whether the terminal tail is open are one place, and two calls would
+      // push two history entries for a single move.
+      setObstacleQuery: (next) => go(next),
+      muteObstacle: (id, muted) => then(api.muteObstacle(id, muted)),
+      ownObstacle: (id, ownerRef) => then(api.ownObstacle(id, ownerRef)),
+      retireObstacle: (id) => then(api.retireObstacle(id)),
+      writeDownObstacle: (id) => then(api.writeDownObstacle(id)),
       openConfig: (where) => go({ tab: 'config', goal: null, ...where }),
       // One `go` for both halves: the tab and the window are one place, and two
       // calls would push two history entries for a single change of question.
@@ -538,6 +546,8 @@ export function useCockpit(): CockpitStatus {
       knowledgeFolded: place.knowledgeFolded,
       knowledgeQueue: place.knowledgeQueue,
       knowledgeOpen: place.knowledgeOpen,
+      viewingObstacle: place.obstacle,
+      obstacleEnded: place.obstacleEnded,
       insightsView: place.insightsView,
       insightsWindow: place.insightsWindow,
       poolProject: place.poolProject,

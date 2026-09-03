@@ -249,6 +249,10 @@ export interface CockpitView {
   knowledgeQueue: string | null;
   /** Which of the queue's three folds are open — opened, never folded away. */
   knowledgeOpen: string[];
+  /** The obstacle whose sightings are unfolded, by id, or null for none. */
+  viewingObstacle: string | null;
+  /** Whether the obstacle board's terminal tail is opened. */
+  obstacleEnded: boolean;
   /** Which reading the Insights page is showing. */
   insightsView: InsightsView;
   /** The stretch of time every reading on that page is measured over. */
@@ -355,6 +359,9 @@ interface ViewInputs {
   knowledgeFolded?: string[];
   knowledgeQueue?: string | null;
   knowledgeOpen?: string[];
+  /** Optional for `collapsed`'s reason: nothing open is what a bare URL means. */
+  viewingObstacle?: string | null;
+  obstacleEnded?: boolean;
   /** Which reading the Insights page is showing. */
   insightsView: InsightsView;
   /** The stretch of time every reading on that page is measured over. */
@@ -532,5 +539,9 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     knowledgeFolded: input.knowledgeFolded ?? [],
     knowledgeQueue: input.knowledgeQueue ?? null,
     knowledgeOpen: input.knowledgeOpen ?? [],
+    viewingObstacle: input.viewingObstacle ?? null,
+    // Shut, which is the page as it stands: the tail states its own size, so
+    // nothing is hidden by being folded.
+    obstacleEnded: input.obstacleEnded ?? false,
   };
 }

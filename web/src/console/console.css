@@ -3670,3 +3670,285 @@ button.cn-grow {
 .cn-thtext pre {
   overflow-x: auto;
 }
+
+/* ---------------------------------------------------------------------------
+   The obstacle board (docs/spec/32-obstacles.md#in-the-cockpit).
+
+   Every colour is a `var()`, never a literal, because a hex at a use site is a
+   surface that stays dark when somebody switches to Light and the only thing in
+   `check` that reads CSS at all is `test/cockpitTheme.test.ts`. Nothing new is
+   declared either: the board borrows the console's palette rather than growing
+   one that could drift from it — a row here is the same kind of thing as a row
+   anywhere else in the situation area, and a second vocabulary for it would be a
+   second thing to retune.
+   --------------------------------------------------------------------------- */
+.ob {
+  display: grid;
+  gap: 16px;
+  max-width: 1040px;
+}
+.ob-head > h2 {
+  margin: 0;
+  font: 600 15px/1.2 var(--cn-ui);
+}
+.ob-blurb {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--cn-fg-dim);
+  max-width: 80ch;
+}
+
+/* The four figures. Nothing here is derived — each is a count of rows something
+   actually wrote, and *turns an agent did not spend* is deliberately absent. */
+.ob-counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+.ob-tile {
+  border: 1px solid var(--cn-line);
+  background: var(--cn-panel);
+  padding: 8px 10px;
+}
+.ob-tile-wide {
+  grid-column: span 2;
+}
+.ob-tile-n {
+  font: 600 20px/1.1 var(--cn-ui);
+  color: var(--cn-fg);
+}
+.ob-tile-of {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--cn-fg-dim);
+}
+.ob-tile-l {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--cn-fg-dim);
+  margin-top: 2px;
+}
+.ob-tile-note {
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--cn-fg-faint);
+  margin-top: 4px;
+}
+
+.ob-section > h3 {
+  margin: 0;
+  font-size: 13px;
+}
+.ob-n {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--cn-fg-dim);
+}
+.ob-note {
+  margin: 2px 0 8px;
+  font-size: 12px;
+  color: var(--cn-fg-dim);
+  max-width: 88ch;
+}
+.ob-refusal {
+  margin: 0;
+  padding: 6px 8px;
+  font-size: 12px;
+  border: 1px solid var(--cn-red-line);
+  background: var(--cn-red-fill);
+  color: var(--cn-red-ink);
+}
+
+/* Sighted-once rows reach nobody, so they are drawn quieter than the ones being
+   told to the fleet. Dimming is the whole signal: they are not a lesser kind of
+   row, they are a row nothing is acting on yet. */
+.ob-dim .ob-row,
+.ob-row.dim {
+  opacity: 0.72;
+}
+
+.ob-fold {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: 600 13px/1.2 var(--cn-ui);
+  color: var(--cn-fg);
+  cursor: pointer;
+}
+.ob-fold:hover {
+  color: var(--cn-accent);
+}
+
+.ob-row {
+  border: 1px solid var(--cn-line);
+  background: var(--cn-panel);
+  padding: 8px 10px;
+  margin-bottom: 6px;
+}
+.ob-row.open {
+  border-color: var(--cn-line-hi);
+  background: var(--cn-panel-2);
+}
+.ob-row-top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ob-claim {
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  font: 500 13px/1.4 var(--cn-ui);
+  color: var(--cn-fg);
+  cursor: pointer;
+}
+.ob-claim:hover {
+  color: var(--cn-accent);
+}
+.ob-state {
+  font: 600 9.5px/1 var(--cn-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 4px;
+  border: 1px solid var(--cn-line-hi);
+  color: var(--cn-fg-dim);
+}
+.ob-state.s-standing {
+  border-color: var(--cn-amber-line);
+  background: var(--cn-amber-fill);
+  color: var(--cn-amber);
+}
+.ob-state.s-owned {
+  border-color: var(--cn-blue-line);
+  background: var(--cn-blue-fill);
+  color: var(--cn-blue-ink-hi);
+}
+.ob-state.s-resolved {
+  border-color: var(--cn-green-line);
+  background: var(--cn-green-fill);
+  color: var(--cn-green-ink);
+}
+.ob-kind {
+  font: 600 9.5px/1 var(--cn-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 4px;
+  border: 1px solid var(--cn-violet-line);
+  background: var(--cn-violet-fill);
+  color: var(--cn-violet);
+}
+
+.ob-row-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 5px;
+  font-size: 11.5px;
+  color: var(--cn-fg-dim);
+}
+.ob-keys {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.ob-key {
+  font: 11px/1.4 var(--cn-mono);
+  border: 1px solid var(--cn-line-hi);
+  background: var(--cn-bg);
+  padding: 1px 4px;
+  color: var(--cn-fg-dim);
+}
+/* A key that only suggests resolves nothing and delivers nothing, so it must not
+   be drawn like one that does — an operator reading a suggestion as an identity
+   is the wrong-merge failure arriving through the eyes. */
+.ob-key.suggests {
+  border-style: dashed;
+  color: var(--cn-fg-faint);
+}
+.ob-key.none {
+  font-style: italic;
+  border-color: var(--cn-red-line);
+  color: var(--cn-red-ink);
+}
+.ob-key-k {
+  color: var(--cn-fg-faint);
+  margin-right: 4px;
+}
+.ob-decay {
+  color: var(--cn-fg-faint);
+}
+.ob-ended {
+  color: var(--cn-green-ink);
+}
+
+.ob-open {
+  margin-top: 8px;
+  border-top: 1px solid var(--cn-line);
+  padding-top: 8px;
+}
+.ob-sightings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.ob-words {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.ob-why {
+  margin: 2px 0 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  color: var(--cn-fg-dim);
+}
+.ob-why code {
+  font: 11px/1.4 var(--cn-mono);
+  color: var(--cn-fg);
+}
+.ob-harness {
+  font-style: italic;
+}
+.ob-not-mine {
+  margin: 3px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--cn-fg-faint);
+  overflow-wrap: anywhere;
+}
+.ob-not-mine-l {
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-size: 10px;
+}
+
+.ob-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.ob-own {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.ob-own input {
+  font: 12px/1.4 var(--cn-mono);
+  padding: 3px 6px;
+  border: 1px solid var(--cn-line-hi);
+  background: var(--cn-bg);
+  color: var(--cn-fg);
+  min-width: 26ch;
+}

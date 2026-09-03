@@ -7,7 +7,7 @@ import {
   conditionsSettled,
   conditionsToWatch,
   decayed,
-  noteWriteUpNote,
+  noteWriteUpFields,
   notesToWriteUp,
   ownerLanded,
   writeUpReading,
@@ -185,31 +185,11 @@ export class ObstacleEndingsDesk {
     if (this.deps.store.openObstacleWriteUps().length > 0) return;
     const row = notesToWriteUp(this.deps.store.obstacleBoard(), this.deps.store.obstaclesWrittenUp())[0];
     if (!row) return;
-    const claim = row.obstacle.what.replace(/\s+/g, ' ').trim();
+    const fields = noteWriteUpFields(row);
     // Appended, never interpolated: `loadPromptTemplates` rejects only *unknown*
     // placeholders, so an override written before this existed would silently drop
     // a new `{token}` — on exactly the deployments that customised most.
-    const prompt = [
-      docs({
-        ref: keyPhrase(row),
-        summary: claim,
-        originRef: row.goalRefs[0] ?? 'an untracked task',
-      }),
-      noteWriteUpNote(row),
-    ].join('\n\n');
-    this.deps.store.writeUpObstacle(row.obstacle.id, { title: `Document: ${claim}`.slice(0, TITLE_CHARS), prompt });
+    const prompt = [docs(fields.vars), fields.note].join('\n\n');
+    this.deps.store.writeUpObstacle(row.obstacle.id, { title: fields.title, prompt });
   }
-}
-
-/** A job title stays a line. The prompt carries everything worth reading. */
-const TITLE_CHARS = 80;
-
-/**
- * What the note is *about*, said as a phrase a sentence can contain — never parsed
- * back. Its binding keys are the harness's own statement of that, and a note with
- * none is about working this repository at all.
- */
-function keyPhrase(row: ObstacleStanding): string {
-  const keys = row.keys.filter((key) => key.binds).map((key) => `\`${key.value}\``);
-  return keys.length === 0 ? 'working this repository' : keys.join(', ');
 }
