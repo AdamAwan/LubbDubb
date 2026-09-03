@@ -139,7 +139,7 @@ test('ending the run is one destructive control that confirms on every goal', ()
     const html = render(goalWith(verdict));
     assert.ok(html.includes('End the run…'), 'the control always says it will ask first');
     assert.ok(!html.includes('>End the run<'), 'and never posts on the click itself');
-    assert.match(html, /cn-tgl cn-danger/, 'it is drawn as the destructive control it is');
+    assert.match(html, /cn-runseg cn-danger/, 'it is drawn as the destructive control it is');
   }
 });
 

@@ -977,7 +977,7 @@ test('a goal draws its own durable record, not only the live snapshot', () => {
 });
 
 /**
- * "More work" is how an operator says what they want done next, in words — and
+ * "Give instructions" is how an operator says what they want done next, in words — and
  * the verdict it writes is what puts the goal back in front of pickup once no PR
  * is open. Losing the control loses both, silently and with every type still
  * checking. The floor carried the verdict; this pins that the goal page carries
@@ -985,7 +985,7 @@ test('a goal draws its own durable record, not only the live snapshot', () => {
  */
 test('a goal can still be sent back for more work, not only marked done', () => {
   const html = render(goalView());
-  assert.ok(html.includes('More work'), 'the goal page must offer the way to say what is left');
+  assert.ok(html.includes('Give instructions'), 'the goal page must offer the way to say what is left');
 
   // Offered *again* on a goal already sent back, unlike the verdict-only control
   // it replaced: a second thing the operator wants is a second instruction, and a
@@ -1005,9 +1005,39 @@ test('a goal can still be sent back for more work, not only marked done', () => 
     ];
   });
   const standing = render(already);
-  assert.ok(standing.includes('More work'), 'and it still is once one stands');
+  assert.ok(standing.includes('Give instructions'), 'and it still is once one stands');
   assert.ok(standing.includes('change the button to primary'), 'what was asked for is drawn, not just counted');
   assert.ok(standing.includes('Withdraw'), 'and there is a way to take it back');
+});
+
+/**
+ * The header's three groups say what they are for, in words, above their
+ * controls — and the run's three states are one control rather than two buttons
+ * at opposite ends of the row.
+ *
+ * Both halves were confusions nothing could catch: `Mark done` and `End the run…`
+ * looked alike and read alike while one writes a verdict and the other kills the
+ * goal's agents, and `More work` was the name of a control *and* of the verdict
+ * the chip above it draws, pointing opposite ways. A rename or a regrouping that
+ * quietly drops a caption puts both back, with every type still checking.
+ */
+test('the goal header captions its groups and draws the run state as one control', () => {
+  const html = render(goalView());
+
+  for (const caption of ['Run state', 'Steer the work', 'Elsewhere']) {
+    assert.ok(html.includes(caption), `the group caption "${caption}" is what explains the controls under it`);
+  }
+
+  // One segmented control, and every state in it — including the one the goal is
+  // not in, which is how the control says what the alternatives are.
+  assert.match(html, /class="cn-runstate"/, 'the run states share one control');
+  for (const state of ['Working', 'Done']) {
+    assert.ok(html.includes(state), `${state} is a segment of the run state`);
+  }
+
+  // The verdict chip is prefixed, so "more work" as a reading can never be
+  // mistaken for "Give instructions" as a control.
+  assert.ok(!html.includes('More work'), 'no control or chip carries the old ambiguous words');
 });
 
 /**
@@ -2179,7 +2209,7 @@ test('the way to the tracker is always drawn, and prefers the unambiguous key', 
   // Read off the control itself rather than off the page: `#<n>` is a ref other
   // surfaces here legitimately draw, so a whole-page search would pass on their
   // links and never see this one.
-  const opener = /<a[^>]*href="([^"]*)"[^>]*>Open ticket/.exec(both);
+  const opener = /<a[^>]*href="([^"]*)"[^>]*>(?:<svg(?:(?!<\/svg>)[\s\S])*<\/svg>)?Open ticket/.exec(both);
   assert.ok(opener, 'the control is drawn as a link when there is somewhere to go');
   assert.equal(opener[1], 'https://tracker/browse/right', 'the goal’s own ref wins over the number a PR shares');
 
@@ -2188,7 +2218,7 @@ test('the way to the tracker is always drawn, and prefers the unambiguous key', 
   assert.ok(nowhere.includes('Open ticket'), 'the row’s shape must not depend on what a provider resolved');
   assert.ok(nowhere.includes('aria-disabled="true"'), 'and it says it is unavailable rather than pretending');
   assert.ok(
-    !/<a[^>]*>Open ticket/.test(nowhere),
+    !/<a[^>]*>(?:<svg(?:(?!<\/svg>)[\s\S])*<\/svg>)?Open ticket/.test(nowhere),
     'a link that leads nowhere is the dead end refs exist to prevent, so it stops being one',
   );
 });
