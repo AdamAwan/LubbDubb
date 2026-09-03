@@ -257,7 +257,7 @@ a reading, instead of on the ask.
 ### Nesting
 
 The ladder is three rungs — **tab, goal, pull request** — and it is a real containment rather than a
-render order: a goal is drawn over the tab that *lists* it, and a pull request over the goal it was
+render order: a goal is drawn over the tab that _lists_ it, and a pull request over the goal it was
 reached from. `Place` holds all three at once precisely so that stepping out of one restores the one
 underneath, and the **crumb at the head of the situation area draws every rung**, each above the last
 a control (`Crumb`, `ConsoleRoot.tsx`).
@@ -266,7 +266,7 @@ a control (`Crumb`, `ConsoleRoot.tsx`).
 Tickets and the feature board. Everything else the nav offers is a reading or a settings page, and
 neither contains a goal.
 
-That has to be *enforced*, because nothing that opens a goal moves the nav. The queue rail is drawn
+That has to be _enforced_, because nothing that opens a goal moves the nav. The queue rail is drawn
 on every tab, and a `<Ref>` opens a goal or a pull request from wherever it is drawn — so the tab an
 operator happens to have last clicked is not evidence of where they came from. Left alone it read as
 one anyway: an operator on Insights who clicked a rail row got a goal page whose way out said
@@ -439,9 +439,9 @@ once.
 
 | Parameter                            | Carries                                                                                                                                                                                                                                                                                                                                                                                                  |
 | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tab`                                | `tickets` / `knowledge` / `insights`; the overview is the absent value. `backlog` and `work` are aliases for `tickets`, and `?panel=knowledge` for `knowledge`, so links to a deleted tab or a promoted panel still land. Narrowed by `homeTab` whenever `goal` or `pr` is set — a link naming one of those is a place one rung in, and the tab is the rung under it → [nesting](#nesting)             |
-| `goal`                               | the open goal page, as `issue:<n>`. It outranks `tab`, which it is drawn over and which the crumb's first rung names                                                                                                                                                                                                                                                                                    |
-| `pr`                                 | the open [pull request page](#the-pull-request-page), by number. It outranks `goal`, which it is drawn over and which is the crumb's second rung; a value that is not a positive integer is nowhere                                                                                                                        |
+| `tab`                                | `tickets` / `knowledge` / `insights`; the overview is the absent value. `backlog` and `work` are aliases for `tickets`, and `?panel=knowledge` for `knowledge`, so links to a deleted tab or a promoted panel still land. Narrowed by `homeTab` whenever `goal` or `pr` is set — a link naming one of those is a place one rung in, and the tab is the rung under it → [nesting](#nesting)               |
+| `goal`                               | the open goal page, as `issue:<n>`. It outranks `tab`, which it is drawn over and which the crumb's first rung names                                                                                                                                                                                                                                                                                     |
+| `pr`                                 | the open [pull request page](#the-pull-request-page), by number. It outranks `goal`, which it is drawn over and which is the crumb's second rung; a value that is not a positive integer is nowhere                                                                                                                                                                                                      |
 | `panel`                              | `knowledge` / `faults` / `launch` / `build` / `record` / `localRun` / `setup` / `pets`                                                                                                                                                                                                                                                                                                                   |
 | `ask`                                | the queue row a `{ ask }` panel is showing                                                                                                                                                                                                                                                                                                                                                               |
 | `agent`                              | the open drawer's agent                                                                                                                                                                                                                                                                                                                                                                                  |
@@ -1502,8 +1502,19 @@ the pair, including the prefix trap (`issue/1` versus `issue/19`).
 
 Open and closed are both drawn, closed dimmed with `merged` / `closed` on the chip. A merged PR leaves
 the open list, and a goal whose work has landed would otherwise draw an empty card
-([03](03-world-model.md)); the closed list is retention-windowed, so what it holds is what the harness
-still remembers.
+([03](03-world-model.md)).
+
+**The closed rows are kept for ever, and they are stale on purpose.** `world.closedPullRequests` is a
+window `closedPrWindowMs` wide, and drawn off it alone a goal's pull requests disappeared from its page
+a few hours after they merged — the page of a goal delivered last month said nothing had ever named
+it, which is the one question that page is opened to answer. So the closed list here is the union of
+that window and `archivedPullRequests`, the same rows kept in `pr_archive`
+([14](14-persistence.md#the-closed-pull-request-archive)), deduplicated by number with the **window's**
+copy winning: the two disagree only while a pull request is recent, and the window is then the fresher
+reading of the two. Nothing re-fetches an archived row and no rule reads one — what is drawn is the
+last thing the world said about a pull request nothing will happen on again, which is what the
+alternative (no row at all) was hiding. The same pair answers [the pull request page](#the-pull-request-page),
+so a closed row still opens the page it links to rather than the gone screen.
 
 **The pull request's name is the way onto [its own page](#the-pull-request-page)**, with the
 provider reference beside it — never inside it, since one click cannot have two destinations and the
@@ -1677,11 +1688,26 @@ rack — whose row name is the way onto it — and from any `<Ref>` that names t
 ([links](#links)), and the crumb at its head draws the
 whole ladder — the tab, then the goal it was reached from, then the pull request. On one no ticket
 owns, which the harness works and which therefore reaches this page too, the middle rung is simply
-absent: the trail is as deep as the place is, never padded to a fixed shape. Leaving it
-(`selectPr(null)`) lands on the goal underneath, which the place never cleared; and because a `<Ref>`
-reaches this page from anywhere at all, the tab it hangs off is narrowed to one that lists pull
-requests on the way in → [nesting](#nesting). `web/src/console/PrPage.tsx` draws it; `web/src/view/prPage.ts`
+absent: the trail is as deep as the place is, never padded to a fixed shape. Leaving it with the
+page's own control (`selectPr(null)`) lands on the goal underneath, which the place never cleared;
+and because a `<Ref>` reaches this page from anywhere at all, the tab it hangs off is narrowed to one
+that lists pull requests on the way in → [nesting](#nesting).
+
+**The goal rung _selects_ the goal, rather than clearing the pull request over it.** The two are the
+same move only when the place already holds the goal, and it does not always: the overview's
+pull-request rack — and every `<Ref to="pr:…">` drawn away from a goal page — opens this page with
+`pr` and nothing under it. The rung is still drawn there, because the page derives what owns the
+pull request from the snapshot rather than from the place (`goalRef`, `web/src/view/prPage.ts`), so
+`selectPr(null)` fell through the rung the operator had just clicked and landed on the tab: a crumb
+that named the goal and went to the overview. `web/src/console/PrPage.tsx` draws it; `web/src/view/prPage.ts`
 derives what it draws.
+
+**The pull request is resolved out of three lists**: the open world, the closed window, and the
+archive behind it — `closedPrs` in `goalPage.ts`, the same pair the goal page's closed rows are drawn
+from. That is what keeps a closed row a link rather than a dead end: a page that could only find a
+pull request the window still held would answer the gone screen for every row the goal page now keeps.
+An archived reading carries no verdicts, exactly as the window's does not, and the page draws what is
+absent as absent.
 
 **It has no route of its own.** Every reading on it is one the harness has already made and already
 ships on the snapshot — the threads and their state, the checks, `attention`, `health`, `ciVerdict`,
@@ -2115,7 +2141,7 @@ taking one — and one colour for both would have merged them.
 The state column carries the step (`handing a slot over`, `reading CI output`, `authorizing`,
 `picked up`) in the same slot every other row wears its state, in the tint. The words are
 [09](09-execution.md#handing-a-slot-over)'s own; the hover behind them says what that step waits on and
-the two things a glance cannot — that it holds no slot the cap counts *yet*, and that it leaves the
+the two things a glance cannot — that it holds no slot the cap counts _yet_, and that it leaves the
 list on its own, when the agent starts or when the dispatch fails.
 
 **It takes no slot and is not counted as one.** `view.live` excludes it, exactly as it excludes a desk
@@ -4934,7 +4960,7 @@ how a surface ends up naming a thing instead of pointing at it. `test/refLinks.t
 nothing else strips a ref down to a number.
 
 **The family is in the name because the marks cannot carry it.** The three marks below say where a
-reference *goes*; none of them says what it *is*. So the rack drew `#412` for a pull request and `#212`
+reference _goes_; none of them says what it _is_. So the rack drew `#412` for a pull request and `#212`
 for the goal it delivers as the same token in the same slot, and the one question that pair raises —
 which of these is the ticket? — was answered by clicking one to find out. A goal keeps the tracker's
 own `#`, which is what every tracker, commit message and operator already calls it; a pull request says
@@ -5039,8 +5065,8 @@ browser from the action bag — [16](16-http-api.md#the-state-snapshot) has why.
 
 ### A reference carries both its doors
 
-A goal and a pull request each exist in **two places**, and the two answer different questions: *what
-does the harness make of this* is the cockpit's page, *what does the tracker or the diff actually say*
+A goal and a pull request each exist in **two places**, and the two answer different questions: _what
+does the harness make of this_ is the cockpit's page, _what does the tracker or the diff actually say_
 is the provider's. A `<Ref>` used to offer only the first, which made the provider somewhere you had to
 go and find — and the one row that minded fixed it locally, by drawing a **second token with the same
 number in it**. The overview's pull-request rack therefore read `#412` `#412` `#212`: two of the three
@@ -5054,7 +5080,7 @@ under the cursor, and the arm takes the same `:focus-visible` ring as the token,
 stop along.
 
 **The arm is absent, not inert, where the provider resolved nothing.** It stands against a token that
-*did* resolve, so a dead second target reads as a broken link where a missing one reads as a token with
+_did_ resolve, so a dead second target reads as a broken link where a missing one reads as a token with
 one door — which is what it is. That is the opposite of `<TicketLink>`'s rule, and deliberately: a
 page's lone control saying "no address for this" is a stated fact; a row's second target saying it, on
 every row, is noise.
@@ -5069,7 +5095,7 @@ the wrong thing on exactly the deployments busy enough to have both.
 row a row's two refs are a pull request and the goal it delivers, always in that order, and the row
 once said so with a muted `delivers` between them. It cost more than it said: the word was the widest
 thing in the refs slot, and the group packs to the right, so on a half-width card the pair overflowed
-its column to the *left* and painted the pull request's own token over the reading slot beside it —
+its column to the _left_ and painted the pull request's own token over the reading slot beside it —
 `agent on it` read as `ag`. The word is gone, `--cn-w-refs` is wide enough for the two tokens, and the
 group is `overflow: hidden` so it can never again spill onto its neighbour. The relation stays in the
 goal ref's hover, which is where a sentence belongs.

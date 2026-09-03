@@ -1,5 +1,5 @@
 import type { AppState, Issue, PrReviewThread, PrThreadState, PullRequest, TaskSummary } from '../types.js';
-import { goalOfPr } from './goalPage.js';
+import { closedPrs, goalOfPr } from './goalPage.js';
 
 /**
  * What the pull-request page draws, derived from the snapshot the cockpit already
@@ -47,11 +47,16 @@ export function hasPrPage(state: AppState, prNumber: number): boolean {
   return findPr(state, prNumber) !== null;
 }
 
-/** The pull request under this number, open or closed, or null when the world dropped it. */
+/**
+ * The pull request under this number, open or closed, or null when nothing carries
+ * it. Closed means {@link closedPrs} — the world's window *and* the archive behind
+ * it — so a pull request reached from a goal page that keeps its closed rows for
+ * ever opens the page it links to rather than the gone screen.
+ */
 function findPr(state: AppState, prNumber: number): PullRequest | null {
   return (
     state.world.pullRequests.find((p) => p.number === prNumber) ??
-    (state.world.closedPullRequests ?? []).find((p) => p.number === prNumber) ??
+    closedPrs(state).find((p) => p.number === prNumber) ??
     null
   );
 }

@@ -183,6 +183,29 @@ function reachesGoal(state: AppState, origin: string | null, ref: string): boole
 }
 
 /**
+ * Every pull request the cockpit knows to be closed: the world's window and the
+ * archive behind it, as one list.
+ *
+ * `world.closedPullRequests` is `closedPrWindowMs` wide, so drawn off it alone a
+ * goal's pull requests vanished from its page a few hours after they merged and
+ * the page of a goal delivered last month said nothing had ever named it. The
+ * archive (`state.archivedPullRequests`) is those same rows kept for good.
+ *
+ * The window is written **second** so its row wins a collision: the two carry the
+ * same pull request whenever one has closed recently, and the window's copy is the
+ * fresher reading of the two. Everything the archive adds is older than the window
+ * and therefore stale by construction — which is the whole of what it claims to be.
+ *
+ * @public shared with prPage, which resolves a pull request through the same pair
+ */
+export function closedPrs(state: AppState): PullRequest[] {
+  const byNumber = new Map<number, PullRequest>();
+  for (const pr of state.archivedPullRequests ?? []) byNumber.set(pr.number, pr);
+  for (const pr of state.world.closedPullRequests ?? []) byNumber.set(pr.number, pr);
+  return [...byNumber.values()];
+}
+
+/**
  * The pull requests this goal owns, by number — what the goal page names when it
  * asks the server for the goal's whole run history.
  *
@@ -195,7 +218,7 @@ function reachesGoal(state: AppState, origin: string | null, ref: string): boole
 export function goalPrNumbers(state: AppState, ref: string): number[] {
   const plan = (state.plans ?? []).find((p) => p.originRef === ref) ?? null;
   const parts = plan === null ? [] : (state.planParts ?? []).filter((p) => p.planId === plan.id).map((p) => p.prNumber);
-  const world = [...state.world.pullRequests, ...(state.world.closedPullRequests ?? [])];
+  const world = [...state.world.pullRequests, ...closedPrs(state)];
   return [
     ...new Set([
       ...parts.flatMap((n) => (n === null ? [] : [n])),
@@ -254,9 +277,7 @@ export function goalOfPr(state: AppState, prNumber: number): string | null {
   const linked = state.world.issues.find((i) => i.linkedPrNumber === prNumber);
   if (linked) return `issue:${linked.number}`;
 
-  const pr = [...state.world.pullRequests, ...(state.world.closedPullRequests ?? [])].find(
-    (p) => p.number === prNumber,
-  );
+  const pr = [...state.world.pullRequests, ...closedPrs(state)].find((p) => p.number === prNumber);
   return pr ? branchGoal(pr.branch) : null;
 }
 
@@ -396,7 +417,7 @@ export function buildGoalPage(
     parts,
     retiredParts,
     openPullRequests: state.world.pullRequests.filter((pr) => ownsPr(pr, issue, partPrs)),
-    closedPullRequests: (state.world.closedPullRequests ?? []).filter((pr) => ownsPr(pr, issue, partPrs)),
+    closedPullRequests: closedPrs(state).filter((pr) => ownsPr(pr, issue, partPrs)),
     agents: goalAgents.map<GoalAgentView>((agent) => {
       const origin = originOf(agent);
       const pr = origin === null ? null : /^pr:(\d+)$/.exec(origin);

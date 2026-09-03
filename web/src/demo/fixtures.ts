@@ -2059,6 +2059,23 @@ export function buildDemoState(): DemoSeed {
     // `stale` — the tracker's copy is from the last pulse it was live, the
     // run, conclusion and spend are the harness's own. The only way out is the
     // operator's dismissal, which is why it is a queue row and not a chip.
+    // The pull requests the world stopped reporting hours ago, kept for good: what
+    // goal 390 shipped first, still on its page months later. Stale by
+    // construction — no verdicts, and nothing re-reads them.
+    archivedPullRequests: [
+      {
+        id: 'pr-388',
+        number: 388,
+        title: 'Carry the validation bench behind one desk',
+        branch: 'issue/390/bench',
+        ciStatus: 'unknown',
+        unresolvedComments: [],
+        baseBranch: 'main',
+        merged: true,
+        state: 'merged',
+        closedAt: ago(60 * 24 * 27),
+      },
+    ],
     retainedRuns: [
       demoIssue({
         id: 'iss-357',

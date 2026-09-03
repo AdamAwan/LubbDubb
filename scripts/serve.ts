@@ -24,6 +24,7 @@
  * was before the button existed.
  */
 import { spawn, spawnSync, type SpawnSyncReturns } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { UPGRADE_EXIT_CODE } from '../src/selfUpdate/handoff.js';
 
 /** Announces to the child that a relaunch is available. Read by `UpdateDesk`. */
@@ -66,7 +67,7 @@ function applyUpdate(): Outcome {
   // The dependency tree, and only when the lockfile actually moved — `npm ci` is a
   // full delete-and-rebuild of two native modules, which would otherwise be a
   // minute added to every upgrade that touched no dependency.
-  if (lockfileChanged(before) && !step('npm ci', NPM, ['ci'], NPM_SPAWN_OPTIONS)) return 'source-moved';
+  if (lockfileChanged(before) && !installDependencies()) return 'source-moved';
   // **Unconditional, unlike the install above.** The server needs no build step —
   // tsx runs it from source — but the cockpit does, `web/dist` is gitignored, and
   // the server serves whatever is there on an `existsSync` check with no version
@@ -90,7 +91,7 @@ function applyUpdate(): Outcome {
   // Running it now costs a minute on the one path that is already broken, and the
   // alternative is coming back on a cockpit bundle nothing says is stale.
   console.log('[serve] the cockpit build failed — reinstalling dependencies and trying it once more');
-  if (!step('npm ci', NPM, ['ci'], NPM_SPAWN_OPTIONS)) return 'source-moved';
+  if (!installDependencies()) return 'source-moved';
   return step('npm run web:build', NPM, ['run', 'web:build'], NPM_SPAWN_OPTIONS) ? 'applied' : 'source-moved';
 }
 
@@ -131,6 +132,28 @@ function describeFailure(run: SpawnSyncReturns<Buffer>): string {
 }
 
 /**
+ * The dependency tree, `npm ci` first and `npm install` as the repair.
+ *
+ * `npm ci` deletes `node_modules` **before** it installs, so unlike every other step
+ * here its failure is not the recoverable direction: it can leave the checkout with no
+ * `tsx` to relaunch through, which is a harness that will not start rather than one on
+ * the previous build. Windows makes that the likely case rather than the exotic one —
+ * an `esbuild.exe` from the cockpit build still held by a lingering service process or
+ * a virus scanner fails the `unlink` `EPERM`, halfway through the delete.
+ *
+ * `npm install` is the repair because it reconciles the tree in place: it replaces only
+ * what the lockfile says is wrong, so it both heals a half-deleted `node_modules` and
+ * has far less to touch that something else might be holding. It is not the first
+ * choice — `ci` is the one that guarantees the tree is exactly the lockfile — but a
+ * reconciled tree is the only outcome here that beats no tree at all.
+ */
+function installDependencies(): boolean {
+  if (step('npm ci', NPM, ['ci'], NPM_SPAWN_OPTIONS)) return true;
+  console.log('[serve] npm ci failed — repairing the dependency tree with npm install instead');
+  return step('npm install', NPM, ['install'], NPM_SPAWN_OPTIONS);
+}
+
+/**
  * Did the pull move the lockfile? Both arms of "cannot tell" — no baseline, or a
  * diff that itself failed — take the slow, safe answer: installing dependencies
  * that were already installed costs a minute, and skipping ones that were not
@@ -147,6 +170,20 @@ function lockfileChanged(before: string | null): boolean {
 function currentHead(): string | null {
   const rev = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' });
   return rev.status === 0 ? rev.stdout.trim() : null;
+}
+
+/**
+ * Is there still a dependency tree to relaunch through?
+ *
+ * `tsx` is the one entry the relaunch cannot do without — it is the loader on the
+ * command line, so a `node_modules` an install emptied and did not refill fails
+ * `ERR_MODULE_NOT_FOUND` before a line of the server runs. Relaunching into that prints
+ * a resolver stack trace where the reason is twenty lines above, and the supervisor
+ * exits on it looking like the server crashed. Refusing instead says the one thing the
+ * operator has to do.
+ */
+function dependenciesUsable(): boolean {
+  return existsSync(new URL('../node_modules/tsx/package.json', import.meta.url));
 }
 
 /**
@@ -194,6 +231,19 @@ async function main(): Promise<void> {
           'restarting on the new code with the PREVIOUS cockpit. Run `npm ci && npm run web:build` here ' +
           'and restart once the reason above is fixed.',
       );
+    }
+    // Both messages above assume there is still a harness to come back on. An install
+    // that emptied `node_modules` and could not refill it is the one case where there is
+    // not, and relaunching buries the reason under a resolver stack trace the supervisor
+    // then exits on as if the server had crashed.
+    if (!dependenciesUsable()) {
+      console.error(
+        '[serve] node_modules has no `tsx`, so the server cannot be started — the install above left ' +
+          'the dependency tree incomplete. Fix the reason it failed (on Windows this is usually a file ' +
+          'still held open: `taskkill /f /im esbuild.exe`), then run `npm ci && npm run web:build` here ' +
+          'and start again with `npm run serve`.',
+      );
+      process.exit(1);
     }
     console.log('[serve] restarting');
   }
