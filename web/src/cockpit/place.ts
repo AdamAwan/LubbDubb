@@ -139,6 +139,28 @@ export interface Place {
    */
   knowledgeOpen: string[];
   /**
+   * The obstacle whose sightings are unfolded on the Obstacles page, by id.
+   *
+   * A place rather than a `useState` in the page for the reason every field here is
+   * one, and this one twice over: the fold is the only place the matcher can be
+   * seen working or getting it wrong, so "look at what these three agents actually
+   * hit, and why the harness thought they were one thing" is exactly the link an
+   * operator sends someone — and a row held open in component state works right up
+   * until the back button steps over it or a reload drops it.
+   * → `docs/spec/32-obstacles.md#in-the-cockpit`
+   */
+  obstacle: string | null;
+  /**
+   * Whether the Obstacles page's terminal tail is **opened**.
+   *
+   * Opened rather than folded away, so the default — the tail shut — is the empty
+   * value and a bare URL, which is `knowledgeOpen`'s rule and the same trade: what
+   * a fold could otherwise cost is paid for by the heading stating its own size, so
+   * a tail that names itself and its count can never let *resolved* read as
+   * *deleted*.
+   */
+  obstacleEnded: boolean;
+  /**
    * The goal page's reference sections that are **open**, by name — `ticket` and
    * `record`.
    *
@@ -244,7 +266,21 @@ export interface Place {
  * question the console answers — see `ConsoleRoot`'s `tabBody`, which sends a
  * stale `?tab=features` to the overview on a deployment with no board.
  */
-const TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'knowledge', 'features', 'insights', 'pets', 'config'];
+const TABS: readonly ConsoleTab[] = [
+  'overview',
+  'tickets',
+  'knowledge',
+  // Listed for `features`' and `pets`' reason, and one of its own: the obstacle
+  // board is reachable by URL *only* — deliberately not in the nav until the
+  // operator says otherwise — so this list is the whole of how anybody gets there.
+  // A tab the parser did not know would send every link to it back to the overview
+  // with nothing saying so. → `docs/spec/32-obstacles.md#in-the-cockpit`
+  'obstacles',
+  'features',
+  'insights',
+  'pets',
+  'config',
+];
 
 /**
  * The tabs a goal or a pull request can hang off — the ones that *list* work.
@@ -337,6 +373,10 @@ export const NOWHERE: Place = {
   knowledgeFolded: [],
   knowledgeQueue: null,
   knowledgeOpen: [],
+  obstacle: null,
+  // Shut, which is what the tail's own count buys: the page as it stands is the
+  // empty value and a bare URL.
+  obstacleEnded: false,
   configTab: 'values',
   configGroup: null,
   insightsView: 'economics',
@@ -518,6 +558,10 @@ export function readPlace(search: string): Place {
     // and two places reading one is a page that opens showing whatever the other
     // one was set to.
     knowledgeOpen: readStrings(param(query, 'see')).filter((id) => KNOWLEDGE_QUEUE_FOLDS.includes(id)),
+    // `obs`, not `fact` or `q`: the Knowledge page owns both, and two pages reading
+    // one parameter is a page that opens showing whatever the other was set to.
+    obstacle: param(query, 'obs'),
+    obstacleEnded: query.has('ended'),
     configTab: CONFIG_TABS.find((t) => t === param(query, 'section')) ?? 'values',
     // `keys`, not `group`: the tickets tab already owns `?group=` (its feature
     // heading mode), and two places reading one parameter is a place that opens
@@ -783,6 +827,8 @@ export function placeQuery(place: Place): string {
   if (place.knowledgeFolded.length > 0) {
     query.set('fold', [...place.knowledgeFolded].sort((a, b) => a.localeCompare(b)).join(','));
   }
+  if (place.obstacle !== null) query.set('obs', place.obstacle);
+  if (place.obstacleEnded) query.set('ended', '1');
   if (place.configTab !== 'values') query.set('section', place.configTab);
   if (place.configGroup !== null) query.set('keys', place.configGroup);
   if (place.insightsView !== 'economics') query.set('view', place.insightsView);

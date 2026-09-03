@@ -23,6 +23,7 @@ import { register as registerJobs } from './routes/jobs.js';
 import { register as registerKnowledge } from './routes/knowledge.js';
 import { register as registerLocalRun } from './routes/localRun.js';
 import { register as registerMcpUsage } from './routes/mcpUsage.js';
+import { register as registerObstacles } from './routes/obstacles.js';
 import { register as registerPets } from './routes/pets.js';
 import { register as registerPool } from './routes/pool.js';
 import { register as registerPlans } from './routes/plans.js';
@@ -63,6 +64,7 @@ const ROUTE_MODULES: RouteModule[] = [
   registerKnowledge,
   registerLocalRun,
   registerMcpUsage,
+  registerObstacles,
   registerPets,
   registerPool,
   registerPlans,
