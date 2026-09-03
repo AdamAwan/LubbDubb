@@ -4364,3 +4364,33 @@ button.cn-grow {
   color: var(--cn-fg);
   min-width: 26ch;
 }
+
+/* The local validation card: a screenshot strip and a folded plan. Layout only —
+   every colour is a token, and there is no new one here because the card wears the
+   chips, lamps and rows the goal page already defines. */
+.cn-lv-shots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.cn-lv-shot {
+  height: 72px;
+  border: 1px solid var(--cn-line);
+  border-radius: 3px;
+  display: block;
+}
+
+.cn-lv-plan > summary {
+  cursor: pointer;
+  color: var(--cn-fg-dim);
+  margin-top: 6px;
+}
+
+/* A passed run reads a step back, the settled check's treatment one card over: it
+   is the work that is done rather than the work that is left. */
+.cn-lv-passed .cn-name,
+.cn-lv-passed .cn-sub {
+  color: var(--cn-fg-dim);
+}

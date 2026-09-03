@@ -48,6 +48,7 @@ type IssueSeed = Omit<
   | 'conclusion'
   | 'delivery'
   | 'instructions'
+  | 'localValidation'
   | 'modelPin'
   | 'priority'
   | 'retrospective'
@@ -79,6 +80,9 @@ function demoIssue(seed: IssueSeed): Issue {
     // Null is "no validation plan", which is a third reading and not a synonym
     // for clear — the fixtures that have one set it.
     validation: null,
+    // Nobody has asked for this goal to be validated on the machine, which is every
+    // goal until an operator presses the button. The fixture that is about it sets it.
+    localValidation: null,
     // Not flagged, which is where every goal starts: a priority is a statement the
     // operator made about this deployment's queue, so the fixture that is about it
     // sets it and the rest read as the ordinary case.
@@ -237,6 +241,7 @@ export function buildDemoState(): DemoSeed {
       // the one explaining what is missing. Both are worth seeing and only one can
       // be the default; this is the state an operator who has set it up is in.
       localRunConfigured: true,
+      localValidationBrowserConfigured: true,
       localRunStopConfigured: true,
       localRunRefreshConfigured: true,
       // The demo tracker's own vocabulary, coloured — the setting is invisible
@@ -904,6 +909,67 @@ export function buildDemoState(): DemoSeed {
           // planner plus every part, which is exactly what one number per goal is
           // for — no card anywhere else adds those up.
           spend: demoSpend(390, 19.16, 7, 2),
+          // What the fleet found the last time somebody drove this goal on their own
+          // machine. Settled and `failed`, which is the state the whole feature is
+          // for: the parts merged, the build was green, and the thing still did not
+          // do what it was supposed to when a person clicked through it. A passed
+          // row would draw two lines and demonstrate nothing.
+          localValidation: {
+            id: 'lv-390-1',
+            originRef: 'issue:390',
+            runId: 'run-1',
+            ref: 'issue/390/catalog-schema',
+            commit: '8b052b9977c1e4f0a2d6b3c5e8f1a4d7b0c3e6f9',
+            status: 'failed',
+            requestedAt: ago(41),
+            dispatchedAt: ago(40),
+            endedAt: ago(26),
+            taskId: 'task-v1',
+            fixTaskId: null,
+            phase: null,
+            plan: [
+              '## What changed',
+              '',
+              'The catalogue now owns the payload schema and the runners read it rather than re-parsing.',
+              '',
+              '1. **A job with a schema is accepted.** Post one through the form and check it lists.',
+              '2. **A job with no schema is refused.** The same form with the field empty.',
+              '3. **A job from before the change still opens.** Nothing on the detail page should assume a schema.',
+            ].join('\n'),
+            summary:
+              'Steps 1 and 3 pass — a job with a schema is accepted and listed, and one created before the change ' +
+              'opens with no schema section. Step 2 does not: the form accepts an empty schema and the API takes ' +
+              'it, so the validation this goal exists to add is not applied on the path a person actually uses.',
+            findings: [
+              {
+                title: 'A job with no schema is accepted',
+                detail:
+                  'Opened /jobs/new, filled in title and payload, left the schema empty and submitted. Expected the ' +
+                  'form to stay put naming the field; it came back 201 and the job is listed with an empty schema.',
+                severity: 'blocker',
+                url: 'http://localhost:5173/jobs/new',
+                screenshot: null,
+              },
+              {
+                title: 'The validation message reads “undefined”',
+                detail:
+                  'A malformed schema is refused, but the message under the field says “undefined” rather than what ' +
+                  'is wrong with it.',
+                severity: 'nit',
+                url: 'http://localhost:5173/jobs/new',
+                screenshot: null,
+              },
+            ],
+            visited: ['http://localhost:5173/jobs/new', 'http://localhost:5173/jobs'],
+            // No bytes to serve in a demo with no server, and an `<img>` pointed at a
+            // path that answers nothing demonstrates a broken feature rather than a
+            // working one — the attachments' rule, one surface over.
+            screenshots: [],
+            files: [],
+            note: null,
+            agent: null,
+            fixAgent: null,
+          },
         }),
         demoIssue({
           id: 'iss-371',

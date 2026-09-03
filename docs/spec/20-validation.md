@@ -791,6 +791,12 @@ repository, which is the one thing in the deployment that cannot know the answer
 arrived at the machine with the browser and the login and stalled on the one fact nobody had written
 down.
 
+The fleet can now be sent to drive it — [32 — Local validation](32-local-validation.md), an
+operator pressing a button on a goal still in flight. It is **not a check and records no reading on
+one**: a check is a procedure somebody declared and a reading somebody took against the _delivered_
+goal, and its agent has no reachable code path to `validation_report` at all. What it does have is a
+test plan of its own, written against the diff, and the goal's checks are handed to it as input.
+
 That is [23 — Local runs](23-local-runs.md), and it is a subsystem rather than a paragraph here
 because the harness **owns the environment**: one dev environment on the machine, one goal's code in
 it at a time, started and stopped from the cockpit or from a session, with a record of which. What

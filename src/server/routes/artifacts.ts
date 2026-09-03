@@ -2,7 +2,9 @@ import type { FastifyInstance } from 'fastify';
 import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { extname, isAbsolute, resolve, sep } from 'node:path';
 import { mintArtifactCapability, verifyArtifactCapability } from '../artifactCapability.js';
+import { z } from 'zod';
 import { checked, IdParams } from '../validation.js';
+import { localValidationOutputDir } from '../../localValidation/origin.js';
 import type { RouteContext } from './context.js';
 
 /**
@@ -112,6 +114,52 @@ export function register(app: FastifyInstance, { system, artifactKey }: RouteCon
       return reply.send(readFileSync(file));
     }),
   );
+
+  // Serve a screenshot a validating agent saved, addressed by its validation and
+  // its file name. Outside `/api` and capability-authorized for the attachment
+  // route's reason, word for word: this is loaded as an `<img src>` beside the
+  // finding it belongs to, and a subresource fetch carries no `Authorization`
+  // header.
+  //
+  // The **directory** comes from the stored row and the **name** from the request,
+  // which is the one thing here that differs from the two routes above — so the
+  // name is checked for a separator before it is joined, and the joined path is
+  // re-confined to the row's own directory afterwards. Either check alone would
+  // do; both are what keeps that true if the schema ever widens.
+  app.get(
+    '/local-validations/:id/files/:name',
+    { config: { rateLimit: { max: 240, timeWindow: '1 minute' } } },
+    checked({ params: LocalValidationFileParams }, async ({ params, req, reply }) => {
+      const { id, name } = params;
+      if (artifactKey) {
+        const tk = (req.query as { tk?: unknown })?.tk;
+        if (
+          typeof tk !== 'string' ||
+          !verifyArtifactCapability(artifactKey, tk, localValidationFileSubject(id, name), Date.now())
+        )
+          return reply.code(401).send({ error: 'missing or invalid screenshot capability' });
+      }
+      const row = store.getLocalValidation(id);
+      if (!row) return reply.code(404).send({ error: 'validation not found' });
+      const dir = localValidationOutputDir(config.validationRoot, row.originRef, row.id);
+      const file = confinedTo(dir, resolve(dir, name));
+      if (!file) return reply.code(404).send({ error: 'screenshot not found' });
+      reply
+        // Sniffed from the extension rather than declared: these bytes were written
+        // by a browser this harness launched, into a directory only it writes to.
+        // `sandbox` and `nosniff` for the attachment route's reasons — they are
+        // still bytes from outside the harness, rendered on its own origin.
+        .header('content-type', artifactMime(file))
+        .header('content-security-policy', 'sandbox')
+        .header('x-content-type-options', 'nosniff')
+        // Immutable for the attachment route's reason: a validation's directory is
+        // written once, by an agent that has since finished, and the URL is stable
+        // across polls. `private`, because a capability URL must never be held by a
+        // shared cache.
+        .header('cache-control', 'private, max-age=300, immutable');
+      return reply.send(readFileSync(file));
+    }),
+  );
 }
 
 /**
@@ -139,6 +187,43 @@ function attachmentSubject(id: string): string {
  * browser's own cache does its job. The capability then lives between one and two
  * buckets rather than exactly one TTL, which is the same order of short.
  */
+/**
+ * A screenshot's path parameters. The name is a **file name** — the grammar the
+ * report tool already refuses a path in, restated here because this is the layer
+ * where the string becomes a filesystem read.
+ */
+const LocalValidationFileParams = z.object({
+  id: z.string().min(1),
+  name: z
+    .string()
+    .min(1)
+    .max(255)
+    .refine((n) => !/[\\/]/.test(n) && n !== '.' && n !== '..', 'not a file name'),
+});
+
+/**
+ * What a screenshot capability is signed over — namespaced for
+ * {@link attachmentSubject}'s reason, and over the **pair**: a capability minted
+ * for one file of a validation must not open another, since the name is the only
+ * part of the address a caller could vary.
+ */
+function localValidationFileSubject(id: string, name: string): string {
+  return `local-validation:${id}:${name}`;
+}
+
+/**
+ * Mint a capability into every screenshot URL the snapshot ships, on
+ * {@link attachmentSignerFor}'s bucketed clock and for its reason: the URL has to
+ * be stable across polls or every refetch would swap the `src` of an image the
+ * browser has already loaded.
+ */
+export function localValidationFileSignerFor(key: Buffer): (id: string, name: string) => string {
+  return (id, name) => {
+    const bucket = Math.floor(Date.now() / ARTIFACT_CAP_TTL_MS) + 2;
+    return mintArtifactCapability(key, localValidationFileSubject(id, name), bucket * ARTIFACT_CAP_TTL_MS);
+  };
+}
+
 export function attachmentSignerFor(key: Buffer): (attachmentId: string) => string {
   return (id) => {
     const bucket = Math.floor(Date.now() / ARTIFACT_CAP_TTL_MS) + 2;

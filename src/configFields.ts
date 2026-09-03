@@ -574,6 +574,18 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'Where the application lands once it is up, drawn as a link beside the run.',
   },
   {
+    path: 'localValidation.instruction',
+    type: 'text',
+    access: 'plain',
+    why: 'What a validating agent is told about reaching your environment — which URL is which, how to sign in, what to leave alone. Never a secret: it is readable here and a project layer commits it.',
+  },
+  {
+    path: 'localValidation.browser',
+    type: 'json',
+    access: 'plain',
+    why: 'The MCP server that gives a validating agent a browser — {command, args}, with {outputDir} and {profileDir} filled in per run. null runs validations without one, and steps that need a screen are reported blocked.',
+  },
+  {
     path: 'validation.desktopSocketPath',
     type: 'string',
     access: 'advanced',

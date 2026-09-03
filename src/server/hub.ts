@@ -205,6 +205,12 @@ export class Hub {
     };
     localRun.on('changed', refetchLocalRun);
     localRunWatch.on('changed', refetchLocalRun);
+    // The validation rides `goals`, not `harness`: it hangs off the goal it was run
+    // for, and the goal's page is where every part of it is drawn. Uncoalesced,
+    // unlike the run beside it — a run emits per line of output, and this emits when
+    // a plan lands, when a report lands and when a sweep settles a row, which is
+    // three times in a run of several minutes.
+    system.localValidations.on('changed', () => this.broadcast({ type: 'dirty', sections: ['goals'] }));
   }
 
   add(socket: WebSocket): void {

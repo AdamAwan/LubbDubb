@@ -1,7 +1,7 @@
 import { nanoid } from 'nanoid';
 import type Database from 'better-sqlite3';
 import { ACTIVE_TASK_STATUS_SQL } from '../tasks.js';
-import type { Task, TaskSummary } from '../types.js';
+import type { ExtraMcpServer, Task, TaskSummary } from '../types.js';
 import type { ColumnMigrations } from './migrate.js';
 import type { StoreContext } from './context.js';
 
@@ -21,6 +21,8 @@ export const TASK_COLUMNS: ColumnMigrations = {
     profile: 'TEXT',
     /** Which level of the precedence chain named it — see {@link Task.profileSource}. */
     profile_source: 'TEXT',
+    /** A JSON array of ExtraMcpServer — see {@link Task.mcpServers}. */
+    mcp_servers: 'TEXT',
   },
 };
 
@@ -49,6 +51,7 @@ export class TaskStore {
       | 'dispatchReason'
       | 'rule'
       | 'ciChecks'
+      | 'mcpServers'
       | 'model'
       | 'effort'
       | 'profile'
@@ -64,6 +67,7 @@ export class TaskStore {
       // same reason: a dispatch composed outside a rule has neither.
       rule?: string | null;
       ciChecks?: string[] | null;
+      mcpServers?: ExtraMcpServer[] | null;
       // The model this run launches on, and the depth it runs at, resolved from
       // one `agentModels` profile at dispatch. Optional for the same reason: a
       // caller with no policy to consult has neither.
@@ -93,6 +97,7 @@ export class TaskStore {
       dispatchReason: input.dispatchReason ?? null,
       rule: input.rule ?? null,
       ciChecks: input.ciChecks ?? null,
+      mcpServers: input.mcpServers ?? null,
       model: input.model ?? null,
       effort: input.effort ?? null,
       profile: input.profile ?? null,
@@ -100,12 +105,16 @@ export class TaskStore {
     };
     this.ctx.db
       .prepare(
-        `INSERT INTO tasks (id, kind, title, prompt, branch, origin_ref, origin_title, origin_summary, dispatch_reason, rule, ci_checks, model, effort, profile, profile_source, status, agent_id, created_at, updated_at)
-         VALUES (@id, @kind, @title, @prompt, @branch, @originRef, @originTitle, @originSummary, @dispatchReason, @rule, @ciChecks, @model, @effort, @profile, @profileSource, @status, @agentId, @createdAt, @updatedAt)`,
+        `INSERT INTO tasks (id, kind, title, prompt, branch, origin_ref, origin_title, origin_summary, dispatch_reason, rule, ci_checks, mcp_servers, model, effort, profile, profile_source, status, agent_id, created_at, updated_at)
+         VALUES (@id, @kind, @title, @prompt, @branch, @originRef, @originTitle, @originSummary, @dispatchReason, @rule, @ciChecks, @mcpServers, @model, @effort, @profile, @profileSource, @status, @agentId, @createdAt, @updatedAt)`,
       )
       // The array is the only field the row shape and the domain shape disagree
       // about, so it is serialised here rather than the whole task being mapped.
-      .run({ ...task, ciChecks: task.ciChecks === null ? null : JSON.stringify(task.ciChecks) });
+      .run({
+        ...task,
+        ciChecks: task.ciChecks === null ? null : JSON.stringify(task.ciChecks),
+        mcpServers: task.mcpServers === null ? null : JSON.stringify(task.mcpServers),
+      });
     return task;
   }
 
@@ -270,6 +279,7 @@ const SUMMARY_COLUMNS = [
   'dispatch_reason',
   'rule',
   'ci_checks',
+  'mcp_servers',
   'model',
   'effort',
   'profile',
@@ -291,6 +301,8 @@ interface TaskSummaryRow {
   dispatch_reason: string | null;
   rule: string | null;
   ci_checks: string | null;
+  /** Nullable *and* possibly absent: added by `ensureColumns` on databases from an older build. */
+  mcp_servers: string | null;
   model: string | null;
   effort: string | null;
   /** Nullable *and* possibly absent: added by `ensureColumns` on databases from an older build. */
@@ -394,6 +406,34 @@ function parseChecks(raw: string | null): string[] | null {
   }
 }
 
+/**
+ * The extra MCP servers a row recorded, or null.
+ *
+ * Read defensively for `parseChecks`' reason and one step further: every entry is
+ * checked for the three fields a launch needs, because a half-written server would
+ * reach `--mcp-config` as a command of `undefined`. A row this cannot read reports
+ * none, which launches the agent on the harness's channel alone — the fail-open
+ * floor the whole MCP channel already has.
+ */
+function parseMcpServers(raw: string | null): ExtraMcpServer[] | null {
+  if (raw === null) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    const servers = parsed.filter(
+      (s): s is ExtraMcpServer =>
+        typeof s === 'object' &&
+        s !== null &&
+        typeof (s as ExtraMcpServer).key === 'string' &&
+        typeof (s as ExtraMcpServer).command === 'string' &&
+        Array.isArray((s as ExtraMcpServer).args),
+    );
+    return servers.length > 0 ? servers : null;
+  } catch {
+    return null;
+  }
+}
+
 function rowToTask(r: TaskRow): Task {
   return { ...rowToSummary(r), prompt: r.prompt };
 }
@@ -410,6 +450,7 @@ function rowToSummary(r: TaskSummaryRow): TaskSummary {
     dispatchReason: r.dispatch_reason,
     rule: r.rule,
     ciChecks: parseChecks(r.ci_checks),
+    mcpServers: parseMcpServers(r.mcp_servers),
     model: r.model,
     effort: r.effort,
     profile: r.profile ?? null,

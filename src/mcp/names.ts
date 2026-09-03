@@ -44,6 +44,9 @@ export const MCP_TOOL_NAMES = [
   'reply_to_review',
   'validation_amend',
   'validation_report',
+  'local_validation_plan',
+  'local_run_read',
+  'local_validation_report',
   'watch_declare',
   'review_report',
   'review_route',
@@ -131,6 +134,15 @@ export const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use'> = {
   scratch_append: 'point-of-use',
   scratch_read: 'point-of-use',
   validation_report: 'point-of-use',
+  // The three a local validation is dispatched with, all named in the
+  // `local-validation` prompt's own tool section — which is also the only prompt
+  // whose agent has an environment to read or a validation to write to. An addendum
+  // entry would advertise them to every planner and part agent in the fleet, and a
+  // `local_run_read` reached for by an agent on somebody else's branch is a reading
+  // of a machine running code that is not theirs.
+  local_validation_plan: 'point-of-use',
+  local_run_read: 'point-of-use',
+  local_validation_report: 'point-of-use',
   // Named by `pr-review`, the one prompt whose agent can cast it — and the only
   // way a fleet review is recorded at all, which is why the prompt says so twice.
   review_report: 'point-of-use',
@@ -217,6 +229,26 @@ export function retiredToolMessage(name: string): string {
  * advertises it, and every call to it is refused with nothing in the logs to say why.
  */
 export const ALLOWED_MCP_TOOLS: string[] = MCP_TOOL_NAMES.map((name) => `mcp__${MCP_SERVER_ID}__${name}`);
+
+/**
+ * The grants for the MCP servers one dispatch carries beside the harness's own.
+ *
+ * **Server-level, not per tool**, and that is the one place this list differs from
+ * {@link ALLOWED_MCP_TOOLS}: a bare `mcp__<server>` rule matches every tool that
+ * server offers. The fleet's own grants are enumerated because the tool set is ours
+ * and a name with no module is a compile error here; an extra server's tool set
+ * belongs to whoever wrote it, so enumerating it would be this repo keeping a copy
+ * of somebody else's API — stale the first time they add a tool, and stale in the
+ * silent direction, since the server still connects and only the new call is
+ * refused.
+ *
+ * Derived here rather than at the launch site so all three things that must agree —
+ * the `mcpServers` key, the permission name and the grant — are still derived in
+ * one file, which is what this module is for.
+ */
+export function extraMcpGrants(servers: readonly { key: string }[]): string[] {
+  return servers.map((server) => `mcp__${server.key}`);
+}
 
 /**
  * The desktop channel's tools — a separate, much shorter list, and separate on

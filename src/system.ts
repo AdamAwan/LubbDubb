@@ -88,6 +88,7 @@ import { IngressInbox } from './ingress/inbox.js';
 import { RuntimeControl } from './runtimeControl.js';
 import { PetKeeper } from './pets/keeper.js';
 import { LocalRunner } from './localRun/runner.js';
+import { LocalValidationDesk } from './localValidation/desk.js';
 import { LocalRunWatch } from './localRun/watch.js';
 import { CommandPortLister, type PortLister } from './localRun/ports.js';
 import { FakePortLister } from './localRun/fakePortLister.js';
@@ -230,6 +231,15 @@ export interface System {
    * clicks, or their own Claude asks, and nothing about it happens on a cycle.
    */
   localRun: LocalRunner;
+  /**
+   * The fleet driving that environment (`src/localValidation/`): the desk that owns
+   * every validation row, and the sweep that settles the ones nobody will answer.
+   *
+   * Always constructed, `localRun`'s reason: with no `localRun.instruction` there
+   * is nothing to validate against and the route refuses saying so, which is a
+   * surface that explains itself rather than one that is quietly missing.
+   */
+  localValidations: LocalValidationDesk;
   /**
    * The readings on that environment — which ports answer, how far the checkout has
    * fallen behind — on a timer of its own that `main.ts` arms. Exposed for the
@@ -589,6 +599,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     sessionId: string;
     resume: boolean;
     mcpConfigPath: string | null;
+    extraAllowedTools: string[];
     model: string | null;
     effort: string | null;
   }) => string[];
@@ -598,7 +609,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
       // front so a restart can re-open *this* conversation. Headless `claude` honours
       // both flags (issue #318) — which is what puts `restore` on the recovery desk
       // for the default deployment instead of requeue-or-remove.
-      buildArgs: (({ sessionId, resume, mcpConfigPath, model, effort }) =>
+      buildArgs: (({ sessionId, resume, mcpConfigPath, extraAllowedTools, model, effort }) =>
         buildClaudeStreamArgs({
           permissionMode: perm,
           extraArgs,
@@ -608,6 +619,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
           resume,
           fileEvents: true,
           mcpConfigPath,
+          extraAllowedTools,
           permissionPromptTool,
           model: model ?? undefined,
           effort: effort ?? undefined,
@@ -695,6 +707,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     // Lazy for the same reason: the desk needs the fleet and the worktrees, both
     // built below this.
     reviewPacks: (): McpToolDeps['reviewPacks'] => reviewPacks,
+    // Lazy for the same reason again, and more so: the runner is the last thing
+    // this file builds, being the one component that can spawn a session of its
+    // own, and the validation desk is built after it.
+    localValidations: (): LocalValidationDesk => localValidations,
+    localRun: (): { runner: LocalRunner; watch: LocalRunWatch } => ({ runner: localRun, watch: localRunWatch }),
     reviewPackChecker: (): McpToolDeps['reviewPackChecker'] => reviewPackChecker,
     errors,
   });
@@ -1334,6 +1351,14 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     // built, being the one component that can spawn a session on its own — and this
     // is only ever called from a later pulse.
     localRun: { noteAlive: () => localRun.noteAlive() },
+    // Settles the rows an agent will never answer: the environment went away, or
+    // the agent ended without reporting. Wrapped for `localRun`'s reason — the desk
+    // is built below this, and this only ever runs from a later pulse.
+    localValidations: {
+      sweep: () => {
+        localValidations.sweep();
+      },
+    },
     landings,
     // Holds the pulse while a previous run's agents await a verdict.
     recovery,
@@ -1568,6 +1593,22 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     fetchIntervalMs: config.planning.gitFetchIntervalMs,
     errors,
   });
+  // The fleet driving that same environment (`src/localValidation/`): the desk that
+  // owns every row, and the two things that end one without an agent saying so.
+  //
+  // Constructed after the runner, and its sweep wired onto the runner's own
+  // `changed` as well as onto the pulse: an operator who swaps the environment is
+  // looking at the page while they do it, and a row that says "validating" for a
+  // heartbeat after the environment it was pinned to has gone is the panel telling
+  // them something that is not true.
+  const localValidations = new LocalValidationDesk({
+    store,
+    validationRoot: config.validationRoot,
+    errors,
+  });
+  localRun.on('changed', () => {
+    localValidations.sweep();
+  });
   // A row saying `running` after a restart describes a process this harness never
   // spawned, so nothing may go on trusting it — but the machine it left behind is
   // half an environment rather than none, and what happens to both is
@@ -1603,6 +1644,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     pets,
     localRun,
     localRunWatch,
+    localValidations,
     liveConfig,
     configFile: opts.configFile ?? configFilePath(),
     projectConfigFile: opts.projectConfigFile ?? projectConfigFilePath(config.repoRoot),

@@ -99,6 +99,13 @@ const RULES = [
     description:
       'A job the operator queued from the cockpit is drained before any world-driven rule, claiming the next free slot first — so a manual request takes priority, and simply waits in the queue when the fleet is at capacity.',
   },
+  {
+    id: 'local-validation',
+    kind: 'rule',
+    name: 'Validate a goal on this machine',
+    description:
+      "The operator pressed Validate locally on a goal, so the harness brought that goal's code up in the machine's one dev environment and this puts one agent on it: write a test plan for the change, wait for the environment, drive the running application through the plan, and report passed, failed or blocked. It is dispatched while the environment is still coming up, because a bring-up is minutes inside one turn and writing the plan is exactly what that wait is worth spending on. The checkout is read-only and pinned to the commit the environment stands at, and the launch carries a browser as a second MCP server — the fleet has none otherwise, and a headless agent cannot open a page without one. It ranks directly behind operator-launched jobs, for their reason: somebody is at a screen waiting, with an environment already running on their machine. A row is one press of a button rather than a standing signal, so there is no cooldown budget and no escalation — it is re-proposed each pulse until it dispatches, the operator calls it off, or the environment goes away, and the last two settle the row.",
+  },
 
   // ---- The fleet's own way, before the work it is in the way of. -----------
   {
@@ -261,6 +268,13 @@ const RULES = [
     name: 'Approved plan is going nowhere',
     description:
       'Every part of a released plan is blocked, so no agent has been dispatched for it and none will be. The only thing that blocks a part is the ref collision — a flat `issue/<n>` branch, which git will not let the part branches sit beneath — and a branch does not clear itself. No agent is dispatched, because none could help; a human is asked once, and told the two ways out: clear the branch, or abandon the decomposition and work the issue as one pull request. Only released plans, since an unapproved one is already in front of you with the same warning on the ask.',
+  },
+  {
+    id: 'local-validation-fix',
+    kind: 'rule',
+    name: 'Fix what a local validation found',
+    description:
+      'A local validation was reported `failed` with findings, so one code agent is put on the branch that was validated to fix them. Writable and on that branch rather than a new one, because that is where the change being validated lives; the branch gate defers it while a part agent is already there, which is right — two agents on one branch is the thing that gate exists for. One dispatch per failed reading, latched on the row, so a fix that crashed is not retried behind the operator: pressing the button again is the same decision they made the first time. It opens no pull request and records nothing on the validation — the reading belongs to the agent that took it, and the branch\u2019s own pull request rules pick the push up. A validation that ran from the integration branch gets no fix, because there is no branch of the goal\u2019s to put one on.',
   },
   {
     id: 'plan-part',

@@ -5,9 +5,7 @@ import { proposePlanAmendment } from '../plans/planAmendment.js';
 import { issueOrigin } from '../plans/planning.js';
 import { acceptanceCriteria, currentPlanSummary, planIssueNumber } from '../plans/parts.js';
 import { planProposalRef } from '../proposals/proposals.js';
-import type { LocalRunner } from '../localRun/runner.js';
-import type { LocalRunWatch } from '../localRun/watch.js';
-import { localRunIsLive } from '../store/localRuns.js';
+import { describeLocalRun } from '../localRun/describe.js';
 import { retroDossier } from '../retro/dossier.js';
 import { goalRecord } from '../retro/record.js';
 import type { Plan } from '../types.js';
@@ -626,67 +624,18 @@ const localRun: DesktopToolFactory = (deps) => ({
     if (message !== undefined) {
       const sent = runner.send(message);
       if (!sent.ok) return toolError(sent.error);
-      return toolJson(describeRun(runner, watch));
+      return toolJson(describeLocalRun(runner, watch));
     }
-    if (args.issue === undefined) return toolJson(describeRun(runner, watch));
+    if (args.issue === undefined) return toolJson(describeLocalRun(runner, watch));
     const ref = desktopIssueRef(args);
     if (!ref.ok) return toolError(ref.error);
     const started = await runner.start(issueOrigin(ref.issue));
     // A refusal is the reason handed back rather than a throw: both are read by a
     // person, and "nothing is configured to start" is an answer.
     if (!started.ok) return toolError(started.error);
-    return toolJson(describeRun(runner, watch));
+    return toolJson(describeLocalRun(runner, watch));
   },
 });
-
-/**
- * The environment as a session reads it.
- *
- * **`running` is presumed, not probed** — and it says so, because the one thing a
- * session must not do is report a check passed against a page it never saw. The
- * watch's readings ride along: the declared port answering is a reading, and a
- * different claim from the application working. The output tail comes too, for the
- * same reason it is in the panel: the case worth explaining is the start that did
- * not work.
- */
-function describeRun(runner: LocalRunner, watch: LocalRunWatch): Record<string, unknown> {
-  const run = runner.current();
-  if (run === null)
-    return {
-      running: false,
-      note: 'Nothing has been started locally on this machine.',
-    };
-  const running = localRunIsLive(run);
-  const readings = watch.reading();
-  return {
-    // Through `localRunIsLive`, not a fifth hand-written copy of which statuses count
-    // — and `stopping` is one of them, so a session asking during a teardown is told
-    // the environment is still up rather than that it is free to start another.
-    running,
-    goal: run.originRef,
-    ref: run.ref,
-    commit: run.commit,
-    dir: run.dir,
-    status: run.status,
-    turn: runner.turn(),
-    holdsSession: runner.holdsSession(),
-    url: run.url,
-    startedAt: run.startedAt,
-    note: run.note,
-    ports: running ? readings.ports : null,
-    freshness: running ? readings.freshness : null,
-    // The port may be probed; the application is not. The status means the session
-    // that was told to bring it up finished without failing, and `ports.declared.answering`
-    // means something accepted a TCP connection — neither is the page working, and
-    // reporting a check passed on the strength of either would be the one outcome the
-    // whole validation channel exists to prevent.
-    caveat:
-      'The harness probes the port but does not exercise the application: `running` means the session that ' +
-      'brought it up did not fail, and `ports.declared.answering` means something accepted a connection. ' +
-      'Open the URL and see for yourself before you report anything about it.',
-    output: runner.output().slice(-40),
-  };
-}
 
 /**
  * The registry, a `Record` over {@link DESKTOP_TOOL_NAMES} for the fleet

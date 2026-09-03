@@ -408,6 +408,10 @@ export function useCockpit(): CockpitStatus {
       // Conversational, like `respondAgent`: the server's `dirty` brings the echo.
       messageLocalRun: (text) => api.messageLocalRun(text).then(() => undefined),
       refreshLocalRun: () => then(api.refreshLocalRun()),
+      // Refetched, like `startLocalRun`: the write moves the local run and the goal
+      // at once, and the two are drawn on the same screen.
+      validateLocally: (issueNumber, opts) => then(api.validateLocally(issueNumber, opts)),
+      cancelLocalValidation: (issueNumber) => then(api.cancelLocalValidation(issueNumber)),
       // Not wrapped in `then`: this one is a read, and refetching the whole
       // snapshot to draw a log tail would make opening the panel cost what a pulse
       // costs.

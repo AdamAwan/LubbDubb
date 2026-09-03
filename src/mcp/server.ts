@@ -3,6 +3,7 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { ExtraMcpServer } from '../types.js';
 import type { Store } from '../store/store.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import {
@@ -86,6 +87,13 @@ interface McpBridgeServerOptions {
   reviewPacks?: () => McpToolDeps['reviewPacks'];
   /** The checker desk `review_pack_check` hands its verdicts to. Lazy for the same reason. */
   reviewPackChecker?: () => McpToolDeps['reviewPackChecker'];
+  /**
+   * The desk the three local-validation tools write through, and the environment
+   * `local_run_read` reports on. Lazy for `filing`'s reason, and more so: the local
+   * runner is the last component `system.ts` builds.
+   */
+  localValidations?: McpToolDeps['localValidations'];
+  localRun?: McpToolDeps['localRun'];
   /**
    * The checkout an obstacle's `path` key is validated against. Absent, no path
    * key validates and those keys are dropped — the report is kept either way.
@@ -173,7 +181,7 @@ export class McpBridgeServer {
    * in-process {@link session} path works even in tests that never listen); the
    * config file is written only when there is a socket for it to point at.
    */
-  open(): McpCredential {
+  open(extra: readonly ExtraMcpServer[] = []): McpCredential {
     const token = randomUUID();
     this.identities.set(token, null);
     if (!this.listening) return { token, configPath: null };
@@ -181,7 +189,7 @@ export class McpBridgeServer {
     try {
       // 0600: the token is a bearer credential for this agent's identity, and the
       // config file is why it never has to appear in argv, where `ps` would show it.
-      writeFileSync(configPath, JSON.stringify(this.launchConfig(token)), { mode: 0o600 });
+      writeFileSync(configPath, JSON.stringify(this.launchConfig(token, extra)), { mode: 0o600 });
     } catch (err) {
       this.opts.errors?.record({
         source: 'agent',
@@ -227,18 +235,36 @@ export class McpBridgeServer {
    * The `--mcp-config` document for one launch. The server key is
    * {@link MCP_SERVER_ID} because Claude Code derives the `mcp__<key>__<tool>`
    * permission names from it, and those are what `--allowedTools` grants.
+   *
+   * `extra` is what a single kind of dispatch brings with it — today a browser, for
+   * a local validation ({@link Task.mcpServers}). It goes in **this** document
+   * rather than a second `--mcp-config`, so a launch still writes one 0600 file and
+   * the grants still come off one list.
    */
-  private launchConfig(token: string): unknown {
-    return {
-      mcpServers: {
-        [MCP_SERVER_ID]: {
-          type: 'stdio',
-          command: process.execPath,
-          args: [BRIDGE_PATH],
-          env: { LUBBDUBB_MCP_SOCKET: this.opts.socketPath, LUBBDUBB_MCP_TOKEN: token },
-        },
+  private launchConfig(token: string, extra: readonly ExtraMcpServer[]): unknown {
+    const mcpServers: Record<string, unknown> = {
+      [MCP_SERVER_ID]: {
+        type: 'stdio',
+        command: process.execPath,
+        args: [BRIDGE_PATH],
+        env: { LUBBDUBB_MCP_SOCKET: this.opts.socketPath, LUBBDUBB_MCP_TOKEN: token },
       },
     };
+    for (const server of extra) {
+      // A dispatch that named our own key would replace the fleet's channel with
+      // somebody else's tools — the agent would connect, list, and be refused or
+      // answered by the wrong server for every call it made. Dropped and recorded
+      // rather than thrown: the launch is still worth having without the extra.
+      if (server.key === MCP_SERVER_ID) {
+        this.opts.errors?.record({
+          source: 'agent',
+          message: `An extra MCP server asked for the key "${MCP_SERVER_ID}", which is the harness's own channel. It was dropped from this launch.`,
+        });
+        continue;
+      }
+      mcpServers[server.key] = { type: 'stdio', command: server.command, args: server.args };
+    }
+    return { mcpServers };
   }
 
   /** Run one tool by name for a token's identity. The seam both transports share. */
@@ -322,6 +348,11 @@ export class McpBridgeServer {
         watch: this.opts.watch?.(),
         reviewPacks: this.opts.reviewPacks?.(),
         reviewPackChecker: this.opts.reviewPackChecker?.(),
+        // Wrapped rather than called: `McpToolDeps` takes these as thunks so a tool
+        // reads the desk at call time, and calling here would resolve them on every
+        // request whether or not a validation tool was the one being invoked.
+        localValidations: this.opts.localValidations,
+        localRun: this.opts.localRun,
         repoRoot: this.opts.repoRoot,
         errors: this.opts.errors,
       },

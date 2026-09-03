@@ -595,6 +595,17 @@ function panelBody(
           onStop={() => actions.stopLocalRun()}
           onMessage={(text) => actions.messageLocalRun(text)}
           onRefresh={() => actions.refreshLocalRun()}
+          onValidate={(issueNumber, opts) => actions.validateLocally(issueNumber, opts)}
+          // The running goal's own row, found through the same origin the panel
+          // draws — the goals list is already here, so nothing extra is shipped for
+          // a panel most sessions never open.
+          validation={
+            state.localRun === null
+              ? null
+              : (state.world.issues.find((i) => `issue:${String(i.number)}` === state.localRun?.originRef)
+                  ?.localValidation ?? null)
+          }
+          validationConfigured={state.config.localRunConfigured}
           fetchOutput={() => actions.localRunOutput()}
         />
       );

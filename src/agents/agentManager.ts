@@ -13,6 +13,7 @@ import type {
   AgentFlag,
   AgentStatus,
   AgentUsage,
+  ExtraMcpServer,
   HumanTask,
   HumanTaskInput,
   IssueConclusion,
@@ -28,6 +29,7 @@ import type {
   Task,
   BugFiling,
 } from '../types.js';
+import { extraMcpGrants } from '../mcp/names.js';
 
 /** What `link_ticket` settled: the bug filing an operator raised, now carrying its ref. */
 type LinkTicketResult = { ok: true; bug: BugFiling } | { ok: false; error: string };
@@ -68,8 +70,14 @@ import { debugEnabled, debugLog } from '../debug.js';
  * the fleet, and knows nothing about sockets or the tool surface.
  */
 interface McpChannel {
-  /** Mint a per-launch credential. `configPath` is null when tools can't be wired. */
-  open(): { token: string; configPath: string | null };
+  /**
+   * Mint a per-launch credential. `configPath` is null when tools can't be wired.
+   *
+   * `extra` are the MCP servers this one dispatch carries beside the harness's own
+   * — they go in the same launch document, so there is one file and one credential
+   * whatever a dispatch brought.
+   */
+  open(extra?: readonly ExtraMcpServer[]): { token: string; configPath: string | null };
   /** Complete the credential's identity once the agent row exists. */
   bind(token: string, agentId: string): void;
   /** Revoke a credential and drop its launch config. */
@@ -90,6 +98,8 @@ interface AgentManagerOptions {
     sessionId: string;
     resume: boolean;
     mcpConfigPath: string | null;
+    /** Server-level grants for whatever `extra` servers this launch declared. */
+    extraAllowedTools: string[];
     model: string | null;
     effort: string | null;
   }) => string[];
@@ -453,11 +463,16 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     // Minted before the session so the launch config exists to point `--mcp-config`
     // at, and bound to the agent row the moment it exists. Nothing can call a tool
     // in between: `createSession` only builds the session, `start()` is below.
-    const mcp = this.opts.mcp?.open() ?? null;
+    // Whatever this dispatch brought with it — recorded on the row at dispatch, so
+    // a resume below re-attaches the same servers rather than re-deriving them from
+    // config that may have changed underneath a running conversation.
+    const extraServers = task.mcpServers ?? [];
+    const mcp = this.opts.mcp?.open(extraServers) ?? null;
     const session = this.opts.createSession({
       command: this.opts.command,
       args: this.opts.buildArgs({
         sessionId: sessionId ?? '',
+        extraAllowedTools: extraMcpGrants(extraServers),
         // `--resume` on an inherited id, `--session-id` on a minted one, and never
         // both — `appendSessionFlags` owns that choice, and `claude` exits 1 with no
         // stream event at all if a pinned id already has a transcript.
@@ -535,12 +550,14 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     const eventsKey = this.opts.fileEvents ? randomUUID() : null;
     // A restart revoked the old credential with the process that held it, so a
     // resume mints a fresh one — same agent row, same identity, new bearer token.
-    const mcp = this.opts.mcp?.open() ?? null;
+    const extraServers = task.mcpServers ?? [];
+    const mcp = this.opts.mcp?.open(extraServers) ?? null;
     const session = this.opts.createSession({
       command: this.opts.command,
       args: this.opts.buildArgs({
         sessionId: agent.sessionId,
         resume: true,
+        extraAllowedTools: extraMcpGrants(extraServers),
         mcpConfigPath: mcp?.configPath ?? null,
         // The stored values, which is why a restart cannot move a half-finished
         // conversation onto a different model or a different depth.

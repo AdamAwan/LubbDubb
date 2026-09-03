@@ -21,6 +21,8 @@ import type {
   PullRequest,
   Remedy,
   TaskSummary,
+  LocalRun,
+  LocalValidation,
   ValidationCheck,
   WorldEvent,
   WorldSnapshot,
@@ -154,6 +156,22 @@ export interface DispatchContext {
    * been handed over, which is every deployment until somebody does.
    */
   validationChecks?: ValidationCheck[];
+  /**
+   * The local run that is up on the operator's machine, or absent for none.
+   *
+   * Read by rule `local-validation` and by nothing else. The dispatcher does not
+   * otherwise know local runs exist ([23](docs/spec/23-local-runs.md) says so in as
+   * many words), and this does not change that: it is here because a validation is
+   * pinned to a run, and whether that pin still holds is the only question the rule
+   * cannot answer from its own row.
+   */
+  localRun?: LocalRun | null;
+  /**
+   * Local validations the pipeline still has something to do about — the open ones
+   * and the failed ones with no fix yet. Absent/empty means nobody has pressed the
+   * button, which is every deployment until somebody does.
+   */
+  localValidations?: LocalValidation[];
   /**
    * Operator "Up next" priority overrides (issue #128), keyed on candidate
    * origin. Applied ahead of the natural cross-rule ranking but behind rule `manual-job`
