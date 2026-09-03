@@ -1,5 +1,6 @@
 import type { Config } from './config.js';
-import type { IssueInstruction } from './types.js';
+import type { Store } from './store/store.js';
+import type { IssueConclusion, IssueInstruction, Plan } from './types.js';
 
 /**
  * The operator saying, mid-run, what they actually want — and that reaching every
@@ -123,3 +124,86 @@ export function operatorInstructionsNote(instructions: IssueInstruction[], amend
       'is one nobody will ever be told about otherwise.',
   ].join('\n');
 }
+
+/**
+ * What writing an instruction does to the goal, in one place.
+ *
+ * Two surfaces reach it — the cockpit's `POST /api/issues/:number/instruction` and
+ * the desktop channel's `goal_instruct` — and it is three writes rather than one,
+ * which is the whole reason it is not left to each of them. An instruction that
+ * only appended a row would be read by the *next* agent dispatched on the goal,
+ * and a delivered goal has no next agent: the words would sit in the record with
+ * nothing scheduled to read them, which looks exactly like an operator being
+ * listened to.
+ *
+ * So the restart is part of writing one:
+ *
+ * - the **row**, which is what reaches the prompt ({@link operatorInstructionsNote});
+ * - an operator `more_work` **conclusion**, which retracts a delivery through the
+ *   exclusion matrix and returns the item to pickup;
+ * - and a **settled plan** sent back to a planner. Only a settled one — a plan
+ *   still `planning`, `awaiting_approval` or `active` already has a next dispatch
+ *   or a decision the operator owes, and rewinding it would throw away the
+ *   decomposition they are in the middle of.
+ *
+ * → `docs/spec/13-jobs-and-tickets.md`, `docs/spec/11-mcp-tools.md`
+ */
+export function writeGoalInstruction(
+  store: GoalInstructionStore,
+  originRef: string,
+  text: string,
+): { instruction: IssueInstruction; conclusion: IssueConclusion; replanned: Plan | null } {
+  const instruction = store.addIssueInstruction({ originRef, text });
+  const conclusion = store.recordIssueConclusion({
+    originRef,
+    verdict: 'more_work',
+    note: 'The operator wrote an instruction for this goal — it is in front of the next agent.',
+    by: 'operator',
+  });
+  const plan = store.getPlanByOrigin(originRef);
+  const replanned = plan?.status === 'complete' ? store.setPlanStatus(plan.id, 'planning') : null;
+  return { instruction, conclusion, replanned };
+}
+
+/**
+ * Take one back — the escape hatch {@link writeGoalInstruction} has to have, and
+ * the only way an instruction stops standing other than an agent concluding the
+ * goal.
+ *
+ * Withdrawing the **last** one clears the operator's `more_work` with it, and only
+ * ever that one: the two rows were written together, so leaving the verdict behind
+ * would keep bouncing the item back to pickup for words nobody is going to read.
+ * An agent's own declaration is left exactly where it was found — it is about the
+ * work, not about the instruction.
+ *
+ * What a withdrawal does **not** undo is the rest of the restart: a delivery the
+ * write retracted stays retracted, and a plan it sent back to a planner stays in
+ * `planning`. Neither is recoverable by guessing — a cleared verdict has no row to
+ * resurrect, and a plan re-marked `complete` from here would claim a roll-up that
+ * nothing re-derived.
+ */
+export function withdrawGoalInstruction(
+  store: GoalInstructionStore,
+  originRef: string,
+  id: string,
+): { ok: false } | { ok: true; standing: number } {
+  if (!store.withdrawInstruction(id)) return { ok: false };
+  const standing = store.listStandingInstructions(originRef);
+  const conclusion = store.getIssueConclusion(originRef);
+  if (standing.length === 0 && conclusion?.by === 'operator' && conclusion.verdict === 'more_work')
+    store.clearIssueConclusion(originRef);
+  return { ok: true, standing: standing.length };
+}
+
+/** What the two acts above touch, and nothing else. */
+type GoalInstructionStore = Pick<
+  Store,
+  | 'addIssueInstruction'
+  | 'recordIssueConclusion'
+  | 'getPlanByOrigin'
+  | 'setPlanStatus'
+  | 'withdrawInstruction'
+  | 'listStandingInstructions'
+  | 'getIssueConclusion'
+  | 'clearIssueConclusion'
+>;

@@ -37,6 +37,7 @@ export function desktopDeps(system: System): Omit<DesktopToolDeps, 'now'> {
     // operator's deployment would actually get.
     renderTicketBody: (vars) => system.prompts.render('brief-ticket-body', vars),
     profileNames: () => orderedProfiles(system.config.agentModels).map((p) => p.name),
+    agentModels: system.config.agentModels,
     connector: system.connector,
     errors: system.errors,
     labelPrefix: system.config.labelPrefix,

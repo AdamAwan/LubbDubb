@@ -1,4 +1,5 @@
 import { applyIssueWatch } from '../issueWatch.js';
+import { applyProfilePin } from '../intake/profilePin.js';
 import { issueConclusionOrigin } from '../issueConclusion.js';
 import { formatAnswers } from '../escalation/questionnaire.js';
 import { settleHumanTask } from '../humanTaskSettle.js';
@@ -580,13 +581,49 @@ export const queueControl: DesktopToolFactory = (deps) => ({
         type: 'string',
         description: 'The id of a queued job to drop. Only works while it is still queued.',
       },
+      origin: {
+        type: 'string',
+        description: 'The origin to price, e.g. "issue:284:plan", from fleet_status. Only with `profile`.',
+      },
+      profile: {
+        type: 'string',
+        description:
+          'The model profile the next dispatch on `origin` runs on, by name, or "" to clear the override. ' +
+          'This prices one queued row and says nothing about when it runs — a row held by a cap, a cooldown ' +
+          "or an unapproved plan is still held. To pin a whole goal's work, that is goal_control.",
+      },
     },
   },
   handler: async (args) => {
     const hasOrder = args.order !== undefined;
     const cancel = typeof args.cancelJob === 'string' ? args.cancelJob.trim() : '';
-    if (!hasOrder && !cancel)
-      return toolError('Nothing to do — give `order` or `cancelJob`. To read the queue, call fleet_status.');
+    const wantsPrice = args.profile !== undefined || args.origin !== undefined;
+    if (!hasOrder && !cancel && !wantsPrice)
+      return toolError(
+        'Nothing to do — give `order`, `cancelJob`, or `origin` with `profile`. To read the queue, call ' +
+          'fleet_status.',
+      );
+
+    // Priced before anything else is written: the two halves are one answer, and a
+    // pin naming a profile that resolves to nothing prices nothing while reading as
+    // a decision taken — the same refusal the cockpit's route makes, by name.
+    let priced: { origin: string; profile: string | null } | null = null;
+    if (wantsPrice) {
+      const origin = typeof args.origin === 'string' ? args.origin.trim() : '';
+      if (!origin) return toolError('origin required — take it from the queue in fleet_status.');
+      if (args.profile !== undefined && typeof args.profile !== 'string')
+        return toolError('profile must be a string, or "" to clear the override.');
+      const wanted = typeof args.profile === 'string' && args.profile.trim() ? args.profile.trim() : null;
+      const known = deps.profileNames();
+      if (wanted !== null && !known.includes(wanted))
+        return toolError(
+          known.length === 0
+            ? 'This deployment configures no agentModels.profiles, so there is nothing to pick.'
+            : `"${wanted}" is not one of this deployment's profiles: ${known.join(', ')}.`,
+        );
+      deps.store.setProfileOverride(origin, wanted);
+      priced = { origin, profile: wanted };
+    }
 
     let pinned: string[] | null = null;
     if (hasOrder) {
@@ -615,6 +652,7 @@ export const queueControl: DesktopToolFactory = (deps) => ({
     return toolJson({
       pinned,
       cancelled,
+      priced,
       means:
         'the queue is re-ranked and a cycle has run. Pinning changes the order only: a row held by a cap, a ' +
         'cooldown, an unapproved plan or a missing watch tag is still held, and an operator-launched job still ' +
@@ -666,6 +704,13 @@ export const goalControl: DesktopToolFactory = (deps) => ({
           'true ranks everything dispatched under this goal ahead of the natural order until it is cleared; ' +
           'false clears the mark.',
       },
+      profile: {
+        type: 'string',
+        description:
+          'The model profile this goal\'s work runs on, by name, or "" to clear the pin. This is the answer ' +
+          "the appraiser's profile question is waiting for, and giving it settles that question whichever " +
+          'name you pick — including keeping the one the goal already had.',
+      },
     },
     required: ['issue'],
   },
@@ -678,23 +723,28 @@ export const goalControl: DesktopToolFactory = (deps) => ({
     if (!wantsWatch && !wantsPriority && !wantsProfile)
       return toolError('Nothing to do — give `watched`, `priority` or `profile`. To read the goal, call goal_read.');
 
-    // Refused by name before anything is written, exactly as the cockpit's route
-    // refuses it: a profile that resolves to nothing prices nothing while reading
-    // as a decision taken, and the goal would go on running at whatever its rule
-    // says with an override on the row saying otherwise.
-    let profile: string | null = null;
+    // The tag on the ticket and the settlement of the appraiser's question, both
+    // through `applyProfilePin` — the cockpit's own write. This arm used to call
+    // `setProfileOverride`, which prices one *queued row* and is `queue_control`'s
+    // job: it left the ticket untagged, left the question unanswered, and reported
+    // a pin the gate went on holding the goal in spite of. Refused by name before
+    // anything is written, exactly as the route refuses it.
+    let profile: { profile: string | null; answered: boolean } | null = null;
     if (wantsProfile) {
       if (typeof args.profile !== 'string') return toolError('profile must be a string, or "" to clear the pin.');
-      const wanted = args.profile.trim() || null;
-      const known = deps.profileNames();
-      if (wanted !== null && !known.includes(wanted))
-        return toolError(
-          known.length === 0
-            ? 'This deployment configures no agentModels.profiles, so there is nothing to pin work to.'
-            : `"${wanted}" is not one of this deployment's profiles: ${known.join(', ')}.`,
-        );
-      deps.store.setProfileOverride(issueConclusionOrigin(ref.issue), wanted);
-      profile = wanted;
+      const pinned = await applyProfilePin(
+        {
+          store: deps.store,
+          sink: deps.connector,
+          errors: deps.errors,
+          labelPrefix: deps.labelPrefix,
+          agentModels: deps.agentModels,
+        },
+        ref.issue,
+        args.profile.trim() || null,
+      );
+      if (!pinned.ok) return toolError(pinned.error);
+      profile = { profile: pinned.profile, answered: pinned.answered };
     }
 
     let priority: boolean | null = null;
@@ -750,10 +800,17 @@ export const goalControl: DesktopToolFactory = (deps) => ({
       issue: ref.issue,
       watch,
       priority,
-      profile: wantsProfile ? profile : undefined,
+      profile: profile === null ? undefined : profile.profile,
+      // Said rather than left to be inferred: settling the appraiser's question is
+      // the *whole* point of the pin on a goal the gate is holding, and a session
+      // told only that a tag was written cannot tell a released goal from a held one.
+      profileQuestionAnswered: profile === null ? undefined : profile.answered,
       means:
         'this changes what the harness picks up next and in what order. Nothing running was stopped: an agent ' +
-        'already working this goal carries on, and un-watching only stops the next dispatch.',
+        'already working this goal carries on, and un-watching only stops the next dispatch.' +
+        (profile?.answered === true
+          ? ' The profile question the appraisal was holding this goal on is answered, so it is released.'
+          : ''),
     });
   },
 });

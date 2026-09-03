@@ -253,6 +253,24 @@ export const ALLOWED_MCP_TOOLS: string[] = MCP_TOOL_NAMES.map((name) => `mcp__${
  * document schema they genuinely do share is one export
  * (`src/mcp/planDocumentSchema.ts`) rather than two literals.
  *
+ * **`goal_gate`, `goal_placement` and `goal_instruct` are the goal's own decisions**,
+ * and they are here because without them this channel could see a held goal and do
+ * nothing about it. Four of the cockpit's goal controls hold work — an appraisal
+ * that came back `unclear`, a model profile nobody confirmed, a shortfall against a
+ * goal that is finished, an environment gate on work that will never deploy — and
+ * every one of them was a click in a browser tab on one machine. A session asked to
+ * settle one reached for the nearest name that would take the call (`human_task_settle`
+ * clears the wrapper task), reported the gate settled, and left it standing.
+ *
+ * Three names rather than one, on {@link DESKTOP_TOOL_NAMES}'s own rule: `goal_gate`
+ * is the escape hatches, which hold work and are answered together; `goal_placement`
+ * is the two placement questions, which write to the tracker and hold nothing;
+ * `goal_instruct` is words in front of the next agent, which is input rather than a
+ * verdict and is the one of the three that restarts a goal. The profile pin is an arm
+ * of `goal_control` and not a fourth name, because it is the same act as the watch tag
+ * beside it — a label on the ticket that says how the harness should work this goal.
+ * → `src/mcp/desktopGoal.ts`
+ *
  * `goal_read` is the one tool here that is *only* a read, and the only one whose
  * answer is not about a next step: it is what the harness kept about a goal — the
  * plan, the parts, the pull requests, the decisions the dispatcher took, what was
@@ -320,6 +338,9 @@ export const DESKTOP_TOOL_NAMES = [
   'agent_read',
   'queue_control',
   'goal_control',
+  'goal_gate',
+  'goal_placement',
+  'goal_instruct',
   'proposal_read',
   'proposal_decide',
   'recovery_decide',

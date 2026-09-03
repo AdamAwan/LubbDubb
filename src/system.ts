@@ -774,6 +774,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     connector,
     labelPrefix: config.labelPrefix,
     issueContainerTypes: config.issueContainerTypes,
+    // The whole set rather than the names: `goal_control`'s pin writes the model
+    // label, and pinning one profile has to clear the others.
+    agentModels: config.agentModels,
     // Lazy for the fleet deps' reason a few lines above: `plan_amend` withdraws
     // the superseded approval card and puts the fresh one up, and both the desk
     // and the harness are built below this.
