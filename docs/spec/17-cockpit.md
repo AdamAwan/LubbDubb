@@ -495,6 +495,10 @@ console does not would make the first real move look like a change when it is no
 `test/cockpitPlace.test.ts` pins the codec — the round trip for every destination, the bare URL, the
 single spelling, an unknown value reading as the overview, and an ask id surviving encoding.
 
+Identifiers carried from the address bar are encoded before they become API path segments. In
+particular, a hand-typed plan id cannot turn the plan-history request's `../` characters into path
+syntax; `test/cockpitApi.test.ts` pins that boundary.
+
 **Reaching the URL is only the first leg.** A `Place` field is carried to the surface that draws it
 through the view model — `useCockpit` hands the fields to `buildViewModel`, which defaults each one it
 is not given. A field the hook never forwards therefore round-trips through the query string perfectly
