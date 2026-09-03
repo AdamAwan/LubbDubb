@@ -450,6 +450,16 @@ body {
   --tone-fill: var(--cn-panel-2);
 }
 
+/* ---------- why the marks below double their class ----------
+
+   `console.css` resets its own markup with `.cn button`, which is (0,1,1) and so
+   outranks a single class: `border: 0`, `background: none` and `color: inherit`
+   won over every tinted mark drawn as a button inside the console — which is every
+   surface that draws one. The tint was declared, computed and then thrown away, so
+   the marks read as bare glyphs on a row and looked exactly like marks nobody had
+   styled. `.rv.rv` is (0,2,0) and wins. The same rule `cn-refs` already keeps.
+   → docs/spec/17-cockpit.md#links */
+
 /* The border is always drawn — the two weights are the same box, so a row of
    mixed tags keeps one baseline and the fill is the only thing ranking them.
 
@@ -9369,7 +9379,7 @@ select:disabled {
    `.rv` itself rather than on any surface's class: the mark has to sit in a
    console row, a console masthead and a card without any of them reaching in.
    → docs/spec/17-cockpit.md#the-fleet-reviews-mark */
-.rv {
+.rv.rv {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -9381,9 +9391,12 @@ select:disabled {
   border-radius: var(--r-sm);
   color: var(--muted);
   cursor: help;
-  /* Room for the badge, which sits on the glyph's shoulder and outside the box:
-     without it the count crowds whatever the row draws next. */
-  margin-right: 3px;
+  /* Room for the badge, which sits on the glyph's shoulder 4px *outside* the box:
+     at 3px the gutter was spent before it began and the count sat on whatever the
+     row drew next — the checks chip, on every reviewed pull request with findings.
+     The mark clears its own overhang wherever it is drawn; the rack's reading slot
+     opens the gutter between the two marks on top of it (`.cn-slot-read`). */
+  margin-right: 5px;
 }
 
 .rv:focus-visible {
@@ -9395,23 +9408,23 @@ select:disabled {
    reading is drawn at full length. A button rather than a span with a handler, so
    it resets the agent's own chrome — and it keeps `cursor: help` nowhere near it,
    since a pointer is the truthful cursor for something that goes somewhere. */
-button.rv {
+button.rv.rv {
   padding: 0;
   background: none;
   font: inherit;
 }
 
-.rv-open {
+.rv-open.rv-open {
   cursor: pointer;
 }
 
 /* The four tinted arms, in one rule: the mark carries a `t-*` tone alias beside
    its arm class, so the hue, the border and the fill are the tag's triple and not
    a fifth copy of it. → docs/spec/17-cockpit.md#the-tag */
-.rv-clear,
-.rv-findings,
-.rv-routed,
-.rv-deciding {
+.rv-clear.rv-clear,
+.rv-findings.rv-findings,
+.rv-routed.rv-routed,
+.rv-deciding.rv-deciding {
   color: var(--tone);
   background: var(--tone-fill);
   border-color: var(--tone-line);
@@ -9419,11 +9432,11 @@ button.rv {
 
 /* Dashed, because a decision that has not been taken yet is the one state that is
    about to change on its own. */
-.rv-deciding {
+.rv-deciding.rv-deciding {
   border-style: dashed;
 }
 
-.rv-skipped {
+.rv-skipped.rv-skipped {
   color: var(--grey);
   border-color: var(--border);
 }
@@ -9433,7 +9446,7 @@ button.rv {
   opacity: 0.55;
 }
 
-.rv-elsewhere {
+.rv-elsewhere.rv-elsewhere {
   color: var(--grey);
   border-color: var(--border);
   border-style: dotted;
@@ -9471,11 +9484,16 @@ button.rv {
   color: var(--on-light);
 }
 
-/* The tooltip. Anchored to the mark's right edge because the mark sits near the
-   right of every row that draws it, so a centred one would leave the panel — and
-   *below* it, because the mark's other surface is a masthead a few pixels under
-   the top of the window, where a tooltip above is a tooltip nobody can read. */
-.rv-tip {
+/* The tooltip the marks share (`web/src/components/tip.tsx`). Anchored to the
+   mark's left edge because the mark sits near the right of every row that draws
+   it, so a centred one would leave the panel — and *below* it, because the mark's
+   other surface is a masthead a few pixels under the top of the window, where a
+   tooltip above is a tooltip nobody can read.
+
+   One class rather than one per mark: the review's reading and the checks' are
+   the same box with different words in it, and two copies is two chances for one
+   of them to be styled where the other was placed. */
+.tip {
   position: fixed;
   /* Above the console's own layers (menus and the why-tip sit at 40) and below the
      modals at 50, which are the one thing that should cover it. The number only
@@ -9506,7 +9524,7 @@ button.rv {
   pointer-events: none;
 }
 
-.rv-tip b {
+.tip b {
   color: var(--text);
   font-weight: 600;
 }
@@ -9525,12 +9543,12 @@ button.rv {
    of them unclamped ran the tooltip past the bottom of the window with its own
    heading scrolled off the top. The rest is one line saying how many, and the page
    the mark opens has all of them. */
-.rv-tip ul {
+.tip .rv-list {
   margin: 0;
   padding-left: 16px;
 }
 
-.rv-tip li {
+.tip .rv-list li {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
@@ -9544,6 +9562,214 @@ button.rv {
 }
 
 .rv-foot {
+  margin-top: 3px;
+  padding-top: 7px;
+  border-top: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--grey);
+}
+
+/* ---------- the review pack's mark ----------
+
+   Whether a pull request has a pack, and whether it is about the head
+   (`web/src/components/PackMark.tsx`). The review mark's box at the review mark's
+   size, because the two are read down the same column and a mark that sat a pixel
+   off would read as a different kind of thing; what tells them apart is the glyph
+   and the tint, which is the work a glyph is for.
+   → docs/spec/31-review-packs.md#on-the-row */
+.pk.pk {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--tone-line, var(--border));
+  border-radius: var(--r-sm);
+  background: var(--tone-fill, var(--panel-2));
+  color: var(--tone, var(--muted));
+  cursor: help;
+}
+
+button.pk.pk {
+  padding: 0;
+  font: inherit;
+}
+
+.pk-open.pk-open {
+  cursor: pointer;
+}
+
+.pk:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+
+/* Dashed for `deciding`'s reason on the review mark: a pack being written is the
+   one state that changes on its own, without anybody doing anything. */
+.pk-writing.pk-writing {
+  border-style: dashed;
+}
+
+/* The stale arm's badge, on the shoulder the review mark puts its count on — a
+   second reading of the same tint rather than a second hue, and the one thing the
+   glyph alone could not say. */
+.pk-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 13px;
+  height: 13px;
+  padding: 0 2px;
+  border: 1px solid var(--tone-line, var(--border));
+  border-radius: var(--r-pill);
+  background: var(--tone, var(--muted));
+  color: var(--on-light);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 11px;
+  text-align: center;
+}
+
+/* The slot held open on a row with no pack, where the rack has one: an empty box
+   rather than a grey glyph, which would be a claim about a pack nobody wrote. */
+.pk-none.pk-none {
+  border-color: transparent;
+  background: none;
+}
+
+.pk-foot {
+  margin-top: 3px;
+  padding-top: 7px;
+  border-top: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--grey);
+}
+
+/* ---------- the checks mark ----------
+
+   The pull request's CI, as a chip that says its own name: `CI 4/4`, `CI 1
+   failed`, `CI 2 running` (`web/src/components/CiMark.tsx`). It replaced a run of
+   6px squares that said all of it in hue alone — no word, no shape between
+   passing and failing, and the check names only in a native `title`.
+
+   Sized to sit beside the review mark without matching it: the mark is a 22px box
+   and this is a 22px chip, so the pair shares a baseline and a height while the
+   words keep them apart at a glance. The tint is the shared family's `t-*` triple
+   and never a hue written here. → docs/spec/17-cockpit.md#the-checks-mark */
+.ck.ck {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  box-sizing: border-box;
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid var(--tone-line, var(--border));
+  border-radius: var(--r-sm);
+  background: var(--tone-fill, var(--panel-2));
+  color: var(--tone, var(--muted));
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  cursor: help;
+}
+
+/* The key is the chip's *name*, not its reading: faint and wider-tracked, so the
+   eye takes the value first and the word only when it needs to know what the
+   value is about. */
+.ck-k {
+  color: var(--grey);
+  letter-spacing: 0.12em;
+}
+
+.ck-v {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* As a control, on a row: it opens the pull request's page, where the whole list
+   of checks is. The same span-or-button rule the review mark keeps. */
+button.ck.ck {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+
+.ck-open.ck-open {
+  cursor: pointer;
+}
+
+.ck:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+
+/* The checks by name inside the tooltip — a dot for the state, the provider's own
+   name for the check, and what the policy made of it where it made anything. Its
+   own list rather than the review's: those are paragraphs and clamp, these are one
+   line each and must not. */
+.ck-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ck-list li {
+  display: grid;
+  grid-template-columns: 6px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+/* A check name is a path the provider chose and can be long; the state beside it
+   is the reading, so the name is what gives way. */
+.ck-list li span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ck-list li em {
+  font-style: normal;
+  color: var(--grey);
+}
+
+.ck-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  background: var(--grey);
+}
+
+.ck-passing {
+  background: var(--green);
+}
+
+.ck-failing {
+  background: var(--red);
+}
+
+.ck-pending {
+  background: var(--blue);
+}
+
+.ck-more {
+  color: var(--grey);
+  font-style: italic;
+}
+
+.ck-foot {
   margin-top: 3px;
   padding-top: 7px;
   border-top: 1px solid var(--border);

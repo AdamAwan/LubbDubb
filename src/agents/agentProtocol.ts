@@ -309,6 +309,21 @@ interface ClaudeArgsOptions {
    * {@link mcpConfigPath} is also set, since the tool lives on the MCP server.
    */
   permissionPromptTool?: string;
+  /**
+   * Permission rules for the MCP servers this launch carries **beside** the
+   * harness's own, from `extraMcpGrants` — a server-level `mcp__<key>` each.
+   *
+   * On `--allowedTools` beside our own grants rather than in `--settings` with
+   * {@link allowedTools}, and that is the opposite of the rule the Bash rules
+   * follow, for the reason that rule states: `--allowedTools` is *the MCP flag*,
+   * and the drift it exists to prevent is an operator's Bash edit dropping a tool
+   * grant. These are tool grants. Keeping them here is what makes them one list
+   * with one derivation in `src/mcp/names.ts`.
+   *
+   * Only meaningful alongside {@link mcpConfigPath}, since that is the document the
+   * servers are declared in.
+   */
+  extraAllowedTools?: string[];
 }
 
 /**
@@ -337,7 +352,10 @@ interface ClaudeArgsOptions {
 function appendMcpConfig(args: string[], opts: ClaudeArgsOptions): void {
   if (!opts.mcpConfigPath) return;
   args.push('--mcp-config', opts.mcpConfigPath);
-  args.push('--allowedTools', ALLOWED_MCP_TOOLS.join(','));
+  // Ours first, then whatever this dispatch brought. Additive in both directions:
+  // an agent launched with these still uses Bash and Write normally, and an extra
+  // server's grant takes nothing away from the fleet's.
+  args.push('--allowedTools', [...ALLOWED_MCP_TOOLS, ...(opts.extraAllowedTools ?? [])].join(','));
   // The permission backstop lives on this same server, so it's only wirable when
   // the channel is (issue #130 phase B). Claude Code then calls it — rather than
   // denying — for any tool the allow-list and permission mode don't resolve.

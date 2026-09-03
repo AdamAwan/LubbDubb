@@ -361,7 +361,7 @@ function FactsRow({ row, has, columns }: { row: PanelRowModel; has: SlotsUsed; c
           <Why row={row} />
         </span>
       )}
-      {has.reading && <span className="cn-slot">{row.reading}</span>}
+      {has.reading && <span className="cn-slot cn-slot-read">{row.reading}</span>}
       {has.chips && <span className="cn-slot">{row.chips}</span>}
       {has.action && <span className="cn-slot">{row.action}</span>}
       {has.refs && <span className="cn-refs">{row.refs}</span>}

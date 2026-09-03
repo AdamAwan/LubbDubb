@@ -58,6 +58,7 @@ import type { PrAttention } from './prAttention.js';
 import type { PoolStatus } from './pool/poolDesk.js';
 import type { PoolRollup } from './pool/aggregate.js';
 import type { PrHealth } from './prHealth.js';
+import type { PrPackStanding } from './reviewPacks/standing.js';
 import type { PrReviewState } from './review/prReviewState.js';
 import type { ControlState } from './runtimeControl.js';
 import type { RunningConfigGroup } from './server/runningConfig.js';
@@ -109,7 +110,9 @@ import type {
   PetStage,
   PetWallet,
   JobSchedule,
+  AgentStatus,
   LocalRun,
+  LocalValidation,
   LocalRunFreshness,
   LocalRunPorts,
   LocalRunTurn,
@@ -175,6 +178,17 @@ export interface PullRequest extends WorldPullRequest {
   attention?: PrAttention;
   /** What the harness will do about each *failing* check, from `classifyCiFailures`. */
   ciVerdict?: CiVerdict;
+  /**
+   * Whether this pull request has a **review pack**, and whether it is about the
+   * head — the mark on its row (`src/reviewPacks/standing.ts`). Absent means no
+   * pack and nobody writing one, which is what draws no mark.
+   *
+   * A standing rather than the pack: the pack is a document, read over its own
+   * route by the page that draws it, and shipping twenty of them on every pulse to
+   * answer one bit per row is the trade this field exists not to make.
+   * → `docs/spec/31-review-packs.md#on-the-row`
+   */
+  pack?: PrPackStanding;
   /**
    * Where this pull request stands with the fleet's own reviewer — the mark on
    * its row and the card on its page (`src/review/prReviewState.ts`).
@@ -368,6 +382,16 @@ export interface Issue extends WorldIssue {
    */
   validation: ValidationVerdict | null;
   /**
+   * The goal's latest local validation — the fleet driving this machine's dev
+   * environment and saying whether the changes work — or null for a goal nobody has
+   * asked about.
+   *
+   * The **latest**, not a list: it is a button an operator presses, and what they
+   * want back is what happened the last time they pressed it. The rows before it are
+   * history nothing draws.
+   */
+  localValidation: LocalValidationView | null;
+  /**
    * What this goal has cost so far, over every agent under it — its planner, its
    * appraisal, its parts, and the agents its pull requests pulled in (`rollUpIssueSpend`).
    *
@@ -488,6 +512,64 @@ export interface LocalRunRefFacts {
  * the panel already draws the goal list and a second copy of a title is a second
  * thing to keep in step.
  */
+/**
+ * How far a local validation has got, derived on the server.
+ *
+ * Derived here and not in the browser, `Issue.validation`'s reason: the words come
+ * off three facts that live in three different places — the row's status, whether a
+ * plan has landed, and what the live local run is doing — and a cockpit that folded
+ * them itself would be a second opinion about what "validating" means, free to
+ * disagree with the row it is drawn beside.
+ *
+ * Null once the row is settled: there is a status to draw then, and a phase as well
+ * would be two answers to one question.
+ */
+export type LocalValidationPhase = 'queued' | 'planning' | 'environment' | 'driving';
+
+/** One file in a validation's own directory, and where the cockpit may fetch it. */
+interface LocalValidationFile {
+  /** The name a finding refers to. */
+  name: string;
+  /**
+   * Where to fetch it — minted by the server, never built by the browser.
+   *
+   * A capability URL like the attachments', and for the identical reason: an
+   * `<img src>` carries no bearer header, so a path the cockpit assembled would 401
+   * on every authenticated deployment while working perfectly on an open one.
+   */
+  url: string;
+}
+
+/** One agent behind a validation, as the cockpit needs it to draw a door to it. */
+export interface LocalValidationAgentView {
+  id: string;
+  status: AgentStatus;
+}
+
+/**
+ * A goal's latest local validation, as the cockpit draws it.
+ *
+ * Extends the domain row rather than restating it, `src/wire.ts`'s rule, and adds
+ * only what the browser cannot work out for itself: the phase (above), the served
+ * URLs for the screenshots, and the agents to open.
+ */
+export interface LocalValidationView extends LocalValidation {
+  phase: LocalValidationPhase | null;
+  /**
+   * The screenshots, with somewhere to fetch each.
+   *
+   * A second field rather than a widening of {@link LocalValidation.screenshots},
+   * which stays the list of names a finding joins against: a wire type either *is*
+   * a domain type or extends it, and rewriting a `string[]` as objects would be the
+   * re-declaration that rule exists to refuse.
+   */
+  files: LocalValidationFile[];
+  /** The agent that ran it, while there is one to open. */
+  agent: LocalValidationAgentView | null;
+  /** The agent dispatched to fix what it found. */
+  fixAgent: LocalValidationAgentView | null;
+}
+
 export interface LocalRunTargetView {
   originRef: string;
   issueNumber: number;
@@ -749,6 +831,17 @@ interface CockpitConfig {
    * dev server needs nothing said — so this only words the control's hint.
    */
   localRunRefreshConfigured: boolean;
+  /**
+   * `localValidation.browser` is set, so a validating agent can open a page.
+   *
+   * Its own flag rather than folded into {@link CockpitConfig.localRunConfigured},
+   * which stays the gate on the control: a deployment with no browser validates
+   * perfectly well through the API and the logs, and hiding the button over it would
+   * withhold a feature that works. What this words is the empty state, so an
+   * operator who wonders why nothing was clicked knows there was nothing to click
+   * with.
+   */
+  localValidationBrowserConfigured: boolean;
   /**
    * `issueContainerTypes` — the work-item types that hold work rather than being
    * it. Shipped because the backlog draws a container as a *heading* over its
@@ -2266,6 +2359,9 @@ export type {
   JobAttachmentInput,
   JobSchedule,
   Obstacle,
+  LocalValidation,
+  LocalValidationFinding,
+  LocalValidationStatus,
   ObstacleKey,
   ObstacleSighting,
   ObstacleStanding,
@@ -2360,6 +2456,13 @@ export type {
 export type { RemedyCauseTotal, RemedyInsights, RemedyKindHealth, RemedyRow } from './remedyInsights.js';
 export type { RemedyCause, RemedyGuard, RemedyKind } from './types.js';
 export type { McpChannel } from './types.js';
+/**
+ * One CI check as its provider names it. On the wire because the cockpit's checks
+ * mark draws the list `ciStatus` folds — a re-export rather than a re-declaration,
+ * so the chip names exactly what the policy matched.
+ * → `docs/spec/17-cockpit.md#the-checks-mark`
+ */
+export type { CiCheck } from './types.js';
 // The pool's own shapes. A wire type either **is** a domain type or `extends` it,
 // so these are re-exports rather than re-declarations — the cockpit reads exactly
 // what the store holds. → `docs/spec/28-cross-fleet-pool.md`
@@ -2367,6 +2470,8 @@ export type { PoolClockKind, PoolDigestRow, PoolFleetReading, PoolPublication } 
 export type { PoolStatus } from './pool/poolDesk.js';
 /** The fleet review as the cockpit draws it. → `docs/spec/07-pull-requests.md#the-fleet-review` */
 export type { PrReviewState, PrReviewStatus } from './review/prReviewState.js';
+/** Whether a pull request has a review pack. → `docs/spec/31-review-packs.md#on-the-row` */
+export type { PrPackStanding } from './reviewPacks/standing.js';
 export type { PoolRollup, PoolRollupRow } from './pool/aggregate.js';
 /** What `POST /api/issues/:number/dismiss-run` stopped on its way out. */
 export type { RunClearOut } from './floor/endRun.js';

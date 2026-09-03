@@ -40,8 +40,15 @@ type IssueOriginRole = 'work' | 'evidence' | 'deliberation' | 'unrecognised';
  */
 const DELIBERATION_SUFFIXES = ['plan', 'appraisal'];
 
-/** The origins that are the work itself, as suffix prefixes under `issue:<n>:`. */
-const WORK_SUFFIX_PREFIXES = ['part:'];
+/**
+ * The origins that are the work itself, as suffix prefixes under `issue:<n>:`.
+ *
+ * `validate-local-fix:<validationId>` is work and not evidence, unlike the
+ * validation that produced it: it is an agent on the goal's own branch, writing and
+ * pushing code. That it was prompted by a reading rather than by a plan part does
+ * not change what it does.
+ */
+const WORK_SUFFIX_PREFIXES = ['part:', 'validate-local-fix:'];
 
 /**
  * The origins that are not the work but prove it happened. Rule `issue-assess` only fires once
@@ -62,8 +69,16 @@ const EVIDENCE_SUFFIXES = ['assess', 'retro'];
  * for a goal already parked as delivered, so a task on one of these cannot exist
  * unless work was done and finished. Both build nothing and open no pull request
  * — they are dispatched into a read-only checkout.
+ *
+ * `validate-local:<validationId>` joins them and is the one that is **not** about a
+ * delivered goal: an operator can validate work still in flight, which is the whole
+ * point of it. It is evidence all the same, and by the strictest reading of the word
+ * — the agent drove the built thing and wrote down what it saw, which is the one
+ * kind of proof nothing else in the harness produces. It builds nothing and its
+ * checkout is read-only; the fix it can lead to is `validate-local-fix:`, which is
+ * work and is classified as work above.
  */
-const EVIDENCE_SUFFIX_PREFIXES = ['validate:', 'validate-failure:'];
+const EVIDENCE_SUFFIX_PREFIXES = ['validate:', 'validate-failure:', 'validate-local:'];
 
 /**
  * Classify a task's origin against an issue.

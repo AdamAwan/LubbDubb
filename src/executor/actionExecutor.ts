@@ -297,6 +297,15 @@ export class ActionExecutor {
               // held must leave the part `ready` for a later cycle, not claim it started.
               if (action.type === 'dispatch_code_agent' && action.partId)
                 store.markPartDispatched(action.partId, task.id, action.branch);
+              // The same rule again, and here it is what keeps one press of the
+              // button to one agent: the store's write is guarded on the row still
+              // being `pending`, so a dispatch the cap held leaves the row where the
+              // rule can propose it again next cycle.
+              if (action.type === 'dispatch_code_agent' && action.localValidation) {
+                if (action.localValidation.as === 'fix')
+                  store.markLocalValidationFix(action.localValidation.id, task.id);
+                else store.markLocalValidationDispatched(action.localValidation.id, task.id);
+              }
               const kind = action.type === 'dispatch_code_agent' ? 'code' : 'desk';
               record(
                 'executed',
@@ -1289,6 +1298,11 @@ export class ActionExecutor {
         // to the agent, so it can say a rule fired and never what that cost.
         rule: action.rule,
         ciChecks: action.ciChecks ?? null,
+        // The MCP servers this dispatch brought with it, recorded for `model`'s
+        // reason: `AgentManager.resume` rebuilds the launch from this row, and an
+        // agent re-attached without the browser it was launched with comes back
+        // holding a conversation full of tool calls it can no longer make.
+        mcpServers: action.mcpServers?.length ? action.mcpServers : null,
         model: profile?.model ?? null,
         effort: profile?.effort ?? null,
         profile: profile?.name ?? null,

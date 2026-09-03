@@ -670,8 +670,8 @@ test('the unsaved-theme flag notifies on a change and only on a change', () => {
  * forty-first pair cannot be written: **uppercase text that is not in a box takes
  * its size and its tracking from `var(--label-*)` and from nowhere else.** A badge
  * is the deliberate exception and it is one the sweep can see — a border, a padding
- * or a ground is what makes `.tag`, `.cn-chip`, `.cfg-badge` and the rest shapes of
- * their own, where the type is part of the shape rather than a caption over
+ * or a ground is what makes `.tag` — the one shape every chip is now drawn in — a
+ * shape of its own, where the type is part of the shape rather than a caption over
  * something. → docs/spec/17-cockpit.md#the-eyebrow
  */
 test('uppercase text outside a badge takes its size from the label ramp', () => {

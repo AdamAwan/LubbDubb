@@ -8,6 +8,7 @@ import type {
   IssueDelivery,
   IssueInstruction,
   LocalRun,
+  LocalValidation,
   LocalRunReadings,
   LocalRunTurn,
   PlanPart,
@@ -18,6 +19,7 @@ import type {
   WorldSnapshot,
 } from '../types.js';
 import type { StateSection } from '../wire.js';
+import type { Store } from '../store/store.js';
 import type {
   CockpitState,
   GoalReachView,
@@ -25,6 +27,9 @@ import type {
   LocalRunRefFacts,
   LocalRunTargetView,
   LocalRunView,
+  LocalValidationAgentView,
+  LocalValidationPhase,
+  LocalValidationView,
   OpenPullRequest,
   PlanPartView,
   PullRequest,
@@ -40,6 +45,7 @@ import { applyThreadReopens } from '../prThreads.js';
 import { prAttentionStatus, type PrAttentionContext } from '../prAttention.js';
 import { reviewReading } from '../review/prReview.js';
 import { prReviewState } from '../review/prReviewState.js';
+import { packStandingOf } from '../reviewPacks/standing.js';
 import {
   effectivePickupStates,
   issuePickupStatus,
@@ -119,6 +125,8 @@ function once<T>(read: () => T): () => T {
 interface SnapshotOpts {
   artifactSigner?: (flagId: string) => string;
   attachmentSigner?: (attachmentId: string) => string;
+  /** Mints the capability in each screenshot URL — see `localValidationFileSignerFor`. */
+  localValidationFileSigner?: (id: string, name: string) => string;
 }
 
 /**
@@ -537,6 +545,11 @@ export function buildStateSections(
   // The flagged goals, as the goal page's chip reads them: keyed on the same
   // `issue:<n>` origin the flag is written against.
   const goalPriorities = new Map(store.listGoalPriorities().map((g) => [g.originRef, { since: g.since }]));
+  // One read for every goal that has ever been validated locally, and one for the
+  // run they are compared against — both `once`, because the enrichment below runs
+  // per issue and a query per goal per heartbeat is what that memo exists to stop.
+  const localValidations = once(() => new Map(store.listLatestLocalValidations().map((v) => [v.originRef, v])));
+  const liveLocalRun = once(() => store.liveLocalRun());
   const validationChecksFor = (origin: string): ReturnType<typeof validationVerdict> | null => {
     const checks = checksByGoal.get(origin) ?? [];
     return checks.length === 0 ? null : validationVerdict(checks);
@@ -647,6 +660,15 @@ export function buildStateSections(
       // which is a third reading and not a synonym for clear: a goal nobody wrote
       // a plan for draws no chip, where a clear one draws a chip it earned.
       validation: validationChecksFor(origin),
+      // The fleet's last run at this goal against the machine's own dev
+      // environment. The **latest** row and not a list: it is a button, and what
+      // its presser wants back is what happened the last time they pressed it.
+      localValidation: localValidationView(
+        localValidations().get(origin),
+        liveLocalRun(),
+        system.store,
+        opts?.localValidationFileSigner,
+      ),
     };
   };
   /**
@@ -665,6 +687,19 @@ export function buildStateSections(
    * the merge.
    */
   const withReview = <T extends PullRequest>(pr: T): T => ({ ...pr, review: reviewStateOf(pr) });
+  /**
+   * The review packs, read once as three columns rather than per row: the rack
+   * asks the same question of twenty pull requests, and `listCurrentReviewPacks`
+   * parses every document to answer it.
+   */
+  const packHeads = once(() => new Map(store.listReviewPackHeads().map((head) => [head.prNumber, head])));
+  /**
+   * Whether a pull request has a pack, and whether it is about the head. Undefined
+   * — no pack, nobody writing one — is what draws no mark, the same silence the
+   * review's own mark keeps on a deployment that has no reviewer.
+   */
+  const packStandingFor = (pr: PullRequest): PullRequest['pack'] =>
+    packStandingOf(packHeads().get(pr.number), pr.headSha, system.reviewPacks.writing(pr.number));
 
   // The open pull requests with their three verdicts folded — hoisted out of the
   // `world` literal below because the local run's rows read the same rows: what has
@@ -686,6 +721,9 @@ export function buildStateSections(
       // the harness held. Same call the dispatcher makes, off the same policy.
       ciVerdict: classifyCiFailures(pr.ciChecks, config.ci, pr.ciChecksWithheld),
       review: reviewStateOf(pr),
+      // The fourth reading, and the only one that is about a *document* rather
+      // than about the pull request: whether somebody has a pack to read.
+      pack: packStandingFor(pr),
     })),
   );
   // Branch → the pull request on it, open rows first so a reopened branch reads as
@@ -729,6 +767,11 @@ export function buildStateSections(
       // The fact rather than the text: the instruction is prose only the session
       // needs, and the cockpit's question is whether it can offer a start at all.
       localRunConfigured: config.localRun.instruction.trim() !== '',
+      // Whether a validating agent would have a browser. Not a gate on the control
+      // — a deployment with none validates through the API and the logs perfectly
+      // well — but it words the empty state, so an operator who wonders why nothing
+      // was clicked knows there was nothing to click with.
+      localValidationBrowserConfigured: config.localValidation.browser !== null,
       localRunStopConfigured: config.localRun.stopInstruction.trim() !== '',
       localRunRefreshConfigured: config.localRun.refreshInstruction.trim() !== '',
       // The container policy itself, because the backlog draws a container as a
@@ -1641,4 +1684,59 @@ function workItemStateRules(config: Config): CockpitState['config']['stateRules'
     inReview: config.issueInReviewState ?? null,
     returnsTo: config.issuePickupStates?.[0] ?? null,
   };
+}
+
+/**
+ * A goal's latest local validation, as the cockpit draws it — or null.
+ *
+ * Everything derived here rather than in the browser, `Issue.validation`'s reason:
+ * the phase is a fold of three separate facts, the screenshot URLs carry a
+ * capability only the server can mint, and the agents behind it are rows a bounded
+ * cockpit list may no longer hold. A cockpit that worked any of them out itself
+ * would be a second opinion drawn beside the first.
+ */
+function localValidationView(
+  row: LocalValidation | undefined,
+  live: LocalRun | null,
+  store: Store,
+  signer?: (id: string, name: string) => string,
+): LocalValidationView | null {
+  if (row === undefined) return null;
+  const agentOf = (taskId: string | null): LocalValidationAgentView | null => {
+    if (taskId === null) return null;
+    const task = store.getTask(taskId);
+    if (!task?.agentId) return null;
+    const agent = store.getAgent(task.agentId);
+    return agent ? { id: agent.id, status: agent.status } : null;
+  };
+  return {
+    ...row,
+    phase: localValidationPhase(row, live),
+    files: row.screenshots.map((name: string) => {
+      const base = `/local-validations/${encodeURIComponent(row.id)}/files/${encodeURIComponent(name)}`;
+      // A signer is present exactly when auth is on. Off, the route verifies
+      // nothing, so the bare path is the whole URL — `attachmentUrls`' arrangement.
+      return { name, url: signer ? `${base}?tk=${encodeURIComponent(signer(row.id, name))}` : base };
+    }),
+    agent: agentOf(row.taskId),
+    fixAgent: agentOf(row.fixTaskId),
+  };
+}
+
+/**
+ * How far a validation has got, in one answer.
+ *
+ * Ordered by what it can prove rather than by what it expects: the plan landing is
+ * a fact on the row, and until it does the agent is reading the diff whatever the
+ * environment is doing. After it, the environment is what the agent is waiting on
+ * — so `driving` is claimed only once the run is actually `running`.
+ *
+ * Null once the row is settled, because there is a status to draw then and a phase
+ * beside it would be two answers to one question.
+ */
+function localValidationPhase(row: LocalValidation, live: LocalRun | null): LocalValidationPhase | null {
+  if (row.status === 'pending') return 'queued';
+  if (row.status !== 'dispatched') return null;
+  if (row.plan === null) return 'planning';
+  return live?.status === 'running' ? 'driving' : 'environment';
 }

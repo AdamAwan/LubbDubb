@@ -273,7 +273,7 @@ test('a pull-request row draws the agent on its branch instead of its checks', (
   for (const pr of staffed) {
     const row = rowFor(html, pr.title);
     assert.match(row, /cn-onit/, `#${pr.number} has an agent on its branch and does not say so`);
-    assert.ok(!row.includes('cn-cd'), `#${pr.number} draws its checks beside a live agent`);
+    assert.ok(!row.includes('"ck '), `#${pr.number} draws its checks beside a live agent`);
   }
 
   // Every agent ended: the checks are the truest reading again, and the marker
@@ -282,7 +282,7 @@ test('a pull-request row draws the agent on its branch instead of its checks', (
     view({ agents: state.agents.map((a) => ({ ...a, endedAt: a.endedAt ?? new Date().toISOString() })) }),
   );
   assert.ok(!quiet.includes('cn-onit'), 'a finished agent still holds a pull request');
-  for (const pr of staffed) assert.match(rowFor(quiet, pr.title), /cn-cd/, `#${pr.number} lost its checks`);
+  for (const pr of staffed) assert.match(rowFor(quiet, pr.title), /"ck /, `#${pr.number} lost its checks`);
 });
 
 /**
@@ -290,7 +290,7 @@ test('a pull-request row draws the agent on its branch instead of its checks', (
  *
  * It is the one mark on either card that says *something is happening to this
  * right now*, and it was the one an eye could not find twice in the same place: on
- * the pull-request rack it stood where the ladder stands, third of three glyphs,
+ * the pull-request rack it stood where the checks mark stands, third of three,
  * and on the goal rack it rode the chips group behind the environment and the
  * orphan chip. Either way its distance along the row moved with whatever its
  * neighbours happened to have to say.

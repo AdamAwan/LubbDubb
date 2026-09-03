@@ -9,6 +9,7 @@ import type { SelfUpdatePolicy } from './selfUpdate/upgradePlan.js';
 import { DEFAULT_VALIDATION, type ValidationPolicy } from './validation/policy.js';
 import { DEFAULT_PR_REVIEW, type PrReviewPolicy } from './review/policy.js';
 import { DEFAULT_LOCAL_RUN, type LocalRunPolicy } from './localRun/policy.js';
+import { DEFAULT_LOCAL_VALIDATION, type LocalValidationPolicy } from './localValidation/policy.js';
 import { validateCiPolicy, type CiPolicy } from './ci/ciPolicy.js';
 import { validatePolicyCheckModes, type PolicyCheckModes } from './integrations/azure/policyKinds.js';
 import { validateAgentModels, type AgentModels } from './agents/modelPolicy.js';
@@ -471,6 +472,17 @@ export interface Config {
    * is the whole of the off switch.
    */
   localRun: LocalRunPolicy;
+  /**
+   * The local validation (`src/localValidation/`) — the fleet driving that same
+   * environment and saying whether a goal's changes work. Deep-merged.
+   *
+   * Its own block rather than fields on `localRun`, because the two answer
+   * different questions to different readers: that one is how the environment is
+   * *started*, which the session bringing it up is told, and this is how it is
+   * *used* and what gives an agent a browser. A deployment with no browser still
+   * runs local runs.
+   */
+  localValidation: LocalValidationPolicy;
   /**
    * How far back a provider looks for pull requests that have *left* the open set,
    * so a merged or abandoned PR is observed rather than inferred from its
@@ -1071,6 +1083,7 @@ const DEFAULTS: Config = {
   validation: DEFAULT_VALIDATION,
   review: DEFAULT_PR_REVIEW,
   localRun: DEFAULT_LOCAL_RUN,
+  localValidation: DEFAULT_LOCAL_VALIDATION,
   closedPrWindowMs: 6 * 60 * 60 * 1000,
   obstacleDormantMs: 7 * 24 * 60 * 60 * 1000,
   // Empty is the off switch, not an empty list of something switched on.
@@ -1199,6 +1212,7 @@ function mergeConfig(overrides: Partial<Config> = {}): Config {
   merged.validation = { ...DEFAULTS.validation, ...overrides.validation };
   merged.review = { ...DEFAULTS.review, ...overrides.review };
   merged.localRun = { ...DEFAULTS.localRun, ...overrides.localRun };
+  merged.localValidation = { ...DEFAULTS.localValidation, ...overrides.localValidation };
   merged.auth = { ...DEFAULTS.auth, ...overrides.auth };
   merged.ingress = { ...DEFAULTS.ingress, ...overrides.ingress };
   // The CI check rules are an ordered list, so this is a replace and not a merge:
@@ -1478,6 +1492,7 @@ export const DEEP_MERGED_BLOCKS = [
   'validation',
   'review',
   'localRun',
+  'localValidation',
   'auth',
   'ingress',
   'ci',

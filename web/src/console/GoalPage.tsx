@@ -31,6 +31,8 @@ import { Ref, TicketLink } from '../components/refs.js';
 import { askPrompt, localRunPrompt } from '../cockpit/desktopLink.js';
 import { DesktopLink } from '../components/DesktopLink.js';
 import { Icon } from '../components/icons.js';
+import { CiMark } from '../components/CiMark.js';
+import { PackMark } from '../components/PackMark.js';
 import { ReviewMark } from '../components/ReviewMark.js';
 import {
   CONTROL_CLASS,
@@ -48,6 +50,17 @@ import { WorkRecord } from '../components/WorkRecord.js';
 import { NeedsBand } from './NeedsBand.js';
 import { OrphanBand } from './OrphanBand.js';
 import { AgentOnIt } from '../components/AgentOnIt.js';
+import { ValidateLocallyModal } from '../components/ValidateLocallyModal.js';
+import { LocalValidationReport } from './LocalValidationReport.js';
+import {
+  inFlight,
+  localValidationOffer,
+  localValidationSaid,
+  localValidationTone,
+  STATUS_WORD,
+  validateLocallyQuestion,
+  type LocalValidationTone,
+} from '../view/localValidation.js';
 import { Button } from '../components/button.js';
 
 /**
@@ -60,6 +73,21 @@ import { Button } from '../components/button.js';
  * rather than a control that does nothing, which is the cockpit's most repeated
  * bug and the one thing this strip must not become.
  */
+/**
+ * The local validation card's anchor, beside {@link ANCHOR} rather than in it: no
+ * track stage lands here, because a run somebody asked for is not a stage of the
+ * goal's life. The chip is what jumps to it.
+ */
+const LOCAL_VALIDATION_ANCHOR = 'cn-local-validation';
+
+/** The chip classes each tone wears, in the goal header's own vocabulary. */
+const CHIP_TONE: Record<LocalValidationTone, string> = {
+  up: 't-green',
+  busy: 't-amber',
+  bad: 't-red',
+  off: '',
+};
+
 const ANCHOR: Record<GoalStageAt, string> = {
   plan: 'cn-plan',
   validation: 'cn-validation',
@@ -154,6 +182,7 @@ export function GoalPage({
         desktopFolder={view.state.config.desktopFolder}
         fold={folds.validation}
       />
+      <LocalValidation page={page} view={view} actions={actions} fold={folds.localValidation} />
       <Signals page={page} actions={actions} refUrls={view.state.refUrls} fold={folds.signals} />
       <div className="cn-gcols">
         <div className="cn-stack">
@@ -382,6 +411,38 @@ function Header({
   const moreWork = issue.conclusion.verdict === 'more_work';
   const [instructing, setInstructing] = useState(false);
   const [endingRun, setEndingRun] = useState(false);
+  // Which question pressing Validate locally raises, or null while it is open on
+  // nothing. Local state and not `Place`: a modal is not a destination.
+  const [validating, setValidating] = useState<'swap' | 'refresh' | null>(null);
+  // The refusal from a post that went straight through — the one path with no modal
+  // to land it in. Without somewhere to say it, a 409 from a race would be a click
+  // that did nothing, which is the failure the two required notes already taught
+  // this page to avoid. → [17](../../../docs/spec/17-cockpit.md)
+  const [validateRefusal, setValidateRefusal] = useState<string | null>(null);
+  const run = view.state.localRun;
+  const target = view.state.localRunTargets.find((t) => t.issueNumber === issue.number);
+  const offer = localValidationOffer(issue, target, config.localRunConfigured);
+  // What is in the environment now, for the swap modal's sentence. Read off the
+  // goals the cockpit already holds rather than shipped a second time: the modal
+  // names it, and a title it cannot find is one it leaves out.
+  const runTitle =
+    run === null
+      ? null
+      : (view.state.world.issues.find((i) => `issue:${String(i.number)}` === run.originRef)?.title ?? null);
+  const onValidate = async (): Promise<void> => {
+    const question = validateLocallyQuestion(issue.number, run);
+    // A question opens a modal and posts nothing, so there is no request to hold a
+    // pending state on — the modal is the feedback.
+    if (question !== null) {
+      setValidating(question);
+      return;
+    }
+    setValidateRefusal(null);
+    // Awaited rather than fired and forgotten: the button reads its pending state
+    // off this promise, and the post behind it starts an environment and runs a
+    // cycle. Rejections reach `onRefused`, which is what draws the sentence.
+    await actions.validateLocally(issue.number);
+  };
   // What ending the run costs, or null when it costs nothing: the route refuses a
   // dismissal with no note while the plan is flagged
   // ([20](../../../docs/spec/20-validation.md#where-it-lands)), and the button
@@ -473,6 +534,25 @@ function Header({
           >
             <Icon name="flask" size={12} />
             Validation · {issue.validation.passed + issue.validation.waived} of {issue.validation.total} settled
+          </button>
+        )}
+        {/* What the fleet found driving this goal on the operator's own machine,
+            beside the plan's verdict and separate from it: one is a checklist
+            somebody keeps, the other is a run somebody asked for. In flight it is
+            the only thing drawn about the validation, and it says which minute of
+            it we are in — the control above is absent while one is running. */}
+        {issue.localValidation !== null && (
+          <button
+            type="button"
+            className={`tag tag-fill tag-button cn-ghverdict cn-jump ${CHIP_TONE[localValidationTone(issue.localValidation.status)]}`}
+            onClick={() => jumpTo(LOCAL_VALIDATION_ANCHOR, folds.localValidation)}
+            title={issue.localValidation.summary ?? 'Go to what the local validation found'}
+          >
+            <Icon name="flask" size={12} />
+            Local validation ·{' '}
+            {inFlight(issue.localValidation)
+              ? localValidationSaid(issue.localValidation)
+              : STATUS_WORD[issue.localValidation.status]}
           </button>
         )}
         {/* The measurements, in one run at the end rather than as three more chips.
@@ -619,6 +699,42 @@ function Header({
             onPick={(profile) => void actions.setIssueProfile(issue.number, profile)}
           />
         </ControlGroup>
+        {/* Checking the work, which is neither steering it nor leaving the page:
+            it asks the fleet to bring this goal up on the operator's own machine
+            and drive it. Its own group because it is the only control here whose
+            effect is on *this machine* rather than on the tracker or the queue —
+            and the whole group is absent when there is nothing to press, since a
+            caption over nothing is furniture. */}
+        {offer.offered && (
+          <ControlGroup caption="Check the work" icon="flask" divider>
+            {/* An `AsyncButton` rather than a `ControlButton`, and that is not a
+                styling choice: the post behind it starts a dev environment and runs
+                a cycle, so it is seconds of work, and a control that looked
+                unpressed for those seconds got pressed again. This one disables
+                itself while the request is in flight, says so, and lands the
+                route's own refusal in its title — which is also what retires the
+                separate refusal line this header used to draw. */}
+            <AsyncButton
+              className={`${CONTROL_CLASS} primary`}
+              onClick={onValidate}
+              onRefused={setValidateRefusal}
+              pendingLabel={
+                <>
+                  <Icon name="flask" />
+                  Starting…
+                </>
+              }
+              title="Bring this goal's code up in your dev environment and send one agent to write a test plan, drive the running application through it, and report here. Asks first if something else is running."
+            >
+              <Icon name="flask" />
+              {/* The label carries whether this has been done before. A goal that
+                  has been validated and one that never has are different states,
+                  and the chip beside it says the verdict but not that the button is
+                  the thing that produced it. */}
+              {issue.localValidation === null ? 'Validate locally' : 'Validate locally again'}
+            </AsyncButton>
+          </ControlGroup>
+        )}
         {/* The three controls whose effect is not on this goal: two destinations,
             and the one that starts a second ticket about it. Grouping them is what
             answers "how is filing a bug different from giving instructions" —
@@ -661,6 +777,11 @@ function Header({
           )}
         </ControlGroup>
       </ControlBar>
+      {validateRefusal !== null && (
+        <p className="launch-error" role="alert">
+          {validateRefusal}
+        </p>
+      )}
       {instructing && (
         <InstructionModal
           issueNumber={issue.number}
@@ -679,6 +800,18 @@ function Header({
           instructions={standing}
           onSubmit={(note) => actions.dismissRun(issue.number, note)}
           onClose={() => setEndingRun(false)}
+        />
+      )}
+      {validating !== null && run !== null && (
+        <ValidateLocallyModal
+          mode={validating}
+          issueNumber={issue.number}
+          issueTitle={issue.title}
+          targetRef={target?.target.ref ?? null}
+          run={run}
+          runTitle={runTitle}
+          onSubmit={(opts) => actions.validateLocally(issue.number, opts)}
+          onClose={() => setValidating(null)}
         />
       )}
       {raisingBug && (
@@ -736,6 +869,74 @@ function StateChip({ state, colours }: { state: string; colours: Readonly<Record
     <span className="tag" style={colour === null ? undefined : { color: colour, borderColor: colour }}>
       {state}
     </span>
+  );
+}
+
+/**
+ * What the fleet found driving this goal on the operator's own machine.
+ *
+ * **Its own card, under the validation plan.** Not a band inside it, which is the
+ * cheaper shape and the wrong one: that card is a checklist against the
+ * *delivered* goal and folds until the work has shipped, and this is an
+ * exploratory run against work still in flight — folded inside it, the report an
+ * operator asked for two minutes ago would be hidden on exactly the unshipped goal
+ * they asked about. Under it rather than over, because the plan's checks are the
+ * standing statement of what this goal has to do and a run is one look at it.
+ *
+ * The card is drawn even with nothing in it, the page's rule for every other card:
+ * a surface that vanishes when it is empty is one an operator cannot learn.
+ */
+function LocalValidation({
+  page,
+  view,
+  actions,
+  fold,
+}: {
+  page: GoalPageView;
+  view: CockpitView;
+  actions: CockpitActions;
+  fold: Fold;
+}): JSX.Element {
+  const { issue } = page;
+  const validation = issue.localValidation;
+  const target = view.state.localRunTargets.find((t) => t.issueNumber === issue.number);
+  const offer = localValidationOffer(issue, target, view.state.config.localRunConfigured);
+  // Which of this goal's agents are still going, so the report gives a finished one
+  // a door rather than a pulse. The same `LIVE_AGENT` set the header counts with,
+  // rather than a second opinion about what "running" means.
+  const liveAgents = new Set(page.agents.filter((a) => LIVE_AGENT.has(a.agent.status)).map((a) => a.agent.id));
+
+  return (
+    <section className="cn-card" id={LOCAL_VALIDATION_ANCHOR}>
+      <h3>
+        <Disclosure open={fold.open} onToggle={fold.onToggle} label="Local validation" />
+        <i className="cn-n">
+          {validation === null
+            ? 'never run'
+            : inFlight(validation)
+              ? localValidationSaid(validation)
+              : STATUS_WORD[validation.status]}
+        </i>
+        {/* What tells this apart from the card above it, on the card itself: that
+            one is a person's checklist, this is an agent's run at the machine in
+            front of them. Without the sentence the two read as the same feature
+            drawn twice. */}
+        <span className="cn-more">an agent, in your own dev environment</span>
+      </h3>
+      {fold.open && (
+        <div className="cn-vin">
+          <LocalValidationReport
+            validation={validation}
+            why={offer.offered ? null : offer.why}
+            issueNumber={issue.number}
+            liveAgents={liveAgents}
+            refUrls={view.state.refUrls}
+            now={view.now}
+            actions={actions}
+          />
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -1059,13 +1260,13 @@ function Part({
           PR closed unmerged — is the one thing the board cannot say for itself. */}
       {pr !== null && (pr.open || pr.pr.merged !== (group === 'merged')) && (
         <span className="cn-pstate">
-          {/* The ladder is drawn for an open pull request only, which is what the
+          {/* The checks are drawn for an open pull request only, which is what the
               pull-request card does with the same two components: on a dead PR
               the checks are history, and the card's closed rows carry a word and
-              no dots for exactly that reason. */}
+              no chip for exactly that reason. */}
           {pr.open ? (
             <>
-              <CiLadder pr={pr.pr} />
+              <CiMark pr={pr.pr} />
               <CourtChip pr={pr.pr} now={now} />
             </>
           ) : (
@@ -1237,10 +1438,11 @@ function PullRequests({
               <span className="cn-sub">{pr.branch}</span>
             </span>
             <ThreadChip pr={pr} />
-            {/* The fleet's own reading, left of the CI ladder so the two verdicts
+            {/* The fleet's own reading, left of the checks so the two verdicts
                 read in the order the harness produces them. */}
             <ReviewMark review={pr.review} now={view.now} onOpen={() => actions.selectPr(pr.number)} />
-            <CiLadder pr={pr} />
+            <PackMark pack={pr.pack} onOpen={() => actions.selectPr(pr.number)} />
+            <CiMark pr={pr} onOpen={() => actions.selectPr(pr.number)} />
             <CourtChip pr={pr} now={view.now} />
             <span className="cn-refs">
               <Ref to={`pr:${pr.number}`} />
@@ -1651,7 +1853,7 @@ export function waitedFor(sinceIso: string, now: number): string {
  * Whose court a pull request is in, with how long it has been waiting where that
  * arm means it.
  *
- * Exported for the pull-request page for `CiLadder`'s reason: the chip is a
+ * Exported for the pull-request page for `CiMark`'s reason: the chip is a
  * reading of `attention`, and a second one written beside it would be a second
  * opinion about a verdict the server already took.
  */
@@ -1671,46 +1873,6 @@ export function CourtChip({ pr, now }: { pr: OpenPullRequest; now: number }): JS
       {pr.attention.status}
       {waited && <span className="cn-chip-age"> · {waited}</span>}
     </Tag>
-  );
-}
-
-/**
- * One dot per check the CI policy classified, in the policy's own three
- * categories, and the aggregate under its generic name when the provider reported
- * no per-check detail at all. No check name is written here — every one comes off
- * the verdict.
- *
- * Exported for the overview's rack for `courtTone`'s reason: the ladder is a
- * reading of `ciVerdict`, and a second one written beside it would be a second
- * chance to classify a check the policy already classified.
- */
-export function CiLadder({ pr }: { pr: PullRequest }): JSX.Element | null {
-  const verdict = pr.ciVerdict;
-  const dots: { name: string; tone: string }[] = [
-    ...(verdict?.dispatch ?? []).map((m) => ({ name: m.name, tone: 'cn-fail' })),
-    ...(verdict?.escalate ?? []).map((m) => ({ name: m.name, tone: 'cn-notours' })),
-    ...(verdict?.ignored ?? []).map((m) => ({ name: m.name, tone: 'cn-mute' })),
-  ];
-  if (dots.length === 0) {
-    // Missing detail is not a clean bill of health, so the aggregate speaks for
-    // itself under the generic name rather than drawing nothing.
-    const tone =
-      pr.ciStatus === 'passing'
-        ? 'cn-pass'
-        : pr.ciStatus === 'failing'
-          ? 'cn-fail'
-          : pr.ciStatus === 'pending'
-            ? 'cn-wait'
-            : null;
-    if (tone === null) return null;
-    dots.push({ name: 'quality gates', tone });
-  }
-  return (
-    <span className="cn-ci">
-      {dots.map((d) => (
-        <i className={`cn-cd ${d.tone}`} key={d.name} title={d.name} />
-      ))}
-    </span>
   );
 }
 

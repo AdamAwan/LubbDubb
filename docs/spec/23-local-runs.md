@@ -14,13 +14,13 @@ This is that fact, plus the thing that acts on it.
 
 ## What it is not
 
-| Not            | Because                                                                                                                                                                                                                  |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| A deployment   | Nothing here reaches a server, a registry or an environment. It runs the project on the machine the harness is on.                                                                                                       |
-| A fleet agent  | No task row, no dispatch, no cap. The dispatcher does not know it exists and no rule reads it.                                                                                                                           |
-| A test run     | `npm run check` runs on every branch. This is a person looking at a screen.                                                                                                                                              |
-| A health check | `running` means the session that brought it up did not fail. The watch probes the declared **port** and compares the checkout to its branch ([below](#watching-the-environment)); **nothing exercises the application.** |
-| A queue        | One environment, so one run. Starting a second thing is stopping the first, and there is no route that means anything else.                                                                                              |
+| Not            | Because                                                                                                                                                                                                                           |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A deployment   | Nothing here reaches a server, a registry or an environment. It runs the project on the machine the harness is on.                                                                                                                |
+| A fleet agent  | No task row, no dispatch, no cap. Rule `local-validation` reads the live row to know whether an environment it was pinned to is still up ([32](32-local-validation.md)), and nothing else in the pipeline knows local runs exist. |
+| A test run     | `npm run check` runs on every branch. This is a person looking at a screen.                                                                                                                                                       |
+| A health check | `running` means the session that brought it up did not fail. The watch probes the declared **port** and compares the checkout to its branch ([below](#watching-the-environment)); **nothing exercises the application.**          |
+| A queue        | One environment, so one run. Starting a second thing is stopping the first, and there is no route that means anything else.                                                                                                       |
 
 ## One at a time
 
@@ -495,12 +495,13 @@ read off deltas ([18](18-observability.md#the-spend-breakdown)).
   One figure for what this deployment spent; the panel and the gauge an operator opened it from cannot
   disagree.
 
-## Two triggers, one owner
+## Three triggers, one owner
 
-| From                  | How                                                                     |
-| --------------------- | ----------------------------------------------------------------------- |
-| The cockpit           | The **Local** reading in the top bar, opening the running-locally panel |
-| The operator's Claude | `local_run` on the desktop channel ([11](11-mcp-tools.md))              |
+| From                  | How                                                                                                  |
+| --------------------- | ---------------------------------------------------------------------------------------------------- |
+| The cockpit           | The **Local** reading in the top bar, opening the running-locally panel                              |
+| The operator's Claude | `local_run` on the desktop channel ([11](11-mcp-tools.md))                                           |
+| Validate locally      | A goal's own control, which starts a run and then puts an agent on it ([32](32-local-validation.md)) |
 
 Both reach the same runner, which is the point: the tool used to render an instruction and let the
 session act on it, so there were two definitions of what running meant and a harness that could not
@@ -550,6 +551,12 @@ than a nav tab: it is a state of the operator's own machine, not a surface work 
 is the value because that is the question — "running" alone leaves an operator opening the panel to
 find out whether it is the goal they are looking at.
 
+The card also carries **Validate #N** while the environment is running and idle — the same control
+the goal page offers, on the environment it is about ([32](32-local-validation.md#the-cockpit)). The
+swap question cannot arise there, since the run in front of it _is_ the goal, so the only question
+left is the stale one; a validation in flight draws its stage in the same line the run's own turns
+use.
+
 The panel (`web/src/components/LocalRunPanel.tsx`) is `'localRun'` on `ConsolePanel`, so it is a
 **place**: it survives a reload and the back button steps out of it
 ([17](17-cockpit.md#the-address-bar)). It is a **card and two folds**, never a table of runs — a list
@@ -598,9 +605,10 @@ the type exists to make unrepeatable.
 
 Each row carries the branch, the part's position, that ref's PR with the CI policy's own verdict, and
 whether an agent is on the branch **now** — because then what a run shows is a moving target. There is
-no per-check dot ladder: `CiLadder` is the one thing allowed to classify a check, it lives in the
-console layer, and nothing under `web/src/components/` reaches into that layer. So the server ships
-the classification it has already made and the row draws it in words.
+no per-check reading of its own: `CiMark` ([the checks mark](17-cockpit.md#the-checks-mark)) is the
+one thing allowed to draw `ciVerdict`, and a second classification written for this row would be a
+second chance to disagree with the policy. So the server ships the classification it has already made
+and the row draws it in words.
 
 Rows with more than one option get an expander for the parts behind the tip. **Freshness is agent
 activity, never a commit date**: the snapshot is synchronous and git is not on that path, so the row

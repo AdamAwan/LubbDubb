@@ -25,7 +25,10 @@ import type { RouteContext } from './context.js';
  * What the cockpit reads about the harness rather than about the work: the state
  * snapshot it polls, and the three constants it fetches once.
  */
-export function register(app: FastifyInstance, { system, artifactSigner, attachmentSigner, hub }: RouteContext): void {
+export function register(
+  app: FastifyInstance,
+  { system, artifactSigner, attachmentSigner, localValidationFileSigner, hub }: RouteContext,
+): void {
   const { config, errors, liveConfig, store, updates, agents, runtimeControl } = system;
   const filePath = system.configFile;
   const projectPath = system.projectConfigFile;
@@ -92,8 +95,8 @@ export function register(app: FastifyInstance, { system, artifactSigner, attachm
     '/api/state',
     checked({ query: StateQuery }, async ({ query }) =>
       query.sections === undefined
-        ? buildStateSnapshot(system, { artifactSigner, attachmentSigner })
-        : buildStateSections(system, query.sections, { artifactSigner, attachmentSigner }),
+        ? buildStateSnapshot(system, { artifactSigner, attachmentSigner, localValidationFileSigner })
+        : buildStateSections(system, query.sections, { artifactSigner, attachmentSigner, localValidationFileSigner }),
     ),
   );
 

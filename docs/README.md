@@ -113,6 +113,7 @@ deliberately left unchecked, and why, is in
 | [29](spec/29-post-deploy-watch.md)   | The post-deploy watch      | Whether shipped work behaves: the declaration, the dry run, the window, and the three verdicts                          |
 | [30](spec/30-ingress.md)             | Event-driven ingress       | The inbound webhook endpoint: what it verifies, what one delivery invalidates, and what it does not trust               |
 | [31](spec/31-review-packs.md)        | Review packs               | How a change is restated for a human: the witness log, the ideas, the claims, and the check                             |
+| [32](spec/32-local-validation.md)    | Local validation           | The fleet driving that environment: the plan, the browser, the reading, and the fix it schedules                        |
 
 ## Conventions used throughout
 

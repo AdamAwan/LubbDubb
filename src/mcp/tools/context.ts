@@ -31,6 +31,9 @@ import type { RemedySubmission } from '../../remedies/remedies.js';
 import type { FeatureSummaryInput } from '../../summaries/featureSummary.js';
 import type { ReviewPackAuthor } from '../../reviewPacks/author.js';
 import type { ReviewPackChecker } from '../../reviewPacks/checker.js';
+import type { LocalValidationDesk } from '../../localValidation/desk.js';
+import type { LocalRunner } from '../../localRun/runner.js';
+import type { LocalRunWatch } from '../../localRun/watch.js';
 import { issueOrigin, originIssueNumber } from '../../plans/planning.js';
 import { type McpTool, toolJson, type ToolCallResult } from '../protocol.js';
 
@@ -251,6 +254,19 @@ export interface McpToolDeps {
    * report is kept**. A refusal an agent cannot satisfy is a report that was never
    * filed, and that is the one loss the board cannot recover from.
    */
+  /**
+   * The desk the three local-validation tools write through, as thunks.
+   *
+   * Thunks because of construction order rather than taste: the MCP server is built
+   * in `system.ts` well above the local runner and the desk that reads it, and a
+   * value captured at that point would be undefined. Optional for
+   * {@link McpToolDeps.openPr}'s reason, with the same floor — unwired, the tools
+   * answer that they are not available on this deployment, which is honest and is
+   * what every test that never builds a runner gets.
+   */
+  localValidations?: () => LocalValidationDesk;
+  /** The environment as `local_run_read` reads it: the runner and its watch, same terms. */
+  localRun?: () => { runner: LocalRunner; watch: LocalRunWatch };
   repoRoot?: string;
   errors?: ErrorRecorder;
 }

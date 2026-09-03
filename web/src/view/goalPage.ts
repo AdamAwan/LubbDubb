@@ -658,7 +658,15 @@ function tailStage(page: GoalPageView): GoalStage {
  * site is a name the address bar accepts and nothing honours — and one added at
  * the draw site without an entry here cannot be linked to at all.
  */
-export const GOAL_SECTIONS = ['ticket', 'validation', 'signals', 'environments', 'tail', 'record'] as const;
+export const GOAL_SECTIONS = [
+  'ticket',
+  'validation',
+  'localValidation',
+  'signals',
+  'environments',
+  'tail',
+  'record',
+] as const;
 
 export type GoalSection = (typeof GOAL_SECTIONS)[number];
 
@@ -695,6 +703,11 @@ export function goalSectionsOpen(page: GoalPageView): Record<GoalSection, boolea
     // regardless of where the work is — a check somebody has already ruled on, or
     // one waiting on the operator, is a card with something in it.
     validation: (shipped(page) && liveChecks(page) > 0) || page.checks.some((c) => c.state !== 'unrun'),
+    // Open when there is a row and shut when there is not, which is simpler than
+    // its neighbours for a reason: this card is not about a stage of the goal's
+    // life, it is about a thing somebody pressed. Either they pressed it or they
+    // did not, and the heading says which either way.
+    localValidation: page.issue.localValidation !== null,
     signals: (shipped(page) && page.signals.length > 0) || page.signals.some((s) => !s.live || s.proposal !== null),
     environments: page.environments.some((e) => e.status !== 'absent'),
     tail: tailBegun(page),

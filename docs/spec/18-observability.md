@@ -411,9 +411,11 @@ hold: **where did it go**. It is served by `GET /api/spend` ([16](16-http-api.md
 and drawn by the Insights page's Economics and Work mix tabs ([17](17-cockpit.md#economics)). Three
 splits of one pot of money, plus the coverage caveat:
 
-- **By phase** — `deliberation` (`:plan`, `:appraisal`), `build` (the pickup root and every `:part:`),
+- **By phase** — `deliberation` (`:plan`, `:appraisal`), `build` (the pickup root, every `:part:`, and
+  `:validate-local-fix:` — an agent writing and pushing code, whatever prompted it),
   `ci` (`pr:<n>:ci`, `pr:<n>:ci-gate`), `landing` (every other `pr:*`), `evidence` (`:assess`,
-  `:retro`), `local` (a local run), `obstacle` (`obstacle:<id>` — a repair for something in the
+  `:retro`, `:validate:`, `:validate-failure:`, `:validate-local:`), `local` (a local run — the
+  environment itself, where the validation driving it is the `evidence` beside it), `obstacle` (`obstacle:<id>` — a repair for something in the
   fleet's way, [27](27-obstacles.md#ownership)), `job` (`job:*`) and `other`. A partition: they sum to
   the fleet total. The issue-subtree phases are `issueOriginRole`'s vocabulary rather than a second one, so **a
   new origin suffix is classified in exactly one place** — an unrecognised suffix surfaces as `other`

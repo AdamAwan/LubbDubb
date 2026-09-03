@@ -8,12 +8,15 @@ import type { CiPolicy } from '../../ci/ciPolicy.js';
 import type { PrReviewPolicy } from '../../review/policy.js';
 import type { PrReviewCharters } from '../../review/prReview.js';
 import type { PlanningPolicy } from '../../plans/planning.js';
+import type { LocalValidationPolicy } from '../../localValidation/policy.js';
 import type {
   Issue,
   IssueAppraisal,
   IssueConclusion,
   IssueRelative,
   IssueShortfall,
+  LocalRun,
+  LocalValidation,
   ObstacleStanding,
   Plan,
   PrReview,
@@ -299,6 +302,37 @@ export interface StageContext {
    * and nothing here reads the filesystem.
    */
   validationRoot: string;
+  /**
+   * The local run that is up right now, or null — read by rule `local-validation`
+   * to answer the one question the row cannot answer for itself: is the
+   * environment this validation was requested against still the one on the
+   * machine.
+   *
+   * A snapshot value like everything else here, so the rule stays pure: the desk
+   * asks the same question against the live store, and the two agree because both
+   * ask `validationRunStale`.
+   */
+  liveLocalRun: LocalRun | null;
+  /**
+   * Local validations the pipeline still has something to do about: the open ones
+   * a validator may be dispatched for, and the failed ones a fix may be.
+   *
+   * Both in one list because they are one table and the two rules read it from
+   * opposite ends — filtering here would mean the dispatcher deciding which rule
+   * gets to see what.
+   */
+  localValidations: LocalValidation[];
+  /**
+   * `localValidation`, read by rule `local-validation` when it composes a
+   * dispatch: the operator's sentence about reaching the environment, and the
+   * browser server the launch carries.
+   *
+   * Held on the context rather than at construction, which is what makes both
+   * keys **live**: the dispatcher is handed the running config's object by
+   * reference, so an instruction corrected between one validation and the next
+   * reaches the next one with no restart.
+   */
+  localValidation: LocalValidationPolicy;
   /**
    * `validation.desktopClaimMinutes`, so `validate-check` and the desktop tools
    * agree about when a claim has expired. A rule with its own opinion about that

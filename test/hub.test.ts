@@ -31,6 +31,10 @@ function fakeSystem(): {
     readying,
     reviewPacks: new EventEmitter(),
     reviewPackChecker: new EventEmitter(),
+    // Every emitter the hub subscribes to has to be here, `reviewPacks`' reason: the
+    // constructor wires them unconditionally, so a stub that omits one is a hub that
+    // throws rather than a subscription quietly not made.
+    localValidations: new EventEmitter(),
   } as unknown as System;
   return { system, agents, localRun, localRunWatch, errors, readying };
 }

@@ -390,6 +390,27 @@ export interface CockpitActions {
    * *returns* something, and the panel asks again when the run changes.
    */
   localRunOutput(): Promise<string[]>;
+  /**
+   * Ask for this goal to be validated against the machine's dev environment: the
+   * harness brings its code up and puts one agent on writing a test plan, driving
+   * the application through it and reporting.
+   *
+   * `swap` is consent to taking the environment from whatever is in it — the server
+   * refuses without it and says what is running, because by the time the runner is
+   * called that environment is already coming down. `refresh` moves the checkout to
+   * the tip of its branch first: a `reset --hard` under a running server, so never
+   * automatic and always the operator's choice.
+   *
+   * Every caller that could hit either question goes through `ValidateLocallyModal`
+   * rather than sending the flags on its own.
+   */
+  validateLocally(issueNumber: number, opts?: { swap?: boolean; refresh?: boolean }): Promise<void>;
+  /**
+   * Call one off. Settles the row, and is the only thing that does when an operator
+   * has killed the agent from its drawer — a `dispatched` row nobody will report
+   * against would otherwise leave the control absent for good.
+   */
+  cancelLocalValidation(issueNumber: number): Promise<void>;
   /** Move the nav to a destination. A selected goal still outranks it. */
   openTab(tab: ConsoleTab): void;
   /**

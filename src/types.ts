@@ -800,6 +800,21 @@ export interface TaskSummary {
    */
   ciChecks?: string[] | null;
   /**
+   * MCP servers this launch carries **beside** the harness's own, or null for the
+   * every-other-task case of none.
+   *
+   * On the row rather than derived at spawn from {@link rule}, because
+   * `AgentManager.resume` rebuilds a launch from the row after a restart: an agent
+   * re-attached without the server it was launched with would come back holding a
+   * conversation full of tool calls it can no longer make. Recorded for the same
+   * reason {@link model} is — what a run *was* launched with stays auditable after
+   * the config that chose it has changed.
+   *
+   * Optional for {@link rule}'s reason: absent means "not recorded", so every row
+   * written before the column existed reads unchanged.
+   */
+  mcpServers?: ExtraMcpServer[] | null;
+  /**
    * The model this run launches on (`claude --model`), resolved from the
    * operator's `agentModels` policy at dispatch — the rule's profile, or the
    * policy default, or `null` for "pass no `--model`", which is every task on a
@@ -4432,6 +4447,116 @@ export interface LocalRunFreshness {
 export interface LocalRunReadings {
   ports: LocalRunPorts | null;
   freshness: LocalRunFreshness | null;
+}
+
+/**
+ * How a local validation ended, or that it has not.
+ *
+ * `blocked` is the third answer and the reason there are three, exactly as
+ * `validation_report`'s hand-back is: an agent that could not reach or confirm the
+ * environment has learned nothing about the goal, and with only `passed` and
+ * `failed` available its options are a lie and silence. A `blocked` row dispatches
+ * no fix, because it carries no finding about the code to fix.
+ *
+ * `abandoned` is the harness's own answer rather than the agent's: the environment
+ * the reading was pinned to went away — stopped, swapped to another goal, or moved
+ * to a different commit — or the agent ended without reporting, or the operator
+ * called it off. It is never a reading, and the note says which of those happened.
+ * → `docs/spec/32-local-validation.md`
+ */
+export type LocalValidationStatus = 'pending' | 'dispatched' | 'passed' | 'failed' | 'blocked' | 'abandoned';
+
+/**
+ * One thing the validator found wrong, in its own words.
+ *
+ * `severity` is the agent's judgement and gates nothing — a `nit` beside a
+ * `blocker` still reaches the fix agent, because a run worth fixing is worth fixing
+ * all of. What it changes is what a person reads first.
+ *
+ * `screenshot` is a **file name**, never a path: the bytes live in the row's own
+ * output directory and the name is what joins a finding to the file the cockpit
+ * serves. A stored path would be wrong for the two readers that are not the
+ * harness — `validationResourcePath`'s rule, one layer over.
+ */
+export interface LocalValidationFinding {
+  title: string;
+  detail: string;
+  severity: 'blocker' | 'defect' | 'nit';
+  /** The page it was found on, where there is one. */
+  url: string | null;
+  /** A file in the row's output directory, or null. */
+  screenshot: string | null;
+}
+
+/**
+ * One run of the fleet against the machine's own dev environment: an agent that
+ * wrote a test plan for a goal's changes, drove the running application through
+ * them, and said what it found.
+ *
+ * **Pinned to the run it was requested against**, and that pin is the whole
+ * correctness of the reading. `runId` and `commit` record which environment the
+ * plan was written for; the moment the live run is no longer that one — stopped,
+ * swapped to another goal, refreshed onto a later commit — a `passed` or `failed`
+ * answer would be a reading of code nobody asked about. The report tool refuses one
+ * and the desk abandons the row, both through `validationRunStale`, so the two
+ * cannot disagree about what counts as the same environment.
+ *
+ * **It is not a validation check** ([20](../docs/spec/20-validation.md)). A check is
+ * a procedure somebody declared and a reading somebody took against the
+ * *delivered* goal; this is an exploratory run against work still in flight, and it
+ * writes no reading on any check. Its plan is its own artefact, and the goal's
+ * checks are handed to it as input.
+ */
+export interface LocalValidation {
+  id: string;
+  /** The goal, as `issue:<n>`. */
+  originRef: string;
+  /** The `local_runs` row this was requested against. */
+  runId: string;
+  /** The git ref that run had checked out — what a fix agent is dispatched onto. */
+  ref: string;
+  /** The commit that checkout stood at, or null on a run from before that was recorded. */
+  commit: string | null;
+  status: LocalValidationStatus;
+  requestedAt: string;
+  /** When an agent actually spawned for it, or null while it is still queued. */
+  dispatchedAt: string | null;
+  endedAt: string | null;
+  /** The validator's task, once one exists. */
+  taskId: string | null;
+  /** The fix dispatched for a failed reading. The once-only latch, so one failure buys one fix. */
+  fixTaskId: string | null;
+  /** The test plan, markdown, written before the environment was up. Null until it lands. */
+  plan: string | null;
+  /** What the agent concluded, in its own words. Null until it reports. */
+  summary: string | null;
+  findings: LocalValidationFinding[];
+  /** The pages it opened, so a person can go and look at the same ones. */
+  visited: string[];
+  /** File names in the row's output directory — see {@link LocalValidationFinding.screenshot}. */
+  screenshots: string[];
+  /** Why it was abandoned, or what a `blocked` run could not reach. Null otherwise. */
+  note: string | null;
+}
+
+/**
+ * An MCP server one dispatch carries onto its launch **beside** the harness's own.
+ *
+ * The fleet's channel is fixed and per-agent ([11](../docs/spec/11-mcp-tools.md));
+ * this is the exception that lets one kind of work bring a tool the rest of the
+ * fleet has no use for — today a browser, for a local validation. It rides the same
+ * single `--mcp-config` document, so there is still one file per launch and one
+ * place the grants are derived from.
+ *
+ * `key` becomes the `mcpServers` key, which is what `mcp__<key>__<tool>` permission
+ * names are derived from — so it is also the grant. It may never be
+ * `MCP_SERVER_ID`: a launch whose extra server took the harness's own key would
+ * connect and answer every one of the fleet's tool calls with somebody else's tools.
+ */
+export interface ExtraMcpServer {
+  key: string;
+  command: string;
+  args: string[];
 }
 
 /**

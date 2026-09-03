@@ -18,11 +18,13 @@ import { AsyncButton } from '../components/AsyncButton.js';
 import { Icon } from '../components/icons.js';
 import { elapsed, fmtUsd, relTime } from '../components/util.js';
 import { Ref, RefText, refLabel } from '../components/refs.js';
-import { CiLadder, StaleChip, waitedFor } from './GoalPage.js';
+import { StaleChip, waitedFor } from './GoalPage.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
 import { PanelRows, type PanelRowModel, type RowGroup } from './PanelRow.js';
 import { Who } from '../components/who.js';
 import { AgentOnIt } from '../components/AgentOnIt.js';
+import { CiMark } from '../components/CiMark.js';
+import { PackMark } from '../components/PackMark.js';
 import { ReviewMark } from '../components/ReviewMark.js';
 import { orphanCount, orphanGoal } from '../view/orphanGoal.js';
 import { Tag, type TagTone } from '../components/tag.js';
@@ -1121,11 +1123,16 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
   // Whether the review's column exists on this card at all — see `ReviewMark`'s
   // `reserve`. An unwatched pull request has no reading and must not bend it.
   const anyReview = open.some((pr) => pr.review !== undefined);
+  // The same question for the pack mark: a rack where one pull request has a pack
+  // keeps the column on every row, and a rack where none has draws no slot at all.
+  const anyPack = open.some((pr) => pr.pack !== undefined);
 
   return (
     // `cn-lamp-mark` widens the lamp column: the rack's lamp is an 8px dot
-    // everywhere else, and this card puts a chip in it — see `console.css`.
-    <section className="cn-card cn-span2 cn-lamp-mark">
+    // everywhere else, and this card puts a chip in it. `cn-read-marks` widens the
+    // reading column, which is the one slot on the cockpit holding three marks —
+    // both are the card's own, see `console.css`.
+    <section className="cn-card cn-span2 cn-lamp-mark cn-read-marks">
       <h3>
         Pull requests <i className="cn-n">{open.length} open</i>
         {merged !== null && <span className="cn-more">{merged} merged</span>}
@@ -1133,7 +1140,7 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
       {open.length === 0 && <p className="cn-empty">No pull request is open.</p>}
       <PanelRows
         rows={ordered.map((pr) => {
-          const row = prRow(pr, view, actions, watchLabel, anyReview);
+          const row = prRow(pr, view, actions, watchLabel, anyReview, anyPack);
           if (!grouped) return row;
           return { ...row, group: band(isYours(pr), yours.length, theirs.length), who: <Who name={whoAsked(pr)} /> };
         })}
@@ -1190,6 +1197,7 @@ function prRow(
   actions: CockpitActions,
   watchLabel: string,
   anyReview: boolean,
+  anyPack: boolean,
 ): PanelRowModel {
   // The server's verdict, not a second reading of the labels: `unwatched` is the
   // first arm `prAttentionStatus` takes, so on an open PR it *is* the absent tag.
@@ -1252,16 +1260,21 @@ function prRow(
     // no gutter for it.
     lamp: onIt === undefined ? undefined : <AgentOnIt agentId={onIt.id} note={onIt.note} actions={actions} />,
     // What is happening to this pull request *now* beats what its checks last
-    // said: an agent on the branch is about to change them, so the ladder is a
+    // said: an agent on the branch is about to change them, so the chip is a
     // reading of a commit that is being replaced. Only while one is actually on
     // it — every other row keeps its checks.
     reading: (
       <>
         {/* The fleet's own reading of the diff, beside whatever the row's checks
-            are saying — it survives an agent taking the ladder's place, because
+            are saying — it survives an agent taking the chip's place, because
             what was already read does not change when a branch moves. */}
         <ReviewMark review={pr.review} now={view.now} reserve={anyReview} onOpen={() => actions.selectPr(pr.number)} />
-        {onIt === undefined ? <CiLadder pr={pr} /> : null}
+        {/* Whether there is a pack to read, which is neither of the two verdicts
+            beside it: those are about the pull request, and this is about a
+            document somebody wrote about it. The ask and the reading are both on
+            the page this opens. */}
+        <PackMark pack={pr.pack} reserve={anyPack} onOpen={() => actions.selectPr(pr.number)} />
+        {onIt === undefined ? <CiMark pr={pr} onOpen={() => actions.selectPr(pr.number)} /> : null}
       </>
     ),
     toggle: (

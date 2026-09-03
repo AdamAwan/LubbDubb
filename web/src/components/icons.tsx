@@ -97,6 +97,18 @@ const PATHS = {
     'M1.9 8h12.2',
     'M8 1.8c1.7 1.7 2.6 3.9 2.6 6.2S9.7 12.5 8 14.2C6.3 12.5 5.4 10.3 5.4 8S6.3 3.5 8 1.8Z',
   ],
+  /**
+   * A review pack — the change restated as a document somebody reads. A sheet
+   * with the reading order down it, deliberately not {@link PATHS.book}, which
+   * means *the record*: what the harness did and what somebody wrote about a diff
+   * are different claims and cannot share a glyph. At 22px a book is a square with
+   * a line in it and reads as neither.
+   */
+  pack: [
+    'M3.4 2.4h6.2l3 3v8.2a1 1 0 0 1-1 1H3.4a1 1 0 0 1-1-1V3.4a1 1 0 0 1 1-1Z',
+    'M9.4 2.4v3.2h3.2',
+    'M5 8.4h5.2M5 11h3.4',
+  ],
   /** What the harness did, after the snapshot forgot it — the record. */
   book: ['M2.6 3.2A1.4 1.4 0 0 1 4 1.8h9.4v10.4H4a1.4 1.4 0 0 0-1.4 1.4V3.2Z', 'M2.6 13.6A1.4 1.4 0 0 1 4 12.2h9.4'],
   /** How this harness is configured. */
