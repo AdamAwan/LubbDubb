@@ -54,6 +54,7 @@ import { PrReviewRouteStore, PR_REVIEW_ROUTE_COLUMNS } from './prReviewRoutes.js
 import { PrReviewExternalStore } from './prReviewExternals.js';
 import { PrThreadReopenStore } from './prThreadReopens.js';
 import { PrReplyStore } from './prReplies.js';
+import { PrArchiveStore } from './prArchive.js';
 import { ObstacleStore, OBSTACLE_COLUMNS, type ObstacleOutcome } from './obstacles.js';
 import type { PrThreadReopen } from '../prThreads.js';
 import { DecisionStore, DECISION_COLUMNS } from './decisions.js';
@@ -139,6 +140,7 @@ import type {
   Plan,
   PlanPart,
   PlanPartInput,
+  PullRequest,
   PlanAmendment,
   PlanRevision,
   FeatureSummary,
@@ -249,6 +251,7 @@ export class Store {
   private readonly prReviewExternals: PrReviewExternalStore;
   private readonly threadReopens: PrThreadReopenStore;
   private readonly prReplies: PrReplyStore;
+  private readonly prArchive: PrArchiveStore;
   private readonly obstacles: ObstacleStore;
   private readonly decisions: DecisionStore;
   private readonly world: WorldStore;
@@ -428,6 +431,7 @@ export class Store {
     this.prReviewExternals = new PrReviewExternalStore(ctx);
     this.threadReopens = new PrThreadReopenStore(ctx);
     this.prReplies = new PrReplyStore(ctx);
+    this.prArchive = new PrArchiveStore(ctx);
     this.obstacles = new ObstacleStore(ctx);
     this.decisions = new DecisionStore(ctx);
     this.world = new WorldStore(ctx);
@@ -1642,6 +1646,14 @@ export class Store {
 
   prReplyRefs(prNumber: number): ReadonlySet<string> {
     return this.prReplies.prReplyRefs(prNumber);
+  }
+
+  archiveClosedPrs(prs: readonly PullRequest[]): void {
+    this.prArchive.archiveClosedPrs(prs);
+  }
+
+  listArchivedPrs(): PullRequest[] {
+    return this.prArchive.listArchivedPrs();
   }
 
   // -- Decisions (audit) ---------------------------------------------------

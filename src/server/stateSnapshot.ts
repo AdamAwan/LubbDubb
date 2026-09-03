@@ -199,6 +199,11 @@ export function buildStateSections(
     closedPullRequests: [],
     issues: [],
   };
+  // Every pull request the world has ever reported closed, kept past the window
+  // the world's own list is (`pr_archive`). Read once and shared two ways below:
+  // the goal page's closed rows, and the ref map — a `#412` on one of those rows
+  // needs a URL as much as an open one does.
+  const archivedPullRequests = store.listArchivedPrs();
   const tasks = store.listTasks();
   // Read once and shared three ways: the fleet list the cockpit draws, the
   // overlap join below, and the per-goal spend roll-up — the last of which is a
@@ -516,8 +521,12 @@ export function buildStateSections(
   // cockpit only looks refs up in this map, so it stays provider-agnostic.
   const refUrls = buildRefUrls({
     // Closed PRs are linked from the cockpit's "recently closed" list, so their
-    // `#n` needs a URL too — the ref map is what the UI looks numbers up in.
-    pullRequests: [...world.pullRequests, ...(world.closedPullRequests ?? [])],
+    // `#n` needs a URL too — the ref map is what the UI looks numbers up in. The
+    // archive is in for the same reason and outlives the window: a goal page whose
+    // closed rows are kept for ever would otherwise draw them as plain numbers the
+    // moment the world forgot them, which is exactly the age at which the provider's
+    // own page is the only place left to read the thing.
+    pullRequests: [...world.pullRequests, ...(world.closedPullRequests ?? []), ...archivedPullRequests],
     issues: world.issues,
     taskBranches: tasks.map((t) => t.branch),
     // A filed ticket is brand new, so it is usually *not* in the world lists the
@@ -869,6 +878,7 @@ export function buildStateSections(
     CockpitState,
     | 'worldObservedAt'
     | 'world'
+    | 'archivedPullRequests'
     | 'retainedRuns'
     | 'stacks'
     | 'environmentReach'
@@ -921,6 +931,11 @@ export function buildStateSections(
     // are not here: the former is over, the latter already rides the world list
     // above (with its `run` field).
     retainedRuns: retainedRuns(),
+    // The closed pull requests kept past the world's window, so a goal's page can
+    // still name what it shipped. Shipped whole rather than folded into `world`:
+    // `closedPullRequests` means "recently", and every reader of it is entitled to
+    // keep meaning that. Nothing is enriched — no rule and no gate reads these.
+    archivedPullRequests,
     // Chains of stacked pull requests, derived from the world rather than stored:
     // a plan *adopts* a stack, so a chain a human opened by hand is drawn on the
     // same terms as one a plan produced. The unfiltered open list, for the reason

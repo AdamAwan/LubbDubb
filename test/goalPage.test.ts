@@ -397,6 +397,90 @@ test('a goal worked whole owns its pull requests by branch, and a merged one is 
   );
 });
 
+/**
+ * The window forgets; the page must not.
+ *
+ * `world.closedPullRequests` is `closedPrWindowMs` wide, so a page drawn off it
+ * alone lost every pull request a goal shipped a few hours after it merged — the
+ * page of a goal delivered last month said nothing had ever named it. The archive
+ * is those rows kept for good, and the two are one list here.
+ */
+test('a goal keeps its closed pull requests after the world’s window has forgotten them', () => {
+  const state = buildDemoState().state;
+  const issue = state.world.issues[0]!;
+  const ref = `issue:${issue.number}`;
+  const archived: PullRequest = {
+    id: 'pr-905',
+    number: 905,
+    title: 'merged months ago',
+    branch: `issue/${issue.number}/early`,
+    ciStatus: 'unknown',
+    unresolvedComments: [],
+    merged: true,
+    state: 'merged',
+  };
+  // Another goal's, so the archive is filtered by the same `ownsPr` the window is
+  // rather than shipped whole onto every page.
+  const elsewhere: PullRequest = { ...archived, id: 'pr-906', number: 906, branch: 'issue/99999/other' };
+
+  const page = buildGoalPage(
+    {
+      ...state,
+      plans: [],
+      planParts: [],
+      archivedPullRequests: [archived, elsewhere],
+      world: { ...state.world, pullRequests: [], closedPullRequests: [] },
+    },
+    ref,
+    [],
+  );
+
+  assert.deepEqual(
+    page?.closedPullRequests.map((pr) => pr.number),
+    [905],
+  );
+});
+
+/**
+ * The two lists carry the same pull request for as long as the window holds it, and
+ * the window's copy is the fresher reading — an archived row is only ever the last
+ * thing the world said. A page that preferred the archive would draw a title the
+ * provider has since changed, on exactly the pull requests still moving.
+ */
+test('the world’s reading of a closed PR wins over the archived copy of it', () => {
+  const state = buildDemoState().state;
+  const issue = state.world.issues[0]!;
+  const ref = `issue:${issue.number}`;
+  const stale: PullRequest = {
+    id: 'pr-907',
+    number: 907,
+    title: 'the title it was archived under',
+    branch: `issue/${issue.number}/rename`,
+    ciStatus: 'unknown',
+    unresolvedComments: [],
+    merged: true,
+    state: 'merged',
+  };
+  const fresh: PullRequest = { ...stale, title: 'the title it merged under' };
+
+  const page = buildGoalPage(
+    {
+      ...state,
+      plans: [],
+      planParts: [],
+      archivedPullRequests: [stale],
+      world: { ...state.world, pullRequests: [], closedPullRequests: [fresh] },
+    },
+    ref,
+    [],
+  );
+
+  assert.deepEqual(
+    page?.closedPullRequests.map((pr) => pr.title),
+    ['the title it merged under'],
+  );
+});
+
 test('a PR the provider linked is the goal’s, whatever its branch is called', () => {
   const state = buildDemoState().state;
   const issue = { ...state.world.issues[0]!, linkedPrNumber: 904 };
