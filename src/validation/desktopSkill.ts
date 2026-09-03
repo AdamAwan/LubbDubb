@@ -407,7 +407,7 @@ which check if more than one is outstanding.
  * tarball resolves no root and gets the body unchanged, which is the honest answer
  * — a section naming a directory that is not there is worse than no section.
  *
- * It exists because of what the cockpit's *Got a question?* control actually
+ * It exists because of what the cockpit's *Question?* control actually
  * collects. The deep link opens the session on `repoRoot`, the repository the
  * fleet **works on**, and most questions are about that work. But a fair share are
  * not — "why has nothing picked this up", "is this a bug in LubbDubb" — and the

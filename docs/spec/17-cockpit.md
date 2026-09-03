@@ -226,7 +226,7 @@ Five surfaces and one shell.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│ ident ↗issue ?ask │ Overview Tickets② Obstacles Insights │ Fleet ⏸ 14s  Usage 5h 62% 7d 30% … ⚙ │ top bar
+│ ident Issue! Question? │ Overview Tickets② Obstacles Insights │ Fleet ⏸ 14s  Usage 5h 62% 7d 30% … ⚙ │ top bar
 ├────────────────────────────────────────────────────────────────────────┤
 │ the recovery banner, when a previous run left work orphaned            │
 ├───────────────┬────────────────────────────────────────────────────────┤
@@ -2914,15 +2914,15 @@ here; a set would be a dependency and a second colour system for one glyph. The 
 the `aria-label` and the head of the `title`.
 
 **The ident carries the one way off this bar to a tracker**, and it has two faces onto _one_
-destination. Connected, `Raise an issue` is a button opening a compose modal and the issue is created
-directly; offline it is `↗ Raise an issue`, the external link it has always been. It sits in the ident
+destination. Connected, `Issue!` is a button opening a compose modal and the issue is created
+directly; offline it is `↗ Issue!`, the external link it has always been. It sits in the ident
 rather than among the readings for the reason the readings are a group at all — each is a gauge on the
-fleet or on this build, read left to right as one sentence about what is happening, and "raise an issue"
-answers nothing in it. `.cn-issue` sizes it out of the wordmark's weight through a console-owned wrapper,
-and `.cn-issue-btn` gives the button the link's colours through the token layer, since `console.css`
-styling `.ext-ref` directly is what this stylesheet is tested not to do.
+fleet or on this build, read left to right as one sentence about what is happening, and "file an issue"
+answers nothing in it. `.cn-issue` sizes it out of the wordmark's weight through a console-owned wrapper
+and `.cn-issue-btn` takes the button's padding off, since `console.css` styling `.ext-ref` directly is
+what this stylesheet is tested not to do.
 
-**Beside it is `Got a question?`, which answers instead of filing.** Most of what reaches the tracker
+**Beside it is `Question?`, which answers instead of filing.** Most of what reaches the tracker
 as a complaint about the fleet is not a fault in it — it is _why has this not moved_, which the
 harness's own record settles in a sentence, and which nobody asked because asking meant opening a
 client, finding the checkout and remembering the skill. The control is that, as a link: a
@@ -2934,11 +2934,24 @@ question is about, and the skill routes on the words they type — a goal number
 job, none is the fleet one ([20](20-validation.md#the-skill)). Unsent for `Ask`'s reason one step
 further along: there is not even a subject yet.
 
-It sits beside `Raise an issue` because the two are the same moment — something looks wrong — and the
-cheaper reading of it should be the one nearer to hand. Unconditional, like every other deep link,
-and with the command in its title for the operator whose machine the link cannot reach.
+It sits beside `Issue!` because the two are the same moment — something looks wrong — and the cheaper
+reading of it should be the one nearer to hand. Unconditional, like every other deep link, and with
+the command in its title for the operator whose machine the link cannot reach.
 
-**Both faces of `Raise an issue` go to LubbDubb's own repository, and neither follows
+**Both are drawn as chips, one word and a mark each** (`.cn-ident-act`, and `.cn-ident-ask` for the
+accent border the question wears). They were two sentences in one weight and one ink a hand's width
+apart, and read as a single run of small print — an operator scanning the bar saw neither, which is
+the whole failure for a control whose value is being noticed at the moment something looks wrong. The
+punctuation carries the difference between them, because that is the difference: one files, one asks.
+The chrome is on the **wrapper** and not the control, since the offline face is `ExtLink` and takes no
+class of its own — and a rule naming `.ext-ref` is the one thing this stylesheet is tested not to do.
+`.cn-ident-act` rather than the console's own `.cn-chip`: that one is mono, uppercase and square, and
+borrowing it dressed the pair as readings — and, because a `<button>` does not take the inherited
+`text-transform` an `<a>` does, drew one of them in sentence case beside the other in capitals. The
+question's ink is set as `.cn .cn-ask-btn`, since the console's `.cn a` reset counts as (0,1,1) and
+beats a bare class.
+
+**Both faces of `Issue!` go to LubbDubb's own repository, and neither follows
 `github.owner`/`github.repo`** (issue #449). Those name the repo the fleet _works on_, which is LubbDubb's only while it is dogfooding itself.
 A fault in the cockpit belongs on the cockpit's tracker whatever repo the deployment is pointed at — the
 bug #449 reported was this control filing a cockpit complaint into a customer's backlog. The fallback URL

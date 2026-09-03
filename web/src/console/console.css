@@ -186,29 +186,62 @@
   font-weight: 400;
   letter-spacing: normal;
 }
-/* The compose control wears the link's face, because it is the same offer in the
-   same spot and the operator should not have to learn two of them: only where it
-   lands differs, and that is what the modal's head is for. It borrows `.ext-ref`'s
-   colours through the token layer rather than the class — `console.css` styling
-   `.ext-ref` directly is the one thing this stylesheet is tested not to do — and it
-   wears no `↗`, since it leaves for nowhere. */
+/* The compose control wears the same face as the link it replaces, because it is
+   the same offer in the same spot and the operator should not have to learn two of
+   them: only where it lands differs, and that is what the modal's head is for. It
+   sets padding and nothing else — the chip round it carries the chrome, and the ink
+   is the bar's own. It wears no `↗`, since it leaves for nowhere. */
 .cn-issue-btn {
-  color: var(--link-ink);
   padding: 0;
 }
-.cn-issue-btn:hover {
-  color: var(--text);
+/* The two ways out of the bar, drawn as controls rather than as more small print.
+   They sat side by side in one weight and one ink and read as a single run of
+   words: an operator scanning the bar saw neither, which is the whole failure for
+   a control whose value is being noticed at the moment something looks wrong.
+
+   The chrome is on the wrapper because one of the two faces is `ExtLink`, which
+   takes no class of its own — and `console.css` naming `.ext-ref` is the one thing
+   this stylesheet is tested not to do. The inner control keeps its own ink, so the
+   `↗` and the focus ring still come from the shared layer.
+
+   The question chip wears the console accent and the issue chip does not: they are
+   the same shape and the same size, and what separates them is the hue and the
+   punctuation. That is deliberate — the cheaper reading of "something looks wrong"
+   is the one that should catch the eye first.
+
+   `.cn-ident-act` and not `.cn-chip`: that class is taken, by the console's own
+   chip — mono, uppercase, square — and borrowing it dressed these two as readings
+   and, because a `<button>` does not take the inherited `text-transform` a
+   `<a>` does, drew one of the pair in sentence case beside the other in capitals. */
+.cn-ident-act {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border: 1px solid var(--cn-line-hi);
+  border-radius: 999px;
+  background: var(--cn-panel-2);
+}
+.cn-ident-act:hover {
+  background: var(--cn-hover);
+}
+.cn-ident-act.cn-ident-ask {
+  border-color: var(--cn-accent);
 }
 /* The question hand-off wears the same face as the compose control beside it —
    same spot, same moment, and an operator should not have to learn two of them.
    Its own class rather than a second `.cn-issue-btn`: that class is what
    `console.test.ts` reads to tell the bar's two faces apart, and a deep link
    answering to it would make the offline bar look like it could still compose. */
-.cn-ask-btn {
-  color: var(--link-ink);
+/* `.cn`-prefixed, like `.cn .cn-tgl` above it and for the same reason: the
+   console's reset for its own markup is `.cn a` / `.cn button`, which counts as
+   (0,1,1) and beats a bare class — a rule that only said `.cn-ask-btn` would set
+   the accent and be overruled by `color: inherit`, which is a control that reads
+   exactly like the wordmark it sits beside. */
+.cn .cn-ask-btn {
+  color: var(--cn-accent);
 }
-.cn-ask-btn:hover {
-  color: var(--text);
+.cn .cn-ask-btn:hover {
+  color: var(--cn-fg);
 }
 .cn-dot {
   width: 7px;

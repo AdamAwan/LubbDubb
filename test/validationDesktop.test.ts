@@ -805,7 +805,7 @@ test('the skill installs, and says what it is for without restating the procedur
  * channel, and the reason it is appended rather than spliced in.
  *
  * The session this skill is written for opens on `repoRoot` — the repository the
- * fleet works on — and the cockpit's *Got a question?* control collects plenty of
+ * fleet works on — and the cockpit's *Question?* control collects plenty of
  * questions that are about the harness instead: why nothing picked a goal up, why
  * a rule did not fire. Without a path, those are answered from the harness's
  * output, which is the confident wrong answer the `ask` section already warns

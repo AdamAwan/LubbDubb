@@ -735,7 +735,7 @@ any of it would be a second copy of the procedure, drifting.
 **One section is appended rather than written into the body**: where LubbDubb's _own_ checkout is,
 when `installRoot()` resolves one (`desktopSkillDocument`, handed the root by `src/server/main.ts`).
 The session this skill is written for opens on `repoRoot` — the repository the fleet **works on** —
-and the cockpit's [Got a question?](17-cockpit.md#the-top-bar-and-the-panels) control collects plenty of questions
+and the cockpit's [Question?](17-cockpit.md#the-top-bar-and-the-panels) control collects plenty of questions
 that are about the harness instead: why nothing picked a goal up, why a rule did not fire. Answered
 from the harness's output those get the shape of confident wrong answer the `ask` section already
 warns about. The note says to read the record first and the source second, and to change nothing in

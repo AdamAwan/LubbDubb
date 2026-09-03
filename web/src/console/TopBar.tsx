@@ -192,7 +192,7 @@ function navBadge(tab: ConsoleTab, view: CockpitView): { count: number; title: s
  *
  * The link sits here and not among the readings for the reason the readings are a
  * group at all — every one of them is a gauge on the fleet or on this build, read
- * left to right as one sentence about what is happening. "Raise an issue" answers
+ * left to right as one sentence about what is happening. "Issue!" answers
  * nothing about the fleet, and a tenth chip in a group that already wraps at laptop
  * widths would cost a line to say so.
  */
@@ -216,8 +216,16 @@ function Ident({ view, actions }: { view: CockpitView; actions: CockpitActions }
       LubbDubb
       {view.demo && <span style={{ color: 'var(--cn-fg-faint)', fontWeight: 400 }}>· demo</span>}
       {/* `.cn-issue` is the console's own hook for sizing the control out of the
-          wordmark — see `console.css`; it styles nothing `ExtLink` owns. */}
-      <span className="cn-issue">
+          wordmark, and `.cn-ident-act` is what makes it read as a control rather
+          than as more wordmark — see `console.css`. Both are on the *wrapper*: `ExtLink`
+          takes no class, and a rule on `.ext-ref` is the one thing this stylesheet
+          is tested not to do, so the chrome goes round the link rather than on it.
+
+          One word and a mark. `Raise an issue` and `Got a question?` were two
+          sentences in the same weight and the same ink, a hand's width apart, and
+          read as one run of small print; the punctuation is what tells them apart at
+          a glance, since it is the difference between them — one files, one asks. */}
+      <span className="cn-issue cn-ident-act">
         {canCompose ? (
           <button
             type="button"
@@ -225,11 +233,11 @@ function Ident({ view, actions }: { view: CockpitView; actions: CockpitActions }
             title="Write an issue about LubbDubb and file it on its own tracker, without leaving the cockpit"
             onClick={() => setComposing(true)}
           >
-            Raise an issue
+            Issue!
           </button>
         ) : (
           <ExtLink href={NEW_ISSUE_URL} title="Raise an issue on the LubbDubb repo">
-            Raise an issue
+            Issue!
           </ExtLink>
         )}
       </span>
@@ -244,14 +252,14 @@ function Ident({ view, actions }: { view: CockpitView; actions: CockpitActions }
           control: a `DesktopLink` onto the repository the fleet works, with
           `/lubbdubb ` in the composer and the question left to the operator.
 
-          Beside *Raise an issue* deliberately. The two are the same moment —
+          Beside *Issue!* deliberately. The two are the same moment —
           something looks wrong — and the cheaper reading of it is offered first;
           drawn anywhere else, the expensive one stays the only one on the bar.
 
           Unconditional, like every other deep link: it reaches only the machine
           the browser is on, and `DesktopLink` puts the command in the title for
           exactly the operator it cannot reach. */}
-      <span className="cn-issue">
+      <span className="cn-issue cn-ident-act cn-ident-ask">
         <DesktopLink
           className="cn-ask-btn"
           folder={view.state.config.desktopFolder}
@@ -259,7 +267,7 @@ function Ident({ view, actions }: { view: CockpitView; actions: CockpitActions }
           ready="waiting for your question"
           explain="which answers it from the harness’s own record of the work, and says so when the record is silent."
         >
-          Got a question?
+          Question?
         </DesktopLink>
       </span>
       {composing && (

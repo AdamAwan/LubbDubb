@@ -96,7 +96,7 @@ export function checkPrompt(issueNumber: number, letter: string): string {
 }
 
 /**
- * What the operator's Claude is asked when they hit *Got a question?* on the top
+ * What the operator's Claude is asked when they hit *Question?* on the top
  * bar — the skill's name and nothing else, with the cursor after it.
  *
  * **No argument, because the bar knows of no goal.** The other four controls are
