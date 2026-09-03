@@ -21,18 +21,30 @@ import { absDate } from '../components/util.js';
  * opens its shell, anything else opens the panel — and the bar underneath carries
  * the way in for an empty enclosure. Nested buttons would be the other way to
  * spell this, and they are not a thing HTML has.
+ *
+ * **The bar is the Pets destination, and it took the nav slot Pets had.** A tab is
+ * the most expensive space in the cockpit and this one was buying a second way to
+ * a subsystem already drawn, at full size, in the corner — beside a strip that was
+ * *already* a button. So the two clicks split by what they are for: an animal is
+ * the collection, which is where you feed and rename and place one; the bar is the
+ * page, which is what the subsystem is. The `›` is what says the bar goes
+ * somewhere, since it is a destination now rather than a caption over a floor.
  */
 export function Vivarium({
   pets,
   runningAgents,
   paused,
   onOpen,
+  onOpenPage,
   onHatch,
 }: {
   pets: PetState;
   runningAgents: number;
   paused: boolean;
+  /** The collection — feed, rename, place, blend. What an animal's own click opens. */
   onOpen: () => void;
+  /** The Pets page, which the nav used to hold a tab for. The bar's click. */
+  onOpenPage: () => void;
   onHatch: (id: string) => void;
 }) {
   const placed = pets.pets.filter((pet) => pet.placed);
@@ -67,9 +79,20 @@ export function Vivarium({
           )
         )}
       </div>
-      <button type="button" className="cn-viv-bar" onClick={onOpen}>
+      <button
+        type="button"
+        className="cn-viv-bar"
+        onClick={onOpenPage}
+        title="Pets — what the vivarium is and how it fills"
+      >
+        {/* **"Pets", not "Vivarium".** The strip is the nav's old tab now, and it
+            has to answer the question the tab answered — a caption naming the
+            enclosure told an operator what they were looking at, which is the one
+            thing the corner already says for itself. The counts follow it, so the
+            word reads as the destination and the numbers as what is at it. */}
+        <span className="cn-viv-name">Pets</span>
         <span>
-          Vivarium · {placed.length} of {pets.pets.length}
+          {placed.length} of {pets.pets.length}
         </span>
         {/* Said plainly rather than drawn as an alert. An egg is a nice thing
             waiting, and nothing in this subsystem nags: it sits there for as long
@@ -80,6 +103,7 @@ export function Vivarium({
           </span>
         ) : null}
         <span className="cn-viv-beats">{pets.wallet.balance.toLocaleString()} beats</span>
+        <i className="cn-viv-chev">›</i>
       </button>
       {/* Under the bar rather than in it, and not a control: the bar is a button,
           and this is a fact about the deployment with nowhere of its own to go.

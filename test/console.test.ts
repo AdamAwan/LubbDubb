@@ -36,7 +36,7 @@ const { ThemeSettings } = await import('../web/src/components/ThemeSettings.js')
 const { ColourField } = await import('../web/src/components/ColourField.js');
 const { ConfigValues } = await import('../web/src/components/ConfigValues.js');
 const { RaiseIssueModal, composeGate, canFile } = await import('../web/src/components/RaiseIssueModal.js');
-const { usageReading, environmentsReading } = await import('../web/src/console/TopBar.js');
+const { usageReading, environmentsReading, menuEntries } = await import('../web/src/console/TopBar.js');
 
 function view(over: Partial<CockpitView> = {}): CockpitView {
   const state = buildDemoState().state;
@@ -244,12 +244,126 @@ test('the usage chip carries both windows, and marks the one that binds', () => 
   assert.equal(nothing.tone, 'quiet', 'nothing spent is a muted reading, never a missing one');
 });
 
-/** And it is on the bar, both windows and all — the demo fixture reports 62% / 30%. */
-test('the usage chip is on the top bar', () => {
+/**
+ * And it is on the bar, both windows and all — the demo fixture reports 62% / 30%.
+ *
+ * **No `Usage` label, and that is asserted.** A percentage on this bar is the
+ * account and nothing else here is one, so the chip's own name was width spent
+ * saying what the figures already say. What each window *is* stays, as the two
+ * superscript tags: position alone is not enough — the pair is always five-hour
+ * then weekly, but an operator glancing at one number cannot tell which of the two
+ * they landed on, which is the whole question the chip answers.
+ */
+test('the usage chip is on the top bar, tagged and unlabelled', () => {
   const html = render(view());
-  assert.ok(/<span>Usage<\/span>/.test(html), 'the top bar draws no usage reading');
+  assert.ok(!/<span>Usage<\/span>/.test(html), 'the chip is back to spending width on its own name');
   assert.ok(html.includes('cn-usage-win'), 'the chip drew no window slots');
   assert.ok(html.includes('cn-binds'), 'neither window is marked as the one nearer its limit');
+  assert.ok(html.includes('<em>5h</em>') && html.includes('<em>7d</em>'), 'the windows are not told apart');
+  assert.ok(html.includes('cn-usage-sep'), 'the two figures run together with no divider');
+});
+
+/**
+ * The bar's strip is two gauges and a menu button, and everything else it used to
+ * carry is behind that button.
+ *
+ * The cut is what each thing is *for*, not what it costs to draw. Usage and Local
+ * are numbers that move on their own and are glanced at on every pulse; the six
+ * behind the button are counts that are usually zero (Faults, Launch), a state
+ * that is `current` nearly all its life (Build, Env) and two surfaces that are
+ * aimed at rather than read (Record, Config). Spread across the strip they wrapped
+ * the bar to two rows at laptop widths.
+ *
+ * Both halves are asserted, because either alone is a bar that lost something: the
+ * six are all still reachable, and the two that stayed are still *on the glass*
+ * rather than a seventh row in the menu.
+ */
+test('the bar folds its ways-in behind one menu, and keeps the two gauges out of it', () => {
+  const keys = menuEntries(view(), actions).map((entry) => entry.key);
+  assert.deepEqual(
+    keys,
+    ['faults', 'launch', 'build', 'env', 'record', 'config'],
+    'a way-in went missing from the menu, or arrived in a different order',
+  );
+
+  const html = render(view());
+  assert.ok(html.includes('aria-haspopup="menu"'), 'nothing on the bar opens the menu');
+  assert.ok(!html.includes('cn-menu-row'), 'the menu draws its rows before anybody has opened it');
+  assert.ok(html.includes('cn-pill'), 'the usage and local gauges left the strip');
+
+  // Every row carries a glyph and a word — the menu is the one surface here where a
+  // reading has to name itself, since nothing around it says what it is.
+  for (const entry of menuEntries(view(), actions)) {
+    assert.ok(entry.label.length > 0, `the ${entry.key} row has no word`);
+    assert.ok(entry.title.length > 0, `the ${entry.key} row has no sentence behind it`);
+  }
+});
+
+/**
+ * An unsaved theme edit reaches the Config row **and** the button in front of it.
+ *
+ * The mark exists because the theme section's save bar does not leave the section,
+ * so once you walk away an unsaved theme looks exactly like a saved one (issue
+ * #680). It shipped on a cog on the strip; Config is behind a menu now, and a mark
+ * visible only once that menu is open is the same invisibility one fold further in
+ * — so `pending` is what lights the button's flag dot beside the tones.
+ */
+test('an unsaved theme edit marks the Config row and the menu button in front of it', () => {
+  const saved = menuEntries(view(), actions, false).find((entry) => entry.key === 'config');
+  assert.equal(saved?.pending, false, 'a saved theme marks Config anyway');
+
+  const pending = menuEntries(view(), actions, true).find((entry) => entry.key === 'config');
+  assert.equal(pending?.pending, true, 'an unsaved theme edit leaves Config unmarked');
+  assert.match(pending.title, /unsaved theme edit/, 'and the row does not say what is pending');
+
+  // The button's own dot reads `pending` beside the tones, which is what carries the
+  // mark off the closed menu. Asserted through the same predicate `BarMenu` uses.
+  assert.ok(
+    menuEntries(view(), actions, true).some((entry) => entry.tone !== null || entry.pending === true),
+    'nothing in front of the menu says an edit is pending',
+  );
+});
+
+/**
+ * `Issue!` and `Question?` sit at the readings' end of the bar, not against the
+ * wordmark — and they stay together.
+ *
+ * They are the same moment (something looks wrong) offered two ways, and the
+ * cheaper one is only offered first while it is beside the other. They moved off
+ * the ident because that is where every *control* on this strip is, and because
+ * inheriting the wordmark's 600 read them as a second half of the product name.
+ */
+test('the two ways out ride the readings, together, online and off', () => {
+  for (const connected of [true, false]) {
+    const html = render(view({ connected }));
+    const asks = /<div class="cn-asks">([\s\S]*?)<\/div>\s*<(?:div|i|span)/.exec(html)?.[1] ?? '';
+    assert.ok(asks.includes('Issue!'), `the file control left the group (connected: ${String(connected)})`);
+    assert.ok(asks.includes('Question?'), `the ask control left the group (connected: ${String(connected)})`);
+    const reads = html.indexOf('cn-reads');
+    assert.ok(reads > 0 && html.indexOf('cn-asks') > reads, 'the pair is drawn outside the readings group');
+  }
+});
+
+/**
+ * Pets is not a nav slot any more: the vivarium is drawn at full size in the
+ * corner already, on a strip that was itself a button, so the tab was a second way
+ * to a surface the eye lands on anyway — and a nav slot is the most expensive
+ * space in the cockpit.
+ *
+ * The strip has to *read* as a destination, which is the half that is easy to lose:
+ * a caption naming the enclosure and a way into it look identical without a word
+ * and a mark, and the word is the nav's own label rather than the panel's.
+ */
+test('Pets left the nav for the vivarium strip, which says so', () => {
+  const html = render(view());
+  const nav = html.split('</nav>')[0] ?? '';
+  assert.ok(!nav.includes('>Pets'), 'Pets is a nav destination again');
+
+  const strip = /<button[^>]*class="cn-viv-bar"[^>]*>([\s\S]*?)<\/button>/.exec(html)?.[1];
+  assert.ok(strip !== undefined, 'the vivarium drew no strip');
+  assert.ok(strip.includes('cn-viv-name'), 'the strip does not name where it goes');
+  assert.ok(strip.includes('>Pets<'), 'the strip is captioned rather than labelled with the nav’s own word');
+  assert.ok(strip.includes('cn-viv-chev'), 'nothing on the strip says it goes anywhere');
 });
 
 test('a dropped socket draws no gauge, no rail and no situation area', () => {
@@ -2075,6 +2189,10 @@ test('each tab replaces the last, and a selected goal outranks every one of them
  * `Work` explicitly *not* among them, since the whole change is that the slot went
  * back. And the record reachable from the bar at every tab, since a panel nothing
  * opens is the graph unreachable rather than relocated.
+ *
+ * The way in is read off `menuEntries` rather than the bar's markup: the six
+ * ways-in that are not gauges are behind the bar's menu button now, and a rendered
+ * bar draws that list only once somebody has opened it.
  */
 test('the work graph is a panel reached from the bar, not a nav destination', () => {
   const nav = render(view()).split('</nav>')[0] ?? '';
@@ -2082,7 +2200,11 @@ test('the work graph is a panel reached from the bar, not a nav destination', ()
     assert.ok(nav.includes(`>${label}`), `the nav is missing ${label}`);
   }
   assert.ok(!nav.includes('>Work'), 'the record is not a nav destination — it is the Record reading');
-  assert.ok(render(view()).includes('>Record<'), 'and the bar carries the way to it');
+  assert.ok(
+    menuEntries(view(), actions).some((entry) => entry.key === 'record'),
+    'and the bar carries the way to it',
+  );
+  assert.ok(render(view()).includes('aria-haspopup="menu"'), 'with nothing on the bar to open the menu it is in');
 
   const panel = render(view({ consolePanel: 'record' }));
   assert.ok(panel.includes('The record'), 'the panel names itself');
@@ -2266,17 +2388,22 @@ test('a well fleet mutes the chip rather than moving it', () => {
   assert.equal(reading.tone, null);
 });
 
-test('the chip is absent, not zeroed, where no environment declares a check', () => {
+test('the row is absent, not zeroed, where no environment declares a check', () => {
   // The card's own exception: a reading on a deployment that configured none
-  // announces a feature as broken.
+  // announces a feature as broken. Read off `menuEntries`, since the row lives in
+  // the bar's menu and a closed menu draws none of them.
   const v = view();
-  const drawn = render({ ...v, state: { ...v.state, environmentHealth: [] } });
-  assert.ok(!/>Env</.test(drawn), 'no environment health, no gauge');
+  const none = menuEntries({ ...v, state: { ...v.state, environmentHealth: [] } }, actions);
+  assert.ok(!none.some((entry) => entry.key === 'env'), 'no environment health, no gauge');
 
-  const withOne = render({
-    ...v,
-    state: { ...v.state, environmentHealth: [envRead({ environment: 'testUk', state: 'unhealthy', tier: 'red' })] },
-  });
-  assert.ok(/>Env</.test(withOne), 'and it is drawn as soon as one environment answers');
-  assert.ok(withOne.includes('cn-env-ill'), 'wearing the tint its worst reading earns');
+  const withOne = menuEntries(
+    {
+      ...v,
+      state: { ...v.state, environmentHealth: [envRead({ environment: 'testUk', state: 'unhealthy', tier: 'red' })] },
+    },
+    actions,
+  );
+  const env = withOne.find((entry) => entry.key === 'env');
+  assert.ok(env !== undefined, 'and it is drawn as soon as one environment answers');
+  assert.equal(env.tone, 'ill', 'wearing the tint its worst reading earns');
 });

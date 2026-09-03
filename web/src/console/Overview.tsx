@@ -576,7 +576,9 @@ function GoalsInFlight({ view, actions }: { view: CockpitView; actions: CockpitA
   const orphans = orphanCount(view.state, goals);
 
   return (
-    <section className="cn-card cn-span2">
+    // `cn-lamp-mark` for the same reason the pull-request rack carries it: the
+    // agent-on-it chip rides this card's lamp column too.
+    <section className="cn-card cn-span2 cn-lamp-mark">
       <h3>
         Goals in flight <i className="cn-n">{goals.length}</i>
         {orphans > 0 && (
@@ -680,6 +682,15 @@ function goalRow(issue: Issue, view: CockpitView, actions: CockpitActions): Pane
     // rather than off the track: `now` counts `in_review` too, and a pull request
     // sitting open is nobody working.
     live: onIt !== undefined,
+    // At the head of the row, in the lamp slot, exactly as the pull-request rack
+    // draws it — the two racks sit one above the other and a mark that means the
+    // same thing on both has to be in the same place on both. It rode the chips
+    // group before, which put it at a different distance along every row depending
+    // on whether the environment and the orphan chip beside it had anything to say.
+    //
+    // A goal's track survives it, unlike a pull request's checks: the track is how
+    // far the plan got, which an agent working does not make untrue.
+    lamp: onIt === undefined ? undefined : <AgentOnIt agentId={onIt.id} note={onIt.note} actions={actions} />,
     chips: (
       <>
         {/* Where the work actually got to, on the row rather than a page deeper.
@@ -698,11 +709,6 @@ function goalRow(issue: Issue, view: CockpitView, actions: CockpitActions): Pane
             ▲ no Feature
           </i>
         )}
-        {/* Beside the environment rather than in place of the track: on a pull
-            request the marker supersedes the checks, because those are a verdict on
-            a commit being replaced. A goal's track is how far the plan got, which
-            an agent working does not make untrue. */}
-        {onIt !== undefined && <AgentOnIt agentId={onIt.id} note={onIt.note} actions={actions} />}
       </>
     ),
   };
@@ -809,7 +815,9 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
   const anyReview = open.some((pr) => pr.review !== undefined);
 
   return (
-    <section className="cn-card cn-span2">
+    // `cn-lamp-mark` widens the lamp column: the rack's lamp is an 8px dot
+    // everywhere else, and this card puts a chip in it — see `console.css`.
+    <section className="cn-card cn-span2 cn-lamp-mark">
       <h3>
         Pull requests <i className="cn-n">{open.length} open</i>
         {merged !== null && <span className="cn-more">{merged} merged</span>}
@@ -924,18 +932,28 @@ function prRow(
     whyLabel: pr.attention.status,
     whyTone: COURT_TONE[pr.attention.status] ?? 'quiet',
     why: pr.attention.reasons.join(' '),
+    // **In the lamp slot, at the head of the row.** It stood in the reading slot,
+    // third of three glyphs, which put it a different distance along the card on
+    // every row depending on what the two beside it had to draw — the one mark on
+    // this rack that says *something is happening to this right now* was the one an
+    // eye could not find twice in the same place. The lamp column is what that
+    // grammar is for: `PanelRow` holds it open on every row once any row fills it,
+    // so the mark is either there or visibly not, always at the same x.
+    //
+    // The column is absent altogether while no agent is out, so a quiet rack pays
+    // no gutter for it.
+    lamp: onIt === undefined ? undefined : <AgentOnIt agentId={onIt.id} note={onIt.note} actions={actions} />,
     // What is happening to this pull request *now* beats what its checks last
     // said: an agent on the branch is about to change them, so the ladder is a
     // reading of a commit that is being replaced. Only while one is actually on
-    // it — every other row keeps its checks. The chip is `AgentOnIt`, the same one
-    // a plan part draws, because it is the same sentence.
+    // it — every other row keeps its checks.
     reading: (
       <>
         {/* The fleet's own reading of the diff, beside whatever the row's checks
             are saying — it survives an agent taking the ladder's place, because
             what was already read does not change when a branch moves. */}
         <ReviewMark review={pr.review} now={view.now} reserve={anyReview} />
-        {onIt === undefined ? <CiLadder pr={pr} /> : <AgentOnIt agentId={onIt.id} note={onIt.note} actions={actions} />}
+        {onIt === undefined ? <CiLadder pr={pr} /> : null}
       </>
     ),
     toggle: (

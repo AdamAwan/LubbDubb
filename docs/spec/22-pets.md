@@ -509,8 +509,21 @@ reserve no space and leave the last ask row permanently half-hidden.
 **One button per creature, rather than one over the floor.** The floor was a single button while it
 had a single destination; an egg gives it two — a shell opens its own ceremony, anything else opens
 the panel — and one click cannot have two destinations. Nested buttons are the other way to spell
-that and are not a thing HTML has, so each animal is its own control and the bar underneath carries
+that and are not a thing HTML has, so each animal is its own control and the strip underneath carries
 the way in for an empty enclosure. → [17](17-cockpit.md#links)
+
+**The strip is the Pets destination, and it took the nav slot Pets had.** A nav slot is the most
+expensive space in the cockpit, and that one was buying a second way to a subsystem already drawn at
+full size in this corner, beside a strip that was _already_ a button. So the two clicks split by what
+they are for: an **animal** is the collection — where you feed, rename, place and blend one — and the
+**strip** is [the page](#the-pets-page), which is what the subsystem is.
+
+It has to _read_ as a destination, which is the half that is easy to lose: a caption naming the
+enclosure and a way into it look identical without a word and a mark. So the strip says **`Pets`** —
+the nav's own label, at the nav's weight (`.cn-viv-name`), with the counts faint behind it — and
+carries a `›` (`.cn-viv-chev`) and a hover that takes the word to the accent. It said `Vivarium · 4 of
+4` before, which told an operator what they were looking at: the one thing this corner already says
+for itself. → [17](17-cockpit.md#shape)
 
 The ceremony itself is `web/src/components/HatchModal.tsx`, rendered from `App.tsx` beside the other
 shared modals, and **which egg is open is a `Place`** (`?hatch=<pet id>`) rather than a `useState`:
@@ -529,9 +542,9 @@ narrow width too, where the enclosure is as wide as the page: four is what the p
 and a floor that filled itself because there was room would make the strip at the foot of a phone
 screen the tallest thing on it.
 
-**Under the bar, the date the vivarium started counting from** — `counting since 14 Aug 2026`, drawn
-from `PetState.startedAt` and outside the bar's button, because the bar has a destination and this is
-a fact with nowhere to go. It is here because this corner is where "nothing has hatched" is read: an
+**Under the strip, the date the vivarium started counting from** — `counting since 14 Aug 2026`,
+drawn from `PetState.startedAt` and outside the strip's button, because the strip has a destination and
+this is a fact with nowhere to go. It is here because this corner is where "nothing has hatched" is read: an
 enclosure still empty after a week of work looks identical to one on a harness whose entire history
 sorts before [the vivarium's start](#the-vivariums-start), and the date is the only thing that tells
 them apart. Nothing is drawn while `startedAt` is null — one boot, before the first scan settles it —
@@ -581,16 +594,16 @@ card names them rather than pretending to a destination it has not got.
 
 ## The Pets page
 
-`ConsoleTab` gains `'pets'`, so the catalogue is a nav destination rather than a panel over
-whatever was in front. It is the second pets surface and the two answer different questions: the
-panel is **your collection**, reached from the rail's vivarium; the page is **what exists**,
-reached from the nav.
+`ConsoleTab` gains `'pets'`, so the catalogue is a **place** rather than a panel over whatever was in
+front — a destination has to round-trip through the URL whatever draws the way in. It is the second pets
+surface and the two answer different questions: the panel is **your collection**, reached by clicking an
+animal; the page is **what exists**, reached from [the vivarium's strip](#the-vivarium).
 
 `web/src/components/PetsPage.tsx` draws four things — the two constants and the **rate per action**,
 the tier weights as a bar, every species banded by rarity, and the matrix of every action against
-every tier it can roll. The tab is absent from the nav whenever the snapshot ships no vivarium —
-`pets.enabled` off, or `pets.visible` off — and `tabBody` refuses a stale `?tab=pets` URL for the
-same reason.
+every tier it can roll. There is no way in at all whenever the snapshot ships no vivarium —
+`pets.enabled` off, or `pets.visible` off — since the strip that carries it is the enclosure's own, and
+`tabBody` refuses a stale `?tab=pets` URL for the same reason.
 
 The rate is drawn per action rather than as one figure because that is what it is: since the drop
 was priced against how often each kind comes up, a single number would make whichever button the

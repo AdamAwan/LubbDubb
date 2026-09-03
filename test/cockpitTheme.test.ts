@@ -495,7 +495,8 @@ test('accent-color is inherited from a container, never declared on a control', 
 
 /**
  * The unsaved-theme marker. The section's save bar is the only sentence about an
- * unsaved edit and it does not leave the section, so the flag is what the cog and
+ * unsaved edit and it does not leave the section, so the flag is what the bar's
+ * menu and
  * the Theme tab read (issue #680). Two properties matter and neither is visible at
  * a call site: a change reaches subscribers, and an unchanged write does not — a
  * store that notified on every publish would re-render the whole top bar on every

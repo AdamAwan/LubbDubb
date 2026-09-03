@@ -4,6 +4,7 @@ import type { CockpitView } from '../view/viewModel.js';
 import type { EnvironmentHealthReading } from '../types.js';
 import type { CockpitActions, ConsoleTab } from '../cockpit/actions.js';
 import { FleetControl } from '../components/FleetControl.js';
+import { Icon } from '../components/icons.js';
 import { ExtLink, fmtUsd, relTime } from '../components/util.js';
 import { RaiseIssueModal } from '../components/RaiseIssueModal.js';
 import { DesktopLink } from '../components/DesktopLink.js';
@@ -39,9 +40,11 @@ import { useThemeUnsaved } from '../hooks.js';
  * triangle over an index of pages that are one click away anyway. A nav slot is
  * the most expensive space in the cockpit and it was buying a fold.
  *
- * `pets` is absent when the snapshot ships no vivarium — the feature off, or on
- * and hidden — exactly as the rail's vivarium is: a tab that opens on a page
- * explaining a subsystem this cockpit does not draw is worse than no tab.
+ * **Pets was the third of these and is not here any more.** It is drawn at full
+ * size in the bottom-left corner already, on a strip that was itself a button, so
+ * the tab was a second way to a surface the eye lands on anyway — and a nav slot is
+ * the most expensive space in the cockpit. The Vivarium bar carries the destination
+ * now, which also puts it where the thing it names is. → `Vivarium`
  */
 const TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'obstacles', 'insights'];
 
@@ -104,21 +107,16 @@ function Nav({ view, actions }: { view: CockpitView; actions: CockpitActions }):
     actions.openTab(tab);
   };
 
-  // Appended rather than listed, so the nav is the same four tabs on a deployment
-  // drawing no vivarium and the fifth cannot be reached by a stale URL either
-  // — `tabBody` refuses it for the same reason.
-  //
-  // Features rides the same rule and is **inserted** rather than appended, because
+  // Features is **inserted** rather than appended, because
   // it belongs beside Tickets: the two are the same backlog read at two altitudes,
   // and a reader moving between them should not cross the board to do it. It is
   // absent unless the deployment has a board at all — the operator's flag *and* a
   // provider with a hierarchy, folded server-side by `featureBoardOn` so the tab
   // and the route can never disagree. A tab that opens on a page explaining a
   // hierarchy this tracker does not have is worse than no tab.
-  const withFeatures: readonly ConsoleTab[] = view.state.config.featureBoard
+  const tabs: readonly ConsoleTab[] = view.state.config.featureBoard
     ? ['overview', 'tickets', 'features', 'obstacles', 'insights']
     : TABS;
-  const tabs = view.state.pets === null ? withFeatures : [...withFeatures, 'pets' as const];
 
   return (
     <nav className="cn-nav">
@@ -197,7 +195,45 @@ function navBadge(tab: ConsoleTab, view: CockpitView): { count: number; title: s
  * nothing about the fleet, and a tenth chip in a group that already wraps at laptop
  * widths would cost a line to say so.
  */
-function Ident({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
+function Ident({ view }: { view: CockpitView }): JSX.Element {
+  return (
+    <div className="cn-ident">
+      <i className="cn-dot" style={view.connected ? undefined : { background: 'var(--cn-red)' }} />
+      LubbDubb
+      {view.demo && <span style={{ color: 'var(--cn-fg-faint)', fontWeight: 400 }}>· demo</span>}
+    </div>
+  );
+}
+
+/**
+ * The bar's two ways out — file one, or ask one — drawn together at the right-hand
+ * end beside the readings.
+ *
+ * **Beside each other, always.** The two are the same moment — something looks
+ * wrong — and the cheaper reading of it is offered first; split up, the expensive
+ * one ends up the only one on the bar.
+ *
+ * They sit with the readings rather than against the wordmark because that is
+ * where the operator's hand already is: every other control on this strip that
+ * *does* something rather than naming the product is in this group, and the
+ * wordmark's job is to say where you are. It also stops the pair inheriting the
+ * ident's 600, which read them as a second half of the wordmark.
+ *
+ * `.cn-issue` is the console's own hook for sizing the pair out of the bar's face,
+ * and `.cn-ident-act` is what makes each read as a control rather than as small
+ * print — see `console.css`. Both are on the *wrapper*: `ExtLink` takes no class,
+ * and a rule on `.ext-ref` is the one thing this stylesheet is tested not to do, so
+ * the chrome goes round the link rather than on it.
+ *
+ * One word and a mark each. `Raise an issue` and `Got a question?` were two
+ * sentences in the same weight and the same ink, a hand's width apart, and read as
+ * one run of small print; the punctuation is what tells them apart at a glance,
+ * since it is the difference between them — one files, one asks.
+ */
+function Asks({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
+  // Local state and not `Place`: a half-typed report is not somewhere you can come
+  // back to, so it is not somewhere the URL should be able to send you.
+  // `GoalPage`'s compose modals are held the same way.
   const [composing, setComposing] = useState(false);
 
   // One cut, made before a round trip is spent, and it is deliberately **not**
@@ -212,20 +248,7 @@ function Ident({ view, actions }: { view: CockpitView; actions: CockpitActions }
   const canCompose = view.connected;
 
   return (
-    <div className="cn-ident">
-      <i className="cn-dot" style={view.connected ? undefined : { background: 'var(--cn-red)' }} />
-      LubbDubb
-      {view.demo && <span style={{ color: 'var(--cn-fg-faint)', fontWeight: 400 }}>· demo</span>}
-      {/* `.cn-issue` is the console's own hook for sizing the control out of the
-          wordmark, and `.cn-ident-act` is what makes it read as a control rather
-          than as more wordmark — see `console.css`. Both are on the *wrapper*: `ExtLink`
-          takes no class, and a rule on `.ext-ref` is the one thing this stylesheet
-          is tested not to do, so the chrome goes round the link rather than on it.
-
-          One word and a mark. `Raise an issue` and `Got a question?` were two
-          sentences in the same weight and the same ink, a hand's width apart, and
-          read as one run of small print; the punctuation is what tells them apart at
-          a glance, since it is the difference between them — one files, one asks. */}
+    <div className="cn-asks">
       <span className="cn-issue cn-ident-act">
         {canCompose ? (
           <button
@@ -242,9 +265,6 @@ function Ident({ view, actions }: { view: CockpitView; actions: CockpitActions }
           </ExtLink>
         )}
       </span>
-      {/* Local state and not `Place`: a half-typed report is not somewhere you can
-          come back to, so it is not somewhere the URL should be able to send you.
-          `GoalPage`'s compose modals are held the same way. */}
       {/* The bar's second way out, and the one that answers rather than files.
           Most of what arrives as an issue about the fleet is not a fault in it —
           it is "why has this not moved", which the harness's own record answers in
@@ -252,10 +272,6 @@ function Ident({ view, actions }: { view: CockpitView; actions: CockpitActions }
           finding the checkout and remembering the skill. This is that, as a
           control: a `DesktopLink` onto the repository the fleet works, with
           `/lubbdubb ` in the composer and the question left to the operator.
-
-          Beside *Issue!* deliberately. The two are the same moment —
-          something looks wrong — and the cheaper reading of it is offered first;
-          drawn anywhere else, the expensive one stays the only one on the bar.
 
           Unconditional, like every other deep link: it reaches only the machine
           the browser is on, and `DesktopLink` puts the command in the title for
@@ -280,45 +296,6 @@ function Ident({ view, actions }: { view: CockpitView; actions: CockpitActions }
         />
       )}
     </div>
-  );
-}
-
-/**
- * One reading: a label and a value, optionally a button that opens something.
- *
- * A zero count mutes the reading — `.cn-quiet` dims the value — and never
- * removes it. The gauge staying put is what lets an operator glance at the same
- * spot every time rather than hunting for a control that reflows when the count
- * it reads happens to hit zero.
- */
-function Read({
-  label,
-  value,
-  quiet,
-  onOpen,
-  title,
-}: {
-  label: string;
-  value: string | null;
-  quiet: boolean;
-  onOpen?: () => void;
-  title: string;
-}): JSX.Element {
-  const cls = `cn-read ${onOpen ? 'cn-act' : ''} ${quiet ? 'cn-quiet' : ''}`;
-  if (!onOpen) {
-    return (
-      <div className={cls} title={title}>
-        <span>{label}</span>
-        {value !== null && <b>{value}</b>}
-      </div>
-    );
-  }
-  return (
-    <button type="button" className={cls} onClick={onOpen} title={title} aria-label={title}>
-      <span>{label}</span>
-      {value !== null && <b>{value}</b>}
-      <i className="cn-chev">›</i>
-    </button>
   );
 }
 
@@ -395,47 +372,6 @@ export function environmentsReading(readings: readonly EnvironmentHealthReading[
 }
 
 /**
- * Whether anything out there is broken — the bar's reading of the Environments
- * card, and the only thing on this strip that is about the world the work ships
- * into rather than about the fleet or this build.
- *
- * The Build gauge's argument, applied to a subject that needed it more: a reading
- * in a fixed spot is one an operator can glance at, where a surface that appears
- * only when there is news is one they have to notice. Health was drawn on one card
- * on one tab, so an outage in testUk reached exactly the people already looking at
- * it.
- *
- * **Absent, not zeroed, where no environment declares a check** — the card's own
- * exception, for its reason: a chip reading `0 well` on a deployment that
- * configured none announces a feature as broken.
- *
- * It opens the overview rather than a panel of its own. The reasons, the ages and
- * the per-environment rows are the card's, and a second surface drawing them is a
- * second place for them to disagree.
- */
-function Environments({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element | null {
-  const readings = view.state.environmentHealth ?? [];
-  if (readings.length === 0) return null;
-  const reading = environmentsReading(readings, view.now);
-  return (
-    <button
-      type="button"
-      className={`cn-read cn-act ${reading.quiet ? 'cn-quiet' : ''} ${reading.tone === null ? '' : `cn-env-${reading.tone}`}`}
-      onClick={() => {
-        actions.selectGoal(null);
-        actions.openTab('overview');
-      }}
-      title={reading.title}
-      aria-label={reading.title}
-    >
-      <span>Env</span>
-      <b>{reading.value}</b>
-      <i className="cn-chev">›</i>
-    </button>
-  );
-}
-
-/**
  * The pulse countdown, and the way to force one — drawn **inside the fleet reading,
  * beside the pause control** rather than as a chip of its own further along the bar.
  *
@@ -483,68 +419,7 @@ function Scan({ view, actions }: { view: CockpitView; actions: CockpitActions })
 }
 
 /**
- * The cog, and the console's first icon.
- *
- * Config is the one way-in on this strip that is not a reading of anything: it
- * states no count and no state, and wearing the label-and-value face of the gauges
- * beside it said otherwise — a word in a row of numbers, read as a subject whose
- * number had gone quiet. A cog says "settings" without claiming to be a measurement
- * of anything, and it buys back the width of the word in a strip that wraps at
- * laptop sizes.
- *
- * Drawn inline rather than reached for from an icon set, and in `currentColor`, so
- * it takes the hover and the theme through the cascade like everything else here —
- * a set would be a dependency and a second colour system for one glyph. The label
- * is not lost: it is the `aria-label` and the `title`, which is what a
- * pointer and a screen reader each ask for.
- */
-function Cog(): JSX.Element {
-  return (
-    <svg className="cn-cog" viewBox="0 0 16 16" aria-hidden focusable="false">
-      <path
-        fill="currentColor"
-        fillRule="evenodd"
-        d="M6.6 0.8L9.4 0.8L9.6 2.7L10.6 3.1L12.1 1.9L14.1 3.9L12.9 5.4L13.3 6.4L15.2 6.6L15.2 9.4L13.3 9.6L12.9 10.6L14.1 12.1L12.1 14.1L10.6 12.9L9.6 13.3L9.4 15.2L6.6 15.2L6.4 13.3L5.4 12.9L3.9 14.1L1.9 12.1L3.1 10.6L2.7 9.6L0.8 9.4L0.8 6.6L2.7 6.4L3.1 5.4L1.9 3.9L3.9 1.9L5.4 3.1L6.4 2.7ZM10.5 8.0L10.4 7.4L10.2 6.8L9.8 6.2L9.3 5.8L8.6 5.6L8.0 5.5L7.4 5.6L6.8 5.8L6.2 6.2L5.8 6.8L5.6 7.4L5.5 8.0L5.6 8.6L5.8 9.3L6.2 9.8L6.7 10.2L7.4 10.4L8.0 10.5L8.6 10.4L9.3 10.2L9.8 9.8L10.2 9.3L10.4 8.6Z"
-      />
-    </svg>
-  );
-}
-
-/**
- * The way in to Config, and the one place an unsaved theme edit is visible off the
- * Theme section.
- *
- * The section's live preview persists when you leave it, on purpose, but the bar
- * that states what that costs does not — so an unsaved theme was indistinguishable
- * from a saved one everywhere else in the cockpit (issue #680). A dot on the cog
- * keeps the preview's intent, which is to go and look at a real goal page in the
- * theme you are building, and keeps its cost legible while you are there.
- *
- * A dot and not a count for `Cog`'s reason: this control measures nothing. What is
- * pending is a fact, not a quantity, and the Theme tab inside Config carries the
- * same mark so the dot leads somewhere.
- */
-function ConfigCog({ actions }: { actions: CockpitActions }): JSX.Element {
-  const unsaved = useThemeUnsaved();
-  return (
-    <button
-      type="button"
-      className={`cn-read cn-act cn-icon${unsaved ? ' cn-pending' : ''}`}
-      onClick={() => actions.openConfig({})}
-      title={
-        unsaved
-          ? 'Config — an unsaved theme edit is pending; a reload drops it'
-          : 'Config — how this harness is configured'
-      }
-      aria-label={unsaved ? 'Config — unsaved theme edit' : 'Config'}
-    >
-      <Cog />
-    </button>
-  );
-}
-
-/**
- * Where the harness's own build stands — the one reading on this bar that is about
+ * Where the harness's own build stands — the one reading in this menu that is about
  * the process rather than the work.
  *
  * It wears the ordinary reading chrome and **stays in place at every state**,
@@ -559,9 +434,9 @@ function ConfigCog({ actions }: { actions: CockpitActions }): JSX.Element {
  * being available stops nothing, so borrowing the banner would say something untrue
  * — and after the second time, be scrolled past.
  */
-function Build({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
+function buildReading(view: CockpitView): MenuReading {
   const build = view.state.build;
-  const quiet = build.state === 'current' || build.state === 'unknown';
+  const due = build.state === 'behind' || build.state === 'ready';
   const title =
     build.state === 'behind'
       ? `LubbDubb is ${build.standing.behind} commit(s) behind upstream — open to see what changed`
@@ -572,19 +447,12 @@ function Build({ view, actions }: { view: CockpitView; actions: CockpitActions }
           : build.state === 'unknown'
             ? `This build could not be checked: ${build.standing.unavailable ?? 'no reason given'}`
             : 'This build is up to date with upstream — open for details';
-  return (
-    <button
-      type="button"
-      className={`cn-read cn-act cn-build ${quiet ? 'cn-quiet' : ''} ${build.state === 'behind' || build.state === 'ready' ? 'cn-build-due' : ''}`}
-      onClick={() => actions.openPanel('build')}
-      title={title}
-      aria-label={title}
-    >
-      <span>Build</span>
-      <b>{build.label}</b>
-      <i className="cn-chev">›</i>
-    </button>
-  );
+  return {
+    value: build.label,
+    tone: due ? 'watch' : null,
+    quiet: build.state === 'current' || build.state === 'unknown',
+    title,
+  };
 }
 
 /**
@@ -615,14 +483,13 @@ function LocalRun({ view, actions }: { view: CockpitView; actions: CockpitAction
   return (
     <button
       type="button"
-      className={`cn-read cn-act ${live ? '' : 'cn-quiet'} ${stale ? 'cn-stale' : ''}`}
+      className={`cn-sub cn-act ${live ? '' : 'cn-quiet'} ${stale ? 'cn-stale' : ''}`}
       onClick={() => actions.openPanel('localRun')}
       title={title}
       aria-label={title}
     >
       <span>Local</span>
       <b>{live && number !== null ? `#${String(number)}` : 'off'}</b>
-      <i className="cn-chev">›</i>
     </button>
   );
 }
@@ -771,11 +638,12 @@ export function usageReading(usage: CockpitView['state']['usage'], now: number):
 function Usage({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const reading = usageReading(view.state.usage, view.now);
   const tone = reading.tone === 'quiet' ? 'cn-quiet' : reading.tone === 'plain' ? '' : `cn-usage-${reading.tone}`;
+  const stale = reading.age === null ? '' : 'cn-usage-old';
   const title = `${reading.title} Open for what spent it.`;
   return (
     <button
       type="button"
-      className={`cn-read cn-act ${tone}`}
+      className={`cn-sub cn-act ${tone} ${stale}`}
       // Economics, because "where did it go" is a question about money and that is
       // the tab that splits it. The window is the point of the trip: landing on the
       // page's own default would answer for a week, which is a different question
@@ -784,24 +652,34 @@ function Usage({ view, actions }: { view: CockpitView; actions: CockpitActions }
       title={title}
       aria-label={title}
     >
-      <span>Usage</span>
+      {/* The chip's own name is gone — `62%` on this bar is the account, and nothing
+          else here is a percentage — but each window keeps a two-character tag.
+          Position alone was tried and is not enough: the pair is always five-hour
+          then weekly, but an operator glancing at one number cannot tell which they
+          landed on, and "which window is that" is the whole question the chip
+          answers. The tag is the smallest thing that settles it — 9px, faint, and
+          set as a superscript so it costs the strip no width. */}
       {reading.cost === null ? (
         <i className="cn-usage-pair">
-          {reading.slots.map((slot) => (
+          {reading.slots.map((slot, i) => (
             <i key={slot.label} className={`cn-usage-win ${slot.binds ? 'cn-binds' : ''}`}>
-              <em>{slot.label}</em>
+              {i > 0 && (
+                <i className="cn-usage-sep" aria-hidden="true">
+                  /
+                </i>
+              )}
               <b>{slot.value}</b>
+              <em>{slot.label}</em>
             </i>
           ))}
         </i>
       ) : (
         <b>{reading.cost}</b>
       )}
-      {/* The age only appears once the reading has gone stale, so the chip is the same
-          shape on every ordinary glance and grows the caveat exactly when the figures
-          have stopped being current. */}
-      {reading.age !== null && <i className="cn-usage-age">{reading.age}</i>}
-      <i className="cn-chev">›</i>
+      {/* A stale reading is said in the *weight*, not in a second figure beside the
+          first. `11m ago` beside `62% / 30%` is three numbers where the chip has two
+          measurements, and the one an operator does not want is the one that changes
+          every minute. The sentence is still in the `title`. */}
     </button>
   );
 }
@@ -812,12 +690,216 @@ function originIssueNumber(originRef: string): number | null {
   return m ? Number(m[1]) : null;
 }
 
+/** What a menu row draws: its value, the tint it takes, and the sentence behind it. */
+interface MenuReading {
+  value: string | null;
+  tone: 'ill' | 'watch' | null;
+  /**
+   * A zero, or a state saying nothing — dimmed, never removed. The strip's own
+   * rule, and it survives the fold: a row that vanished at zero would be a
+   * reading an operator had to hunt for on the days it had nothing to say.
+   */
+  quiet: boolean;
+  title: string;
+}
+
+/** One row of the bar's menu — a glyph, a word, and what that word currently reads. */
+interface MenuEntry extends MenuReading {
+  key: string;
+  icon: 'alert' | 'rocket' | 'download' | 'globe' | 'book' | 'gear';
+  label: string;
+  /**
+   * Something is waiting on this row that its value cannot say — an unsaved theme
+   * edit on Config, and so far only that (issue #680). A **dot and not a count**,
+   * for the reason Config carries no value at all: what is pending is a fact, not a
+   * quantity.
+   */
+  pending?: boolean;
+  onPick: () => void;
+}
+
+/**
+ * The six ways-in the bar keeps folded away, in reading order.
+ *
+ * They are together because none of them is a gauge an operator glances at on
+ * every pulse: faults and briefs are counts that are usually zero, the build is
+ * `current` nearly all its life, and Record and Config are aimed at rather than
+ * read. Spread across the strip they cost the width that pushed the bar into a
+ * second row at laptop sizes; folded, each keeps its count — the menu's own
+ * button carries the dot when any of them has something to say, so nothing that
+ * used to be visible has become invisible.
+ *
+ * Exported for the tests, like {@link usageReading} and {@link environmentsReading}:
+ * the rows are behind a button an operator opens, so a rendered bar cannot say
+ * whether the fold that fills them is right — and every one of them was an
+ * assertion on the bar's own markup before it moved in here.
+ *
+ * **Environments is absent, not zeroed, where no environment declares a check** —
+ * the card's own exception, for its reason: a row reading `0 well` on a deployment
+ * that configured none announces a feature as broken. It opens the overview rather
+ * than a panel of its own, because the reasons and the per-environment rows are the
+ * card's and a second surface drawing them is a second place for them to disagree.
+ */
+export function menuEntries(view: CockpitView, actions: CockpitActions, themeUnsaved = false): MenuEntry[] {
+  const faults = view.state.errors.length;
+  // The queue, not the history: a launched brief that has been dispatched is
+  // an agent in the Fleet, and counting it here would have the reading climb as
+  // work starts rather than as it waits.
+  const queued = view.state.jobs.filter((job) => job.status === 'queued').length;
+  const health = view.state.environmentHealth ?? [];
+  const env = health.length === 0 ? null : environmentsReading(health, view.now);
+  const build = buildReading(view);
+  return [
+    {
+      key: 'faults',
+      icon: 'alert',
+      label: 'Faults',
+      value: `${faults}`,
+      tone: faults === 0 ? null : 'ill',
+      quiet: faults === 0,
+      title: 'Recorded faults — open the fault log',
+      onPick: () => actions.openPanel('faults'),
+    },
+    {
+      key: 'launch',
+      icon: 'rocket',
+      label: 'Launch',
+      value: `${queued}`,
+      tone: null,
+      quiet: queued === 0,
+      title: 'Briefs waiting for a free slot — open the launch desk',
+      onPick: () => actions.openPanel('launch'),
+    },
+    {
+      key: 'build',
+      icon: 'download',
+      label: 'Build',
+      value: build.value,
+      tone: build.tone,
+      quiet: build.quiet,
+      title: build.title,
+      onPick: () => actions.openPanel('build'),
+    },
+    ...(env === null
+      ? []
+      : [
+          {
+            key: 'env',
+            icon: 'globe' as const,
+            label: 'Env',
+            value: env.value,
+            tone: env.tone,
+            quiet: env.quiet,
+            title: env.title,
+            onPick: () => {
+              actions.selectGoal(null);
+              actions.openTab('overview');
+            },
+          },
+        ]),
+    {
+      key: 'record',
+      icon: 'book',
+      label: 'Record',
+      value: null,
+      tone: null,
+      quiet: false,
+      title: 'What the harness did, after the world snapshot forgot it — operator jobs, and the goals it has worked',
+      onPick: () => actions.openPanel('record'),
+    },
+    {
+      key: 'config',
+      icon: 'gear',
+      label: 'Config',
+      value: null,
+      tone: null,
+      quiet: false,
+      pending: themeUnsaved,
+      title: themeUnsaved
+        ? 'Config — an unsaved theme edit is pending; a reload drops it'
+        : 'Config — how this harness is configured',
+      onPick: () => actions.openConfig({}),
+    },
+  ];
+}
+
+/**
+ * The bar's menu: one button, and the six ways-in behind it.
+ *
+ * Closed on `Escape` and on focus leaving the group, which is the pair a keyboard
+ * and a pointer each need — a document-level listener would be a third thing to
+ * unsubscribe on a component the shell mounts and unmounts with the connection.
+ *
+ * The button takes a dot whenever a row inside has a tint, so the one thing the
+ * fold could have cost — noticing a fault or an upgrade without opening anything —
+ * is bought back in the spot the readings used to occupy.
+ */
+function BarMenu({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
+  const [open, setOpen] = useState(false);
+  // The theme's live preview persists when you leave its section, on purpose, but
+  // the bar that states what that costs does not — so an unsaved theme was
+  // indistinguishable from a saved one everywhere else in the cockpit (#680). It
+  // has to reach the *button*, not only the row it belongs to: a mark visible only
+  // once the menu is open is the same invisibility one fold further in.
+  const entries = menuEntries(view, actions, useThemeUnsaved());
+  const flagged = entries.some((entry) => entry.tone !== null || entry.pending === true);
+  const title = flagged ? 'More — something in here wants a look' : 'More — faults, launch, build, record and config';
+  return (
+    <div
+      className="cn-menu-wrap"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') setOpen(false);
+      }}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false);
+      }}
+    >
+      <button
+        type="button"
+        className={`cn-read cn-act cn-icon ${flagged ? 'cn-menu-flag' : ''} ${open ? 'cn-on' : ''}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((was) => !was)}
+        title={title}
+        aria-label={title}
+      >
+        <Icon name="menu" size={15} />
+      </button>
+      {open && (
+        <div className="cn-menu" role="menu">
+          {entries.map((entry) => (
+            <button
+              key={entry.key}
+              type="button"
+              role="menuitem"
+              className={`cn-menu-row ${entry.quiet ? 'cn-quiet' : ''} ${entry.pending === true ? 'cn-pending' : ''} ${
+                entry.tone === null ? '' : `cn-tone-${entry.tone}`
+              }`}
+              title={entry.title}
+              onClick={() => {
+                setOpen(false);
+                entry.onPick();
+              }}
+            >
+              <Icon name={entry.icon} size={14} />
+              <span>{entry.label}</span>
+              {entry.value !== null && <b>{entry.value}</b>}
+              <i className="cn-chev">›</i>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * The control-room strip: ident, the nav, the pulse, the fleet cap, and the
  * readings. The nav is here because this is the only row of the shell that never
- * scrolls — everything else lives inside `.cn-sit`, which does. The ident carries
- * the one way off this bar to a tracker — the compose modal where the harness can
- * file, and the external form it falls back to where it cannot ({@link Ident}).
+ * scrolls — everything else lives inside `.cn-sit`, which does. The ident is the
+ * wordmark and nothing else; the two ways off this bar to a tracker — the compose
+ * modal where the harness can file, and the external form it falls back to where it
+ * cannot — ride the readings group at the other end ({@link Asks}).
  *
  * Each reading is one subject stated once, in a plain text-and-number face — the
  * console has no icon set of its own to draw from. None reaches `api.js`: every
@@ -839,23 +921,24 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
   if (!view.connected) {
     return (
       <div className="cn-bar">
-        <Ident view={view} actions={actions} />
+        <Ident view={view} />
         <div className="cn-read">
           <span>Link</span>
           <b>offline</b>
+        </div>
+        {/* The offline bar keeps them, and the socket being down is the moment they
+            matter most: `Asks` falls back to the tracker's own form when it cannot
+            compose, which is the whole reason that fallback exists. */}
+        <div className="cn-reads">
+          <Asks view={view} actions={actions} />
         </div>
       </div>
     );
   }
 
-  const faultCount = state.errors.length;
-  // The queue, not the history: a launched brief that has been dispatched is
-  // an agent in the Fleet, and counting it here would have the reading climb as
-  // work starts rather than as it waits.
-  const queued = state.jobs.filter((job) => job.status === 'queued').length;
   return (
     <div className="cn-bar">
-      <Ident view={view} actions={actions} />
+      <Ident view={view} />
       <div className="cn-sep" />
 
       <Nav view={view} actions={actions} />
@@ -873,50 +956,25 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
       </div>
 
       <div className="cn-reads">
-        <Usage view={view} actions={actions} />
-        <Read
-          label="Faults"
-          value={`${faultCount}`}
-          quiet={faultCount === 0}
-          onOpen={() => actions.openPanel('faults')}
-          title="Recorded faults — open the fault log"
-        />
-        <Read
-          label="Launch"
-          value={`${queued}`}
-          quiet={queued === 0}
-          onOpen={() => actions.openPanel('launch')}
-          title="Briefs waiting for a free slot — open the launch desk"
-        />
-        <LocalRun view={view} actions={actions} />
-        <Build view={view} actions={actions} />
-        <Environments view={view} actions={actions} />
-        {/* The tail of the strip is the two ways-in that are not gauges. Every
-            reading above states a count or a state and is glanced at; these two
-            state nothing and are aimed at, so they sit together at the end rather
-            than interleaved among numbers that change.
-
-            Record is the durable work graph, which was the console's second nav
-            destination until everything on it found a better home. It keeps a way
-            in because it is the only surface that outlives the world snapshot —
-            the answer to "what happened to that job" long after the pulse forgot
-            — and it is a way in from the *bar* so it is reachable from a goal
-            page too, which a tab never was.
-
-            Config is a destination and not a modal, but it stays off the nav for
-            the same reason as Record: the nav is the surfaces work happens on,
-            and a button beside them would say configuration is another thing you
-            do rather than the thing you set up once. It is a cog and not a word
-            for the reason it is last: it is the one control here that measures
-            nothing ({@link Cog}). */}
-        <Read
-          label="Record"
-          value={null}
-          quiet={false}
-          onOpen={() => actions.openPanel('record')}
-          title="What the harness did, after the world snapshot forgot it — operator jobs, and the goals it has worked"
-        />
-        <ConfigCog actions={actions} />
+        <Asks view={view} actions={actions} />
+        {/* One pill, two readings. Both are gauges of *this machine and this
+            account* rather than of the work — what the allowance has left, and
+            whether anything is up locally — and each is two or three characters
+            wide. Two boxes around six characters was more chrome than reading; one
+            box with a rule down the middle is the same two ways-in at half the
+            width. Each half still opens its own surface, which is why they are two
+            buttons and not one. */}
+        <div className="cn-read cn-pill">
+          <Usage view={view} actions={actions} />
+          <i className="cn-pill-sep" />
+          <LocalRun view={view} actions={actions} />
+        </div>
+        {/* Everything that is not a gauge, behind one button. Usage and Local stay
+            on the strip because each is a number that moves on its own and is
+            glanced at; the six inside are counts that are usually zero and ways-in
+            that are aimed at, and a strip carrying all eight wrapped to two rows on
+            a laptop. See {@link menuEntries}. */}
+        <BarMenu view={view} actions={actions} />
       </div>
     </div>
   );
