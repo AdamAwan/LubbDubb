@@ -212,13 +212,7 @@ function pendingView(
             narrative: declared.narrative,
             parts: declared.parts,
           }),
-    warnings:
-      declared === null
-        ? []
-        : amendmentWarnings(
-            store.listPlanParts(amendment.planId),
-            declared.parts.map((p) => p.slug),
-          ),
+    warnings: declared === null ? [] : amendmentWarnings(store.listPlanParts(amendment.planId), declared.parts),
   };
 }
 

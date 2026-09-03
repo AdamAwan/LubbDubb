@@ -1304,15 +1304,43 @@ Ingestion merges on **slug**, so a part with a branch, a pull request or an outc
 and only its declaration is refreshed. A part the amendment no longer declares is retired only if
 nothing was started for it (`partsToRetire`). A part it adds is schedulable on the next pulse.
 
-That merge is what makes an amendment safe, and it is also the source of the two things the card warns
-about (`amendmentWarnings`) — the half of the reading a diff cannot give, because it is about the
-plan's _rows_ rather than its declarations:
+That merge is what makes an amendment safe, and it is also the source of the three things the card
+warns about (`amendmentWarnings`) — the half of the reading a diff cannot give, because it is about
+the plan's _rows_ rather than its declarations:
 
 - **A dropped part that work has started on keeps running.** `partsToRetire` spares it, so the
   amendment does not stop it; only the operator can end that run.
 - **A re-declared part that has already settled has its declaration rewritten while what it delivered
   stays as it was** — so the plan would then describe delivered work in terms nobody delivered it
   under.
+- **A re-declared part still in flight has its declaration rewritten under work that is neither
+  stopped nor re-dispatched.** The merge refreshes the row, rule `plan-part` produces no candidate for
+  a part that is already `dispatched`, and the agent — or the reviewer of the pull request open
+  against it — carries on to the declaration it was dispatched under. The warning names the part, its
+  status, its pull request if it has one, and which fields moved.
+
+Each part draws **at most one** of the three, and a settled part draws the second rather than the
+third: "neither stopped nor re-dispatched" is nonsense about a part that has finished.
+
+The in-flight warning is the one the surface was silent about while the warnings turned on
+`partSettled` alone, and the silence was observed rather than theoretical — an operator approved an
+amendment that rewrote the scope and acceptance of two parts that each had an open pull request built
+to the previous declaration, and nothing on the card said so. It is also the warning an operator is
+least able to reconstruct from the diff, which says what the plan _will_ say and not that somebody is
+already building the other thing.
+
+**"Materially changed" is what the work in flight was built to**, not everything the diff can name.
+The fields compared are the ones that reach the running work: `title`, `scope` and `acceptance` are
+rendered into the part's prompt (and `acceptance` is the checklist a reviewer is shown), `touches` is
+the path claim the agent is handed and a merged part's writes are checked against, `dependsOn` chose
+the branch the work was cut from, and `expectedKind` says what the part is meant to produce at all.
+`seq` (it moves whenever anything is inserted above a part), `rationale` (why this is its own pull
+request, never shown to the agent), `size` (a review estimate) and `profile` (read once, at dispatch,
+and a dispatched part keeps the agent it got) are not material. Prose is compared with runs of
+whitespace collapsed and a null `expectedKind` as `code`, so a re-wrapped paragraph or a spelled-out
+default is not a change. The narrowing is the point: a warning that fires on every amendment is one an
+operator learns to click past, and then the amendment that reverses an open PR's design reads exactly
+like the four before it that renamed a part.
 
 Applying compares-and-sets twice, against the amendment row _and_ the plan's status, for
 `releasePlan`'s reason: a verdict that arrives after the world moved must not write a document nobody

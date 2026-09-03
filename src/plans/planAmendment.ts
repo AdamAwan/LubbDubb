@@ -1,5 +1,5 @@
 import type { Store } from '../store/store.js';
-import type { Plan, PlanAmendment, PlanAmendmentAuthor, PlanPart } from '../types.js';
+import type { Plan, PlanAmendment, PlanAmendmentAuthor, PlanPart, PlanPartInput } from '../types.js';
 import { validatePlanDocument, planNarrative, planPartInputs } from './planDocument.js';
 import { ingestPlanDocument } from './planIngest.js';
 import { proposedPlanDiff } from './planDiff.js';
@@ -140,10 +140,7 @@ export function proposePlanAmendment(
         narrative: planNarrative(parsed.document),
         parts: declared,
       }),
-      warnings: amendmentWarnings(
-        parts,
-        declared.map((p) => p.slug),
-      ),
+      warnings: amendmentWarnings(parts, declared),
     },
   };
 }
@@ -261,33 +258,122 @@ export function supersedePlanAmendments(store: Store, planId: string, reason: st
  * meant — the half of the reading a diff cannot give, because it is about the
  * plan's *rows* rather than its declarations.
  *
- * Both warnings are consequences of the merge that makes an amendment safe in the
- * first place. A dropped part that work was started for is spared by
+ * All three warnings are consequences of the merge that makes an amendment safe in
+ * the first place. A dropped part that work was started for is spared by
  * `partsToRetire`, so the amendment does not stop it — the agent on it carries on,
  * and only the operator can end that run. A re-declared part that has already
  * settled has its *declaration* rewritten while the work it produced stays exactly
  * as it was, so the plan would then describe delivered work in terms nobody
- * delivered it under.
+ * delivered it under. And a re-declared part still **in flight** — an agent on it,
+ * or a pull request open against the declaration it was dispatched under — has its
+ * declaration rewritten under work that is neither stopped nor re-dispatched: the
+ * merge refreshes the row, rule `plan-part` produces no candidate for a part that
+ * is already dispatched, and the agent or the reviewer carries on to the old
+ * specification. That third one is what this surface was silent about while the
+ * warnings turned on `partSettled` alone, and it is the one an operator is least
+ * able to reconstruct from the diff — the diff says what the plan will say, not
+ * that somebody is already building the other thing.
  */
-export function amendmentWarnings(existing: PlanPart[], declared: string[]): string[] {
-  const keep = new Set(declared);
+export function amendmentWarnings(existing: PlanPart[], declared: PlanPartInput[]): string[] {
+  const keep = new Map(declared.map((p) => [p.slug, p]));
   const warnings: string[] = [];
   for (const part of liveParts(existing)) {
-    if (!keep.has(part.slug) && partHasWork(part)) {
-      warnings.push(
-        `"${part.slug}" is dropped by this amendment but work has already started on it (${part.status})` +
-          `${part.prNumber === null ? '' : `, PR #${part.prNumber}`} — it keeps running. End that run yourself if it ` +
-          'should stop.',
-      );
+    const redeclared = keep.get(part.slug);
+    // At most one warning per part, and the branches are ordered by what is true of
+    // it rather than by what is interesting: a settled part must not also draw the
+    // in-flight warning, because "neither stopped nor re-dispatched" is nonsense
+    // about a part that has finished — and two lines about one part read as two
+    // parts.
+    if (redeclared === undefined) {
+      if (partHasWork(part))
+        warnings.push(
+          `"${part.slug}" is dropped by this amendment but work has already started on it (${part.status})` +
+            `${part.prNumber === null ? '' : `, PR #${part.prNumber}`} — it keeps running. End that run yourself if it ` +
+            'should stop.',
+        );
+      continue;
     }
-    if (keep.has(part.slug) && partSettled(part)) {
+    if (partSettled(part)) {
       warnings.push(
         `"${part.slug}" has already finished (${part.status}). The amendment rewrites what it was for; it does ` +
           'not change what was delivered.',
       );
+      continue;
     }
+    if (!partHasWork(part)) continue;
+    const changed = materialChanges(part, redeclared);
+    if (changed.length === 0) continue;
+    warnings.push(
+      `"${part.slug}" is being worked right now (${part.status})` +
+        `${part.prNumber === null ? '' : `, PR #${part.prNumber}`} and this amendment rewrites its ` +
+        `${changed.join(', ')}. That work was built to the old declaration, and applying this neither stops it nor ` +
+        're-dispatches it — the agent carries on, and the pull request still implements what the plan used to ' +
+        'say. Re-dispatch or end it yourself if the change is meant to reach it.',
+    );
   }
   return warnings;
+}
+
+/**
+ * Which of an in-flight part's declared fields this amendment actually moves.
+ *
+ * "Material" is **what the work in flight was built to**, not everything a diff can
+ * name, and the narrowing is the point rather than an economy: a warning that fires
+ * on every amendment is one an operator learns to click past, and then the single
+ * amendment that reverses an open pull request's design reads exactly like the four
+ * before it that renamed a part.
+ *
+ * So the fields are the ones that reach the running work. `title`, `scope` and
+ * `acceptance` are rendered into the part's prompt (`plan-part`, plus
+ * `partDeclarationNote` for the last two), `touches` is the path claim that same
+ * note hands the agent and that a merged part's writes are checked against,
+ * `dependsOn` chose the branch the work was cut from (`partBase`), and
+ * `expectedKind` says what the part is meant to produce at all. Every one is
+ * something an agent or a reviewer is acting on *now*.
+ *
+ * Deliberately not material:
+ *
+ * - `seq` — it moves whenever anything is inserted above a part, which is
+ *   `changedFields`' reason for keeping it out of the diff as well.
+ * - `rationale` — why this is its own pull request rather than folded into a
+ *   sibling. Read by whoever judges the decomposition; it never reaches the agent.
+ * - `size` — an estimate of how big the part is to review.
+ * - `profile` — read once, at dispatch. A part already dispatched keeps the agent
+ *   it got, so re-declaring it says nothing about the work in flight.
+ *
+ * And two normalisations, both the same point — a re-declaration that says what the
+ * row already said is not a change: prose is compared with runs of whitespace
+ * collapsed, because a re-wrapped paragraph is a re-wrap and not a rewrite; and a
+ * null `expectedKind` is compared as `code`, which is what null *means*, so a
+ * planner spelling out the default does not read as reversing it.
+ */
+function materialChanges(part: PlanPart, declared: PlanPartInput): string[] {
+  const changed: string[] = [];
+  const compare = (field: string, from: string | null, to: string | null): void => {
+    if (from !== to) changed.push(field);
+  };
+  compare('title', prose(part.title), prose(declared.title));
+  compare('scope', prose(part.scope), prose(declared.scope));
+  compare('acceptance', prose(part.acceptance), prose(declared.acceptance));
+  // Order is not a difference in either list: `touches` is a claim on a set of
+  // paths and `dependsOn` is a set to the scheduler, so a re-ordered declaration
+  // means nothing to anybody — the reading `changedFields` already takes.
+  compare('paths', unordered(part.touches), unordered(declared.touches));
+  compare('dependencies', unordered(part.dependsOn), unordered(declared.dependsOn));
+  compare('expected outcome', part.expectedKind ?? 'code', declared.expectedKind ?? 'code');
+  return changed;
+}
+
+/** Prose as it is compared: blank and absent are one thing, and a re-wrap is not a rewrite. */
+function prose(text: string | null): string | null {
+  if (text === null) return null;
+  const collapsed = text.replace(/\s+/g, ' ').trim();
+  return collapsed === '' ? null : collapsed;
+}
+
+/** A declared list as an order-insensitive string, for {@link materialChanges}' reason. */
+function unordered(values: readonly string[]): string | null {
+  return values.length === 0 ? null : [...values].sort().join(', ');
 }
 
 /**
