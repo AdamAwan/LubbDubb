@@ -51,11 +51,10 @@ const TICKET_VIEW_KEY = 'lubbdubb.ticketView';
 export function readTicketView(raw: string | null): TicketView {
   // The **literal**, never `raw` itself, even though the comparison has already
   // proved they are the same two characters. What comes back goes on `Place`, and a
-  // `Place` is what the tickets list's request URL is built from (`api.ts`), so a
-  // value carrying its provenance out of storage taints the whole record — which is
-  // exactly what CodeQL reported against `authFetch` as client-side request forgery.
-  // Returning what this module wrote ends the flow here, at the one door the stored
-  // value comes through.
+  // `Place` is what the tickets list's request URL is built from (`api.ts`), so
+  // what leaves here is a value this module wrote rather than one carrying its
+  // provenance out of storage — the taint ends at the one door the stored value
+  // comes through.
   if (raw === 'table') return 'table';
   if (raw === 'card') return 'card';
   return DEFAULT_TICKET_VIEW;
