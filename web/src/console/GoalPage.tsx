@@ -534,9 +534,9 @@ function Header({
                 icon="stop"
                 tone="danger"
                 onClick={() => setEndingRun(true)}
-                title="End the harness's run at this goal — one way, terminal for the dispatcher, and it stops the agents, jobs and instructions still standing on it. It asks before it does."
+                title="Abandon the harness's run at this goal — one way, terminal for the dispatcher, and it stops the agents, jobs and instructions still standing on it. It asks before it does."
               >
-                End the run…
+                Abandon…
               </ControlSegment>
             )}
             {ended && (
@@ -544,9 +544,9 @@ function Header({
                 icon="stop"
                 tone="danger"
                 inert
-                title="This run was ended. Nothing more is scheduled for it."
+                title="This run was abandoned. Nothing more is scheduled for it."
               >
-                Ended
+                Abandoned
               </ControlSegment>
             )}
           </ControlSegments>

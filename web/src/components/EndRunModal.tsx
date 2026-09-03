@@ -85,14 +85,14 @@ export function EndRunModal({
       <div className="plan-modal" onClick={(e) => e.stopPropagation()}>
         <div className="pm-head">
           <span className="chip small">#{issueNumber}</span>
-          <span className="pm-title">End the run</span>
+          <span className="pm-title">Abandon the run</span>
           <button className="btn ghost pm-close" onClick={onClose}>
             close
           </button>
         </div>
         <p className="rb-intro">
-          On “{issueTitle}”. This ends the harness’s run at the goal — one way, and terminal for the dispatcher, so
-          nothing is scheduled for it again, though the report stays readable.
+          On “{issueTitle}”. This abandons the harness’s run at the goal — one way, and terminal for the dispatcher,
+          so nothing is scheduled for it again, though the report stays readable.
         </p>
         <ul className="rb-costs">
           <li>
@@ -152,7 +152,7 @@ export function EndRunModal({
             onRefused={setRefusal}
             onClick={submit}
           >
-            end the run
+            abandon the run
           </AsyncButton>
         </div>
       </div>

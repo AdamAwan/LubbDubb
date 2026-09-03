@@ -160,8 +160,8 @@ thing you have to remember on the day you happen to open the goal.
 
 ### 5. Conclude, or let it end
 
-A run lives until it is ended. `Done`, `Give instructions`, or `End the run` on a retained one. `End the
-run` is the destructive one and asks before it acts: it stops the dispatcher **and** kills whatever the
+A run lives until it is ended. `Done`, `Give instructions`, or `Abandon` on a retained one. `Abandon`
+is the destructive one and asks before it acts: it stops the dispatcher **and** kills whatever the
 goal still has in flight — its live agents, its queued jobs, the instructions you left standing — so
 the confirmation states the counts before you take them. A fleet
 whose goals never conclude fills the rail with obligations nobody has retired, and that is the state

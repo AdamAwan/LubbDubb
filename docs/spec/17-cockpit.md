@@ -1159,7 +1159,7 @@ kit](#the-control-kit) rather than as class strings.
 
 | caption         | controls                                              |
 | --------------- | ----------------------------------------------------- |
-| Run state       | Working / Done / End the run… — one segmented control |
+| Run state       | Working / Done / Abandon… — one segmented control     |
 | Steer the work  | Give instructions, Watch, Prioritise, the profile pin |
 | Leave this page | Ask Claude Code ↗, Open ticket ↗, File a new bug    |
 
@@ -1178,7 +1178,7 @@ turns a legible row into a quiz, which is the trade this header cannot make: it 
 operator reaches when they are least sure what is going on.
 
 **The run's three states are one control, not two buttons at opposite ends of the row.** `Mark done`
-and `End the run…` looked alike and read alike, and what separated them — one writes a verdict and
+and `End the run…` (now `Abandon…`) looked alike and read alike, and what separated them — one writes a verdict and
 stops scheduling, the other kills the goal's live agents, cancels its queued jobs and settles its
 standing instructions — was stated nowhere either of them could be seen. As segments of a **Run
 state** they are obviously alternatives, and which one the goal is in is readable without pressing
@@ -1188,8 +1188,8 @@ anything:
   which is what `Unfinish` was.
 - **Done** writes the `done` conclusion. Agents already running are left alone; nothing further is
   scheduled.
-- **End the run…** is drawn while the harness holds a run, and once one has been ended the segment
-  stays, **inert, reading `Ended`** — a control that vanished on being used would leave the state
+- **Abandon…** is drawn while the harness holds a run, and once one has been abandoned the segment
+  stays, **inert, reading `Abandoned`** — a control that vanished on being used would leave the state
   control saying the run is still working.
 
 Ending still wears `cn-danger`'s red at rest rather than only on hover, and still opens `EndRunModal`
@@ -1275,13 +1275,14 @@ dead end [refs](#links) exists to prevent.
   where it found it — which is exactly why it is captioned **Leave this page**, beside the two
   destinations,
   and not beside `Give instructions`. The pair had no visible difference and one is a second ticket.
-- **End the run** is keyed on the run **existing and not yet ended**, never on anything else the page
+- **Abandon** is keyed on the run **existing and not yet ended**, never on anything else the page
   is showing — the lesson `planId` and `retroRef` learned. It is how a retained run is ended, so it
   has to be reachable for exactly as long as the harness still holds one
   ([16](16-http-api.md#post-apiissuesnumberdismiss-run)). It is the header's one **destructive**
   control: it wears `cn-danger` (red at rest, not only on hover — the warning has to be there before
-  the pointer is), it reads `End the run…` on every goal, and it opens `EndRunModal` rather than
-  posting. That is unconditional now, and the change is earned by what the route became: ending a run
+  the pointer is), it reads `Abandon…` on every goal — the word the modal it opens uses, because a
+  control and the confirmation it raises disagreeing about what is about to happen is the one thing a
+  confirmation exists to prevent — and it opens `EndRunModal` rather than posting. That is unconditional now, and the change is earned by what the route became: ending a run
   kills the goal's live agents, cancels its queued jobs and settles its standing instructions, none of
   which can be undone. A one-click toggle that abandons work in flight is the friction rule pointed
   the wrong way — the rule is against friction nobody's decision asked for, and this is a decision.
