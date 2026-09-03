@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   prCommentOrigin,
+  prCommentSignalRef,
   prCommentsOrigin,
   reviewRecheckNote,
   reviewThreadNote,
@@ -85,4 +86,79 @@ test('a notify line names the PR, the author and the thread', () => {
   assert.match(note, /you/);
   assert.match(note, /thread c1/);
   assert.match(note, /rename this/);
+});
+
+const reply = (id: string, author: string, body: string, ours = false) => ({ id, author, body, ours });
+
+test('a thread renders its replies, not just the root', () => {
+  // The bug this exists for: the operator replies under a bot's finding saying
+  // which part actually needs fixing and how, and the agent was handed the bot's
+  // opening line and nothing else — answering the wrong question while the person
+  // who wrote the reply watched it ignore them.
+  const note = reviewThreadsNote([
+    {
+      ...thread('c1', 'reviewer', 'this loop looks expensive'),
+      replies: [reply('r1', 'operator', 'only the inner one — hoist the lookup out of it')],
+    },
+  ]);
+  assert.match(note, /this loop looks expensive/);
+  assert.match(note, /operator replied:/);
+  assert.match(note, /hoist the lookup out of it/);
+});
+
+test('a reply body is quoted like a root, so it cannot be read as another thread', () => {
+  const note = reviewThreadsNote([
+    { ...thread('c1', 'reviewer', 'a finding'), replies: [reply('r1', 'operator', 'fix it\n2. and this')] },
+  ]);
+  const lines = note.split('\n').filter((l) => l.includes('and this'));
+  assert.equal(lines.length, 1);
+  assert.match(lines[0]!, /^ {3}> /);
+});
+
+test("the fleet's own replies are marked as its own", () => {
+  // Unmarked, an agent reads the harness's last answer back as a fresh
+  // instruction and makes the same change twice.
+  const note = reviewThreadsNote([
+    { ...thread('c1', 'reviewer', 'a finding'), replies: [reply('r1', 'operator', 'done in a5f2', true)] },
+  ]);
+  assert.match(note, /\(the fleet, earlier\)/);
+});
+
+test('the newest message is named as the live ask, and only when there is a conversation', () => {
+  const withReplies = reviewThreadsNote([
+    { ...thread('c1', 'reviewer', 'a finding'), replies: [reply('r1', 'operator', 'narrow it to the parser')] },
+  ]);
+  assert.match(withReplies, /last message in a thread is the live ask/i);
+  // A root-only review renders byte-identically to before this existed: the
+  // ordering rule is about a conversation, and there isn't one.
+  assert.doesNotMatch(reviewThreadsNote([thread('c1', 'reviewer', 'a finding')]), /live ask/i);
+});
+
+test('the re-check covers a thread that gained a reply', () => {
+  // The commonest way a review moves mid-run, and the one an edit-or-new-thread
+  // check reads as nothing having happened.
+  assert.match(reviewRecheckNote(7), /carrying a reply that is not above/);
+});
+
+test('a notify line carries the replies that moved the thread', () => {
+  // This line is often the only delivery a follow-up gets — it is sent *because*
+  // the thread moved, and what moved it is the reply.
+  const note = reviewThreadNote(42, {
+    ...thread('c1', 'reviewer', 'this loop looks expensive'),
+    replies: [reply('r1', 'operator', 'only the inner one')],
+  });
+  assert.match(note, /only the inner one/);
+  assert.match(note, /live ask/);
+});
+
+test('the notify de-dup key moves when a thread gains a reply, and the thread ref does not', () => {
+  // Keyed on the thread alone, a follow-up on a thread the running agent was
+  // already told about reads as something already delivered and reaches nobody.
+  // The ref must not move with it: it is what a refused reply draft is filed
+  // under and what `rejectionGuidance` matches whole.
+  const root = thread('c1', 'reviewer', 'a finding');
+  const answered = { ...root, replies: [reply('r1', 'operator', 'narrow it to the parser')] };
+  assert.equal(prCommentSignalRef(42, root), prCommentOrigin(42, 'c1'));
+  assert.notEqual(prCommentSignalRef(42, answered), prCommentSignalRef(42, root));
+  assert.equal(prCommentOrigin(42, 'c1'), 'pr:42:comment:c1');
 });
