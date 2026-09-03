@@ -86,6 +86,8 @@ interface Recorded {
   historySince: string[];
   labelSets: Array<{ number: number; label: string; present: boolean }>;
   closed: Array<{ number: number; reason: string }>;
+  /** PR numbers `closePull` was called for — the restart's close. */
+  closedPulls: number[];
   closedSince: string[];
   annotationReads: number[];
   jobLogReads: number[];
@@ -110,6 +112,7 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     historySince: [],
     labelSets: [],
     closed: [],
+    closedPulls: [],
     closedSince: [],
     annotationReads: [],
     jobLogReads: [],
@@ -227,6 +230,9 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     },
     async closeIssue(number, reason) {
       recorded.closed.push({ number, reason });
+    },
+    async closePull(number) {
+      recorded.closedPulls.push(number);
     },
   };
   return { api, recorded };
@@ -1044,6 +1050,18 @@ test('createPullRequest posts head/base to the pulls API and returns the new num
   assert.deepEqual(recorded.createdPulls, [
     { head: 'issue/12/cursor', base: 'issue/12/schema', title: '#12 [2/2] feat(store): cursor', body: 'part of #12' },
   ]);
+});
+
+test('closePr closes a pull request that will not be merged', async () => {
+  const { api, recorded } = fakeApi();
+  const sc = new GitHubSourceControlIntegration({ api });
+
+  // The plan part restart's first step. Idempotent by GitHub's own contract — the
+  // patch is accepted whatever state the pull request is in — so pressing restart
+  // twice is two successes rather than a failure the operator has to interpret.
+  assert.deepEqual(await sc.closePr({ prNumber: 7 }), { ok: true, ref: 'pr:7' });
+  assert.deepEqual(await sc.closePr({ prNumber: 7 }), { ok: true, ref: 'pr:7' });
+  assert.deepEqual(recorded.closedPulls, [7, 7]);
 });
 
 test('deleteBranch reaps a merged branch, and an already-absent one is still a success', async () => {

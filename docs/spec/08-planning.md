@@ -1304,15 +1304,43 @@ Ingestion merges on **slug**, so a part with a branch, a pull request or an outc
 and only its declaration is refreshed. A part the amendment no longer declares is retired only if
 nothing was started for it (`partsToRetire`). A part it adds is schedulable on the next pulse.
 
-That merge is what makes an amendment safe, and it is also the source of the two things the card warns
-about (`amendmentWarnings`) — the half of the reading a diff cannot give, because it is about the
-plan's _rows_ rather than its declarations:
+That merge is what makes an amendment safe, and it is also the source of the three things the card
+warns about (`amendmentWarnings`) — the half of the reading a diff cannot give, because it is about
+the plan's _rows_ rather than its declarations:
 
 - **A dropped part that work has started on keeps running.** `partsToRetire` spares it, so the
   amendment does not stop it; only the operator can end that run.
 - **A re-declared part that has already settled has its declaration rewritten while what it delivered
   stays as it was** — so the plan would then describe delivered work in terms nobody delivered it
   under.
+- **A re-declared part still in flight has its declaration rewritten under work that is neither
+  stopped nor re-dispatched.** The merge refreshes the row, rule `plan-part` produces no candidate for
+  a part that is already `dispatched`, and the agent — or the reviewer of the pull request open
+  against it — carries on to the declaration it was dispatched under. The warning names the part, its
+  status, its pull request if it has one, and which fields moved.
+
+Each part draws **at most one** of the three, and a settled part draws the second rather than the
+third: "neither stopped nor re-dispatched" is nonsense about a part that has finished.
+
+The in-flight warning is the one the surface was silent about while the warnings turned on
+`partSettled` alone, and the silence was observed rather than theoretical — an operator approved an
+amendment that rewrote the scope and acceptance of two parts that each had an open pull request built
+to the previous declaration, and nothing on the card said so. It is also the warning an operator is
+least able to reconstruct from the diff, which says what the plan _will_ say and not that somebody is
+already building the other thing.
+
+**"Materially changed" is what the work in flight was built to**, not everything the diff can name.
+The fields compared are the ones that reach the running work: `title`, `scope` and `acceptance` are
+rendered into the part's prompt (and `acceptance` is the checklist a reviewer is shown), `touches` is
+the path claim the agent is handed and a merged part's writes are checked against, `dependsOn` chose
+the branch the work was cut from, and `expectedKind` says what the part is meant to produce at all.
+`seq` (it moves whenever anything is inserted above a part), `rationale` (why this is its own pull
+request, never shown to the agent), `size` (a review estimate) and `profile` (read once, at dispatch,
+and a dispatched part keeps the agent it got) are not material. Prose is compared with runs of
+whitespace collapsed and a null `expectedKind` as `code`, so a re-wrapped paragraph or a spelled-out
+default is not a change. The narrowing is the point: a warning that fires on every amendment is one an
+operator learns to click past, and then the amendment that reverses an open PR's design reads exactly
+like the four before it that renamed a part.
 
 Applying compares-and-sets twice, against the amendment row _and_ the plan's status, for
 `releasePlan`'s reason: a verdict that arrives after the world moved must not write a document nobody
@@ -1321,6 +1349,45 @@ row `superseded` rather than leaving it pending, because a row nothing can ever 
 operator is asked about for good. The stored document is re-validated rather than trusted — it may
 have been written by an older build, and a document the schema has since moved past is refused whole
 rather than ingested in halves.
+
+### Restarting a part
+
+An amendment that rewrites a part's scope does not stop the pull request already open against the old
+one. That is the design — "the plan keeps scheduling while the question is open" cuts both ways, and
+the merge on slug is what makes an amendment safe — but it leaves an operator holding a pull request
+built to a declaration nobody stands behind any more. Until this existed, ending that run meant
+closing the pull request by hand on the provider and deleting the branch by hand beside it.
+
+`POST /api/plans/:id/restart-part` ([16](16-http-api.md#post-apiplansidrestart-part)) is the
+affordance, and `src/plans/partRestart.ts` is the module. It makes three writes, and each one is load
+bearing:
+
+- **The pull request is closed** through `ActionSink.closePr`. Reset the row alone and the reconciler
+  puts it straight back: `observePartPr`'s first reading is "an open PR on the branch → `in_review`".
+- **The branch is dropped**, locally through `Worktrees.deleteBranch` — the lease and the ref together
+  — and then on the remote. `WorktreeManager.ensure` is reuse-first
+  ([09](09-execution.md#worktrees)), so a branch left standing is handed back to the re-dispatched
+  agent with the superseded commits on it, as its own starting point.
+- **The row goes back to `ready` with `prNumber` and `branch` cleared**, which is what makes rule
+  `plan-part` schedule it again — against the amended declaration, because the declaration is
+  whatever the plan holds when the prompt is rendered.
+
+**It is never automatic.** Applying an amendment reaches none of this. Closing a reviewable pull
+request on the strength of a diff in a scope field is outward-facing and effectively irreversible —
+somebody may be halfway through reviewing it — so the harness offers the act and an operator makes it.
+That is the same line the amendment itself draws: a live plan that rewrote itself on an agent's say-so
+would change what other agents were dispatched against mid-flight.
+
+It refuses four states, each naming its reason rather than the rule: a part that has already settled
+(amend the plan for a new part instead of redoing delivered work), a part with no pull request open, a
+part with a live agent on it (the restart would delete the worktree that agent is sitting in), and a
+deployment whose provider is not `PrCloseCapable` — where the whole control is absent from the plan
+sheet rather than drawn and refused, the way the board draws no drag where `canSetWorkItemState` is
+false ([15](15-integrations.md#outbound-is-many-small-interfaces-not-one-fat-one)).
+
+On the sheet it is a two-step confirm on a part in review, beside its PR chip: `in_review` is exactly
+the state that means an open pull request and no agent running, so the control is offered only where it
+applies. → [17](17-cockpit.md#the-plan-sheet)
 
 ### What a rejection deliberately does not do
 

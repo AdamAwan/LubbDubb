@@ -144,6 +144,7 @@ function fakeApi(script: Script): { api: AzureDevOpsApi; counts: Counts; script:
     createPull: nope,
     async setPullTitle() {},
     async setPullBase() {},
+    async abandonPullRequest() {},
     async deleteBranch() {
       return true;
     },

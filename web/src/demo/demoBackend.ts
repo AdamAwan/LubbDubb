@@ -871,6 +871,23 @@ class DemoServer {
   }
 
   /**
+   * Restart one part — the demo mirror of closing the pull request and handing the
+   * part back. The PR row goes with it: a demo that left the pull request on the
+   * board would show the one state the real restart exists to get out of.
+   */
+  async restartPart(planId: string, slug: string): Promise<{ ok: true; detail: string }> {
+    const part = (this.state.planParts ?? []).find((p) => p.planId === planId && p.slug === slug);
+    if (!part?.prNumber) return { ok: true, detail: 'nothing to restart' };
+    const prNumber = part.prNumber;
+    this.state.world.pullRequests = this.state.world.pullRequests.filter((p) => p.number !== prNumber);
+    part.status = 'ready';
+    part.prNumber = null;
+    part.branch = null;
+    this.dirty();
+    return { ok: true, detail: `closed PR #${prNumber} and put "${slug}" back to ready` };
+  }
+
+  /**
    * Toggle an issue's watch/ignore tags — the demo mirror of the real write-back
    * (opt-in), **including the container cascade**: watching a Feature tags every
    * descendant, as the route does, or the demo would show a click that the real
@@ -4435,6 +4452,7 @@ export const demoApi = {
     getServer().setIssueAreaPath(issueNumber, areaPath),
   setPartProfile: (planId: string, slug: string, profile: string | null) =>
     getServer().setPartProfile(planId, slug, profile),
+  restartPart: (planId: string, slug: string) => getServer().restartPart(planId, slug),
   setIssueConclusion: (issueNumber: number, verdict: 'done' | 'more_work' | null) =>
     getServer().setIssueConclusion(issueNumber, verdict),
   setIssueAppraisal: (issueNumber: number, verdict: 'workable' | 'unclear' | null) =>

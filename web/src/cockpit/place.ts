@@ -1,4 +1,5 @@
 import type { ConfigTab, ConsolePanel, ConsoleTab, InsightsView } from './actions.js';
+import { GOAL_SECTIONS } from '../view/goalPage.js';
 import type {
   InsightsWindow,
   TicketOrder,
@@ -95,20 +96,26 @@ export interface Place {
    */
   obstacleEnded: boolean;
   /**
-   * The goal page's reference sections that are **open**, by name — `ticket` and
-   * `record`.
+   * The goal page's foldable sections the operator has **opened**, by name.
    *
-   * Open rather than closed, which is the other way round from `collapsed` and
-   * `ticketColumns`, and for the same underlying rule: the empty list has to be
-   * the page as it stands. Both of these are drawn shut — neither is owed
-   * anything, and the ticket is read once at pickup — so "nothing open" is the
-   * default and a bare URL.
+   * Two lists rather than one, because a section's default is no longer *shut*: it
+   * is {@link goalSectionsOpen}'s reading of how far the goal has got, and that
+   * reading moves under the operator as the work does. One list could only say
+   * "not the default", so a card folded away while the goal was mid-flight would
+   * spring open the moment it shipped — and a card opened early would slam shut
+   * for the same reason. Two lists say which way the operator went, and both
+   * outrank the default.
+   *
+   * The empty pair is still the page as it stands: a bare URL is every section at
+   * whatever the goal's own progress makes it.
    *
    * A place rather than a `useState` in the page for the reason every field here
    * is one: a disclosure opened and then stepped back out of has to come back, and
    * a link somebody sends to a goal's ticket body has to open on it.
    */
   goalOpen: string[];
+  /** The same, for the sections the operator has **folded away**. See {@link goalOpen}. */
+  goalShut: string[];
   /** Which section of the config page is in front. */
   configTab: ConfigTab;
   /** The config group the page is showing, or null for the first one. */
@@ -282,6 +289,7 @@ export const NOWHERE: Place = {
   reviewPack: null,
   reviewIdea: null,
   goalOpen: [],
+  goalShut: [],
   obstacle: null,
   // Shut, which is what the tail's own count buys: the page as it stands is the
   // empty value and a bare URL.
@@ -357,12 +365,17 @@ const PANEL_ALIASES: Readonly<Record<string, ConsoleTab>> = {
   lessons: 'obstacles',
 };
 /**
- * The goal page's two reference sections, validated like every other parameter
- * here: a name this list does not carry is dropped rather than carried, because a
+ * The goal page's foldable sections, validated like every other parameter here: a
+ * name this list does not carry is dropped rather than carried, because a
  * hand-edited `?open=` is an input an operator can type and an unknown entry would
  * be a section held open that does not exist.
+ *
+ * Read off {@link GOAL_SECTIONS} rather than written again, because the page's
+ * defaults are keyed on the same union: a section the page learned to fold and
+ * this list never learned about is one whose disclosure writes a parameter that is
+ * parsed straight back to nothing, so the fold works until you reload.
  */
-const GOAL_SECTIONS: readonly string[] = ['record', 'ticket'];
+const SECTIONS: readonly string[] = GOAL_SECTIONS;
 const TICKET_WATCH: readonly TicketWatchFilter[] = ['any', 'watched', 'unwatched'];
 const TICKET_TRACKING: readonly TicketTrackingFilter[] = ['any', 'live', 'frozen'];
 const TICKET_GROUP = ['feature', 'flat'] as const;
@@ -445,7 +458,8 @@ export function readPlace(search: string): Place {
     hatch: param(query, 'hatch'),
     scratchpad: param(query, 'pad'),
     ...readReviewPack(param(query, 'pack'), param(query, 'idea')),
-    goalOpen: readStrings(param(query, 'open')).filter((name) => GOAL_SECTIONS.includes(name)),
+    goalOpen: readStrings(param(query, 'open')).filter((name) => SECTIONS.includes(name)),
+    goalShut: readStrings(param(query, 'shut')).filter((name) => SECTIONS.includes(name)),
     obstacle: param(query, 'obs'),
     obstacleEnded: query.has('ended'),
     configTab: CONFIG_TABS.find((t) => t === param(query, 'section')) ?? 'values',
@@ -673,6 +687,7 @@ export function placeQuery(place: Place): string {
   // the record and the record then the ticket are one place rather than two
   // history entries.
   if (place.goalOpen.length > 0) query.set('open', place.goalOpen.join(','));
+  if (place.goalShut.length > 0) query.set('shut', place.goalShut.join(','));
   if (place.obstacle !== null) query.set('obs', place.obstacle);
   if (place.obstacleEnded) query.set('ended', '1');
   if (place.configTab !== 'values') query.set('section', place.configTab);

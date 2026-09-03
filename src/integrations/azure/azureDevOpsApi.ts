@@ -136,6 +136,12 @@ export interface AzureDevOpsApi {
     lastMergeSourceCommit: string,
     method: MergeMethod,
   ): Promise<AzMergeResult>;
+  /**
+   * Abandon a pull request — Azure's "closed without merging", which is a
+   * `status` patch rather than a verb of its own. Idempotent: a pull request
+   * already abandoned takes the same patch and stays abandoned.
+   */
+  abandonPullRequest(pullRequestId: number): Promise<void>;
   /** Add (`present`) or remove a label on a PR. Idempotent. */
   setPullLabel(pullRequestId: number, label: string, present: boolean): Promise<void>;
 

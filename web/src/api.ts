@@ -499,6 +499,13 @@ const realApi = {
   // current profile.
   setPartProfile: (planId: string, slug: string, profile: string | null) =>
     post<{ ok: true }>(`/api/plans/${planId}/part-profile`, { slug, profile: profile ?? '' }),
+  // Restart one plan part: close the pull request built to the superseded
+  // declaration, drop its branch, and put the part back to `ready` so the plan
+  // schedules it again. Every refusal comes back as a 400 with the reason in it —
+  // a settled part, a part with no PR, an agent still on it, a provider that
+  // cannot close a pull request.
+  restartPart: (planId: string, slug: string) =>
+    post<{ ok: true; detail: string }>(`/api/plans/${planId}/restart-part`, { slug }),
   // The operator's override of whether an issue is finished. `null` clears it,
   // returning the issue to whatever its agent or its plan says.
   setIssueConclusion: (issueNumber: number, verdict: 'done' | 'more_work' | null) =>

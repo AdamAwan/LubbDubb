@@ -108,6 +108,8 @@ export function App() {
       onOpenGoal={(ref) => status.actions.selectGoal(ref)}
       onAcceptance={(id, slug, criterion, met) => status.actions.setAcceptance(id, slug, criterion, met)}
       onPartProfile={(id, slug, profile) => status.actions.setPartProfile(id, slug, profile)}
+      onRestartPart={(id, slug) => status.actions.restartPart(id, slug)}
+      canClosePr={state.config.canClosePr}
       profiles={state.config.profiles}
       defaultProfile={state.config.defaultProfile}
       desktopFolder={state.config.desktopFolder}

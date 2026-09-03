@@ -121,6 +121,7 @@ function ghApi(script: GhScript): GitHubApi {
     setPullTitle: unused('setPullTitle'),
     setPullBase: unused('setPullBase'),
     updatePullBranch: unused('updatePullBranch'),
+    closePull: unused('closePull'),
     deleteBranch: unused('deleteBranch'),
   };
 }
@@ -220,6 +221,7 @@ function azApi(script: AzScript): AzureDevOpsApi {
     createPull: unused('createPull'),
     setPullTitle: unused('setPullTitle'),
     setPullBase: unused('setPullBase'),
+    abandonPullRequest: unused('abandonPullRequest'),
     deleteBranch: unused('deleteBranch'),
   };
 }

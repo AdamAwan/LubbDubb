@@ -3,6 +3,7 @@ import type {
   BranchDeleteInput,
   PrBaseInput,
   PrBaseUpdateInput,
+  PrCloseInput,
   PrCreateInput,
   PrLabelInput,
   PrMergeInput,
@@ -21,6 +22,7 @@ import type {
   Integration,
   PrBaseCapable,
   PrBaseUpdateCapable,
+  PrCloseCapable,
   PrCreateCapable,
   PrLabelCapable,
   PrMergeCapable,
@@ -128,6 +130,7 @@ export class GitHubSourceControlIntegration
     PrReplyCapable,
     PrThreadResolveCapable,
     PrMergeCapable,
+    PrCloseCapable,
     PrLabelCapable,
     PrCreateCapable,
     PrTitleCapable,
@@ -396,6 +399,17 @@ export class GitHubSourceControlIntegration
   async mergePr(input: PrMergeInput): Promise<SendResult> {
     const result = await this.opts.api.mergePull(input.prNumber, input.method);
     return { ok: result.merged, ref: result.sha };
+  }
+
+  /**
+   * Close a pull request that will not be merged. Always `ok: true`: GitHub
+   * accepts the patch whatever state the pull request is already in, so
+   * already-closed is a success — which is what the restart's idempotence rests
+   * on — and anything else throws.
+   */
+  async closePr(input: PrCloseInput): Promise<SendResult> {
+    await this.opts.api.closePull(input.prNumber);
+    return { ok: true, ref: `pr:${input.prNumber}` };
   }
 
   resolveRefUrl(ref: string): string | null {

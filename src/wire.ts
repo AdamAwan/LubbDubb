@@ -789,6 +789,19 @@ interface CockpitConfig {
    */
   canCloseIssue: boolean;
   /**
+   * Whether the provider can close a **pull request** — the plan sheet's "restart
+   * this part", and nothing else, depends on it.
+   *
+   * Asked of the connector for `canCloseIssue`'s reason, and shipped for the same
+   * one: `closePr` throws where no integration implements it, and a restart that
+   * could not close the pull request would take the part back to `ready` only for
+   * the reconciler to read the still-open PR and put it back into review — having
+   * deleted its branch on the way. False draws no control, the way the board draws
+   * no drag where `canSetWorkItemState` is false.
+   * → `docs/spec/08-planning.md#restarting-a-part`
+   */
+  canClosePr: boolean;
+  /**
    * Whether this deployment has a feature board — the operator's `featureBoard`
    * flag **and** a provider with a container hierarchy to roll up.
    *
