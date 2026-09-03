@@ -3,6 +3,7 @@ import type { RemedyCauseTotal, RemedyInsights, RemedyKindHealth } from '../type
 import { fmtUsd, relTime } from './util.js';
 import { fmtShare, share } from './insightsFormat.js';
 import { Ref } from './refs.js';
+import { HeadRow } from './panel.js';
 
 /**
  * Causes: what keeps sending the fleet back.
@@ -256,7 +257,7 @@ function Lately({ remedies }: { remedies: RemedyInsights }): JSX.Element {
     <div>
       {remedies.recent.map((r) => (
         <div className="rm-row" key={r.id}>
-          <div className="rm-head">
+          <HeadRow align="baseline" className="rm-head">
             {/* The pull request as a ref, never as text — a row that names one and
                 offers no way there is the cockpit's most repeated dead end. */}
             <Ref to={r.ref} />
@@ -266,7 +267,7 @@ function Lately({ remedies }: { remedies: RemedyInsights }): JSX.Element {
             </span>
             {r.checks.length > 0 && <span className="bl mono">{r.checks.join(', ')}</span>}
             <span className="rm-when">{relTime(r.at)}</span>
-          </div>
+          </HeadRow>
           <div>{r.summary}</div>
         </div>
       ))}

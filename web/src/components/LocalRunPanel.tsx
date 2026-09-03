@@ -13,6 +13,7 @@ import { ConfirmButton } from './ConfirmButton.js';
 import { Ref } from './refs.js';
 import { TranscriptPane } from './TranscriptPane.js';
 import { elapsed, fmtUsd, relTime } from './util.js';
+import { Label } from './label.js';
 
 /** How often the tail is refetched while the run is live. */
 const POLL_MS = 2000;
@@ -509,7 +510,7 @@ function Tile({
 }): JSX.Element {
   return (
     <div className={`lrun-tile${tone === undefined ? '' : ` ${tone}`}`}>
-      <span className="lrun-tile-label">{label}</span>
+      <Label dense>{label}</Label>
       <span className="lrun-tile-value">{children}</span>
       {sub !== undefined && <span className="lrun-tile-sub">{sub}</span>}
     </div>

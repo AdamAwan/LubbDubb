@@ -4,6 +4,7 @@ import { AsyncButton } from './AsyncButton.js';
 import { ConfirmButton } from './ConfirmButton.js';
 import { expectation, WatchReadingLine } from './WatchDigest.js';
 import { renderMarkdown } from './markdown.js';
+import { HeadRow } from './panel.js';
 
 /**
  * The goal's declared checks, on the goal's own page, with the controls that
@@ -118,7 +119,7 @@ function SignalRow({
     <div className={`cn-sig-row ${tone}`}>
       <span className="cn-sig-stripe" />
       <div className="cn-sig-body">
-        <div className="cn-sig-head">
+        <HeadRow className="cn-sig-head">
           <b className="cn-name">{check.title}</b>
           <i className="cn-chip">{check.kind}</i>
           <i className="cn-chip cn-lower" title="The author’s own id, and the merge key every writer folds on">
@@ -134,7 +135,7 @@ function SignalRow({
               awaiting you
             </i>
           )}
-        </div>
+        </HeadRow>
         <p className="cn-sig-expect">{expectation(check)}</p>
         <pre className="cn-sig-query">{check.query}</pre>
         {check.presence !== null && (

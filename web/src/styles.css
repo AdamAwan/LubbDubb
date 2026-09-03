@@ -51,6 +51,12 @@
   --red-line: #5a231d;
   --red-fill: #2a1512;
   --accent-fill: #33230d;
+  /* The accent's tinted border, a mix rather than a literal for the reason the
+     blue ones are: the warm *fills* were hand-tuned against contrast targets and
+     a formula cannot reproduce hand-tuning, but a border is a border. Before it
+     existed the one tag drawn in the accent bordered in `--accent` itself, at
+     full strength, and out-shouted the red one beside it. */
+  --accent-line: color-mix(in srgb, var(--accent) 40%, var(--well));
   --green-line: #1e4d33;
   --green-fill: #16240f;
   --blue-line: color-mix(in srgb, var(--blue) 36%, var(--well));
@@ -134,12 +140,29 @@
   --r-lg: 0;
   --r-pill: 0;
 
+  /* The two insets a frame is allowed to have. Three steps counting `flush`, and
+     three is the point: the cockpit reached five paddings between 6px 8px and
+     14px 16px with nothing choosing between them, so the fix is not a better
+     spread but a ramp short enough that picking a step is a decision.
+     → docs/spec/17-cockpit.md#the-frame */
+  --pad-snug: 10px 12px;
+  --pad-roomy: 14px 16px;
+
   --font-ui: 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: 'Cascadia Mono', Consolas, ui-monospace, 'SF Mono', Menlo, monospace;
   /* Condensed, mechanical, and already on the machine in both directions:
      Bahnschrift ships with Windows, DIN Alternate with macOS. Bundling a webfont
      to say the same thing would cost a data URI and a licence audit. */
   --font-display: 'Bahnschrift', 'DIN Alternate', 'Segoe UI Semibold', 'Segoe UI', system-ui, sans-serif;
+
+  /* The eyebrow ramp — two sizes, one tracking, one weight, for every uppercase
+     label the cockpit draws. The tracking is em-relative on purpose: one value
+     holds at both sizes, so "how much tracking at this size" is not a decision
+     anybody has to make again. */
+  --label-size: 11px;
+  --label-size-sm: 10px;
+  --label-track: 0.08em;
+  --label-weight: 600;
 
   /* Extruded, not flat: 1px light top/left, 1px dark bottom/right. */
   --border-hi: color-mix(in srgb, var(--grey) 23%, var(--border));
@@ -262,6 +285,216 @@ body {
 .chip.info {
   color: var(--blue);
   border-color: var(--blue-line);
+}
+
+/* ---------- the eyebrow, and the two sizes every uppercase label reads through --
+
+   An uppercase caption over a block, a column head, a tile's word above its
+   figure: one thing, drawn at forty different font-size/letter-spacing pairs —
+   11px/0.04em, 11px/0.03em, 11px/0.5px, 10.5px/0.7px, 9.5px/0.14em and on. Nobody
+   chose those apart; each is a call site answering a question the sheet had never
+   answered once. It is the same failure the tag had, in the two properties a
+   reader notices last and a designer notices first.
+
+   The ramp is two steps and no more. `lb` is the section label — the caption over
+   a block, a group, a panel. `lb-sm` is the dense one: a table's column heads and
+   a stat tile's word, where the label sits in a grid of many and must not compete
+   with the figures beside it. A third step would be a size somebody picked, which
+   is what this replaces.
+
+   What the ramp owns is size, tracking, weight and case. **Family and colour stay
+   with the surface**, because those are the two places the cockpit's registers
+   genuinely differ: the review pack and the console draw their labels in mono, and
+   `--muted`/`--grey` against `--cn-fg-faint`/`--cn-fg-dim` are the two families
+   ([Tokens](../../docs/spec/17-cockpit.md#tokens)) rather than a namespace. So
+   there are two faces, `lb` and `cn-lb`, and a rule that wants the brighter step
+   says so in one line of its own.
+
+   Both faces are declared here rather than one per sheet: they are one decision
+   with two answers, and split across two files is exactly how they drift back
+   apart. `console.css` says nothing about them — the same argument scrollbars
+   settle the same way.
+
+   The named classes below are the labels that keep markup of their own. They join
+   the rule rather than being renamed, because a rename of forty classes is a diff
+   about names; this one is about the type.
+   → docs/spec/17-cockpit.md#the-eyebrow */
+.lb,
+.lb-sm,
+.cn-lb,
+.cn-lb-sm,
+.caveat-ack-label,
+.world-row,
+.world-group-kind,
+.dispatch-reason-label,
+.pm-verify b,
+.pm-accept > b,
+.pm-stat span,
+.pm-section-label,
+.pm-wbody > div > b,
+.pm-wpending > b,
+.pm-vbody b,
+.pm-vamend-head i,
+.pad-decision-label,
+.sp-sub,
+.sp-tbl th,
+.tickets-flabel,
+.tickets-thead,
+.tickets-rows .tickets-why h4,
+.cfg-railhead,
+.cfg-card > h3,
+.cn-fb-sum-block h4,
+.cn-fb-brief-list h4,
+.rp-kicker,
+.rp-rule,
+.rp-claims-head,
+.rp-code-cap,
+.rv-detail dt,
+.species-odd dt,
+.species-table thead th,
+.flag-chip-kind,
+.lrun-tag,
+.cfg-effect,
+.species-band-head h4,
+.species-age b,
+.species-stat span,
+.species-landed,
+.pet-stage,
+.cn-read span,
+.cn-rail-head h2,
+.cn-railsub,
+.cn-ctlcap,
+.cn-tkk,
+.cn-needs > header,
+.cn-coln,
+.cn-watch-head,
+.cn-sig-field > span,
+.cn-grpname,
+.cn-card > h3,
+.cn-setup-tbl th,
+.cn-fact-k,
+.cn-group,
+.ob-tile-l,
+.ob-not-mine-l {
+  font-size: var(--label-size);
+  font-weight: var(--label-weight);
+  letter-spacing: var(--label-track);
+  text-transform: uppercase;
+}
+
+/* The dense step. Nothing else changes — the same tracking holds because it is
+   em-relative, which is the reason there is one tracking token and not two. */
+.lb-sm,
+.cn-lb-sm,
+.caveat-ack-label,
+.world-group-kind,
+.dispatch-reason-label,
+.pm-stat span,
+.sp-sub,
+.sp-tbl th,
+.tickets-flabel,
+.tickets-thead,
+.cfg-railhead,
+.rp-code-cap,
+.rv-detail dt,
+.species-odd dt,
+.species-table thead th,
+.cfg-effect,
+.species-band-head h4,
+.species-age b,
+.species-stat span,
+.species-landed,
+.flag-chip-kind,
+.pet-stage,
+.cn-ctlcap,
+.cn-tkk,
+.cn-sig-field > span,
+.cn-setup-tbl th,
+.cn-fact-k,
+.cn-group,
+.ob-not-mine-l {
+  font-size: var(--label-size-sm);
+}
+
+/* The two faces. A label that wants the brighter ink says so on its own rule; a
+   named class above keeps whatever colour it already had, which is why neither of
+   these lists reaches past the component's own classes. */
+.lb,
+.lb-sm {
+  color: var(--muted);
+}
+.cn-lb,
+.cn-lb-sm {
+  color: var(--cn-fg-faint);
+}
+
+/* ---------- the tag, and the tones every tinted badge reads through ----------
+
+   A tinted badge is three values that have to move together — the hue, the border
+   that reads as the hue without competing with the word, and the ground the
+   filled weight sits on — and the sheet had that triple written out by hand at
+   twenty class names. The copies had already drifted: `--red` and `--red-line`
+   were both in use as "the red border", a hand's width apart on one page.
+
+   These six blocks are the shared family's mirror of `console.css`'s `.cn-t-*`,
+   and pure aliases for the same reason: a declaration here shadows an inherited
+   value unconditionally, so a tint written on a tone class is a tint no theme can
+   reach *inside* a tone. `grey` is the absence of a verdict rather than one of
+   them, and so is the fallback every rule below names.
+   → docs/spec/17-cockpit.md#the-tag */
+.t-red {
+  --tone: var(--red);
+  --tone-line: var(--red-line);
+  --tone-fill: var(--red-fill);
+}
+.t-amber {
+  --tone: var(--amber);
+  --tone-line: var(--amber-line);
+  --tone-fill: var(--amber-fill);
+}
+.t-green {
+  --tone: var(--green);
+  --tone-line: var(--green-line);
+  --tone-fill: var(--green-fill);
+}
+.t-blue {
+  --tone: var(--blue);
+  --tone-line: var(--blue-line);
+  --tone-fill: var(--blue-fill);
+}
+.t-accent {
+  --tone: var(--accent);
+  --tone-line: var(--accent-line);
+  --tone-fill: var(--accent-fill);
+}
+.t-grey {
+  --tone: var(--muted);
+  --tone-line: var(--border);
+  --tone-fill: var(--panel-2);
+}
+
+/* The border is always drawn — the two weights are the same box, so a row of
+   mixed tags keeps one baseline and the fill is the only thing ranking them. */
+.tag {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: 2px;
+  padding: 2px 6px;
+  white-space: nowrap;
+  border: 1px solid var(--tone-line, var(--border));
+  background: none;
+  color: var(--tone, var(--muted));
+}
+.tag-fill {
+  background: var(--tone-fill, var(--panel-2));
+}
+/* Dashed is the box that is not the plain case — a region outside the diff being
+   walked, a label a person overrode the checker on. */
+.tag-dashed {
+  border-style: dashed;
 }
 
 .btn {
@@ -475,12 +708,6 @@ select:disabled {
   padding: 10px 20px;
   background: var(--panel);
   border-bottom: 1px solid var(--border);
-}
-.inject-label {
-  color: var(--muted);
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
 .raw,
 .reply {
@@ -880,11 +1107,53 @@ select:disabled {
   padding: 8px 0;
 }
 
-.card {
+/* ---------- the frame, and the head row ----------
+   One definition each, drawn by `Panel` and `HeadRow` (`components/panel.tsx`), so
+   a call site names a face and a density and never a ground, an edge or a corner.
+
+   Placed high in the sheet on purpose: every modifier a call site still carries —
+   `.escalation`, `.cfg-pending`, `.cn-fb-orphans` — weighs the same (0,1,0) as the
+   base, so source order is what lets a card tint its own border. A rule that wants
+   to override the frame goes below this and nothing has to be `!important`.
+
+   The two faces are the two token families, which are a real distinction and not a
+   namespace: `--panel` sits two steps lighter than `--cn-panel`, and each family
+   keeps its own radius step rather than sharing one.
+   → docs/spec/17-cockpit.md#the-frame */
+.pl {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  padding: 12px;
+  border-radius: var(--r-md);
+  min-width: 0;
+}
+.pl-cn {
+  background: var(--cn-panel);
+  border-color: var(--cn-line);
+  border-radius: var(--cn-r);
+}
+.pl-snug {
+  padding: var(--pad-snug);
+}
+.pl-roomy {
+  padding: var(--pad-roomy);
+}
+
+/* Flex, centred, 8px, wrapping — the most duplicated declaration set in this sheet,
+   at eleven names. Alignment is the only thing that ever differed: `baseline` where
+   the row is words of two sizes rather than a row of boxes. A different *gap* is a
+   different row and stays its own rule; folding 6px into 8px would be a restyling
+   rather than a collapse. */
+.hdr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.hdr-base {
+  align-items: baseline;
+}
+
+.card {
   margin-bottom: 10px;
 }
 .card.agent.waiting {
@@ -928,9 +1197,6 @@ select:disabled {
 }
 .flag-chip-kind {
   color: var(--muted);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 .drawer-flags {
   display: flex;
@@ -1095,12 +1361,6 @@ select:disabled {
   display: flex;
   align-items: center;
   gap: 6px;
-}
-.dl-lb {
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
 }
 
 /* ---- The print sheet -------------------------------------------------------
@@ -1310,13 +1570,6 @@ select:disabled {
   font-size: 13px;
   overflow-wrap: anywhere;
 }
-/* Names who wrote the block. Stands in for the `<summary>` this used to be
-   folded behind, so it is a caption and not a control — no pointer, no marker. */
-.esc-detail-label {
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-size: 10px;
-}
 .esc-detail > :first-child {
   margin-top: 0;
 }
@@ -1436,9 +1689,6 @@ select:disabled {
   display: flex;
   align-items: center;
   gap: 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-size: 10px;
 }
 .caveat-ack-count {
   color: var(--amber);
@@ -1538,9 +1788,6 @@ select:disabled {
   display: flex;
   justify-content: space-between;
   color: var(--muted);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
   margin: 10px 0 4px;
 }
 .world-item {
@@ -1571,9 +1818,6 @@ select:disabled {
   flex-wrap: wrap;
 }
 .world-group-kind {
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-size: 10px;
   color: var(--muted);
 }
 .world-group-title {
@@ -1789,9 +2033,6 @@ select:disabled {
   font-size: 12px;
 }
 .dispatch-reason-label {
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-size: 10.5px;
   opacity: 0.85;
 }
 
@@ -2025,12 +2266,6 @@ select:disabled {
 .card.crashed {
   border-color: var(--border);
   margin-bottom: 8px;
-}
-.crashed-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
 }
 .crashed-title {
   overflow-wrap: anywhere;
@@ -2464,10 +2699,6 @@ select:disabled {
 .pm-verify b {
   display: block;
   color: var(--muted);
-  font-weight: 600;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
   margin-bottom: 3px;
 }
 @media (max-width: 800px) {
@@ -2738,10 +2969,6 @@ select:disabled {
 }
 .pm-accept > b {
   color: var(--muted);
-  font-weight: 600;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
   white-space: nowrap;
 }
 .pm-crit {
@@ -2785,9 +3012,6 @@ select:disabled {
   font-variant-numeric: tabular-nums;
 }
 .pm-stat span {
-  font-size: 10.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
   color: var(--muted);
 }
 .pm-stat.warn b {
@@ -2818,12 +3042,6 @@ select:disabled {
   max-height: min(28vh, 240px);
   overflow-y: auto;
 }
-.pm-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
 .pm-row .spacer {
   flex: 1;
 }
@@ -2837,12 +3055,6 @@ select:disabled {
   background: var(--amber-fill);
   padding: 10px 12px;
   margin-bottom: 12px;
-}
-.pm-pending-head {
-  display: flex;
-  gap: 8px;
-  align-items: baseline;
-  flex-wrap: wrap;
 }
 .pm-pending-head .pm-section-label {
   margin-bottom: 0;
@@ -2901,20 +3113,14 @@ select:disabled {
   border: 1px solid var(--border);
   color: var(--grey);
 }
-.pm-dtag.added {
-  color: var(--green);
-  background: var(--green-fill);
-  border-color: var(--green-line);
-}
-.pm-dtag.dropped {
-  color: var(--red);
-  background: var(--red-fill);
-  border-color: var(--red-line);
-}
+/* One rule, three tones: the row carries a `t-*` alias and the triple is the
+   tag's. → docs/spec/17-cockpit.md#the-tag */
+.pm-dtag.added,
+.pm-dtag.dropped,
 .pm-dtag.changed {
-  color: var(--blue);
-  background: var(--blue-fill);
-  border-color: var(--blue-line);
+  color: var(--tone);
+  background: var(--tone-fill);
+  border-color: var(--tone-line);
 }
 .pm-was {
   font-size: 12px;
@@ -2948,12 +3154,6 @@ select:disabled {
   padding: 14px 16px;
   font-size: 13px;
   color: var(--text);
-}
-.pm-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
 }
 .pm-title {
   font-weight: 600;
@@ -3036,9 +3236,6 @@ select:disabled {
 .pm-section-label {
   display: block;
   color: var(--muted);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
   margin-bottom: 3px;
 }
 /* The split justification, once `approach` has taken the headline: a caption on
@@ -3196,9 +3393,6 @@ select:disabled {
 .pm-wbody > div > b {
   color: var(--muted);
   display: block;
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 /* A query is the one thing on this sheet that must be read character for
    character, so it wraps rather than scrolls and keeps its own whitespace. */
@@ -3254,9 +3448,6 @@ select:disabled {
 .pm-wpending > b {
   color: var(--muted);
   display: block;
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 .pm-wpending > p {
   margin: 4px 0 0;
@@ -3436,10 +3627,6 @@ select:disabled {
 .pm-vbody b {
   display: block;
   color: var(--muted);
-  font-weight: 600;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
   margin-bottom: 2px;
 }
 @media (max-width: 800px) {
@@ -3496,8 +3683,6 @@ select:disabled {
 }
 .pm-vamend-head i {
   font-style: normal;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 .pm-vamend summary {
   cursor: pointer;
@@ -3737,9 +3922,6 @@ select:disabled {
 }
 .pad-decision-label {
   color: var(--muted);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   padding-top: 1px;
 }
 .pad-decision-rejected {
@@ -4090,9 +4272,6 @@ select:disabled {
    lives in the other stylesheet and belongs to the console's type scale. */
 .sp-sub {
   font-family: var(--font-mono);
-  font-size: 9.5px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
   color: var(--grey);
   margin: 12px 0 6px;
 }
@@ -4460,9 +4639,6 @@ select:disabled {
 }
 .sp-tile .lb {
   font-family: var(--font-mono);
-  font-size: 9.5px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
   color: var(--grey);
 }
 .sp-tile .vl {
@@ -4576,11 +4752,7 @@ select:disabled {
   margin-top: 4px;
 }
 .sp-tbl th {
-  font-size: 9.5px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
   color: var(--grey);
-  font-weight: 400;
   text-align: left;
   padding: 0 8px 5px 0;
   border-bottom: 1px solid var(--border);
@@ -4858,9 +5030,6 @@ select:disabled {
   min-width: 0;
 }
 .tickets-flabel {
-  font-size: 10.5px;
-  letter-spacing: 0.7px;
-  text-transform: uppercase;
   color: var(--cn-fg-faint);
   white-space: nowrap;
 }
@@ -4907,10 +5076,6 @@ select:disabled {
 }
 
 .tickets-card {
-  border: 1px solid var(--cn-line);
-  border-radius: var(--cn-r);
-  background: var(--cn-panel);
-  min-width: 0;
   overflow: hidden;
 }
 
@@ -4948,9 +5113,6 @@ select:disabled {
   position: sticky;
   top: 0;
   z-index: 2;
-  font-size: 10.5px;
-  letter-spacing: 0.7px;
-  text-transform: uppercase;
   color: var(--cn-fg-faint);
 }
 /* Only the two orderable columns are buttons: a header that sorts and a header
@@ -5441,9 +5603,6 @@ select:disabled {
 }
 .tickets-rows .tickets-why h4 {
   margin: 0 0 6px;
-  font-size: 11px;
-  letter-spacing: 0.6px;
-  text-transform: uppercase;
   color: var(--cn-fg-dim);
 }
 .tickets-rows .tickets-why ul {
@@ -5973,12 +6132,6 @@ select:disabled {
 .lrun-tile.stale .lrun-tile-sub {
   color: var(--amber);
 }
-.lrun-tile-label {
-  font-size: 10.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-}
 .lrun-tile-value {
   font-size: 13px;
   color: var(--text);
@@ -6148,9 +6301,6 @@ select:disabled {
 }
 .lrun-tag {
   color: var(--green);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 .lrun-refs {
   display: flex;
@@ -6244,12 +6394,6 @@ select:disabled {
 }
 .build-more {
   color: var(--muted);
-}
-.build-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
 }
 /* The consequence, beside the button rather than inside it: what an upgrade does
    to work in flight is the whole of the decision, and it does not fit on a label. */
@@ -6358,9 +6502,6 @@ select:disabled {
   padding: 12px 10px 12px 0;
 }
 .cfg-railhead {
-  font-size: 10.5px;
-  letter-spacing: 0.8px;
-  text-transform: uppercase;
   color: var(--cn-fg-faint);
   padding: 0 8px 8px;
 }
@@ -6413,10 +6554,6 @@ select:disabled {
   min-width: 0;
 }
 .cfg-card {
-  border: 1px solid var(--cn-line);
-  border-radius: var(--cn-r);
-  background: var(--cn-panel);
-  min-width: 0;
   display: flex;
   flex-direction: column;
 }
@@ -6424,9 +6561,6 @@ select:disabled {
   margin: 0;
   padding: 10px 13px;
   border-bottom: 1px solid var(--cn-line-soft);
-  font-size: 11.5px;
-  letter-spacing: 0.8px;
-  text-transform: uppercase;
   color: var(--cn-fg-dim);
   display: flex;
   align-items: center;
@@ -6622,9 +6756,7 @@ select:disabled {
    `entry.live`, true only because an arm re-seats the value. */
 .cfg-effect {
   margin-top: 4px;
-  font: 10.5px var(--cn-mono);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font-family: var(--cn-mono);
   color: var(--cn-amber);
 }
 .cfg-effect.now {
@@ -7258,9 +7390,6 @@ select:disabled {
   gap: 12px;
 }
 .pet-card {
-  border: 1px solid var(--border);
-  background: var(--panel);
-  padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -7374,9 +7503,6 @@ select:disabled {
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
@@ -7432,9 +7558,6 @@ select:disabled {
 }
 .species-odd dt {
   font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
   color: var(--muted);
   align-self: flex-start;
   border-bottom: 1px dotted var(--muted);
@@ -7515,9 +7638,8 @@ select:disabled {
 }
 .species-band-head h4 {
   margin: 0;
-  font: 10px/1 var(--font-mono);
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
+  font-family: var(--font-mono);
+  line-height: 1;
   color: var(--tier);
 }
 .species-band-head span {
@@ -7568,8 +7690,6 @@ select:disabled {
   align-items: start;
 }
 .species-card {
-  border: 1px solid var(--border);
-  background: var(--panel);
   display: flex;
   flex-direction: column;
 }
@@ -7633,11 +7753,9 @@ select:disabled {
   display: block;
 }
 .species-age b {
-  font: 9.5px/1 var(--font-mono);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-family: var(--font-mono);
+  line-height: 1;
   color: var(--muted);
-  font-weight: 400;
 }
 
 .species-stats {
@@ -7661,9 +7779,8 @@ select:disabled {
   font-variant-numeric: tabular-nums;
 }
 .species-stat span {
-  font: 9.5px/1 var(--font-mono);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-family: var(--font-mono);
+  line-height: 1;
   color: var(--muted);
   align-self: flex-start;
   border-bottom: 1px dotted var(--muted);
@@ -7717,9 +7834,8 @@ select:disabled {
   vertical-align: top;
 }
 .species-table thead th {
-  font: 10px/1.3 var(--font-mono);
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
+  font-family: var(--font-mono);
+  line-height: 1.3;
   color: var(--muted);
   background: var(--panel-2);
   white-space: nowrap;
@@ -7748,9 +7864,8 @@ select:disabled {
 }
 .species-landed {
   display: block;
-  font: 9.5px/1 var(--font-mono);
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
+  font-family: var(--font-mono);
+  line-height: 1;
   color: var(--muted);
   margin-bottom: 4px;
 }
@@ -7805,12 +7920,6 @@ select:disabled {
   gap: 2px;
   padding: 7px 0;
   border-top: 1px solid var(--border);
-}
-.rm-row .rm-head {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  flex-wrap: wrap;
 }
 /* The two enums as chips, coloured only on the guard axis. Colouring both would
    put two competing readings on one line — the guard is the one that is a
@@ -8019,12 +8128,6 @@ select:disabled {
 .mc-q-desktop-unused {
   --verdict: var(--grey);
 }
-.mc-q-head {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  flex-wrap: wrap;
-}
 .mc-q-tool {
   font-family: var(--font-mono);
   font-size: 12px;
@@ -8177,12 +8280,6 @@ select:disabled {
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--well);
-}
-.insights-lb {
-  font-size: 10px;
-  letter-spacing: 0.9px;
-  text-transform: uppercase;
-  color: var(--muted);
 }
 .insights-meta {
   font-size: 12px;
@@ -8354,12 +8451,6 @@ select:disabled {
   gap: 14px;
   max-width: 1040px;
 }
-.pool-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
 .pool-section > h3 {
   margin: 0;
   font-size: 13px;
@@ -8500,10 +8591,6 @@ select:disabled {
 
 .cn-fb-card {
   position: relative;
-  background: var(--cn-panel);
-  border: 1px solid var(--cn-line);
-  border-radius: var(--cn-r);
-  padding: 14px 16px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -8637,10 +8724,6 @@ select:disabled {
 }
 .cn-fb-sum-block h4 {
   margin: 0 0 3px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--cn-fg-faint);
 }
 .cn-fb-sum-block p {
@@ -8677,10 +8760,6 @@ select:disabled {
 }
 .cn-fb-brief-list h4 {
   margin: 0 0 4px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--cn-fg-faint);
 }
 .cn-fb-brief-list h4 .cn-psub {
@@ -8903,9 +8982,6 @@ select:disabled {
   align-items: center;
   gap: 6px 12px;
   font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: var(--muted);
   margin-bottom: 8px;
 }
@@ -9064,9 +9140,6 @@ select:disabled {
   align-items: center;
   gap: 12px;
   font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: var(--muted);
 }
 .rp-rule::after {
@@ -9141,44 +9214,6 @@ select:disabled {
   font-weight: 700;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
-}
-.rp-att,
-.rp-v,
-.rp-tag,
-.rp-prov {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  border-radius: 2px;
-  padding: 2px 6px;
-  white-space: nowrap;
-  border: 1px solid var(--border);
-  color: var(--muted);
-}
-.rp-att-read {
-  color: var(--red);
-  border-color: var(--red-line);
-  background: var(--red-fill);
-}
-.rp-att-decide {
-  color: var(--amber);
-  border-color: var(--amber-line);
-  background: var(--amber-fill);
-}
-.rp-att-skim {
-  color: var(--muted);
-  border-color: var(--border);
-  background: var(--panel-2);
-}
-.rp-att-split {
-  color: var(--blue);
-  border-color: var(--blue-line);
-  background: var(--blue-fill);
-}
-.rp-att-over {
-  border-style: dashed;
 }
 .rp-meta {
   font-family: var(--font-mono);
@@ -9255,28 +9290,6 @@ select:disabled {
 .rp-dashed > .rp-step-head .rp-path {
   color: var(--muted);
 }
-.rp-tag-diff {
-  color: var(--blue);
-  border-color: var(--blue-line);
-}
-.rp-tag-region {
-  border-style: dashed;
-}
-.rp-tag-key {
-  color: var(--accent);
-  border-color: var(--accent);
-  background: var(--accent-fill);
-}
-.rp-tag-false {
-  color: var(--red);
-  border-color: var(--red);
-  background: var(--red-fill);
-}
-.rp-tag-disputed {
-  color: var(--amber);
-  border-color: var(--amber-line);
-  background: var(--amber-fill);
-}
 .rp-gist {
   margin: 4px 0 6px;
   font-size: 13px;
@@ -9293,9 +9306,6 @@ select:disabled {
 }
 .rp-code-cap {
   font-family: var(--font-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: var(--muted);
   padding: 4px 10px;
   border-bottom: 1px solid var(--border);
@@ -9346,9 +9356,6 @@ select:disabled {
 .rp-claims-head {
   margin: 12px 0 6px;
   font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--muted);
 }
 .rp-claims {
@@ -9366,29 +9373,6 @@ select:disabled {
 }
 .rp-claim-body {
   min-width: 0;
-}
-.rp-v-true {
-  color: var(--green);
-  border-color: var(--green-line);
-  background: var(--green-fill);
-}
-.rp-v-false {
-  color: var(--red);
-  border-color: var(--red);
-  background: var(--red-fill);
-}
-.rp-v-un {
-  color: var(--amber);
-  border-color: var(--amber-line);
-  background: var(--amber-fill);
-}
-.rp-prov-witnessed {
-  color: var(--blue);
-  border-color: var(--blue-line);
-}
-.rp-prov-disputed {
-  color: var(--amber);
-  border-color: var(--amber-line);
 }
 .rp-evidence {
   color: var(--muted);
@@ -9626,30 +9610,21 @@ button.rv {
   cursor: pointer;
 }
 
-.rv-clear {
-  color: var(--green);
-  background: var(--green-fill);
-  border-color: var(--green-line);
-}
-
-.rv-findings {
-  color: var(--red);
-  background: var(--red-fill);
-  border-color: var(--red-line);
-}
-
-.rv-routed {
-  color: var(--amber);
-  background: var(--amber-fill);
-  border-color: var(--amber-line);
+/* The four tinted arms, in one rule: the mark carries a `t-*` tone alias beside
+   its arm class, so the hue, the border and the fill are the tag's triple and not
+   a fifth copy of it. → docs/spec/17-cockpit.md#the-tag */
+.rv-clear,
+.rv-findings,
+.rv-routed,
+.rv-deciding {
+  color: var(--tone);
+  background: var(--tone-fill);
+  border-color: var(--tone-line);
 }
 
 /* Dashed, because a decision that has not been taken yet is the one state that is
    about to change on its own. */
 .rv-deciding {
-  color: var(--blue);
-  background: var(--blue-fill);
-  border-color: var(--blue-line);
   border-style: dashed;
 }
 
@@ -9690,19 +9665,14 @@ button.rv {
   text-align: center;
 }
 
-.rv-findings .rv-badge {
-  background: var(--red);
-  border-color: var(--red-line);
-  color: var(--on-light);
-}
-
-/* Findings somebody has dealt with: the count becomes a tick, and it takes the
-   clear arm's green with it. The verdict has not changed — the reviewer found what
-   it found — but a mark that keeps shouting after the thread was resolved is a
-   mark an operator learns to stop reading. */
+/* The badge inverts its arm: the hue as the ground rather than the ink. Findings
+   somebody has dealt with take the clear arm's green with them — the verdict has
+   not changed, but a mark that keeps shouting after the thread was resolved is a
+   mark an operator learns to stop reading, and the arm's tone says which it is. */
+.rv-findings .rv-badge,
 .rv-clear .rv-badge {
-  background: var(--green);
-  border-color: var(--green-line);
+  background: var(--tone);
+  border-color: var(--tone-line);
   color: var(--on-light);
 }
 
@@ -9807,9 +9777,6 @@ button.rv {
 
 .rv-detail dt {
   font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
   color: var(--grey);
   line-height: 1.7;
 }
@@ -9828,26 +9795,12 @@ button.rv {
   font-size: 12.5px;
 }
 
-.rv-word.rv-clear {
-  color: var(--green);
-  background: none;
-  border: 0;
-}
-
-.rv-word.rv-findings {
-  color: var(--red);
-  background: none;
-  border: 0;
-}
-
-.rv-word.rv-routed {
-  color: var(--amber);
-  background: none;
-  border: 0;
-}
-
+/* The same four arms as prose: the tone's hue, and none of the box. */
+.rv-word.rv-clear,
+.rv-word.rv-findings,
+.rv-word.rv-routed,
 .rv-word.rv-deciding {
-  color: var(--blue);
+  color: var(--tone);
   background: none;
   border: 0;
 }

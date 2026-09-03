@@ -6,6 +6,7 @@ import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 import { QuestionnaireModal } from './QuestionnaireModal.js';
 import { CaveatChecklist, heldTitle, useAcknowledgements } from './CaveatChecklist.js';
 import { planCaveatsOf } from '../planCaveats.js';
+import { Panel } from './panel.js';
 
 export function EscalationCard({
   escalation,
@@ -179,7 +180,7 @@ export function EscalationCard({
       : null;
 
   return (
-    <div className="card escalation">
+    <Panel face="shared" density="snug" className="card escalation">
       <div className="card-head">
         <span className="badge escalate">{escalation.type.replace(/_/g, ' ')}</span>
         {questions && (
@@ -243,7 +244,7 @@ export function EscalationCard({
           wall it replaced, with a scrollbar. The card grows; the panel scrolls. */}
       {context.detail ? (
         <div className="esc-context">
-          <div className="muted small esc-detail-label">{detailLabel(context, escalation.agentId)}</div>
+          <div className="lb lb-sm">{detailLabel(context, escalation.agentId)}</div>
           <div className="esc-detail">{renderMarkdown(String(context.detail), refUrls)}</div>
         </div>
       ) : null}
@@ -476,7 +477,7 @@ export function EscalationCard({
           onSend={onAnswerQuestions}
         />
       ) : null}
-    </div>
+    </Panel>
   );
 }
 

@@ -1,29 +1,21 @@
-import { useEffect } from 'react';
+import { Modal } from '../components/Modal.js';
 
 /**
  * A full-surface panel with three ways out — the backdrop, the button and
  * Escape. A thing that covers the console must not have exactly one exit.
+ *
+ * All three come from {@link Modal}; what stays here is the console's own head.
  */
 export function Panel({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
   return (
-    <div className="cn-backdrop" onClick={onClose}>
-      <section className="cn-panel" onClick={(e) => e.stopPropagation()}>
-        <header className="cn-panel-head">
-          <h2>{title}</h2>
-          <button className="cn-btn" onClick={onClose}>
-            Close
-          </button>
-        </header>
-        {children}
-      </section>
-    </div>
+    <Modal face="panel" label={title} onClose={onClose}>
+      <header className="cn-panel-head">
+        <h2>{title}</h2>
+        <button className="cn-btn" onClick={onClose}>
+          Close
+        </button>
+      </header>
+      {children}
+    </Modal>
   );
 }

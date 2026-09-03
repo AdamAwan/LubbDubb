@@ -19,6 +19,7 @@ import { UnrecordedWork } from './UnrecordedWork.js';
 import { Ref, RefLinksExtended } from './refs.js';
 import { TicketsBoard } from './TicketsBoard.js';
 import { absDate, fmtUsd, relAge } from './util.js';
+import { Panel } from './panel.js';
 
 /** What the tab is narrowed to, grouped and ordered by — every field of it a `Place` field. */
 interface TicketQueryPlace {
@@ -395,7 +396,7 @@ export function TicketsPanel({ query, onQuery, view, actions, now }: TicketsPane
         />
       ) : (
         <RefLinksExtended refUrls={refUrls}>
-          <section className="tickets-card">
+          <Panel face="console" density="flush" as="section" className="tickets-card">
             <div className={`tickets-rows by-${query.order} ${query.group === 'feature' ? 'grouped' : ''}`}>
               <div className="tickets-thead">
                 <span>#</span>
@@ -436,7 +437,7 @@ export function TicketsPanel({ query, onQuery, view, actions, now }: TicketsPane
                 {footWords({ loading, backfilling, done, empty: rows.length === 0, anchorAt })}
               </div>
             </div>
-          </section>
+          </Panel>
         </RefLinksExtended>
       )}
     </div>

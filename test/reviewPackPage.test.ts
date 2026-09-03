@@ -343,7 +343,7 @@ test('opening an idea shows the walk, the marks, the claims and the false claim 
   const walk = html.indexOf('class="rp-walk"');
   assert.ok(raised >= 0 && walk > raised, 'the false claim is shown at the top of the idea, before its walk');
   assert.match(html, /claim is false/);
-  assert.match(html, /class="rp-v rp-v-false"/);
+  assert.match(html, /class="tag t-red tag-fill">False</);
   assert.match(html, /src\/unchanged\.ts:2 still reads old\./);
   assert.match(html, /class="rp-l rp-del">-const old = 2;/);
   assert.match(html, /Mark read/);
@@ -359,7 +359,7 @@ test('opening an idea shows the walk, the marks, the claims and the false claim 
   assert.match(other, /Can’t tell/);
   assert.match(other, /<strong> You decide\.<\/strong>/);
   assert.match(other, /cites pad entry <code>scr_1<\/code> — the pads have not loaded/);
-  assert.match(other, /class="rp-att rp-att-read/);
+  assert.match(other, /class="tag t-red tag-fill" title="the checker&#x27;s label">Read</);
 });
 
 test('an unchecked pack says so and offers the ask; a pack being checked says that instead', () => {

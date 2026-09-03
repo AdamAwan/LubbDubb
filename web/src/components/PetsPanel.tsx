@@ -4,6 +4,7 @@ import { AsyncButton } from './AsyncButton.js';
 import { petLabel, speciesKnown } from '../pets/reveal.js';
 import { PetSprite } from './PetSprite.js';
 import { relTime } from './util.js';
+import { Panel } from './panel.js';
 
 /**
  * The vivarium, whole.
@@ -124,7 +125,11 @@ function PetCard({
   // says so first, because a button that always refuses is worse than no button.
   const flawed = pet.flaw !== null;
   return (
-    <div className={`pet-card${dissolved ? ' is-dissolved' : ''}${flawed ? ' is-flawed' : ''}`}>
+    <Panel
+      face="shared"
+      density="snug"
+      className={`pet-card${dissolved ? ' is-dissolved' : ''}${flawed ? ' is-flawed' : ''}`}
+    >
       <div className="pet-frame">
         <PetSprite pet={pet} size={84} beatMs={2400} />
       </div>
@@ -249,7 +254,7 @@ function PetCard({
           </>
         )}
       </div>
-    </div>
+    </Panel>
   );
 }
 

@@ -11,6 +11,7 @@ import { PrLink, Ref } from '../components/refs.js';
 import { renderMarkdown } from '../components/markdown.js';
 import { relTime } from '../components/util.js';
 import { CiLadder, CourtChip } from './GoalPage.js';
+import { HeadRow } from '../components/panel.js';
 
 /**
  * One pull request, in full — the page the review-pack control used to sit on a
@@ -211,7 +212,7 @@ function Thread({
   const canReopen = page.open && (reopened || thread.state === 'answered' || thread.state === 'resolved');
   return (
     <article className={`cn-thread cn-th-${thread.state}`}>
-      <div className="cn-throw">
+      <HeadRow className="cn-throw">
         <i className={`cn-chip ${THREAD_TONE[thread.state]}`} title={THREAD_SAID[thread.state]}>
           {thread.state}
         </i>
@@ -237,7 +238,7 @@ function Thread({
             {reopened ? 'Never mind' : 'Reopen'}
           </AsyncButton>
         )}
-      </div>
+      </HeadRow>
       <Message message={{ id: thread.id, author: thread.author, body: thread.body, ours: false }} view={view} />
       {/* The replies hang under the comment they answer rather than beside it: a
           flat run of messages made a thread of three read as three threads. */}

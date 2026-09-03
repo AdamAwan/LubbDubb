@@ -285,10 +285,7 @@
   font: 600 12px/1 var(--cn-mono);
 }
 .cn-read span {
-  font-size: 11px;
   color: var(--cn-fg-faint);
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
 }
 .cn-read.cn-act:hover {
   border-color: var(--cn-line-hi);
@@ -719,9 +716,6 @@
 }
 .cn-rail-head h2 {
   margin: 0;
-  font-size: 12px;
-  letter-spacing: 0.8px;
-  text-transform: uppercase;
   color: var(--cn-fg-dim);
 }
 .cn-count {
@@ -1056,9 +1050,6 @@
 
 .cn-railsub {
   padding: 10px 14px 4px;
-  font-size: 11px;
-  letter-spacing: 0.7px;
-  text-transform: uppercase;
   color: var(--cn-fg-faint);
 }
 /* Zero rows still draws the rail — a note here, not an absent surface, is
@@ -1295,9 +1286,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font: 500 10px/1 var(--cn-mono);
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
+  font-family: var(--cn-mono);
+  line-height: 1;
   color: var(--cn-fg-faint);
   padding-left: 1px;
 }
@@ -1471,9 +1461,7 @@
   background: var(--cn-hover);
 }
 .cn-tkk {
-  font: 600 10px var(--cn-mono);
-  letter-spacing: 0.9px;
-  text-transform: uppercase;
+  font-family: var(--cn-mono);
   color: var(--cn-fg-faint);
 }
 .cn-tkv {
@@ -1575,9 +1563,7 @@
   padding: 9px 13px;
   background: var(--cn-tone-fill);
   border-bottom: 1px solid var(--cn-tone-line);
-  font: 600 11px var(--cn-mono);
-  letter-spacing: 0.9px;
-  text-transform: uppercase;
+  font-family: var(--cn-mono);
   color: var(--cn-tone-ink);
 }
 .cn-needs > header .cn-age {
@@ -1798,9 +1784,7 @@
   flex: 1;
 }
 .cn-coln {
-  font: 11px var(--cn-mono);
-  letter-spacing: 0.6px;
-  text-transform: uppercase;
+  font-family: var(--cn-mono);
   color: var(--cn-fg-faint);
   padding-bottom: 3px;
 }
@@ -1909,9 +1893,6 @@
   display: flex;
   align-items: baseline;
   gap: 8px;
-  font-size: 11px;
-  letter-spacing: 0.6px;
-  text-transform: uppercase;
   color: var(--cn-fg-faint);
   margin-bottom: 5px;
 }
@@ -2013,12 +1994,6 @@
   min-width: 0;
   padding-left: 10px;
 }
-.cn-sig-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
 .cn-sig-expect {
   margin: 3px 0 0;
   color: var(--cn-fg-dim);
@@ -2079,9 +2054,8 @@
   gap: 3px;
 }
 .cn-sig-field > span {
-  font: 500 10px/1.4 var(--cn-mono);
-  letter-spacing: 0.7px;
-  text-transform: uppercase;
+  font-family: var(--cn-mono);
+  line-height: 1.4;
   color: var(--cn-fg-faint);
 }
 /* `.cn-in` carries the field itself — a class on the element and never `.cn input`,
@@ -2140,9 +2114,6 @@
   align-items: center;
   gap: 8px;
   padding: 14px 2px 8px;
-  font-size: 11.5px;
-  letter-spacing: 0.8px;
-  text-transform: uppercase;
   color: var(--cn-fg-dim);
 }
 .cn-grpname .cn-n {
@@ -2392,9 +2363,6 @@ a.cn-tgl {
   margin: 0;
   padding: 10px 13px;
   border-bottom: 1px solid var(--cn-line-soft);
-  font-size: 11.5px;
-  letter-spacing: 0.8px;
-  text-transform: uppercase;
   color: var(--cn-fg-dim);
   display: flex;
   align-items: center;
@@ -3492,9 +3460,7 @@ button.cn-grow {
 }
 .cn-setup-tbl th {
   text-align: left;
-  font: 600 10.5px var(--cn-mono);
-  letter-spacing: 0.6px;
-  text-transform: uppercase;
+  font-family: var(--cn-mono);
   color: var(--cn-fg-faint);
   padding: 7px 12px;
   border-bottom: 1px solid var(--cn-line);
@@ -3608,9 +3574,8 @@ button.cn-grow {
   min-width: 0;
 }
 .cn-fact-k {
-  font: 600 9.5px/1.6 var(--cn-mono);
-  letter-spacing: 0.7px;
-  text-transform: uppercase;
+  font-family: var(--cn-mono);
+  line-height: 1.6;
   color: var(--cn-fg-faint);
   flex: none;
 }
@@ -3838,9 +3803,8 @@ button.cn-grow {
   padding: 7px 13px;
   background: var(--cn-panel-2);
   border-bottom: 1px solid var(--cn-line-soft);
-  font: 600 9.5px/1 var(--cn-mono);
-  letter-spacing: 0.9px;
-  text-transform: uppercase;
+  font-family: var(--cn-mono);
+  line-height: 1;
   color: var(--cn-fg-faint);
 }
 /* The band that is your move, in the tone the state column already says it in —
@@ -4032,12 +3996,6 @@ button.cn-grow {
 .cn-thread.cn-th-resolved .cn-thwho {
   color: var(--cn-fg-faint);
 }
-.cn-throw {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
 /* Where the thread hangs. A path is the one thing here that can be longer than the
    column, so it scrolls inside itself rather than pushing the controls off the row. */
 .cn-thwhere {
@@ -4180,9 +4138,6 @@ button.cn-grow {
   color: var(--cn-fg-dim);
 }
 .ob-tile-l {
-  font-size: 11.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
   color: var(--cn-fg-dim);
   margin-top: 2px;
 }
@@ -4246,12 +4201,6 @@ button.cn-grow {
 .ob-row.open {
   border-color: var(--cn-line-hi);
   background: var(--cn-panel-2);
-}
-.ob-row-top {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  flex-wrap: wrap;
 }
 .ob-claim {
   background: none;
@@ -4383,12 +4332,6 @@ button.cn-grow {
   color: var(--cn-fg-faint);
   overflow-wrap: anywhere;
 }
-.ob-not-mine-l {
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  font-size: 10px;
-}
-
 .ob-controls {
   display: flex;
   align-items: center;

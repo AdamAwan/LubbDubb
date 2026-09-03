@@ -12,6 +12,8 @@ import type {
 import { fmtShare, fmtSince, share } from './insightsFormat.js';
 import { toCsv } from './Downloads.js';
 import { Ref } from './refs.js';
+import { HeadRow } from './panel.js';
+import { Label } from './label.js';
 
 /**
  * MCP: which tools the fleet reaches for, and — the reason the tab exists — which
@@ -204,12 +206,12 @@ function Tiles({ totals }: { totals: McpInsights['totals'] }): JSX.Element {
   return (
     <div className="sp-tiles">
       <div className="sp-tile">
-        <span className="lb">Tool calls</span>
+        <Label dense>Tool calls</Label>
         <span className="vl">{totals.calls.toLocaleString()}</span>
         <span className="sb">across {totals.runs.toLocaleString()} settled runs</span>
       </div>
       <div className="sp-tile">
-        <span className="lb">Calls per run</span>
+        <Label dense>Calls per run</Label>
         <span className="vl">{totals.callsPerRun === null ? '—' : totals.callsPerRun.toFixed(1)}</span>
         <span className="sb">
           median {totals.medianCallsPerRun ?? '—'} · busiest {totals.busiestRunCalls}
@@ -218,7 +220,7 @@ function Tiles({ totals }: { totals: McpInsights['totals'] }): JSX.Element {
       {/* The two alarms carry the alarm colours, and only when there is something
           to be alarmed about: a tile permanently tinted red is a tile nobody reads. */}
       <div className={totals.silentRuns > 0 ? 'sp-tile sp-leak' : 'sp-tile'}>
-        <span className="lb">Runs that called nothing</span>
+        <Label dense>Runs that called nothing</Label>
         <span className="vl">{totals.silentRuns}</span>
         <span className="sb">{fmtShare(totals.silentRuns, totals.runs)} of settled runs</span>
       </div>
@@ -226,7 +228,7 @@ function Tiles({ totals }: { totals: McpInsights['totals'] }): JSX.Element {
           not two counters. A retired name still being called is its own finding
           and says so beneath, rather than pushing the numerator past 20/20. */}
       <div className={totals.toolsQuiet > 0 || totals.toolsRetiredCalled > 0 ? 'sp-tile sp-watch' : 'sp-tile'}>
-        <span className="lb">Tools to answer for</span>
+        <Label dense>Tools to answer for</Label>
         <span className="vl">
           {totals.toolsQuiet}
           <small>/</small>
@@ -240,7 +242,7 @@ function Tiles({ totals }: { totals: McpInsights['totals'] }): JSX.Element {
         </span>
       </div>
       <div className="sp-tile">
-        <span className="lb">Refused</span>
+        <Label dense>Refused</Label>
         <span className="vl">{totals.refused}</span>
         <span className="sb">
           {fmtShare(totals.refused, totals.calls)} · median call{' '}
@@ -328,14 +330,14 @@ function Quiet({ quiet }: { quiet: readonly McpQuietTool[] }): JSX.Element {
     <ul className="mc-quiet">
       {quiet.map((tool) => (
         <li key={`${tool.channel}:${tool.tool}`} className={`mc-q-${tool.verdict}`}>
-          <div className="mc-q-head">
+          <HeadRow align="baseline" className="mc-q-head">
             <code className="mc-q-tool">{tool.tool}</code>
             <span className={`cls ${tool.naming}`}>{tool.naming.replace('-', ' ')}</span>
             <span className="mc-q-verdict">{tool.label}</span>
             <span className="mc-q-when">
               {tool.lastCalledAt === null ? 'never called' : `last called ${fmtSince(tool.lastCalledAt)}`}
             </span>
-          </div>
+          </HeadRow>
           <p className="mc-q-why">{tool.blurb}</p>
           {/* The evidence, so the verdict is checkable rather than merely stated.
               Omitted for a desktop tool, whose verdict rests on neither. */}

@@ -162,6 +162,46 @@ test('the registry and the :root blocks name the same tokens', () => {
 });
 
 /**
+ * The tone aliases are aliases, and nothing else.
+ *
+ * `.t-*` and `.cn-t-*` are the two tint vocabularies — the shared family's and the
+ * console's — and both work only because a tone block *renames* `:root` tokens
+ * rather than holding values. A declaration on `.t-red` shadows an inherited one
+ * unconditionally, so a literal, a `color-mix`, or even a second `var()` fallback
+ * written there is a colour the Theme section cannot reach *inside* a tone: every
+ * tag on the page keeps the sheet's tint while everything around it moves.
+ *
+ * The literal guard above does not catch it — `color-mix(in srgb, var(--red) 40%,
+ * var(--well))` has no hex in it — so this asserts the shape directly: a tone
+ * property, and a bare `var()` naming a token `:root` declares.
+ * → docs/spec/17-cockpit.md#the-tag
+ */
+test('every tone alias renames a :root token and holds no value of its own', () => {
+  const root = rootProperties();
+  const offenders: string[] = [];
+  let blocks = 0;
+  for (const sheet of ['web/src/styles.css', 'web/src/console/console.css']) {
+    const visible = withoutComments(readFileSync(sheet, 'utf8'));
+    for (const block of visible.matchAll(/^\.((?:cn-)?t-[a-z0-9-]+)\s*\{([^}]*)\}/gm)) {
+      blocks += 1;
+      for (const line of block[2]!.split(';')) {
+        const body = line.trim();
+        if (body === '') continue;
+        const alias = /^(--(?:cn-)?tone[a-z-]*)\s*:\s*var\((--[a-z0-9-]+)\)$/.exec(body);
+        if (alias === null) {
+          offenders.push(`${sheet} .${block[1]} → ${body}`);
+        } else if (!root.has(alias[2]!)) {
+          offenders.push(`${sheet} .${block[1]} → ${alias[2]} is declared on no :root`);
+        }
+      }
+    }
+  }
+  assert.deepEqual(offenders, [], `a tone that a theme cannot reach:\n${offenders.join('\n')}`);
+  // Both families, or the regex stopped matching one of them and asserted nothing.
+  assert.ok(blocks >= 10, `only ${blocks} tone blocks found — the sweep is not reaching them`);
+});
+
+/**
  * A token's `kind` decides which control edits it and which grammar accepts its
  * value, so a wrong one is doubly silent: the row loses its colour input, and every
  * hex the operator types is refused as malformed. Checking it against the value the
@@ -178,6 +218,10 @@ test('every token’s kind matches the value its sheet declares', () => {
       assert.match(value, /^(?:#[0-9a-fA-F]{3,8}|color-mix\(.*\))$/, `${token.name} is not a colour`);
     } else if (token.kind === 'radius') {
       assert.match(value, /^\d{1,3}(?:px|rem|em|%)?$/, `${token.name} is not a length`);
+    } else if (token.kind === 'space') {
+      assert.match(value, /^\d{1,3}(?:px|rem|em)( \d{1,3}(?:px|rem|em))?$/, `${token.name} is not an inset`);
+    } else if (token.kind === 'metric') {
+      assert.match(value, /^\d{1,3}(?:\.\d{1,2})?(?:px|rem|em)?$/, `${token.name} is not a metric`);
     } else {
       assert.ok(value.includes(',') || /^[A-Za-z' -]+$/.test(value), `${token.name} is not a font stack`);
     }
@@ -440,6 +484,90 @@ test('a refused value is not written, so a half-typed hex cannot blank the cockp
 });
 
 /**
+ * Every rule block in the two sheets, as `{selector, declarations}`.
+ *
+ * Innermost-first, so a block inside `@media` is read and its wrapper is not — which
+ * is what the two sweeps below want: a nested copy of the head row is still a copy.
+ */
+function ruleBlocks(sheet: string): Array<{ selector: string; declarations: Map<string, string> }> {
+  const out: Array<{ selector: string; declarations: Map<string, string> }> = [];
+  for (const block of withoutComments(readFileSync(sheet, 'utf8')).matchAll(/([^{}]*)\{([^{}]*)\}/g)) {
+    const selector = block[1]!
+      .trim()
+      .split(/\s*\n\s*/)
+      .join(' ')
+      .trim();
+    const declarations = new Map<string, string>();
+    for (const decl of block[2]!.matchAll(/([a-z-]+)\s*:\s*([^;]+);/g)) declarations.set(decl[1]!, decl[2]!.trim());
+    out.push({ selector, declarations });
+  }
+  return out;
+}
+
+/**
+ * The head row is written once.
+ *
+ * `display: flex; align-items: center; gap: 8px; flex-wrap: wrap` was the most
+ * duplicated declaration set in the cockpit — eleven names for one row, differing in
+ * nothing but whether they said `center` or `baseline`. Nothing catches that kind of
+ * copy: every one of the eleven rendered, and the drift only ever shows up as two
+ * head rows a page apart sitting at different heights.
+ *
+ * Asserted as a shape rather than a name list, so a twelfth cannot be written: a
+ * block whose whole content *is* that set belongs to `HeadRow`.
+ * → docs/spec/17-cockpit.md#the-frame
+ */
+test('the head row is one definition, and alignment is the only axis', () => {
+  const copies: string[] = [];
+  for (const sheet of ['web/src/styles.css', 'web/src/console/console.css']) {
+    for (const { selector, declarations } of ruleBlocks(sheet)) {
+      if (selector === '.hdr' || selector === '.hdr-base') continue;
+      const only = [...declarations.keys()].every((k) => ['display', 'align-items', 'gap', 'flex-wrap'].includes(k));
+      if (!only) continue;
+      if (declarations.get('display') !== 'flex') continue;
+      if (declarations.get('gap') !== '8px' || declarations.get('flex-wrap') !== 'wrap') continue;
+      // The two axis values the component offers, and no others: `stretch` on
+      // `.sp-ratio` is a row of tiles that share a height, which is a different row.
+      const align = declarations.get('align-items');
+      if (align !== 'center' && align !== 'baseline') continue;
+      copies.push(`${sheet} → ${selector}`);
+    }
+  }
+  assert.deepEqual(copies, [], `a twelfth head row, written out by hand:\n${copies.join('\n')}`);
+});
+
+/**
+ * The frame takes its corner and its inset from its family's step, and from nowhere
+ * else.
+ *
+ * A radius literal is the same failure a colour literal is, one property over: the
+ * `--r-*` ramp is what the Theme section's Corners rows move, so a hard `7px` on a
+ * card is a corner no operator setting can reach — and the cockpit had six of them.
+ * The padding is the other half: five insets between 6px 8px and 14px 16px with
+ * nothing choosing between them is why density is a named step now.
+ * → docs/spec/17-cockpit.md#the-frame
+ */
+test('the frame draws its corner and its inset through tokens', () => {
+  const root = rootProperties();
+  const offenders: string[] = [];
+  let seen = 0;
+  for (const { selector, declarations } of ruleBlocks('web/src/styles.css')) {
+    if (!/^\.pl(-[a-z]+)?$/.test(selector)) continue;
+    seen += 1;
+    for (const property of ['border-radius', 'padding']) {
+      const value = declarations.get(property);
+      if (value === undefined) continue;
+      const named = /^var\((--[a-z0-9-]+)\)$/.exec(value);
+      if (named === null) offenders.push(`${selector} → ${property}: ${value}`);
+      else if (!root.has(named[1]!)) offenders.push(`${selector} → ${named[1]} is declared on no :root`);
+    }
+  }
+  assert.deepEqual(offenders, [], `a frame no theme can reshape:\n${offenders.join('\n')}`);
+  // Both faces and both densities, or the selector test stopped matching them.
+  assert.equal(seen, 4, `only ${seen} frame blocks found — the sweep is not reaching them`);
+});
+
+/**
  * The field base is an element rule, which is what lets it reach a control nobody
  * remembered — and the reason it can be one is that its type exclusions sit inside
  * `:where()` and cost no specificity. Written as a plain `input:not(…)` the rule
@@ -525,4 +653,49 @@ test('the unsaved-theme flag notifies on a change and only on a change', () => {
   setThemeUnsaved(true);
   assert.equal(calls, 2, 'unsubscribing stops the notifications');
   setThemeUnsaved(false);
+});
+
+/**
+ * The eyebrow ramp, held shut.
+ *
+ * An uppercase caption over a block, a table's column head, a tile's word above its
+ * figure — one thing, and the two sheets drew it at **forty** different
+ * font-size/letter-spacing pairs: 11px/0.04em, 11px/0.03em, 11px/0.5px,
+ * 10.5px/0.7px, 9.5px/0.14em and on. Nobody chose those apart. Each was a call site
+ * answering a question the sheet had never answered once, and it is invisible to
+ * every other check the repo runs: the rule is valid, the label renders, and the
+ * drift shows only to somebody holding two surfaces up together.
+ *
+ * The guard is a shape rather than a list of names, so it cannot rot and a
+ * forty-first pair cannot be written: **uppercase text that is not in a box takes
+ * its size and its tracking from `var(--label-*)` and from nowhere else.** A badge
+ * is the deliberate exception and it is one the sweep can see — a border, a padding
+ * or a ground is what makes `.tag`, `.cn-chip`, `.cfg-badge` and the rest shapes of
+ * their own, where the type is part of the shape rather than a caption over
+ * something. → docs/spec/17-cockpit.md#the-eyebrow
+ */
+test('uppercase text outside a badge takes its size from the label ramp', () => {
+  const offenders: string[] = [];
+  let labels = 0;
+  for (const sheet of ['web/src/styles.css', 'web/src/console/console.css']) {
+    for (const { selector, declarations } of ruleBlocks(sheet)) {
+      if (declarations.get('text-transform') !== 'uppercase') continue;
+      labels += 1;
+      // A box: the type is part of a shape rather than a caption over one.
+      const boxed = [...declarations.keys()].some((k) => /^(border|padding|background)/.test(k));
+      if (boxed) continue;
+      // The shorthand carries the size too, and hides it from a `font-size` lookup.
+      const shorthand = /(\d+(?:\.\d+)?(?:px|rem|em))/.exec(declarations.get('font') ?? '');
+      const size = declarations.get('font-size') ?? shorthand?.[1];
+      for (const [property, value] of [
+        ['font-size', size],
+        ['letter-spacing', declarations.get('letter-spacing')],
+      ] as const) {
+        if (value === undefined) continue;
+        if (!/^var\(--label-[a-z-]+\)$/.test(value)) offenders.push(`${sheet} ${selector} → ${property}: ${value}`);
+      }
+    }
+  }
+  assert.deepEqual(offenders, [], `a label size nobody chose:\n${offenders.join('\n')}`);
+  assert.ok(labels > 10, `only ${labels} uppercase rules found — the sweep is not reaching them`);
 });
