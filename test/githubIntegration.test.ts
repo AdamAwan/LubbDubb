@@ -448,6 +448,10 @@ test('a PR somebody assigned to you is kept by the owner filter and reported as 
   );
   assert.equal(slice.pullRequests!.find((p) => p.number === 7)?.viewerAssignment, undefined);
   assert.equal(slice.pullRequests!.find((p) => p.number === 8)?.viewerAssignment, 'assignee');
+  // And which of the two the fleet may act on: the filter admits both, authorship
+  // is what separates them. → `src/prOwnership.ts`
+  assert.equal(slice.pullRequests!.find((p) => p.number === 7)?.viewerAuthored, true);
+  assert.equal(slice.pullRequests!.find((p) => p.number === 8)?.viewerAuthored, false);
 });
 
 test('an assignment carries who asked, and your own review is what ends it', async () => {

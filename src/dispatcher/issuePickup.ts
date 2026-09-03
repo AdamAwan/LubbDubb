@@ -149,7 +149,7 @@ export function issueBranch(number: number): string {
  *
  * `openPrs` must be **every** open PR — including the unwatched ones hidden from the
  * dispatch world (`Harness.runCycle` filters them out, so the dispatcher passes them
- * back in via `DispatchContext.unwatchedPrs`). Both providers list only open/active
+ * back in via `DispatchContext.hiddenPrs`). Both providers list only open/active
  * PRs, so absence otherwise reads as "merged" — and an unwatched PR would get its
  * issue re-picked and a second agent onto the very same branch.
  *

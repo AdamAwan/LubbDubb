@@ -338,14 +338,14 @@ test('an issue whose only PR merged is picked up again', async () => {
 
 test('an unwatched PR still holds its issue back', async () => {
   // The harness hides untagged PRs from the dispatch world and hands them back via
-  // `unwatchedPrs`; without them "absent" reads as "merged" and a second agent lands
+  // `hiddenPrs`; without them "absent" reads as "merged" and a second agent lands
   // on the branch nobody opted in.
   const d = new RuleDispatcher();
   const { actions } = await d.decide(
     ctx(
       { issues: [{ id: 'i1', number: 101, title: 'X', body: '', labels: [], state: 'open', linkedPrNumber: 43 }] },
       {
-        unwatchedPrs: [
+        hiddenPrs: [
           {
             id: 'p',
             number: 43,
@@ -1289,7 +1289,7 @@ test('return-from-review: an ignore-tagged open PR keeps the item in review', as
         ],
       },
       {
-        unwatchedPrs: [
+        hiddenPrs: [
           {
             id: 'p',
             number: 97,

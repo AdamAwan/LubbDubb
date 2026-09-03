@@ -396,9 +396,7 @@ export class RuleDispatcher implements Dispatcher {
     // "no PR in the world" cannot be mistaken for "the PR merged", which would put a
     // second agent on an unwatched PR's own branch, and so a stack's base PR is
     // still found when it is one nobody opted in.
-    const openPrs = ctx.unwatchedPrs?.length
-      ? [...ctx.world.pullRequests, ...ctx.unwatchedPrs]
-      : ctx.world.pullRequests;
+    const openPrs = ctx.hiddenPrs?.length ? [...ctx.world.pullRequests, ...ctx.hiddenPrs] : ctx.world.pullRequests;
 
     // The entities whose reading predates the fleet's own last act on them — built
     // over `openPrs` rather than the dispatch view, so the answer for one pull

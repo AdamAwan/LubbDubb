@@ -150,7 +150,7 @@ export class AzureDevOpsSourceControlIntegration
           (p) => sameIdentity(p.authorUniqueName, prAuthor) || viewerAssignment(p.reviewers, prAuthor) !== undefined,
         );
       }
-      const closedPullRequests = await this.recentlyClosed();
+      const closedPullRequests = await this.recentlyClosed(viewer);
 
       const pullRequests = await Promise.all(
         pulls.map(async (p): Promise<PullRequest> => {
@@ -201,6 +201,13 @@ export class AzureDevOpsSourceControlIntegration
           // the sentence simply drops the name.
           const author = p.authorDisplayName || p.authorUniqueName;
           if (author !== '') pr.author = author;
+          // Whose pull request this is, against `viewer` and never `prAuthor`, for
+          // the reason the assignment below is: the filter also admits the pull
+          // requests a colleague put the operator on as a reviewer, so reading it as
+          // ownership is what had the fleet working another team's review threads.
+          // Compared on the UPN — `displayName` is a label and two people may share
+          // one. → `src/prOwnership.ts`
+          if (viewer !== '' && p.authorUniqueName !== '') pr.viewerAuthored = sameIdentity(p.authorUniqueName, viewer);
           // Against `viewer` — who the credential *is* — and never against
           // `prAuthor`, which is a filter and is unset the moment a project turns
           // `ownWorkOnly` off. Read the other way round, turning the filter off
@@ -288,12 +295,21 @@ export class AzureDevOpsSourceControlIntegration
    * domain shape as an active one — minus every signal only an *open* PR has
    * (policy evaluations, threads, labels), which is what keeps this one request.
    */
-  private async recentlyClosed(): Promise<PullRequest[]> {
+  private async recentlyClosed(viewer: string): Promise<PullRequest[]> {
     const { api, prAuthor, closedPrWindowMs } = this.opts;
     if (!closedPrWindowMs || closedPrWindowMs <= 0) return [];
     const since = closedWindowStart((this.opts.now ?? Date.now)(), closedPrWindowMs);
     const closed = await api.listRecentlyClosedPullRequests(since);
-    return closed.filter((p) => !prAuthor || p.authorUniqueName === prAuthor).map(mapClosedPull);
+    return closed
+      .filter((p) => !prAuthor || p.authorUniqueName === prAuthor)
+      .map((p) => {
+        const pr = mapClosedPull(p);
+        // Answered on the closed list too, because the branch reap acts on it: a
+        // colleague's completed pull request whose branch the harness deleted is
+        // the same mistake as a rename, and irreversible.
+        if (viewer !== '' && p.authorUniqueName !== '') pr.viewerAuthored = sameIdentity(p.authorUniqueName, viewer);
+        return pr;
+      });
   }
 
   async postPrReply(input: PrReplyInput): Promise<SendResult> {

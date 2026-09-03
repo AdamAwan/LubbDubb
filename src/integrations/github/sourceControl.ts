@@ -169,7 +169,7 @@ export class GitHubSourceControlIntegration
       // deployment. Widening costs no request: `assigneeLogins` rides on the list
       // payload the filter already reads.
       if (prAuthor) pulls = pulls.filter((p) => p.authorLogin === prAuthor || p.assigneeLogins.includes(prAuthor));
-      const closedPullRequests = await this.recentlyClosed();
+      const closedPullRequests = await this.recentlyClosed(viewer);
 
       const pullRequests = await Promise.all(
         pulls.map(async (p): Promise<PullRequest> => {
@@ -202,6 +202,13 @@ export class GitHubSourceControlIntegration
           // The login is the only name GitHub puts on the list payload, and it is
           // the name a reviewer is asked by — enough for a row to say who asked.
           if (p.authorLogin !== '') pr.author = p.authorLogin;
+          // Whose pull request this is, answered against `viewer` — the identity the
+          // token actually is — for the reason `viewerAssignment` is: `prAuthor` is a
+          // filter, and since it also lets a colleague's *assigned* pull request into
+          // the world, reading it as ownership is what put the fleet on somebody
+          // else's review threads. Left absent when GitHub named neither side, which
+          // every reader falls back to the branch shape for. → `src/prOwnership.ts`
+          if (viewer !== '' && p.authorLogin !== '') pr.viewerAuthored = p.authorLogin === viewer;
           // Only ever `true`: a reviewer who has not answered and one GitHub
           // reports no review from are the same silence, and `false` would assert
           // a verdict nobody gave.
@@ -345,12 +352,21 @@ export class GitHubSourceControlIntegration
    * acts on a dead PR, and fetching those per PR is exactly the cost this feature
    * mustn't have.
    */
-  private async recentlyClosed(): Promise<PullRequest[]> {
+  private async recentlyClosed(viewer: string): Promise<PullRequest[]> {
     const { api, prAuthor, closedPrWindowMs } = this.opts;
     if (!closedPrWindowMs || closedPrWindowMs <= 0) return [];
     const since = closedWindowStart((this.opts.now ?? Date.now)(), closedPrWindowMs);
     const closed = await api.listRecentlyClosedPulls(since);
-    return closed.filter((p) => !prAuthor || p.authorLogin === prAuthor).map(mapClosedPull);
+    return closed
+      .filter((p) => !prAuthor || p.authorLogin === prAuthor)
+      .map((p) => {
+        const pr = mapClosedPull(p);
+        // Answered here too, because the branch reap acts on this list: a merged
+        // pull request of a colleague's whose branch the harness deleted is the
+        // same mistake as a rename, and irreversible.
+        if (viewer !== '' && p.authorLogin !== '') pr.viewerAuthored = p.authorLogin === viewer;
+        return pr;
+      });
   }
 
   async postPrReply(input: PrReplyInput): Promise<SendResult> {

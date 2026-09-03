@@ -34,12 +34,14 @@ import type { DispatchRuleId } from './rules.js';
 export interface DispatchContext {
   world: WorldSnapshot;
   /**
-   * Open PRs carrying no watch tag, hidden from `world.pullRequests`. No rule *acts*
-   * on them — that is the whole of being unwatched — but they are still open, so
-   * gates that must not read "absent from the world" as "merged" (issue pickup, the
-   * work-item state back-off) resolve against these too. Absent/empty = nothing hidden.
+   * Open PRs hidden from `world.pullRequests` — the ones carrying no watch tag, and
+   * the ones a colleague opened (`src/prOwnership.ts`). No rule *acts* on either:
+   * that is the whole of being unwatched, and the whole of the fleet staying off
+   * another person's pull request. But they are still open, so gates that must not
+   * read "absent from the world" as "merged" (issue pickup, the work-item state
+   * back-off) resolve against these too. Absent/empty = nothing hidden.
    */
-  unwatchedPrs?: PullRequest[];
+  hiddenPrs?: PullRequest[];
   /**
    * Which of `world.issues` are **retained runs** rather than the tracker's own
    * answer (issue #234): a goal the harness has worked, whose ticket the tracker

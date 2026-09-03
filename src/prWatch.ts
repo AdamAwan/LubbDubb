@@ -1,4 +1,4 @@
-import { isHarnessBranch } from './prOwnership.js';
+import { isHarnessBranch, isSomeoneElsesPr } from './prOwnership.js';
 import { prState } from './prHealth.js';
 import { isWatched } from './watchLabels.js';
 import type { PullRequest } from './types.js';
@@ -51,6 +51,11 @@ export function prsToSeedWatch(openPrs: PullRequest[], ctx: PrWatchContext): PrW
   for (const pr of openPrs) {
     if (prState(pr) !== 'open') continue;
     if (!isHarnessBranch(pr.branch)) continue;
+    // A branch shape is evidence, not proof: on a shared repository a colleague's
+    // pull request can sit on `issue/12` too, and tagging that one would opt the
+    // fleet into their work — the exact thing the watch tag exists to stop. Where
+    // the provider names an author, it outranks the shape.
+    if (isSomeoneElsesPr(pr)) continue;
     if (ctx.seeded.has(pr.number)) continue;
     if (isWatched(pr.labels, ctx.watchLabel)) continue;
     if (ctx.legacyIgnoreLabel && (pr.labels ?? []).includes(ctx.legacyIgnoreLabel)) continue;
