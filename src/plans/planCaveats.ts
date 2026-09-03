@@ -27,6 +27,11 @@ import { unclaimedIssuePrs, wedgeReasons } from './planWedge.js';
  * scannable to tick against. The label names the thing in a few words; the sentence
  * that explains it, or the planner's own field, goes underneath.
  *
+ * A planner field rides **whole** — it is the thing being acknowledged, and half of
+ * it under an ellipsis is worse than either the whole of it or none. Keeping it short
+ * enough to read at a verdict is asked of the planner instead, where `risks` and
+ * `openQuestions` are specified (`promptTemplates.ts`, `planDocumentSchema.ts`).
+ *
  * ## What is a caveat and what is not
  *
  * Four sources, and they are two kinds of thing. The planner's own uncertainty —
@@ -53,9 +58,6 @@ import { unclaimedIssuePrs, wedgeReasons } from './planWedge.js';
  * The verdict is on what was proposed — the same principle as `Proposal.action`
  * being kept verbatim.
  */
-
-/** How much of a planner's field rides in a caveat's detail before it is cut. */
-const MAX_DETAIL = 600;
 
 /**
  * Everything this plan raises, in the order an approver meets it: the world's
@@ -94,14 +96,14 @@ export function planCaveats(
     caveats.push({
       id: 'open-questions',
       label: 'Open questions — approving decides them the planner’s way',
-      detail: clip(unsure),
+      detail: unsure,
     });
   const risks = plan.risks?.trim();
   if (risks)
     caveats.push({
       id: 'risks',
       label: 'Risks the planner named',
-      detail: clip(risks),
+      detail: risks,
     });
   return caveats;
 }
@@ -167,9 +169,4 @@ export function proposedCaveats(proposal: Proposal): PlanCaveat[] {
     caveats.push({ id, label, detail: typeof detail === 'string' && detail ? detail : null });
   }
   return caveats;
-}
-
-/** One planner field, bounded — the ask is read on a card, and the plan sheet has the whole of it. */
-function clip(text: string): string {
-  return text.length > MAX_DETAIL ? `${text.slice(0, MAX_DETAIL - 1)}…` : text;
 }

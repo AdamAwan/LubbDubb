@@ -690,11 +690,18 @@ that belongs to no part of the plan (`wedgeReasons` and `unclaimedIssuePrs`, exp
 **A caveat is a short label and the words behind it.** `label` names the thing in a few words —
 "Risks the planner named", "PR #31231 is open on this issue and unclaimed" — and `detail` carries what
 it is about: the stored blocked reason, what approving that pull request does not do, or the planner's
-own field clipped to `MAX_DETAIL`. Each used to state its whole case in the label, and four of those
-stacked above a primary button was the appended paragraph back again in checkbox form, with nothing
-scannable to tick against. The cockpit draws the label as the line being ticked and the detail quietly
-under it ([17](17-cockpit.md#how-an-escalation-card-is-laid-out)); `caveatNotice` renders the same two
-parts as a bullet and an indented block.
+own field. Each used to state its whole case in the label, and four of those stacked above a primary
+button was the appended paragraph back again in checkbox form, with nothing scannable to tick against.
+The cockpit draws the label as the line being ticked and the detail quietly under it
+([17](17-cockpit.md#how-an-escalation-card-is-laid-out)); `caveatNotice` renders the same two parts as
+a bullet and an indented block.
+
+**A planner field rides whole, and brevity is asked of the planner.** Nothing here truncates: the
+detail _is_ the thing being acknowledged, and half of it under an ellipsis is worse than either the
+whole of it or none — an operator ticking a box cannot see what they cut off. Keeping `risks` and
+`openQuestions` short enough to read at a verdict is stated where they are specified instead — the
+`issue-plan` template's field guide and `planDocumentSchema.ts` both say a sentence or two, and name
+the tick box as the reason. The write-up is where the long version goes.
 
 `outOfScope` and `alternatives` are deliberately **not** caveats. Both are the planner being explicit
 about the shape it chose, which is what the plan sheet is for; neither goes wrong if unread, and a gate
