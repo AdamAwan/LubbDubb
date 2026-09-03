@@ -312,6 +312,21 @@ interface HarnessDeps {
    */
   obstacleVoice?: { run(prev: WorldSnapshot | null, next: WorldSnapshot): void };
   /**
+   * Reads what a model may decide about the rows nobody has read since somebody
+   * last said something about one: the keys in their prose, a merge the keys
+   * missed, what each row is *for*, and the ticket written from the sightings.
+   * Absent = nothing calls a model at all (tests, and every deployment with no
+   * reader wired), and then extraction stays the mechanical reading and the ticket
+   * the mechanical composition.
+   *
+   * It writes `obstacle_keys`, `obstacle_suggestions` and `obstacle_readings` rows
+   * and the one column that says which door a row is at. It moves no state, takes
+   * no owner and resolves nothing — it is the harness's secretary and deliberately
+   * not its judge.
+   * → `docs/spec/32-obstacles.md#what-may-be-decided-by-a-model-and-what-may-not`
+   */
+  obstacleDesk?: { run(): Promise<void> };
+  /**
    * Gives a standing obstacle an owner — a ticket, or the repair dispatch rule
    * `obstacle-repair` has already made — and lets a goal parked behind one back
    * into pickup once the board stops reaching agents with it. Absent = nothing
@@ -778,6 +793,18 @@ export class Harness extends EventEmitter {
       // ownership desk may take up, and one the endings desk promises to watch a
       // condition for — all on the pulse that saw it rather than the next.
       if (readWorld) this.deps.obstacleVoice?.run(previousWorld, world);
+      // What a model may decide about the rows the board has not had read since a
+      // voice last landed words on one — the keys in their prose, a merge the keys
+      // missed, what each is for, and the ticket written from the sightings.
+      //
+      // **Not awaited**, alone among the desks here, and that is the whole of what
+      // its position in the pulse means. A model round trip is not a provider's:
+      // nothing below waits on a reading, and a pulse that blocked on one would
+      // hold every dispatch behind a call this subsystem makes for its own
+      // convenience. What it writes is read by the pulse that finds it written,
+      // which for a suggestion nobody is bound by and a ticket nobody has filed yet
+      // is a pulse either way. It runs one pass at a time and never rejects.
+      void this.deps.obstacleDesk?.run();
       // What has changed about an obstacle since the agents now running were
       // dispatched — their own reports being taken up or settled, and what a
       // second voice has since corroborated on the checks they are working.

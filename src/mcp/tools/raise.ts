@@ -1,5 +1,5 @@
 import { extractKeys, gateKeys } from '../../obstacles/keys.js';
-import { buildObstacleWorld } from '../../obstacles/world.js';
+import { buildObstacleWorld, reportedChecks } from '../../obstacles/world.js';
 import { lookupFor, ownBreakage, validateRaisedObstacle } from '../../obstacles/intake.js';
 import {
   corroborationGoal,
@@ -11,7 +11,6 @@ import {
 } from '../../knowledge/knowledge.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
-import type { Store } from '../../store/store.js';
 
 /**
  * The one door: anything in an agent's way that is not its goal, and anything true
@@ -233,7 +232,7 @@ export const raise: ToolFactory = ({ deps, agent, task, ok }) => {
         if (!raised.ok) return toolError(`Not raised: ${raised.error}`);
         const report = raised.report;
         const world = buildObstacleWorld({
-          reported: reportedChecks(deps.store),
+          reported: reportedChecks(deps.store.getWorldBaseline()),
           dispatchChecks: task.ciChecks ?? [],
           branchPaths: goalRef === null ? [] : deps.store.listGoalFiles(goalRef).map((file) => file.path),
           repoRoot: deps.repoRoot ?? null,
@@ -348,18 +347,3 @@ export const raise: ToolFactory = ({ deps, agent, task, ok }) => {
     },
   };
 };
-
-/**
- * Every check name the provider is reporting, off the world model the harness
- * already keeps.
- *
- * The validation gate, and nothing more: a `check` key must name a check that
- * exists somewhere rather than a phrase an agent wrote. Which of them *this*
- * dispatch is about is a different question, asked of `Task.ciChecks`, and the two
- * are kept apart because a key that passes the first and fails the second is a
- * suggestion rather than nonsense.
- */
-function reportedChecks(store: Store): string[] {
-  const prs = store.getWorldBaseline()?.pullRequests ?? [];
-  return [...new Set(prs.flatMap((pr) => (pr.ciChecks ?? []).map((check) => check.name)))];
-}

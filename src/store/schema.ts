@@ -1804,6 +1804,47 @@ CREATE TABLE IF NOT EXISTS obstacle_writeups (
   settled_at  TEXT
 );
 
+-- What the model desk read off one obstacle's prose, and when it read it
+-- (docs/spec/32-obstacles.md#what-may-be-decided-by-a-model-and-what-may-not).
+--
+-- One row per obstacle, upserted: a reading is a restatement of the whole row
+-- rather than a log, and an operator asking what the desk made of something is
+-- asking about the sightings it holds now.
+--
+-- read_at is the obstacle's own last_seen_at as it stood when the desk read it,
+-- which is what makes the inbox a comparison rather than a clock: a row nobody has
+-- said anything new about is a row already read, and a row a further voice has
+-- landed words on is back in the inbox. purpose, title and body are the desk's
+-- prose and its answer to what the row is for; every one of them is nullable,
+-- because a reading that came back without one is dropped in that half and kept in
+-- the rest — the gates' own rule.
+CREATE TABLE IF NOT EXISTS obstacle_readings (
+  obstacle_id TEXT PRIMARY KEY,
+  read_at     TEXT NOT NULL,      -- the last_seen_at this reading was taken from
+  taken_at    TEXT NOT NULL,
+  purpose     TEXT,               -- ticket | docs; what the desk says the row is for
+  title       TEXT,               -- the ticket's title, written from the sightings
+  body        TEXT                -- and its body; null leaves the mechanical composition
+);
+
+-- Two rows something thinks are one obstacle, which is the one thing here nothing
+-- may act on.
+--
+-- **A suggestion and never a merge.** Deciding two reports are one obstacle is the
+-- job no model may do: a wrong merge hides one agent's report inside another's,
+-- the swallowed report is answered "already owned", nobody fixes it, and nothing
+-- is red. So the pair lands here, is answered into the intake's near[], and an
+-- agent or an operator confirms it by id — or nobody does and the rows stay apart.
+-- source says what proposed it: the desk's own reading, or a key it extracted that
+-- another row already holds.
+CREATE TABLE IF NOT EXISTS obstacle_suggestions (
+  obstacle_id  TEXT NOT NULL,
+  suggested_id TEXT NOT NULL,
+  source       TEXT NOT NULL,     -- model | key
+  created_at   TEXT NOT NULL,
+  PRIMARY KEY (obstacle_id, suggested_id)
+);
+
 CREATE TABLE IF NOT EXISTS rate_limit_readings (
   captured_at               TEXT PRIMARY KEY,
   five_hour_used_percentage REAL,
@@ -1848,6 +1889,10 @@ CREATE INDEX IF NOT EXISTS idx_obstacle_sightings_obstacle ON obstacle_sightings
 -- The mid-session desk asks one question per live agent: what has this one already
 -- been told? The primary key leads on the obstacle, so that read needs its own.
 CREATE INDEX IF NOT EXISTS idx_obstacle_notices_agent ON obstacle_notices(agent_id);
+-- A suggestion is read from both ends — the intake answers near[] on the row a
+-- report landed on, and the pair may have been proposed the other way round — so
+-- the trailing column of the primary key needs its own.
+CREATE INDEX IF NOT EXISTS idx_obstacle_suggestions_suggested ON obstacle_suggestions(suggested_id);
 -- obstacle_conditions needs no index of its own: every read of it is by
 -- obstacle_id, which is the leading column of the UNIQUE above.
 `;

@@ -2,8 +2,8 @@
 
 **Partly built.** The spine is running: the tables, the keys and their three gates, the matcher, the
 states, the intake, both delivery channels, ownership, the `blocked` verdict, the four ways an
-obstacle ends and the harness's own voice. What is not yet built carries its own marker, section by
-section — the model desk and the cockpit tab.
+obstacle ends, the harness's own voice and the model desk. What is not yet built carries its own
+marker — the cockpit tab, which is the last of it.
 It supersedes [27](27-knowledge.md) on landing — that document describes the claim store this
 replaces, and what it says is true of the harness today; a **note** still lands there, through the
 same intake, until the last of these sections is built. The change that lands the last of them deletes
@@ -171,13 +171,52 @@ cheaply. The rule that governs where they may be used is not about trust:
 | Deciding what an obstacle is for — a ticket, a documentation change | Yes    | A wrong ticket is a ticket, and a ticket is visible.                                                                                                                                                       |
 | Writing the ticket from the sightings                               | Yes    | It is prose, read by whoever reads any other ticket.                                                                                                                                                       |
 
-The desk that does this work is _src/obstacles/desk.ts_, on the pulse, and only where the inbox is
+The desk that does this work is `src/obstacles/desk.ts`, on the pulse, and only where the inbox is
 non-empty. It is the harness's secretary and it is deliberately not its judge.
 
-**Not yet built.** The rule holds over what is running — nothing merges on a model's say-so, because
-nothing calls a model at all. The desk is a later phase; extraction today is the mechanical reading
-in `src/obstacles/keys.ts`, checked against the world by the same three gates a model's output would
-be.
+**The inbox is a comparison and never a clock.** A reading records the row's own `last_seen_at`, so a
+row is back in the inbox exactly when a further voice has landed words on it — which is the only
+thing that gives the desk anything new to read. A board nobody has said anything about calls no model
+at all, and one row is read per pulse: a reading is a round trip and a pulse is seconds.
+
+**Nothing it writes moves a state, takes an owner or resolves anything.** It writes keys, merge
+suggestions, the reading itself — and the one column that says which of the two doors a row is at,
+guarded on the row being one nothing has taken yet. Each of the four jobs lands somewhere a mistake
+can be seen:
+
+- **The keys go through the same three gates an agent's report goes through**, `src/obstacles/keys.ts`
+  unchanged, against `src/obstacles/world.ts` built from what the harness knows about the *row*: the
+  checks it already holds a binding key for, and the files of the goals that reported it. A bare
+  `check` still does not bind on its own, from this door as from every other, and a key that names
+  nothing is dropped while the row is kept.
+- **A key it reads that another row already holds moves nothing.** `Store.addObstacleKeys` leaves the
+  value where it is and hands the collision back, and the desk records it as a suggestion —
+  following it would be a model's merge wearing a key's clothes, and the wrong-merge failure is the
+  one this whole document is arranged around.
+- **A suggestion is a row in `obstacle_suggestions`**, answered into the intake's `near[]` on the row
+  a report lands on, so an agent or an operator confirms it **by id** — or nobody does and the rows
+  stay apart. It is read from either end: the pair is one suggestion however it was proposed.
+- **What a row is for is the `kind` column the intake already writes**, and not a second field beside
+  it: an obstacle is fixed and a note is written down, which is the same pair of doors as *a ticket*
+  and *a documentation change*.
+- **The ticket prose replaces the mechanical composition** where the desk has written one, so the
+  ticket says one thing once. `obstacleTicketFields` (`src/obstacles/ownership.ts`) and the operator's
+  `obstacle-ticket-body` template are what a row with no reading gets, which is every row on a
+  deployment with no reader wired.
+
+**It reads an agent's prose and never the harness's.** A row nothing but the harness has said is not
+in the inbox at all, and its sentence is left out of the rows it shares: the harness's own voice is
+[gated but never extracted](#the-harness-is-a-voice), because a prose pass over it would turn the
+branch name in its sentence into a `path` key that the check beside it then grounds — which is the
+harness carrying a row to `standing` alone, through the one door the rest of the rules do not cover.
+
+**The reader is a seam and not a client**, on the terms the desks either side of it take one — the
+ownership desk files no ticket where no tracker is configured, and the endings desk writes up no note
+where no prompt book renders one. With none injected nothing here calls a model at all: extraction
+stays the mechanical reading in `src/obstacles/keys.ts` and the ticket the mechanical composition,
+which is what the harness did before this desk existed. `test/obstacleDesk.test.ts` holds the
+properties that fail silently — a merge is unreachable from here, the gates are the same ones, and
+the pass moves no state.
 
 ## States
 

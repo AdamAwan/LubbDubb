@@ -5379,3 +5379,40 @@ export interface ObstacleWriteUp {
 
 /** What became of a note's documentation change. `unknown` settles nothing and is never stored. */
 export type ObstacleWriteUpOutcome = 'landed' | 'abandoned';
+
+/**
+ * What the model desk made of one row, as the store holds it.
+ *
+ * **It is a reading and never a ruling.** Nothing here moves a state, takes an
+ * owner or resolves anything: the desk is the harness's secretary and deliberately
+ * not its judge. What it holds is what a model may decide — what the row is *for*,
+ * and the ticket prose that would be written from the sightings otherwise.
+ * → `docs/spec/32-obstacles.md#what-may-be-decided-by-a-model-and-what-may-not`
+ */
+export interface ObstacleDeskReading {
+  obstacleId: string;
+  /**
+   * The row's own `lastSeenAt` as it stood when this was read, which is what makes
+   * the inbox a comparison rather than a clock: a further voice landing words on a
+   * row puts it back in the inbox, and a row nobody has said anything new about is
+   * one already read.
+   */
+  readAt: string;
+  takenAt: string;
+  /** What the desk says the row is for, or null where it did not say. */
+  purpose: ObstaclePurpose | null;
+  /** The ticket's title and body, written from the sightings; null leaves the mechanical composition. */
+  title: string | null;
+  body: string | null;
+}
+
+/**
+ * What an obstacle is *for*: a ticket somebody fixes, or a change to the
+ * documentation.
+ *
+ * A model may decide it, because a wrong ticket is a ticket and a ticket is
+ * visible. It is the same pair of doors the `kind` column already names — an
+ * obstacle is fixed and a note is written down — so the desk writes the kind
+ * rather than a second field nothing else reads.
+ */
+export type ObstaclePurpose = 'ticket' | 'docs';

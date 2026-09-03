@@ -43,6 +43,7 @@ import { KNOWLEDGE_READ_LIMIT, renderKnowledgeBlock } from './knowledge/block.js
 import { KnowledgeClusterDesk } from './knowledge/cluster.js';
 import { KnowledgeGraduationDesk } from './knowledge/graduationDesk.js';
 import { KnowledgeNoticeDesk } from './knowledge/noticeDesk.js';
+import { ObstacleModelDesk, type ObstacleReader } from './obstacles/desk.js';
 import { ObstacleEndingsDesk } from './obstacles/endingsDesk.js';
 import { ObstacleNoticeDesk } from './obstacles/noticeDesk.js';
 import { ObstacleOwnershipDesk } from './obstacles/ownershipDesk.js';
@@ -435,6 +436,14 @@ interface BuildOptions {
    * → `docs/spec/28-cross-fleet-pool.md#a-fleet-with-no-name-yet`
    */
   poolTransport?: PoolTransport;
+  /**
+   * How one obstacle's prose is read by a model (tests inject a scripted reader).
+   * Wiring one **wires the model desk**, which is otherwise off entirely: without
+   * it nothing in this subsystem calls a model at all, and a test asserting what
+   * the desk does with a reading would otherwise depend on a model answering.
+   * → `docs/spec/32-obstacles.md#what-may-be-decided-by-a-model-and-what-may-not`
+   */
+  obstacleReader?: ObstacleReader;
   /**
    * Override when crash recovery considers this process to have started (tests).
    * Everything older is a previous run's orphan; everything newer is a dispatch
@@ -1225,6 +1234,18 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // already watching — which a fleet running four agents does not have.
   const obstacleVoice = new ObstacleVoiceDesk({ store, errors });
 
+  // What a model may decide about a row nobody has read since a voice last landed
+  // words on it (`docs/spec/32-obstacles.md`, phase 6). Wired **only where a
+  // reader is injected**, unlike the desks around it: with none, every model call
+  // this subsystem could make is one it does not make, extraction stays the
+  // mechanical reading in `src/obstacles/keys.ts` and the ticket stays the
+  // mechanical composition — which is exactly what the harness did before this
+  // desk existed. The terms the ownership desk takes its tracker on, and the
+  // endings desk its prompt book.
+  const obstacleDesk = opts.obstacleReader
+    ? new ObstacleModelDesk({ store, reader: opts.obstacleReader, repoRoot: config.repoRoot, errors })
+    : undefined;
+
   // What has changed on the obstacle board since a running agent was dispatched
   // (`docs/spec/32-obstacles.md`, phase 2). Always wired, like the three desks
   // above: with an empty board it sends nothing, and a deployment without it is
@@ -1369,6 +1390,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     graduations,
     clusters,
     obstacleVoice,
+    obstacleDesk,
     obstacleNotices,
     obstacleOwnership,
     obstacleEndings,
