@@ -46,6 +46,7 @@ import { KnowledgeNoticeDesk } from './knowledge/noticeDesk.js';
 import { ObstacleEndingsDesk } from './obstacles/endingsDesk.js';
 import { ObstacleNoticeDesk } from './obstacles/noticeDesk.js';
 import { ObstacleOwnershipDesk } from './obstacles/ownershipDesk.js';
+import { ObstacleVoiceDesk } from './obstacles/voiceDesk.js';
 import { trackerCoordinates } from './mcp/findings.js';
 import { PrNamingDesk } from './prNamingDesk.js';
 import { DeliveryCloseOutDesk } from './delivery/closeOutDesk.js';
@@ -1217,6 +1218,13 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // will ever carry.
   const clusters = new KnowledgeClusterDesk({ store, errors });
 
+  // The harness's own voice on the obstacle board (`docs/spec/32-obstacles.md`,
+  // phase 5). Always wired, like the desks below: with nothing having changed
+  // between two readings it writes nothing, and a deployment without it is one
+  // where every row waits for a second *agent* to hit what the world model was
+  // already watching — which a fleet running four agents does not have.
+  const obstacleVoice = new ObstacleVoiceDesk({ store, errors });
+
   // What has changed on the obstacle board since a running agent was dispatched
   // (`docs/spec/32-obstacles.md`, phase 2). Always wired, like the three desks
   // above: with an empty board it sends nothing, and a deployment without it is
@@ -1360,6 +1368,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     notices,
     graduations,
     clusters,
+    obstacleVoice,
     obstacleNotices,
     obstacleOwnership,
     obstacleEndings,
