@@ -659,10 +659,17 @@ moves immediately.
 (by name, with the configured set listed — the boundary half of the boot rejection), and on a provider
 failure, which is recorded on the error log. Returns `{ok: true, profile, answered}`.
 
+The sweep, the refusal and the settlement are `applyProfilePin` (`src/intake/profilePin.ts`), shared
+with the desktop channel's `goal_control`
+([11](11-mcp-tools.md#the-escape-hatches-a-gate-has-to-have)); what stays here is the broadcast, the
+cycle and the reply's shape.
+
 ### `POST /api/issues/:number/parent` · `POST /api/issues/:number/area-path`
 
 Bodies `{parent?: number}` and `{areaPath?: string}`. Settle one of a goal's two **placement**
-questions — which container it hangs off, and which area node puts it on a team's board. Each takes
+questions — which container it hangs off, and which area node puts it on a team's board. The refusal,
+the write and the stamp are `settlePlacement` (`src/intake/placementSettle.ts`), shared with the
+desktop channel's `goal_placement`. Each takes
 the three answers the appraisal's proposal has: the value proposed, a different value the operator picked,
 or **absent**, which is "this goal wants no such thing". The route does not distinguish the first two,
 because nothing downstream does.
@@ -723,7 +730,10 @@ way to say it, and as what `null` clears.
 
 Body `{text}`, required and non-empty (max 4 000). What the operator wants done on this goal, in their
 own words — _change the button to primary_, _the permission is wrong_. This is what the cockpit's
-**More work** control writes, and what the bare `more_work` toggle became.
+**More work** control writes, and what the bare `more_work` toggle became. The three writes below are
+`writeGoalInstruction` (`src/goalInstructions.ts`), shared with the desktop channel's `goal_instruct`
+([11](11-mcp-tools.md#the-escape-hatches-a-gate-has-to-have)); the withdrawal below is
+`withdrawGoalInstruction` beside it.
 
 It writes the instruction and then **restarts the goal**, and those are two different jobs. The
 instruction is what reaches the agent, appended to every dispatch on the goal until one concludes it
@@ -813,7 +823,9 @@ on a release with no note, or a non-integer issue number.
 
 The escape hatch has to exist wherever a gate does: without it a goal that is never going to reach an
 environment sits delivered with an empty bench for good, which is the harness losing an obligation
-rather than holding one. → [24](24-environments.md#lifting-the-hold)
+rather than holding one. → [24](24-environments.md#lifting-the-hold). The desktop channel's `goal_gate`
+takes the same two answers and makes the same refusal on a release with no note
+([11](11-mcp-tools.md#the-escape-hatches-a-gate-has-to-have)).
 
 ### `POST /api/issues/:number/watch-proposals/:checkId`
 
@@ -874,7 +886,9 @@ into that card survives the loop either — `shortfallRef` is nobody's dispatch 
 `rejectionGuidance` reaches no agent with the note. Without this the operator has no way to say
 "that finding is mistaken" that anything reads.
 
-It writes **two** rows, `/instruction`'s arrangement for its reason — half of it does nothing.
+It writes **two** rows, `/instruction`'s arrangement for its reason — half of it does nothing. Both
+are `overruleShortfall` (`src/delivery/overrule.ts`), shared with the desktop channel's `goal_gate`,
+because two rows written together are a rule and a second copy of it is free to write one of them.
 
 The **delivery** is the verdict. It clears the shortfall through `VERDICT_EXCLUSIONS` rather than a
 `DELETE` of its own, parks the assessor that would otherwise re-derive the finding, and releases the
@@ -909,7 +923,9 @@ so "not appraised" has exactly one representation (which is also what a crashed 
 the fail-open). An operator verdict is fingerprinted against the issue as the last world snapshot saw
 it, so it expires on the next edit exactly as an agent's does; an issue absent from that snapshot is
 a 404 rather than a guess, since a verdict fingerprinted against an empty goal would be a silent
-no-op dressed as an override. 400 on a non-integer issue number or an unrecognised verdict.
+no-op dressed as an override. 400 on a non-integer issue number or an unrecognised verdict. The
+desktop channel's `goal_gate` takes the same three answers, with the same refusal on an issue the
+snapshot does not carry ([11](11-mcp-tools.md#the-escape-hatches-a-gate-has-to-have)).
 
 ### `POST /api/issues/:number/bug`
 

@@ -10,6 +10,7 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { McpDesktopServer } from '../src/mcp/desktop.js';
 import { desktopDeps } from './support/desktop.js';
+import { appraisalHold, goalFingerprint } from '../src/intake/appraisal.js';
 import { DESKTOP_TOOL_NAMES } from '../src/mcp/names.js';
 import type { ToolCallResult } from '../src/mcp/protocol.js';
 import type { WorldSnapshot } from '../src/types.js';
@@ -88,6 +89,11 @@ async function deck(
     // so an assertion on the mirror would be asserting what the *fake provider*
     // last said rather than what the harness asked it to write.
     connector: {
+      // The rest of the seam as the harness built it — a spread would drop the
+      // connector's prototype methods and leave the placement writes undefined.
+      canPlaceWorkItem: () => system.connector.canPlaceWorkItem(),
+      setWorkItemParent: (input) => system.connector.setWorkItemParent(input),
+      setWorkItemAreaPath: (input) => system.connector.setWorkItemAreaPath(input),
       setIssueLabel: async (input) => {
         if (refuse) throw new Error('the provider is down');
         labelWrites.push({ number: input.number, label: input.label, present: input.present });
@@ -713,27 +719,280 @@ test('agent_control tells a dead agent from one that never existed', async () =>
 
 // -- pinning a profile -------------------------------------------------------
 
-test('goal_control refuses a profile the deployment does not configure', async () => {
-  const d = await deck({
-    agentModels: { profiles: { cheap: { model: 'haiku', rank: 0, description: 'the cheap one, for small changes' } } },
-  });
+test('goal_control pins the goal to a profile as a tag, and settles the question the gate is holding', async () => {
+  const writes: LabelWrite[] = [];
+  const d = await deck(
+    {
+      agentModels: {
+        profiles: {
+          cheap: { model: 'haiku', rank: 0, description: 'the cheap one, for small changes' },
+          deep: { model: 'opus', rank: 1, description: 'the expensive one' },
+        },
+      },
+    },
+    writes,
+  );
   try {
     world(d.system, [42]);
+    const origin = 'issue:42';
+    // The appraiser proposed a profile the goal is not already on, which is the
+    // gate: nothing is dispatched for #42 until somebody answers it.
+    d.system.store.recordAppraisal({
+      originRef: origin,
+      verdict: 'workable',
+      summary: 'workable, but this wants the deep profile',
+      goalRef: goalFingerprint('Issue 42', ''),
+      by: 'appraiser',
+      proposedProfile: 'deep',
+      profileDiverges: true,
+    });
+    assert.equal(d.system.store.getAppraisal(origin)?.profileAnsweredAt, null);
+
     const bad = await d.call('goal_control', { issue: 42, profile: 'enormous' });
     assert.ok(bad.isError);
     // Named against what is configured, because a profile that resolves to nothing
     // prices nothing while reading as a decision taken.
     assert.match(bad.text, /cheap/);
+    assert.equal(writes.length, 0);
+    assert.equal(d.system.store.getAppraisal(origin)?.profileAnsweredAt, null);
+
+    const ok = await d.call('goal_control', { issue: 42, profile: 'deep' });
+    assert.equal(ok.isError, false);
+    // The tag on the ticket, and every other profile's tag off it — not the
+    // queue's per-origin override, which is `queue_control`'s and would have left
+    // the ticket untagged and the gate holding.
+    assert.deepEqual(
+      writes.map((w) => `${w.label}:${w.present}`),
+      ['lubbdubb-model-cheap:false', 'lubbdubb-model-deep:true'],
+    );
+    assert.equal(d.system.store.listProfileOverrides().length, 0);
+    // The click the gate was waiting for. Said in the reply as well as written,
+    // because a session told only that a tag landed cannot tell a released goal
+    // from a held one.
+    assert.equal(ok.json.profileQuestionAnswered, true);
+    assert.notEqual(d.system.store.getAppraisal(origin)?.profileAnsweredAt, null);
+
+    // Clearing is the state a ticket starts in, not a third value.
+    writes.length = 0;
+    const cleared = await d.call('goal_control', { issue: 42, profile: '' });
+    assert.equal(cleared.isError, false);
+    assert.deepEqual(
+      writes.map((w) => w.present),
+      [false, false],
+    );
+  } finally {
+    await d.close();
+  }
+});
+
+test('queue_control prices one queued row, and refuses a profile the deployment does not configure', async () => {
+  const d = await deck({
+    agentModels: { profiles: { cheap: { model: 'haiku', rank: 0, description: 'the cheap one, for small changes' } } },
+  });
+  try {
+    const bad = await d.call('queue_control', { origin: 'issue:42:plan', profile: 'enormous' });
+    assert.ok(bad.isError);
+    assert.match(bad.text, /cheap/);
     assert.equal(d.system.store.listProfileOverrides().length, 0);
 
-    const ok = await d.call('goal_control', { issue: 42, profile: 'cheap' });
+    const ok = await d.call('queue_control', { origin: 'issue:42:plan', profile: 'cheap' });
     assert.equal(ok.isError, false);
     assert.equal(d.system.store.listProfileOverrides()[0]?.profile, 'cheap');
 
-    // Clearing is the state a goal starts in, not a third value.
-    const cleared = await d.call('goal_control', { issue: 42, profile: '' });
+    const cleared = await d.call('queue_control', { origin: 'issue:42:plan', profile: '' });
     assert.equal(cleared.isError, false);
     assert.equal(d.system.store.listProfileOverrides().length, 0);
+
+    // The origin is the whole of what is priced, so a call without one is a
+    // caller that meant something else.
+    const bare = await d.call('queue_control', { profile: 'cheap' });
+    assert.ok(bare.isError);
+    assert.match(bare.text, /origin required/);
+  } finally {
+    await d.close();
+  }
+});
+
+// -- the goal's own decisions ------------------------------------------------
+
+/**
+ * The hold this arrived as: an appraiser proposes a profile, nothing is
+ * dispatched until somebody answers, and the answer was a click in a browser tab.
+ * `appraisalHold` is asserted directly rather than through a cycle because it is
+ * the one function the dispatcher asks — a test on "did an agent start" would pass
+ * for a dozen reasons that are not this one.
+ */
+test('goal_gate releases a goal an appraiser called unclear, and clears the verdict outright', async () => {
+  const d = await deck();
+  try {
+    world(d.system, [42]);
+    const origin = 'issue:42';
+    const issue = d.system.store.getWorldBaseline()!.issues[0]!;
+    d.system.store.recordAppraisal({
+      originRef: origin,
+      verdict: 'unclear',
+      summary: 'the goal does not say what done means',
+      goalRef: goalFingerprint(issue.title, issue.body),
+      by: 'appraiser',
+    });
+    assert.notEqual(appraisalHold(d.system.store.getAppraisal(origin), issue), null, 'the goal is held');
+
+    const worked = await d.call('goal_gate', { issue: 42, appraisal: 'workable', summary: 'it is clear enough' });
+    assert.equal(worked.isError, false);
+    assert.equal(appraisalHold(d.system.store.getAppraisal(origin), issue), null, 'the hold is gone');
+    assert.equal(d.system.store.getAppraisal(origin)?.by, 'operator');
+
+    const cleared = await d.call('goal_gate', { issue: 42, appraisal: 'clear' });
+    assert.equal(cleared.isError, false);
+    // A delete rather than a stored third verdict: the absence of an appraisal
+    // keeps exactly one representation, and it is the fail-open a crashed
+    // appraiser leaves behind.
+    assert.equal(d.system.store.getAppraisal(origin), null);
+  } finally {
+    await d.close();
+  }
+});
+
+test('goal_gate refuses a verdict on a goal the last snapshot does not carry', async () => {
+  const d = await deck();
+  try {
+    const missing = await d.call('goal_gate', { issue: 99, appraisal: 'workable' });
+    assert.ok(missing.isError);
+    // Refused rather than guessed: a verdict fingerprinted against an empty goal
+    // expires the instant the issue is next fetched, which is a silent no-op
+    // dressed as an override.
+    assert.match(missing.text, /not in the last world snapshot/);
+    assert.equal(d.system.store.getAppraisal('issue:99'), null);
+  } finally {
+    await d.close();
+  }
+});
+
+test('goal_gate overrules a shortfall as a delivery plus an instruction, and refuses when none stands', async () => {
+  const d = await deck();
+  try {
+    world(d.system, [42]);
+    const origin = 'issue:42';
+    const bare = await d.call('goal_gate', { issue: 42, overrule: 'the assessor is wrong, it shipped last week' });
+    assert.ok(bare.isError);
+    assert.match(bare.text, /no standing shortfall/);
+    assert.equal(d.system.store.getDelivery(origin), null, 'nothing is delivered by a refused overrule');
+
+    d.system.store.recordShortfall({
+      originRef: origin,
+      cause: 'goal',
+      summary: 'the export is missing',
+      by: 'assessor',
+    });
+    const ok = await d.call('goal_gate', { issue: 42, overrule: 'the export is there; the assessor looked in the UI' });
+    assert.equal(ok.isError, false);
+    // The delivery clears the shortfall through the exclusion matrix, and the
+    // words reach the next agent as an instruction — half of this does nothing
+    // without the other half.
+    assert.equal(d.system.store.getShortfall(origin), null);
+    assert.match(d.system.store.getDelivery(origin)?.summary ?? '', /assessor looked in the UI/);
+    assert.equal(d.system.store.listStandingInstructions(origin).length, 1);
+  } finally {
+    await d.close();
+  }
+});
+
+test('goal_gate will not release an environment gate without an account of why', async () => {
+  const d = await deck();
+  try {
+    world(d.system, [42]);
+    const bare = await d.call('goal_gate', { issue: 42, environmentGate: true });
+    assert.ok(bare.isError);
+    assert.match(bare.text, /note/);
+    assert.equal(d.system.store.listEnvironmentGateReleases().length, 0);
+
+    const ok = await d.call('goal_gate', { issue: 42, environmentGate: true, note: 'docs only — it never deploys' });
+    assert.equal(ok.isError, false);
+    assert.equal(d.system.store.listEnvironmentGateReleases()[0]?.goalRef, 'issue:42');
+
+    const back = await d.call('goal_gate', { issue: 42, environmentGate: false });
+    assert.equal(back.isError, false);
+    assert.equal(d.system.store.listEnvironmentGateReleases().length, 0);
+  } finally {
+    await d.close();
+  }
+});
+
+test('goal_gate does nothing on a call that names no hold', async () => {
+  const d = await deck();
+  try {
+    world(d.system, [42]);
+    const nothing = await d.call('goal_gate', { issue: 42 });
+    assert.ok(nothing.isError);
+    // A call that changes nothing is nearly always a session that meant to read,
+    // so the refusal names the read rather than passing silently.
+    assert.match(nothing.text, /goal_read/);
+  } finally {
+    await d.close();
+  }
+});
+
+/**
+ * The placement questions are the only decisions on this channel that write to
+ * the tracker, and the refusal is asked of the connector rather than inferred from
+ * the provider name. The fake tracker cannot place a work item, which is what this
+ * asserts against — the answer an operator on GitHub gets.
+ */
+test('goal_placement refuses where the tracker has no parent or area path', async () => {
+  const d = await deck();
+  try {
+    world(d.system, [42]);
+    const refused = await d.call('goal_placement', { issue: 42, parent: 7 });
+    assert.ok(refused.isError);
+    assert.match(refused.text, /no parent or area path/);
+
+    const nothing = await d.call('goal_placement', { issue: 42 });
+    assert.ok(nothing.isError);
+    assert.match(nothing.text, /goal_read/);
+  } finally {
+    await d.close();
+  }
+});
+
+test('goal_instruct puts words in front of the next agent and restarts the goal', async () => {
+  const d = await deck();
+  try {
+    world(d.system, [42]);
+    const origin = 'issue:42';
+    d.system.store.recordDelivery({ originRef: origin, summary: 'assessed as delivered', by: 'assessor' });
+
+    const wrote = await d.call('goal_instruct', { issue: 42, text: 'the button is the wrong colour' });
+    assert.equal(wrote.isError, false);
+    assert.equal(d.system.store.listStandingInstructions(origin).length, 1);
+    // The restart is what gets the words read: the operator `more_work` verdict
+    // retracts the delivery through the exclusion matrix.
+    assert.equal(d.system.store.getIssueConclusion(origin)?.verdict, 'more_work');
+    assert.equal(d.system.store.getDelivery(origin), null);
+
+    const id = (wrote.json.instruction as { id: string }).id;
+    const back = await d.call('goal_instruct', { issue: 42, withdraw: id });
+    assert.equal(back.isError, false);
+    assert.equal(d.system.store.listStandingInstructions(origin).length, 0);
+    // Withdrawing the last one takes the operator's verdict with it — and only
+    // that one. What it does not do is put the delivery back.
+    assert.equal(d.system.store.getIssueConclusion(origin), null);
+    assert.equal(d.system.store.getDelivery(origin), null);
+  } finally {
+    await d.close();
+  }
+});
+
+test('goal_instruct refuses a write and a withdrawal in one call', async () => {
+  const d = await deck();
+  try {
+    world(d.system, [42]);
+    const both = await d.call('goal_instruct', { issue: 42, text: 'do the thing', withdraw: 'ins_1' });
+    assert.ok(both.isError);
+    assert.equal(d.system.store.listStandingInstructions('issue:42').length, 0);
+
+    const gone = await d.call('goal_instruct', { issue: 42, withdraw: 'ins_nope' });
+    assert.ok(gone.isError);
+    assert.match(gone.text, /goal_read/);
   } finally {
     await d.close();
   }

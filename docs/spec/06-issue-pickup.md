@@ -760,9 +760,10 @@ complete set.
 
 ### The write is the harness's
 
-The appraiser proposes and does nothing else. Applying a proposal is a cockpit click →
-`POST /api/issues/:number/parent` or `/area-path` → `ActionSink` → the Azure adapter — the discipline
-`src/tickets/filing.ts` states, and for its reason: an instruction in a prompt is only as reliable as
+The appraiser proposes and does nothing else. Applying a proposal is an operator's answer — a cockpit
+click, or `goal_placement` on the desktop channel ([11](11-mcp-tools.md#the-escape-hatches-a-gate-has-to-have))
+— through `POST /api/issues/:number/parent` or `/area-path` → `ActionSink` → the Azure adapter, the
+discipline `src/tickets/filing.ts` states, and for its reason: an instruction in a prompt is only as reliable as
 one model's memory of one line. There is no `az boards work-item update` anywhere, and no shell command
 handed to a model.
 

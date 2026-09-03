@@ -95,7 +95,7 @@ doing, whether anything is stuck, and sometimes to change it.
 
 ### Steering it
 
-Nine verbs. The first five do less than they sound like:
+Twelve verbs. The first five do less than they sound like:
 
 - **\`fleet_control\`** — \`cap\`, \`paused\`, \`pulse\`. Lowering the cap or
   pausing **never stops a running agent**; it stops the next dispatch. Both are in
@@ -104,7 +104,9 @@ Nine verbs. The first five do less than they sound like:
 - **\`queue_control\`** — \`order\` pins origins to the front, and it **replaces
   every standing pin** rather than adding one. It only re-orders: a row held by a
   cap, a cooldown, an unapproved plan or a missing watch tag is still held.
-  \`cancelJob\` drops a brief that has not run yet.
+  \`cancelJob\` drops a brief that has not run yet. \`origin\` with \`profile\`
+  prices one queued row — which model its next dispatch runs on, and nothing about
+  when it runs.
 - **\`escalation_answer\`** — settles one row from \`attention_read\`. Free text
   (or \`answers\`, one per question) for a question, \`permission\` for a blocked
   tool call. **Two kinds are not yours**: a proposal and a crashed agent's question
@@ -118,10 +120,29 @@ Nine verbs. The first five do less than they sound like:
   task backing a plan part leaves that part blocked rather than concluded.
 - **\`goal_control\`** — \`watched\` is the tracker tag that opts work in or out
   (and cascades to everything under a container); \`priority\` is the harness's own
-  mark and only re-orders its queue; \`profile\` pins which model the next dispatch
-  runs on. None of them starts or stops an agent.
+  mark and only re-orders its queue; \`profile\` writes the model tag on the ticket,
+  which is also **the answer the appraiser's profile question is waiting for** — the
+  reply says whether it released a goal that was held on it. None of them starts or
+  stops an agent.
+- **\`goal_placement\`** — \`parent\` and \`areaPath\`, the two questions about
+  where a goal belongs on the board. Send a field with no value to answer "it wants
+  no such thing", which settles the question and writes nothing. Neither affects
+  what the harness dispatches.
 
-The other four actually do something:
+The other seven actually do something:
+
+- **\`goal_gate\`** — the escape hatches, for a goal the harness is **holding**.
+  \`appraisal\` overrides an appraiser's verdict (\`workable\` works an
+  \`unclear\` goal anyway, \`clear\` has it appraised afresh); \`overrule\` says a
+  standing shortfall is wrong and records why, which **delivers the goal**;
+  \`environmentGate\` says a delivered goal is not waiting on a deployment, which
+  opens its validation and close-out rows and needs a \`note\`. The hold names
+  itself in the queue reason — read it first.
+- **\`goal_instruct\`** — say what you actually want, in your own words. It stands
+  in front of every agent dispatched on the goal until one concludes it, and writing
+  it **restarts the goal**: a delivery is retracted and a finished plan goes back to
+  a planner. \`withdraw\` stops the words standing but does not undo either of
+  those.
 
 - **\`job_create\`** — put work in. A \`code\` brief where a tracker is configured is
   **filed as a ticket** and goes through planning like any other issue; it does not

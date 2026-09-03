@@ -1,4 +1,5 @@
 import type { AgentManager } from '../agents/agentManager.js';
+import type { AgentModels } from '../agents/modelPolicy.js';
 import type { PermissionDesk } from '../agents/permissionDesk.js';
 import type { RecoveryDesk } from '../agents/recoveryDesk.js';
 import type { Config } from '../config.js';
@@ -12,6 +13,7 @@ import type { ProposalDesk } from '../proposals/proposalDesk.js';
 import type { RuntimeControl } from '../runtimeControl.js';
 import type { TicketFiler } from '../tickets/filing.js';
 import type { IssueWatchContext } from '../issueWatch.js';
+import type { SendResult, WorkItemAreaPathInput, WorkItemParentInput } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
 import type { UpcomingPlan } from '../wire.js';
 import type { McpTool } from './protocol.js';
@@ -145,14 +147,23 @@ export interface DesktopToolDeps {
   /** Agents orphaned by a crash — read by `attention_read`, and a refusal on `escalation_answer`. */
   recovery(): RecoveryDesk;
   /**
-   * The outbound seam `goal_control`'s watch toggle writes the tag through.
+   * The outbound seam this channel's four tracker writes go through: the watch tag
+   * and the model pin (`goal_control`), and the container and area path
+   * (`goal_placement`).
    *
-   * Narrowed to the one method rather than taking the whole `ActionSink`, and that
+   * Narrowed method by method rather than taking the whole `ActionSink`, and that
    * is the fence rather than a convenience: an `ActionSink` here would put
    * `mergePr`, `postPrReply` and `createIssue` one line away from a channel whose
-   * whole claim is that it steers the fleet and never acts for it.
+   * whole claim is that it steers the fleet and never acts for it. Each name added
+   * here widens that fence by exactly one verb, deliberately — the two placement
+   * writes are an operator answering a question the harness asked them, which is
+   * the same act as the watch tag and not the same as publishing on their behalf.
    */
-  connector: IssueWatchContext['sink'];
+  connector: IssueWatchContext['sink'] & {
+    canPlaceWorkItem(): boolean;
+    setWorkItemParent(input: WorkItemParentInput): Promise<SendResult>;
+    setWorkItemAreaPath(input: WorkItemAreaPathInput): Promise<SendResult>;
+  };
   /**
    * Where a failed tag write is recorded. Optional for the reason everything on
    * this channel is best-effort: the server is constructed with one and a test
@@ -162,6 +173,13 @@ export interface DesktopToolDeps {
   /** `config.labelPrefix` and `config.issueContainerTypes`, for `applyIssueWatch`. */
   labelPrefix: string;
   issueContainerTypes: string[];
+  /**
+   * `config.agentModels`, for `goal_control`'s pin — which writes the model *label*
+   * and therefore needs the whole set to sweep, not just the names {@link
+   * DesktopToolDeps.profileNames} answers with. Undefined on a deployment that
+   * configures none, where the pin refuses rather than tagging nothing.
+   */
+  agentModels: AgentModels | undefined;
   now(): string;
 }
 

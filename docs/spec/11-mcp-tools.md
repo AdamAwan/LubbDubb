@@ -840,10 +840,13 @@ and [the run](20-validation.md#getting-the-application-up);
 | `attention_read`    | "Needs you" as one list — questions, blocked tool calls, proposals, human tasks, orphaned runs — each row naming its own kind and what settles it. Records nothing. |
 | `agent_read`        | One agent close up: its row, the files it wrote, the tail of its transcript, and any question it is parked on. Records nothing. |
 | `fleet_control`     | The three live dispatch controls: `cap`, `paused`, and `pulse`. In memory, exactly as the cockpit's are. |
-| `queue_control`     | The Up next queue's two verbs: replace the pin set, and cancel a still-queued job. |
+| `queue_control`     | The Up next queue's three verbs: replace the pin set, cancel a still-queued job, and price one row with `origin` + `profile`. |
 | `escalation_answer` | Settle one inbox row: `response`/`answers` for a question, `permission` for a blocked tool call. Refuses the other two kinds by name. |
 | `human_task_settle` | Settle one bench row — work only a person can do: `done` once it has been, `declined` with a required note. Not an escalation, and not answered as one. |
-| `goal_control`      | The three standing marks on a goal: `watched` (the tracker tag, cascading), `priority` (the harness's own queue mark) and `profile` (which model the next dispatch runs on). |
+| `goal_control`      | The three standing marks on a goal: `watched` (the tracker tag, cascading), `priority` (the harness's own queue mark) and `profile` (the model tag, which also answers the appraiser's profile question). |
+| `goal_gate`         | The escape hatches a blocking gate has to have: override an `appraisal`, `overrule` a standing shortfall, release or re-apply the `environmentGate`. |
+| `goal_placement`    | The two placement questions: `parent` and `areaPath`. Either sent with no value answers "this goal wants no such thing" and settles it. |
+| `goal_instruct`     | Say what you want on a goal, in your own words — it stands in front of every later dispatch and restarts the goal. `withdraw` takes one back. |
 | `proposal_read`     | One proposed act in full: its kind, what accepting it would actually do, and the caveats that gate it. Records nothing. |
 | `proposal_decide`   | `accept` performs the act; `reject` performs nothing; `close_ticket` / `hold_ticket` are a plan's two verdicts about the **ticket**. |
 | `recovery_decide`   | `restore` / `requeue` / `remove` a run a crash orphaned. |
@@ -911,7 +914,7 @@ one machine. An operator who wants their own agent keeping an eye on the fleet �
 overnight, answering a question, lowering the cap when the account's five-hour window is nearly spent
 — had the bearer token and forty hand-rolled endpoints, or nothing.
 
-Four reads and eight verbs. The reads:
+Four reads and twelve verbs. The reads:
 
 - **`fleet_status`** is the read, and it is one call rather than three because the decision it serves
   is one decision. An operator's agent checking in is nearly always asking _is there room to run
@@ -933,8 +936,9 @@ Four reads and eight verbs. The reads:
 - **`proposal_read`** is the fourth, and it exists because of what its verb can do — see
   [below](#what-it-may-do-and-what-it-may-not).
 
-The verbs are `fleet_control`, `queue_control`, `goal_control`, `escalation_answer`,
-`human_task_settle`, `proposal_decide`, `recovery_decide`, `job_create` and `agent_control`.
+The verbs are `fleet_control`, `queue_control`, `goal_control`, `goal_gate`, `goal_placement`,
+`goal_instruct`, `escalation_answer`, `human_task_settle`, `proposal_decide`, `recovery_decide`,
+`job_create` and `agent_control`.
 
 #### What it may do, and what it may not
 
@@ -978,17 +982,23 @@ is also what clears the park, rather than writing to the session and leaving the
 still parked. Each refuses an agent with no live session, and names the row's status rather than the
 map lookup that failed: a typo and an agent that has ended are different answers.
 
-The `connector` dep is still narrowed to `setIssueLabel` rather than taking the whole `ActionSink`.
-That is not undone by the above: a merge reached through `proposal_decide` is an act **the harness
-itself proposed** and an operator is approving, which is a different thing from a tool that can merge
+The `connector` dep is still narrowed method by method rather than taking the whole `ActionSink` —
+`setIssueLabel` for the watch tag and the model pin, `canPlaceWorkItem` / `setWorkItemParent` /
+`setWorkItemAreaPath` for `goal_placement`. That is not undone by the above: each name widens the
+fence by exactly one verb, and every one of them is an operator answering a question the harness put
+to them about their own tracker item — which is a different thing from `mergePr`, `postPrReply` or
+`createIssue` sitting one line away from a channel whose whole claim is that it steers the fleet and
+never acts for it. A merge reached through `proposal_decide` is the same distinction from the other
+side: an act **the harness itself proposed** and an operator is approving, not a tool that can merge
 anything it names.
 
 #### Every write goes through the object the cockpit's click goes through
 
 `RuntimeControl.apply`, `EscalationInbox.answer`, `PermissionDesk.decide`, `ProposalDesk.accept` /
 `reject` / `backOut`, `RecoveryDesk.decide`, `AgentManager`'s six verbs, `submitBrief`,
-`Store.setPriorityOverrides`, `Store.cancelJob`, `Store.setGoalPriority`, `applyIssueWatch` — never a
-second implementation beside one of them. A control surface that reached the store directly would be
+`Store.setPriorityOverrides`, `Store.cancelJob`, `Store.setGoalPriority`, `applyIssueWatch`,
+`applyProfilePin`, `settlePlacement`, `overruleShortfall`, `writeGoalInstruction` /
+`withdrawGoalInstruction` — never a second implementation beside one of them. A control surface that reached the store directly would be
 a second opinion about what a pause or a watch means, free to disagree with the cockpit on the next
 change to either. `fleet_control` does not even validate `cap`: which numbers are a legal cap is
 `RuntimeControl.apply`'s question, and a check in the handler would be two answers to one.
@@ -1071,6 +1081,53 @@ everything is worked, and there is no tag to write; reporting the change would b
 did not happen and could not have. **A tag the provider refused is an error, not a success** — an
 operator told "watched" would leave the ticket believing the fleet will pick it up, and it never
 will, with nothing red.
+
+#### The escape hatches a gate has to have
+
+`goal_control`'s two marks steer a goal the harness is willing to work. The **four decisions that
+decide whether it will work it at all** were, until `goal_gate` and the pin below, reachable only
+from a browser tab:
+
+| Hold                                                                   | What is waiting                                | Answered by                        |
+| ---------------------------------------------------------------------- | ---------------------------------------------- | ---------------------------------- |
+| An appraisal that came back `unclear` ([06](06-issue-pickup.md))        | somebody saying "work it anyway", or agreeing  | `goal_gate` — `appraisal`          |
+| A profile the appraiser proposed and nobody confirmed                   | the model tag on the ticket                    | `goal_control` — `profile`         |
+| A shortfall standing against a goal that is actually finished           | somebody saying the assessment is wrong        | `goal_gate` — `overrule`           |
+| An environment gate on work that is never going to deploy ([24](24-environments.md#the-three-verdicts)) | somebody saying so, with a note | `goal_gate` — `environmentGate`    |
+
+Each of the four routes behind them describes itself, in the code, as "the escape hatch a blocking
+gate has to have". The gap this closes is the one they all leave open together: an operator away from
+that machine had a session that could **see** the hold — every one of them names itself in the queue
+reason `fleet_status` ships — and could do nothing about it. What that produced in practice is a
+session reaching for the nearest name that would take the call: told to answer a profile question, it
+called `human_task_settle`, cleared the wrapper task, reported the gate settled, and left it standing.
+
+**The profile pin is an arm of `goal_control` and not a fifth name**, because it is the same act as
+the watch tag beside it — a label on the ticket saying how the harness should work this goal — and
+the reply says whether it released a goal that was held on it. It writes through `applyProfilePin`
+(`src/intake/profilePin.ts`), shared with `POST /api/issues/:number/profile`, which is the third
+extraction under the rule [above](#every-write-goes-through-the-object-the-cockpits-click-goes-through)
+and the one that was already broken when it was made: the arm wrote `setProfileOverride` — the
+**queue's** per-origin price, a different record with a different lifetime — so it tagged nothing,
+settled nothing and reported a pin. That price is a real thing an operator wants, and it is now
+`queue_control`'s `origin` + `profile`, beside the pin set it belongs with.
+
+**`goal_placement` is its own name** because it is a different kind of act: `parent` and `areaPath`
+are the only decisions on this channel that **write to the tracker's own fields**, and neither holds
+any work — an unplaced goal is dispatched exactly as a placed one, and the questions exist because an
+item filed under nothing rolls up to nothing. Both go through `settlePlacement`
+(`src/intake/placementSettle.ts`) with the routes, which stamps the row **after** the write and never
+before. They are also why the `connector` dep widened by three methods; see
+[below](#what-it-may-do-and-what-it-may-not).
+
+**`goal_instruct` is input, not a verdict**, which is why it is neither an arm of `goal_gate` nor of
+`goal_control`. Writing one **restarts the goal**: the row that reaches the prompt, an operator
+`more_work` verdict that retracts a delivery, and a settled plan sent back to a planner are one act
+(`writeGoalInstruction`, `src/goalInstructions.ts`), because an instruction nothing is dispatched for
+is an operator being ignored in a way that looks exactly like being listened to. `withdraw` is the
+same object from the other end and is honest about the asymmetry: taking the words back clears the
+verdict they wrote, and does **not** put the delivery back or re-finish the plan.
+→ [13](13-jobs-and-tickets.md)
 
 Four things differ from the fleet channel, and each answers a way this credential is unlike an
 agent's:
