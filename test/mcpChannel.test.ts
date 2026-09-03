@@ -1113,6 +1113,10 @@ test('a claim is a write, so it stays structurally attributed — there is no ar
     // corroboration it writes is still the credential's, so agreeing on purpose
     // widens what an agent can say and not who it can say it as.
     'agreeWith',
+    // The reporter's answer about its **own task** — whether this stops it
+    // finishing. Not an author either: it names nobody, and what it changes is the
+    // directive this agent is answered with.
+    'blocks_me',
     'contradicts',
     // The obstacle board's discriminator, and the only classification the intake
     // asks for: *would a fix make this go away?* Not a shelf, and not an author.

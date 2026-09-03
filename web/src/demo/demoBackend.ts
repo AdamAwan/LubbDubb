@@ -2689,6 +2689,10 @@ const PHASE_COPY: Record<SpendPhase, { label: string; blurb: string }> = {
   landing: { label: 'Landing', blurb: 'The rest of getting a pull request in — review comments, retargets, the merge' },
   evidence: { label: 'Evidence', blurb: 'Assessing what shipped, and writing the run up' },
   local: { label: 'Local runs', blurb: 'Bringing a goal’s branch up on this machine to look at it' },
+  obstacle: {
+    label: 'Obstacles',
+    blurb: 'Repairing something in the fleet’s way — a red base, a wall three goals have hit',
+  },
   job: { label: 'Jobs', blurb: 'Work an operator queued directly, rather than a goal the harness picked up' },
   other: { label: 'Unclassified', blurb: 'Runs whose origin names none of the above — see the note below' },
 };
@@ -3802,6 +3806,7 @@ function buildDemoSpend(): SpendInsights {
     landing: 0,
     evidence: 0,
     local: 0,
+    obstacle: 0,
     job: 0,
     other: 0,
   });
@@ -4023,6 +4028,7 @@ function buildDemoTrend(): SpendTrend {
     landing: 0,
     evidence: 0,
     local: 0,
+    obstacle: 0,
     job: 0,
     other: 0,
   });

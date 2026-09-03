@@ -181,8 +181,10 @@ import type {
   WorkItemFiling,
   BugFiling,
   Obstacle,
+  ObstacleBlock,
   ObstacleKey,
   ObstacleSighting,
+  ObstacleStanding,
   WorldEvent,
   WorldEventInput,
   WorldEventKind,
@@ -1525,6 +1527,10 @@ export class Store {
     return this.obstacles.recordObstacleSighting(...args);
   }
 
+  getObstacle(id: string): Obstacle | null {
+    return this.obstacles.getObstacle(id);
+  }
+
   listObstacles(): Obstacle[] {
     return this.obstacles.listObstacles();
   }
@@ -1543,6 +1549,34 @@ export class Store {
 
   obstaclesNoticedBy(agentId: string): Set<string> {
     return this.obstacles.obstaclesNoticedBy(agentId);
+  }
+
+  obstacleBoard(): ObstacleStanding[] {
+    return this.obstacles.obstacleBoard();
+  }
+
+  claimObstacle(id: string): boolean {
+    return this.obstacles.claimObstacle(id);
+  }
+
+  setObstacleOwner(id: string, ownerRef: string): void {
+    this.obstacles.setObstacleOwner(id, ownerRef);
+  }
+
+  releaseObstacle(id: string): void {
+    this.obstacles.releaseObstacle(id);
+  }
+
+  recordObstacleBlock(...args: Parameters<ObstacleStore['recordObstacleBlock']>): ObstacleBlock {
+    return this.obstacles.recordObstacleBlock(...args);
+  }
+
+  listObstacleBlocks(): ObstacleBlock[] {
+    return this.obstacles.listObstacleBlocks();
+  }
+
+  clearObstacleBlock(originRef: string): void {
+    this.obstacles.clearObstacleBlock(originRef);
   }
 
   prReplyRefs(prNumber: number): ReadonlySet<string> {

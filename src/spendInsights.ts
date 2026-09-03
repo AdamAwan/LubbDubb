@@ -9,7 +9,7 @@ import type {
   WorkNode,
   WorldEvent,
 } from './types.js';
-import { issueOriginRole } from './issueOrigins.js';
+import { issueOriginRole, obstacleOriginId } from './issueOrigins.js';
 import { rollUpIssueSpend, roundUsd, unmeasured } from './issueSpend.js';
 import { rollUpChecks, rollUpTaskTypes, type ChecksSpend, type TaskTypeSpend } from './taskTypeSpend.js';
 import {
@@ -81,7 +81,16 @@ import {
  * than failing — counts here too: it is the same pipeline costing the same money,
  * and a phase per dispatch state would rank states instead of causes.
  */
-export type SpendPhase = 'deliberation' | 'build' | 'ci' | 'landing' | 'evidence' | 'local' | 'job' | 'other';
+export type SpendPhase =
+  | 'deliberation'
+  | 'build'
+  | 'ci'
+  | 'landing'
+  | 'evidence'
+  | 'local'
+  | 'obstacle'
+  | 'job'
+  | 'other';
 
 /**
  * Reading order, funnel order: decide, build, go green, land, check, and the two
@@ -98,6 +107,7 @@ export const PHASE_ORDER: readonly SpendPhase[] = [
   'landing',
   'evidence',
   'local',
+  'obstacle',
   'job',
   'other',
 ];
@@ -117,6 +127,10 @@ const PHASE_COPY: Record<SpendPhase, { label: string; blurb: string }> = {
   landing: { label: 'Landing', blurb: 'The rest of getting a pull request in — review comments, retargets, the merge' },
   evidence: { label: 'Evidence', blurb: 'Assessing what shipped, and writing the run up' },
   local: { label: 'Local runs', blurb: 'Bringing a goal’s branch up on this machine to look at it' },
+  obstacle: {
+    label: 'Obstacles',
+    blurb: 'Repairing something in the fleet’s way — a red base, a wall three goals have hit',
+  },
   job: { label: 'Jobs', blurb: 'Work an operator queued directly, rather than a goal the harness picked up' },
   other: { label: 'Unclassified', blurb: 'Runs whose origin names none of the above — see the note below' },
 };
@@ -351,6 +365,10 @@ export function phaseOf(originRef: string | null): SpendPhase {
   // being lifted out.
   if (originRef.startsWith('pr:')) return CI_CONCERN.test(originRef) ? 'ci' : 'landing';
   if (originRef.startsWith('job:')) return 'job';
+  // A repair dispatch is not any goal's work and must not file under one: it is
+  // what the fleet spent getting something out of its own way, which is the one
+  // figure that says whether the second ownership door is paying for itself.
+  if (obstacleOriginId(originRef) !== null) return 'obstacle';
   const issueNumber = /^issue:(\d+)(?::|$)/.exec(originRef)?.[1];
   if (issueNumber === undefined) return 'other';
   switch (issueOriginRole(Number(issueNumber), originRef)) {
@@ -379,7 +397,7 @@ export function phaseLabel(phase: SpendPhase): string {
  * present. Exported alongside {@link PHASE_ORDER} and for its reason.
  */
 export function zeroPhases(): Record<SpendPhase, number> {
-  return { deliberation: 0, build: 0, ci: 0, landing: 0, evidence: 0, local: 0, job: 0, other: 0 };
+  return { deliberation: 0, build: 0, ci: 0, landing: 0, evidence: 0, local: 0, obstacle: 0, job: 0, other: 0 };
 }
 
 /** Where an agent's run sits in time: when it finished, or when it started if it has not. */

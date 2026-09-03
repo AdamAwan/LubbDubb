@@ -1,9 +1,9 @@
 # 32 — Obstacles
 
 **Partly built.** The spine is running: the tables, the keys and their three gates, the matcher, the
-states, the intake, and both delivery channels. What is not yet built carries its own marker,
-section by section — ownership, the `blocked` verdict, the ways an obstacle ends, and the cockpit
-tab. It supersedes [27](27-knowledge.md) on landing — that document describes the claim store this
+states, the intake, both delivery channels, ownership and the `blocked` verdict. What is not yet
+built carries its own marker, section by section — the ways an obstacle ends, and the cockpit tab.
+It supersedes [27](27-knowledge.md) on landing — that document describes the claim store this
 replaces, and what it says is true of the harness today; a **note** still lands there, through the
 same intake, until the last of these sections is built. The change that lands the last of them deletes
 [27](27-knowledge.md) and this document takes its number. Every path named here is italic until the
@@ -148,7 +148,7 @@ rule are worth stating, because both could have gone the other way:
   reporting. The harness holds no registry of test names, so a gate that claimed to check one would
   be a gate that checked nothing. A key with no file in it is dropped: identity here is a fact about
   the world, and a test name on its own is a sentence.
-- **A `test` or `path` key is grounded by *either* half of what the harness knows** — the branch's
+- **A `test` or `path` key is grounded by _either_ half of what the harness knows** — the branch's
   own files, or a `check` key on the same report that grounded. The branch alone is the wrong half
   for most honest reports: an agent saying a test is not its doing is saying precisely that the file
   is not in its diff. A grounded check is the harness's own statement that this dispatch is about
@@ -204,8 +204,9 @@ mis-diagnosing its own breakage, which is why `sighted` reaches nobody.
 
 The states and their exits are declared in `src/obstacles/lifecycle.ts`, and what moves a row today
 is a report: `sighted` on the first voice, `standing` on the second, and back to `standing` from a
-terminal state on a re-report. **Not yet built:** nothing writes `owned`, `resolved` or `dormant` —
-those are the ownership, world-condition and decay phases, and each is marked below.
+terminal state on a re-report. `owned` is written on the pulse by the ownership desk
+(`src/obstacles/ownershipDesk.ts`). **Not yet built:** nothing writes `resolved` or `dormant` —
+those are the world-condition and decay phases, and each is marked below.
 
 ### The harness is a voice
 
@@ -298,8 +299,10 @@ trip, with no model call and no waiting:
 | `sighted`                              | _Recorded. Nothing else has seen this, so it may be your own change: check your diff before deciding it is not. Either way, do not go fixing it._ |
 | The obstacle makes the task impossible | _You cannot finish. Conclude `blocked`, naming this obstacle._                                                                                    |
 
-The last of those is **not yet built** — it needs the `blocked` verdict, which is [ownership's
-phase](#blocked-is-an-answer). The other three are what the tool answers with today.
+The last is chosen by the agent's own `blocks_me`, and only by that: whether an obstacle makes _this_
+task impossible is a fact about the task, and the harness has no reading of it. It is the same shape
+as `fix_makes_it_go_away` — one thing asked of the agent that only the agent can know — and it is read
+by nothing except the directive. → [blocked is an answer](#blocked-is-an-answer)
 
 `near[]` names rows a suggestion linked but no key merged, with their ids, so the agent may agree with
 one directly. **The report is filed either way** and never held pending a reply: a round trip is a
@@ -388,9 +391,6 @@ than read, and adding to one makes every line in it worth less.
 
 ## Ownership
 
-**Not yet built.** No row is owned, nothing files a ticket from a sighting, and there is no
-`obstacle:<id>` origin.
-
 **Never an agent.** The reporting agent is not the owner, and no agent stakes a claim: a lock an agent
 takes is a lock an agent forgets. Ownership is a row the harness writes, on the pulse, transactionally
 on `owner IS NULL` — so _do not all pile on_ is a uniqueness constraint rather than an instruction.
@@ -398,7 +398,8 @@ on `owner IS NULL` — so _do not all pile on_ is a uniqueness constraint rather
 A `standing` obstacle gets an owner one of two ways:
 
 - **A ticket**, filed through `ticketFiler` (`src/tickets/filing.ts`) with the goal that hit it as a
-  reference. Type, labels, assignee and the bug relation are **arguments**, never sentences in a
+  reference — the first goal that hit it, since the relation is one edge and that is the goal whose
+  session paid for the discovery. Type, labels, assignee and the bug relation are **arguments**, never sentences in a
   prompt: a ticket without the watch label is created, linked, shown complete, and never dispatched
   for ([13](13-jobs-and-tickets.md#filing-a-ticket)). It then enters the normal funnel and is ranked
   and priced like any other goal.
@@ -411,7 +412,25 @@ A `standing` obstacle gets an owner one of two ways:
 That second door is a **capability**, not a convenience: a store that can queue work can put agents on
 the fleet. It is one rule, in the pipeline where it can be seen, subject to the headroom cut like every
 other candidate ([05](05-dispatcher.md#the-rule-book)) — never a general licence for this subsystem to
-schedule things.
+schedule things. It is bounded once more on top of the cut: **one repair in flight at a time**, across
+the whole fleet, because the cut bounds how many agents run and not how many of them this rule may be.
+A board that went to twenty standing rows on a bad afternoon would otherwise propose twenty repairs,
+and the subsystem whose point is not spending the fleet twice on one thing would be spending it on
+itself.
+
+**The claim is the transition, and the ticket comes after it.** `Store.claimObstacle` is one
+`UPDATE … WHERE state='standing' AND owner_ref IS NULL`, so two passes cannot both take one row —
+filing first and claiming after would let the pulse either side of a provider round trip file a
+second ticket for one obstacle. The window that opens the other way is closed at the other end: a row
+left `owned` with a null owner is released at the top of the next pass, so a crash mid-filing costs a
+pulse rather than a row nobody can ever own. Which door a row is at is `ownershipDoor`
+(`src/obstacles/ownership.ts`), asked by the desk and by the rule, so the two cannot disagree about
+what is blocking the fleet.
+
+**The repair door is _recorded_ rather than taken.** The desk owns a row only once a task actually
+exists on `obstacle:<id>` — a candidate the headroom cut never dispatched is not something fixing it,
+and a row marked `owned` on the strength of one tells every agent it reaches to stand down from
+something nobody is doing.
 
 ### Blocked is an answer
 
@@ -419,6 +438,26 @@ An agent whose task is genuinely stopped by an obstacle — the base will not bu
 _carry on_, and telling it to carry on makes it spin. `conclude_work` gains a `blocked` verdict
 carrying an obstacle id: the task parks, the goal does **not** return to pickup, and a desk re-queues
 it when the obstacle resolves.
+
+**It writes no conclusion**, and that is what makes it a park rather than a failure. `done` and
+`more_work` are the agent's statement about the _work_; this says the work could not be attempted, so
+there is nothing to declare about whether the goal is finished — and a `more_work` row written here
+would send the goal straight back to pickup, which is the next agent hitting the same wall. It is not
+a fifth member of the verdict matrix ([14](14-persistence.md#issue-verdicts-and-the-exclusion-matrix))
+for the same reason: those four answer _is the work finished_ and clear the ones they contradict, and
+a block that cleared a delivery would hand delivered work back to the fleet.
+
+Its exit is the **obstacle** and never the issue. `blockedGoals` (`src/obstacles/blocked.ts`) asks
+`reachesAgents` rather than restating the states, so the rows a goal waits behind and the rows the
+intake answers _it is not yours_ on cannot drift — `owned` still holds it, because being fixed is not
+fixed. A block naming a row that is **gone** releases rather than holds: an unheld goal is a redundant
+agent an operator can see, and a goal held behind an id nothing resolves is work that never comes back
+with nothing red.
+
+The directive that sends an agent here is the intake's fourth, and it is reached by the agent's own
+answer to `blocks_me` — whether this stops _this_ task is a fact about the task, which the harness has
+no reading of. It is the same shape as `fix_makes_it_go_away`: one thing asked of the agent that only
+the agent can know, and nothing inferred from it.
 
 That is the difference between the fleet queueing behind one obstacle and the fleet spending its
 allowance on it.

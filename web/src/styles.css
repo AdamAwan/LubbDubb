@@ -4481,6 +4481,9 @@ select:disabled {
      first seven — so this one is mixed from two of them rather than written as a
      literal, which is what keeps it following the theme an operator picked. */
   --sp-local: color-mix(in srgb, var(--blue) 45%, var(--green));
+  /* The ninth, mixed for the eighth's reason and from the two it sits between: what
+     a repair costs reads as a red thing on somebody else's branch. */
+  --sp-obstacle: color-mix(in srgb, var(--red) 55%, var(--violet));
   --sp-job: var(--violet);
   --sp-other: var(--grey);
 }

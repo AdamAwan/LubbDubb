@@ -14,6 +14,7 @@ import type {
   IssueConclusion,
   IssueRelative,
   IssueShortfall,
+  ObstacleStanding,
   Plan,
   PrReview,
   PrReviewRoute,
@@ -188,6 +189,20 @@ export interface StageContext {
    * `validate-check` and nothing else.
    */
   validationChecks: Map<string, ValidationCheck[]>;
+  /**
+   * The obstacle board — every row with its keys, its voice count and the goals
+   * that reported it. Read by rule `obstacle-repair` and by nothing else here.
+   * Empty on a caller that has not wired it, and then no repair is ever proposed.
+   */
+  obstacles: readonly ObstacleStanding[];
+  /**
+   * The checks failing on a branch other open pull requests are **based on** —
+   * half of what makes an obstacle *blocking the fleet now*. `redBaseChecks`'
+   * answer, which the ownership desk asks too, so the rule that dispatches a
+   * repair and the desk that files a ticket cannot hold different opinions about
+   * which obstacle is at which door.
+   */
+  redBaseChecks: ReadonlySet<string>;
   /** Issues `issue-appraisal` claimed this cycle. Written by it, read after it — see the class doc. */
   appraising: Set<number>;
   /** Issues `issue-assess` claimed this cycle. Written by it, read after it — see the class doc. */

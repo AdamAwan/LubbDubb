@@ -552,7 +552,7 @@ function fmtSpan(ms: number): string {
 
 /** The phase split inside one goal, as a bar the width of its share of the fleet. */
 function GoalBar({ goal, total }: { goal: SpendGoal; total: number }): JSX.Element {
-  const order: SpendPhase[] = ['deliberation', 'build', 'ci', 'landing', 'evidence', 'job', 'other'];
+  const order: SpendPhase[] = ['deliberation', 'build', 'ci', 'landing', 'evidence', 'obstacle', 'job', 'other'];
   return (
     <span className="sp-gbar" style={{ width: `${Math.max(share(goal.costUsd, total), 1.5)}%` }}>
       {order

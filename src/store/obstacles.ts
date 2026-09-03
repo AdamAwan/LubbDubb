@@ -2,13 +2,22 @@ import { nanoid } from 'nanoid';
 import { matchObstacle, nearMatches, resolvingKeys, type NearCandidate } from '../obstacles/match.js';
 import { stateAfterSighting } from '../obstacles/lifecycle.js';
 import type { GatedKey } from '../obstacles/keys.js';
-import type { Obstacle, ObstacleKey, ObstacleKind, ObstacleSighting, ObstacleState } from '../types.js';
+import type {
+  Obstacle,
+  ObstacleBlock,
+  ObstacleKey,
+  ObstacleKind,
+  ObstacleSighting,
+  ObstacleStanding,
+  ObstacleState,
+} from '../types.js';
 import type { ColumnMigrations } from './migrate.js';
 import type { StoreContext } from './context.js';
 
 /**
- * The obstacle board: `obstacles`, `obstacle_keys`, `obstacle_sightings`, and the
- * ledger of who has been told what, `obstacle_notices`.
+ * The obstacle board: `obstacles`, `obstacle_keys`, `obstacle_sightings`, the
+ * ledger of who has been told what, `obstacle_notices`, and the goals parked
+ * behind a row, `obstacle_blocks`.
  *
  * **The uniqueness constraint is on a key's `value`, and not on `(kind, value)`.**
  * The value is the identity; the kind is a column beside it. Two agents may
@@ -22,7 +31,7 @@ import type { StoreContext } from './context.js';
  * report to the winner. Two agents reporting in the same millisecond cannot both
  * create a row, and neither waits.
  *
- * The four tables are new, so they need no {@link OBSTACLE_COLUMNS} entries — and
+ * The five tables are new, so they need no {@link OBSTACLE_COLUMNS} entries — and
  * being new *once* is what stops that keeping them exempt: the first column added
  * to any of them later belongs there. → `docs/spec/32-obstacles.md`
  */
@@ -107,6 +116,15 @@ interface SightingRow {
   words: string;
   why_not_mine: string | null;
   matched_by: string;
+  created_at: string;
+}
+
+interface BlockRow {
+  origin_ref: string;
+  obstacle_id: string;
+  agent_id: string | null;
+  task_id: string | null;
+  note: string;
   created_at: string;
 }
 
@@ -197,6 +215,122 @@ export class ObstacleStore {
       obstacle_id: string;
     }[];
     return new Set(rows.map((row) => row.obstacle_id));
+  }
+
+  /**
+   * Take a standing row for the harness, or say it was already taken.
+   *
+   * **The claim is the transition, made transactionally on `owner IS NULL`** — so
+   * *do not all pile on* is a uniqueness constraint rather than an instruction, and
+   * two desks on one pulse cannot both win it. Nothing an agent calls reaches this:
+   * a lock an agent takes is a lock an agent forgets.
+   *
+   * It moves the row to `owned` **before** the owner exists, and that order is
+   * deliberate. Filing a ticket is a round trip to a provider, and a claim taken
+   * after it would let the pulse either side of that trip file a second ticket for
+   * one obstacle. The window is closed from the other end instead: a row left
+   * `owned` with no owner is released by {@link releaseObstacle} at the top of the
+   * next pass, so a crash mid-filing costs a pulse rather than a row nobody can
+   * ever own.
+   * → `docs/spec/32-obstacles.md#ownership`
+   */
+  claimObstacle(id: string): boolean {
+    const at = this.ctx.now();
+    const result = this.ctx.db
+      .prepare(
+        `UPDATE obstacles SET state='owned', updated_at=?
+           WHERE id=? AND state='standing' AND owner_ref IS NULL`,
+      )
+      .run(at, id);
+    return result.changes > 0;
+  }
+
+  /** Name what is fixing it — a ticket ref, or the repair dispatch's own origin. */
+  setObstacleOwner(id: string, ownerRef: string): void {
+    this.ctx.db
+      .prepare(`UPDATE obstacles SET owner_ref=?, updated_at=? WHERE id=? AND state='owned'`)
+      .run(ownerRef, this.ctx.now(), id);
+  }
+
+  /**
+   * Hand a claimed row back, and only one that was never filled.
+   *
+   * Guarded on `owner_ref IS NULL` rather than trusted to the caller: an `owned`
+   * row with an owner is a ticket somebody is working, and releasing one would put
+   * *do not fix this* back to *nobody has this* while an agent was on it.
+   */
+  releaseObstacle(id: string): void {
+    this.ctx.db
+      .prepare(`UPDATE obstacles SET state='standing', updated_at=? WHERE id=? AND state='owned' AND owner_ref IS NULL`)
+      .run(this.ctx.now(), id);
+  }
+
+  /**
+   * Park a goal behind an obstacle, replacing whatever it was parked behind.
+   *
+   * One row per goal — the obstacle the agent named is the one it could not get
+   * past, and a second would leave the desk asking which of them has to clear.
+   */
+  recordObstacleBlock(input: {
+    originRef: string;
+    obstacleId: string;
+    agentId: string | null;
+    taskId: string | null;
+    note: string;
+  }): ObstacleBlock {
+    const at = this.ctx.now();
+    this.ctx.db
+      .prepare(
+        `INSERT INTO obstacle_blocks (origin_ref, obstacle_id, agent_id, task_id, note, created_at)
+         VALUES (?,?,?,?,?,?)
+         ON CONFLICT(origin_ref) DO UPDATE SET
+           obstacle_id=excluded.obstacle_id, agent_id=excluded.agent_id,
+           task_id=excluded.task_id, note=excluded.note, created_at=excluded.created_at`,
+      )
+      .run(input.originRef, input.obstacleId, input.agentId, input.taskId, input.note, at);
+    return { ...input, createdAt: at };
+  }
+
+  /** Every goal parked behind an obstacle right now, oldest first. */
+  listObstacleBlocks(): ObstacleBlock[] {
+    const rows = this.ctx.db
+      .prepare(`SELECT * FROM obstacle_blocks ORDER BY created_at ASC, rowid ASC`)
+      .all() as BlockRow[];
+    return rows.map((row) => ({
+      originRef: row.origin_ref,
+      obstacleId: row.obstacle_id,
+      agentId: row.agent_id,
+      taskId: row.task_id,
+      note: row.note,
+      createdAt: row.created_at,
+    }));
+  }
+
+  /** Let a goal back into pickup. The desk's whole act — nothing else is written. */
+  clearObstacleBlock(originRef: string): void {
+    this.ctx.db.prepare(`DELETE FROM obstacle_blocks WHERE origin_ref=?`).run(originRef);
+  }
+
+  /**
+   * The board as anything that reads it wants it: the row, its keys, how many
+   * independent voices carry it, and the goals that have said it.
+   *
+   * One read rather than a walk per row at each call site, and the voice count is
+   * {@link obstacleVoices}' own rather than a second fold of the sightings — the
+   * number that promotes a row and the number a repair dispatch is judged against
+   * are the same number.
+   */
+  obstacleBoard(): ObstacleStanding[] {
+    return this.listObstacles().map((obstacle) => {
+      const sightings = this.listObstacleSightings(obstacle.id);
+      return {
+        obstacle,
+        keys: this.listObstacleKeys(obstacle.id),
+        voices: this.obstacleVoices(obstacle.id),
+        goalRefs: [...new Set(sightings.map((s) => s.goalRef).filter((ref): ref is string => ref !== null))],
+        words: sightings.map((s) => s.words),
+      };
+    });
   }
 
   getObstacle(id: string): Obstacle | null {

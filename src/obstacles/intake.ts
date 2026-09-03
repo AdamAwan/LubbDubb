@@ -23,6 +23,8 @@ const KEY_KINDS: ReadonlySet<string> = new Set<ObstacleKeyKind>(['check', 'test'
 
 /** One report, validated at the boundary and nowhere else. */
 interface RaisedObstacle {
+  /** The reporter's own answer to whether this stops it finishing. Default false. */
+  blocksMe: boolean;
   /** The claim, with the reporter's own frame stripped out of it. */
   what: string;
   /** The reporter's sentence exactly as it arrived, kept as the sighting's words. */
@@ -81,6 +83,10 @@ export function validateRaisedObstacle(
       whyNotMine,
       keys: parseKeys(args.keys),
       untilHours: typeof until === 'number' ? until : null,
+      // Not validated and not second-guessed: whether this stops *this* task is a
+      // fact about the task, which the harness has no reading of. Anything but an
+      // explicit true is false, so an agent that says nothing carries on.
+      blocksMe: args.blocks_me === true,
     },
   };
 }
@@ -127,7 +133,19 @@ export function ownBreakage(keys: readonly KeyCandidate[], ownPaths: readonly st
  * what its own report means. It is in pain, it called something, and what comes
  * back tells it what to do with the next ten turns.
  */
-function directiveFor(state: ObstacleState, ownerRef: string | null): string {
+function directiveFor(state: ObstacleState, ownerRef: string | null, blocksMe: boolean): string {
+  // First, because it is about the *reporter's* own task rather than about the
+  // row: an agent that cannot finish is not helped by "return to your task", and
+  // telling it to carry on makes it spin. It is the one thing here the harness
+  // cannot judge for itself — whether this stops *this* task is a fact about the
+  // task — so the agent says it, exactly as it says whether a fix would end the
+  // thing. → `docs/spec/32-obstacles.md#blocked-is-an-answer`
+  if (blocksMe) {
+    return (
+      'You cannot finish. Conclude `blocked`, naming this obstacle by the id in this answer. Your goal ' +
+      'is parked rather than failed, and comes back the moment this clears. Do not go fixing it.'
+    );
+  }
   if (state === 'owned' && ownerRef !== null) {
     return `${ownerRef} owns this. Do not fix it. Note it and return to your task.`;
   }
@@ -169,6 +187,8 @@ export function lookupFor(input: {
   /** The sighting this call just wrote, which is never one of the others. */
   mine: string | null;
   near: readonly NearCandidate[];
+  /** The reporter saying this stops it finishing — its own answer, about its own task. */
+  blocksMe: boolean;
 }): ObstacleLookup {
   const others = reachesAgents(input.obstacle.state)
     ? input.sightings
@@ -180,7 +200,7 @@ export function lookupFor(input: {
     status: input.obstacle.state,
     seen_by: input.voices,
     owner: input.obstacle.ownerRef,
-    directive: directiveFor(input.obstacle.state, input.obstacle.ownerRef),
+    directive: directiveFor(input.obstacle.state, input.obstacle.ownerRef, input.blocksMe),
     what_others_saw: others,
     near: input.near.map((row) => ({ id: row.id, what: row.what })),
   };

@@ -460,6 +460,11 @@ export function buildStateSections(
     // calling it eligible for a pickup that has not happened yet.
     appraisals,
     appraisalSignals: appraisalWindow ? store.listWorldEventsSince(appraisalWindow.since, appraisalWindow.refs) : [],
+    // The third park: a goal an agent concluded `blocked` on, behind an obstacle
+    // that still reaches agents. Read the same way `Harness.runCycle` reads it, so
+    // the chip says what is holding the goal rather than calling it eligible.
+    obstacleBlocks: store.listObstacleBlocks(),
+    obstacles: store.obstacleBoard(),
     // So a closed ticket whose run still lives reads `retained` rather than
     // `done` — the same rows the retained list below is built from (issue #234).
     runs: issueRuns,

@@ -17,6 +17,8 @@ import { DEFAULT_PR_REVIEW, type PrReviewPolicy } from '../review/policy.js';
 import type { PrReviewCharters } from '../review/prReview.js';
 import { rankByPriorityOverride } from './priorityOverride.js';
 import { expeditedOrigins } from './goalPriority.js';
+import { redBaseChecks } from '../obstacles/ownership.js';
+import { blockedGoals } from '../obstacles/blocked.js';
 import { deliveryHold } from '../delivery/delivery.js';
 import { candidateParents } from '../issueRelations.js';
 import { appraisalHold } from '../intake/appraisal.js';
@@ -37,6 +39,7 @@ import {
 import { liveParts } from '../plans/parts.js';
 import { isActive, type Candidate, type RawAction, type StageContext } from './rules/context.js';
 import { manualJob } from './rules/manualJob.js';
+import { obstacleRepair } from './rules/obstacleRepair.js';
 import { prCiFailing } from './rules/prCiFailing.js';
 import { prReviewTriage } from './rules/prReviewTriage.js';
 import { workItemInReview } from './rules/workItemInReview.js';
@@ -76,6 +79,7 @@ import { validationFailed } from './rules/validationFailed.js';
  */
 const STAGES: Partial<Record<StageRuleId, (s: StageContext) => void>> = {
   'manual-job': manualJob,
+  'obstacle-repair': obstacleRepair,
   'pr-review-triage': prReviewTriage,
   'pr-ci-failing': prCiFailing,
   'work-item-in-progress': workItemInProgress,
@@ -276,6 +280,11 @@ export class RuleDispatcher implements Dispatcher {
       issues: ctx.world.issues,
       plans: ctx.plans ?? [],
       parts: ctx.planParts ?? [],
+      // A flagged goal waiting on an obstacle is the strongest case there is for
+      // lifting that obstacle's repair: the repair is the last thing between the
+      // goal and any progress at all.
+      obstacles: ctx.obstacles ?? [],
+      obstacleBlocks: ctx.obstacleBlocks ?? [],
     });
     const ranked = rankByPriorityOverride(s.candidates, overrideRank, expedited);
 
@@ -418,6 +427,15 @@ export class RuleDispatcher implements Dispatcher {
       appraisalHold(appraisals.get(issueOrigin(issue.number)) ?? null, issue, { signals: ctx.appraisalSignals }) !==
       null;
 
+    // The goals an agent concluded `blocked` on, still behind an obstacle that
+    // reaches agents. A third park beside the delivery and the appraisal, and the
+    // one whose exit is not the issue at all: the goal comes back the moment the
+    // obstacle stops reaching agents, which the ownership desk sweeps for on the
+    // pulse. Asked through the same pure `blockedGoals` the desk asks, so the gate
+    // and the sweep cannot disagree about which goals are parked.
+    // → `docs/spec/32-obstacles.md#blocked-is-an-answer`
+    const blocked = blockedGoals(ctx.obstacleBlocks ?? [], ctx.obstacles ?? []);
+
     // The runs in the issue list that the tracker has forgotten (issue #234).
     // Read by the rules that must not act on one — which is all of them but
     // `issue-assess` and `issue-retro` — each saying so in its own body.
@@ -448,6 +466,11 @@ export class RuleDispatcher implements Dispatcher {
           // whose goal the appraisal could not work from is not eligible for either,
           // which is what stops a decomposition of a question nobody could answer.
           !appraisalParked(i) &&
+          // An agent said it could not finish this goal because of something that
+          // is not this goal, and named it. Picking it up again while that thing
+          // still stands is the fleet queueing behind one obstacle instead of
+          // spending its allowance on it.
+          !blocked.has(issueOrigin(i.number)) &&
           isIssuePickupEligible(i, this.pickup).eligible,
       )
       .map((issue) => ({ issue, weight: issuePriority(issue.labels, this.pickup) }))
@@ -577,6 +600,11 @@ export class RuleDispatcher implements Dispatcher {
       // runs after them. See {@link StageContext} — the ordering is load-bearing.
       appraising: new Set<number>(),
       assessing: new Set<number>(),
+      // The obstacle board, and the one reading of *which checks are red on a base*
+      // that the ownership desk also takes — one function, so the rule and the desk
+      // cannot hold different opinions about what is blocking the fleet.
+      obstacles: ctx.obstacles ?? [],
+      redBaseChecks: redBaseChecks(openPrs),
       consider,
       pickup: this.pickup,
       cooldown: this.cooldown,

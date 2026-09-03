@@ -77,6 +77,7 @@ function insights(over: Partial<SpendInsights> = {}): SpendInsights {
     ci: 0,
     evidence: 0,
     local: 0,
+    obstacle: 0,
     job: 0,
     other: 0,
   });
