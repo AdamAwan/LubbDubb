@@ -952,6 +952,26 @@ review threads** is not reviewed. A reviewer has already asked for changes, so t
 rewritten, and a second opinion on the old one is spent for nothing. The concern comes back on the
 pulse after those threads are handled.
 
+**Leading means the concerns below it wait**, not merely that it sorts above them. While the fleet's
+own review is still coming, the pull request contributes **no dispatch candidate but the review** — the
+CI fix, the base update and the requeue all hold. Sorting alone was not enough, because the review is
+not always on the list to be sorted: through the [routing wait](#choosing-how-to-review) there is no
+review concern at all, and the CI fix under it took the branch in that gap and rewrote the diff the
+reviewer was about to read.
+
+The wait is finite, and the review's own attempt ledger is what ends it. Three dispatches that report
+nothing, then the escalation, and the review stops leading: the concerns below it take the branch on
+the pulse after a human has been told. Held on the standing verdict instead, a review nobody can
+complete would be a pull request nothing may ever fix, with nothing red.
+
+Notes are not held. An agent already working the branch is still told that CI went red — a note claims
+no headroom and changes no diff. What it is **never** told is that the pull request wants reviewing:
+that note would reach an agent whose dispatch origin is `pr:<n>:ci` or `pr:<n>:comments`, which
+`reviewTargetPr` refuses, so the diff would be read with `review_report` unable to land. The merge gate
+would still hold, the fleet would pay for the review a second time, and the only record of the first
+would be whatever that agent happened to say. A review done outside the record is worse than one not
+yet done, so the review is a dispatch of its own or it is nothing.
+
 ### A review that happened somewhere else
 
 **Off** (`review.reviewedElsewhere: null`). `pr_reviews` answers "has the **fleet** read this", which is
@@ -1108,6 +1128,12 @@ A **read-only checkout of the pull request's branch** (`readOnlyDispatch`, `revi
 branch itself. Two things follow, and both are the point: the reviewer cannot commit what it found —
 an agent that fixes its own findings then reviews its own fix — and it does not hold the branch lease,
 so the CI fix behind it is not queued behind the review.
+
+**And it does not wait on that lease either**, which is the same fact read the other way. Whether a
+concern may be dispatched is asked of the branch its own agent checks out — `review/pr-<n>` for this
+one, the pull request's branch for every other — so an agent working the code is not in the review's
+way. Asked of the pull request's branch for all of them, the review was blocked by the very agent that
+opened it, and by every CI fix after that.
 
 ### Choosing how to review
 

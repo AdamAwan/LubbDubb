@@ -129,7 +129,20 @@ export function prCiFailing(s: StageContext): void {
     // hold — `pr-review-triage` fails open, so the absence resolves either way,
     // on the pulse after it answers or on the pulse it gives up.
     const routing = route === null && triageRuns(s.review) && !triageSpent(s, pr.number);
-    if (needsFleetReview(pr, reading, s.review) && !routing) {
+    // **Is the fleet's own review still coming?** Not "is it due this pulse" —
+    // the routing wait below is part of it, and so is the review already having
+    // been dispatched and not yet reported. Everything under `holdForReview`
+    // reads this, which is what makes the review *lead* the concerns rather than
+    // merely sort above them.
+    //
+    // Finite, and that is the whole of why the review's own attempt ledger is
+    // read here. A review that cannot be got through — three dispatches that
+    // reported nothing, then the escalation — stops leading, and the concerns
+    // below it take the branch. Held on the standing verdict instead, a review
+    // nobody can complete would be a pull request nothing may ever fix, with
+    // nothing red: the shape every other wait in this file is written against.
+    const reviewComing = needsFleetReview(pr, reading, s.review) && !reviewSpent(s, pr.number);
+    if (reviewComing && !routing) {
       const origin = reviewOrigin(pr.number);
       const branch = reviewBranch(pr.number);
       concerns.push({
@@ -417,6 +430,10 @@ export function prCiFailing(s: StageContext): void {
     }
 
     if (concerns.length > 0) {
+      // Who holds the pull request's **own** branch. This is the question a note
+      // is about — the agent working the code — and it is no longer the question
+      // the dispatch below is about, which is who holds the branch the winning
+      // concern's agent actually checks out.
       const branch = resolveBranchAgent(ctx, pr.branch);
       if (branch.kind === 'running') {
         // A running agent already owns this branch — notify it, don't duplicate.
@@ -430,14 +447,26 @@ export function prCiFailing(s: StageContext): void {
         // base concern *is* its own origin), the dispatch that launched this
         // agent (its prompt lists those threads; repeating them is noise), and
         // a note already sent.
-        const fresh = concerns.flatMap((c) =>
-          signalsOf(c).filter(
-            (sig) =>
-              !s.activeOrigins.has(sig.ref) &&
-              !s.dispatchedSignals.has(`${pr.branch}::${sig.ref}`) &&
-              !s.notified.has(`${branch.agent.id}::${sig.ref}`),
-          ),
-        );
+        //
+        // **A concern that takes its own checkout is never a note.** Rule
+        // `pr-review` is the one, and delivering it here would hand "this pull
+        // request has not been reviewed — read the diff and report what you
+        // find" to the agent *writing* the diff: an agent whose dispatch origin
+        // is `pr:<n>:ci`, which `reviewTargetPr` refuses, so its `review_report`
+        // cannot land and the read happens with nothing recording it. The merge
+        // gate then still holds, and the fleet pays for the review a second time
+        // — a review done outside the record, which is worse than one not yet
+        // done. The review is a dispatch of its own or it is nothing.
+        const fresh = concerns
+          .filter((c) => !c.dispatch?.readOnly)
+          .flatMap((c) =>
+            signalsOf(c).filter(
+              (sig) =>
+                !s.activeOrigins.has(sig.ref) &&
+                !s.dispatchedSignals.has(`${pr.branch}::${sig.ref}`) &&
+                !s.notified.has(`${branch.agent.id}::${sig.ref}`),
+            ),
+          );
         if (fresh.length > 0) {
           s.raw.push({
             type: 'respond_to_agent',
@@ -465,8 +494,33 @@ export function prCiFailing(s: StageContext): void {
             reason: `New PR signal(s) for a branch already staffed by agent ${branch.agent.id}.`,
           } satisfies RawAction);
         }
-      } else if (branch.kind === 'free') {
-        // No agent on this branch — a dispatch candidate for the most urgent
+      }
+      // branch.kind === 'busy' (queued / starting / parked waiting): hold every
+      // note. Injecting into a waiting agent would un-park a human escalation,
+      // and a starting agent has no live session yet. The signals persist, so a
+      // later cycle delivers them once the agent is running.
+
+      const top = concerns[0]!;
+      // **The lease the winning concern actually needs, which is not always the
+      // pull request's branch.** `pr-review` takes a read-only checkout of it
+      // (`review/pr-<n>`) precisely so it neither holds the branch nor waits on
+      // it — asked about `pr.branch` instead, the review was blocked by the very
+      // agent that opened the pull request, and by every CI fix after it, which
+      // is the whole of what put the review last.
+      const lease = resolveBranchAgent(ctx, top.dispatch?.branch ?? pr.branch);
+      // **Nothing else is worked while the fleet's own review is still coming.**
+      // The review already sorts first, but sorting first only decides who wins
+      // a *free* branch: with the routing still in flight there is no review
+      // concern to win, and the CI fix under it took the branch and the review
+      // landed on a diff the harness had already rewritten — the reading that
+      // decays fastest, taken last. So the pull request contributes no candidate
+      // at all until the review is either done or given up on (`reviewComing`),
+      // rather than contributing the next concern down.
+      //
+      // Notes above are unaffected: telling the agent already on the branch that
+      // CI went red costs no headroom and changes no diff.
+      if (lease.kind === 'free' && (!reviewComing || top.rule === 'pr-review')) {
+        // No agent on that branch — a dispatch candidate for the most urgent
         // concern; ranked cross-PR (and throttled) after the loop.
         //
         // `urgent` is read off **every** concern on the PR, not off `top`. The
@@ -476,12 +530,8 @@ export function prCiFailing(s: StageContext): void {
         // operator's escalation quietly conditional on nobody having commented,
         // which is not a rule anyone wrote down. Which concern the agent is sent
         // for is still `top`; this only decides where the PR sits in the queue.
-        prCandidates.push({ pr, top: concerns[0]!, urgent: concerns.some((c) => c.urgent === true) });
+        prCandidates.push({ pr, top, urgent: concerns.some((c) => c.urgent === true) });
       }
-      // branch.kind === 'busy' (queued / starting / parked waiting): hold every
-      // note. Injecting into a waiting agent would un-park a human escalation,
-      // and a starting agent has no live session yet. The signals persist, so a
-      // later cycle delivers them once the agent is running.
     }
 
     // 3: Drive a settled PR the last mile — propose merging it in. `merge_pr`
@@ -799,4 +849,29 @@ function resolveBranchAgent(ctx: DispatchContext, branch: string): BranchAgent {
 function triageSpent(s: StageContext, prNumber: number): boolean {
   const verdict = dispatchVerdict(reviewTriageOrigin(prNumber), s.now, s.ctx.recentDecisions, s.cooldown);
   return verdict.kind === 'escalate' || verdict.kind === 'hold';
+}
+
+/**
+ * Has the review itself given up on this pull request?
+ *
+ * What makes "nothing else is worked until the review is done" a wait rather
+ * than a wedge, and read off the same ledger {@link triageSpent} reads for the
+ * same reason: the review's own attempt budget is the only thing that can say
+ * "no review is ever coming" apart from a row that will never be written.
+ *
+ * A cooldown is deliberately **not** spent — it is one pulse, and releasing the
+ * branch to a CI fix on it would rewrite the diff in exactly the gap the review
+ * is about to read.
+ *
+ * **`hold` alone, and not `escalate`**, which is where this differs from
+ * {@link triageSpent} and has to. The triage's cap is silent by design; the
+ * review's is not — the escalation is raised by `consider`, and `consider` is
+ * only reached for a concern that is still on the list. Standing the review down
+ * on `escalate` would drop it on the very pulse its cap was spent, and the human
+ * who was to be told a review could not be got through would never hear. So the
+ * cap costs one more pulse of holding, and the pulse after — the escalation
+ * recorded, the verdict now `hold` — releases the pull request.
+ */
+function reviewSpent(s: StageContext, prNumber: number): boolean {
+  return dispatchVerdict(reviewOrigin(prNumber), s.now, s.ctx.recentDecisions, s.cooldown).kind === 'hold';
 }
