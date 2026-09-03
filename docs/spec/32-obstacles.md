@@ -1,9 +1,9 @@
 # 32 — Obstacles
 
 **Partly built.** The spine is running: the tables, the keys and their three gates, the matcher, the
-states, the intake, both delivery channels, ownership, the `blocked` verdict and the four ways an
-obstacle ends. What is not yet built carries its own marker, section by section — the model desk,
-the harness's own voice, and the cockpit tab.
+states, the intake, both delivery channels, ownership, the `blocked` verdict, the four ways an
+obstacle ends and the harness's own voice. What is not yet built carries its own marker, section by
+section — the model desk and the cockpit tab.
 It supersedes [27](27-knowledge.md) on landing — that document describes the claim store this
 replaces, and what it says is true of the harness today; a **note** still lands there, through the
 same intake, until the last of these sections is built. The change that lands the last of them deletes
@@ -218,7 +218,12 @@ on the same footing as a goal and by the same rule — an independent party said
 It is the better witness wherever it applies, because it is edge-triggered on a transition it
 watches rather than on somebody happening to run into it: a check going red on a branch other pull
 requests are based on, a check flapping red-then-green on one `headSha`. An obstacle the harness can
-see is `standing` from the first agent's report — or before any agent reports at all.
+see is `standing` from the **first** agent's report rather than the second.
+
+It never carries a row there **alone**, and that falls out of the rules rather than being a policy of
+its own: its one key is a `check`, a bare `check` does not resolve, and so a second harness reading
+has no row of the first's to join. One transition is one voice, and the voice that makes it standing
+is somebody else's. → [a key alone is not always enough](#a-key-alone-is-not-always-enough)
 
 **This is what makes the two-goal gate safe on a small fleet.** "Thirty agents in a minute" is what
 makes waiting for a second voice cheap, and a fleet running four agents does not have it. What that
@@ -227,13 +232,36 @@ waiting is the class the harness genuinely cannot witness — a bug in code nobo
 of documentation the code stopped agreeing with — and none of those is costing an agent its session
 this minute.
 
-**Not yet built.** The sighting carries the column the transition is recorded in, and the voice count
-already folds by it; nothing on the pulse writes one yet.
+A harness voice is recorded as a sighting like any other, through the same
+`Store.recordObstacleSighting` — attributed to the harness rather than to a goal (no agent, no task,
+no session, no goal ref) and saying which transition it saw. An operator reading why a row is
+standing must never find one voice that is really the same reading counted twice: the transition is
+the identity, so the same check going red once is one voice however many pulses observe it still
+red. Two rungs stacked on one red base are one voice for that reason, where the same two are
+deliberately two corroborators to [27](27-knowledge.md)'s notices — the transition names the check
+and the base branch and never the rung, and `Store.obstacleVoices` folds by it besides.
 
-A harness voice is recorded as a sighting like any other, attributed to the harness rather than to a
-goal, and says which transition it saw. An operator reading why a row is standing must never find
-one voice that is really the same reading counted twice: the transition is the identity, so the same
-check going red once is one voice however many pulses observe it still red.
+The readings are `src/obstacles/voice.ts`, pure over the pair of snapshots, and the desk that files
+them is `src/obstacles/voiceDesk.ts`, on the pulse above the notice, ownership and endings desks so
+a row it files is told, owned and watched on the pulse that saw it. Neither reading is new: both are
+`src/prHealth.ts`' — `recoveredOnSameCommit` and `newlyFailingChecks`, shared with the knowledge
+notices rather than copied, because a second copy of a provider reading is a second thing to be
+wrong about. It is **skipped on a local cycle**, for the endings desk's reason: it is handed the
+*pair* the diff was taken from, and a local cycle takes no diff.
+
+**The keys it carries go through the same three gates as an agent's, and the harness gets no
+exemption from a bare `check` not binding.** Its one key is the check the transition was seen on,
+validated against what the provider is reporting in the reading the pass was handed and grounded on
+the harness's own statement that this is the check it saw. It is *gated* but never *extracted*:
+extraction is a language judgement over an agent's prose, and a prose pass over the harness's own
+words would happily turn a branch name into a `path` key that the check beside it then grounds.
+
+Because a bare `check` does not resolve, **the harness stays silent on a check the board already
+holds a key for**. It could not join that row, and filing anyway would leave a *keyless* duplicate —
+a row nothing can deliver, match or ever end. The row is already there, and the first agent's
+locating report is what carries it to `standing`. `test/obstacleVoice.test.ts` holds the three
+properties that fail silently: the harness counts as one of the two, one transition is never two
+voices, and the gates are the same ones.
 
 **`resolved` and `dormant` are not deletions.** A matching report reopens the row at `standing` with
 its whole history. That is the only way a fix that did not stick is visible as a recurrence rather

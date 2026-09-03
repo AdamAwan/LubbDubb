@@ -299,6 +299,18 @@ interface HarnessDeps {
    */
   obstacleNotices?: { run(): void };
   /**
+   * Records the harness's own voice on the obstacle board: a check going red on a
+   * branch other pull requests are based on, a check flapping red-then-green on
+   * one `headSha`. Absent = the harness never speaks (tests that do not care), and
+   * then every row waits for two *agents* to hit it — which a fleet running four
+   * agents does not have.
+   *
+   * It writes `obstacles`, `obstacle_keys` and `obstacle_sightings` rows. It
+   * staffs nobody, decides no dispatch, and no rule reads what it writes.
+   * → `docs/spec/32-obstacles.md#the-harness-is-a-voice`
+   */
+  obstacleVoice?: { run(prev: WorldSnapshot | null, next: WorldSnapshot): void };
+  /**
    * Gives a standing obstacle an owner — a ticket, or the repair dispatch rule
    * `obstacle-repair` has already made — and lets a goal parked behind one back
    * into pickup once the board stops reaching agents with it. Absent = nothing
@@ -749,6 +761,22 @@ export class Harness extends EventEmitter {
       // all: nothing waits on a cluster, it takes its own cadence, and the page an
       // operator opens is the only thing that reads what it writes.
       this.deps.clusters?.run();
+      // What the harness has seen for itself on the board the agents read: a check
+      // red on a branch other pull requests are based on, a check flapping
+      // red-then-green on one commit. **The harness is one of the two voices**, so
+      // a row it can see is standing from the first agent's report rather than the
+      // second — which is what makes the two-goal gate safe on a small fleet.
+      //
+      // **Skipped on a local cycle**, for the endings desk's reason rather than the
+      // provider-traffic one: it is handed the *pair* the diff was taken from, and
+      // a local cycle takes no diff. Run with `previousWorld === world` it would
+      // read every transition as new or as none.
+      //
+      // **Above the three desks below it**, and every half of that matters: a row
+      // filed here is one the notice desk may tell a running agent about, one the
+      // ownership desk may take up, and one the endings desk promises to watch a
+      // condition for — all on the pulse that saw it rather than the next.
+      if (readWorld) this.deps.obstacleVoice?.run(previousWorld, world);
       // What has changed about an obstacle since the agents now running were
       // dispatched — their own reports being taken up or settled, and what a
       // second voice has since corroborated on the checks they are working.
