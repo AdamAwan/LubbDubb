@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
+import { useThemeUnsaved } from '../hooks.js';
 import type { CockpitActions, ConfigTab } from '../cockpit/actions.js';
 import type { CockpitView } from '../view/viewModel.js';
 import type { ConfigChange, RunningConfigPayload } from '../types.js';
@@ -66,6 +67,7 @@ export function ConfigPage({ view, actions }: { view: CockpitView; actions: Cock
   // the reload has already dropped.
   const [reviewing, setReviewing] = useState(false);
   const [saved, setSaved] = useState<readonly ConfigChange[] | null>(null);
+  const themeEdit = useThemeUnsaved();
 
   const load = (): void => {
     void api.getConfig().then((next) => {
@@ -128,6 +130,14 @@ export function ConfigPage({ view, actions }: { view: CockpitView; actions: Cock
           >
             {entry.label}
             {entry.id === 'values' && dirty > 0 && <i className="cfg-tabn">{dirty}</i>}
+            {/* A dot rather than a count: what the theme is holding is one pending
+                edit, however many tokens it moved. It is what the cog's dot leads
+                to (issue #680). */}
+            {entry.id === 'theme' && themeEdit && (
+              <i className="cfg-tabn" title="An unsaved theme edit is pending">
+                &#9679;
+              </i>
+            )}
           </button>
         ))}
       </div>

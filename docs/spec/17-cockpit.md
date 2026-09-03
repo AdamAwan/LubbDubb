@@ -3826,6 +3826,19 @@ Three things about the drawing that are decisions rather than details:
   whose cleanup reverts it**, and the bar states the cost: a reload drops them. Saving is not a visual
   event — the colours are already on screen — so the bar has to make a statement, or a Save that appears
   to do nothing gets pressed twice.
+- **The bar's statement is carried off the section by a dot on the cog.** The bar lives on the Theme
+  section and the preview does not, so once you leave, an unsaved theme is drawn exactly like a saved one
+  and nothing says an edit is pending — the cost stops being visible at the moment it starts to matter.
+  The section publishes `dirty` to a module store in `theme.ts` (`setThemeUnsaved`), which the top bar's
+  cog and the Theme tab inside Config read through `useThemeUnsaved`. It is a module store and not React
+  state because the two ends are not in one tree, and it is **not** on `Place` and **not** persisted: an
+  unsaved edit is a fact about this tab, not a destination, and a flag surviving a reload would mark a
+  draft the reload dropped. The publishing effect has **no cleanup**, for the same reason the applier has
+  none — unmounting the section must not clear the marker. A dot rather than a count on both surfaces,
+  because what is pending is one edit however many tokens it moved, and the cog measures nothing.
+- **The dirty sentence never counts zero.** A preset change sets `dirty` but moves no token, so
+  "**0** tokens changed · unsaved" read as "nothing pending" and got left unsaved (issue #680). With no
+  token moved the bar names the preset instead: `Preset ‹label›, unsaved — a reload drops it`.
 - **A preview card cannot lie about its preset.** Each preset block in `theme.css` carries a second
   selector, `[data-theme-swatch='x']`, and a card is a `<span>` with that attribute whose swatches read
   `var(--bg)` and friends — so a card's colours arrive through the same declaration block as the theme.
@@ -5280,7 +5293,7 @@ blue `deciding`, faint `skipped` and `elsewhere`. It sits left of the CI ladder,
 read in the order the harness produces them.
 
 **One badge slot on the glyph's shoulder, three meanings** — how many findings, a dash for a review
-that will not happen, an arrow for one that happened somewhere else. A mark drawn *through* the lenses
+that will not happen, an arrow for one that happened somewhere else. A mark drawn _through_ the lenses
 is mud at 15px; a badge beside them holds at every size a row uses.
 
 **Everything else is in the tooltip**: the mode, the triage's reason in its own words, what the
@@ -5294,7 +5307,7 @@ so the two surfaces cannot come to word one record differently.
 earns it the way the CI ladder does: a dense list of pull requests, one recurring subject, the words
 one hover away. The `aria-label` carries the same sentence the tooltip heads with and the tooltip opens
 on keyboard focus, so the glyph is never the only channel. The glyph is deliberately not `eye`, which
-already means *watching* — reading a diff and watching an item are different claims.
+already means _watching_ — reading a diff and watching an item are different claims.
 
 Absent where the deployment has no fleet review. → [07](07-pull-requests.md#where-the-operator-sees-it)
 
