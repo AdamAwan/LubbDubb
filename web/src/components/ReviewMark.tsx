@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState, type CSSProperties, type JSX } from 'react';
+import { createPortal } from 'react-dom';
 import type { PrReviewState, PrReviewStatus } from '../types.js';
 import { Icon } from './icons.js';
 import { relTime } from './util.js';
@@ -32,15 +33,29 @@ const TONE: Record<PrReviewStatus, string> = {
 };
 
 /**
+ * The tone, which is the status' own except on one arm: findings somebody has
+ * **dealt with** read green rather than red.
+ *
+ * The verdict is unchanged — the reviewer found four things and always will have
+ * — but the mark is a call to look, and a row that keeps shouting after the thing
+ * was handled is a row an operator learns to stop reading. What "dealt with"
+ * means is the record, not a count of anything: the thread the fleet published
+ * the findings into is resolved (`PrReviewState.addressed`).
+ */
+function tone(review: PrReviewState): string {
+  return review.addressed ? TONE.clear : TONE[review.status];
+}
+
+/**
  * The badge on the glyph's shoulder, or null where the tint says it all.
  *
- * One slot, three meanings — how many findings, a dash for a review that will not
- * happen, an arrow for one that happened elsewhere. It is a badge rather than a
- * mark drawn *through* the lenses because a stroke across a 15px glyph is mud;
- * this holds at every size a row uses.
+ * One slot, four meanings — how many findings, a tick where they have been dealt
+ * with, a dash for a review that will not happen, an arrow for one that happened
+ * elsewhere. It is a badge rather than a mark drawn *through* the lenses because a
+ * stroke across a 15px glyph is mud; this holds at every size a row uses.
  */
 function badge(review: PrReviewState): string | null {
-  if (review.status === 'findings') return String(review.findings.length);
+  if (review.status === 'findings') return review.addressed ? '✓' : String(review.findings.length);
   if (review.status === 'skipped') return '–';
   if (review.status === 'elsewhere') return '↗';
   return null;
@@ -53,7 +68,10 @@ function reviewSaid(review: PrReviewState): string {
     case 'clear':
       return `Read ${inMode} — clear`;
     case 'findings':
-      return `Read ${inMode} — ${review.findings.length} finding${review.findings.length === 1 ? '' : 's'}`;
+      return (
+        `Read ${inMode} — ${review.findings.length} finding${review.findings.length === 1 ? '' : 's'}` +
+        (review.addressed ? ', addressed' : '')
+      );
     case 'routed':
       return review.mode === null ? 'Not yet reviewed by the fleet' : `Routed to ${review.mode} — not read yet`;
     case 'deciding':
@@ -83,6 +101,17 @@ function reviewSaidMore(review: PrReviewState): string | null {
 }
 
 /**
+ * How many findings the tooltip lists before it stops counting.
+ *
+ * A review's findings are written for a person reading the pull request, so each
+ * one is a paragraph — four of them filled the tooltip past the height of the
+ * window it was hovering in, and the heading it started with scrolled off the top.
+ * The tooltip's job on a dense rack is to say *what this mark means*; the reading
+ * itself belongs on the page the mark now opens.
+ */
+const TIP_FINDINGS = 2;
+
+/**
  * The mark itself. Null where the deployment has no fleet review, which is what
  * draws nothing at all: a grey "no review" glyph on every row of every default
  * deployment is a claim about a feature nobody turned on.
@@ -92,11 +121,19 @@ function reviewSaidMore(review: PrReviewState): string | null {
  * a dense row of pull requests, one recurring subject, the words one hover away.
  * The `aria-label` carries the same sentence the tooltip heads with, and the
  * tooltip opens on keyboard focus, so the glyph is never the only channel.
+ *
+ * **The tooltip is a summary and the page is the record.** Given `onOpen` the mark
+ * is a button onto the pull request's own page, where `ReviewDetail` draws the
+ * same reading at full length — so the hover can be two findings and a line about
+ * when, rather than the whole review in a 320px box that no pointer can reach into
+ * and nothing can scroll. The two are one component precisely so they cannot come
+ * to word one record differently.
  */
 export function ReviewMark({
   review,
   now,
   reserve = false,
+  onOpen,
 }: {
   review: PrReviewState | undefined;
   now?: number;
@@ -107,8 +144,14 @@ export function ReviewMark({
    * review off pays no gutter for a feature it does not have.
    */
   reserve?: boolean;
+  /**
+   * Open the pull request's page, where the whole reading is. Omitted on the
+   * masthead of that very page — a control that goes where you already are is a
+   * dead click — and on any surface that has nowhere to send you.
+   */
+  onOpen?: () => void;
 }): JSX.Element | null {
-  const anchor = useRef<HTMLSpanElement>(null);
+  const anchor = useRef<HTMLElement>(null);
   const [at, setAt] = useState<CSSProperties | null>(null);
 
   /**
@@ -142,13 +185,19 @@ export function ReviewMark({
   const mark = badge(review);
   const more = reviewSaidMore(review);
   const stamp = review.reviewedAt ?? review.routedAt;
+  const shown = review.findings.slice(0, TIP_FINDINGS);
+  const rest = review.findings.length - shown.length;
+  // A button where there is somewhere to go, a span where there is not — rather
+  // than a span with a click handler, which is a control no keyboard reaches and
+  // no screen reader announces. Both carry the same tooltip and the same
+  // accessible name; only the element and the cursor differ.
+  const Tag = onOpen === undefined ? 'span' : 'button';
   return (
-    <span
-      ref={anchor}
-      className={`rv ${TONE[review.status]}`}
-      tabIndex={0}
-      role="img"
-      aria-label={`Fleet review: ${reviewSaid(review)}`}
+    <Tag
+      ref={anchor as never}
+      className={`rv ${tone(review)}${onOpen === undefined ? '' : ' rv-open'}`}
+      {...(onOpen === undefined ? { tabIndex: 0, role: 'img' as const } : { type: 'button' as const, onClick: onOpen })}
+      aria-label={`Fleet review: ${reviewSaid(review)}${onOpen === undefined ? '' : ' — open the pull request'}`}
       onMouseEnter={place}
       onFocus={place}
       onMouseLeave={() => setAt(null)}
@@ -156,34 +205,36 @@ export function ReviewMark({
     >
       <Icon name="review" size={15} />
       {mark !== null && <span className="rv-badge">{mark}</span>}
-      {at !== null && (
-        <span className="rv-tip" style={at}>
-          <b>{reviewSaid(review)}</b>
-          {more !== null && <span className="rv-said">{more}</span>}
-          {review.routeReason !== null && review.status !== 'skipped' && (
-            <span className="rv-why">
-              <i>Routed</i> {review.routeReason}
+      {at !== null &&
+        // Portalled to the body, not drawn in place. `position: fixed` is not
+        // enough on its own: a closed pull request's row carries `opacity: .55`,
+        // which is a stacking context — so the tooltip was positioned against the
+        // row rather than the window, painted under the rail's cards, and dimmed to
+        // 55% along with everything else on the row. Out here it is neither.
+        createPortal(
+          <span className="rv-tip" style={at}>
+            <b>{reviewSaid(review)}</b>
+            {more !== null && <span className="rv-said">{more}</span>}
+            {shown.length > 0 && (
+              <ul>
+                {shown.map((f) => (
+                  <li key={f}>{f}</li>
+                ))}
+              </ul>
+            )}
+            {rest > 0 && <span className="rv-more">{`and ${rest} more`}</span>}
+            <span className="rv-foot">
+              {review.status === 'skipped'
+                ? 'a skip is a decision — the merge is not held'
+                : stamp !== null
+                  ? `${review.reviewedAt !== null ? 'reviewed' : 'routed'} ${relTime(stamp, now)}`
+                  : 'nothing recorded yet'}
+              {onOpen !== undefined && ' · click for the whole reading'}
             </span>
-          )}
-          {review.findings.length > 0 && (
-            <ul>
-              {review.findings.map((f) => (
-                <li key={f}>{f}</li>
-              ))}
-            </ul>
-          )}
-          <span className="rv-foot">
-            {review.status === 'skipped'
-              ? 'The merge is not held — a skip is a decision.'
-              : stamp !== null
-                ? `${review.reviewedAt !== null ? 'reviewed' : 'routed'} ${relTime(stamp, now)}`
-                : 'nothing recorded yet'}
-            {review.agentId !== null && ` · ${review.agentId}`}
-            {review.headSha !== null && ` · head ${review.headSha.slice(0, 7)}`}
-          </span>
-        </span>
-      )}
-    </span>
+          </span>,
+          document.body,
+        )}
+    </Tag>
   );
 }
 
@@ -201,7 +252,10 @@ export function ReviewDetail({ review, now }: { review: PrReviewState; now?: num
       <dl>
         <dt>Verdict</dt>
         <dd>
-          <span className={`rv-word ${TONE[review.status]}`}>{reviewSaid(review)}</span>
+          {/* The same tone the mark takes, `addressed` included: the card and the
+              glyph are one record, and a verdict drawn red beside a green mark is
+              the two surfaces disagreeing in the smallest possible way. */}
+          <span className={`rv-word ${tone(review)}`}>{reviewSaid(review)}</span>
         </dd>
         {review.mode !== null && (
           <>
@@ -223,7 +277,11 @@ export function ReviewDetail({ review, now }: { review: PrReviewState; now?: num
         )}
       </dl>
       {review.findings.length > 0 && (
-        <ul className="rv-found">
+        // The bars follow the verdict word above them: red while the findings
+        // stand, green once the thread they were published into is resolved. Two
+        // colours saying opposite things about one record is the smallest way for
+        // a card to contradict itself.
+        <ul className={`rv-found${review.addressed ? ' rv-found-done' : ''}`}>
           {review.findings.map((f) => (
             <li key={f}>{f}</li>
           ))}

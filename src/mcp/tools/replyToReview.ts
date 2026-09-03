@@ -106,6 +106,10 @@ export const replyToReview: ToolFactory = ({ deps, agent, task, ok }) => ({
       commentId: thread,
       draft: body,
       resolve,
+      // Carried so the send can attribute what it creates: the reviewer's
+      // publication of its findings is a reply like any other on the way out, and
+      // its origin is the only thing that says which one it was.
+      originRef: scope.originRef,
       reason: `agent reply on ${scope.originRef}${thread ? ` (thread ${thread})` : ''}`,
     });
     return ok({

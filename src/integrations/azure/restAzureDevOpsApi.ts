@@ -807,16 +807,19 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
 
   async createThread(pullRequestId: number, content: string): Promise<AzCommentRef> {
     // A *new* thread, so nothing here is a reply into an existing one and no
-    // attribution row is ever keyed on it. The id is still reported when Azure
-    // gives one, so the two create paths answer in one shape.
-    const created = await this.request<{ comments?: { id?: number }[] }>(
+    // attribution row is ever keyed on it. Both ids are still reported when Azure
+    // gives them, so the two create paths answer in one shape — and the thread's
+    // own id is what a later resolution of it is recognised by.
+    const created = await this.request<{ id?: number; comments?: { id?: number }[] }>(
       this.withApiVersion(`${this.repoUrl}/pullRequests/${pullRequestId}/threads`),
       { method: 'POST', body: JSON.stringify({ comments: [{ content, commentType: 'text' }], status: 'active' }) },
     );
     const id = created?.comments?.[0]?.id;
+    const threadId = created?.id;
     return {
       url: `${this.projectUrl}/_git/${encodeURIComponent(this.repository)}/pullrequest/${pullRequestId}`,
       ...(typeof id === 'number' ? { id } : {}),
+      ...(typeof threadId === 'number' ? { threadId } : {}),
     };
   }
 

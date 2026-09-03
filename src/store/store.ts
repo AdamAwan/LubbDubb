@@ -33,7 +33,7 @@ import { WatchStore, WATCH_COLUMNS } from './watches.js';
 import { PrWatchSeedStore } from './prWatchSeeds.js';
 import { WorkItemLinkStore } from './workItemLinks.js';
 import { ReviewWaitStore } from './reviewWaits.js';
-import { PrReviewStore } from './prReviews.js';
+import { PrReviewStore, PR_REVIEW_COLUMNS } from './prReviews.js';
 import { PrReviewRouteStore, PR_REVIEW_ROUTE_COLUMNS } from './prReviewRoutes.js';
 import { PrReviewExternalStore } from './prReviewExternals.js';
 import { PrThreadReopenStore } from './prThreadReopens.js';
@@ -277,6 +277,7 @@ export class Store {
       ENVIRONMENT_COLUMNS,
       WATCH_COLUMNS,
       PR_REVIEW_ROUTE_COLUMNS,
+      PR_REVIEW_COLUMNS,
       SCRATCH_COLUMNS,
       REVIEW_PACK_COLUMNS,
       OBSTACLE_COLUMNS,
@@ -1295,6 +1296,9 @@ export class Store {
 
   recordPrReview(input: PrReviewInput): PrReview {
     return this.prReviews.recordPrReview(input);
+  }
+  recordPrReviewPublished(prNumber: number, threadId: string): void {
+    this.prReviews.recordPrReviewPublished(prNumber, threadId);
   }
   listPrReviews(): PrReview[] {
     return this.prReviews.listPrReviews();

@@ -655,8 +655,8 @@ export function buildStateSections(
    * clause holding its merge can never disagree. Undefined where the review is
    * off, which is what draws no mark at all.
    */
-  const reviewStateOf = (prNumber: number): PullRequest['review'] =>
-    prReviewState(prNumber, reviewReading(reviewRows, prNumber), config.review) ?? undefined;
+  const reviewStateOf = (pr: PullRequest): PullRequest['review'] =>
+    prReviewState(pr.number, reviewReading(reviewRows, pr.number), config.review, pr.reviewThreads) ?? undefined;
   /**
    * The one enrichment a *dead* pull request gets, and the exception is
    * deliberate: the other three verdicts answer what happens next, and nothing
@@ -664,7 +664,7 @@ export function buildStateSections(
    * and "why did this merge with three findings on it" is asked precisely after
    * the merge.
    */
-  const withReview = <T extends PullRequest>(pr: T): T => ({ ...pr, review: reviewStateOf(pr.number) });
+  const withReview = <T extends PullRequest>(pr: T): T => ({ ...pr, review: reviewStateOf(pr) });
 
   // The open pull requests with their three verdicts folded — hoisted out of the
   // `world` literal below because the local run's rows read the same rows: what has
@@ -685,7 +685,7 @@ export function buildStateSections(
       // duplicate. That drift would fail silently — the cockpit saying *repair* while
       // the harness held. Same call the dispatcher makes, off the same policy.
       ciVerdict: classifyCiFailures(pr.ciChecks, config.ci, pr.ciChecksWithheld),
-      review: reviewStateOf(pr.number),
+      review: reviewStateOf(pr),
     })),
   );
   // Branch → the pull request on it, open rows first so a reopened branch reads as

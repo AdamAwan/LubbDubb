@@ -516,6 +516,16 @@ export interface AzCommentRef {
    * reading as work.
    */
   id?: number;
+  /**
+   * Azure's own id for the **thread** the comment landed in, as the thread read
+   * puts it on `AzThread.id` — a different number from {@link id}, and the one a
+   * resolution is keyed on.
+   *
+   * Reported only where the create opened a thread and Azure named it. The two
+   * ids are kept apart deliberately: matching a resolution against the comment id
+   * would silently never match, which reads exactly like a thread nobody closed.
+   */
+  threadId?: number;
 }
 
 export interface AzMergeResult {

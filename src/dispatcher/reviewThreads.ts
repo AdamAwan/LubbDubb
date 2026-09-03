@@ -195,19 +195,29 @@ function quote(body: string): string {
  * is the tool channel's one structural guarantee, and it is the whole of what
  * makes a reply the harness sends attributable at all.
  *
- * Fenced to the review dispatch and not to `pr:<n>:ci`: a CI agent is answering a
- * red check, and a reply from it is a comment nobody asked for on a thread
- * somebody else's agent is working.
+ * **Two origins, not one.** `pr:<n>:comments` is the agent answering a reviewer's
+ * threads. `pr:<n>:review` is the fleet's own reviewer publishing what it found,
+ * which `publishNote` has told it to do through this tool since the tool existed —
+ * against an origin check that admitted only the first, so every deployment with
+ * `review.publish` on refused the call it had just instructed, and the reviewer's
+ * only remaining route was the operator's own credential in its shell, which the
+ * same prompt forbids. The findings then reached the pull request as nothing at
+ * all.
+ *
+ * Still fenced against `pr:<n>:ci`: a CI agent is answering a red check, and a
+ * reply from it is a comment nobody asked for on a thread somebody else's agent
+ * is working.
  */
 export function replyOrigin(
   originRef: string | null,
 ): { ok: true; prNumber: number; originRef: string } | { ok: false; error: string } {
-  const match = originRef ? /^pr:(\d+):comments$/.exec(originRef) : null;
+  const match = originRef ? /^pr:(\d+):(?:comments|review)$/.exec(originRef) : null;
   if (match) return { ok: true, prNumber: Number(match[1]), originRef: originRef! };
   return {
     ok: false,
     error:
-      `reply_to_review is only for an agent dispatched to answer a pull request's review threads, and ` +
+      `reply_to_review is only for an agent dispatched to answer a pull request's review threads, or to ` +
+      `review it, and ` +
       `this task's origin is ${originRef ?? '(none)'}. Do not post to the thread yourself instead: if you ` +
       `have something to say about a pull request that is not yours to answer, say it in the summary you ` +
       `finish with, or raise it.`,

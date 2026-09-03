@@ -161,6 +161,14 @@ const ActionSchema = z.discriminatedUnion('type', [
      * `commentId`: there is no thread to resolve on a reply to the pull request.
      */
     resolve: z.boolean().default(false),
+    /**
+     * The dispatch origin that asked for this reply, where an agent did — the one
+     * thing that says *which* reply this is once it has been through JSON and a
+     * proposal row. The review's publication of its findings is a reply like any
+     * other on the way out, and this is what lets the send record the thread it
+     * opened against the review it belongs to. Null on a reply a rule drafted.
+     */
+    originRef: z.string().nullable().default(null),
     ...base,
   }),
   z.object({

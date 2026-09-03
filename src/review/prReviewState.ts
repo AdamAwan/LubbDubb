@@ -10,6 +10,7 @@
  * of them applies would be a second opinion about a decision already taken
  * (`docs/spec/17-cockpit.md#the-fleet-reviews-mark`).
  */
+import type { PrReviewThread } from '../types.js';
 import type { PrReviewPolicy } from './policy.js';
 import { defaultReviewMode, resolvedReviewMode, reviewSkipped, triageRuns, type PrReviewReading } from './prReview.js';
 
@@ -50,6 +51,20 @@ export interface PrReviewState {
   summary: string | null;
   /** What it found, one entry each. Empty on every arm but `findings`. */
   findings: readonly string[];
+  /**
+   * Somebody has dealt with what it found: the thread the findings were published
+   * into reads **resolved** on the provider. False on every other arm, and on a
+   * `findings` review that was never published, whose thread the current reading
+   * does not carry, or whose thread is still open.
+   *
+   * It is the resolution of the fleet's *own* published thread and nothing else —
+   * read off `PrReview.publishedThread`, which is a record of what the harness
+   * sent. Any wider rule (every thread on the pull request, a thread whose author
+   * matches the credential) would let somebody else's tidy-up report the fleet's
+   * findings as answered, which is the one thing this bit must never say wrongly:
+   * it is what turns the mark from red to green.
+   */
+  addressed: boolean;
   /** When the reviewer reported, for the tooltip's foot. Null until it has. */
   reviewedAt: string | null;
   /** When the triage decided. Null where nothing routed this pull request. */
@@ -77,6 +92,13 @@ export function prReviewState(
   prNumber: number,
   reading: PrReviewReading,
   policy: PrReviewPolicy,
+  /**
+   * The pull request's review threads, where the caller has them — the only
+   * source for {@link PrReviewState.addressed}. Omitted (a closed pull request's
+   * row, a test about the arms) leaves it false, which draws the findings exactly
+   * as they were reported.
+   */
+  threads?: readonly PrReviewThread[],
 ): PrReviewState | null {
   if (!policy.enabled) return null;
   const { review, route } = reading;
@@ -85,6 +107,7 @@ export function prReviewState(
     routeReason: route?.reason ?? null,
     summary: null,
     findings: [],
+    addressed: false,
     reviewedAt: null,
     routedAt: route?.decidedAt ?? null,
     agentId: null,
@@ -99,6 +122,12 @@ export function prReviewState(
       mode: resolvedReviewMode(route, policy),
       summary: review.summary,
       findings: review.findings,
+      // Only the thread the harness recorded publishing into, and only where this
+      // reading still carries it: a thread the provider no longer reports is a
+      // thread nothing can say was resolved, and "cannot say" is not "dealt with".
+      addressed:
+        review.publishedThread !== null &&
+        (threads ?? []).some((t) => t.id === review.publishedThread && t.state === 'resolved'),
       reviewedAt: review.reviewedAt,
       agentId: review.agentId,
       headSha: review.headSha,

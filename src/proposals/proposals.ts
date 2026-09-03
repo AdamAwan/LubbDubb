@@ -491,7 +491,15 @@ interface Authority {
  */
 type ProposedAct =
   | { kind: 'merge'; prNumber: number; method: 'merge' | 'squash' | 'rebase' }
-  | { kind: 'reply_draft'; prNumber: number; commentId: string | null; body: string; resolve: boolean }
+  | {
+      kind: 'reply_draft';
+      prNumber: number;
+      commentId: string | null;
+      body: string;
+      resolve: boolean;
+      /** The dispatch origin that asked for the reply, where an agent did. */
+      originRef: string | null;
+    }
   | { kind: 'plan'; planId: string; originRef: string }
   | { kind: 'plan_amendment'; amendmentId: string; planId: string; originRef: string }
   | {
@@ -587,6 +595,10 @@ export function readProposedAct(proposal: Proposal): { ok: true; act: ProposedAc
       // "leave the thread as the reviewer left it" — the safe direction, and the
       // behaviour those rows were proposed under.
       resolve: action.resolve === true,
+      // Absent on a rule's draft and on every row from before it existed; absence
+      // is "nothing to attribute this reply to", which records nothing rather than
+      // attributing it to whichever origin happens to fit.
+      originRef: typeof action.originRef === 'string' && action.originRef !== '' ? action.originRef : null,
     },
   };
 }

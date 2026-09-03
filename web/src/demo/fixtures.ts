@@ -347,6 +347,7 @@ export function buildDemoState(): DemoSeed {
           // above: an operator learning the mark should meet every arm of it once.
           review: {
             status: 'findings',
+            addressed: false,
             mode: 'deep',
             routeReason: 'Touches the ranker and the budget together, and the cut is what every answer is built from.',
             summary: 'Trims the ranked section list to a global token budget before the answer is composed.',
@@ -392,6 +393,7 @@ export function buildDemoState(): DemoSeed {
           attention: { status: 'you', reasons: ['a merge is waiting on your verdict'] },
           review: {
             status: 'clear',
+            addressed: false,
             mode: 'quick',
             routeReason: 'One module, one cache key, and the embed path is covered end to end.',
             summary: 'Keys cached embeddings on the section digest so an unchanged section is not re-embedded.',
@@ -430,6 +432,7 @@ export function buildDemoState(): DemoSeed {
           attention: { status: 'harness', reasons: ['queued for a base update'] },
           review: {
             status: 'routed',
+            addressed: false,
             mode: 'deep',
             routeReason: 'Changes what counts as approval, which is the gate in front of every merge.',
             summary: null,
@@ -464,6 +467,7 @@ export function buildDemoState(): DemoSeed {
           },
           review: {
             status: 'deciding',
+            addressed: false,
             mode: null,
             routeReason: null,
             summary: null,
@@ -491,6 +495,7 @@ export function buildDemoState(): DemoSeed {
           attention: { status: 'you', reasons: ['a merge is waiting on your verdict'] },
           review: {
             status: 'skipped',
+            addressed: false,
             mode: null,
             routeReason: 'Mechanical: every call site moves to the catalog’s own validator, no behaviour of its own.',
             summary: null,
@@ -518,6 +523,7 @@ export function buildDemoState(): DemoSeed {
           attention: { status: 'elsewhere', reasons: ['waiting on PR #413'] },
           review: {
             status: 'elsewhere',
+            addressed: false,
             mode: null,
             routeReason: null,
             summary: null,
@@ -599,12 +605,20 @@ export function buildDemoState(): DemoSeed {
           // A dead pull request keeps the one reading that is a record rather than
           // a verdict about what happens next — which is what the page reached
           // after a merge is usually opened to ask about.
+          // Findings that were **dealt with**: the thread the fleet published them
+          // in reads resolved, so the mark is green with a tick rather than red
+          // with a 2 — the arm an operator meets after a review round has actually
+          // been through, and the one the roll-call above cannot show.
           review: {
-            status: 'clear',
+            status: 'findings',
+            addressed: true,
             mode: 'deep',
             routeReason: 'Changes when a gap is considered closed, which nothing downstream re-checks.',
             summary: 'Verifies the gap has no weak answers left before resolving it on merge.',
-            findings: [],
+            findings: [
+              'A gap with no answers at all resolves as closed, since "no weak answers" is vacuously true.',
+              'The re-check reads the answers the merge replaced, one poll behind.',
+            ],
             reviewedAt: ago(70),
             routedAt: ago(96),
             agentId: 'agent_6ttlw',

@@ -9612,6 +9612,20 @@ select:disabled {
   outline-offset: 1px;
 }
 
+/* The mark as a control: on a row it opens the pull request's page, where the same
+   reading is drawn at full length. A button rather than a span with a handler, so
+   it resets the agent's own chrome — and it keeps `cursor: help` nowhere near it,
+   since a pointer is the truthful cursor for something that goes somewhere. */
+button.rv {
+  padding: 0;
+  background: none;
+  font: inherit;
+}
+
+.rv-open {
+  cursor: pointer;
+}
+
 .rv-clear {
   color: var(--green);
   background: var(--green-fill);
@@ -9682,13 +9696,29 @@ select:disabled {
   color: var(--on-light);
 }
 
+/* Findings somebody has dealt with: the count becomes a tick, and it takes the
+   clear arm's green with it. The verdict has not changed — the reviewer found what
+   it found — but a mark that keeps shouting after the thread was resolved is a
+   mark an operator learns to stop reading. */
+.rv-clear .rv-badge {
+  background: var(--green);
+  border-color: var(--green-line);
+  color: var(--on-light);
+}
+
 /* The tooltip. Anchored to the mark's right edge because the mark sits near the
    right of every row that draws it, so a centred one would leave the panel — and
    *below* it, because the mark's other surface is a masthead a few pixels under
    the top of the window, where a tooltip above is a tooltip nobody can read. */
 .rv-tip {
   position: fixed;
-  z-index: 30;
+  /* Above the console's own layers (menus and the why-tip sit at 40) and below the
+     modals at 50, which are the one thing that should cover it. The number only
+     means anything because the tooltip is portalled to the body: a closed pull
+     request's row is `opacity: .55`, which is a stacking context, and inside one no
+     z-index reaches past the row — half the reading was drawn behind the rail's
+     cards, at 55% opacity, with no way to bring it forward. */
+  z-index: 45;
   width: 320px;
   padding: 9px 11px;
   display: flex;
@@ -9718,20 +9748,34 @@ select:disabled {
 
 .rv-said {
   color: var(--text);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  overflow: hidden;
 }
 
-.rv-why i {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-style: normal;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  color: var(--grey);
-}
-
+/* The findings the tooltip does list are clamped to three lines each: a review's
+   finding is written as a paragraph for somebody reading the pull request, and four
+   of them unclamped ran the tooltip past the bottom of the window with its own
+   heading scrolled off the top. The rest is one line saying how many, and the page
+   the mark opens has all of them. */
 .rv-tip ul {
   margin: 0;
   padding-left: 16px;
+}
+
+.rv-tip li {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+
+.rv-more {
+  color: var(--grey);
+  font-style: italic;
 }
 
 .rv-foot {
@@ -9743,7 +9787,17 @@ select:disabled {
   color: var(--grey);
 }
 
-/* --- the same record at full length, on the pull-request page --- */
+/* --- the same record at full length, on the pull-request page ---
+
+   Its own inset, because the card that holds it gives its body none: a console
+   card pads its `h3` and leaves the rest to whatever it draws, and every other
+   thing drawn in one brings its own. Without it the whole reading — labels,
+   findings and foot — sat flush against three borders. 13px matches the heading
+   above it, so the two columns line up. */
+.rv-detail {
+  padding: 12px 13px 13px;
+}
+
 .rv-detail dl {
   margin: 0;
   display: grid;
@@ -9818,9 +9872,14 @@ select:disabled {
   padding: 7px 9px;
   background: var(--well);
   border-left: 2px solid var(--red-line);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
   font-size: 12.5px;
   line-height: 1.5;
   color: var(--text);
+}
+
+.rv-found-done li {
+  border-left-color: var(--green-line);
 }
 
 .rv-detail-foot {
