@@ -91,8 +91,8 @@ export function EndRunModal({
           </button>
         </div>
         <p className="rb-intro">
-          On “{issueTitle}”. This abandons the harness’s run at the goal — one way, and terminal for the dispatcher,
-          so nothing is scheduled for it again, though the report stays readable.
+          On “{issueTitle}”. This abandons the harness’s run at the goal — one way, and terminal for the dispatcher, so
+          nothing is scheduled for it again, though the report stays readable.
         </p>
         <ul className="rb-costs">
           <li>
