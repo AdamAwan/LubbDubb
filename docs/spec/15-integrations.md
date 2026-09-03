@@ -46,7 +46,7 @@ providers share one `FakeWorldStore` so their world stays coherent.
 
 `src/integrations/integration.ts` defines each outbound capability separately, with a type guard:
 
-`PrReplyCapable`, `PrThreadResolveCapable`, `PrMergeCapable`, `PrLabelCapable`, `PrCreateCapable`, `PrTitleCapable`,
+`PrReplyCapable`, `PrThreadResolveCapable`, `PrMergeCapable`, `PrCloseCapable`, `PrLabelCapable`, `PrCreateCapable`, `PrTitleCapable`,
 `PrBaseCapable`, `PrBaseUpdateCapable`, `BranchDeleteCapable`, `IssueLabelCapable`,
 `WorkItemStateCapable`, `WorkItemLinkCapable`, `IssueCommentCapable`, `IssueCreateCapable`,
 `IssueCloseCapable`,
@@ -65,6 +65,20 @@ head branches" setting removes the branch at merge time, so absence is the commo
 failure. GitHub deletes the ref; Azure has no delete verb for one and updates it to the zero object
 id, which needs the id it currently points at, so the Azure arm is two calls and the first is also
 the already-gone check.
+
+`PrCloseCapable` closes a pull request **without merging it** — the plan part restart's superseded PR
+([08](08-planning.md#restarting-a-part)), and nothing else: no rule reaches it, because a reviewable
+pull request is only ever closed because a person said so. Its own capability rather than a method on
+`PrMergeCapable` for `IssueCloseCapable`'s reason — merging and abandoning are different operations
+reached through different fields, and a provider may have one without the other. Both providers here
+implement it and both are **idempotent**, which is what makes a half-failed restart safe to retry:
+GitHub patches the pull request's `state` to `closed`, Azure patches its `status` to `abandoned` (the
+same word its closed-window read maps back to `closed`), and neither minds being told what is already
+true. Unlike `mergePr`, the Azure arm needs no remembered head commit: Azure asks for one only to
+_complete_ a pull request, so an abandon works on one this process never snapshotted.
+`ActionSink.canClosePr()` is the probe, asked for `canCloseIssue`'s reason — a surface that
+**offers** the operation rather than attempting it — and the cockpit draws no restart control where it
+is false.
 
 `TicketHistoryCapable` lists the tracker's items **across states**, which nothing else here does, and
 that is precisely why it is its own capability rather than a widening of `snapshot()`. The snapshot is

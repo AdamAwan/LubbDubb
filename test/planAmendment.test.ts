@@ -10,10 +10,10 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
-import { parsePlanDocument } from '../src/plans/planDocument.js';
+import { parsePlanDocument, planPartInputs } from '../src/plans/planDocument.js';
 import { amendmentWarnings, declinePlanAmendment, proposePlanAmendment } from '../src/plans/planAmendment.js';
 import { planAmendmentProposalRef } from '../src/proposals/proposals.js';
-import type { Plan, PlanAmendment, PlanStatus } from '../src/types.js';
+import type { Plan, PlanAmendment, PlanPartInput, PlanStatus } from '../src/types.js';
 import type { PlanHistory } from '../src/wire.js';
 
 /**
@@ -261,10 +261,85 @@ test('the warnings say what applying it would leave standing', async () => {
   // rewritten while what it delivered stays as it was.
   system.store.updatePlanPart(parts.find((p) => p.slug === 'api')!.id, { status: 'merged' });
 
-  const warnings = amendmentWarnings(system.store.listPlanParts(plan.id), ['api', 'console']);
+  // An amendment that drops `schema` altogether and keeps the other two.
+  const dropping = amendedDocument() as { parts: { slug: string }[] };
+  dropping.parts = dropping.parts.filter((p) => p.slug !== 'schema');
+
+  const warnings = amendmentWarnings(system.store.listPlanParts(plan.id), declaredParts(dropping));
   assert.equal(warnings.length, 2);
   assert.match(warnings[0]!, /"schema" is dropped[\s\S]*PR #4[\s\S]*keeps running/);
+  // The amendment rewrites `api`'s scope and drops its dependency, and `api` has
+  // merged — so it draws the settled warning and *only* that one. "Neither stopped
+  // nor re-dispatched" is nonsense about a part that has finished.
   assert.match(warnings[1]!, /"api" has already finished[\s\S]*does not change what was delivered/);
+  await close();
+});
+
+/**
+ * The warning the card was missing, and the failure it was missing: an operator
+ * approved an amendment that rewrote the scope and acceptance of two parts that
+ * each had an open pull request built to the *previous* declaration. Nothing was
+ * said, `upsertPlanParts` merged on slug, nothing new became dispatchable, and both
+ * PRs carried on implementing a design the amendment had just reversed.
+ */
+test('a re-declared part with work in flight warns, and names its pull request', async () => {
+  const { system, close } = await build();
+  const plan = seedRunningPlan(system);
+  const parts = system.store.listPlanParts(plan.id);
+  system.store.updatePlanPart(parts.find((p) => p.slug === 'api')!.id, {
+    status: 'in_review',
+    branch: 'issue/12/api',
+    prNumber: 7,
+  });
+
+  const warnings = amendmentWarnings(system.store.listPlanParts(plan.id), declaredParts(amendedDocument()));
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0]!, /"api" is being worked right now \(in_review\), PR #7/);
+  assert.match(warnings[0]!, /rewrites its scope, dependencies/);
+  assert.match(warnings[0]!, /neither stops it nor re-dispatches it/);
+  await close();
+});
+
+test('a re-declared part in flight whose declaration did not move says nothing', async () => {
+  const { system, close } = await build();
+  const plan = seedRunningPlan(system);
+  const parts = system.store.listPlanParts(plan.id);
+  system.store.updatePlanPart(parts.find((p) => p.slug === 'schema')!.id, {
+    status: 'in_review',
+    branch: 'issue/12/schema',
+    prNumber: 9,
+  });
+
+  // The same amendment as everywhere else — it re-declares `schema` verbatim and
+  // only moves `api`, which nothing has started. A warning on every amendment is
+  // one an operator learns to click past.
+  assert.deepEqual(amendmentWarnings(system.store.listPlanParts(plan.id), declaredParts(amendedDocument())), []);
+
+  // Nor on a re-wrap: the prose says exactly what the row already said.
+  const rewrapped = amendedDocument() as { parts: { slug: string; scope: string }[] };
+  rewrapped.parts.find((p) => p.slug === 'schema')!.scope = '  src/store\n';
+  assert.deepEqual(amendmentWarnings(system.store.listPlanParts(plan.id), declaredParts(rewrapped)), []);
+  await close();
+});
+
+test('a dispatched part whose acceptance is rewritten warns before anybody has a PR', async () => {
+  const { system, close } = await build();
+  const plan = seedRunningPlan(system);
+  const parts = system.store.listPlanParts(plan.id);
+  system.store.updatePlanPart(parts.find((p) => p.slug === 'schema')!.id, {
+    status: 'dispatched',
+    branch: 'issue/12/schema',
+  });
+
+  const doc = amendedDocument() as { parts: { slug: string; acceptance?: string }[] };
+  doc.parts.find((p) => p.slug === 'schema')!.acceptance = 'The column is nullable and backfilled.';
+  const warnings = amendmentWarnings(system.store.listPlanParts(plan.id), declaredParts(doc));
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0]!, /"schema" is being worked right now \(dispatched\) and this amendment rewrites its /);
+  assert.match(warnings[0]!, /acceptance/);
+  // No pull request yet, so nothing is named — the agent is still the only thing
+  // holding the old declaration.
+  assert.doesNotMatch(warnings[0]!, /PR #/);
   await close();
 });
 
@@ -365,6 +440,13 @@ function amendedDocument(): unknown {
       { slug: 'console', title: 'Console', scope: 'web/src', dependsOn: ['api'] },
     ],
   };
+}
+
+/** A document as `proposePlanAmendment` hands it to `amendmentWarnings` — the declared parts, validated. */
+function declaredParts(document: unknown): PlanPartInput[] {
+  const parsed = parsePlanDocument(JSON.stringify(document));
+  assert.ok(parsed.ok, parsed.ok ? '' : parsed.error);
+  return planPartInputs(parsed.document);
 }
 
 function propose(system: System, plan: Plan): PlanAmendment {

@@ -1628,10 +1628,7 @@ function describeAmendmentFor(store: Store, amendment: PlanAmendment): string {
       narrative: planNarrative(parsed.document),
       parts: declared,
     }),
-    warnings: amendmentWarnings(
-      store.listPlanParts(amendment.planId),
-      declared.map((p) => p.slug),
-    ),
+    warnings: amendmentWarnings(store.listPlanParts(amendment.planId), declared),
   });
 }
 

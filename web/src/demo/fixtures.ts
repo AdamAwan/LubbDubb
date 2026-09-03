@@ -327,6 +327,7 @@ export function buildDemoState(): DemoSeed {
       // a visitor the wrong thing about the product.
       canSetWorkItemState: true,
       canCloseIssue: true,
+      canClosePr: true,
       stateRules: { pickup: ['Ready', 'Active'], inProgress: 'Active', inReview: null, returnsTo: 'Ready' },
       // Cheapest first, as `rank` orders them — the demo's profile controls draw
       // this list in this order.

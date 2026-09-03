@@ -794,6 +794,9 @@ export function buildStateSections(
       // The same question one act further on, and asked the same way: whether this
       // deployment's tracker can be closed from here at all.
       canCloseIssue: connector.canCloseIssue(),
+      // And the same question about a pull request, which is a different provider
+      // operation on both of them — the plan sheet's restart is its only reader.
+      canClosePr: connector.canClosePr(),
       // The flag and the provider's hierarchy, folded by the one predicate the
       // route refuses on — so the tab and the route can never disagree about
       // whether this deployment has a board.
