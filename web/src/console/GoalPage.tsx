@@ -29,6 +29,15 @@ import { fmtUsd, relTime } from '../components/util.js';
 import { Ref, TicketLink } from '../components/refs.js';
 import { askPrompt, localRunPrompt } from '../cockpit/desktopLink.js';
 import { DesktopLink } from '../components/DesktopLink.js';
+import { Icon } from '../components/icons.js';
+import {
+  CONTROL_CLASS,
+  ControlBar,
+  ControlButton,
+  ControlGroup,
+  ControlSegment,
+  ControlSegments,
+} from '../components/controls.js';
 import { ValidationSection } from '../components/ValidationSection.js';
 import { SignalsSection } from '../components/SignalsSection.js';
 import { watchBucket } from '../worldBuckets.js';
@@ -388,6 +397,11 @@ function Header({
   // page itself is showing: the button is how a run is abandoned, so it has to be
   // reachable for exactly as long as the harness still holds one.
   const retained = issue.run !== undefined && !issue.run.dismissed;
+  // The other end of the same reading: a run the harness held and the operator
+  // ended. Drawn as the run state's third segment, inert — the goal *is* in that
+  // state, and a segment that disappeared once it was reached would leave the
+  // control saying the run is still working.
+  const ended = issue.run !== undefined && issue.run.dismissed;
 
   return (
     <div className="cn-gh">
@@ -415,14 +429,25 @@ function Header({
       <div className="cn-ghmeta">
         {issue.appraisal !== null && (
           <i
-            className={`cn-chip ${issue.appraisal.verdict === 'workable' ? 'cn-ok' : 'cn-stall'}`}
+            className={`cn-chip cn-ghverdict ${issue.appraisal.verdict === 'workable' ? 'cn-ok' : 'cn-stall'}`}
             title={issue.appraisal.summary}
           >
-            Appraisal: {issue.appraisal.verdict}
+            <Icon name="scale" size={12} />
+            Appraisal · {issue.appraisal.verdict}
           </i>
         )}
+        {/* Prefixed with *whose* verdict it is, because the two words this chip
+            most often reads — "more work" — were also the name of a control an
+            operator presses. One is a judgement the goal already carries and the
+            other is a thing you do to it; a chip that could be read as either is
+            the header's oldest confusion. `by` is read rather than assumed: the
+            operator's own override says "Your verdict", and calling that one the
+            harness's would be the header telling somebody their own decision was
+            somebody else's. */}
         {issue.conclusion.verdict !== 'undeclared' && (
-          <i className="cn-chip" title={issue.conclusion.note}>
+          <i className="cn-chip cn-ghverdict" title={issue.conclusion.note}>
+            <Icon name="robot" size={12} />
+            {issue.conclusion.by === 'operator' ? 'Your verdict' : 'Harness verdict'} ·{' '}
             {issue.conclusion.verdict.replace(/_/g, ' ')}
           </i>
         )}
@@ -436,7 +461,7 @@ function Header({
         {issue.validation !== null && (
           <button
             type="button"
-            className={`cn-chip cn-jump ${issue.validation.state === 'clear' ? 'cn-ok' : 'cn-stall'}`}
+            className={`cn-chip cn-ghverdict cn-jump ${issue.validation.state === 'clear' ? 'cn-ok' : 'cn-stall'}`}
             onClick={() => jumpTo(ANCHOR.validation, folds.validation)}
             title={
               issue.validation.state === 'clear'
@@ -444,7 +469,8 @@ function Header({
                 : `${issue.validation.failed} failed, ${issue.validation.unrun} never run, ${issue.validation.deferred} deferred — go to them`
             }
           >
-            Validation: {issue.validation.passed + issue.validation.waived}/{issue.validation.total}
+            <Icon name="flask" size={12} />
+            Validation · {issue.validation.passed + issue.validation.waived} of {issue.validation.total} settled
           </button>
         )}
         {/* The measurements, in one run at the end rather than as three more chips.
@@ -457,53 +483,100 @@ function Header({
           {issue.spend !== null && <> · {fmtUsd(issue.spend.costUsd)}</>}
         </span>
       </div>
-      <div className="cn-ghacts">
-        {/* Three groups, in the order an operator reaches for them — what only
-            reads, what steers the work, what settles it — with the one destructive
-            control held out of all three and pushed to the far end. The groups do
-            not wrap internally, so a narrow page breaks between them rather than
-            through one: every control keeps its neighbours, which is what a row of
-            nine identical toggles could never offer. */}
-        <span className="cn-ghgrp">
-          {/* The one control up here that changes nothing. It opens the operator's
-            own Claude Code on this goal with `/lubbdubb ask <n>` already in the
-            box, so a question about the work — what was done, which pull request,
-            is it on hallway yet — is a click from the goal rather than a cockpit
-            read joined to a repository read by hand. An anchor rather than a
-            button, as the other two deep links are: a deep link is a destination.
-            First in the row because it is the read, and everything after it acts.
-            Drawn through `DesktopLink`, which is what puts the command in the
-            title as well as the href — the standing rule for every one of these,
-            and the one this row would otherwise have to remember. */}
-          <DesktopLink
-            className="cn-tgl"
-            folder={config.desktopFolder}
-            prompt={askPrompt(issue.number)}
-            ready="ready for your question"
-            explain="answered from what the harness actually recorded about this goal — the plan, the pull requests, what was escalated, what it cost, and where the work has reached."
-          >
-            Ask ↗
-          </DesktopLink>
-          {/* The tracker, beside the other control that only reads. It used to sit
-              between "Raise a bug" and "End the run…", which put a destination in
-              the middle of the two controls that write.
-
-              Which of the three keys resolves it, and the inert `<span>` drawn
-              when none of them does, are `TicketLink`'s business rather than this
-              page's — both are judgements about how a ref resolves. */}
-          <TicketLink className="cn-tgl" number={issue.number} url={issue.url}>
-            Open ticket ↗
-          </TicketLink>
-        </span>
-        <i className="cn-ghsep" />
-        <span className="cn-ghgrp">
-          <button
-            type="button"
-            className={`cn-tgl ${watched === 'watched' ? 'cn-watch' : ''}`}
+      {/* Three captioned groups, drawn through the control kit
+          (`web/src/components/controls.tsx`) rather than as class strings: what
+          state the run is in, what steers the work, and what happens somewhere
+          other than this goal. The caption is the part that does the explaining —
+          it answers "how is this one different from that one" once, for a whole
+          group, so no control has to grow a defensive name of its own.
+          → docs/spec/17-cockpit.md#the-headers-controls */}
+      <ControlBar>
+        {/* Working, done and ended are three states of one thing, so they are one
+            control rather than two buttons at opposite ends of the row. What
+            "Mark done" and "End the run" each did was never legible from their
+            names side by side; as segments of a run state they are obviously
+            alternatives, and which one the goal is in is readable without pressing
+            anything. Ending still wears the danger tone and still opens the modal. */}
+        <ControlGroup caption="Run state" icon="clock">
+          <ControlSegments label="Run state">
+            <ControlSegment
+              icon="play"
+              pressed={!finished && !ended}
+              onClick={() => {
+                if (finished) void actions.setIssueConclusion(issue.number, null);
+              }}
+              title={
+                finished
+                  ? 'Withdraw "finished" — the goal goes back to whatever its agents and its plan say'
+                  : 'The harness is free to schedule work for this goal'
+              }
+            >
+              Working
+            </ControlSegment>
+            <ControlSegment
+              icon="check"
+              tone="on"
+              pressed={finished}
+              onClick={() => {
+                if (!finished) void actions.setIssueConclusion(issue.number, 'done');
+              }}
+              title="Mark this goal finished, so the harness schedules nothing more for it. Agents already running are left alone."
+            >
+              Done
+            </ControlSegment>
+            {/* Keyed on the run existing, never on anything else the page is
+                showing: for as long as the harness holds a run there is a way to
+                end it, and once one has been ended the segment stays — drawn
+                inert — because a control that vanishes says nothing about which
+                state the goal ended up in. */}
+            {retained && (
+              <ControlSegment
+                icon="stop"
+                tone="danger"
+                onClick={() => setEndingRun(true)}
+                title="Abandon the harness's run at this goal — one way, terminal for the dispatcher, and it stops the agents, jobs and instructions still standing on it. It asks before it does."
+              >
+                Abandon…
+              </ControlSegment>
+            )}
+            {ended && (
+              <ControlSegment
+                icon="stop"
+                tone="danger"
+                inert
+                title="This run was abandoned. Nothing more is scheduled for it."
+              >
+                Abandoned
+              </ControlSegment>
+            )}
+          </ControlSegments>
+        </ControlGroup>
+        {/* What steers the work the harness does on this goal. Every control here
+            is reversible by pressing it again, which is what holds it apart from
+            the group before. */}
+        <ControlGroup caption="Steer the work" icon="pen" divider>
+          {issue.state === 'open' && (
+            <ControlButton
+              icon="pen"
+              tone={moreWork ? 'on' : 'primary'}
+              count={standing}
+              onClick={() => setInstructing(true)}
+              title={
+                standing === 0
+                  ? 'Say what you want done next on this goal — your words go to the next agent, and the goal goes back in front of the harness: a "delivered" verdict is retracted, and a plan whose parts have all landed is sent back to a planner for you to approve again'
+                  : `Add to the ${standing} instruction${standing === 1 ? '' : 's'} already standing on this goal`
+              }
+            >
+              Give instructions
+            </ControlButton>
+          )}
+          {/* One label, both ways: un-watching takes the tag off and writes nothing
+              in its place, which is why the goal lands back in Unwatched rather than
+              in a bucket of its own. */}
+          <ControlButton
+            icon="eye"
+            tone={watched === 'watched' ? 'on' : undefined}
             onClick={() => void actions.setIssueWatched(issue.number, watched !== 'watched')}
-            // One label, both ways: un-watching takes the tag off and writes nothing
-            // in its place, which is why the goal lands back in Unwatched rather than
-            // in a bucket of its own.
             title={
               watched === 'watched'
                 ? `Remove "${config.watchLabel}" so the harness leaves this goal alone`
@@ -511,16 +584,16 @@ function Header({
             }
           >
             {watched === 'watched' ? 'Watching' : 'Watch'}
-          </button>
+          </ControlButton>
           {/* "Work this one first." Beside the watch toggle because it is the next
               thing an operator says after "work this" — and deliberately worded as a
               queue statement rather than an importance one: it changes what the
               fleet reaches for while it is short of slots, and it changes nothing
               about whether the goal is allowed to move. A goal sitting on a cooldown
               or an unapproved plan is still sitting there, flagged. */}
-          <button
-            type="button"
-            className={`cn-tgl ${issue.priority !== null ? 'cn-watch' : ''}`}
+          <ControlButton
+            icon="bolt"
+            tone={issue.priority !== null ? 'on' : undefined}
             onClick={() => void actions.setGoalPriority(issue.number, issue.priority === null)}
             title={
               issue.priority === null
@@ -529,11 +602,13 @@ function Header({
             }
           >
             {issue.priority !== null ? 'Priority' : 'Prioritise'}
-          </button>
+          </ControlButton>
           {/* Which profile this goal's work runs on (#342). Beside the watch toggle
               because it is the same kind of statement about the same object — "work
               this" and "work this at this depth" — and because an operator who has
-              just read a hard ticket is already here. */}
+              just read a hard ticket is already here. It dresses itself through
+              the kit's `ControlSelect`, so this row says nothing about how a
+              `<select>` is made to match the controls beside it. */}
           <ProfilePicker
             profiles={config.profiles}
             value={issue.modelPin.profile}
@@ -541,72 +616,49 @@ function Header({
             inheritLabel="Not pinned"
             onPick={(profile) => void actions.setIssueProfile(issue.number, profile)}
           />
-          {issue.state === 'open' && (
-            <button
-              type="button"
-              className={`cn-tgl ${moreWork ? 'cn-watch' : ''}`}
-              onClick={() => setInstructing(true)}
-              title={
-                standing === 0
-                  ? 'Say what you want done next on this goal — your words go to the next agent, and the goal goes back in front of the harness: a "delivered" verdict is retracted, and a plan whose parts have all landed is sent back to a planner for you to approve again'
-                  : `Add to the ${standing} instruction${standing === 1 ? '' : 's'} already standing on this goal`
-              }
-            >
-              More work{standing > 0 ? ` · ${standing}` : ''}
-            </button>
-          )}
-        </span>
-        <i className="cn-ghsep" />
-        {/* What settles the goal: the verdict, and the one control that starts a
-            second ticket about it. Both write, neither is reversible by clicking
-            the same button again, and that is what separates them from the group
-            before. */}
-        <span className="cn-ghgrp">
-          <button
-            type="button"
-            className="cn-tgl"
-            onClick={() => void actions.setIssueConclusion(issue.number, finished ? null : 'done')}
-            title={
-              finished
-                ? 'Withdraw "finished" — the goal goes back to whatever its agents and its plan say'
-                : 'Mark this goal finished, so the harness schedules nothing more for it'
-            }
+        </ControlGroup>
+        {/* The three controls whose effect is not on this goal: two destinations,
+            and the one that starts a second ticket about it. Grouping them is what
+            answers "how is filing a bug different from giving instructions" —
+            one steers the work here, one leaves. */}
+        <ControlGroup caption="Leave this page" icon="ticket" divider>
+          {/* The one control up here that changes nothing. It opens the operator's
+              own Claude Code on this goal with `/lubbdubb ask <n>` already in the
+              box, so a question about the work — what was done, which pull request,
+              is it on hallway yet — is a click from the goal rather than a cockpit
+              read joined to a repository read by hand. An anchor rather than a
+              button, as the other deep links are: a deep link is a destination.
+              Drawn through `DesktopLink`, which is what puts the command in the
+              title as well as the href — the standing rule for every one of these,
+              and the one this row would otherwise have to remember. */}
+          <DesktopLink
+            className={CONTROL_CLASS}
+            folder={config.desktopFolder}
+            prompt={askPrompt(issue.number)}
+            ready="ready for your question"
+            explain="answered from what the harness actually recorded about this goal — the plan, the pull requests, what was escalated, what it cost, and where the work has reached."
           >
-            {finished ? 'Unfinish' : 'Mark done'}
-          </button>
+            <Icon name="chat" />
+            Ask Claude Code ↗
+          </DesktopLink>
+          {/* Which of the three keys resolves the ticket, and the inert `<span>`
+              drawn when none of them does, are `TicketLink`'s business rather than
+              this page's — both are judgements about how a ref resolves. */}
+          <TicketLink className={CONTROL_CLASS} number={issue.number} url={issue.url}>
+            <Icon name="ticket" />
+            Open ticket ↗
+          </TicketLink>
           {config.canFileTickets && (
-            <button
-              type="button"
-              className="cn-tgl"
+            <ControlButton
+              icon="bug"
               onClick={() => setRaisingBug(true)}
-              title="Report that this does not work as you expect — an agent files it as a bug against this goal"
+              title="Report that this does not work as you expect — an agent files it as a separate bug against this goal. It changes nothing about this goal's own verdict."
             >
-              Raise a bug
-            </button>
+              File a new bug
+            </ControlButton>
           )}
-        </span>
-        {/* Destructive, and always confirmed. Ending a run no longer merely clears
-            the card: it kills the goal's live agents, cancels its queued jobs and
-            settles its standing instructions, none of which can be undone — so the
-            one thing the header must not do is fire it on a stray click. The modal
-            is where what it costs is stated, and the flagged-plan note is one more
-            requirement inside it rather than the reason it opens.
-
-            Held out of all three groups and pushed to the far end, because
-            *distance* is the part of the warning a colour cannot carry: red at
-            rest says what the control does, and being the only thing over there
-            says it is not one of the others. */}
-        {retained && (
-          <button
-            type="button"
-            className="cn-tgl cn-danger cn-ghend"
-            onClick={() => setEndingRun(true)}
-            title="End the harness's run at this goal — one way, terminal for the dispatcher, and it stops the agents, jobs and instructions still standing on it. It asks before it does."
-          >
-            End the run…
-          </button>
-        )}
-      </div>
+        </ControlGroup>
+      </ControlBar>
       {instructing && (
         <InstructionModal
           issueNumber={issue.number}
@@ -1093,7 +1145,7 @@ function Instructions({ issue, actions }: { issue: Issue; actions: CockpitAction
               <span className="cn-sub">{instruction.createdAt}</span>
             </span>
             <AsyncButton
-              className="cn-tgl"
+              className={CONTROL_CLASS}
               onClick={() => actions.withdrawInstruction(issue.number, instruction.id)}
               title="Take this back — it stops being sent to the next agent"
             >
@@ -1772,7 +1824,7 @@ function Tail({ issue, actions, fold }: { issue: Issue; actions: CockpitActions;
               <span className="cn-sub">{issue.retrospective?.summary ?? 'not written'}</span>
             </span>
             {issue.retrospective !== null && (
-              <button type="button" className="cn-tgl" onClick={() => actions.viewRetro(ref)}>
+              <button type="button" className={CONTROL_CLASS} onClick={() => actions.viewRetro(ref)}>
                 Read
               </button>
             )}
@@ -1793,7 +1845,7 @@ function Tail({ issue, actions, fold }: { issue: Issue; actions: CockpitActions;
               </span>
             </span>
             {issue.scratchpad !== null && (
-              <button type="button" className="cn-tgl" onClick={() => actions.viewScratchpad(ref)}>
+              <button type="button" className={CONTROL_CLASS} onClick={() => actions.viewScratchpad(ref)}>
                 Open
               </button>
             )}
