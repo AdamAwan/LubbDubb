@@ -4,6 +4,8 @@ import { checkPrompt } from '../cockpit/desktopLink.js';
 import { DesktopLink } from './DesktopLink.js';
 import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 import { renderMarkdown } from './markdown.js';
+import { Button, buttonClass } from './button.js';
+import type { ButtonLook } from './button.js';
 
 /**
  * Whether a resource's absence is worth drawing.
@@ -45,7 +47,7 @@ export function ValidationSection({
   resources,
   refUrls,
   desktopFolder,
-  buttonClass = 'ghost small',
+  look = { ghost: true, size: 'small' },
   onResult,
   onDefer,
   onWaive,
@@ -61,11 +63,13 @@ export function ValidationSection({
   /** `config.desktopFolder` — the checkout the desktop hand-off opens Claude Code on. */
   desktopFolder: string;
   /**
-   * The station's own button chrome, the seam `HumanTaskActions` and
-   * `EscalationCard` already take. One component, two faces — the alternative is a
+   * The station's own button tone, the seam `HumanTaskActions` and
+   * `EscalationCard` already take — [`Button`](./button.tsx)'s props rather than a
+   * class string, so the caller cannot hand down a base class this section then
+   * prefixes a second one onto. One component, two faces; the alternative is a
    * second wiring of five verbs, and five more places for the refusals to drift.
    */
-  buttonClass?: string;
+  look?: ButtonLook;
   onResult: (checkId: string, result: 'passed' | 'failed', note: string) => Promise<unknown> | unknown;
   onDefer: (checkId: string, reason: string) => Promise<unknown> | unknown;
   onWaive: (checkId: string, reason: string) => Promise<unknown> | unknown;
@@ -140,7 +144,7 @@ export function ValidationSection({
             return found ? [found] : [];
           })}
           refUrls={refUrls}
-          buttonClass={buttonClass}
+          look={look}
           issueNumber={issueNumber}
           desktopFolder={desktopFolder}
           onResult={(result, note) => onResult(check.id, result, note)}
@@ -260,9 +264,9 @@ export function ValidationDigest({
       <div className="pm-vout">
         This plan proposes the checks. What anyone saw when they ran one is recorded on the goal.
         {onOpenGoal !== null && (
-          <button className="btn ghost small" onClick={onOpenGoal}>
+          <Button ghost size="small" onClick={onOpenGoal}>
             Open the goal →
-          </button>
+          </Button>
         )}
       </div>
     </>
@@ -295,7 +299,7 @@ function CheckBlock({
   check,
   resources,
   refUrls,
-  buttonClass,
+  look,
   issueNumber,
   desktopFolder,
   onResult,
@@ -307,7 +311,7 @@ function CheckBlock({
   check: ValidationCheck;
   resources: ValidationResourceView[];
   refUrls: Record<string, string>;
-  buttonClass: string;
+  look: ButtonLook;
   issueNumber: number;
   desktopFolder: string;
   onResult: (result: 'passed' | 'failed', note: string) => Promise<unknown> | unknown;
@@ -446,18 +450,18 @@ function CheckBlock({
             <div className="pm-vacts">
               {check.state === 'unrun' ? (
                 <>
-                  <button className={`btn ${buttonClass}`} onClick={() => setVerb('passed')}>
+                  <Button {...look} onClick={() => setVerb('passed')}>
                     Passed
-                  </button>
-                  <button className={`btn ${buttonClass}`} onClick={() => setVerb('failed')}>
+                  </Button>
+                  <Button {...look} onClick={() => setVerb('failed')}>
                     Failed
-                  </button>
-                  <button className={`btn ${buttonClass}`} onClick={() => setVerb('deferred')}>
+                  </Button>
+                  <Button {...look} onClick={() => setVerb('deferred')}>
                     Defer
-                  </button>
-                  <button className={`btn ${buttonClass}`} onClick={() => setVerb('waived')}>
+                  </Button>
+                  <Button {...look} onClick={() => setVerb('waived')}>
                     Waive
-                  </button>
+                  </Button>
                   {/* The hand-over, beside the four readings and deliberately not
                       among them: it says who runs the check, not what it said. It
                       is offered on every unrun check rather than only on a
@@ -466,7 +470,7 @@ function CheckBlock({
                       planner's permission to use it. */}
                   {check.actor === 'fleet' ? (
                     <AsyncButton
-                      className={buttonClass}
+                      {...look}
                       title="Stop waiting for an agent and take this check back"
                       onClick={() => onHandover('human')}
                     >
@@ -474,7 +478,7 @@ function CheckBlock({
                     </AsyncButton>
                   ) : (
                     <AsyncButton
-                      className={buttonClass}
+                      {...look}
                       title="Let the harness put an agent on this check once the goal is delivered"
                       onClick={() => onHandover('fleet')}
                     >
@@ -491,7 +495,7 @@ function CheckBlock({
                       nobody can read are the same dead end — and only the machine
                       running this browser has a client to answer it. */}
                   <DesktopLink
-                    className={`btn ${buttonClass}`}
+                    className={buttonClass(look)}
                     folder={desktopFolder}
                     prompt={promptText}
                     explain="so this check runs at the keyboard — with the browser and the logins the fleet has not — and reports the reading back here."
@@ -503,11 +507,7 @@ function CheckBlock({
                 // One way back from every settled state, and it takes no note for a
                 // dismissal's reason: it says nothing about the work, only that what
                 // was recorded no longer holds.
-                <AsyncButton
-                  className={buttonClass}
-                  title="Withdraw what was recorded and put it back to unrun"
-                  onClick={onReset}
-                >
+                <AsyncButton {...look} title="Withdraw what was recorded and put it back to unrun" onClick={onReset}>
                   Back to unrun
                 </AsyncButton>
               )}
@@ -529,12 +529,12 @@ function CheckBlock({
                   if (e.key === 'Escape') setVerb(null);
                 }}
               />
-              <SubmitButton phase={send.phase} className="primary small">
+              <SubmitButton phase={send.phase} tone="primary" size="small">
                 {verb === 'deferred' ? 'Defer' : verb === 'waived' ? 'Waive' : verb === 'passed' ? 'Passed' : 'Failed'}
               </SubmitButton>
-              <button type="button" className={`btn ${buttonClass}`} onClick={() => setVerb(null)}>
+              <Button {...look} onClick={() => setVerb(null)}>
                 Cancel
-              </button>
+              </Button>
             </form>
           ))}
       </div>

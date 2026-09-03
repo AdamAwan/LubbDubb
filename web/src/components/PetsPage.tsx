@@ -13,6 +13,7 @@ import type {
 import { PET_STAGES, speciesSeen } from '../pets/reveal.js';
 import { SpeciesSprite } from './SpeciesSprite.js';
 import { absDate } from './util.js';
+import { Panel } from './panel.js';
 
 /**
  * The catalogue: every species that exists, what each costs, and how often it
@@ -285,7 +286,7 @@ function SpeciesCard({
   const window = entry.hours === null ? null : hourWindow(entry.hours);
   const oneIn = Math.round(1 / (entry.share * meanDrop)).toLocaleString();
   return (
-    <div className={`species-card is-${entry.rarity}${known ? '' : ' is-unknown'}`}>
+    <Panel density="flush" className={`species-card is-${entry.rarity}${known ? '' : ' is-unknown'}`}>
       <div className="species-top">
         <h5>{known ? entry.display : '???'}</h5>
         <span className="species-spacer" />
@@ -378,7 +379,7 @@ function SpeciesCard({
           ))}
         </div>
       ) : null}
-    </div>
+    </Panel>
   );
 }
 

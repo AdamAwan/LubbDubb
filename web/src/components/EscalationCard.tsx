@@ -6,6 +6,8 @@ import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 import { QuestionnaireModal } from './QuestionnaireModal.js';
 import { CaveatChecklist, heldTitle, useAcknowledgements } from './CaveatChecklist.js';
 import { planCaveatsOf } from '../planCaveats.js';
+import { Panel } from './panel.js';
+import { Button } from './button.js';
 
 export function EscalationCard({
   escalation,
@@ -179,7 +181,7 @@ export function EscalationCard({
       : null;
 
   return (
-    <div className="card escalation">
+    <Panel density="padded" className="card escalation">
       <div className="card-head">
         <span className="badge escalate">{escalation.type.replace(/_/g, ' ')}</span>
         {questions && (
@@ -243,7 +245,7 @@ export function EscalationCard({
           wall it replaced, with a scrollbar. The card grows; the panel scrolls. */}
       {context.detail ? (
         <div className="esc-context">
-          <div className="muted small esc-detail-label">{detailLabel(context, escalation.agentId)}</div>
+          <div className="lb lb-sm">{detailLabel(context, escalation.agentId)}</div>
           <div className="esc-detail">{renderMarkdown(String(context.detail), refUrls)}</div>
         </div>
       ) : null}
@@ -266,13 +268,14 @@ export function EscalationCard({
       {escalation.agentId ? (
         <div className="esc-agent-actions">
           {onOpenAgent ? (
-            <button className="btn ghost small esc-open" onClick={() => onOpenAgent(escalation.agentId!)}>
+            <Button ghost size="small" className="esc-open" onClick={() => onOpenAgent(escalation.agentId!)}>
               Open agent transcript →
-            </button>
+            </Button>
           ) : null}
           {onComplete ? (
             <AsyncButton
-              className="ghost small"
+              ghost
+              size="small"
               title="The agent is finished: record it done, reclaim its worktree, and close this out"
               onClick={() => onComplete(escalation.agentId!)}
             >
@@ -283,7 +286,8 @@ export function EscalationCard({
               no countdown would offer to postpone nothing, and 409. */}
           {expiring && onExtend ? (
             <AsyncButton
-              className="ghost small"
+              ghost
+              size="small"
               title="Hold the countdown for another fifteen minutes while you read the transcript. Nothing is decided by this."
               onClick={() => onExtend(escalation.agentId!)}
             >
@@ -294,10 +298,10 @@ export function EscalationCard({
       ) : null}
 
       {planId ? (
-        <button className="btn esc-plan-open" onClick={() => onViewPlan!(planId)}>
+        <Button className="esc-plan-open" onClick={() => onViewPlan!(planId)}>
           <span className="esc-plan-open-label">Read the full plan</span>
           <span className="esc-plan-open-hint">the split, the evidence, what it rules out →</span>
-        </button>
+        </Button>
       ) : null}
 
       {permission ? <pre className="esc-output">{permission.summary}</pre> : null}
@@ -305,7 +309,7 @@ export function EscalationCard({
       {!decidable && !permission && !questions && quick.length > 0 && (
         <div className="esc-quick">
           {quick.map((q) => (
-            <AsyncButton key={q} className="small" onClick={() => onAnswer(q)}>
+            <AsyncButton key={q} size="small" onClick={() => onAnswer(q)}>
               {q}
             </AsyncButton>
           ))}
@@ -320,14 +324,14 @@ export function EscalationCard({
             onChange={(e) => setText(e.target.value)}
           />
           <AsyncButton
-            className="primary"
+            tone="primary"
             title="Run this command; the same agent continues"
             onClick={() => onPermission!(escalation.id, true, text.trim() || undefined)}
           >
             Allow
           </AsyncButton>
           <AsyncButton
-            className="ghost"
+            ghost
             title="Refuse this command; the agent is told and carries on"
             onClick={() => onPermission!(escalation.id, false, text.trim() || undefined)}
           >
@@ -350,7 +354,7 @@ export function EscalationCard({
               onChange={(e) => setText(e.target.value)}
             />
             <AsyncButton
-              className="primary"
+              tone="primary"
               // Disabled rather than hidden, and rather than left to 400: the button
               // is where the operator is looking, so what is holding it belongs in
               // its own hint. The route refuses it either way — this is the same
@@ -362,7 +366,7 @@ export function EscalationCard({
               {ACCEPT_LABEL[decidable.kind] ?? 'Approve'}
             </AsyncButton>
             <AsyncButton
-              className="ghost"
+              ghost
               title={REJECT_HINT[decidable.kind] ?? "Nothing goes out, and the harness won't ask again"}
               onClick={() => onDecide!(decidable.id, 'reject', text.trim() || undefined)}
             >
@@ -370,7 +374,7 @@ export function EscalationCard({
             </AsyncButton>
             {overrulable && (
               <AsyncButton
-                className="ghost"
+                ghost
                 // Disabled rather than hidden until there are words, because the words
                 // *are* the act: an overrule with nothing in the box records "delivered"
                 // for a reason nobody can read, which is the assessment problem again
@@ -395,7 +399,7 @@ export function EscalationCard({
             <div className="esc-backout">
               <span className="muted small">Not the work you want?</span>
               <AsyncButton
-                className="ghost"
+                ghost
                 // Disabled rather than hidden until there are words, for the overrule's
                 // reason and one more: the note is posted on somebody's tracker as the
                 // reason it closed, and a close nobody can read the reason for is the
@@ -412,7 +416,7 @@ export function EscalationCard({
               </AsyncButton>
               {onCommentDraft && (
                 <AsyncButton
-                  className="ghost"
+                  ghost
                   title="Put a draft comment in the box to edit — nothing is posted until you close the ticket"
                   onClick={async () => setText(await onCommentDraft(backOutable.id))}
                 >
@@ -420,7 +424,7 @@ export function EscalationCard({
                 </AsyncButton>
               )}
               <AsyncButton
-                className="ghost"
+                ghost
                 title="Stops watching the ticket and sends this plan back. Nothing is scheduled for it — watch it again and a fresh plan is written."
                 onClick={() => onBackOut!(backOutable.id, 'hold', text.trim() || undefined)}
               >
@@ -431,7 +435,7 @@ export function EscalationCard({
         </>
       ) : questions ? (
         <div className="esc-quick">
-          <AsyncButton className="primary" onClick={() => setAsking(true)}>
+          <AsyncButton tone="primary" onClick={() => setAsking(true)}>
             Answer {questions.length} questions →
           </AsyncButton>
         </div>
@@ -449,7 +453,7 @@ export function EscalationCard({
           }}
         >
           <input placeholder="Your answer…" value={text} onChange={(e) => setText(e.target.value)} />
-          <SubmitButton phase={send.phase} className="primary">
+          <SubmitButton phase={send.phase} tone="primary">
             Send
           </SubmitButton>
         </form>
@@ -458,7 +462,8 @@ export function EscalationCard({
       {onDismiss && (
         <div className="esc-dismiss">
           <AsyncButton
-            className="ghost small"
+            ghost
+            size="small"
             title={DISMISS_HINT[decidable ? 'proposal' : permission ? 'permission' : 'question']}
             onClick={() => onDismiss(escalation.id, text.trim() || undefined)}
           >
@@ -476,7 +481,7 @@ export function EscalationCard({
           onSend={onAnswerQuestions}
         />
       ) : null}
-    </div>
+    </Panel>
   );
 }
 

@@ -4,6 +4,7 @@ import { fmtTokens, fmtUsd, relAge, relTime } from './util.js';
 import { fmtShare, localPhaseCostUsd, share, PLOT } from './insightsFormat.js';
 import { Ref } from './refs.js';
 import { toCsv } from './Downloads.js';
+import { Label } from './label.js';
 
 /**
  * Economics: is the fleet worth what it costs?
@@ -98,7 +99,7 @@ function Ratio({ insights }: { insights: SpendInsights }): JSX.Element {
   return (
     <div className="sp-tiles sp-ratio">
       <div className="sp-tile sp-well">
-        <span className="lb">Spent</span>
+        <Label dense>Spent</Label>
         <span className="vl">{fmtUsd(totals.costUsd)}</span>
         <span className="sb">
           {totals.measuredRuns} run{totals.measuredRuns === 1 ? '' : 's'} measured
@@ -108,7 +109,7 @@ function Ratio({ insights }: { insights: SpendInsights }): JSX.Element {
         ÷
       </div>
       <div className="sp-tile sp-well">
-        <span className="lb">Landed</span>
+        <Label dense>Landed</Label>
         <span className="vl">{landed}</span>
         <span className="sb">pull requests merged in this window</span>
       </div>
@@ -116,14 +117,14 @@ function Ratio({ insights }: { insights: SpendInsights }): JSX.Element {
         =
       </div>
       <div className="sp-tile sp-well sp-key">
-        <span className="lb">Per landed change</span>
+        <Label dense>Per landed change</Label>
         <span className="vl">{perLanded === null ? '—' : fmtUsd(perLanded)}</span>
         <span className="sb">
           {perLanded === null ? 'nothing landed in this window' : 'what one merged change cost the fleet'}
         </span>
       </div>
       <div className="sp-tile sp-well sp-leak">
-        <span className="lb">Never landed</span>
+        <Label dense>Never landed</Label>
         <span className="vl">{fmtUsd(lostCostUsd)}</span>
         <span className="sb">
           {fmtShare(lostCostUsd, totals.costUsd)} of it — runs that failed or crashed. A killed run is a steer and is
@@ -131,7 +132,7 @@ function Ratio({ insights }: { insights: SpendInsights }): JSX.Element {
         </span>
       </div>
       <div className="sp-tile sp-well">
-        <span className="lb">Tokens</span>
+        <Label dense>Tokens</Label>
         <span className="vl">
           {fmtTokens(totals.inputTokens)}
           <small>→</small>

@@ -13,6 +13,7 @@ import { fmtDuration, fmtRate, fmtShare, share, PLOT } from './insightsFormat.js
 import { causeRows } from './CausesTab.js';
 import { toCsv } from './Downloads.js';
 import { Ref } from './refs.js';
+import { Label } from './label.js';
 
 /**
  * Reliability: did the work finish, and did it go green?
@@ -201,7 +202,7 @@ function Tiles({ insights }: { insights: ReliabilityInsights }): JSX.Element {
   return (
     <div className="sp-tiles">
       <div className="sp-tile sp-well">
-        <span className="lb">Runs finished</span>
+        <Label dense>Runs finished</Label>
         <span className="vl">{fmtRate(runs.completionRate)}</span>
         <span className="sb">
           {runs.completed} of {runs.settled} settled
@@ -209,7 +210,7 @@ function Tiles({ insights }: { insights: ReliabilityInsights }): JSX.Element {
         </span>
       </div>
       <div className="sp-tile sp-well">
-        <span className="lb">Lost to faults</span>
+        <Label dense>Lost to faults</Label>
         <span className="vl">{fmtUsd(runs.lostCostUsd)}</span>
         <span className="sb">
           {runs.lost} run{runs.lost === 1 ? '' : 's'} failed or crashed
@@ -217,7 +218,7 @@ function Tiles({ insights }: { insights: ReliabilityInsights }): JSX.Element {
         </span>
       </div>
       <div className="sp-tile sp-well">
-        <span className="lb">CI went red</span>
+        <Label dense>CI went red</Label>
         <span className="vl">{fmtRate(ci.redRate)}</span>
         <span className="sb">
           {ci.redRate === null
@@ -226,7 +227,7 @@ function Tiles({ insights }: { insights: ReliabilityInsights }): JSX.Element {
         </span>
       </div>
       <div className="sp-tile sp-well">
-        <span className="lb">Back to green</span>
+        <Label dense>Back to green</Label>
         <span className="vl">{fmtDuration(ci.medianToGreenMs)}</span>
         <span className="sb">
           {ci.recoveries === 0
@@ -241,7 +242,7 @@ function Tiles({ insights }: { insights: ReliabilityInsights }): JSX.Element {
           arrives in — and the per-red figure beside it is the one an operator can
           multiply by the reds they expect next week. */}
       <div className="sp-tile sp-well">
-        <span className="lb">Red checks cost</span>
+        <Label dense>Red checks cost</Label>
         <span className="vl">{fmtUsd(ci.ciCostUsd)}</span>
         <span className="sb">
           {ci.reds === 0

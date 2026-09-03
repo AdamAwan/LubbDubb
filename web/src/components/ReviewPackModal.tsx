@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReviewAttention, ReviewMark, ReviewPackSharing, ScratchEntryView } from '../types.js';
 import { api, type ReviewPackReading } from '../api.js';
 import { AsyncButton } from './AsyncButton.js';
+import { Modal } from './Modal.js';
 import { Ref } from './refs.js';
 import { ReviewPackPage } from './ReviewPackPage.js';
 
@@ -167,50 +168,49 @@ export function ReviewPackModal({
   );
 
   return (
-    <div className="plan-modal-backdrop" onClick={onClose}>
-      <div className="plan-modal rp-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="pm-head">
-          <span className="pm-title">Review pack</span>
-          <span className="cn-refs">
-            <Ref to={`pr:${prNumber}`} />
-          </span>
-          <button className="btn ghost small pm-close" onClick={onClose}>
-            close
-          </button>
-        </div>
-        {reading === 'loading' && <p className="empty">Loading the pack…</p>}
-        {reading === 'failed' && <p className="empty">Could not load the pack. The harness may be unreachable.</p>}
-        {reading !== 'loading' && reading !== 'failed' && reading.kind === 'none' && (
-          <NoPack
-            prNumber={prNumber}
-            writing={reading.writing}
-            onAsk={ask}
-            refused={askRefusal}
-            onRefused={setAskRefusal}
-          />
-        )}
-        {reading !== 'loading' && reading !== 'failed' && reading.kind === 'pack' && (
-          <ReviewPackPage
-            payload={reading.payload}
-            marks={marks ?? reading.payload.marks}
-            entries={entries}
-            openIdea={openIdea}
-            onOpenIdea={onOpenIdea}
-            onRead={onRead}
-            onSeen={onSeen}
-            onAttention={onAttention}
-            onAsk={ask}
-            onShare={share}
-            onUnshare={unshare}
-            shareRefusal={shareRefusal}
-            onShareRefused={setShareRefusal}
-            askRefusal={askRefusal}
-            onAskRefused={setAskRefusal}
-            refUrls={refUrls}
-          />
-        )}
-      </div>
-    </div>
+    <Modal
+      face="modal"
+      className="rp-modal"
+      title="Review pack"
+      chips={
+        <span className="cn-refs">
+          <Ref to={`pr:${prNumber}`} />
+        </span>
+      }
+      onClose={onClose}
+    >
+      {reading === 'loading' && <p className="empty">Loading the pack…</p>}
+      {reading === 'failed' && <p className="empty">Could not load the pack. The harness may be unreachable.</p>}
+      {reading !== 'loading' && reading !== 'failed' && reading.kind === 'none' && (
+        <NoPack
+          prNumber={prNumber}
+          writing={reading.writing}
+          onAsk={ask}
+          refused={askRefusal}
+          onRefused={setAskRefusal}
+        />
+      )}
+      {reading !== 'loading' && reading !== 'failed' && reading.kind === 'pack' && (
+        <ReviewPackPage
+          payload={reading.payload}
+          marks={marks ?? reading.payload.marks}
+          entries={entries}
+          openIdea={openIdea}
+          onOpenIdea={onOpenIdea}
+          onRead={onRead}
+          onSeen={onSeen}
+          onAttention={onAttention}
+          onAsk={ask}
+          onShare={share}
+          onUnshare={unshare}
+          shareRefusal={shareRefusal}
+          onShareRefused={setShareRefusal}
+          askRefusal={askRefusal}
+          onAskRefused={setAskRefusal}
+          refUrls={refUrls}
+        />
+      )}
+    </Modal>
   );
 }
 
@@ -255,7 +255,7 @@ function NoPack({
         Nobody has asked for a pack on #{prNumber}. Asking spends two agent runs — an author and a checker — and the
         pack arrives here when the first has finished.
       </p>
-      <AsyncButton className="primary small" onClick={onAsk} onRefused={onRefused} pendingLabel="asking…">
+      <AsyncButton tone="primary" size="small" onClick={onAsk} onRefused={onRefused} pendingLabel="asking…">
         Ask for a review pack
       </AsyncButton>
       {refused !== null && <p className="rp-refusal">{refused}</p>}

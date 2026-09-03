@@ -4,6 +4,7 @@ import { AsyncButton } from './AsyncButton.js';
 import { petLabel, speciesKnown } from '../pets/reveal.js';
 import { PetSprite } from './PetSprite.js';
 import { relTime } from './util.js';
+import { Panel } from './panel.js';
 
 /**
  * The vivarium, whole.
@@ -124,7 +125,7 @@ function PetCard({
   // says so first, because a button that always refuses is worse than no button.
   const flawed = pet.flaw !== null;
   return (
-    <div className={`pet-card${dissolved ? ' is-dissolved' : ''}${flawed ? ' is-flawed' : ''}`}>
+    <Panel density="padded" className={`pet-card${dissolved ? ' is-dissolved' : ''}${flawed ? ' is-flawed' : ''}`}>
       <div className="pet-frame">
         <PetSprite pet={pet} size={84} beatMs={2400} />
       </div>
@@ -208,7 +209,8 @@ function PetCard({
               Open it
             </button>
             <AsyncButton
-              className="ghost small"
+              ghost
+              size="small"
               disabled={full}
               title={full ? `The vivarium holds ${slots} — take one out first` : undefined}
               onClick={() => onPlace(pet.id, !pet.placed)}
@@ -218,14 +220,15 @@ function PetCard({
           </>
         ) : dissolved || flawed ? null : (
           <>
-            <AsyncButton className="ghost small" disabled={balance < 100} onClick={() => onFeed(pet.id, 100)}>
+            <AsyncButton ghost size="small" disabled={balance < 100} onClick={() => onFeed(pet.id, 100)}>
               Feed 100
             </AsyncButton>
-            <AsyncButton className="ghost small" disabled={toNext <= 0} onClick={() => onFeed(pet.id, toNext)}>
+            <AsyncButton ghost size="small" disabled={toNext <= 0} onClick={() => onFeed(pet.id, toNext)}>
               {pet.beatsToNextStage === null ? 'Grown' : `Feed ${toNext.toLocaleString()}`}
             </AsyncButton>
             <AsyncButton
-              className="ghost small"
+              ghost
+              size="small"
               disabled={full}
               title={full ? `The vivarium holds ${slots} — take one out first` : undefined}
               onClick={() => onPlace(pet.id, !pet.placed)}
@@ -233,7 +236,8 @@ function PetCard({
               {pet.placed ? 'Take out' : 'Put out'}
             </AsyncButton>
             <AsyncButton
-              className="ghost small"
+              ghost
+              size="small"
               disabled={!duplicate}
               title={
                 duplicate
@@ -249,7 +253,7 @@ function PetCard({
           </>
         )}
       </div>
-    </div>
+    </Panel>
   );
 }
 

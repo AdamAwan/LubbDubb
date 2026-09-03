@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import type { ConfigChange, RunningConfigPayload } from '../types.js';
 import type { Staged } from './ConfigValues.js';
+import { Panel } from './panel.js';
+import { Button } from './button.js';
 
 /**
  * What the write will do to the file, before it does it.
@@ -63,9 +65,9 @@ export function ReviewWrite({
           </span>
         </div>
         <div className="cfg-headacts">
-          <button className="btn ghost small" onClick={onCancel}>
+          <Button ghost size="small" onClick={onCancel}>
             Back to values
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -73,7 +75,7 @@ export function ReviewWrite({
 
       {preview && (
         <div className="cfg-diff">
-          <section className="cfg-card">
+          <Panel density="flush" className="cfg-card">
             <h3>
               {payload.file}
               <span className="cfg-more">{countChanged(payload.text, preview.text)} lines changed</span>
@@ -90,9 +92,9 @@ export function ReviewWrite({
               Rewritten in place: key order and the <code>&quot;//&quot;</code> doc keys the file already carries are
               kept, and no key this page did not touch is re-serialised.
             </p>
-          </section>
+          </Panel>
 
-          <section className="cfg-card">
+          <Panel density="flush" className="cfg-card">
             <h3>What it does</h3>
             {preview.changes.map((change) => (
               <div className="cfg-eff" key={change.path}>
@@ -127,14 +129,14 @@ export function ReviewWrite({
               <span className="cfg-src ok">kept</span>
             </div>
             <div className="cfg-foot cfg-footacts">
-              <button className="btn ghost small" onClick={onCancel}>
+              <Button ghost size="small" onClick={onCancel}>
                 Cancel
-              </button>
-              <button className="btn primary small" disabled={busy} onClick={() => void write()}>
+              </Button>
+              <Button tone="primary" size="small" disabled={busy} onClick={() => void write()}>
                 {busy ? 'Writing…' : 'Write'}
-              </button>
+              </Button>
             </div>
-          </section>
+          </Panel>
         </div>
       )}
     </div>

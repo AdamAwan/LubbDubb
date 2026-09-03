@@ -4,6 +4,8 @@ import { AsyncButton } from './AsyncButton.js';
 import { ConfirmButton } from './ConfirmButton.js';
 import { expectation, WatchReadingLine } from './WatchDigest.js';
 import { renderMarkdown } from './markdown.js';
+import { HeadRow } from './panel.js';
+import { Button } from './button.js';
 
 /**
  * The goal's declared checks, on the goal's own page, with the controls that
@@ -72,22 +74,18 @@ export function SignalsSection({
         <CheckForm kind={open} taken={taken} onSave={onSave} onClose={() => setOpen(null)} onDelete={null} />
       )}
       <div className="cn-sig-add">
-        <button
-          type="button"
-          className="cn-btn"
+        <Button
           onClick={() => setOpen('signal')}
           title="Something that should not be happening: an exception, a failure, a retry. Needs a second query proving the code path runs."
         >
           Add a signal
-        </button>
-        <button
-          type="button"
-          className="cn-btn"
+        </Button>
+        <Button
           onClick={() => setOpen('measure')}
           title="One number: a percentile, a rate, a duration. Needs a threshold, or the baseline it is compared against."
         >
           Add a measure
-        </button>
+        </Button>
         <span className="cn-sub">
           Saving puts the query to an environment once, with your credential — which is why it is asked.
         </span>
@@ -118,7 +116,7 @@ function SignalRow({
     <div className={`cn-sig-row ${tone}`}>
       <span className="cn-sig-stripe" />
       <div className="cn-sig-body">
-        <div className="cn-sig-head">
+        <HeadRow className="cn-sig-head">
           <b className="cn-name">{check.title}</b>
           <i className="cn-chip">{check.kind}</i>
           <i className="cn-chip cn-lower" title="The author’s own id, and the merge key every writer folds on">
@@ -134,7 +132,7 @@ function SignalRow({
               awaiting you
             </i>
           )}
-        </div>
+        </HeadRow>
         <p className="cn-sig-expect">{expectation(check)}</p>
         <pre className="cn-sig-query">{check.query}</pre>
         {check.presence !== null && (
@@ -154,26 +152,19 @@ function SignalRow({
       </div>
       <div className="cn-sig-ctrls">
         {check.live ? (
-          <button type="button" className="cn-btn" onClick={onEdit}>
-            Edit
-          </button>
+          <Button onClick={onEdit}>Edit</Button>
         ) : (
-          <AsyncButton className="cn-btn" onClick={() => onRule(check.id, true)}>
-            Accept &amp; run
-          </AsyncButton>
+          <AsyncButton onClick={() => onRule(check.id, true)}>Accept &amp; run</AsyncButton>
         )}
         {check.live ? (
           <ConfirmButton
-            className="cn-btn cn-danger"
             label="Delete"
             confirmLabel="Delete it"
             title="Drop this check and the readings taken against it. A check the plan declares comes back on the next replan."
             onConfirm={onDelete}
           />
         ) : (
-          <AsyncButton className="cn-btn" onClick={() => onRule(check.id, false)}>
-            Decline
-          </AsyncButton>
+          <AsyncButton onClick={() => onRule(check.id, false)}>Decline</AsyncButton>
         )}
       </div>
     </div>
@@ -396,7 +387,7 @@ function CheckForm({
         ))}
         <div className="cn-sig-ctrls">
           <AsyncButton
-            className="cn-btn cn-primary"
+            tone="primary"
             disabled={refusal !== null}
             onClick={async () => {
               const said = await onSave(declaration(draft));
@@ -409,16 +400,9 @@ function CheckForm({
           >
             Save &amp; run
           </AsyncButton>
-          <button type="button" className="cn-btn" onClick={onClose}>
-            Cancel
-          </button>
+          <Button onClick={onClose}>Cancel</Button>
           {onDelete !== null && (
-            <ConfirmButton
-              className="cn-btn cn-danger cn-sig-spacer"
-              label="Delete"
-              confirmLabel="Delete it"
-              onConfirm={onDelete}
-            />
+            <ConfirmButton className="cn-sig-spacer" label="Delete" confirmLabel="Delete it" onConfirm={onDelete} />
           )}
         </div>
       </div>

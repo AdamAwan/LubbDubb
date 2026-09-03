@@ -1,4 +1,6 @@
 import type { JSX } from 'react';
+import { Label } from './label.js';
+import { Button } from './button.js';
 
 /**
  * Taking a reading off the glass.
@@ -144,22 +146,22 @@ export function Downloads({
 }): JSX.Element {
   return (
     <div className="dl">
-      <span className="dl-lb">Export</span>
+      <Label>Export</Label>
       {files.map((f) => (
-        <button
+        <Button
           key={f.format}
-          type="button"
-          className="btn ghost small"
+          ghost
+          size="small"
           title={f.title}
           onClick={() => save(`${name}-${stamp(new Date())}.${f.format}`, f.format, f.build())}
         >
           .{f.format}
-        </button>
+        </Button>
       ))}
       {sheet && (
-        <button
-          type="button"
-          className="btn ghost small"
+        <Button
+          ghost
+          size="small"
           title={sheet.title}
           onClick={() => {
             const node = sheet.node();
@@ -167,7 +169,7 @@ export function Downloads({
           }}
         >
           .pdf
-        </button>
+        </Button>
       )}
     </div>
   );

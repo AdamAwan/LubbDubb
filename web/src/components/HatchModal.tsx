@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PetView } from '../types.js';
+import { Modal } from './Modal.js';
 import { PetSprite } from './PetSprite.js';
+import { Button } from './button.js';
 
 /**
  * The shell coming off, over the surface the operator was already looking at.
@@ -74,14 +76,6 @@ export function HatchModal({
     return () => timers.forEach(clearTimeout);
   }, []);
 
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
   // **The animation decides what is drawn, never the snapshot.** The write above
   // stamps `openedAt` and broadcasts, so the live pet turns into a hatchling on
   // whatever pulse the socket delivers — which is usually somewhere around the
@@ -96,46 +90,36 @@ export function HatchModal({
   const shown: PetView = { ...pet, openedAt: out ? (pet.openedAt ?? new Date().toISOString()) : null };
 
   return (
-    <div className="cn-backdrop" onClick={onClose}>
-      <div
-        className="cn-hatch"
-        role="dialog"
-        aria-modal="true"
-        aria-label={out ? `a ${pet.rarity} hatchling` : 'an egg, hatching'}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className={`cn-hatch-floor${phase === 'flash' ? ' is-flash' : ''}`}>
-          {/* Keyed on the rock count so each one restarts the animation: a class
+    <Modal face="hatch" label={out ? `a ${pet.rarity} hatchling` : 'an egg, hatching'} onClose={onClose}>
+      <div className={`cn-hatch-floor${phase === 'flash' ? ' is-flash' : ''}`}>
+        {/* Keyed on the rock count so each one restarts the animation: a class
               re-applied to the same element does not replay it, which is the bug
               where the egg lurches once and then sits there cracking silently. */}
-          <span key={`${phase}-${rocks}`} className={out ? 'cn-hatch-pet is-out' : 'cn-hatch-pet is-rocking'}>
-            <PetSprite pet={shown} size={out ? 128 : 112} beatMs={0} rocks={rocks} />
-          </span>
-        </div>
-        <div className="cn-hatch-say" aria-live="polite">
-          {out ? (
-            <>
-              <b>
-                A {pet.rarity} {shown.stage}.
-              </b>
-              <p>
-                {/* The tier, and not the species: one hatchling grid serves every
+        <span key={`${phase}-${rocks}`} className={out ? 'cn-hatch-pet is-out' : 'cn-hatch-pet is-rocking'}>
+          <PetSprite pet={shown} size={out ? 128 : 112} beatMs={0} rocks={rocks} />
+        </span>
+      </div>
+      <div className="cn-hatch-say" aria-live="polite">
+        {out ? (
+          <>
+            <b>
+              A {pet.rarity} {shown.stage}.
+            </b>
+            <p>
+              {/* The tier, and not the species: one hatchling grid serves every
                     animal of a tier, and which one it is arrives at the juvenile
                     stage. The wait is the point — see the spec. */}
-                Feed it to find out what it is.
-              </p>
-            </>
-          ) : (
-            <>
-              <b>Something is moving.</b>
-              <p>&nbsp;</p>
-            </>
-          )}
-        </div>
-        <button type="button" className="cn-btn" onClick={onClose}>
-          {out ? 'Done' : 'Skip'}
-        </button>
+              Feed it to find out what it is.
+            </p>
+          </>
+        ) : (
+          <>
+            <b>Something is moving.</b>
+            <p>&nbsp;</p>
+          </>
+        )}
       </div>
-    </div>
+      <Button onClick={onClose}>{out ? 'Done' : 'Skip'}</Button>
+    </Modal>
   );
 }

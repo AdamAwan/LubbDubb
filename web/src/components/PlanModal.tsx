@@ -27,7 +27,10 @@ import { ProfilePicker } from './ProfilePicker.js';
 import { ValidationDigest } from './ValidationSection.js';
 import { WatchDigest } from './WatchDigest.js';
 import { partOriginOf, planIssueOf, refLink, relTime } from './util.js';
+import { Modal } from './Modal.js';
 import { Ref } from './refs.js';
+import { HeadRow } from './panel.js';
+import { buttonClass } from './button.js';
 
 /**
  * The plan sheet — the whole plan, in one scroll, as the record of what was agreed.
@@ -226,14 +229,15 @@ export function PlanModal({
   };
 
   return (
-    <div className="plan-modal-backdrop" onClick={onClose}>
-      <div className="plan-sheet" onClick={(e) => e.stopPropagation()}>
-        <div className="pm-head">
-          {/* The goal the plan hangs off, as the way onto its page: the sheet is
-              opened from several surfaces and is the one place a plan is read, so
-              a number here that led nowhere was the longest way back. */}
-          <Ref to={plan.originRef} />
-          <span className="pm-title">{plan.title}</span>
+    <Modal
+      face="sheet"
+      title={plan.title}
+      /* The goal the plan hangs off, as the way onto its page: the sheet is
+         opened from several surfaces and is the one place a plan is read, so a
+         number here that led nowhere was the longest way back. */
+      lead={<Ref to={plan.originRef} />}
+      chips={
+        <>
           <span className={`chip small${plan.status === 'complete' ? ' ok' : decidable ? ' warn' : ''}`}>
             {plan.status.replace(/_/g, ' ')}
           </span>
@@ -247,384 +251,336 @@ export function PlanModal({
           {plan.statusCommentRef !== null && (
             <span className="chip small">{refLink(plan.statusCommentRef, refUrls)}</span>
           )}
-          <button className="btn ghost small pm-close" onClick={onClose}>
-            close
+        </>
+      }
+      onClose={onClose}
+    >
+      <div className="pm-rail">
+        <button className="pm-jump" onClick={() => jump('verdict')}>
+          Verdict
+        </button>
+        {live.length > 0 && (
+          <button className="pm-jump" onClick={() => jump('shape')}>
+            The shape
           </button>
-        </div>
-
-        <div className="pm-rail">
-          <button className="pm-jump" onClick={() => jump('verdict')}>
-            Verdict
-          </button>
-          {live.length > 0 && (
-            <button className="pm-jump" onClick={() => jump('shape')}>
-              The shape
-            </button>
-          )}
-          <button className="pm-jump" onClick={() => jump('parts')}>
-            Parts <i className="k">{live.length > 0 ? live.length : 'one PR'}</i>
-          </button>
-          <button className="pm-jump" onClick={() => jump('validation')}>
-            Validation <i className="k">{liveChecks.length > 0 ? `${settledChecks}/${liveChecks.length}` : 'none'}</i>
-          </button>
-          <button className="pm-jump" onClick={() => jump('caveats')}>
-            Caveats
-          </button>
-          <button className="pm-jump" onClick={() => jump('writeup')}>
-            Write-up
-          </button>
-          <span className="spacer" />
-          {/* A view, not a jump — a different document, so it reads as a different
+        )}
+        <button className="pm-jump" onClick={() => jump('parts')}>
+          Parts <i className="k">{live.length > 0 ? live.length : 'one PR'}</i>
+        </button>
+        <button className="pm-jump" onClick={() => jump('validation')}>
+          Validation <i className="k">{liveChecks.length > 0 ? `${settledChecks}/${liveChecks.length}` : 'none'}</i>
+        </button>
+        <button className="pm-jump" onClick={() => jump('caveats')}>
+          Caveats
+        </button>
+        <button className="pm-jump" onClick={() => jump('writeup')}>
+          Write-up
+        </button>
+        <span className="spacer" />
+        {/* A view, not a jump — a different document, so it reads as a different
               control. Absent until there is a second revision to be a change from,
               or a change waiting on the operator to be asked about. */}
-          {history !== null && (history.revisions.length > 1 || history.pending !== null) && (
-            <button
-              className={`pm-jump history${view === 'history' ? ' on' : ''}${history.pending ? ' waiting' : ''}`}
-              onClick={() => setView(view === 'history' ? 'plan' : 'history')}
-            >
-              {/* A change waiting on the operator outranks the history it would
+        {history !== null && (history.revisions.length > 1 || history.pending !== null) && (
+          <button
+            className={`pm-jump history${view === 'history' ? ' on' : ''}${history.pending ? ' waiting' : ''}`}
+            onClick={() => setView(view === 'history' ? 'plan' : 'history')}
+          >
+            {/* A change waiting on the operator outranks the history it would
                   become: it is the one thing on this sheet that is asking them
                   something, and it is why the control is offered at all on a plan
                   with a single revision. */}
-              {history.pending ? 'Change waiting' : history.diff === null ? 'History' : 'What changed'}{' '}
-              <i className="k">v{history.revisions.length}</i>
-            </button>
-          )}
-        </div>
+            {history.pending ? 'Change waiting' : history.diff === null ? 'History' : 'What changed'}{' '}
+            <i className="k">v{history.revisions.length}</i>
+          </button>
+        )}
+      </div>
 
-        <div className="pm-body" ref={body}>
-          {view === 'history' ? (
-            <HistoryView history={history} now={now} />
-          ) : (
-            <>
-              <section
-                ref={(el) => {
-                  sections.current.verdict = el;
-                }}
-                className="pm-verdict"
-              >
-                {plan.diagnosis && (
-                  <div className="pm-vcell wrong">
-                    <span className="pm-section-label">What&rsquo;s wrong</span>
-                    <div className="pm-prose">{renderMarkdown(plan.diagnosis, refUrls)}</div>
-                    {plan.evidence.length > 0 && <Evidence evidence={plan.evidence} />}
-                  </div>
-                )}
-                {headline && (
-                  <div className="pm-vcell do">
-                    {/* On a plan that predates both fields this is `reason`, under the
+      <div className="pm-body" ref={body}>
+        {view === 'history' ? (
+          <HistoryView history={history} now={now} />
+        ) : (
+          <>
+            <section
+              ref={(el) => {
+                sections.current.verdict = el;
+              }}
+              className="pm-verdict"
+            >
+              {plan.diagnosis && (
+                <div className="pm-vcell wrong">
+                  <span className="pm-section-label">What&rsquo;s wrong</span>
+                  <div className="pm-prose">{renderMarkdown(plan.diagnosis, refUrls)}</div>
+                  {plan.evidence.length > 0 && <Evidence evidence={plan.evidence} />}
+                </div>
+              )}
+              {headline && (
+                <div className="pm-vcell do">
+                  {/* On a plan that predates both fields this is `reason`, under the
                         label `reason` used to carry. The fallback is the whole reason
                         the fields are separate rather than one retargeted `reason`:
                         stored plans keep meaning what they meant when they were
                         written, and read back under a heading that is true of them. */}
-                    <span className="pm-section-label">
-                      {plan.approach ? 'What we’ll do' : live.length > 0 ? 'Why the planner split it' : 'The approach'}
-                    </span>
-                    <div className="pm-prose">{renderMarkdown(headline, refUrls)}</div>
-                    {plan.verification && (
-                      <div className="pm-verify">
-                        <b>How we&rsquo;ll know it worked</b>
-                        {renderMarkdown(plan.verification, refUrls)}
-                      </div>
-                    )}
-                  </div>
-                )}
-                {/* Evidence with no diagnosis to sit under still belongs on the
+                  <span className="pm-section-label">
+                    {plan.approach ? 'What we’ll do' : live.length > 0 ? 'Why the planner split it' : 'The approach'}
+                  </span>
+                  <div className="pm-prose">{renderMarkdown(headline, refUrls)}</div>
+                  {plan.verification && (
+                    <div className="pm-verify">
+                      <b>How we&rsquo;ll know it worked</b>
+                      {renderMarkdown(plan.verification, refUrls)}
+                    </div>
+                  )}
+                </div>
+              )}
+              {/* Evidence with no diagnosis to sit under still belongs on the
                     sheet: it is what the planner read, and hiding it would lose the
                     only checkable thing on a plan whose author skipped the field. */}
-                {!plan.diagnosis && plan.evidence.length > 0 && (
-                  <div className="pm-vcell wrong">
-                    <span className="pm-section-label">What the planner read</span>
-                    <Evidence evidence={plan.evidence} />
-                  </div>
-                )}
-              </section>
+              {!plan.diagnosis && plan.evidence.length > 0 && (
+                <div className="pm-vcell wrong">
+                  <span className="pm-section-label">What the planner read</span>
+                  <Evidence evidence={plan.evidence} />
+                </div>
+              )}
+            </section>
 
-              {live.length > 1 && (
-                <section
-                  ref={(el) => {
-                    sections.current.shape = el;
-                  }}
-                >
-                  <span className="pm-section-label">The shape</span>
-                  {/* Normal case, under the label rather than inside it: `reason` is
+            {live.length > 1 && (
+              <section
+                ref={(el) => {
+                  sections.current.shape = el;
+                }}
+              >
+                <span className="pm-section-label">The shape</span>
+                {/* Normal case, under the label rather than inside it: `reason` is
                       a sentence, and a sentence set in the label's letter-spaced
                       uppercase is a sentence nobody reads. */}
-                  {shapeNote !== null && <div className="pm-shape">Split this way because: {shapeNote}</div>}
-                  <PlanMap parts={live} queued={queued} originOf={originOf} selected={focused} onSelect={focusPart} />
-                </section>
-              )}
+                {shapeNote !== null && <div className="pm-shape">Split this way because: {shapeNote}</div>}
+                <PlanMap parts={live} queued={queued} originOf={originOf} selected={focused} onSelect={focusPart} />
+              </section>
+            )}
 
-              <section
-                ref={(el) => {
-                  sections.current.parts = el;
-                }}
-              >
-                {live.length === 0 ? (
-                  <p className="empty">
-                    {/* Every plan declares at least one part, so the only plan with
+            <section
+              ref={(el) => {
+                sections.current.parts = el;
+              }}
+            >
+              {live.length === 0 ? (
+                <p className="empty">
+                  {/* Every plan declares at least one part, so the only plan with
                         none is one still being written — or one whose every part an
                         amendment retired. */}
-                    {plan.status === 'planning' ? 'No parts declared yet.' : 'Every part of this plan was retired.'}
-                  </p>
-                ) : (
-                  <>
-                    <span className="pm-section-label">
-                      {live.length} part{live.length === 1 ? '' : 's'}, in dispatch order
-                      {shapeNote !== null ? ` — ${shapeNote}` : ''}
-                    </span>
-                    {live.map((part, idx) => (
-                      <div
-                        key={part.id}
-                        ref={(el) => {
-                          sections.current[`part:${part.slug}`] = el;
-                        }}
-                      >
-                        {idx === cutAt && (
-                          <div className="pm-cut">
-                            <span>
-                              {decidable ? 'nothing below is scheduled until you approve' : 'not started this cycle'}
-                            </span>
-                          </div>
-                        )}
-                        <PartBlock
-                          part={part}
-                          seq={idx + 1}
-                          queue={queued.get(originOf(part.slug))}
-                          focused={part.slug === focused}
-                          pin={pins[part.slug]}
-                          pinnable={decidable !== null}
-                          onPin={(pin) => setPins({ ...pins, [part.slug]: pin })}
-                          onAcceptance={(criterion, met) => onAcceptance(plan.id, part.slug, criterion, met)}
-                          onPartProfile={(profile) => onPartProfile(plan.id, part.slug, profile)}
-                          onRestart={canClosePr ? () => onRestartPart(plan.id, part.slug) : undefined}
-                          profiles={profiles}
-                          defaultProfile={defaultProfile}
-                        />
-                      </div>
-                    ))}
-                  </>
-                )}
-              </section>
+                  {plan.status === 'planning' ? 'No parts declared yet.' : 'Every part of this plan was retired.'}
+                </p>
+              ) : (
+                <>
+                  <span className="pm-section-label">
+                    {live.length} part{live.length === 1 ? '' : 's'}, in dispatch order
+                    {shapeNote !== null ? ` — ${shapeNote}` : ''}
+                  </span>
+                  {live.map((part, idx) => (
+                    <div
+                      key={part.id}
+                      ref={(el) => {
+                        sections.current[`part:${part.slug}`] = el;
+                      }}
+                    >
+                      {idx === cutAt && (
+                        <div className="pm-cut">
+                          <span>
+                            {decidable ? 'nothing below is scheduled until you approve' : 'not started this cycle'}
+                          </span>
+                        </div>
+                      )}
+                      <PartBlock
+                        part={part}
+                        seq={idx + 1}
+                        queue={queued.get(originOf(part.slug))}
+                        focused={part.slug === focused}
+                        pin={pins[part.slug]}
+                        pinnable={decidable !== null}
+                        onPin={(pin) => setPins({ ...pins, [part.slug]: pin })}
+                        onAcceptance={(criterion, met) => onAcceptance(plan.id, part.slug, criterion, met)}
+                        onPartProfile={(profile) => onPartProfile(plan.id, part.slug, profile)}
+                        onRestart={canClosePr ? () => onRestartPart(plan.id, part.slug) : undefined}
+                        profiles={profiles}
+                        defaultProfile={defaultProfile}
+                      />
+                    </div>
+                  ))}
+                </>
+              )}
+            </section>
 
-              <section
-                ref={(el) => {
-                  sections.current.validation = el;
-                }}
-              >
-                {/* Read-only, because the sheet defines the checks and the goal
+            <section
+              ref={(el) => {
+                sections.current.validation = el;
+              }}
+            >
+              {/* Read-only, because the sheet defines the checks and the goal
                     page runs them. A plan under review still has to show what it
                     proposes to check — that is part of judging it — but a reading
                     is recorded against the *goal*, and offering the verbs in two
                     places is two wirings of one set of refusals. */}
-                <ValidationDigest
-                  checks={checks}
-                  refUrls={refUrls}
-                  onOpenGoal={
-                    issueNumber === null
-                      ? null
-                      : () => {
-                          onOpenGoal(`issue:${issueNumber}`);
-                          onClose();
-                        }
-                  }
-                />
-              </section>
+              <ValidationDigest
+                checks={checks}
+                refUrls={refUrls}
+                onOpenGoal={
+                  issueNumber === null
+                    ? null
+                    : () => {
+                        onOpenGoal(`issue:${issueNumber}`);
+                        onClose();
+                      }
+                }
+              />
+            </section>
 
-              <section
-                ref={(el) => {
-                  sections.current.watch = el;
-                }}
-              >
-                {/* Read-only for {@link ValidationDigest}'s reason, and below it
+            <section
+              ref={(el) => {
+                sections.current.watch = el;
+              }}
+            >
+              {/* Read-only for {@link ValidationDigest}'s reason, and below it
                     deliberately: validation asks whether the goal was met, and this
                     asks whether the thing is behaving once it is there — the later
                     question, drawn later. Nothing renders where nothing was
                     declared. */}
-                <WatchDigest
-                  watches={watches}
-                  refUrls={refUrls}
-                  // Null where the sheet cannot name the goal: the ruling is keyed
-                  // on the issue, and a control that could not say which goal it
-                  // was accepting for would be a button with no destination.
-                  onRule={
-                    issueNumber === null
-                      ? null
-                      : (checkId, accept) => void onWatchProposal(issueNumber, checkId, accept)
-                  }
-                />
-              </section>
+              <WatchDigest
+                watches={watches}
+                refUrls={refUrls}
+                // Null where the sheet cannot name the goal: the ruling is keyed
+                // on the issue, and a control that could not say which goal it
+                // was accepting for would be a button with no destination.
+                onRule={
+                  issueNumber === null ? null : (checkId, accept) => void onWatchProposal(issueNumber, checkId, accept)
+                }
+              />
+            </section>
 
-              <section
-                ref={(el) => {
-                  sections.current.caveats = el;
-                }}
-                className="pm-flags"
-              >
-                {/* Four, and the order is how much they bear on the decision in front
+            <section
+              ref={(el) => {
+                sections.current.caveats = el;
+              }}
+              className="pm-flags"
+            >
+              {/* Four, and the order is how much they bear on the decision in front
                     of you: what else we could have done, what we are unsure of, what
                     could go wrong, what we are not doing. */}
-                {plan.alternatives && (
-                  <Caveat kind="alt" label="Considered and rejected" body={plan.alternatives} refUrls={refUrls} />
-                )}
-                {plan.openQuestions && (
-                  <Caveat
-                    kind="open"
-                    label="Least sure about"
-                    body={plan.openQuestions}
-                    refUrls={refUrls}
-                    // Opened by default while a verdict is pending: it is the field
-                    // written for exactly this moment, and folded shut it is one more
-                    // thing that has to be clicked before it can change a mind.
-                    open={decidable !== null}
-                  />
-                )}
-                {plan.risks && <Caveat kind="risk" label="Risks" body={plan.risks} refUrls={refUrls} />}
-                {plan.outOfScope && (
-                  <Caveat kind="oos" label="Deliberately out of scope" body={plan.outOfScope} refUrls={refUrls} />
-                )}
-                {!plan.alternatives && !plan.openQuestions && !plan.risks && !plan.outOfScope && (
-                  <p className="empty">This planner recorded no caveats — no alternatives, risks or exclusions.</p>
-                )}
-              </section>
+              {plan.alternatives && (
+                <Caveat kind="alt" label="Considered and rejected" body={plan.alternatives} refUrls={refUrls} />
+              )}
+              {plan.openQuestions && (
+                <Caveat
+                  kind="open"
+                  label="Least sure about"
+                  body={plan.openQuestions}
+                  refUrls={refUrls}
+                  // Opened by default while a verdict is pending: it is the field
+                  // written for exactly this moment, and folded shut it is one more
+                  // thing that has to be clicked before it can change a mind.
+                  open={decidable !== null}
+                />
+              )}
+              {plan.risks && <Caveat kind="risk" label="Risks" body={plan.risks} refUrls={refUrls} />}
+              {plan.outOfScope && (
+                <Caveat kind="oos" label="Deliberately out of scope" body={plan.outOfScope} refUrls={refUrls} />
+              )}
+              {!plan.alternatives && !plan.openQuestions && !plan.risks && !plan.outOfScope && (
+                <p className="empty">This planner recorded no caveats — no alternatives, risks or exclusions.</p>
+              )}
+            </section>
 
-              <section
-                ref={(el) => {
-                  sections.current.writeup = el;
-                }}
-              >
-                <span className="pm-section-label">The full write-up</span>
-                {plan.document ? (
-                  <div className="pm-doc">{renderMarkdown(plan.document, refUrls)}</div>
-                ) : (
-                  // Said rather than hidden: an absent section reads as "the planner
-                  // had nothing to add", which is indistinguishable from "the planner
-                  // ignored the instruction" — and only one of those is your problem.
-                  <p className="empty">
-                    This planner wrote no write-up. Replan to ask again, or discuss it if you want the reasoning.
-                  </p>
-                )}
-              </section>
-            </>
-          )}
-        </div>
+            <section
+              ref={(el) => {
+                sections.current.writeup = el;
+              }}
+            >
+              <span className="pm-section-label">The full write-up</span>
+              {plan.document ? (
+                <div className="pm-doc">{renderMarkdown(plan.document, refUrls)}</div>
+              ) : (
+                // Said rather than hidden: an absent section reads as "the planner
+                // had nothing to add", which is indistinguishable from "the planner
+                // ignored the instruction" — and only one of those is your problem.
+                <p className="empty">
+                  This planner wrote no write-up. Replan to ask again, or discuss it if you want the reasoning.
+                </p>
+              )}
+            </section>
+          </>
+        )}
+      </div>
 
-        <div className="pm-foot">
+      <div className="pm-foot">
+        {decidable && (
+          <Decision
+            parts={live}
+            planning={planning}
+            spend={spend}
+            queued={queued}
+            originOf={originOf}
+            issueNumber={issueNumber}
+          />
+        )}
+        {decidable && <CaveatChecklist caveats={caveats} ticked={ack.ticked} onToggle={ack.toggle} refUrls={refUrls} />}
+        <PinList pins={pins} parts={live} onClear={(slug) => setPins(without(pins, slug))} />
+        <HeadRow className="pm-row">
           {decidable && (
-            <Decision
-              parts={live}
-              planning={planning}
-              spend={spend}
-              queued={queued}
-              originOf={originOf}
-              issueNumber={issueNumber}
+            <input
+              className="pm-note"
+              placeholder={
+                Object.keys(pins).length > 0
+                  ? 'Anything to add — your pinned parts are sent with this'
+                  : 'Why (optional) — recorded either way'
+              }
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
             />
           )}
           {decidable && (
-            <CaveatChecklist caveats={caveats} ticked={ack.ticked} onToggle={ack.toggle} refUrls={refUrls} />
-          )}
-          <PinList pins={pins} parts={live} onClear={(slug) => setPins(without(pins, slug))} />
-          <div className="pm-row">
-            {decidable && (
-              <input
-                className="pm-note"
-                placeholder={
-                  Object.keys(pins).length > 0
-                    ? 'Anything to add — your pinned parts are sent with this'
-                    : 'Why (optional) — recorded either way'
-                }
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-              />
-            )}
-            {decidable && (
-              <>
-                <AsyncButton
-                  className="ghost"
-                  title="Sends it back to the planner with your note. Parts nothing has started for are retired."
-                  onClick={() => onDecide(decidable.id, 'reject', composeNote(pins, live, note))}
-                >
-                  Reject — send it back to the planner
-                </AsyncButton>
-                {/* The two ways out that are not about the plan. A rejection asks a
+            <>
+              <AsyncButton
+                ghost
+                title="Sends it back to the planner with your note. Parts nothing has started for are retired."
+                onClick={() => onDecide(decidable.id, 'reject', composeNote(pins, live, note))}
+              >
+                Reject — send it back to the planner
+              </AsyncButton>
+              {/* The two ways out that are not about the plan. A rejection asks a
                     planner for a different plan, so it is the wrong "no" for a goal
                     that should not be worked at all — which is the reading this
                     panel, where the plan has actually been read, most often produces. */}
-                <AsyncButton
-                  className="ghost"
-                  // The note is posted on the tracker as the closing comment, so a
-                  // close with an empty box would shut somebody's ticket for a
-                  // reason nobody can read.
-                  disabled={note.trim().length === 0}
-                  title={
-                    note.trim().length === 0
-                      ? 'Say why in the box — your words go on the ticket as the closing comment'
-                      : 'Comments with your words, closes the ticket, stops watching it and abandons this plan'
-                  }
-                  onClick={() => onBackOut(decidable.id, 'close', note.trim())}
-                >
-                  Close the ticket
-                </AsyncButton>
-                <AsyncButton
-                  className="ghost"
-                  title="Put a draft closing comment in the box to edit — nothing is posted until you close the ticket"
-                  onClick={async () => setNote(await onCommentDraft(decidable.id))}
-                >
-                  Draft a comment
-                </AsyncButton>
-                <AsyncButton
-                  className="ghost"
-                  title="Stops watching the ticket and sends this plan back to the planner. Nothing is scheduled for it — watch it again and a fresh plan is written."
-                  onClick={() => onBackOut(decidable.id, 'hold', note.trim() || undefined)}
-                >
-                  Hold — stop watching
-                </AsyncButton>
-                {issueNumber !== null && (
-                  <DesktopLink
-                    className="btn ghost"
-                    folder={desktopFolder}
-                    prompt={discussPrompt(issueNumber)}
-                    explain={discuss}
-                  >
-                    Discuss…
-                  </DesktopLink>
-                )}
-                <AsyncButton
-                  className="primary"
-                  // Held, not hidden: the checklist above says what is outstanding
-                  // and the hint on the button says how many. The route refuses it
-                  // either way — this is that answer, a step earlier.
-                  disabled={held}
-                  title={
-                    held
-                      ? heldTitle(ack.outstanding)
-                      : 'Release the plan — each part gets its own agent, branch and pull request'
-                  }
-                  onClick={() => onDecide(decidable.id, 'accept', composeNote(pins, live, note), ack.acknowledged)}
-                >
-                  {approveLabel(live, queued, originOf)}
-                </AsyncButton>
-              </>
-            )}
-            {!decidable && (
-              <span className="muted small">
-                {spend === null
-                  ? 'Nothing measured for this goal yet'
-                  : `This goal has cost $${spend.costUsd.toFixed(2)} so far`}
-                {' · updated '}
-                {relTime(plan.updatedAt, now)}
-              </span>
-            )}
-            <span className="spacer" />
-            {/* Offered on both statuses `plan_amend` settles, and no others: it
-                rewrites an `awaiting_approval` plan and proposes against a running
-                one. A control that offered what the tool refuses is a session sent
-                to argue about a plan it cannot then change. */}
-            {(plan.status === 'awaiting_approval' || plan.status === 'active') &&
-              !decidable &&
-              issueNumber !== null && (
+              <AsyncButton
+                ghost
+                // The note is posted on the tracker as the closing comment, so a
+                // close with an empty box would shut somebody's ticket for a
+                // reason nobody can read.
+                disabled={note.trim().length === 0}
+                title={
+                  note.trim().length === 0
+                    ? 'Say why in the box — your words go on the ticket as the closing comment'
+                    : 'Comments with your words, closes the ticket, stops watching it and abandons this plan'
+                }
+                onClick={() => onBackOut(decidable.id, 'close', note.trim())}
+              >
+                Close the ticket
+              </AsyncButton>
+              <AsyncButton
+                ghost
+                title="Put a draft closing comment in the box to edit — nothing is posted until you close the ticket"
+                onClick={async () => setNote(await onCommentDraft(decidable.id))}
+              >
+                Draft a comment
+              </AsyncButton>
+              <AsyncButton
+                ghost
+                title="Stops watching the ticket and sends this plan back to the planner. Nothing is scheduled for it — watch it again and a fresh plan is written."
+                onClick={() => onBackOut(decidable.id, 'hold', note.trim() || undefined)}
+              >
+                Hold — stop watching
+              </AsyncButton>
+              {issueNumber !== null && (
                 <DesktopLink
-                  className="btn ghost"
+                  className={buttonClass({ ghost: true })}
                   folder={desktopFolder}
                   prompt={discussPrompt(issueNumber)}
                   explain={discuss}
@@ -632,17 +588,57 @@ export function PlanModal({
                   Discuss…
                 </DesktopLink>
               )}
-            <AsyncButton
-              className="ghost"
-              title="Ask the planner again from the plan's current state. Nothing is torn down."
-              onClick={() => onReplan(plan.id)}
+              <AsyncButton
+                tone="primary"
+                // Held, not hidden: the checklist above says what is outstanding
+                // and the hint on the button says how many. The route refuses it
+                // either way — this is that answer, a step earlier.
+                disabled={held}
+                title={
+                  held
+                    ? heldTitle(ack.outstanding)
+                    : 'Release the plan — each part gets its own agent, branch and pull request'
+                }
+                onClick={() => onDecide(decidable.id, 'accept', composeNote(pins, live, note), ack.acknowledged)}
+              >
+                {approveLabel(live, queued, originOf)}
+              </AsyncButton>
+            </>
+          )}
+          {!decidable && (
+            <span className="muted small">
+              {spend === null
+                ? 'Nothing measured for this goal yet'
+                : `This goal has cost $${spend.costUsd.toFixed(2)} so far`}
+              {' · updated '}
+              {relTime(plan.updatedAt, now)}
+            </span>
+          )}
+          <span className="spacer" />
+          {/* Offered on both statuses `plan_amend` settles, and no others: it
+                rewrites an `awaiting_approval` plan and proposes against a running
+                one. A control that offered what the tool refuses is a session sent
+                to argue about a plan it cannot then change. */}
+          {(plan.status === 'awaiting_approval' || plan.status === 'active') && !decidable && issueNumber !== null && (
+            <DesktopLink
+              className={buttonClass({ ghost: true })}
+              folder={desktopFolder}
+              prompt={discussPrompt(issueNumber)}
+              explain={discuss}
             >
-              Replan
-            </AsyncButton>
-          </div>
-        </div>
+              Discuss…
+            </DesktopLink>
+          )}
+          <AsyncButton
+            ghost
+            title="Ask the planner again from the plan's current state. Nothing is torn down."
+            onClick={() => onReplan(plan.id)}
+          >
+            Replan
+          </AsyncButton>
+        </HeadRow>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -974,7 +970,7 @@ function PartBlock({
               open pull request is not undoable from here. */}
           {onRestart && part.status === 'in_review' && part.prNumber !== null && (
             <ConfirmButton
-              className="small"
+              size="small"
               label="↺ restart"
               confirmLabel="close the PR and restart"
               title={`Close PR #${part.prNumber}, drop its branch, and put "${part.slug}" back to ready so it is worked again against the plan as it stands now.`}
@@ -1171,13 +1167,13 @@ function HistoryView({ history, now }: { history: PlanHistory | null; now: numbe
 function PendingAmendment({ pending, now }: { pending: PendingPlanAmendment; now: number }) {
   return (
     <section className="pm-pending">
-      <div className="pm-pending-head">
+      <HeadRow align="baseline" className="pm-pending-head">
         <span className="pm-section-label">Waiting on you</span>
         <span className="chip small warn">amendment</span>
         <span className="muted small">
           proposed by {pending.author === 'operator' ? 'you' : 'an agent'} · {relTime(pending.createdAt, now)}
         </span>
-      </div>
+      </HeadRow>
       <p className="pm-pending-note">{pending.note}</p>
       {pending.diff === null ? (
         <p className="empty">There is no earlier version to compare this against.</p>
@@ -1202,6 +1198,14 @@ function PendingAmendment({ pending, now }: { pending: PendingPlanAmendment; now
   );
 }
 
+/**
+ * The tag's tone alias per kind of change, beside the kind's own class: the class
+ * is what the row is, the alias is where the hue, the border and the fill come
+ * from. An unchanged part is never drawn here, and prose has no tone at all.
+ * → docs/spec/17-cockpit.md#the-tag
+ */
+const DIFF_TONE = { added: 't-green', dropped: 't-red', changed: 't-blue', unchanged: '' };
+
 function DiffBody({ diff }: { diff: PlanDiff }) {
   const moved = diff.parts.filter((p) => p.kind !== 'unchanged');
   const unchanged = diff.parts.length - moved.length;
@@ -1216,7 +1220,9 @@ function DiffBody({ diff }: { diff: PlanDiff }) {
       </div>
       {moved.map((change) => (
         <div className="pm-diff-row" key={change.slug}>
-          <span className={`pm-dtag ${change.kind}`}>{change.kind === 'dropped' ? 'no longer' : change.kind}</span>
+          <span className={`pm-dtag ${change.kind} ${DIFF_TONE[change.kind]}`}>
+            {change.kind === 'dropped' ? 'no longer' : change.kind}
+          </span>
           <div>
             <div className="pm-part-head">
               <span className="pm-part-title">{change.title}</span>

@@ -1,6 +1,7 @@
 import type { BuildReading, UpgradeAction } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
 import { relTime } from './util.js';
+import { HeadRow } from './panel.js';
 
 /**
  * What the running build is, what is waiting for it, and how to take it.
@@ -44,7 +45,7 @@ export function BuildPanel({
             checked {relTime(standing.checkedAt, now)}
           </p>
         </div>
-        <AsyncButton className="btn ghost" onClick={() => onCheck()}>
+        <AsyncButton ghost onClick={() => onCheck()}>
           Check now
         </AsyncButton>
       </header>
@@ -121,17 +122,17 @@ function Controls({
 
   if (intent.state === 'draining' || intent.state === 'ready')
     return (
-      <div className="build-controls">
+      <HeadRow className="build-controls">
         {intent.state === 'ready' ? (
-          <AsyncButton className="btn primary" onClick={() => onUpgrade('apply')}>
+          <AsyncButton tone="primary" onClick={() => onUpgrade('apply')}>
             Upgrade now
           </AsyncButton>
         ) : (
-          <AsyncButton className="btn" onClick={() => onUpgrade('apply', { interrupt: true })}>
+          <AsyncButton onClick={() => onUpgrade('apply', { interrupt: true })}>
             Don&apos;t wait — interrupt {live} and upgrade
           </AsyncButton>
         )}
-        <AsyncButton className="btn ghost" onClick={() => onUpgrade('cancel')}>
+        <AsyncButton ghost onClick={() => onUpgrade('cancel')}>
           Cancel
         </AsyncButton>
         <p className="build-note">
@@ -140,25 +141,21 @@ function Controls({
             : 'Dispatch is paused; running agents are being left to finish. Interrupting them instead is safe — they ' +
               'are resumed automatically on the way back up.'}
         </p>
-      </div>
+      </HeadRow>
     );
 
   return (
-    <div className="build-controls">
-      <AsyncButton className="btn primary" onClick={() => onUpgrade('drain')}>
+    <HeadRow className="build-controls">
+      <AsyncButton tone="primary" onClick={() => onUpgrade('drain')}>
         {live > 0 ? `Drain and upgrade (${live} running)` : 'Upgrade'}
       </AsyncButton>
-      {live > 0 && (
-        <AsyncButton className="btn" onClick={() => onUpgrade('apply', { interrupt: true })}>
-          Upgrade now
-        </AsyncButton>
-      )}
+      {live > 0 && <AsyncButton onClick={() => onUpgrade('apply', { interrupt: true })}>Upgrade now</AsyncButton>}
       <p className="build-note">
         {live > 0
           ? 'Draining pauses dispatch and waits for the fleet to finish; nothing is interrupted. Upgrading now stops ' +
             'the running agents and restores them on the way back up.'
           : 'Nothing is running, so this pauses dispatch, exits, takes the update and comes back.'}
       </p>
-    </div>
+    </HeadRow>
   );
 }

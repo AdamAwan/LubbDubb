@@ -16,6 +16,7 @@ import { inFlight, localValidationSaid } from '../view/localValidation.js';
 import { ValidateLocallyModal } from './ValidateLocallyModal.js';
 import { TranscriptPane } from './TranscriptPane.js';
 import { elapsed, fmtUsd, relTime } from './util.js';
+import { Label } from './label.js';
 
 /** How often the tail is refetched while the run is live. */
 const POLL_MS = 2000;
@@ -243,7 +244,7 @@ export function LocalRunPanel({
                 // Primary, and only while there is something to pick up: the one
                 // action the panel is asking for. Gone the moment it is not.
                 <AsyncButton
-                  className="primary"
+                  tone="primary"
                   onClick={() => onRefresh()}
                   title={
                     refreshConfigured
@@ -481,7 +482,7 @@ export function LocalRunPanel({
               should be. The rows are the instruction. */}
           {picked !== null && chosenFacts !== null && (
             <div className="lrun-go">
-              <AsyncButton className="primary" onClick={() => onStart(picked.issueNumber, picked.ref)}>
+              <AsyncButton tone="primary" onClick={() => onStart(picked.issueNumber, picked.ref)}>
                 {`${live ? 'Swap to' : 'Start'} #${String(picked.issueNumber)}`}
               </AsyncButton>
               {/* The ref, on the button's own line: this is the last chance to see what
@@ -575,7 +576,7 @@ function Tile({
 }): JSX.Element {
   return (
     <div className={`lrun-tile${tone === undefined ? '' : ` ${tone}`}`}>
-      <span className="lrun-tile-label">{label}</span>
+      <Label dense>{label}</Label>
       <span className="lrun-tile-value">{children}</span>
       {sub !== undefined && <span className="lrun-tile-sub">{sub}</span>}
     </div>

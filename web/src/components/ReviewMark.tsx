@@ -22,12 +22,19 @@ import { relTime } from './util.js';
  * → `docs/spec/17-cockpit.md#the-fleet-reviews-mark`
  */
 
-/** The tone each status carries, in the shared family's names. */
+/**
+ * The tone each status carries: the arm's own class, which is what the badge and
+ * the word hang off, beside the shared family's tone alias, which is where the
+ * hue, the border and the fill come from. Two classes rather than one because the
+ * mark is the only thing here with descendants — the badge is tinted *by* the arm
+ * — while the triple itself is the tag's, written once.
+ * → docs/spec/17-cockpit.md#the-tag
+ */
 const TONE: Record<PrReviewStatus, string> = {
-  clear: 'rv-clear',
-  findings: 'rv-findings',
-  routed: 'rv-routed',
-  deciding: 'rv-deciding',
+  clear: 'rv-clear t-green',
+  findings: 'rv-findings t-red',
+  routed: 'rv-routed t-amber',
+  deciding: 'rv-deciding t-blue',
   skipped: 'rv-skipped',
   elsewhere: 'rv-elsewhere',
 };

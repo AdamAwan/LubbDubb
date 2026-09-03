@@ -23,6 +23,7 @@ import { WorkMixTab } from './WorkMixTab.js';
 import { McpUsageTab, mcpCsv } from './McpUsageTab.js';
 import { PoolTab } from './PoolTab.js';
 import { ReviewCalibrationTab } from './ReviewCalibrationTab.js';
+import { Label } from './label.js';
 
 /**
  * Insights — one destination, one window, five readings of it.
@@ -287,7 +288,7 @@ export function InsightsPage({
       </div>
 
       <div className="insights-bar">
-        <span className="insights-lb">Window</span>
+        <Label dense>Window</Label>
         <div className="insights-win" role="group" aria-label="Window">
           {WINDOWS.map((w) => (
             <button

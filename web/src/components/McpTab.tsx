@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import type { McpChannelPayload } from '../types.js';
+import { Panel } from './panel.js';
+import { Button } from './button.js';
 
 /**
  * How to point the operator's **own** Claude Code at this harness.
@@ -60,7 +62,7 @@ export function McpTab() {
         </p>
       )}
 
-      <section className="cfg-card mcp-step">
+      <Panel density="flush" className="cfg-card mcp-step">
         <h3>
           <span className="mcp-n">1</span> Register it, once
         </h3>
@@ -75,9 +77,9 @@ export function McpTab() {
           Claude Code spawns it, and it is minted fresh at every start — so a restarted harness needs no
           re-registration. Check it took with <code>claude mcp list</code>.
         </p>
-      </section>
+      </Panel>
 
-      <section className="cfg-card mcp-step">
+      <Panel density="flush" className="cfg-card mcp-step">
         <h3>
           <span className="mcp-n">2</span> Ask for a check
         </h3>
@@ -91,9 +93,9 @@ export function McpTab() {
           validation section also has a <b>Copy desktop prompt</b> button, which is the same request in words for a
           session that has no skills.
         </p>
-      </section>
+      </Panel>
 
-      <section className="cfg-card mcp-step">
+      <Panel density="flush" className="cfg-card mcp-step">
         <h3>
           <span className="mcp-n">3</span> What it can do
         </h3>
@@ -113,7 +115,7 @@ export function McpTab() {
             ))}
           </ul>
         )}
-      </section>
+      </Panel>
     </div>
   );
 }
@@ -131,8 +133,9 @@ function Command({ text }: { text: string }) {
   return (
     <div className="mcp-cmd">
       <code>{text}</code>
-      <button
-        className="btn ghost small"
+      <Button
+        ghost
+        size="small"
         onClick={() => {
           void navigator.clipboard.writeText(text).then(
             () => setCopied(true),
@@ -141,7 +144,7 @@ function Command({ text }: { text: string }) {
         }}
       >
         {copied ? 'Copied' : 'Copy'}
-      </button>
+      </Button>
     </div>
   );
 }

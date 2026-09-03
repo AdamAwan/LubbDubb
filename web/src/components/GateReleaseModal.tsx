@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { AsyncButton } from './AsyncButton.js';
+import { Modal } from './Modal.js';
+import { Button } from './button.js';
 
 /**
  * Where the operator says this goal is never going to reach an environment.
@@ -49,54 +51,52 @@ export function GateReleaseModal({
   }
 
   return (
-    <div className="plan-modal-backdrop" onClick={onClose}>
-      <div className="plan-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="pm-head">
-          <span className="chip small">#{issueNumber}</span>
-          <span className="pm-title">Not waiting on an environment</span>
-          <button className="btn ghost pm-close" onClick={onClose}>
-            close
-          </button>
-        </div>
-        <p className="rb-intro">
-          On “{issueTitle}”. {hold} Releasing that says the work is not going to arrive there — a docs change, a config
-          change, something whose deployment nothing here can see — so the checks and the close-out are asked for now
-          instead. It changes nothing about the work itself, and you can put the goal back to waiting afterwards.
-        </p>
-        <label className="rb-label" htmlFor="gate-note">
-          Why is it not shipping?
-        </label>
-        <textarea
-          id="gate-note"
-          className="rb-text"
-          rows={3}
-          autoFocus
-          value={note}
-          placeholder="Documentation only — nothing in this goal is deployed."
-          onChange={(e) => setNote(e.target.value)}
-          onKeyDown={(e) => {
-            // ⌘/Ctrl+Enter submits, matching the composer and the other two modals.
-            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-              e.preventDefault();
-              void submit();
-            }
-          }}
-        />
-        {failed && (
-          <p className="launch-error" role="alert">
-            That didn’t go through. Your note is still here — try again.
-          </p>
-        )}
-        <div className="pm-foot">
+    <Modal
+      face="modal"
+      title="Not waiting on an environment"
+      lead={<span className="chip small">#{issueNumber}</span>}
+      onClose={onClose}
+      foot={
+        <>
           <span className="spacer" />
-          <button className="btn ghost" onClick={onClose}>
+          <Button ghost onClick={onClose}>
             cancel
-          </button>
-          <AsyncButton className="primary" disabled={note.trim().length === 0} onClick={submit}>
+          </Button>
+          <AsyncButton tone="primary" disabled={note.trim().length === 0} onClick={submit}>
             stop waiting
           </AsyncButton>
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    >
+      <p className="rb-intro">
+        On “{issueTitle}”. {hold} Releasing that says the work is not going to arrive there — a docs change, a config
+        change, something whose deployment nothing here can see — so the checks and the close-out are asked for now
+        instead. It changes nothing about the work itself, and you can put the goal back to waiting afterwards.
+      </p>
+      <label className="rb-label" htmlFor="gate-note">
+        Why is it not shipping?
+      </label>
+      <textarea
+        id="gate-note"
+        className="rb-text"
+        rows={3}
+        autoFocus
+        value={note}
+        placeholder="Documentation only — nothing in this goal is deployed."
+        onChange={(e) => setNote(e.target.value)}
+        onKeyDown={(e) => {
+          // ⌘/Ctrl+Enter submits, matching the composer and the other two modals.
+          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+            e.preventDefault();
+            void submit();
+          }
+        }}
+      />
+      {failed && (
+        <p className="launch-error" role="alert">
+          That didn’t go through. Your note is still here — try again.
+        </p>
+      )}
+    </Modal>
   );
 }

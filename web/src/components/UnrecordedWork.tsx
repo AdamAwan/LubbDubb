@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import type { UnrecordedWorkView } from '../types.js';
 import { refLink, relTime } from './util.js';
 import { AsyncButton } from './AsyncButton.js';
+import { Button } from './button.js';
 
 /**
  * What the harness did that nothing in the tracker accounts for — and the two
@@ -60,7 +61,7 @@ export function UnrecordedWork({ now, canFileTickets }: { now: number; canFileTi
       <span className="work-unrecorded-actions">
         {item.ignored ? (
           <AsyncButton
-            className="ghost"
+            ghost
             onClick={() => api.setWorkItemIgnored(item.ref, false).then(() => load())}
             title="Put this back in the list"
           >
@@ -73,7 +74,7 @@ export function UnrecordedWork({ now, canFileTickets }: { now: number; canFileTi
             ) : (
               canFileTickets && (
                 <AsyncButton
-                  className="ghost"
+                  ghost
                   onClick={() => api.fileWorkItem(item.ref).then(() => load())}
                   title="Ask an agent to create a tracker item recording this work"
                 >
@@ -82,7 +83,7 @@ export function UnrecordedWork({ now, canFileTickets }: { now: number; canFileTi
               )
             )}
             <AsyncButton
-              className="ghost"
+              ghost
               onClick={() => api.setWorkItemIgnored(item.ref, true).then(() => load())}
               title="No tracker item is wanted for this — clear it from the list"
             >
@@ -104,10 +105,10 @@ export function UnrecordedWork({ now, canFileTickets }: { now: number; canFileTi
       {live.length === 0 && <p className="muted">Nothing outstanding — every item here has been dealt with.</p>}
       {ignored.length > 0 && (
         <div className="work-ignored">
-          <button type="button" className="btn ghost work-ignored-head" onClick={() => setShowIgnored(!showIgnored)}>
+          <Button ghost className="work-ignored-head" onClick={() => setShowIgnored(!showIgnored)}>
             <span className="work-caret">{showIgnored ? '▾' : '▸'}</span>
             {ignored.length} ignored
-          </button>
+          </Button>
           {showIgnored && ignored.map(row)}
         </div>
       )}

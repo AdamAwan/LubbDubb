@@ -2,6 +2,8 @@ import type { JSX } from 'react';
 import type { PoolFleetReading, PoolInsightsPayload, PoolRollupRow } from '../types.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import { fmtUsd, relTime } from './util.js';
+import { HeadRow } from './panel.js';
+import { Label } from './label.js';
 
 /**
  * The shared insights page: what the whole pool spent, across fleets.
@@ -37,8 +39,8 @@ export function PoolTab({
   const { rollup } = payload;
   return (
     <div className="pool">
-      <div className="pool-bar">
-        <span className="insights-lb">Project</span>
+      <HeadRow className="pool-bar">
+        <Label dense>Project</Label>
         <div className="insights-win" role="group" aria-label="Project">
           <button
             type="button"
@@ -64,7 +66,7 @@ export function PoolTab({
           {rollup.fleets.length} fleet{rollup.fleets.length === 1 ? '' : 's'} ·{' '}
           {rollup.days.length === 0 ? 'nothing published yet' : `${rollup.days.length} UTC days`}
         </span>
-      </div>
+      </HeadRow>
 
       <Fleets fleets={payload.fleets} />
 

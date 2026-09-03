@@ -15,6 +15,7 @@ import type {
 import { AsyncButton } from './AsyncButton.js';
 import { renderMarkdown } from './markdown.js';
 import { Ref } from './refs.js';
+import { Tag, type TagTone } from './tag.js';
 import {
   ALL_IDEAS,
   falseClaims,
@@ -293,12 +294,12 @@ function Share({
   }
   const share = sharing.share;
   const button = (label: string) => (
-    <AsyncButton className="ghost small" onClick={onShare} onRefused={onRefused} pendingLabel="sharing…">
+    <AsyncButton ghost size="small" onClick={onShare} onRefused={onRefused} pendingLabel="sharing…">
       {label}
     </AsyncButton>
   );
   const unshare = (
-    <AsyncButton className="ghost small" onClick={onUnshare} onRefused={onRefused} pendingLabel="unsharing…">
+    <AsyncButton ghost size="small" onClick={onUnshare} onRefused={onRefused} pendingLabel="unsharing…">
       Unshare
     </AsyncButton>
   );
@@ -422,7 +423,7 @@ function AskAgain({
 }): JSX.Element {
   return (
     <>
-      <AsyncButton className="ghost small" onClick={onAsk} onRefused={onRefused} pendingLabel="asking…">
+      <AsyncButton ghost size="small" onClick={onAsk} onRefused={onRefused} pendingLabel="asking…">
         Ask again
       </AsyncButton>
       {refused !== null && <p className="rp-refusal">{refused}</p>}
@@ -568,7 +569,7 @@ function IdeaRow({
             </div>
           )}
           <div className="rp-marks">
-            <AsyncButton className="ghost small" onClick={() => onRead(!marks.read)} pendingLabel="marking…">
+            <AsyncButton ghost size="small" onClick={() => onRead(!marks.read)} pendingLabel="marking…">
               {marks.read ? 'Mark unread' : 'Mark read'}
             </AsyncButton>
             <label className="rp-override">
@@ -621,6 +622,25 @@ function findingIndex(wrong: FalseClaim[], idea: ReviewIdea, claim: ReviewClaim)
   return i < 0 ? null : i + 1;
 }
 
+/**
+ * What each label is *asking of the reader*, in the tag's tones: red to stop and
+ * read, amber a call to make, blue an idea that should have been two, and no tone
+ * at all for the one that asks nothing. Total over `ReviewAttention`, so a fifth
+ * label fails the typecheck rather than drawing untinted.
+ */
+const ATTENTION_TONE: Record<ReviewAttention, TagTone> = {
+  read: 'red',
+  decide: 'amber',
+  skim: 'grey',
+  split: 'blue',
+};
+
+const PROVENANCE_TONE: Record<ReviewClaim['provenance']['kind'], TagTone | undefined> = {
+  witnessed: 'blue',
+  disputed: 'amber',
+  inferred: undefined,
+};
+
 function AttentionChip({
   attention,
   overridden,
@@ -630,10 +650,12 @@ function AttentionChip({
   overridden: boolean;
   checker: ReviewAttention | null;
 }): JSX.Element {
-  if (attention === null) return <span className="rp-att rp-att-none">—</span>;
+  if (attention === null) return <Tag>—</Tag>;
   return (
-    <span
-      className={`rp-att rp-att-${attention} ${overridden ? 'rp-att-over' : ''}`}
+    <Tag
+      tone={ATTENTION_TONE[attention]}
+      fill
+      dashed={overridden}
       title={
         overridden
           ? `your label; the checker said ${checker === null ? 'nothing' : ATTENTION_LABEL[checker]}`
@@ -642,7 +664,7 @@ function AttentionChip({
     >
       {ATTENTION_LABEL[attention]}
       {overridden && ' *'}
-    </span>
+    </Tag>
   );
 }
 
@@ -678,15 +700,27 @@ function Step({ anchor, index }: { anchor: ReviewAnchor; index: number }): JSX.E
         <span className="rp-step-n">{index}</span>
         <span className="rp-path">{rangeLabel(anchor.range)}</span>
         {region ? (
-          <span className="rp-tag rp-tag-region">not in this PR</span>
+          <Tag dashed>not in this PR</Tag>
         ) : (
-          <span className="rp-tag rp-tag-diff">
+          <Tag tone="blue">
             changed {counts.added > 0 && `+${counts.added}`} {counts.removed > 0 && `−${counts.removed}`}
-          </span>
+          </Tag>
         )}
-        {anchor.mark === 'key' && <span className="rp-tag rp-tag-key">the important bit</span>}
-        {anchor.mark === 'false' && <span className="rp-tag rp-tag-false">claim is false</span>}
-        {anchor.mark === 'disputed' && <span className="rp-tag rp-tag-disputed">witness disagrees</span>}
+        {anchor.mark === 'key' && (
+          <Tag tone="accent" fill>
+            the important bit
+          </Tag>
+        )}
+        {anchor.mark === 'false' && (
+          <Tag tone="red" fill>
+            claim is false
+          </Tag>
+        )}
+        {anchor.mark === 'disputed' && (
+          <Tag tone="amber" fill>
+            witness disagrees
+          </Tag>
+        )}
       </div>
       <p className="rp-gist">{anchor.gist}</p>
       <CodeBlock code={anchor.code} caption={anchor.caption} dashed={region} diff={!region} />
@@ -747,9 +781,15 @@ function CodeBlock({
   );
 }
 
+const VERDICT_TONE: Record<ReviewVerdict, TagTone> = { true: 'green', false: 'red', cant_tell: 'amber' };
+
 function VerdictChip({ verdict }: { verdict: ReviewVerdict | null }): JSX.Element {
-  if (verdict === null) return <span className="rp-v rp-v-none">Unchecked</span>;
-  return <span className={`rp-v rp-v-${verdict === 'cant_tell' ? 'un' : verdict}`}>{VERDICT_LABEL[verdict]}</span>;
+  if (verdict === null) return <Tag>Unchecked</Tag>;
+  return (
+    <Tag tone={VERDICT_TONE[verdict]} fill>
+      {VERDICT_LABEL[verdict]}
+    </Tag>
+  );
 }
 
 /**
@@ -773,7 +813,7 @@ function ClaimLine({
     <div className={`rp-claim ${claim.verdict === 'false' ? 'rp-claim-false' : ''}`}>
       <VerdictChip verdict={claim.verdict} />
       <span className="rp-claim-body">
-        <span className={`rp-prov rp-prov-${claim.provenance.kind}`}>{claim.provenance.kind}</span> {claim.text}
+        <Tag tone={PROVENANCE_TONE[claim.provenance.kind]}>{claim.provenance.kind}</Tag> {claim.text}
         {claim.evidence !== null && <span className="rp-evidence"> {claim.evidence}</span>}
         {claim.verdict === 'cant_tell' && <strong> You decide.</strong>}
         {findingIndex !== null && (

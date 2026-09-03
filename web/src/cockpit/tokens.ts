@@ -19,7 +19,7 @@
  */
 
 /** What a value looks like, and so which control edits it. */
-export type TokenKind = 'colour' | 'radius' | 'font';
+export type TokenKind = 'colour' | 'radius' | 'space' | 'metric' | 'font';
 
 export type TokenGroup =
   | 'ground'
@@ -79,13 +79,15 @@ export const TOKEN_GROUPS: Record<TokenGroup, { label: string; blurb: string; ad
     advanced: true,
   },
   shape: {
-    label: 'Corners',
-    blurb: 'Square is the default: a rounded corner is a soft edge on an instrument.',
+    label: 'Corners and density',
+    blurb:
+      'Square is the default: a rounded corner is a soft edge on an instrument. The two insets are the whole ramp a frame may pick from.',
     advanced: true,
   },
   type: {
-    label: 'Typefaces',
-    blurb: 'A face the machine lacks falls through to the next in the stack.',
+    label: 'Typefaces and labels',
+    blurb:
+      'A face the machine lacks falls through to the next in the stack. The two label sizes are the whole ramp every uppercase caption reads through.',
     advanced: true,
   },
 };
@@ -270,6 +272,13 @@ export const THEME_TOKENS: readonly ThemeToken[] = [
     group: 'tints',
     kind: 'colour',
     why: 'The ground of the recovery banner',
+  },
+  {
+    name: '--accent-line',
+    label: 'Accent border',
+    group: 'tints',
+    kind: 'colour',
+    why: 'The edge of an accent-tinted box',
   },
   {
     name: '--green-line',
@@ -705,7 +714,42 @@ export const THEME_TOKENS: readonly ThemeToken[] = [
     kind: 'radius',
     why: 'A console chip or control',
   },
+  {
+    name: '--pad',
+    label: 'Frame inset',
+    group: 'shape',
+    kind: 'space',
+    why: 'How much room a card gives its contents',
+  },
   { name: '--font-ui', label: 'Interface face', group: 'type', kind: 'font', why: 'Every word that is not code' },
+  {
+    name: '--label-size',
+    label: 'Label size',
+    group: 'type',
+    kind: 'metric',
+    why: 'Every uppercase caption over a block',
+  },
+  {
+    name: '--label-size-sm',
+    label: 'Label size, dense',
+    group: 'type',
+    kind: 'metric',
+    why: 'The same, in a column head or a tile',
+  },
+  {
+    name: '--label-track',
+    label: 'Label tracking',
+    group: 'type',
+    kind: 'metric',
+    why: 'How far apart a label sets its letters',
+  },
+  {
+    name: '--label-weight',
+    label: 'Label weight',
+    group: 'type',
+    kind: 'metric',
+    why: 'How much a label holds against the prose under it',
+  },
   {
     name: '--font-mono',
     label: 'Monospace face',
