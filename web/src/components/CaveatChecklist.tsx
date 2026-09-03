@@ -42,7 +42,7 @@ export function CaveatChecklist({
   return (
     <div className="caveat-ack">
       <div className="muted small caveat-ack-label">
-        Before you can approve — tick each one
+        Tick to approve
         <span className="caveat-ack-count">
           {ticked.size}/{caveats.length}
         </span>
@@ -52,9 +52,11 @@ export function CaveatChecklist({
           <input type="checkbox" checked={ticked.has(c.id)} onChange={() => onToggle(c.id)} />
           <span className="caveat-ack-body">
             <span className="caveat-ack-text">{c.label}</span>
-            {/* The planner's own words, where the label is a summary of a longer
-                field. Drawn, not folded behind a disclosure: a box you tick without
-                the thing it is about being on the page is the paragraph again. */}
+            {/* What the label is about — the planner's own words, or the stored
+                reason. Drawn, not folded behind a disclosure: a box you tick without
+                the thing it is about being on the page is the paragraph again. The
+                label carries the weight and this is quiet, so a list of several is
+                scanned by its titles and read by the one that matters. */}
             {c.detail ? <span className="caveat-ack-detail">{renderMarkdown(c.detail, refUrls)}</span> : null}
           </span>
         </label>
@@ -99,6 +101,6 @@ export function useAcknowledgements(caveats: PlanCaveat[]): {
 /** What the held button says it is waiting for — one sentence, both surfaces. */
 export function heldTitle(outstanding: PlanCaveat[]): string {
   return outstanding.length === 1
-    ? 'One thing to acknowledge before this plan can be released — tick it above'
-    : `${outstanding.length} things to acknowledge before this plan can be released — tick them above`;
+    ? 'One box left to tick before this plan can be released'
+    : `${outstanding.length} boxes left to tick before this plan can be released`;
 }

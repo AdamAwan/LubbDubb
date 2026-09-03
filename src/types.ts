@@ -2534,9 +2534,13 @@ export interface Plan {
 export interface PlanCaveat {
   /** Stable within one proposal; what an acknowledgement names. */
   id: string;
-  /** The sentence the operator is ticking — what they are saying they have read. */
+  /**
+   * The short line the operator is ticking — a title, not a paragraph. What it is
+   * *about* goes in {@link detail}, so a checklist of several reads as a list
+   * rather than as the wall of prose it replaced.
+   */
   label: string;
-  /** The planner's own words behind it, where the label is a summary of a longer field. */
+  /** What the label is about: the planner's own words, or the stored reason. */
   detail: string | null;
 }
 

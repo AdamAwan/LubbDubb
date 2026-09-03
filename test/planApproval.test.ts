@@ -914,6 +914,12 @@ test('a plan that raises caveats is not approved until each of them is acknowled
     ['open-questions', 'risks'],
   );
   assert.match(caveats[0]!.detail ?? '', /needs the table locked/);
+  // Each label is a title and the detail is what it is about: a label that states
+  // its whole case is the appended paragraph back again, one checkbox at a time.
+  for (const c of caveats) {
+    assert.ok(c.label.length <= 60, `caveat ${c.id} label is a paragraph, not a title: ${c.label}`);
+    assert.ok(!c.label.includes('. '), `caveat ${c.id} label runs to a second sentence: ${c.label}`);
+  }
   // And the ask says the accept is held, appended rather than templated so an
   // override cannot drop it.
   const esc = system.store.getEscalation(proposal.escalationId!)!;
@@ -1080,6 +1086,9 @@ test('the approval ask names an open PR that would belong to no part', () => {
   const parts = [partRow('a', 1), partRow('b', 2)];
 
   const clean = { risks: null, openQuestions: null };
+  // The box is titled by the PR; what approving does not do is the detail under it.
+  const [unclaimed] = planCaveats(clean, issue, parts, [pr]);
+  assert.equal(unclaimed!.label, 'PR #31231 is open on this issue and unclaimed');
   const warning = caveatNotice(planCaveats(clean, issue, parts, [pr]));
   assert.match(warning, /PR #31231/);
   assert.match(warning, /belongs to no part/);
