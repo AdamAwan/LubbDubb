@@ -16,13 +16,24 @@ import type { JSX } from 'react';
  * groups say what they are in words, and stripping a label to leave the glyph
  * turns a legible row into a quiz. → docs/spec/17-cockpit.md#the-headers-controls
  *
+ * The exception is a mark that **repeats down a column in a fixed slot** and is
+ * counted rather than read — `AgentOnIt`, which is the same sentence on every row
+ * an agent is out on. There the words are what stop the one row that is news from
+ * standing out, and the sentence moves to the `aria-label` and the `title` rather
+ * than being dropped.
+ *
  * Circles are written as arc pairs rather than `<circle>` so one element type
  * draws every glyph.
  */
 const PATHS = {
   /** Elapsed time — the run's own state. */
   clock: ['M14 8a6 6 0 1 1-12 0 6 6 0 1 1 12 0', 'M8 4.4V8l2.6 1.6'],
-  /** Running: the harness is scheduling for this goal. */
+  /**
+   * Running: somebody's hands are on this right now. `AgentOnIt`'s glyph, and
+   * deliberately not {@link PATHS.robot}, which means *whose reading this is* on the
+   * goal header's verdict chip — an agent working and a verdict the harness passed
+   * are different claims and cannot share a mark.
+   */
   play: ['M4.6 2.8 12.6 8l-8 5.2V2.8Z'],
   /** Settled by a verdict. */
   check: ['M2.8 8.4 6.2 11.8 13.2 4.6'],
@@ -70,6 +81,31 @@ const PATHS = {
     'M7 9.1c.35-.9 1.65-.9 2 0',
     'M1.8 8.6 3.5 5.2M14.2 8.6 12.5 5.2',
   ],
+  /** Something went wrong and was recorded — the fault log. */
+  alert: ['M8 1.9 15 13.4H1L8 1.9Z', 'M8 6.2v3.4', 'M8 11.4v.1'],
+  /** Work waiting for a slot — the launch desk. */
+  rocket: [
+    'M9.6 2.2c2.4 1.4 3.8 4 3.9 6.8L10.8 11.6H6.4L3.9 9C4 6.2 5.4 3.6 7.8 2.2h1.8Z',
+    'M9.4 6.4a1.4 1.4 0 1 1-2.8 0 1.4 1.4 0 1 1 2.8 0',
+    'M6.4 11.6 5 14.2M9.6 11.6 11 14.2',
+  ],
+  /** This build against upstream — something to take, or nothing. */
+  download: ['M8 2.2v7.2', 'M4.8 6.6 8 9.8l3.2-3.2', 'M2.4 12.6h11.2'],
+  /** The world the work ships into — the environments. */
+  globe: [
+    'M14.2 8a6.2 6.2 0 1 1-12.4 0 6.2 6.2 0 1 1 12.4 0',
+    'M1.9 8h12.2',
+    'M8 1.8c1.7 1.7 2.6 3.9 2.6 6.2S9.7 12.5 8 14.2C6.3 12.5 5.4 10.3 5.4 8S6.3 3.5 8 1.8Z',
+  ],
+  /** What the harness did, after the snapshot forgot it — the record. */
+  book: ['M2.6 3.2A1.4 1.4 0 0 1 4 1.8h9.4v10.4H4a1.4 1.4 0 0 0-1.4 1.4V3.2Z', 'M2.6 13.6A1.4 1.4 0 0 1 4 12.2h9.4'],
+  /** How this harness is configured. */
+  gear: [
+    'M10.1 8a2.1 2.1 0 1 1-4.2 0 2.1 2.1 0 1 1 4.2 0',
+    'M12.9 9.9a1.1 1.1 0 0 0 .2 1.2l.1.1a1.3 1.3 0 1 1-1.9 1.9l-.1-.1a1.1 1.1 0 0 0-1.2-.2 1.1 1.1 0 0 0-.7 1v.2a1.3 1.3 0 1 1-2.6 0v-.1a1.1 1.1 0 0 0-.7-1 1.1 1.1 0 0 0-1.2.2l-.1.1a1.3 1.3 0 1 1-1.9-1.9l.1-.1a1.1 1.1 0 0 0 .2-1.2 1.1 1.1 0 0 0-1-.7h-.2a1.3 1.3 0 1 1 0-2.6h.1a1.1 1.1 0 0 0 1-.7 1.1 1.1 0 0 0-.2-1.2l-.1-.1a1.3 1.3 0 1 1 1.9-1.9l.1.1a1.1 1.1 0 0 0 1.2.2h.1a1.1 1.1 0 0 0 .7-1v-.2a1.3 1.3 0 1 1 2.6 0v.1a1.1 1.1 0 0 0 .7 1 1.1 1.1 0 0 0 1.2-.2l.1-.1a1.3 1.3 0 1 1 1.9 1.9l-.1.1a1.1 1.1 0 0 0-.2 1.2v.1a1.1 1.1 0 0 0 1 .7h.2a1.3 1.3 0 1 1 0 2.6h-.1a1.1 1.1 0 0 0-1 .7Z',
+  ],
+  /** Everything the bar keeps folded away — the menu. */
+  menu: ['M2.4 4.4h11.2M2.4 8h11.2M2.4 11.6h11.2'],
   /** Validation: the checks a goal has to clear. */
   flask: ['M6.4 1.9v4L2.8 12a1.6 1.6 0 0 0 1.4 2.4h7.6A1.6 1.6 0 0 0 13.2 12L9.6 5.9v-4', 'M5.4 1.9h5.2M4.4 9.6h7.2'],
 } as const satisfies Record<string, readonly string[]>;
