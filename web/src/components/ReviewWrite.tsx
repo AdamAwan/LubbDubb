@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import type { ConfigChange, RunningConfigPayload } from '../types.js';
 import type { Staged } from './ConfigValues.js';
+import { Panel } from './panel.js';
 
 /**
  * What the write will do to the file, before it does it.
@@ -73,7 +74,7 @@ export function ReviewWrite({
 
       {preview && (
         <div className="cfg-diff">
-          <section className="cfg-card">
+          <Panel face="console" density="flush" as="section" className="cfg-card">
             <h3>
               {payload.file}
               <span className="cfg-more">{countChanged(payload.text, preview.text)} lines changed</span>
@@ -90,9 +91,9 @@ export function ReviewWrite({
               Rewritten in place: key order and the <code>&quot;//&quot;</code> doc keys the file already carries are
               kept, and no key this page did not touch is re-serialised.
             </p>
-          </section>
+          </Panel>
 
-          <section className="cfg-card">
+          <Panel face="console" density="flush" as="section" className="cfg-card">
             <h3>What it does</h3>
             {preview.changes.map((change) => (
               <div className="cfg-eff" key={change.path}>
@@ -134,7 +135,7 @@ export function ReviewWrite({
                 {busy ? 'Writing…' : 'Write'}
               </button>
             </div>
-          </section>
+          </Panel>
         </div>
       )}
     </div>

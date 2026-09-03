@@ -13,6 +13,7 @@ import { AsyncButton } from './AsyncButton.js';
 import { ConfirmButton } from './ConfirmButton.js';
 import { Ref } from './refs.js';
 import { absDate, relTime, untilTime } from './util.js';
+import { HeadRow } from './panel.js';
 
 /**
  * The obstacle board — *what is blocking the fleet, and what owns each one*.
@@ -278,7 +279,7 @@ function Row({
   const { obstacle } = row;
   return (
     <div className={`ob-row${dim ? ' dim' : ''}${open ? ' open' : ''}`}>
-      <div className="ob-row-top">
+      <HeadRow align="baseline" className="ob-row-top">
         <button
           type="button"
           className="ob-claim"
@@ -291,7 +292,7 @@ function Row({
         <span className="cn-refs">{obstacle.ownerRef !== null && <Ref to={obstacle.ownerRef} />}</span>
         <span className={`ob-state s-${obstacle.state}`}>{obstacle.state}</span>
         {obstacle.kind === 'note' && <span className="ob-kind">note</span>}
-      </div>
+      </HeadRow>
 
       <div className="ob-row-meta">
         <span className="ob-keys">

@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 import type { SpendPhase, SpendTrend, SpendTrendComparison, SpendTrendPhaseShift, SpendTrendBucket } from '../types.js';
 import { fmtTokens, fmtUsd } from './util.js';
+import { Label } from './label.js';
 
 /**
  * The trend behind the breakdown: three questions on one axis.
@@ -197,7 +198,7 @@ function Tiles({ trend }: { trend: SpendTrend }): JSX.Element {
   return (
     <div className="sp-tiles">
       <div className="sp-tile sp-well">
-        <span className="lb">Per goal closed</span>
+        <Label dense>Per goal closed</Label>
         <span className="vl">
           {comparison?.recent.medianCostUsd === null || comparison === null
             ? '—'
@@ -211,7 +212,7 @@ function Tiles({ trend }: { trend: SpendTrend }): JSX.Element {
         <span className={`sb sp-delta ${toneOf(costRatio, true)}`}>{fmtChange(costRatio)}</span>
       </div>
       <div className="sp-tile sp-well">
-        <span className="lb">Input per goal</span>
+        <Label dense>Input per goal</Label>
         <span className="vl">
           {comparison?.recent.medianInputTokens == null ? '—' : fmtTokens(comparison.recent.medianInputTokens)}
         </span>
@@ -223,7 +224,7 @@ function Tiles({ trend }: { trend: SpendTrend }): JSX.Element {
         <span className={`sb sp-delta ${toneOf(tokenRatio, true)}`}>{fmtChange(tokenRatio)}</span>
       </div>
       <div className="sp-tile sp-well">
-        <span className="lb">Goals closed</span>
+        <Label dense>Goals closed</Label>
         <span className="vl">{closed}</span>
         <span className="sb">
           over {trend.periods} {periodWord(trend)}s · {(closed / trend.periods).toFixed(1)} a {periodWord(trend)}
@@ -233,7 +234,7 @@ function Tiles({ trend }: { trend: SpendTrend }): JSX.Element {
         <span className="sb sp-delta level">the unit everything here is per</span>
       </div>
       <div className="sp-tile sp-well">
-        <span className="lb">Runs finished</span>
+        <Label dense>Runs finished</Label>
         <span className="vl">{doneNow === null ? '—' : fmtPct(doneNow)}</span>
         <span className="sb">
           {doneThen === null ? 'of settled runs' : `of settled runs · was ${fmtPct(doneThen)}`}
@@ -609,7 +610,7 @@ function LandingTiles({ comparison }: { comparison: SpendTrendComparison | null 
     <>
       <div className="sp-tiles">
         <div className="sp-tile sp-well">
-          <span className="lb">Red checks per goal</span>
+          <Label dense>Red checks per goal</Label>
           <span className="vl">{recent.redsPerGoal === null ? '—' : recent.redsPerGoal.toFixed(1)}</span>
           <span className="sb">
             {earlier.redsPerGoal === null ? 'no comparison' : `was ${earlier.redsPerGoal.toFixed(1)}`}
@@ -619,7 +620,7 @@ function LandingTiles({ comparison }: { comparison: SpendTrendComparison | null 
           </span>
         </div>
         <div className="sp-tile sp-well">
-          <span className="lb">Spent on lost runs</span>
+          <Label dense>Spent on lost runs</Label>
           <span className="vl">{recent.lostCostPerGoalUsd === null ? '—' : fmtUsd(recent.lostCostPerGoalUsd)}</span>
           <span className="sb">
             per goal
@@ -630,7 +631,7 @@ function LandingTiles({ comparison }: { comparison: SpendTrendComparison | null 
           </span>
         </div>
         <div className="sp-tile sp-well">
-          <span className="lb">Reopened after close</span>
+          <Label dense>Reopened after close</Label>
           <span className="vl">{recent.reopenedRate === null ? '—' : fmtPct(recent.reopenedRate)}</span>
           <span className="sb">
             of goals{earlier.reopenedRate !== null && ` · was ${fmtPct(earlier.reopenedRate)}`}
@@ -642,7 +643,7 @@ function LandingTiles({ comparison }: { comparison: SpendTrendComparison | null 
           </span>
         </div>
         <div className="sp-tile sp-well">
-          <span className="lb">Goals closed</span>
+          <Label dense>Goals closed</Label>
           <span className="vl">{recent.goalsClosed}</span>
           <span className="sb">
             in {recent.weeks} weeks · was {earlier.goalsClosed}

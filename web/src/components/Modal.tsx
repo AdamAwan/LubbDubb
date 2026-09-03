@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { JSX, ReactNode } from 'react';
+import { HeadRow } from './panel.js';
 
 /**
  * The cockpit's one overlay: a backdrop, a surface, and the three ways out of it.
@@ -84,14 +85,14 @@ export function Modal({
         onClick={stop}
       >
         {title !== undefined && (
-          <div className="pm-head">
+          <HeadRow className="pm-head">
             {lead}
             <span className="pm-title">{title}</span>
             {chips}
             <button className="btn ghost small pm-close" onClick={onClose}>
               close
             </button>
-          </div>
+          </HeadRow>
         )}
         {children}
         {foot !== undefined && <div className="pm-foot">{foot}</div>}

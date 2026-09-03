@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import type { RunningConfigPayload } from '../types.js';
+import { Panel } from './panel.js';
 
 /**
  * The file, edited as a file.
@@ -97,7 +98,7 @@ export function RawConfigTab({
         </div>
       )}
 
-      <section className="cfg-card">
+      <Panel face="console" density="flush" as="section" className="cfg-card">
         <div className="cfg-rawhead">
           <code>{payload.file}</code>
           <span className="cfg-rawacts">
@@ -123,9 +124,9 @@ export function RawConfigTab({
           onChange={(e) => setText(e.target.value)}
           rows={24}
         />
-      </section>
+      </Panel>
 
-      <section className="cfg-card">
+      <Panel face="console" density="flush" as="section" className="cfg-card">
         <h3>
           What the loader says
           <span className="cfg-more">checked against src/config.ts, not by this page</span>
@@ -143,7 +144,7 @@ export function RawConfigTab({
             <span className="cfg-markwhat">{verdict.message}</span>
           </div>
         )}
-      </section>
+      </Panel>
     </div>
   );
 }

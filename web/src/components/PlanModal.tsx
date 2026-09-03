@@ -29,6 +29,7 @@ import { WatchDigest } from './WatchDigest.js';
 import { partOriginOf, planIssueOf, refLink, relTime } from './util.js';
 import { Modal } from './Modal.js';
 import { Ref } from './refs.js';
+import { HeadRow } from './panel.js';
 
 /**
  * The plan sheet — the whole plan, in one scroll, as the record of what was agreed.
@@ -521,7 +522,7 @@ export function PlanModal({
         )}
         {decidable && <CaveatChecklist caveats={caveats} ticked={ack.ticked} onToggle={ack.toggle} refUrls={refUrls} />}
         <PinList pins={pins} parts={live} onClear={(slug) => setPins(without(pins, slug))} />
-        <div className="pm-row">
+        <HeadRow className="pm-row">
           {decidable && (
             <input
               className="pm-note"
@@ -634,7 +635,7 @@ export function PlanModal({
           >
             Replan
           </AsyncButton>
-        </div>
+        </HeadRow>
       </div>
     </Modal>
   );
@@ -1165,13 +1166,13 @@ function HistoryView({ history, now }: { history: PlanHistory | null; now: numbe
 function PendingAmendment({ pending, now }: { pending: PendingPlanAmendment; now: number }) {
   return (
     <section className="pm-pending">
-      <div className="pm-pending-head">
+      <HeadRow align="baseline" className="pm-pending-head">
         <span className="pm-section-label">Waiting on you</span>
         <span className="chip small warn">amendment</span>
         <span className="muted small">
           proposed by {pending.author === 'operator' ? 'you' : 'an agent'} · {relTime(pending.createdAt, now)}
         </span>
-      </div>
+      </HeadRow>
       <p className="pm-pending-note">{pending.note}</p>
       {pending.diff === null ? (
         <p className="empty">There is no earlier version to compare this against.</p>

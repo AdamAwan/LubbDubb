@@ -1,4 +1,5 @@
 import type { JSX } from 'react';
+import { Label } from './label.js';
 
 /**
  * Taking a reading off the glass.
@@ -144,7 +145,7 @@ export function Downloads({
 }): JSX.Element {
   return (
     <div className="dl">
-      <span className="dl-lb">Export</span>
+      <Label>Export</Label>
       {files.map((f) => (
         <button
           key={f.format}

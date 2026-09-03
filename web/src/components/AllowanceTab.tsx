@@ -11,6 +11,7 @@ import type {
 import { fmtUsd, relAge, relTime } from './util.js';
 import { fmtDuration, fmtShare, share } from './insightsFormat.js';
 import { Ref, RefLinksExtended } from './refs.js';
+import { Label } from './label.js';
 
 /**
  * Allowance: what the account has spent, when it went, and on what.
@@ -108,24 +109,24 @@ function Headline({ allowance, now }: { allowance: AllowanceInsights; now: numbe
   return (
     <div className="sp-tiles">
       <div className="sp-tile sp-well sp-key">
-        <span className="lb">Allowance spent</span>
+        <Label dense>Allowance spent</Label>
         <span className="vl">{fmtPoints(observed)}</span>
         <span className="sb">
           of the five-hour window, over {allowance.readings.length} readings · last {relTime(lastAt(allowance), now)}
         </span>
       </div>
       <div className="sp-tile sp-well">
-        <span className="lb">Charged to a goal</span>
+        <Label dense>Charged to a goal</Label>
         <span className="vl">{fmtPoints(attributedPoints)}</span>
         <span className="sb">{fmtShare(attributedPoints, observed)} of the rise, apportioned by cost share</span>
       </div>
       <div className="sp-tile sp-well">
-        <span className="lb">Unattributed</span>
+        <Label dense>Unattributed</Label>
         <span className="vl">{fmtPoints(unattributedPoints)}</span>
         <span className="sb">moved with no fleet spend to explain it — your own sessions, and local runs</span>
       </div>
       <div className="sp-tile sp-well">
-        <span className="lb">Per dollar</span>
+        <Label dense>Per dollar</Label>
         <span className="vl">{pointsPerUsd === null ? '—' : fmtPoints(pointsPerUsd)}</span>
         <span className="sb">
           {pointsPerUsd === null

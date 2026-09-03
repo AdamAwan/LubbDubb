@@ -106,6 +106,12 @@ export function isTokenValue(name: string, value: unknown): value is string {
   const kind = KIND_OF.get(name);
   if (kind === 'colour') return /^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value);
   if (kind === 'radius') return /^\d{1,3}(?:px|rem|em|%)?$/.test(value);
+  // One length or two — a frame's inset is `10px 12px`, and a shorthand longer than
+  // that is a fourth padding by the back door, which is the spread the ramp replaced.
+  if (kind === 'space') return /^\d{1,3}(?:px|rem|em)( \d{1,3}(?:px|rem|em))?$/.test(value);
+  // A decimal length, or a bare number for a weight. Half a pixel is a real step at
+  // 10px, so `space`'s whole-number grammar would refuse the sheet's own values.
+  if (kind === 'metric') return /^\d{1,3}(?:\.\d{1,2})?(?:px|rem|em)?$/.test(value);
   if (kind === 'font') return value.length <= 200 && !/[;(){}]|url|\\/i.test(value);
   return false;
 }

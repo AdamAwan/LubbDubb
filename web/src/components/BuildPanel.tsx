@@ -1,6 +1,7 @@
 import type { BuildReading, UpgradeAction } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
 import { relTime } from './util.js';
+import { HeadRow } from './panel.js';
 
 /**
  * What the running build is, what is waiting for it, and how to take it.
@@ -121,7 +122,7 @@ function Controls({
 
   if (intent.state === 'draining' || intent.state === 'ready')
     return (
-      <div className="build-controls">
+      <HeadRow className="build-controls">
         {intent.state === 'ready' ? (
           <AsyncButton className="btn primary" onClick={() => onUpgrade('apply')}>
             Upgrade now
@@ -140,11 +141,11 @@ function Controls({
             : 'Dispatch is paused; running agents are being left to finish. Interrupting them instead is safe — they ' +
               'are resumed automatically on the way back up.'}
         </p>
-      </div>
+      </HeadRow>
     );
 
   return (
-    <div className="build-controls">
+    <HeadRow className="build-controls">
       <AsyncButton className="btn primary" onClick={() => onUpgrade('drain')}>
         {live > 0 ? `Drain and upgrade (${live} running)` : 'Upgrade'}
       </AsyncButton>
@@ -159,6 +160,6 @@ function Controls({
             'the running agents and restores them on the way back up.'
           : 'Nothing is running, so this pauses dispatch, exits, takes the update and comes back.'}
       </p>
-    </div>
+    </HeadRow>
   );
 }

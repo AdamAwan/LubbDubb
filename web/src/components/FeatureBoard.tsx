@@ -19,6 +19,7 @@ import type {
   FeatureSummary,
   FeatureWorkingRow,
 } from '../types.js';
+import { Panel } from './panel.js';
 
 /**
  * The feature board — the fleet's work read one tier up (issue #—).
@@ -99,7 +100,7 @@ export function FeatureBoard({ view, actions }: { view: CockpitView; actions: Co
       ))}
 
       {orphans !== null && (
-        <section className="cn-fb-card cn-fb-orphans">
+        <Panel face="console" density="roomy" as="section" className="cn-fb-card cn-fb-orphans">
           <div className="cn-fb-top">
             <h3>Work that rolls up nowhere</h3>
             <span className="cn-psub">the tracker says these hang off no container</span>
@@ -111,7 +112,7 @@ export function FeatureBoard({ view, actions }: { view: CockpitView; actions: Co
           </p>
           <Briefing briefing={orphans.briefing} now={view.now} actions={actions} />
           <Children rows={orphans.children} total={orphans.counts.total} actions={actions} />
-        </section>
+        </Panel>
       )}
 
       {unresolved > 0 && (
@@ -140,7 +141,12 @@ function FeatureCard({
   const now = view.now;
   const attention = wantsYou(feature, view);
   return (
-    <section className={`cn-fb-card${attention === null ? '' : ' cn-fb-wants'}`}>
+    <Panel
+      face="console"
+      density="roomy"
+      as="section"
+      className={`cn-fb-card${attention === null ? '' : ' cn-fb-wants'}`}
+    >
       <div className="cn-fb-top">
         {/* The `f<slot>` class is the Tickets tab's own ladder, reused rather than
             re-declared: the slot is persisted per feature, so one Feature is one
@@ -177,7 +183,7 @@ function FeatureCard({
       </div>
 
       <Children rows={feature.children} total={feature.counts.total} actions={actions} />
-    </section>
+    </Panel>
   );
 }
 

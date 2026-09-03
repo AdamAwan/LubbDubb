@@ -75,8 +75,8 @@ narrower than the usual meaning: `web/src/console/console.css` writes whatever C
 style themselves only through tokens, and **nothing in `console.css` targets a shared component's
 class** — the moment it reaches into `.escalation-card` the two stop being separable and a change to
 one silently redraws the other. `test/console.test.ts` asserts that by name. Beyond colour the set
-covers `--r-*` (radius), `--font-ui|mono|display`, and `--border-hi`/`--border-lo`, the light/dark pair
-that makes a bevel expressible.
+covers `--r-*` (radius), `--pad-*` ([the frame's density ramp](#the-frame)), `--font-ui|mono|display`,
+and `--border-hi`/`--border-lo`, the light/dark pair that makes a bevel expressible.
 
 The console's own colours are `--cn-*` properties on `:root` in `console.css` — a separate prefix so
 the two sheets cannot collide while both are loaded. The two families are a real distinction rather
@@ -1268,6 +1268,144 @@ names rather than about the tint.
 `test/cockpitTheme.test.ts` holds the aliases pure: a `.t-*` or `.cn-t-*` block may declare tone
 properties and their values must every one be a bare `var(--token)`. It is the only test in
 `npm run check` that reads CSS at all.
+
+### The frame
+
+**One card** — `Panel` in `web/src/components/panel.tsx`, dressed by the `.pl` block in
+`styles.css`. A card, a panel and a tile are one idea, and the cockpit had written it out at some
+thirty class names: `.card`, `.cfg-card`, `.tb-card`, `.tickets-card`, `.pet-card`, `.species-card`,
+`.finding-card`, `.lesson-card`, `.cn-fb-card`, `.sp-tile`, `.lrun-tile`, `.ob-tile`, `.cn-box`,
+`.cn-warnbox` and the rest. Under the names the same four declarations, and they had drifted the way
+copies do:
+
+> **Padding ran 6px 8px, 8px 10px, 9px 10px, 8px 12px and 14px 16px, with nothing choosing between
+> them**, and the radius alternated between three named steps and bare `4px`, `7px` and `20px`
+> literals. `.finding-card` and `.lesson-card` had become the same five declarations twice under two
+> names — with no live call site left on either.
+
+**Density is a step, never a value.** Three, counting the one that is no inset at all:
+
+| Density | Inset            | Drawn for                                                       |
+| ------- | ---------------- | --------------------------------------------------------------- |
+| `flush` | none             | a frame whose own children pad — a card with a header band       |
+| `snug`  | `--pad-snug`     | the ordinary card                                                 |
+| `roomy` | `--pad-roomy`    | a frame that is the page's subject                                |
+
+The ramp is deliberately shorter than the spread it replaces. The fix for five paddings nobody chose
+is not a better-argued five; it is a set small enough that picking a step is a decision, and a sixth
+inset is a token somebody has to add on purpose. `--pad-snug` and `--pad-roomy` are on `:root` and in
+[the registry](#the-theme) under Corners and density, so they follow an operator the way the corners
+already do.
+
+**The face is a prop, never a class string** — the precedent [the modal](#the-modal) sets. The
+`--cn-*` console family and the shared family are a real distinction rather than a namespace
+([Tokens](#tokens)), so `face` names which of the two a frame draws in and neither sheet learns the
+other's names. **Each family keeps its own radius step** — `--r-md` for the shared face, `--cn-r` for
+the console's — and no frame writes a length. A radius literal is the same failure a colour literal
+is, one property over: square-everywhere is the operator's setting, and a hard `7px` is a corner no
+setting moves.
+
+**`className` is a modifier, never a second face.** What makes a frame *that* frame stays at the call
+site — `.cn-fb-wants` tinting a Feature that wants a person, `.cfg-pending` bordering staged edits,
+`.tickets-card` clipping its rows — and every one of those weighs (0,1,0) just as the base does, so
+`.pl` sits high in the sheet and source order is what lets a card override its own frame.
+
+**There is no `Tile`.** A tile differs from a card in its inset and in nothing else, which is what
+the density prop is for; a second component would be the same four declarations again under a name
+that means "smaller".
+
+### The head row
+
+`display: flex; align-items: center; gap: 8px; flex-wrap: wrap` was the most duplicated declaration
+set in the cockpit — eleven names for one row, in two sheets, differing in nothing but whether they
+said `center` or `baseline`. `HeadRow` is that row once, and **alignment is the only axis**:
+`baseline` where the row is words of two sizes rather than a row of boxes.
+
+A different *gap* is a different row and keeps its own rule. The 6px variants — `.finding-head`,
+`.pm-part-head`, `.cn-prchips` — are not folded in, because folding 6px into 8px would be a
+restyling rather than a collapse, and the point of this one is that nothing on the screen moves.
+
+`test/cockpitTheme.test.ts` pins both from the sharp end, as shapes rather than name lists so a
+twelfth cannot be written: a block whose whole content *is* that declaration set is a hand-written
+head row, and a `.pl*` block whose radius or padding is anything but a `var()` naming a `:root` token
+is a frame no theme can reshape.
+
+**What deliberately keeps its own frame.** `.tb-card` carries a status bar in an asymmetric left
+inset; `.sp-tile`, `.lrun-tile` and `.ob-tile` are readings in a grid at a tighter inset than the
+ramp offers; `.rp-panel`, `.build-panel` and `.qn-box` were never frames at all. `.finding-card` and
+`.lesson-card` are dead and are left dead rather than migrated. Those are a separate change, and this
+one is deliberately shallow: the frame and the head row have one definition each now, and the
+remaining names can come to them one at a time.
+
+### The eyebrow
+
+**One uppercase caption** — `Label` in `web/src/components/label.tsx`, dressed by the `.lb` / `.cn-lb`
+block in `styles.css` and the four `--label-*` tokens on `:root`. It is [the tag](#the-tag)'s argument
+one property further down: not the tint this time, but the size and the tracking — the two things a
+reader notices last and a designer notices first.
+
+A caption over a block, a table's column head, a tile's word above its figure. One thing, and the two
+sheets drew it at **seventy-seven rules over forty distinct font-size/letter-spacing pairs**:
+11px/0.04em, 11px/0.03em, 11px/0.5px, 10.5px/0.7px, 10.5px/0.06em, 9.5px/0.14em, 9.5px/0.12em,
+11.5px/0.8px, 10px/0.9px and on. Nobody meant those to differ. Each is a call site answering a
+question the sheet had never answered once, and it was the worst drift in the stylesheet by a
+distance. Nothing catches it: every rule is valid, every label renders, and two labels a page apart
+being a half-pixel and three hundredths of an em different is visible only to somebody holding the two
+surfaces up together.
+
+**The ramp is two steps, and a third would be a size somebody picked.**
+
+| step    | token                       | what it is                                                                       |
+| ------- | --------------------------- | -------------------------------------------------------------------------------- |
+| `lb`    | `--label-size` (11px)       | the section label: the caption over a block, a group, a panel                     |
+| `lb-sm` | `--label-size-sm` (10px)    | the dense one: a table's column heads, a stat tile's word above its figure        |
+
+The dense step earns its place on one argument: those labels sit in a grid of many, over figures they
+must not compete with. Everything else that used to be 9.5px, 10.5px or 11.5px was one of these two
+and drew a decimal apart from it.
+
+**There is one tracking, and that is a decision rather than an omission.** `--label-track` is
+`0.08em` — em-relative, so it scales with the step and holds at both sizes. A second tracking token
+would put "how much tracking at this size" back in front of every future call site, which is the
+question the forty pairs were each answering separately. `--label-weight` is the fourth token, and it
+takes the choice away from the element: a label written as a `<b>` and one written as a `<span>` used
+to differ by a weight nobody declared.
+
+**The ramp owns size, tracking, weight and case — never family, never colour.** Those are the two
+axes where the cockpit's registers genuinely differ, and folding them in would make a two-value
+component a four-value one:
+
+- **Family.** The review pack, the species sheet and most of the console draw their labels in mono.
+  That rule keeps its own `font-family`, which is one line.
+- **Colour.** `--muted`/`--grey` against `--cn-fg-faint`/`--cn-fg-dim` is [the two
+  families](#tokens), not a namespace, so there are two faces — `.lb` and `.cn-lb` — and a label that
+  wants the brighter ink of its family says so on its own rule. `face` is a prop, never a class
+  string, the same rule [the modal](#the-modal) keeps for its six.
+
+**Both faces are declared in `styles.css`, and `console.css` says nothing about them.** They are one
+decision with two answers, and splitting them across two files is exactly how they drift back apart —
+the same argument [scrollbars](#scrollbars) settle the same way. The `--label-*` tokens are core and
+not `--cn-*` for the same reason: a ramp is furniture, and furniture is drawn once for everything.
+
+**A label that is markup comes through `Label`; a label that is structure wears the class.** A `<th>`
+in a stats table, a `<dt>` in a detail list, an `<h4>` over a briefing — those are elements a surface
+already renders, and the class is what reaches them. Thirty-odd such names — `.pm-section-label`,
+`.tickets-thead`, `.cfg-railhead`, `.rp-kicker`, `.sp-tbl th`, `.cn-coln`, `.cn-fact-k`, `.ob-tile-l`
+and the rest — join the ramp's rule rather than being renamed: renaming forty classes is a diff about
+names, and this one is about the type. What they each keep is their own layout, family and colour.
+
+**What deliberately keeps its own size: a badge.** `.tag`, `.badge`, `.cn-tag`, `.cn-chip`,
+`.cfg-badge`, `.pm-dtag`, `.cls`, `.pet-rarity`, `.rp-gate-tag`, `.ob-state` and the others are boxes
+— a border, a padding, a ground — where the type is part of a shape rather than a caption over one,
+and [the tag](#the-tag) already said those are shapes of their own. Thirteen pairs remain and every
+one of them is inside a box.
+
+That is what makes the guard a shape rather than a list. `test/cockpitTheme.test.ts` asserts that
+**uppercase text that is not in a box takes its size and its tracking from `var(--label-*)` and from
+nowhere else** — no selectors and no allow-list, so it cannot rot as the sheets grow, and a
+forty-first pair cannot be written. The `--label-*` tokens are themeable like every other, so the ramp
+is also something an operator can move: they carry `kind: 'metric'`, the grammar for a decimal length
+or a bare weight, because `space`'s whole-number form would refuse the sheet's own `10.5px`.
 
 ### The header's controls
 

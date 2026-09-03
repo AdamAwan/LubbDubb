@@ -2,6 +2,7 @@ import type { OrphanedWork, RecoveryVerdict } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
 import { refLink, relTime } from './util.js';
 import { Ref } from './refs.js';
+import { HeadRow, Panel } from './panel.js';
 
 /**
  * What each verdict does, in the operator's terms. These are the whole of the
@@ -80,8 +81,8 @@ function CrashedCard({
   onDecide: (taskId: string, verdict: RecoveryVerdict) => Promise<unknown> | unknown;
 }) {
   return (
-    <div className="card crashed">
-      <div className="crashed-head">
+    <Panel face="shared" density="snug" className="card crashed">
+      <HeadRow className="crashed-head">
         <span className={`badge ${crashed.died}`} title={VERDICT_CAUSE[crashed.died]}>
           {DIED_LABEL[crashed.died]}
         </span>
@@ -92,7 +93,7 @@ function CrashedCard({
           </span>
         )}
         {crashed.branch && <code className="branch">{refLink(crashed.branch, refUrls)}</code>}
-      </div>
+      </HeadRow>
 
       <div className="crashed-meta muted">
         {crashed.died === 'never_started' ? 'queued' : 'started'} {relTime(crashed.startedAt, now)}
@@ -139,7 +140,7 @@ function CrashedCard({
           Remove
         </AsyncButton>
       </div>
-    </div>
+    </Panel>
   );
 }
 

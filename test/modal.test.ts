@@ -85,7 +85,8 @@ test('the head, the foot and the guard are drawn once, for every caller', () => 
   );
   assert.match(html, /class="plan-modal-backdrop"/);
   assert.match(html, /class="plan-modal"/);
-  assert.match(html, /class="pm-head"/);
+  // The head is a `HeadRow` now — the shared row, wearing the modal's own modifier.
+  assert.match(html, /class="hdr pm-head"/);
   assert.match(html, /class="pm-title">Raise a bug</);
   assert.match(html, /class="btn ghost small pm-close"/);
   assert.match(html, /class="pm-foot"/);

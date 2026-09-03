@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { isStateColour } from '../stateColour.js';
 import { ColourField } from './ColourField.js';
 import type { ConfigChange, RunningConfigEntry, RunningConfigGroup, RunningConfigPayload } from '../types.js';
+import { Panel } from './panel.js';
 
 /**
  * The values section: every configurable leaf, grouped, editable.
@@ -176,7 +177,7 @@ export function ConfigValues({
           </p>
         )}
 
-        <section className="cfg-card">
+        <Panel face="console" density="flush" as="section" className="cfg-card">
           <h3>
             {shown?.title ?? 'Config'}
             <span className="cfg-more">
@@ -210,10 +211,10 @@ export function ConfigValues({
                 onUndo={() => undo(entry.path)}
               />
             ))}
-        </section>
+        </Panel>
 
         {(shown?.entries ?? []).some((entry) => entry.access === 'advanced') && (
-          <section className="cfg-card">
+          <Panel face="console" density="flush" as="section" className="cfg-card">
             <button className="cfg-advhead" onClick={() => setAdvanced(!advanced)} aria-expanded={advanced}>
               <span className="muted">{advanced ? '▾' : '▸'}</span> Advanced
               <span className="chip small warn">
@@ -244,14 +245,14 @@ export function ConfigValues({
                   ))}
               </>
             )}
-          </section>
+          </Panel>
         )}
 
         {/* The two values a config block on its own would lie about: both are
             runtime-adjustable through the fleet control and revert to the file on
             restart. Drawn from the same fetch as the rows above, so the two halves
             of "live 5, configured 3" can never come from readings that disagree. */}
-        <section className="cfg-card">
+        <Panel face="console" density="flush" as="section" className="cfg-card">
           <h3>Live now</h3>
           <div className="cfg-liverow">
             <span className="cfg-key">Agent cap</span>
@@ -271,7 +272,7 @@ export function ConfigValues({
               )}
             </span>
           </div>
-        </section>
+        </Panel>
 
         {refusal && <p className="cfg-refusal">{refusal}</p>}
       </div>
@@ -329,7 +330,7 @@ function PendingCard({
 }): React.JSX.Element {
   const [interrupt, setInterrupt] = useState(false);
   return (
-    <section className="cfg-card cfg-pending">
+    <Panel face="console" density="flush" as="section" className="cfg-card cfg-pending">
       <h3>
         Waiting for a restart
         {canRestart ? (
@@ -360,7 +361,7 @@ function PendingCard({
           it — these are what it will come back on.
         </p>
       )}
-    </section>
+    </Panel>
   );
 }
 
