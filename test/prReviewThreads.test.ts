@@ -100,6 +100,30 @@ test('the provider keeps the conversation and where it hangs, not just the root'
   assert.equal(threadComments([built!])[0]!.handled, false);
 });
 
+test('the fold carries the conversation through to what a rule reads', () => {
+  // The fold used to stop at the root, and every surface an agent reads is built
+  // off it: the reviewer's follow-up existed in the world, in the store and in the
+  // cockpit, and reached the one reader that acts on it nowhere.
+  const built = thread({
+    state: 'open',
+    replies: [
+      { id: 'r1', author: 'lubbdubb-bot', body: 'because X', ours: true },
+      { id: 'r2', author: 'bob', body: 'not convinced — do it the other way', ours: false },
+    ],
+  });
+  const [comment] = threadComments([built]);
+  assert.deepEqual(
+    comment!.replies?.map((r) => [r.body, r.ours]),
+    [
+      ['because X', true],
+      ['not convinced — do it the other way', false],
+    ],
+  );
+  // Absent, not empty, on a thread nobody answered: "no replies" and "this
+  // provider does not report replies" are one answer to every reader downstream.
+  assert.equal(threadComments([thread()])[0]!.replies, undefined);
+});
+
 test('a thread the reviewer resolved is resolved, and one the fleet answered is answered', () => {
   const comments: GhReviewComment[] = [
     { id: 100, authorLogin: 'bob', body: 'rename', inReplyToId: null },

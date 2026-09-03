@@ -761,8 +761,10 @@ A pull request's review reaches the harness twice, from one reading.
 
 `unresolvedComments` is the fold every dispatch rule consumes: one `PrComment` per thread, keyed on
 the thread's root comment, carrying `handled` — the single bit that decides whether rule
-`pr-review-comment` has work. `reviewThreads` is the same threads with the conversation and the state
-kept: the replies, who wrote each one, where the thread hangs in the diff, and one of four states.
+`pr-review-comment` has work — with the thread's replies on it, so the fold is the whole conversation
+and not only its opening line ([below](#the-thread-is-the-conversation)). `reviewThreads` is the same
+threads with the state kept as well: who wrote each message, where the thread hangs in the diff, and
+one of four states.
 The providers build the threads and derive the comments from them (`threadComments` in
 `src/prThreads.ts`), so a thread the cockpit draws as open and a comment list that calls it handled
 cannot happen — there is one derivation, not two.
@@ -788,6 +790,46 @@ review comments to the GraphQL resolution read it was already making (`buildRevi
 the threads it already fetches (`src/integrations/azure/sourceControl.ts`). A provider that reports
 no file or line leaves `path`/`line` unset and the thread is drawn without a place rather than with
 a guessed one.
+
+### The thread is the conversation
+
+`PrComment` carries **`replies`** alongside the root's `body`, and `threadComments` fills it from the
+thread it folds. The root alone is not a review thread — it is where one started.
+
+This was the harness's second way of losing a reviewer's words, and it looked identical to the first
+from the outside. Everything an agent reads about a review is built off `unresolvedComments`: the
+thread list in the `pr-review-comment` prompt (`reviewThreadsNote`), the line a running agent gets
+when a thread moves (`reviewThreadNote`), and `world_read`. All three rendered `body`, which is the
+**root** and nothing else. So a reviewer's follow-up narrowing a finding, or an operator's reply
+saying which of a bot's five comments actually needs fixing and what the fix is, was read off the
+provider, recorded, drawn in the cockpit — and dropped on the way to the only reader that acts on it.
+The agent answered the opening comment of a conversation it could not see the rest of, which to the
+person who wrote the reply is indistinguishable from the fleet ignoring them, and is worse than the
+silence: an answer arrives, confidently, to a question nobody asked.
+
+`replies` is **absent rather than empty** on a thread nobody answered, so a provider that reports no
+replies and a thread that has none are one answer to every reader — neither is a conversation to
+render, and nothing that predates this changes shape.
+
+Three things follow from carrying it:
+
+- **The transcript names its authors, and marks the fleet's own replies.** Unmarked, an agent reads
+  the harness's last answer back as a fresh instruction and makes the same change twice. `ours` is
+  the record (above), so the badge is never on a person's message.
+- **The newest message is stated to be the live ask** (`lastWordNote`). A list of threads with
+  replies under them still reads as a list of comments to answer one by one; a reviewer who narrows
+  a finding replies rather than editing what they wrote first, so the opening comment is where the
+  thread started and not what it now wants. Appended only when some thread has a reply — a root-only
+  review renders exactly as it did before this existed.
+- **Notify de-dup keys on `prCommentSignalRef`, not on the thread ref.** De-dup asks "has this agent
+  already been told this", and keyed on the thread alone the answer is yes forever after the first
+  delivery — so a follow-up on a thread already in the running agent's prompt reached nobody, which
+  is precisely the feedback an operator gives while watching an agent work. The key is the thread ref
+  plus the id of its newest message, so it moves when the conversation does. It is a second function
+  rather than a change to `prCommentOrigin`, because that string is a *ref*: it is what a refused
+  `reply_draft` proposal is filed under and what `rejectionGuidance` matches whole, and it has to
+  stay the same across the life of a thread. A key that must move and a ref that must not are two
+  jobs.
 
 ### Attribution is a record, never an identity
 
@@ -1315,8 +1357,9 @@ Two things fall out, and both are load-bearing:
   rule `cooldown-escalate` had already handed to a human. One origin means one attempt cap means one
   reading of whose turn it is. Keyed on the origin alone, a
   reviewer's fourth comment would be swallowed by the origin the first three already claimed — the
-  signal an operator sends while reviewing an agent's work as it goes. `PrConcern.signals` carries the
-  thread refs; `dispatch_code_agent.signalRefs` records the ones a dispatch already put in an agent's
+  signal an operator sends while reviewing an agent's work as it goes. A *reply* on a thread the agent
+  already has is that same signal, which is why the key is `prCommentSignalRef` and not the thread ref
+  ([above](#the-thread-is-the-conversation)). `PrConcern.signals` carries those keys; `dispatch_code_agent.signalRefs` records the ones a dispatch already put in an agent's
   prompt, since `activeOrigins` sees task origins only and cannot tell that the running agent was
   launched with those threads (`dispatchedSignalsByBranch`).
 
@@ -1332,7 +1375,11 @@ against the cooldown cap, and at the cap a human instead of an agent.
 So the agent is asked to close that gap itself. `reviewRecheckNote` (`src/dispatcher/reviewThreads.ts`)
 is appended after the thread list and tells it to call `world_read("pr", "pr:<n>")` before finishing
 and compare `unresolvedComments` against the threads it was handed: a thread that is not in the
-prompt arrived after it started and is its to answer, and a body that no longer matches was edited.
+prompt arrived after it started and is its to answer, a body that no longer matches was edited, and a
+thread carrying a reply the prompt does not have was answered while it worked — that reply being the
+live ask on it now. The reading serves the replies for exactly this: a review moves by reply far more
+often than by a new thread, and roots-only this re-check could not see the commonest thing it exists
+to catch.
 It is the same snapshot the dispatch was decided against, carrying `observedAt`, so the note also
 says to read once more at the end of a long run. The agent then accounts for every thread by id,
 which is what makes a missed one visible rather than merely absent.

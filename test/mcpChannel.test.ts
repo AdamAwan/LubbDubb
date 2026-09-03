@@ -359,7 +359,7 @@ function prPayload(item: Record<string, unknown>) {
     ciFailingOnBasePr: number | null;
     basePr: { number: number } | null;
     health: { blocked: boolean; reasons: string[] };
-    unresolvedComments: { body: string }[];
+    unresolvedComments: { body: string; replies: { id: string; author: string; body: string; ours: boolean }[] }[];
     state: string;
   };
 }
@@ -909,7 +909,15 @@ test('world_read answers out of the harness view, with the status envelope on it
           branch: 'issue/12',
           baseBranch: 'main',
           ciStatus: 'failing',
-          unresolvedComments: [{ id: 'c1', author: 'rev', body: 'this leaks a handle', handled: false }],
+          unresolvedComments: [
+            {
+              id: 'c1',
+              author: 'rev',
+              body: 'this leaks a handle',
+              handled: false,
+              replies: [{ id: 'r1', author: 'rev', body: 'the one in the retry path, specifically', ours: false }],
+            },
+          ],
         }),
       ],
       issues: [fakeIssue(12, { labels: ['bug'], linkedPrNumber: 42 })],
@@ -930,6 +938,13 @@ test('world_read answers out of the harness view, with the status envelope on it
   assert.equal(payload.item.ciStatus, 'failing');
   assert.deepEqual(payload.item.health, { blocked: true, reasons: ['CI failing', '1 unresolved comment'] });
   assert.equal(prPayload(payload.item).unresolvedComments[0]?.body, 'this leaks a handle');
+  // The replies come with the thread. The agent is told to compare this list
+  // against the one in its prompt to catch a review that moved while it worked,
+  // and the commonest move is a reply — served roots-only, that re-check could
+  // not see the thing it exists for.
+  assert.deepEqual(prPayload(payload.item).unresolvedComments[0]?.replies, [
+    { id: 'r1', author: 'rev', body: 'the one in the retry path, specifically', ours: false },
+  ]);
   // A pulse-old reading, not a live fetch — and it says which.
   assert.equal(payload.observedAt, TAKEN_AT);
   assert.equal(payload._status.origin, 'pr:42:ci');

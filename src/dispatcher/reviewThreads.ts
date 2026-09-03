@@ -27,6 +27,31 @@ export function prCommentOrigin(prNumber: number, commentId: string): string {
 }
 
 /**
+ * The notify de-dup key for one thread — {@link prCommentOrigin} while the thread
+ * is just its root, and the root **plus its newest message** once somebody has
+ * replied under it.
+ *
+ * De-dup asks "has this agent already been told this?", and keyed on the thread
+ * alone the answer was yes forever after the first delivery. A reviewer's
+ * follow-up on a thread the agent was handed at dispatch is then a signal
+ * delivered to nobody — which is exactly the shape of feedback an operator gives
+ * while watching an agent work, and the one it must never be. The key moves when
+ * the conversation does, so the follow-up reaches the running agent and the
+ * unchanged thread still does not repeat itself every pulse.
+ *
+ * Not folded into `prCommentOrigin`: that string is a *ref* — the one a refused
+ * `reply_draft` proposal is filed under, and the one `rejectionGuidance` matches
+ * whole — and it has to stay the same string across the life of a thread. A key
+ * that must move and a ref that must not are two jobs, so they are two functions.
+ */
+export function prCommentSignalRef(prNumber: number, thread: PrComment): string {
+  const origin = prCommentOrigin(prNumber, thread.id);
+  const replies = thread.replies ?? [];
+  const newest = replies[replies.length - 1];
+  return newest === undefined ? origin : `${origin}@${newest.id}`;
+}
+
+/**
  * The unresolved threads, rendered for the end of the `pr-review-comment` prompt.
  *
  * **Appended, never interpolated**, for `ciFailureNote`'s reason: the template is
@@ -46,8 +71,55 @@ export function reviewThreadsNote(threads: PrComment[]): string {
     threads.length === 1
       ? '\n\nThe unresolved review thread:'
       : `\n\nThe ${threads.length} unresolved review threads, in the order they were left:`;
-  const bodies = threads.map((t, i) => `${i + 1}. ${t.author} (thread ${t.id}):\n${quote(t.body)}`);
-  return `${heading}\n\n${bodies.join('\n\n')}`;
+  const bodies = threads.map((t, i) => `${i + 1}. ${threadTranscript(t)}`);
+  return `${heading}\n\n${bodies.join('\n\n')}${lastWordNote(threads)}`;
+}
+
+/**
+ * One thread as the agent must read it: the root, then **every reply under it**,
+ * oldest first, each named by its author.
+ *
+ * The root alone was the whole of what an agent ever saw, and a review thread is
+ * not its opening line. A reviewer narrows a finding in the reply; the operator
+ * says which of a bot's five comments actually needs fixing, and what the fix is,
+ * in the reply. Handed the root by itself, the agent answers the wrong question
+ * confidently — and to the person who wrote the reply that is indistinguishable
+ * from being ignored, because the harness's answer never mentions what they said.
+ *
+ * A reply the harness itself sent is marked as such rather than left to be read
+ * as the reviewer's. Without it an agent re-reads the fleet's own last answer as a
+ * fresh instruction, which is how a thread gets the same fix twice.
+ */
+function threadTranscript(thread: PrComment): string {
+  const head = `${thread.author} (thread ${thread.id}):\n${quote(thread.body)}`;
+  const replies = thread.replies ?? [];
+  if (replies.length === 0) return head;
+  const rendered = replies.map(
+    (r) => `   ${r.author}${r.ours ? ' (the fleet, earlier)' : ''} replied:\n${quote(r.body)}`,
+  );
+  return `${head}\n${rendered.join('\n')}`;
+}
+
+/**
+ * The line that says what the transcript above is *for*, appended only when
+ * there is a conversation to read.
+ *
+ * The list looks like a list of comments, and an agent that treats it as one
+ * answers each root and skips the replies underneath — the same failure the
+ * transcript exists to end, moved one step later. So the ordering rule is stated
+ * outright: the newest message is the live ask, and an earlier one it revises is
+ * history rather than a second instruction.
+ */
+function lastWordNote(threads: PrComment[]): string {
+  if (!threads.some((t) => (t.replies?.length ?? 0) > 0)) return '';
+  return (
+    '\n\nRead each thread whole, oldest to newest. **The last message in a thread is the live ask** — a ' +
+    'reviewer narrowing a finding, or telling you which part of it to fix and how, replies rather than ' +
+    'editing what they wrote first, so the opening comment is where the thread started and not what it ' +
+    'now wants. Where the two differ, answer the newest and say what you took it to mean. A reply marked ' +
+    'as the fleet\u2019s is your own earlier answer: it is context for what has been tried, never an ' +
+    'instruction.'
+  );
 }
 
 /**
@@ -78,7 +150,9 @@ export function reviewRecheckNote(prNumber: number): string {
     'threads above:\n\n' +
     '- A thread that is not above arrived after you started. It is yours — answer it in this dispatch.\n' +
     '- A thread whose body no longer reads as it does above was edited after you started. Answer the wording ' +
-    'you can see now, and say that it changed.\n\n' +
+    'you can see now, and say that it changed.\n' +
+    '- A thread carrying a reply that is not above was answered while you worked, and that reply is now the ' +
+    'live ask on it. Answer that, not the root you were handed.\n\n' +
     'The reading carries an observedAt: it is the last cycle’s snapshot rather than a live fetch, so if the ' +
     'work took a while, read it once more at the very end. Then account for every thread by its id — what you ' +
     'changed for it, or what you are defending and why. A thread you never mention reads as one you missed.'
@@ -90,7 +164,17 @@ export function reviewRecheckNote(prNumber: number): string {
  * told about appears. One per thread, collapsed into a single note by the caller.
  */
 export function reviewThreadNote(prNumber: number, thread: PrComment): string {
-  return `Review comment from ${thread.author} on PR #${prNumber} (thread ${thread.id}): "${thread.body}"`;
+  const replies = thread.replies ?? [];
+  const head = `Review comment from ${thread.author} on PR #${prNumber} (thread ${thread.id}): "${thread.body}"`;
+  // The replies, for `threadTranscript`'s reason and one more: this line is often
+  // the *only* delivery a follow-up gets — it is sent because the thread moved,
+  // and the thing that moved it is the reply. Naming the root alone would deliver
+  // the notification and drop its content.
+  if (replies.length === 0) return head;
+  const rendered = replies
+    .map((r) => `${r.author}${r.ours ? ' (the fleet, earlier)' : ''}: "${r.body}"`)
+    .join('; then ');
+  return `${head} — then ${rendered}. The last of those is the live ask.`;
 }
 
 /** Indent a comment body so its own line breaks can't be read as the next thread. */

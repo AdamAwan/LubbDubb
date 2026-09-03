@@ -319,6 +319,23 @@ export interface PrComment {
   body: string;
   /** True once the harness has handled (drafted a reply / fixed) this comment. */
   handled: boolean;
+  /**
+   * The replies under the root, oldest first — the rest of the conversation the
+   * root started, carried on the fold rather than left behind on
+   * {@link PrReviewThread}.
+   *
+   * `body` is the thread's **root** and nothing else, and for a long time it was
+   * the whole of what an agent was handed: a reviewer's follow-up saying which
+   * finding actually mattered, or an operator's "fix this one, like so", was read
+   * off the provider, stored, drawn in the cockpit — and dropped on the way to the
+   * prompt. The agent answered the opening comment of a conversation it could not
+   * see the rest of, which reads exactly like it ignoring the person in it.
+   *
+   * Optional, and absent rather than empty on a thread nobody replied to, so a
+   * fixture or a provider that reports no replies is unchanged by this.
+   * → `docs/spec/07-pull-requests.md#the-thread-is-the-conversation`
+   */
+  replies?: PrThreadMessage[];
 }
 
 /**
