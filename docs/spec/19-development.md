@@ -270,7 +270,7 @@ the escape hatch for the case where the build must not run — a checkout instal
 635 kB file. Two things about that cut are load-bearing:
 
 - **Every chunk is eager.** They are static imports of the entry, so the browser fetches the whole
-  graph on load exactly as it did when the bundle was one file. A *lazy* chunk — one fetched when a
+  graph on load exactly as it did when the bundle was one file. A _lazy_ chunk — one fetched when a
   panel opens — would fail mid-session against a `web/dist` rebuilt underneath it, which is the one
   staleness case [16](16-http-api.md#the-spa-fallback) does not already answer with "reload once".
   Nothing here is worth a second one.

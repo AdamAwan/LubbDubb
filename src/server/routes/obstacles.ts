@@ -15,7 +15,7 @@ import type { RouteContext } from './context.js';
  * pulse and ended by one of the four endings. Nothing here is a step in any of
  * that, and that is deliberate — *every state has an exit that is not you* is the
  * invariant this whole subsystem is arranged around
- * (`docs/spec/32-obstacles.md#every-state-has-an-exit-that-is-not-you`), and a
+ * (`docs/spec/27-obstacles.md#every-state-has-an-exit-that-is-not-you`), and a
  * route that the harness waited on would be the state a person has to empty,
  * rebuilt. So there is no accept, no promote, no triage verdict, and no queue.
  *
@@ -30,7 +30,7 @@ import type { RouteContext } from './context.js';
  * - **Retire** — this is over, and no reading is going to say so. It is
  *   *not* rejecting: the row keeps its claim, its keys and its sightings, and a
  *   matching report reopens it at `standing` like any other terminal row
- *   ([27](../../../docs/spec/27-knowledge.md#retiring-is-not-rejecting)). Nothing
+ *   — retiring is not rejecting. Nothing
  *   here bars a claim by name, because nothing here is a durable statement about
  *   the repository to bar.
  * - **Write it down** — queue a note's documentation change now rather than
@@ -42,7 +42,7 @@ import type { RouteContext } from './context.js';
  * every row, and the snapshot comes round every couple of seconds for every open
  * cockpit — the argument `/api/spend` and `/api/pool` already make.
  *
- * → `docs/spec/32-obstacles.md#in-the-cockpit`, `docs/spec/16-http-api.md`
+ * → `docs/spec/27-obstacles.md#in-the-cockpit`, `docs/spec/16-http-api.md`
  */
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
   const { store } = system;

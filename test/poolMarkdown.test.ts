@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { GitPoolTransport } from '../src/integrations/pool/gitPool.js';
 import { POOL_SCHEMA_VERSION } from '../src/pool/document.js';
 import { poolMarkdownPath, renderPoolMarkdown } from '../src/pool/markdown.js';
-import type { PoolClaimsDocument, PoolDigestDocument, PoolDigestRow } from '../src/types.js';
+import type { PoolDigestDocument, PoolDigestRow } from '../src/types.js';
 import { gitRepo } from './support/gitRepo.js';
 
 /**
@@ -21,19 +21,6 @@ import { gitRepo } from './support/gitRepo.js';
  */
 
 const NOW = '2026-08-25T09:14:02.481Z';
-
-function claimsDoc(over: Partial<PoolClaimsDocument> = {}): PoolClaimsDocument {
-  return {
-    pool: POOL_SCHEMA_VERSION,
-    kind: 'claims',
-    fleetId: 'alice@acme-api',
-    project: 'acme-api',
-    publishedAt: NOW,
-    harnessVersion: '0.1.0',
-    claims: [],
-    ...over,
-  };
-}
 
 function digestDoc(over: Partial<PoolDigestDocument> = {}): PoolDigestDocument {
   return {
@@ -56,72 +43,6 @@ function digestDoc(over: Partial<PoolDigestDocument> = {}): PoolDigestDocument {
 function row(day: string, key: string, count: number, costUsd: number | null): PoolDigestRow {
   return { day, key, count, costUsd, partial: day === '2026-08-25' };
 }
-
-// ---------------------------------------------------------------------------
-// Claims
-// ---------------------------------------------------------------------------
-
-test('the claims companion draws the words, where it applies and the origin counts', () => {
-  const markdown = renderPoolMarkdown(
-    claimsDoc({
-      claims: [
-        {
-          id: 'fact_7Kq2',
-          claim: 'The native builds need npm ci before the tests.',
-          where: 'package.json',
-          vouchedAt: '2026-08-19T16:02:11.000Z',
-          corroborations: 4,
-          disputes: 1,
-          evidence: ['better-sqlite3 threw NODE_MODULE_VERSION until npm ci rebuilt it.'],
-        },
-      ],
-    }),
-  );
-
-  assert.match(markdown, /^# acme-api — what this fleet has vouched for\n/);
-  assert.match(markdown, /\*\*Fleet\*\* `alice@acme-api`/);
-  assert.match(markdown, /## The native builds need npm ci before the tests\./);
-  assert.match(markdown, /\*\*Where\*\* package\.json · \*\*Vouched\*\* 2026-08-19/);
-  assert.match(markdown, /\*\*Corroborations\*\* 4 · \*\*Disputes\*\* 1/);
-  assert.match(markdown, /- better-sqlite3 threw NODE_MODULE_VERSION until npm ci rebuilt it\./);
-  // The counts are the loudest numbers on the page, and a reader who takes them for
-  // a threshold has the corroboration gate backwards — so the file says which it is.
-  assert.match(markdown, /a reading, and never a trigger/);
-  // Nothing the reader cannot reach: no fact id, and no ref into somebody else's world.
-  assert.doesNotMatch(markdown, /fact_7Kq2/);
-});
-
-/**
- * A claim is free text an agent wrote. A newline inside one would end the heading
- * it is drawn as, and the rest of the sentence would render as body text under a
- * truncated heading — which reads as a claim the fleet did not make.
- */
-test('a claim written across lines is drawn on one', () => {
-  const markdown = renderPoolMarkdown(
-    claimsDoc({
-      claims: [
-        {
-          id: 'f1',
-          claim: 'Windows refuses rmdir\non a worktree a live process holds.',
-          where: null,
-          vouchedAt: '2026-08-11T10:41:55.000Z',
-          corroborations: 2,
-          disputes: 0,
-          evidence: ['Every dispatch\nfailed EBUSY.'],
-        },
-      ],
-    }),
-  );
-
-  assert.match(markdown, /## Windows refuses rmdir on a worktree a live process holds\.\n/);
-  assert.match(markdown, /- Every dispatch failed EBUSY\.\n/);
-  // `where` is null here, so the row starts at the vouch rather than drawing an empty field.
-  assert.match(markdown, /^\*\*Vouched\*\* 2026-08-11/m);
-});
-
-test('a fleet that has vouched for nothing says so rather than drawing an empty page', () => {
-  assert.match(renderPoolMarkdown(claimsDoc()), /This fleet has vouched for nothing yet\./);
-});
 
 // ---------------------------------------------------------------------------
 // Digest
@@ -272,13 +193,13 @@ test('the git transport publishes the companion beside the document, under the p
     fleetId: 'alice@acme-api',
   });
 
-  await transport.publish(claimsDoc({ claims: [] }));
+  await transport.publish(digestDoc());
 
-  const markdown = remoteFile(remote, 'engineering/fleet-pool/fleets/alice@acme-api/claims.md');
-  assert.notEqual(remoteFile(remote, 'engineering/fleet-pool/fleets/alice@acme-api/claims.json'), null);
+  const markdown = remoteFile(remote, 'engineering/fleet-pool/fleets/alice@acme-api/digest.md');
+  assert.notEqual(remoteFile(remote, 'engineering/fleet-pool/fleets/alice@acme-api/digest.json'), null);
   assert.notEqual(markdown, null, 'the companion reached the pool too');
-  assert.match(markdown ?? '', /^# acme-api — what this fleet has vouched for/);
-  assert.equal(poolMarkdownPath('alice@acme-api', 'claims'), 'fleets/alice@acme-api/claims.md');
+  assert.match(markdown ?? '', /^# acme-api — daily digest/);
+  assert.equal(poolMarkdownPath('alice@acme-api', 'digest'), 'fleets/alice@acme-api/digest.md');
 });
 
 /**
@@ -292,16 +213,15 @@ test('fetch reads the documents and never their companions', async () => {
   const root = join(mkdtempSync(join(tmpdir(), 'lubbdubb-poolmd-fetch-')), 'pool');
   const transport = new GitPoolTransport({ root, remote, branch: 'main', path: '', fleetId: 'alice@acme-api' });
 
-  await transport.publish(claimsDoc());
   await transport.publish(digestDoc());
   // A hand-written file in the same directory, as a shared wiki would have.
   const notes = join(root, 'fleets', 'bob@acme-api');
   mkdirSync(notes, { recursive: true });
-  writeFileSync(join(notes, 'claims.md'), '# notes somebody wrote\n', 'utf8');
+  writeFileSync(join(notes, 'digest.md'), '# notes somebody wrote\n', 'utf8');
 
   const fetched = await transport.fetch();
 
-  assert.equal(fetched.length, 2, 'the two documents, and neither companion');
+  assert.equal(fetched.length, 1, 'the one document, and neither companion');
   for (const entry of fetched) assert.ok(entry.text.trimStart().startsWith('{'), 'every fetched document is JSON');
 });
 
@@ -310,9 +230,9 @@ test('a re-publish of unchanged content commits nothing, companion included', as
   const root = join(mkdtempSync(join(tmpdir(), 'lubbdubb-poolmd-idle-')), 'pool');
   const transport = new GitPoolTransport({ root, remote, branch: 'main', path: '', fleetId: 'alice@acme-api' });
 
-  await transport.publish(claimsDoc());
+  await transport.publish(digestDoc());
   const before = execFileSync('git', ['rev-list', '--count', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
-  await transport.publish(claimsDoc());
+  await transport.publish(digestDoc());
   const after = execFileSync('git', ['rev-list', '--count', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
 
   assert.equal(after, before, 'identical bytes are not a commit');

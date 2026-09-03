@@ -381,7 +381,7 @@ closed-PR window, at no extra request: the author rides on the payload the snaps
 **`prAuthor` is not that answer**, and stopped being a usable proxy for it the day `ownWorkOnly`
 widened the fetch to the pull requests a colleague **assigned** the operator
 ([#a-pull-request-a-person-put-on-you](#a-pull-request-a-person-put-on-you)). With the filter set,
-somebody else's pull request is in the world *by design* — so reading "it was fetched" as "it is
+somebody else's pull request is in the world _by design_ — so reading "it was fetched" as "it is
 ours" had the harness renaming a colleague's pull request, tagging it for watching, reaping its
 branch on merge, and, through rule `pr-review-comment`, **dispatching an agent that answered their
 reviewers**. On a single-operator deployment nothing about that is red: the reply is posted under the
@@ -547,7 +547,7 @@ folding them would make one of the two a lie every time they disagree.
 | ----------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `done`      | nobody — off the board        | `prState(pr) !== 'open'`.                                                                                                                                                                                                                                                                                                                                            |
 | `unwatched` | nobody — nobody opted it in   | `!isPrWatched(pr, watchLabel)`. First, because the harness filters these out of the dispatch world entirely — every arm below would describe rules that cannot fire.                                                                                                                                                                                                 |
-| `elsewhere` | somebody else's               | `isSomeoneElsesPr(pr)` ([#whose-pull-request-is-it](#whose-pull-request-is-it)) — hidden from the dispatch world beside the unwatched, so no rule below can fire either. Named `elsewhere` rather than a status of its own because the fold below turns it into `you` the moment they put the operator on it. |
+| `elsewhere` | somebody else's               | `isSomeoneElsesPr(pr)` ([#whose-pull-request-is-it](#whose-pull-request-is-it)) — hidden from the dispatch world beside the unwatched, so no rule below can fire either. Named `elsewhere` rather than a status of its own because the fold below turns it into `you` the moment they put the operator on it.                                                        |
 | `you`       | yours                         | A **pending proposal** whose ref names this PR; an agent on the branch **parked waiting**; a concern whose **attempt cap is spent** (rule `cooldown-escalate` did); or a failing check the **CI policy holds** (rule `pr-ci-blocked` handed it to a human) **with no other concern under it** — a held check that is one of two problems is a reason, not the court. |
 | `harness`   | the harness's                 | An agent is **running or queued** on the branch; an unstaffed **concern** (rules `pr-ci-failing`/`pr-ci-gate`/`pr-base-update`/`pr-base-update-conflict`/`pr-review-comment`) is dispatchable or on cooldown; the PR is **merge-ready** and the merge gate runs next cycle, or an accepted verdict is inside its settle window.                                      |
 | `settled`   | nobody — you already answered | Merge-ready, and a **rejection still stands** on `pr:<n>:merge`. The reason quotes the note you left.                                                                                                                                                                                                                                                                |
@@ -767,12 +767,12 @@ The providers build the threads and derive the comments from them (`threadCommen
 `src/prThreads.ts`), so a thread the cockpit draws as open and a comment list that calls it handled
 cannot happen — there is one derivation, not two.
 
-| state | what it means | `handled` |
-| --- | --- | --- |
-| `open` | no reply the harness recorded sending stands last in the thread | no |
-| `answered` | the newest reply is one the harness recorded sending; it is with the reviewer | yes |
-| `resolved` | the reviewer closed the thread — their own verdict | yes |
-| `reopened` | the operator put it back to the fleet, whatever the provider says | no |
+| state      | what it means                                                                 | `handled` |
+| ---------- | ----------------------------------------------------------------------------- | --------- |
+| `open`     | no reply the harness recorded sending stands last in the thread               | no        |
+| `answered` | the newest reply is one the harness recorded sending; it is with the reviewer | yes       |
+| `resolved` | the reviewer closed the thread — their own verdict                            | yes       |
+| `reopened` | the operator put it back to the fleet, whatever the provider says             | no        |
 
 The first three are exactly the two arms `handled` always folded, said out loud. They are worth
 separating because the fold is right for dispatch and wrong for a person: "3 handled" cannot tell an
@@ -952,7 +952,7 @@ have been a per-pull-request ledger stamping what was open on the pulse the revi
 its discriminating work happens exactly once, at adoption, after which it stamps every pull request
 eligible for ever: a table, a provider field for the pull request's age, and a predicate arm, all
 carrying a one-time problem. This command already answers the same question, permanently, and answers
-it *better* at the cutover, because the operator knows their own and the harness can only guess a
+it _better_ at the cutover, because the operator knows their own and the harness can only guess a
 window. `LUBBDUBB_PR` is in the environment, so the whole guard is `[ "$LUBBDUBB_PR" -lt 677 ]`,
 composed with whatever the real policy query is — a cutoff a team chose, at a precision they know,
 rather than two pulses the harness picked. What it does not soften is a backlog nobody has reviewed at
@@ -968,7 +968,7 @@ thread is never asked about, because the pulse builds its reading exactly the wa
 ### Skipping a review altogether
 
 **Off** (`review.allowSkip`), and it is the one answer the triage can give that waives the gate rather
-than sizing it. Everything else it decides is about *how much* to read; this decides whether anything
+than sizing it. Everything else it decides is about _how much_ to read; this decides whether anything
 does, and with `review.blocking` it is also what lets the merge through. So a project asks for it
 deliberately or it is not on offer at all: `review_route` does not carry the argument, and
 `skipNote` puts nothing in the prompt.
@@ -979,7 +979,7 @@ follows is read off the row by both halves, exactly as the intake is: `needsFlee
 nothing, and `reviewSatisfied` does not hold the merge. A skip that only did the first would make the
 triage's cheapest answer the one that wedges the branch.
 
-**It turns the triage on by itself.** `review.modes` is the switch for the *routing* question because a
+**It turns the triage on by itself.** `review.modes` is the switch for the _routing_ question because a
 decision with one option is not a decision — but with skipping allowed, one declared mode is two
 answers ("read it that way" or "do not"), so the triage runs. `triageRuns` is that reading, and every
 rule asks it rather than `routesBetweenModes`, which stays the narrower fact the triage's own prompt is
@@ -991,7 +991,7 @@ something an agent said on purpose. And it is honoured only while the project st
 operator who turns `allowSkip` back off has every standing skip fall back to a review, the safe
 direction and the same one a route naming a removed mode takes.
 
-The prompt's wording pushes *against* the skip deliberately. A model asked to size a read and handed a
+The prompt's wording pushes _against_ the skip deliberately. A model asked to size a read and handed a
 "no read needed" option reaches for it more often than a team would, and the cost is asymmetric in
 exactly the way the fail-open default already accounts for.
 
@@ -1101,16 +1101,16 @@ Every field of `review` is written to be set by the **project** rather than by e
 what a team looks for in a diff belongs beside the code it is about. `lubbdubb.project.json` carries any
 key ([02](02-configuration.md#the-project-layer)), so all of it is committed once and shared.
 
-| Key                         | Default  | What it decides                                                                                                 |
-| --------------------------- | -------- | --------------------------------------------------------------------------------------------------------------- |
-| `review.enabled`            | `false`  | Whether the review runs at all. It switches both rules in and out of the pipeline.                              |
-| `review.blocking`           | `true`   | Whether an unreviewed pull request is held out of the merge gate. Off records the verdict and gates nothing.    |
-| `review.allowSkip`          | `false`  | Whether the triage may answer that a pull request needs no review at all. It also turns the triage on by itself. |
+| Key                         | Default  | What it decides                                                                                                                                                                                                 |
+| --------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `review.enabled`            | `false`  | Whether the review runs at all. It switches both rules in and out of the pipeline.                                                                                                                              |
+| `review.blocking`           | `true`   | Whether an unreviewed pull request is held out of the merge gate. Off records the verdict and gates nothing.                                                                                                    |
+| `review.allowSkip`          | `false`  | Whether the triage may answer that a pull request needs no review at all. It also turns the triage on by itself.                                                                                                |
 | `review.reviewedElsewhere`  | `null`   | A command asking whether a pull request has already been reviewed outside the harness — and the way a team adopts this without reviewing their backlog. Exit 0 = yes; anything else leaves the fleet reviewing. |
-| `review.publish`            | `'none'` | Whether the reviewer is told to post its findings on the pull request, through `reply_to_review` and only that. |
-| `review.modes`              | `{}`     | The ways this project reviews: `charterFile` and `profile` each. Two or more switches the triage on.            |
-| `review.defaultMode`        | `null`   | The mode a review falls back to when nothing routed it. Null takes the first declared.                          |
-| `review.routingCharterFile` | `null`   | The prose that decides between the modes, read by the triage.                                                   |
+| `review.publish`            | `'none'` | Whether the reviewer is told to post its findings on the pull request, through `reply_to_review` and only that.                                                                                                 |
+| `review.modes`              | `{}`     | The ways this project reviews: `charterFile` and `profile` each. Two or more switches the triage on.                                                                                                            |
+| `review.defaultMode`        | `null`   | The mode a review falls back to when nothing routed it. Null takes the first declared.                                                                                                                          |
+| `review.routingCharterFile` | `null`   | The prose that decides between the modes, read by the triage.                                                                                                                                                   |
 
 ```json
 {

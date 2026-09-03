@@ -1372,511 +1372,6 @@ export interface GoalNeighbour {
   lastWriteAt: string;
 }
 
-// ---------------------------------------------------------------------------
-// Knowledge (what the fleet knows about this repository)
-// ---------------------------------------------------------------------------
-
-/**
- * Who a fact is relevant to — the first of the three axes, and the one that is
- * most often folded into the other two by mistake.
- *
- * "A flaky check" and "fleet-wide" are not two values of one enum: the first says
- * how long a fact lives and the second says who it applies to. A flaky check is
- * fleet-scoped *and* expiring; "the pets vivarium is off by default" is
- * fleet-scoped and permanent.
- *
- * - `fleet` — true of working this repository at all. The most expensive to be wrong.
- * - `check:<name>` — true of one CI check, named exactly as the provider names it.
- *   Fragile on purpose: `priorRemedies` matches check names exactly for the same
- *   reason, and a prefix match would put another job's history in front of an
- *   agent under a name it would read as its own.
- * - `goal:<ref>` — true of one goal, and dies with it.
- *
- * → `docs/spec/27-knowledge.md`
- */
-export type FactScope = 'fleet' | `check:${string}` | `goal:${string}`;
-
-/**
- * How a fact ends. It either **stands** until it is retired, or it **expires** —
- * and an expiring fact is a *notice*, which is a different animal in every
- * respect that matters.
- */
-export type FactLifetime = 'standing' | 'expiring';
-
-/**
- * How far a fact carries. This is the state machine, and it is the whole of the
- * governance.
- *
- * - `proposal` — nowhere. One agent said it and nothing has agreed.
- * - `lookup` — answered when asked, and injected on a matching scope. Reached on
- *   two corroborations from two different goals, or by an operator.
- * - `injected` — in front of every agent, before it reads any code. **An operator,
- *   and only an operator**, moves a fact here; the one exception is a notice,
- *   whose blast radius is capped by its own clock.
- * - `graduated` — somewhere else now, and **out of every prompt**. The claim left
- *   this store for a medium that carries it better: the repository, where an agent
- *   reads it from the tree; a job, where it is being acted on; a ticket, where it
- *   waits its turn with everything else. One reach and not three, because what
- *   they share is the whole of what a reach says — the claim is no longer
- *   something the fleet is *told* — and which exit it took is a
- *   {@link KnowledgeGraduation} row rather than a third value of this field,
- *   since a claim may be sent somewhere twice and a column would overwrite the
- *   attempt that failed.
- * - `superseded` — replaced. A sharper claim naming this one in `supersedes` was
- *   adopted by an operator, so this is out of every read while its row stays
- *   saying what it said. **Not `rejected`**: the claim was not judged untrue, and
- *   it must not bar the amendment's own words from being restated by the next
- *   agent to hit the same edge — which is precisely what a rejection would do,
- *   since an amendment usually contains the claim it sharpens.
- * - `rejected` — nowhere, and barred from coming back. Means **not true**, and
- *   nothing else: "true, but not worth the context" is `lookup`, where it costs
- *   nothing until somebody asks.
- */
-export type FactReach =
-  | 'proposal'
-  | 'lookup'
-  | 'injected'
-  | 'graduated'
-  | 'superseded'
-  /**
-   * Not carried any more, and **not judged untrue**.
-   *
-   * The distinction from `rejected` is the whole of why this exists, and the
-   * lesson store had it as two meanings of one word: retiring is the prune and
-   * rejecting is the bar. A claim that stopped being worth its place — the check
-   * it was about is gone, the seam it described was refactored away, the fleet has
-   * simply moved on — is not a claim anybody found false, and barring it means the
-   * agent that hits the same wall next quarter is refused by name for saying
-   * something true.
-   *
-   * So a retired claim is out of every read and may be raised again, which files a
-   * fresh row and **re-dates** it. That is deliberate rather than incidental: a
-   * claim worth bringing back is worth reading first, and a re-raise arrives with
-   * its own evidence and its own date rather than resurrecting a judgement nobody
-   * has revisited. `lessons` has stated exactly this rule since #355 — there is no
-   * un-retire — and this is where it now lives.
-   */
-  | 'retired'
-  | 'rejected';
-
-/**
- * One thing the fleet believes about this repository that the repository does not
- * say.
- *
- * Not a fact about the code — that belongs in the repository's own documentation,
- * which is what `committed` records having happened. Not a defect, which is a
- * {@link Finding}. And not a note between siblings on one goal, which is the
- * scratchpad: a pad entry is chronological prose with nothing to corroborate, and
- * it keeps its own writer.
- */
-export interface KnowledgeFact {
-  id: string;
-  /** The claim, in the words it is rendered in. Markdown, and free-form. */
-  claim: string;
-  scope: FactScope;
-  lifetime: FactLifetime;
-  /** When an expiring fact lapses. Null for a standing one, and set for every expiring one. */
-  expiresAt: string | null;
-  reach: FactReach;
-  /**
-   * The fact this amends, when it is an amendment.
-   *
-   * Load-bearing rather than decorative: an amended claim usually *contains* its
-   * original — that is what amending is — so a rejected claim's bar would swallow
-   * its own correction, and the sharpest version of a fact would be the one form
-   * of it that could never be filed. A fact naming a barred parent is exempt from
-   * that parent's bar. Nothing else is.
-   */
-  supersedes: string | null;
-  /**
-   * Which claim stands in this one's place, once one does — the other end of
-   * {@link supersedes}, and the only end a **merge** has.
-   *
-   * An amendment names the claim it sharpens, so a superseded-by-amendment row can
-   * be found from the sharper side. A merge has no such row: four phrasings of one
-   * wall fold into whichever the operator kept, and nothing about the survivor
-   * names the four. Written by both paths for that reason — one answer to *what
-   * replaced this*, rather than one that depends on how it was replaced.
-   *
-   * Null on every row from before the column existed, and null spells *nothing
-   * stands in its place*, which is what those rows already drew.
-   */
-  supersededBy: string | null;
-  /** The goal it was first observed on (`issue:41`, `pr:42`), or null when an operator wrote it. */
-  originRef: string | null;
-  /**
-   * When an operator last moved it, or null while nobody has ruled on it.
-   *
-   * The one thing that tells a fact two agents carried to `lookup` from a fact an
-   * operator *left* there. Both are the same reach — "true, but not worth every
-   * agent's context" is `lookup` too — so without this the cockpit's **Needs you**
-   * section would go on asking for a decision that has already been made, and the
-   * operator's only way to silence it would be to make the wrong one.
-   */
-  ruledAt: string | null;
-  /**
-   * What would settle this notice before its clock runs out, or null for a fact
-   * whose clock is the whole of it.
-   *
-   * **The clock is the backstop, not the mechanism.** A timer alone either drops a
-   * notice while it is still true — and the fleet rediscovers it — or keeps one
-   * alive after the thing is fixed, which teaches every agent to disbelieve a
-   * check that is now genuinely failing. Both are silent.
-   *
-   * Only ever written by the harness's own notices, because a condition is a
-   * mechanism rather than a sentence: settling one means watching a world object
-   * pulse after pulse, and the harness can only watch what it already reads.
-   * → `docs/spec/27-knowledge.md#notices`
-   */
-  resolvesWhen: FactResolution | null;
-  /**
-   * The world item the claim is *about* (`issue:41`, `pr:412`), or null.
-   *
-   * Never {@link KnowledgeFact.originRef}, which names the goal the observing
-   * agent was working when it learned this. The two are different questions and
-   * the answer differs exactly when it matters most: an agent on `issue:41` that
-   * says `pr:412` duplicates `pr:398` has an origin of the first and is talking
-   * about the second. Attributing such a claim to its origin files it under
-   * somebody else's goal — the defect `findingJobRequest` already refuses by
-   * carrying `finding.ref` rather than `finding.originRef`.
-   */
-  aboutRef: string | null;
-  /**
-   * What locates the claim — a file and line, a package, a service, an endpoint.
-   *
-   * Free text rather than a closed vocabulary because "where" means a different
-   * thing for a duplicate, a flaky check and an undocumented seam, and a schema
-   * for it would be guessed at. Optional for {@link KnowledgeFact.aboutRef}'s
-   * reason: a required field an agent has nothing for comes back as "N/A", and a
-   * list of those is worse than an absence.
-   */
-  where: string | null;
-  /**
-   * The project this claim was learned about (`pool.project`), or null on a
-   * deployment that declares none.
-   *
-   * Stamped **as the fact is written**, because what is worth recording is what
-   * was true when the claim was learned rather than what is true when it is
-   * published. Pool-wide, `fleet` scope no longer implies *this repository*, and
-   * nothing in the sentence says which one it is about.
-   *
-   * It never takes part in claim matching — making it part of identity would
-   * fragment exactly the agreement the pool exists to gain. What it decides is one
-   * thing: whether a **non-matching** arrival is proposed locally, or held in the
-   * mirror and proposed to nobody.
-   * → `docs/spec/28-cross-fleet-pool.md#the-project-name`
-   */
-  project: string | null;
-  /**
-   * Whether the operator has withheld this claim from the cross-fleet pool.
-   *
-   * An **opt-out** rather than an opt-in, so the cheap vouch stays cheap: the
-   * per-claim gate is the vouch itself, and this is for the one claim in fifty
-   * that quotes a customer's configuration. Withdrawal is immediate — a claim
-   * marked here is simply not in the next publish, which is a whole-document put.
-   * → `docs/spec/28-cross-fleet-pool.md#data-classification`
-   */
-  keepLocal: boolean;
-  createdAt: string;
-  /** When it last moved — for anything but a fresh proposal, when its reach changed. */
-  updatedAt: string;
-}
-
-/**
- * A condition the harness can evaluate against the world it already reads, which
- * is the whole of what may be written here: `main` red on a check resolves when
- * that check goes green, not when a timer runs out.
- *
- * One member today, and a discriminated union rather than a bare pair so a second
- * kind cannot arrive as a widened field every reader would have to re-check.
- */
-export interface FactResolution {
-  /** Settled when the named check stops failing on the pull request named — or that pull request is gone. */
-  kind: 'ci-check-green';
-  /** The pull request the check runs on, as a ref (`pr:412`). */
-  ref: string;
-  /** The check, named exactly as the provider names it — `priorRemedies`' fragility, for its reason. */
-  check: string;
-}
-
-/**
- * One agent saying it saw the same thing.
- *
- * Rows in their own table, each carrying the agent, the goal, the moment and the
- * agent's **own words** — never a counter on the fact. The count is what promotes;
- * the words are what an operator reads to decide whether it should have.
- */
-export interface KnowledgeCorroboration {
-  id: string;
-  factId: string;
-  /** Null for an operator's own observation. */
-  agentId: string | null;
-  taskId: string | null;
-  /**
-   * The goal it was observed on, collapsed from the dispatch origin — the unit
-   * the count is taken over, because two origins on one goal are one observation.
-   */
-  goalRef: string | null;
-  /**
-   * The session it was observed in, so an agent that inherited a conversation
-   * through `spawn`'s `resumeSessionId` is not counted twice.
-   */
-  sessionId: string | null;
-  /** What the observer actually saw. Never the claim restated. */
-  words: string;
-  /**
-   * The pool fleet whose document carried this voice, or null for a local agent's.
-   *
-   * **One fleet is one voice**, however many entries it publishes and however many
-   * times it is polled — which is why this is on the row rather than a second count
-   * beside the local one: `distinctCorroborators` unions over goal and session
-   * transitively, and a pooled row has neither, so the origin fleet folds into that
-   * same union. → `docs/spec/28-cross-fleet-pool.md#what-arriving-means`
-   */
-  fleetId: string | null;
-  createdAt: string;
-}
-
-/** Who observed a claim, resolved from the credential and never from an argument. */
-export interface FactObservation {
-  agentId: string | null;
-  taskId: string | null;
-  goalRef: string | null;
-  sessionId: string | null;
-  words: string;
-  /**
-   * The pool fleet this observation arrived from, when it did. Absent for every
-   * local agent, which is every observation the harness made before the pool.
-   */
-  fleetId?: string | null;
-}
-
-/**
- * One agent saying an injected claim is contradicted by the code in front of it —
- * and what it should say instead.
- *
- * **A row in its own table rather than a discriminated corroboration**, which is
- * the one decision here where a mistake is silent. A contradiction carries an
- * agent, a goal, a session, a moment and the agent's own words — the same shape a
- * {@link KnowledgeCorroboration} carries — so folding the two into one table with
- * a stance column would leave `distinctCorroborators` counting disputes as
- * agreement unless every reader remembered a filter. A contradiction that promoted
- * the claim it disputes is exactly the failure nothing would report, and a second
- * table is what makes it unreachable rather than merely wrong.
- *
- * → `docs/spec/27-knowledge.md#contradiction-and-why-it-does-not-delete`
- */
-export interface KnowledgeContradiction {
-  id: string;
-  /** The claim being disputed. */
-  factId: string;
-  /**
-   * The amendment filed alongside it — what the contradicting agent says the
-   * claim should say instead, as a fact of its own naming `factId` in
-   * `supersedes`.
-   *
-   * Never null: a contradiction with no amendment is refused at the tool, because
-   * a bare "this is wrong" is a count, and nothing here is demoted by count.
-   */
-  amendmentId: string;
-  /** Null for the harness's own reading, exactly as a corroboration's is. */
-  agentId: string | null;
-  taskId: string | null;
-  /** The goal it was seen on, collapsed from the dispatch origin — the unit the ratio is taken over. */
-  goalRef: string | null;
-  /** The session it was seen in, so a re-dispatch disputing its own predecessor's claim counts once. */
-  sessionId: string | null;
-  /** What the agent actually saw that the claim does not fit. Never the amendment restated. */
-  words: string;
-  /** How an operator answered it, or null while it is still open. */
-  resolution: ContradictionResolution | null;
-  resolvedAt: string | null;
-  createdAt: string;
-}
-
-/**
- * The three moves an operator has on a contradiction, and there is no fourth.
- *
- * - `amended` — the amendment is adopted at the original's reach and the original
- *   is superseded. **One act, one call**: two calls could half-land, leaving an
- *   amendment injected beside the blunter claim it was written to replace, both in
- *   the same block saying different things.
- * - `narrowed` — the operator writes the sharper sentence themselves, in place, and
- *   the amendments they answered are superseded by it.
- * - `dismissed` — the contradiction is wrong. **The only one that leaves the fact
- *   where it was**, and the only one that touches nothing but the contradiction row.
- */
-export type ContradictionResolution = 'amended' | 'narrowed' | 'dismissed';
-
-/**
- * One of those three moves as it is made — the verb, and what `narrowed` needs to
- * make it.
- *
- * A discriminated union rather than an optional `claim` beside a free verb,
- * because "narrow this claim" with nothing to narrow it to is the one shape of
- * this decision that could silently do nothing. One statement rather than two: it
- * is the store's argument and the route's body, so a `claim` that became optional
- * on one side would be a narrowing that reached the store empty.
- */
-export type ContradictionRuling = { resolution: 'amended' | 'dismissed' } | { resolution: 'narrowed'; claim: string };
-
-/**
- * The three ways a claim leaves this store, and the whole of what "graduated"
- * discriminates.
- *
- * They are one field because they are one act — *this claim is better somewhere
- * else than in front of the fleet* — and three values because what "there" is
- * decides who does the work and what landing looks like:
- *
- * - `docs` — a pull request against the worked repository's own documentation.
- *   The claim ends up where an agent reads it from the tree.
- * - `job` — an agent works it now. What a promoted `docs`-less finding always
- *   was: the claim is a thing to do rather than a thing to be told.
- * - `ticket` — an agent writes it up and files it in the tracker, so it waits its
- *   turn in the backlog with everything else. The *defer* arm beside `job`'s
- *   "work it now", and the one thing a job could never express, since a queued
- *   job either runs or is cancelled.
- *
- * All three were separate implementations before the stores merged, and two of
- * them were silent: a promoted finding was stamped `promoted` and never learned
- * what became of the job, and a filed one carried a ticket ref with nothing
- * watching whether the filing agent ever created it. One shape, one sweep.
- */
-export type GraduationExit = 'docs' | 'job' | 'ticket';
-
-/**
- * Which document a `docs` exit writes into — the two places named in
- * `docs/spec/27-knowledge.md#committing-to-the-repository`, and there is no third.
- *
- * `spec` leaves *which* document to the agent, because `docs/README.md` already
- * says which one owns what and a fact that survived long enough to be committed is
- * by definition an invariant of some subsystem. `claudeMd` is the exception and is
- * priced like one: that file is loaded into every agent's context on every
- * dispatch and **its length is asserted, not intended**, so graduating there grows
- * without bound the exact cost this whole design exists to cap. The operator says
- * why it meets that file's bar in their own words, and the shape of
- * {@link FactExit} is what makes that unskippable.
- *
- * Null on any exit that is not `docs`: a job and a ticket have no document, and a
- * defaulted `spec` there would be a target nothing reads wearing a name that says
- * an agent will write into it.
- */
-export type GraduationTarget = 'spec' | 'claudeMd';
-
-/**
- * The operator's decision to send a claim somewhere: which exit, where within it,
- * and — for the one target that needs it — the argument that it belongs there.
- *
- * A discriminated union rather than optional fields beside free ones, for
- * {@link ContradictionRuling}'s reason exactly: a CLAUDE.md graduation with no
- * statement of what breaks silently without the claim is the one shape of this
- * decision that would silently do the expensive thing. The sentence is not
- * ceremony — it is appended to the agent's prompt, so whoever writes the entry has
- * the argument in the operator's words rather than having to invent one.
- */
-export type FactExit =
-  | { exit: 'docs'; target: 'spec' }
-  | { exit: 'docs'; target: 'claudeMd'; bar: string }
-  | { exit: 'job' }
-  | { exit: 'ticket' };
-
-/**
- * What became of a graduation. Null on the row means it is still going.
- *
- * `abandoned` is not a failure state to be tidied away: a pull request closed
- * unmerged, or a job cancelled before it opened one, means **nobody took the
- * claim anywhere**, so the fact stays exactly where it was and goes on being
- * delivered. The row stays too, because an operator deciding whether to try again
- * needs to know one was tried.
- */
-export type GraduationOutcome = 'landed' | 'abandoned';
-
-/**
- * What the harness can say about a graduation in flight, from the work graph.
- *
- * **Three live verdicts and not two**, for `GitObserver.contains`' reason
- * (`docs/spec/24-environments.md#the-three-verdicts`): a pull request the harness
- * never saw finish and one it saw merge are different readings, and folding the
- * first into the second takes a claim out of every prompt for a pull request that
- * may never have merged. `unknown` is drawn on the page with the two controls that
- * answer it, and is the one reading that asks the operator for something.
- */
-export type GraduationReading = 'waiting' | 'unknown' | GraduationOutcome;
-
-/**
- * One attempt to put a claim somewhere other than in front of the fleet: the job
- * an operator opened for it, which exit it took, and where it got to.
- *
- * **Its own table rather than columns on `knowledge_facts`.** An attempt that
- * does not land — a pull request closed unmerged, a job cancelled — leaves the
- * claim exactly where it was and an operator free to try again, so a fact can have
- * more than one of these over its life, and columns would overwrite the record of
- * the attempt that failed, which is precisely what the operator deciding whether
- * to try again needs to read.
- *
- * It is deliberately **not** a reach, and this is the same argument the reach
- * machine makes about `graduated` being one value rather than three: reach says
- * how far a claim carries, and a claim being written up carries exactly as far as
- * it did yesterday. A reach that moved at the click would stop the fleet being
- * told a claim that nobody has committed and that nobody can read yet — and if
- * the attempt is abandoned, would stop telling them forever, with nothing red.
- */
-/**
- * One pair of claims a machine thinks are one claim
- * (`docs/spec/27-knowledge.md#one-claim-written-two-ways`).
- *
- * **A suggestion, and it decides nothing.** `claimsMatch` — strict, containment
- * over a character floor — goes on deciding what `proposeFact` joins and what the
- * rejection bar refuses; this is `claimsSimilar`'s answer, which proposes a
- * cluster the page draws and an operator merges with a click. One matcher doing
- * both is the version of this that must not be built: loosening the strict one
- * would widen the bar by exactly what it gained in agreement, so a claim nobody
- * has rejected would be refused by name with the agent unable to argue and the
- * operator told nothing.
- */
-export interface KnowledgeSimilarity {
-  id: string;
-  /** The older of the two, so one likeness is one row however the pass walked the set. */
-  leftId: string;
-  rightId: string;
-  /** How alike, from 0 to 1 — `claimOverlap`'s answer, and a suggestion's whole weight. */
-  score: number;
-  /** When the pass that saw it ran. A reading of the store as it stood, not a first sighting. */
-  createdAt: string;
-}
-
-export interface KnowledgeGraduation {
-  id: string;
-  factId: string;
-  exit: GraduationExit;
-  /**
-   * The job the operator opened. Its branch is how a pull request is found, and
-   * its origin is how `link_ticket` finds the graduation back from a filing
-   * agent's credential.
-   */
-  jobId: string;
-  /** Which document a `docs` exit writes into. Null on a `job` or a `ticket`. */
-  target: GraduationTarget | null;
-  /** The operator's statement of what breaks silently without the claim. Null for anything but `claudeMd`. */
-  bar: string | null;
-  /** The pull request the job produced (`pr:41`), stamped when the work graph first shows one. */
-  prRef: string | null;
-  /**
-   * The tracker item a `ticket` exit created (`issue:314`), reported back by the
-   * filing agent through `link_ticket`. Null until then, and on every other exit.
-   *
-   * Its own field beside {@link prRef} rather than one neutral "what it became":
-   * a pull request and a tracker item are two different world objects, drawn as
-   * two different references, and one column would have to be read with the exit
-   * in hand to know which it was holding.
-   */
-  ticketRef: string | null;
-  /** `landed` or `abandoned`, or null while it is still going. */
-  outcome: GraduationOutcome | null;
-  settledAt: string | null;
-  createdAt: string;
-}
-
 /**
  * Which kind of return to a pull request a {@link Remedy} accounts for: its CI
  * going red, or a review asking for changes.
@@ -4992,11 +4487,11 @@ export interface McpCallInput {
 type PoolDocumentKind = PoolClockKind | 'pack';
 
 /**
- * The two documents a **clock** publishes. Named apart from {@link PoolDocumentKind}
+ * The document a **clock** publishes. Named apart from {@link PoolDocumentKind}
  * so the publication bookkeeping — dirty, hash, checked — cannot be handed a pack,
  * which has none of those things and is published by a person.
  */
-export type PoolClockKind = 'claims' | 'digest';
+export type PoolClockKind = 'digest';
 
 /**
  * What every pool document carries, whichever kind it is.
@@ -5014,44 +4509,6 @@ interface PoolEnvelope {
   project: string;
   publishedAt: string;
   harnessVersion: string;
-}
-
-/**
- * One claim as it crosses — the words, and nothing that points into a world the
- * reader cannot see.
- *
- * Three omissions, each load-bearing. **No claim key**: it is recomputed locally
- * through `src/claims.ts`, and a key carried in the document is a second matcher
- * free to disagree with the one that actually decides whether an arrival joins a
- * local row. **No `aboutRef` and no `originRef`**: a ref points into somebody
- * else's tracker, and `<Ref to={ref}/>` would draw it as a live link there. **No
- * lifetime and no scope**: everything published stands, and everything published
- * is fleet-scoped.
- */
-export interface PoolClaim {
-  /** The origin's own fact id. Never minted at the far end — it is half the mirror's key. */
-  id: string;
-  claim: string;
-  /** What locates it, in the origin's words. Free text, or null. */
-  where: string | null;
-  /** When an operator at the origin ruled on it — the vouch that let it leave the machine. */
-  vouchedAt: string;
-  /** The origin's own count. A **reading** drawn on the row, never a trigger. */
-  corroborations: number;
-  /**
-   * The origin's dispute count — the more useful of the two. *The fleet that
-   * vouched for this has since had two agents contradict it* is exactly what an
-   * operator needs in front of them before promoting it here.
-   */
-  disputes: number;
-  /** The corroborators' own words, capped. What survives the crossing is the words. */
-  evidence: string[];
-}
-
-/** A fleet's claims document: what it has vouched for, whole. */
-export interface PoolClaimsDocument extends PoolEnvelope {
-  kind: 'claims';
-  claims: PoolClaim[];
 }
 
 /**
@@ -5138,27 +4595,10 @@ export interface PoolPackDocument extends PoolEnvelope {
 }
 
 /** A document published on a clock, and tracked as one. The layer above splits on `kind`. */
-export type PoolClockDocument = PoolClaimsDocument | PoolDigestDocument;
+export type PoolClockDocument = PoolDigestDocument;
 
 /** One document, whichever kind. The layer above splits on `kind`; the transport stays opaque. */
 export type PoolDocument = PoolClockDocument | PoolPackDocument;
-
-/**
- * One arriving claim as the mirror holds it, plus what this fleet did with it.
- *
- * `localFactId` is null for the "held in the mirror, proposed to nobody" case — a
- * cross-project arrival matching nothing local. That asymmetry is the design: a
- * claim about your project's lint configuration never reaches a fleet on another
- * project, because no agent there will ever say that sentence.
- */
-export interface PoolMirroredClaim extends PoolClaim {
-  fleetId: string;
-  project: string;
-  /** The local fact this was proposed onto, or null when it was held in the mirror. */
-  localFactId: string | null;
-  publishedAt: string;
-  seenAt: string;
-}
 
 /**
  * One fleet as the mirror last saw it — including the two readings that are not
@@ -5171,7 +4611,6 @@ export interface PoolMirroredClaim extends PoolClaim {
 export interface PoolFleetReading {
   fleetId: string;
   project: string | null;
-  claimsAt: string | null;
   digestAt: string | null;
   ahead: boolean;
   seenAt: string;
@@ -5188,7 +4627,7 @@ export interface PoolPublication {
 }
 
 // ---------------------------------------------------------------------------
-// The obstacle board → `docs/spec/32-obstacles.md`
+// The obstacle board → `docs/spec/27-obstacles.md`
 
 /**
  * What identifies an obstacle: a fact about the world, not a sentence about it.
@@ -5314,7 +4753,7 @@ export interface Obstacle {
    * Null on every row a build before the endings wrote, and that is the honest
    * reading rather than a hole a backfill has to fill: nothing could write
    * `resolved` or `dormant` then, so no row that predates this column has ended at
-   * all. → `docs/spec/32-obstacles.md#how-an-obstacle-ends`
+   * all. → `docs/spec/27-obstacles.md#how-an-obstacle-ends`
    */
   endedBy: ObstacleEnding | null;
 }
@@ -5333,7 +4772,7 @@ export interface Obstacle {
  * say a clock or the world ended a row a person did. **Retiring is not
  * rejecting** — the row keeps its claim, its keys and its sightings, and a
  * matching report reopens it at `standing` like any other terminal row, which is
- * the whole difference from `muted`. → `docs/spec/32-obstacles.md#in-the-cockpit`
+ * the whole difference from `muted`. → `docs/spec/27-obstacles.md#in-the-cockpit`
  */
 export type ObstacleEnding = 'condition' | 'landing' | 'expiry' | 'decay' | 'written-down' | 'retired';
 
@@ -5344,7 +4783,7 @@ export type ObstacleEnding = 'condition' | 'landing' | 'expiry' | 'decay' | 'wri
  * Settling one means reading a world object pulse after pulse, and the only party
  * that can promise to do that is the one already reading it — an agent naming a
  * condition would be naming something nothing watches.
- * → `docs/spec/32-obstacles.md#how-an-obstacle-ends`
+ * → `docs/spec/27-obstacles.md#how-an-obstacle-ends`
  */
 export interface ObstacleCondition {
   id: string;
@@ -5371,7 +4810,7 @@ export interface ObstacleCondition {
  * One row per note, ever — the primary key is the obstacle. A note whose write-up
  * was abandoned is not queued again: it stays `standing` and decays like anything
  * else, where a retry on every pulse would be this subsystem spending the fleet on
- * itself. → `docs/spec/32-obstacles.md#how-an-obstacle-ends`
+ * itself. → `docs/spec/27-obstacles.md#how-an-obstacle-ends`
  */
 export interface ObstacleWriteUp {
   obstacleId: string;
@@ -5394,7 +4833,7 @@ export type ObstacleWriteUpOutcome = 'landed' | 'abandoned';
  * owner or resolves anything: the desk is the harness's secretary and deliberately
  * not its judge. What it holds is what a model may decide — what the row is *for*,
  * and the ticket prose that would be written from the sightings otherwise.
- * → `docs/spec/32-obstacles.md#what-may-be-decided-by-a-model-and-what-may-not`
+ * → `docs/spec/27-obstacles.md#what-may-be-decided-by-a-model-and-what-may-not`
  */
 export interface ObstacleDeskReading {
   obstacleId: string;

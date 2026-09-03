@@ -153,14 +153,14 @@ required `detail`, writes **no plan row at all**, and records the issue's delive
 
 It exists because the refusal above is right and still cannot say this. Every plan has at least one
 part, and work that is one pull request is a one-part plan — so a planner holding "there is nothing to
-build" has to encode it as *something*, and each way of doing that spends an agent to rediscover what
+build" has to encode it as _something_, and each way of doing that spends an agent to rediscover what
 this planner already knows:
 
-| What it does instead      | What it costs                                                                                                              |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Invents a part            | An agent, a branch and a worktree, to arrive at `conclude_part` with kind `determination`.                                  |
-| Writes a part that redoes it | The same, plus a pull request nobody wanted, against code that already does the thing.                                    |
-| Submits nothing           | Its attempts, and then the fail-open arm: `unplanned` puts rule `issue-pickup` on the issue, which is the first row again — with the planner's finding thrown away. |
+| What it does instead         | What it costs                                                                                                                                                       |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Invents a part               | An agent, a branch and a worktree, to arrive at `conclude_part` with kind `determination`.                                                                          |
+| Writes a part that redoes it | The same, plus a pull request nobody wanted, against code that already does the thing.                                                                              |
+| Submits nothing              | Its attempts, and then the fail-open arm: `unplanned` puts rule `issue-pickup` on the issue, which is the first row again — with the planner's finding thrown away. |
 
 All three end with a human being asked to approve, or review, work that did not need to happen. The
 verdict is cast where it is known instead.
@@ -168,7 +168,7 @@ verdict is cast where it is known instead.
 **Why a delivery row rather than a fifth thing.** `issue_deliveries` already means exactly this —
 "what the issue asked for is present, schedule nothing further" — and `deliveryHold` already filters
 `eligibleIssues`, which is the list both rule `issue-plan` and rule `issue-pickup` draw from. So one
-row stops the planner being re-dispatched *and* stops pickup taking the issue instead, with no new
+row stops the planner being re-dispatched _and_ stops pickup taking the issue instead, with no new
 gate anywhere. It is reversible by the operator and expires on world signal, which is the right
 lifetime for a claim about a goal nobody has worked: the moment the ticket moves or something links to
 it, the question is open again.
@@ -178,7 +178,7 @@ questions and both are silent if nobody asks them:
 
 - **A replan.** An issue that already has a plan row cannot be settled this way: the plan would go on
   owning the issue — `planInFlight` reads `planning` as more work, so the goal would read delivered
-  *and* mid-decomposition — and any part already dispatched or in review would keep running underneath
+  _and_ mid-decomposition — and any part already dispatched or in review would keep running underneath
   it. A replanner that believes the goal is met amends the plan, or raises it: the operator asked for
   this replan and it is theirs to end.
 - **A standing shortfall.** Writing a delivery clears one through the exclusion matrix
@@ -347,7 +347,7 @@ For an amendment:
    every time. An amendment lands the same way whatever it does to the part count.
 3. `store.upsertPlan`, then retire, then `store.upsertPlanParts` (which merges on slug and never
    deletes). **A slug the document re-declares is un-retired**, back to `pending` with its
-   `blocked_reason` cleared: retirement is a *declaration* verdict, not progress, so a document that
+   `blocked_reason` cleared: retirement is a _declaration_ verdict, not progress, so a document that
    declares a slug again is a plan delivering it again. Every other status is progress and survives
    untouched, which is the split `upsertPlanParts` is made of. Retirement is therefore reversible by
    the planner and by nothing else — the operator's Reject retires, and only the replan that follows
@@ -474,7 +474,7 @@ readiness then decides when the ask becomes actionable, exactly as it does for a
 `partSettled` answer true and release every dependent waiting on the thing that was refused — a plan
 completing on work nobody did. The dependents stay `pending`, the goal page draws the part under
 **Held** with the reason on it, and the way out is Replan, on the plan sheet. Nothing escalates for the
-decline itself: the operator is the one who declined, and the button is in front of them. What *does*
+decline itself: the operator is the one who declined, and the button is in front of them. What _does_
 ask is a decline that leaves other work stranded behind it — see [the wedge](#the-ref-collision-guard)
 below, which is a question about the plan rather than about the refusal.
 
@@ -488,7 +488,7 @@ claiming a collision that has been resolved or a refusal that was withdrawn.
 row rather than re-derived because the two blockers now have different consequences and the reconciler
 is the only thing that knows which it wrote: a reader sniffing `blocked_reason`'s prose to tell them
 apart would be one rewording away from escalating the operator's own refusal back at them. Null is
-*unattributed* — every blocked row on a database from before the column — and counts toward the wedge
+_unattributed_ — every blocked row on a database from before the column — and counts toward the wedge
 the way it did when there was nothing to count.
 
 `concluded` is **not** a kind of retirement. `retired` means "dropped by an amendment before anything
@@ -631,8 +631,8 @@ the first writes (`src/store/store.ts`):
 | The executor         | Creates an `approve_change` escalation plus a `plan` proposal with ref `issue:<n>:plan`, and re-asks the same hold (every path that reaches the executor is covered, not just the one that checks first).                                          |
 | Accept               | `ProposalDesk.accept` → `ActionExecutor.runAuthorized` → `releasePlan`: the plan becomes `active`, audited under `human:<proposal id>` as `authorized by you`.                                                                                     |
 | Reject               | `ProposalDesk.reject` → `refusePlan`, carrying the operator's note.                                                                                                                                                                                |
-| Close the ticket     | `ProposalDesk.backOut(id, 'close')` → `backOutOfPlan` → `declinePlan`: comment, close, un-watch, conclude, abandon. Below.                                                                                                                          |
-| Hold the ticket      | `ProposalDesk.backOut(id, 'hold')` → the watch tag comes off and the plan is refused, so watching it again gets a new one. Below.                                                                                                                   |
+| Close the ticket     | `ProposalDesk.backOut(id, 'close')` → `backOutOfPlan` → `declinePlan`: comment, close, un-watch, conclude, abandon. Below.                                                                                                                         |
+| Hold the ticket      | `ProposalDesk.backOut(id, 'hold')` → the watch tag comes off and the plan is refused, so watching it again gets a new one. Below.                                                                                                                  |
 | Replan               | `POST /api/plans/:id/replan` withdraws a pending proposal (below).                                                                                                                                                                                 |
 
 **What the ask says** is one template, a quoted block, and two appended paragraphs.
@@ -763,7 +763,7 @@ flight is a _replan_ being refused, and the work already running carries on whil
 around it.
 
 **The retirement lifts when the replan re-declares the slug**, and that is what makes the route a route
-rather than a dead end. A replan *must* reuse slugs — the slug is the merge key and has to survive one —
+rather than a dead end. A replan _must_ reuse slugs — the slug is the merge key and has to survive one —
 so a retirement that outlived a re-declaration would merge every part of the new plan onto a retired
 row and release a plan with nothing live in it: rule `plan-part` schedules nothing, `rollUpPlanStatus`
 returns early on no parts, `planIsWedged` is false because nothing is `blocked`, and the goal sits
@@ -836,12 +836,12 @@ watching the ticket again is what starts a planner — and what comes back is a 
 in the light of why it was held.
 
 Parking the plan at `awaiting_approval` instead was the first shape of this and is the wrong one: a
-hold says the thinking is not finished, so re-proposing the *same* decomposition weeks later asks the
+hold says the thinking is not finished, so re-proposing the _same_ decomposition weeks later asks the
 operator to approve a plan written before whatever they were waiting on happened. The plan they get
 back should be one that knows about it.
 
 Neither verdict widens `ProposalStatus`. Both settle the row as `rejected`, because that is what
-happened to the *act* — the plan was not authorized — and what distinguishes them lives where it can
+happened to the _act_ — the plan was not authorized — and what distinguishes them lives where it can
 be read: the decision detail, the plan's reason, and the conclusion.
 
 An operator who wants a _different_ plan without refusing this one can press Replan, on the same panel.
@@ -972,7 +972,7 @@ parked `blocked` and **one** clear error is recorded naming the branch to delete
 **A human part is outside the guard, because it is outside the branch namespace entirely.** It is
 never cut, so the flat branch is not in its way — the same reason the fold loop skips it, and the
 reason a plan of nothing but human steps records no collision at all and is not `planIsWedged` for
-one. Parked by it, such a part carries a reason that reads correctly and is *false about that part*:
+one. Parked by it, such a part carries a reason that reads correctly and is _false about that part_:
 the person is not waiting on git, and their step starts no sooner for the branch going away (it is
 settled by `Store.concludeHumanPart`, not by readiness).
 
@@ -1029,7 +1029,7 @@ Replan — which is the way out of every plan that is wrong for any other reason
   live part blocked" while the collision was the only one — a collision blocks them together or not at
   all, so a mixture was a plan still making progress — and that reading broke in both directions once
   a decline could block one part alone. It escalated a one-part plan whose only part was a step the
-  operator had just refused; and it *missed* a real wedge as soon as one sibling had settled, since a
+  operator had just refused; and it _missed_ a real wedge as soon as one sibling had settled, since a
   merged part is not a blocked one and `every` then said no. `[merged, blocked, pending]` is the
   ordinary shape of that, and it stalled the goal permanently with nothing in "Needs you": `plan-part`
   finds no `ready` part, `rollUpPlanStatus` keeps the plan `active` so `issue-assess` skips it, and the

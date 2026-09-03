@@ -16,7 +16,7 @@ import { reachesAgents } from './lifecycle.js';
  * customised most (`docs/spec/05-dispatcher.md#prompt-templates`).
  *
  * Pure — no I/O, no clock, no store: what the board holds and what the dispatch is
- * about both arrive as arguments. → `docs/spec/32-obstacles.md#delivery`
+ * about both arrive as arguments. → `docs/spec/27-obstacles.md#delivery`
  */
 
 /** One row as delivery reads it: the claim, and the ways into it. */

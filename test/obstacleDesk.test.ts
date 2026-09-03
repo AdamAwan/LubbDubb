@@ -17,7 +17,7 @@ import {
 
 /**
  * **A model may do anything whose mistakes are visible**, and the table in
- * `docs/spec/32-obstacles.md#what-may-be-decided-by-a-model-and-what-may-not` is
+ * `docs/spec/27-obstacles.md#what-may-be-decided-by-a-model-and-what-may-not` is
  * the whole permission list.
  *
  * The properties here are the ones that fail *silently* if this desk ever grows

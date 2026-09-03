@@ -101,30 +101,11 @@ export const linkTicket: ToolFactory = ({ deps, agent, ok }) => ({
 
     const result = deps.agents.linkTicket(agent.id, ticketRef);
     if (!result.ok) return toolError(result.error);
-    // Two things a filing job can be for, resolved from the credential the same
-    // way: a finding an agent reported, or a bug an operator raised on a story.
-    if (result.bug) {
-      return ok({
-        linked: true,
-        filed: ref === '',
-        bug: { originRef: result.bug.originRef, status: result.bug.status, ticketRef: result.bug.ticketRef },
-        note: 'Recorded against the story the operator raised it from. Your filing task is done.',
-      });
-    }
     return ok({
       linked: true,
       filed: ref === '',
-      claim: {
-        id: result.graduation.factId,
-        ticketRef: result.graduation.ticketRef,
-      },
-      // The claim leaves every prompt on this call, and the agent is told so: it is
-      // the one thing about `link_ticket` that is not obvious from having filed a
-      // ticket, and an agent that files a second one for the same claim would be
-      // told the row was already answered rather than why.
-      note:
-        'Recorded against the claim, which is now in the tracker rather than in front of the fleet. ' +
-        'Your filing task is done.',
+      bug: { originRef: result.bug.originRef, status: result.bug.status, ticketRef: result.bug.ticketRef },
+      note: 'Recorded against the story the operator raised it from. Your filing task is done.',
     });
   },
 });

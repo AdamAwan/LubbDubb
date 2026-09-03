@@ -20,7 +20,7 @@ import type { CiCheck, PullRequest, WorldSnapshot } from '../src/types.js';
  * reading can never be counted twice; and the keys it carries go through the same
  * three gates an agent's do, with **no exemption** from a bare `check` not
  * binding.
- * → `docs/spec/32-obstacles.md#the-harness-is-a-voice`
+ * → `docs/spec/27-obstacles.md#the-harness-is-a-voice`
  */
 
 const NOW = '2026-07-28T12:00:00.000Z';

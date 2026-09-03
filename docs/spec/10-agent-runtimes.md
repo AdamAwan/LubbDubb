@@ -81,7 +81,7 @@ of buffer or whitespace) so an echoed sentinel mid-token does not fire.
 
 ```
 -p --input-format stream-json --output-format stream-json --verbose
---append-system-prompt <protocol [+ tool addendum] [+ injected knowledge]>
+--append-system-prompt <protocol [+ tool addendum]>
 (--session-id <id> | --resume <id>)
 [--settings <file-events + permissions fragments>]
 [--mcp-config <path> --allowedTools <names> [--permission-prompt-tool <name>]]
@@ -164,79 +164,30 @@ install, working or dead by how the server was started. The fallback scan is win
 environment variables are genuinely case-sensitive, and a lower-cased `path` there is a different
 variable.
 
-### The knowledge block
+### Nothing is injected fleet-wide
 
-Since #27 phase 3 the appended system prompt carries a third part: what the fleet **knows** about
-working this repository — the claims an operator has injected, and (since phase 4) the notices two
-goals have seen → [27](27-knowledge.md#delivery-two-prompts-not-one).
+The appended system prompt is the protocol and, where the tool channel is wired, the tool addendum.
+There is no third part, and the two that used to be there are both gone: the lesson block, and the
+claim store's block that replaced it (`renderKnowledgeBlock`) →
+[27](27-obstacles.md#what-the-claim-store-left-behind).
 
-It replaced the lesson block rather than joining it, and that is the one thing to know about this
-section's history: a promoted lesson is mirrored into the knowledge base as an injected fleet claim
-(`KnowledgeStore.adoptLessons`), so rendering both would have sent every promoted lesson to every
-agent **twice** — once as a lesson and once as its own mirror. One block ships, and a promoted lesson
-reaches agents as the fact it was adopted into.
+**The placement rule that produced them still holds, and is the reason nothing replaced them.** A
+system-prompt append is **identical across every agent in the fleet**, so it is a cached prefix paid
+once; everything `recordDispatchTask` appends is per-goal and variable, so it is fresh input tokens on
+every dispatch. Anything that churns per dispatch belongs in the task prompt — and everything the
+harness now has to tell an agent about the fleet's own experience is _keyed_, so it is per dispatch by
+construction ([09](09-execution.md#what-the-fleet-has-already-run-into-reaches-the-agent)).
 
-It goes here, and not in the task prompt, because of what the two cost. This block is **identical
-across every agent in the fleet**, so it is a cached prefix paid once; everything `recordDispatchTask`
-appends is per-goal and variable, so it is fresh input tokens on every dispatch. That is the placement
-rule for all future context, and it is the reason nothing per-dispatch may enter this block: no goal
-name, no branch, no agent id, no timestamp of "now". A block that churns is a block that never caches.
-Recomputing an identical string per launch is free; producing a _different_ one is the bug. The facts
-scoped to one goal or one check ride the **task** prompt for exactly that reason
-→ [09](09-execution.md#what-a-dispatch-prompt-carries).
+**Blanket context was the wrong instrument, not merely the wrong place.** A block every agent reads
+before it reads any code is skimmed rather than read at the sizes this harness runs against, and each
+line added to one makes every line already in it worth less. The board that replaced the store
+delivers a row to the dispatches its keys match and to nowhere else, which is the same budget spent on
+the agents it is actually about → [27](27-obstacles.md#delivery).
 
-- **The seam is a string, not a store.** `src/knowledge/block.ts` renders it, `src/system.ts` calls
-  that renderer in its `ArgsBuilder`, and `agentProtocol.ts` receives a finished `knowledgeBlock`
-  string and appends it. So this module stays pure and can no more read the knowledge store than the
-  dispatcher can — `test/knowledge.test.ts` asserts structurally that nothing under `src/dispatcher/`
-  reads a fact, and passing a rendered string is what keeps the launch path equally clean. It carries
-  the same trap `--model` does: a builder that accepts the field and forgets to forward it type-checks
-  clean and silently drops the block on both runtimes.
-- **With nothing injected, nothing is appended at all** — not a header, not a newline. The argv is
-  byte-identical to a build without the feature, which is what `test/knowledge.test.ts` and
-  `test/knowledgeBlock.test.ts` pin between them.
-- **Only an `injected` claim is in it, and never a goal-scoped one.** `lookup` is as far as two agents
-  agreeing can carry a standing claim, so delivering one here would make corroboration an
-  auto-promotion into every agent's context — the arrival by the back door the whole reach machine
-  exists to stop. `injected` is the reach that _means_ in front of every agent, so an injected
-  `check:` claim rides this block too: a check that flakes flakes for the agent about to run it, not
-  only for the one dispatched to fix it. The exception is a `goal:` claim, which dies with its goal
-  and rides that goal's own dispatches instead. One predicate decides — `ridesSystemPrompt` — and the
-  task-prompt append reads the same one inverted, so no claim is delivered twice and none falls
-  between them.
-- **A notice's line carries its lapse date and never a countdown.** Every date in this block is the
-  fact's own, and "lapses in three hours" would be computed from _now_ — different bytes on every
-  launch, which is the cached prefix thrown away for nothing that measures it. Notices render first
-  and are therefore the last thing the cap drops.
-- **Capped at `knowledgeBlockChars` (default 6,000), on characters rather than on a count**, since a
-  claim runs from a line to 2,000 characters. Over the cap, whole facts are dropped **newest-vouched
-  first surviving** — ordered by `ruledAt` descending, so what goes is the ruling most likely to have
-  gone stale. `ruledAt` and not `updatedAt`: the latter also moves for a corroboration, which would let
-  an agent agreeing with a claim reorder the fleet's block. Never a truncated claim: half a fact is a
-  different claim, and one nobody vouched for. `0` disables rendering entirely.
-  → [02](02-configuration.md#agent-launch)
-- **The agent _is_ told how many claims the block is not carrying**, and this reverses the lesson
-  block's stance deliberately. A partial list presented as whole is the failure the cap exists to
-  bound — an agent concludes something from the absence of an entry that was merely trimmed — and the
-  lesson block could only say so uselessly, because an agent told a count had no way to reach what was
-  missing. `knowledge_ask` is that way, so the count is actionable and the header names the tool. The
-  drop is shown to the **operator** as well, per row and against the budget, on the cockpit's
-  Knowledge page → [17](17-cockpit.md#the-console).
-- **It is claims, not instructions.** Each fact renders with the goal it was first seen on and the date
-  it was written, under a header saying the repository in front of the agent is the authority. That is
-  what lets an agent discount a stale one, and it is exactly what a bare block of assertions strips.
-  Since #27 phase 5 that sentence names `raise` with `contradicts`, so the invitation and the call that
-  answers it are one sentence rather than an invitation pointing at nothing.
-- **The block does not say which claims are disputed**, and that is a decision rather than an
-  omission. A contradiction is one agent's reading, and marking the line would be a hedge in front of
-  the whole fleet on that say-so — delivery moving without an operator, which is what the reach
-  machine reserves for a clock or a person. It would also hand the reader a doubt it can do nothing
-  with: the amendment is a proposal, so there would be nothing to read instead. What a contradiction
-  does to this block is **nothing**, and the operator's page is where it is visible
-  → [27](27-knowledge.md#contradiction-and-why-it-does-not-delete).
-- **The block is re-appended on every launch, `--resume` included**, exactly as the protocol prompt is.
-  So injecting or demoting a claim reaches a running agent at its **next** launch, never mid-run — an
-  agent already running keeps the block it started with until it is relaunched or resumed.
+**`agentProtocol.ts` reads no store, and that is structural rather than a habit.** It composes the
+protocol from its own constants; anything else an agent must read is appended by the executor, at the
+one place every dispatch passes through. A launch path that could reach a store is a launch path that
+can put something in front of the whole fleet without anything ranking or gating it.
 
 ## Permission model (issue #130)
 
@@ -441,7 +392,7 @@ Three things about which parks count down:
 - **Nor a limit park** — and the exclusion holds **however the two arrive in order**. That park has its
   own ending, the window turning over, and settling it `done` would throw away a conversation the
   account will be able to continue in an hour. `handleStalled`'s arm-time check is the cheap case and
-  not the only one: `handleLimited` drops the clock when the account runs out *after* it was armed,
+  not the only one: `handleLimited` drops the clock when the account runs out _after_ it was armed,
   and `completeExpiredStalls` re-checks `limited` before settling anything, so a park added later
   inherits the exclusion rather than having to remember it.
 - **A park that has ended takes its clock with it.** `respond` and `releasePark` already do this — an
@@ -640,7 +591,7 @@ are worded. The enum members are carried as plain strings rather than re-declare
 someone else's wire format, and a narrower type here would read a value the CLI adds tomorrow as "not
 exhausted".
 
-The same event carries the account's usage *windows* beside the exhaustion — read separately, and by a
+The same event carries the account's usage _windows_ beside the exhaustion — read separately, and by a
 function that cannot park anything; see [the account usage windows](#the-account-usage-windows).
 
 ## `PtySession`
@@ -998,11 +949,11 @@ panel with the reason `restorability` already wrote. Full flow: [21](21-self-upd
 
 ### Kill vs interrupt vs interruptAll
 
-| Call             | Agent status  | Task status   | Resumable on next boot | Worktree              |
-| ---------------- | ------------- | ------------- | ---------------------- | --------------------- |
-| `kill(id)`       | `killed`      | `interrupted` | No                     | Kept, lease released  |
-| `interrupt(id)`  | unchanged     | unchanged     | —                      | —                     |
-| `interruptAll()` | `interrupted` | unchanged     | Yes                    | Kept                  |
+| Call             | Agent status  | Task status   | Resumable on next boot | Worktree             |
+| ---------------- | ------------- | ------------- | ---------------------- | -------------------- |
+| `kill(id)`       | `killed`      | `interrupted` | No                     | Kept, lease released |
+| `interrupt(id)`  | unchanged     | unchanged     | —                      | —                    |
+| `interruptAll()` | `interrupted` | unchanged     | Yes                    | Kept                 |
 
 `interrupt` sends raw ETX (`\x03`) and mutates no status — the agent's own output and exit drive what
 happens next. `kill` releases the credential and spool, clears the park, flushes the transcript, and

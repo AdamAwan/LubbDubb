@@ -7,11 +7,11 @@ import type { ObstacleState } from '../types.js';
  * **This is the invariant the store this replaces did not have.** Every durable
  * claim there waited on an operator's click, so its output when nobody visited
  * the page was exactly zero and neglect had no degraded mode
- * (`docs/spec/32-obstacles.md#what-went-wrong-last-time`). A queue only a human
+ * (`docs/spec/27-obstacles.md#what-went-wrong-last-time`). A queue only a human
  * empties is how that died, and a convention would not have caught it — so the
  * exits are a table a test walks rather than a rule a reviewer remembers.
  *
- * Pure — no I/O, no clock, no store. → `docs/spec/32-obstacles.md#states`
+ * Pure — no I/O, no clock, no store. → `docs/spec/27-obstacles.md#states`
  */
 
 /**
@@ -120,7 +120,7 @@ export function stateAfterSighting(state: ObstacleState, voices: number): Obstac
  * `what_others_saw` structural rather than polite: a second agent shown the
  * first's sentence and then counted as agreeing with it is not independent
  * evidence, and the count cannot see the difference.
- * → `docs/spec/32-obstacles.md#others-words-are-withheld-until-standing`
+ * → `docs/spec/27-obstacles.md#others-words-are-withheld-until-standing`
  */
 export function reachesAgents(state: ObstacleState): boolean {
   return state === 'standing' || state === 'owned';

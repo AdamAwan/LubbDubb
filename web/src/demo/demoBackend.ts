@@ -22,19 +22,14 @@ import type {
   BuildReading,
   CockpitDecision,
   Decision,
-  ContradictionRuling,
-  FactExit,
-  FactRuling,
   GoalWatch,
   GoalWatchDeclaration,
-  GraduationOutcome,
   FilingTargetProbe,
   Issue,
   IssueFiled,
   Job,
   LocalRunView,
   JobSchedule,
-  KnowledgeFactPayload,
   McpChannelPayload,
   McpInsights,
   McpNaming,
@@ -1217,256 +1212,6 @@ class DemoServer {
       pets.wallet.balance = Math.max(0, pets.wallet.earned - pets.wallet.spent);
       this.dirty();
     }
-    return { ok: true };
-  }
-
-  /**
-   * Write a claim down — the demo mirror of `POST /api/knowledge/facts`.
-   *
-   * It lands a **proposal**, as it does on the real route: the gate has no bypass,
-   * and a demo that showed one would be teaching the wrong thing about the surface.
-   */
-  async raiseFact(claim: string, originRef: string | null): Promise<{ ok: true }> {
-    const at = new Date().toISOString();
-    this.state.knowledge = [
-      {
-        id: `fact-${this.state.knowledge.length + 1}-demo`,
-        claim,
-        scope: 'fleet',
-        lifetime: 'standing',
-        expiresAt: null,
-        reach: 'proposal',
-        supersedes: null,
-        project: 'lubbdubb',
-        keepLocal: false,
-        supersededBy: null,
-        originRef,
-        ruledAt: null,
-        resolvesWhen: null,
-        aboutRef: null,
-        where: null,
-        createdAt: at,
-        updatedAt: at,
-        // One voice — the operator's own. Nothing about typing it into the page
-        // makes it agreed with.
-        corroborations: 1,
-        contradictions: 0,
-        contradictionRatio: 0,
-        openContradictions: 0,
-        asks: 0,
-        lastAskedAt: null,
-        scopeStale: false,
-        scopeLastMatchedAt: null,
-        cold: false,
-      },
-      ...this.state.knowledge,
-    ];
-    this.dirty();
-    return { ok: true };
-  }
-
-  /**
-   * Where a claim stands — the demo mirror of `POST /api/knowledge/facts/:id/reach`
-   * (#27 phase 2), including the one refusal the real store makes: a rejected
-   * claim does not move, because the bar is what stops a killed claim coming back.
-   */
-  async setFactReach(id: string, reach: FactRuling): Promise<{ ok: true }> {
-    const fact = this.state.knowledge.find((f) => f.id === id);
-    if (fact && fact.reach !== 'rejected') {
-      fact.reach = reach;
-      // Ruled, whether or not the reach moved: saying a corroborated claim belongs
-      // exactly where it is *is* the decision, and it is what takes the row out of
-      // the page's "Needs you" section.
-      fact.ruledAt = new Date().toISOString();
-      fact.updatedAt = fact.ruledAt;
-      this.dirty();
-    }
-    return { ok: true };
-  }
-
-  /**
-   * Folding a cluster — the demo mirror of `POST /api/knowledge/facts/:id/merge`,
-   * including the shape that makes a merge safe: the members' voices move onto the
-   * survivor and the members become `superseded` naming it, rather than being
-   * deleted or retired.
-   */
-  async mergeFacts(id: string, members: string[]): Promise<{ ok: true }> {
-    const survivor = this.state.knowledge.find((f) => f.id === id);
-    if (!survivor) return { ok: true };
-    const at = new Date().toISOString();
-    for (const memberId of members) {
-      const member = this.state.knowledge.find((f) => f.id === memberId);
-      if (!member || member.id === survivor.id) continue;
-      if (member.reach === 'rejected' || member.reach === 'superseded') continue;
-      if (member.scope !== survivor.scope) continue;
-      survivor.corroborations += member.corroborations;
-      member.reach = 'superseded';
-      member.supersededBy = survivor.id;
-      member.ruledAt = at;
-      member.updatedAt = at;
-    }
-    // The promotion is the ordinary one on the ordinary rule: the merge let the
-    // voices be counted, and the count is what carries a claim to lookup.
-    if (survivor.reach === 'proposal' && survivor.corroborations > 1) survivor.reach = 'lookup';
-    survivor.ruledAt = at;
-    survivor.updatedAt = at;
-    this.state.knowledgeSimilarities = this.state.knowledgeSimilarities.filter(
-      (pair) => !members.includes(pair.leftId) && !members.includes(pair.rightId),
-    );
-    this.dirty();
-    return { ok: true };
-  }
-
-  /**
-   * One claim's observations, in the observers' own words — the demo mirror of
-   * `GET /api/knowledge/facts/:id`. Synthesised from the count rather than stored,
-   * since the fixture ships the reading and not the rows behind it.
-   */
-  async knowledgeFact(id: string): Promise<KnowledgeFactPayload> {
-    const fact = this.state.knowledge.find((f) => f.id === id);
-    if (!fact) throw new Error('fact not found');
-    const corroborations = Array.from({ length: Math.max(1, fact.corroborations) }, (_, i) => ({
-      id: `knc-${fact.id}-${i + 1}`,
-      factId: fact.id,
-      agentId: null,
-      taskId: null,
-      goalRef: i === 0 ? fact.originRef : `issue:${340 + i}`,
-      sessionId: null,
-      // Local voices: the demo has one fleet, so nothing here arrived from a pool.
-      fleetId: null,
-      words:
-        i === 0
-          ? 'What I actually saw when I wrote this down.'
-          : 'I hit the same wall on a different goal, and this is what it looked like.',
-      createdAt: fact.createdAt,
-    }));
-    // The disputes, synthesised the same way and from the same two readings the
-    // row already ships: `contradictions` is how many voices spoke against the
-    // claim and `openContradictions` how many of those an operator has still to
-    // answer, so the first N rows are open and the rest are answered. The
-    // amendment is the fixture's own — the fact naming this one in `supersedes` —
-    // because an operator cannot answer a dispute without reading the sentence
-    // being offered in place of the claim.
-    const amendment = this.state.knowledge.find((f) => f.supersedes === fact.id) ?? null;
-    const contradictions = Array.from({ length: fact.contradictions }, (_, i) => ({
-      id: `knx-${fact.id}-${i + 1}`,
-      factId: fact.id,
-      amendmentId: amendment?.id ?? 'fact-gone',
-      amendment,
-      agentId: null,
-      taskId: null,
-      goalRef: amendment?.originRef ?? null,
-      sessionId: null,
-      words:
-        'The claim did not hold here: the ticket named the failing check, and that was enough to plan from. ' +
-        'What I saw is in the amendment.',
-      resolution: i < fact.openContradictions ? null : ('dismissed' as const),
-      resolvedAt: i < fact.openContradictions ? null : fact.updatedAt,
-      createdAt: fact.updatedAt,
-    }));
-    return { fact, corroborations, contradictions };
-  }
-
-  /**
-   * Answer one contradiction — the demo mirror of
-   * `POST /api/knowledge/contradictions/:id/resolve` (#27 phase 5), including the
-   * property that makes it one route: adopting the amendment moves **both** facts,
-   * so the demo cannot show the half-landed state where the sharper claim and the
-   * blunter one are both in the block.
-   */
-  async resolveContradiction(id: string, ruling: ContradictionRuling): Promise<{ ok: true }> {
-    // The synthesised id carries the claim it disputes: `knx-<factId>-<n>`.
-    const factId = id.slice('knx-'.length).replace(/-\d+$/, '');
-    const fact = this.state.knowledge.find((f) => f.id === factId);
-    if (!fact || fact.openContradictions === 0) return { ok: true };
-    const amendment = this.state.knowledge.find((f) => f.supersedes === fact.id) ?? null;
-    const at = new Date().toISOString();
-    if (ruling.resolution === 'amended' && amendment) {
-      // The amendment takes the claim's place exactly, and the claim is superseded
-      // rather than rejected: it was not judged untrue, and a rejection would bar
-      // the amendment's own words, which contain it.
-      amendment.reach = fact.reach;
-      amendment.ruledAt = at;
-      amendment.updatedAt = at;
-      fact.reach = 'superseded';
-    }
-    if (ruling.resolution === 'narrowed') fact.claim = ruling.claim;
-    if (ruling.resolution !== 'dismissed') {
-      fact.ruledAt = at;
-      fact.updatedAt = at;
-    }
-    // Answered either way — the queue is what an operator has left to decide, and
-    // dismissing is a decision.
-    fact.openContradictions -= 1;
-    this.dirty();
-    return { ok: true };
-  }
-
-  /**
-   * Send a claim on — the demo mirror of `POST /api/knowledge/facts/:id/exit`,
-   * including the property that is the whole of the intermediate state: **the reach
-   * does not move**. The claim goes on being delivered while the work is in flight,
-   * and reaches `graduated` only when the exit is actually taken.
-   */
-  async exitFact(id: string, exit: FactExit): Promise<{ ok: true }> {
-    const fact = this.state.knowledge.find((f) => f.id === id);
-    if (!fact || this.state.knowledgeGraduations.some((g) => g.factId === id && g.outcome === null)) {
-      return { ok: true };
-    }
-    const at = new Date().toISOString();
-    const headline = fact.claim.split('\n')[0]!;
-    // What each exit queues, mirrored so the demo's Up next shows what the control
-    // the operator just clicked actually asks for.
-    const title = (
-      exit.exit === 'docs'
-        ? `Document: ${headline}`
-        : exit.exit === 'ticket'
-          ? `File ticket: ${headline}`
-          : `${fact.aboutRef ? `${fact.aboutRef} ` : ''}${headline}`
-    ).slice(0, 80);
-    await this.launchJob({ prompt: fact.claim, title });
-    this.state.knowledgeGraduations = [
-      {
-        id: `kng-${id}`,
-        factId: id,
-        exit: exit.exit,
-        jobId: this.state.jobs[0]?.id ?? `job-${exit.exit}-${id}`,
-        target: exit.exit === 'docs' ? exit.target : null,
-        bar: exit.exit === 'docs' && exit.target === 'claudeMd' ? exit.bar : null,
-        prRef: null,
-        ticketRef: null,
-        outcome: null,
-        settledAt: null,
-        createdAt: at,
-        reading: 'waiting',
-      },
-      ...this.state.knowledgeGraduations,
-    ];
-    this.dirty();
-    return { ok: true };
-  }
-
-  /**
-   * Say what became of a graduation the harness will not read for itself — the
-   * demo mirror of `POST /api/knowledge/graduations/:id/settle`. `landed` is the
-   * one place `graduated` is an operator's own word, and it moves the claim out of
-   * every prompt; `abandoned` moves nothing at all.
-   */
-  async settleGraduation(id: string, outcome: GraduationOutcome): Promise<{ ok: true }> {
-    const graduation = this.state.knowledgeGraduations.find((g) => g.id === id);
-    if (!graduation || graduation.outcome !== null) return { ok: true };
-    graduation.outcome = outcome;
-    graduation.reading = outcome;
-    graduation.settledAt = new Date().toISOString();
-    if (outcome === 'landed') {
-      const fact = this.state.knowledge.find((f) => f.id === graduation.factId);
-      if (fact) {
-        fact.reach = 'graduated';
-        fact.ruledAt = graduation.settledAt;
-        fact.updatedAt = graduation.settledAt;
-      }
-    }
-    this.dirty();
     return { ok: true };
   }
 
@@ -4546,7 +4291,6 @@ export const demoApi = {
       fleets: [],
     }),
   getPool: () => Promise.resolve({ status: null, fleets: [], claims: [] }),
-  setFactKeepLocal: () => Promise.resolve({ ok: true as const }),
   // The prompt book lives in the server's template registry, and the web bundle
   // deliberately imports no server code. Shipping a copy of eighteen prompts here
   // to fill the demo panel would be a duplicate free to drift from the originals
@@ -4735,13 +4479,6 @@ export const demoApi = {
   renamePet: (id: string, name: string) => getServer().renamePet(id, name),
   placePet: (id: string, placed: boolean) => getServer().placePet(id, placed),
   blendPet: (id: string) => getServer().blendPet(id),
-  setFactReach: (id: string, reach: FactRuling) => getServer().setFactReach(id, reach),
-  mergeFacts: (id: string, members: string[]) => getServer().mergeFacts(id, members),
-  exitFact: (id: string, exit: FactExit) => getServer().exitFact(id, exit),
-  raiseFact: (claim: string, originRef: string | null) => getServer().raiseFact(claim, originRef),
-  settleGraduation: (id: string, outcome: GraduationOutcome) => getServer().settleGraduation(id, outcome),
-  knowledgeFact: (id: string) => getServer().knowledgeFact(id),
-  resolveContradiction: (id: string, ruling: ContradictionRuling) => getServer().resolveContradiction(id, ruling),
   completeHumanTask: (id: string, note?: string) => getServer().completeHumanTask(id, note),
   declineHumanTask: (id: string, note: string) => getServer().declineHumanTask(id, note),
   closeHumanTaskTicket: (id: string, note?: string) => getServer().closeHumanTaskTicket(id, note),

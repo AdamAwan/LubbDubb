@@ -49,7 +49,6 @@ export const MCP_TOOL_NAMES = [
   'review_route',
   'report_remedy',
   'raise',
-  'knowledge_ask',
   'review_pack_submit',
   'review_pack_check',
 ] as const;
@@ -109,9 +108,6 @@ export const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use'> = {
   world_read: 'addendum',
   open_pr: 'addendum',
   note_progress: 'addendum',
-  // Every agent may read the knowledge base, and it has no point of use to be named
-  // at: a tool named nowhere but in `tools/list` is a tool an agent finishes without.
-  knowledge_ask: 'addendum',
   // A request for a person to act rather than an observation, which is why it did
   // not fold into `raise` — and why it still needs naming.
   request_human_task: 'addendum',
@@ -185,15 +181,20 @@ export const RETIRED_TOOL_NAMES: readonly string[] = [
   'knowledge_propose',
   'knowledge_notice',
   'knowledge_contradict',
+  // The claim store's read side. It joined this list when the store went: there is
+  // no search tool now, and an agent reaching for one from an out-of-date prompt
+  // must be told that rather than met with an unknown method.
+  'knowledge_ask',
 ];
 
 /** What a call to a retired tool is told, so the answer names the door that replaced it. */
 export function retiredToolMessage(name: string): string {
   return (
-    `${name} has been retired. Everything it did is now one call: raise(claim, evidence) — say what you ` +
-    'learned and what you saw, and the harness works out where it goes. Add `contradicts: <id>` if you ' +
-    'are disputing a claim the harness gave you, or `until: <hours>` if it is only true for now. If you ' +
-    'reached this from a prompt that named it, that prompt is out of date.'
+    `${name} has been retired. Everything it did is now one call: raise(what, why_not_mine) — say what ` +
+    'you hit and why it is not your own change doing, and the harness works out the rest. **The call ' +
+    'is the lookup**: it comes back with whether anybody else has hit it, who owns it if anyone does, ' +
+    'and what they saw. There is no search tool; call raise the moment you are in pain. If you reached ' +
+    'this from a prompt that named it, that prompt is out of date.'
   );
 }
 

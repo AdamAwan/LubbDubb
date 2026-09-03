@@ -12,7 +12,7 @@ import type { ObstacleWorld } from './keys.js';
  * checkout on disk — so a key is validated against a reading the harness is
  * already paying for, which is what keeps the intake a single round trip with no
  * model call and no waiting.
- * → `docs/spec/32-obstacles.md#where-a-key-comes-from`
+ * → `docs/spec/27-obstacles.md#where-a-key-comes-from`
  */
 export function buildObstacleWorld(input: {
   /** Check names the provider is reporting, from the world baseline. */

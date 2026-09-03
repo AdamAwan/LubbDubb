@@ -18,7 +18,7 @@ import type { ObstacleBoardPayload } from '../src/wire.js';
  * writes and none of them is a step on any path, and *retiring is not rejecting*
  * — a retired row keeps what it said and a matching report reopens it. Each of
  * those renders perfectly while being wrong, which is why none of them is left to
- * the surface. → `docs/spec/32-obstacles.md#in-the-cockpit`
+ * the surface. → `docs/spec/27-obstacles.md#in-the-cockpit`
  */
 
 function build(): System {

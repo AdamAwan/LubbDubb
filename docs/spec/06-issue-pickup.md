@@ -319,7 +319,7 @@ An issue is picked up when:
 2. `openPrForIssue(issue, allOpenPrs) === null`, and
 3. `isIssuePickupEligible(issue, policy).eligible`, and no standing `unclear` goal appraisal holds it
    (see below), and no obstacle block does
-   ([32](32-obstacles.md#blocked-is-an-answer) — an agent concluded `blocked` naming something that is
+   ([27](27-obstacles.md#blocked-is-an-answer) — an agent concluded `blocked` naming something that is
    not this goal, and the goal returns on its own when that obstacle stops reaching agents), and
 4. its plan route resolves to `unplanned` — the funnel failed open on it, which is the only arm this rule works — and
 5. no active task holds `issue:<n>`, and

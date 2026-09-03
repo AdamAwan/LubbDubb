@@ -202,25 +202,6 @@ export interface ResolvedWindow {
 }
 
 /**
- * The window a reading with no control of its own is taken over.
- *
- * The Knowledge page's cost reading is the caller: it draws one figure and has no
- * time bar, and a second control there would be a second answer to "over what
- * stretch" on a page whose whole argument is that one number should be readable
- * beside another. So it takes the window Insights *opens* on, resolved through
- * this same function — which is what "against the same window as Insights"
- * (`docs/spec/27-knowledge.md`) has to mean for a surface that cannot ask.
- *
- * A function rather than an exported constant so the default is applied here, once,
- * exactly as {@link InsightsQuery} applies it for the routes.
- */
-export function defaultWindow(now: number): ResolvedWindow {
-  // No limits, because the default is never `session` — and passing the reading
-  // in here anyway would be a caller with no time bar quietly acquiring one.
-  return resolveWindow(DEFAULT_INSIGHTS_WINDOW, now, null);
-}
-
-/**
  * The window a route was asked for, resolved.
  *
  * `limits` is **required rather than optional** even though five of the six keys

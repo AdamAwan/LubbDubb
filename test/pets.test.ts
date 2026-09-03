@@ -77,6 +77,14 @@ function started(store: Store): string {
 /** Every action that can roll, which several tests walk. */
 const KINDS: PetActionKind[] = ['escalation', 'human-task', 'plan', 'landing', 'job', 'claim', 'upgrade'];
 
+/**
+ * The kinds the scan still *produces*. `claim` is not one: the claim store is
+ * gone, so nothing rules on one any more — the kind stays in {@link KINDS} because
+ * the catalogue and the ledger still have to answer for every creature already
+ * hatched from a ruling.
+ */
+const LIVE_KINDS: PetActionKind[] = KINDS.filter((kind) => kind !== 'claim');
+
 /** A settled `ask`: a second kind of action, for the tests that need two. */
 function settle(store: Store, title: string): string {
   const { task } = store.recordHumanTask({ title, detail: '', agentId: null, taskId: null, originRef: null });
@@ -1192,7 +1200,15 @@ function allFiles(dir: string): string[] {
 // The origin label (`docs/spec/22-pets.md#the-sources`)
 // ---------------------------------------------------------------------------
 
-/** One settled action of every kind, so a scan can hatch a pet from each. */
+/**
+ * One settled action of every kind the scan still finds, so a scan can hatch a pet
+ * from each.
+ *
+ * `claim` is not among them any more: the claim store is gone, so nothing hatches
+ * one — the kind survives on `PetActionKind` because every creature already
+ * hatched from a ruling carries it, and a pet whose origin kind the wire did not
+ * know would be a pet the grid could not draw.
+ */
 function oneOfEachKind(store: Store): Map<PetActionKind, string> {
   const refs = new Map<PetActionKind, string>();
   refs.set('escalation', answer(store, 'Should the rate-limit park apply to review agents too?'));
@@ -1201,25 +1217,6 @@ function oneOfEachKind(store: Store): Map<PetActionKind, string> {
   refs.set('plan', plan.id);
   refs.set('landing', store.recordStackLanding('stack:413', [411, 412]).id);
   refs.set('job', store.createJob({ title: 'Re-run the flaky worktree suite', prompt: 'go', kind: 'code' }).id);
-  const raised = store.proposeFact(
-    {
-      claim: 'ingest.ts buffers the whole body',
-      scope: 'fleet',
-      lifetime: 'standing',
-      expiresInHours: null,
-      evidence: 'A 400MB upload took the process down.',
-      supersedes: null,
-      resolvesWhen: null,
-      aboutRef: null,
-      where: null,
-    },
-    { agentId: 'agent_1', taskId: 'task_1', goalRef: null, sessionId: null, words: 'saw it' },
-  );
-  assert.ok(raised.outcome !== 'barred');
-  // Ruling on it is the operator action — `ruledAt` is the one stamp that means
-  // exactly that, which is why the scan reads it rather than the reach.
-  store.setFactReach(raised.fact.id, 'rejected');
-  refs.set('claim', raised.fact.id);
   // Stamped now, not at a fixed date. Every other action here takes its timestamp
   // from the store's clock, and `requestedAt` is the one a caller supplies — so a
   // literal puts this action before the vivarium's start, where it is recorded
@@ -1241,18 +1238,17 @@ test('every origin arrives on the wire as words rather than as a row id', () => 
   const state = pets.state();
   assert.ok(state);
   const byKind = new Map(state.pets.map((pet) => [pet.originKind, pet]));
-  for (const kind of KINDS) assert.ok(byKind.has(kind), `${kind} must have hatched something to label`);
+  for (const kind of LIVE_KINDS) assert.ok(byKind.has(kind), `${kind} must have hatched something to label`);
   assert.equal(byKind.get('escalation')?.originLabel, 'Should the rate-limit park apply to review agents too?');
   assert.equal(byKind.get('human-task')?.originLabel, 'Issue a deploy key for the staging cluster');
   assert.equal(byKind.get('plan')?.originLabel, 'Give jobs real names');
   assert.equal(byKind.get('landing')?.originLabel, 'stack:413');
   assert.equal(byKind.get('job')?.originLabel, 'Re-run the flaky worktree suite');
-  assert.equal(byKind.get('claim')?.originLabel, 'ingest.ts buffers the whole body');
   // An upgrade is the one kind that reads nothing: its ref is the commit itself.
   assert.equal(byKind.get('upgrade')?.originLabel, '9c1d4a2');
   // And the ref the label stands beside has not moved — it is the seed, the
   // re-roll's input and part of the chain hash.
-  for (const kind of KINDS) assert.equal(byKind.get(kind)?.originRef, refs.get(kind));
+  for (const kind of LIVE_KINDS) assert.equal(byKind.get(kind)?.originRef, refs.get(kind));
 });
 
 test('the labels are one batched read per kind over the refs the vivarium holds', () => {
@@ -1264,14 +1260,7 @@ test('the labels are one batched read per kind over the refs the vivarium holds'
   pets.scan();
 
   const asked = new Map<string, string[][]>();
-  const methods = [
-    'escalationLabels',
-    'humanTaskLabels',
-    'planLabels',
-    'landingLabels',
-    'jobLabels',
-    'factLabels',
-  ] as const;
+  const methods = ['escalationLabels', 'humanTaskLabels', 'planLabels', 'landingLabels', 'jobLabels'] as const;
   for (const method of methods) {
     const real = store[method].bind(store);
     store[method] = (ids: string[]): Map<string, string> => {

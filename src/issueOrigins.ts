@@ -103,7 +103,7 @@ export function issueOriginRole(issueNumber: number, originRef: string | null): 
  * {@link issueOriginRole}'s answers — it names no issue. It is a second, tiny
  * vocabulary rather than a member of the first, and the callers that ask about
  * both ask both.
- * → `docs/spec/32-obstacles.md#ownership`
+ * → `docs/spec/27-obstacles.md#ownership`
  */
 export function obstacleOriginId(originRef: string | null): string | null {
   const match = /^obstacle:([A-Za-z0-9_-]+)$/.exec(originRef ?? '');

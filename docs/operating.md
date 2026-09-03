@@ -27,7 +27,7 @@ Everything below is what that means in practice.
 | Chase red CI                               | Each failing check is classified and worked, or held if it isn't ours   |
 | Write the change                           | An agent writes it; you read the plan and the delivered result          |
 | Decide what "done" means                   | **Still you.** Nothing else                                             |
-| Decide whether the goal was even clear     | **Still you**, when the appraisal says it isn't                             |
+| Decide whether the goal was even clear     | **Still you**, when the appraisal says it isn't                         |
 | Decide whether this may leave the building | **Still you.** No comment, merge or ticket goes out unauthorized        |
 
 The pattern is that **the harness owns the loop and you own the judgement**. Where a step needs a

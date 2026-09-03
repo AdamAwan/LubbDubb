@@ -246,8 +246,8 @@ Above both lanes sits `ReadPlan.fresh`: the refs this read must re-hydrate whate
 says and whatever lane they are on. It is asked before the lanes and answers an age bound of zero,
 which is always past, so the cache drops exactly those entries and re-reads them.
 
-It has two writers, and they name the same kind of fact — *something happened to this entity that its
-change token does not report*:
+It has two writers, and they name the same kind of fact — _something happened to this entity that its
+change token does not report_:
 
 - **An inbound delivery**, drained from the `IngressInbox` ([30](30-ingress.md#invalidating-precisely)).
 - **The fleet's own finished work** — the entities a task reached a terminal on since the last reading
@@ -424,7 +424,7 @@ flowchart TD
 
    Below the graph and the environment probes, and still above `decide`, `notices.run(prev, world)`
    raises the knowledge notices the harness can see for itself and ends the ones the world has settled
-   ([27](27-knowledge.md#what-the-harness-raises)). It is handed the **pair** step 2's diff was taken
+   ([27](27-obstacles.md#the-harness-is-a-voice)). It is handed the **pair** step 2's diff was taken
    from, read before the baseline moved on, so the two cannot come to be looking at different pulses.
    Its position is the point: the knowledge block a dispatch carries is rendered at launch, a few steps
    below, so a notice raised under that line would not reach the agents dispatched on this pulse and

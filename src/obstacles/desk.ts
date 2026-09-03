@@ -14,7 +14,7 @@ import { buildObstacleWorld, reportedChecks } from './world.js';
  * > **A model may do anything whose mistakes are visible.**
  *
  * — and the table in
- * `docs/spec/32-obstacles.md#what-may-be-decided-by-a-model-and-what-may-not` is
+ * `docs/spec/27-obstacles.md#what-may-be-decided-by-a-model-and-what-may-not` is
  * the whole permission list. Four jobs are on it, and each is here because a wrong
  * answer to it can be seen:
  *
@@ -206,7 +206,7 @@ export class ObstacleModelDesk {
    * harness carrying a row to `standing` alone through a door every other rule
    * closes. The inbox leaves out a row nothing but the harness has said, and this
    * leaves out its sentence on the rows it shares.
-   * → `docs/spec/32-obstacles.md#the-harness-is-a-voice`
+   * → `docs/spec/27-obstacles.md#the-harness-is-a-voice`
    */
   private async read(row: ObstacleStanding, board: readonly ObstacleStanding[], reader: ObstacleReader): Promise<void> {
     const id = row.obstacle.id;

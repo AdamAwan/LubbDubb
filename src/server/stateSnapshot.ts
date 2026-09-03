@@ -7,7 +7,6 @@ import type {
   IssueAppraisal,
   IssueDelivery,
   IssueInstruction,
-  KnowledgeFact,
   LocalRun,
   LocalRunReadings,
   LocalRunTurn,
@@ -23,8 +22,6 @@ import type {
   CockpitState,
   GoalReachView,
   GoalWatchView,
-  KnowledgeGraduationView,
-  KnowledgeDeliveryView,
   LocalRunRefFacts,
   LocalRunTargetView,
   LocalRunView,
@@ -57,19 +54,7 @@ import { DISPATCH_RULES } from '../dispatcher/rules.js';
 import { trackerCoordinates } from '../mcp/findings.js';
 import { featureBoardOn } from '../features/featureBoard.js';
 import { rejectionSignalQuery } from '../proposals/proposals.js';
-import { graduationReading } from '../knowledge/graduation.js';
-import type { Store } from '../store/store.js';
 import { detectFileOverlaps, OVERLAP_AGENT_WINDOW } from '../fileOverlap.js';
-import {
-  KNOWLEDGE_READ_LIMIT,
-  renderKnowledgeBlock,
-  renderScopedKnowledgeNote,
-  ridesSystemPrompt,
-} from '../knowledge/block.js';
-import { knowledgeBlockCost } from '../knowledge/cost.js';
-import { isCold } from '../knowledge/cold.js';
-import { checkScopeDrift, checkSightings } from '../knowledge/drift.js';
-import { defaultWindow } from '../insightsWindow.js';
 import { acceptanceCriteria, bySlug, partDepth, partOrigin, planIssueNumber } from '../plans/parts.js';
 import { planScopeDrift } from '../plans/scopeDrift.js';
 import { deliveryHold, deliverySignalQuery } from '../delivery/delivery.js';
@@ -105,7 +90,6 @@ export const STATE_SECTIONS: readonly StateSection[] = [
   'goals',
   'plans',
   'fleet',
-  'knowledge',
   'queue',
   'inbox',
   'activity',
@@ -223,52 +207,6 @@ export function buildStateSections(
   const flags = store.listAllFlags();
   // Hoisted for the same reason: the URL map below is derived from the same rows.
   const attachments = store.listAllAttachments();
-  // What the knowledge base actually delivers (issue #27 phase 3), from the two
-  // renderers that deliver it, with the cap the launch reads. Everything the two
-  // panels say about what is *sent* comes from here — the block's budget meter,
-  // the per-claim drop, and the lesson rows' "sent to agents" chip alike.
-  const delivery = once(() => knowledgeDelivery(store, config.knowledgeBlockChars));
-  // The harness's own clock rather than `world.takenAt`: both readings below are
-  // about how long ago something happened *now*, and dating them to a world
-  // snapshot that is a pulse old would put the staleness verdict a pulse behind
-  // the page drawing it.
-  const readAt = Date.now();
-  // What the harness has seen of each check name — the dispatches it made and the
-  // checks the provider is reporting — for the `check:` staleness verdict below.
-  // Derived from records already in hand rather than from a new write path: a
-  // recorder for a reading is a second record to keep true, and the failure this
-  // surfaces is silent non-delivery, which a recorder that stopped writing would
-  // reproduce rather than reveal.
-  const sightings = checkSightings(tasks, world.pullRequests);
-  // The work graph, read once for every graduation in flight rather than a subtree
-  // query each: the list is the operator's own clicks, and this is a polled snapshot.
-  const graduationNodes = store.listWorkNodes();
-  const graduations = store.listGraduations().map(
-    (graduation): KnowledgeGraduationView => ({
-      ...graduation,
-      reading: graduationReading(
-        graduation,
-        // The job's own node and its children: the first is what says a job was
-        // cancelled before it ever opened one, and the second is the pull request.
-        graduationNodes.filter((n) => n.ref === `job:${graduation.jobId}` || n.parentRef === `job:${graduation.jobId}`),
-      ),
-    }),
-  );
-  // What the fleet knows about working this repository, every reach and the
-  // rejected tail included (issue #27 phase 2). Read here for lessons' reason
-  // twice over: each fact's `originRef` and its `goal:` scope both name a goal the
-  // world has usually dropped, and the page draws each as a way there.
-  //
-  // The count is taken here, from the store, and never in the browser: it is
-  // `distinctCorroborators`' answer — two observations are one corroborator if
-  // they share a goal or a session — and a `rows.length` in the view layer would
-  // be free to disagree with the count that actually promotes a claim.
-  const facts = store.listFacts();
-  // Every count on a fact row, taken together in the store: the agreement count,
-  // the dispute count, the fraction that is, and how often the claim was asked
-  // for. One read rather than four, so the ratio the page draws and the count
-  // beside it cannot be answers to two different questions about the same rows.
-  const factCounts = store.factCounts();
   // Work only a person can do. Read here rather than only in the panel for
   // findings' reason: each row's `originRef` names the work it belongs to, and the
   // panel links it through the same ref map as everything else.
@@ -533,16 +471,6 @@ export function buildStateSections(
     // `#n` keys are built from — it needs resolving by its canonical ref or the
     // chip the operator just created links nowhere.
     refs: [
-      // Everything a claim draws as a way somewhere, and every one of them outlives
-      // the world lists: the goal it was first observed on and the goal a `goal:`
-      // scope names are both usually long finished by the time anyone reads the
-      // claim, the item it is *about* is often a closed duplicate, and where it
-      // went is a pull request or a ticket the exit only just produced.
-      ...facts.map((f) => f.originRef),
-      ...facts.map((f) => f.aboutRef),
-      ...facts.map((f) => (f.scope.startsWith('goal:') ? f.scope.slice('goal:'.length) : null)),
-      ...graduations.map((g) => g.prRef),
-      ...graduations.map((g) => g.ticketRef),
       // Both halves of a raised bug: the story it came from, and the bug itself once
       // the filing agent reports it — the chip on the row links the latter.
       ...bugFilings.map((b) => b.originRef),
@@ -1113,68 +1041,6 @@ export function buildStateSections(
   });
 
   /**
-   * What the fleet knows about working this repository, and what saying it costs.
-   */
-  const knowledgeSection = (): Pick<
-    CockpitState,
-    'knowledge' | 'knowledgeGraduations' | 'knowledgeSimilarities' | 'knowledgeDelivery' | 'knowledgeCost'
-  > => ({
-    // Every fact, the rejected ones included: the page is the governance, and a
-    // surface drawing only what it let through cannot show that a claim was
-    // killed. Nothing in the dispatcher reads one — a fact feeds prompts (phase 3)
-    // and this panel, and that is the whole of it.
-    knowledge: facts.map((fact) => {
-      // Whether the check this claim is scoped to still runs (issue #27 phase 7).
-      // Taken here rather than in the browser for the ratio's reason: it is a
-      // comparison against a configured window, made beside the dispatches and the
-      // world it reads, and a "days since" computed from `Date.now()` in the view
-      // layer would be a second implementation of the verdict.
-      const drift = checkScopeDrift(fact, sightings, { now: readAt, staleDays: config.knowledgeScopeStaleDays });
-      const counts = factCounts.get(fact.id);
-      return {
-        ...fact,
-        corroborations: 0,
-        contradictions: 0,
-        contradictionRatio: 0,
-        openContradictions: 0,
-        asks: 0,
-        lastAskedAt: null,
-        ...counts,
-        scopeStale: drift?.stale ?? false,
-        scopeLastMatchedAt: drift?.lastMatchedAt ?? null,
-        // Derived here rather than recorded, and taken beside the counts it reads
-        // for `scopeStale`'s reason: an age against a configured window computed in
-        // the browser would be a second implementation of the verdict the fold's
-        // own count is taken from.
-        cold: isCold(
-          fact,
-          { corroborations: counts?.corroborations ?? 0, asks: counts?.asks ?? 0 },
-          {
-            now: readAt,
-            coldDays: config.knowledgeColdDays,
-          },
-        ),
-      };
-    }),
-    // Every attempt to put one in the repository, the abandoned ones included:
-    // committing is one act with two ends, and the operator deciding whether to try
-    // again needs to see the try that did not land. `reading` is the sweep's own
-    // verdict over the work graph, taken here rather than in the browser for the
-    // reason every other count on this row is.
-    knowledgeGraduations: graduations,
-    // Which proposals a machine thinks are one claim. A suggestion table read
-    // straight out — nothing here has joined, promoted or barred anything, and the
-    // page draws a cluster whose merge is the operator's click.
-    knowledgeSimilarities: store.listSimilarities(),
-    // What that list actually sends, from the renderers that send it.
-    knowledgeDelivery: delivery(),
-    // What sending it costs, over the window Insights opens on. The block's length
-    // is the renderer's own answer above rather than a second rendering: a cost
-    // drawn from a block that did not ship is a cost for nothing.
-    knowledgeCost: knowledgeBlockCost(agents, delivery().block.length, defaultWindow(readAt)),
-  });
-
-  /**
    * What is waiting to be dispatched, and the recurrences behind some of it.
    */
   const queueSection = (): Pick<CockpitState, 'jobs' | 'schedules' | 'upcoming' | 'runway'> => ({
@@ -1280,7 +1146,6 @@ export function buildStateSections(
   if (want.has('goals')) Object.assign(out, goalsSection());
   if (want.has('plans')) Object.assign(out, plansSection());
   if (want.has('fleet')) Object.assign(out, fleetSection());
-  if (want.has('knowledge')) Object.assign(out, knowledgeSection());
   if (want.has('queue')) Object.assign(out, queueSection());
   if (want.has('inbox')) Object.assign(out, inboxSection());
   if (want.has('activity')) Object.assign(out, activitySection());
@@ -1736,46 +1601,5 @@ function workItemStateRules(config: Config): CockpitState['config']['stateRules'
     inProgress: config.issueInProgressState ?? null,
     inReview: config.issueInReviewState ?? null,
     returnsTo: config.issuePickupStates?.[0] ?? null,
-  };
-}
-
-/**
- * What the knowledge base actually delivers, projected from the renderers that
- * deliver it.
- *
- * **Never a second reading.** The block is `renderKnowledgeBlock`'s own output —
- * the string, the ids it carries, and the ids the cap left out — so the cockpit's
- * budget meter is measuring the block that will ship rather than a character count
- * of its own. A recomputation here would be free to disagree with the launch, and
- * nothing would be red when it did.
- *
- * The scoped half is one entry per `check:` or `goal:` scope holding anything
- * deliverable, rendered through the same function `recordDispatchTask` appends
- * with. Per scope rather than per dispatch because a dispatch matches its goal and
- * every check it answers at once, and the set of dispatches is not a list — an
- * agent on `pr:412:ci` with `test (windows)` red receives this page's `goal:pr:412`
- * entry and its `check:test (windows)` entry, in one pass through the renderer.
- */
-function knowledgeDelivery(store: Store, limit: number): KnowledgeDeliveryView {
-  const block = renderKnowledgeBlock(store.askFacts({ limit: KNOWLEDGE_READ_LIMIT }), limit);
-  const byScope = new Map<string, KnowledgeFact[]>();
-  for (const fact of store.askFacts({ limit: KNOWLEDGE_READ_LIMIT })) {
-    // What rides the block is out of the scoped half, through the renderers' own
-    // predicate rather than a scope test of this page's — a fact counted in both
-    // halves here would tell an operator a claim is sent twice when it is sent
-    // once, which is the drift this whole surface exists to make visible.
-    if (fact.scope === 'fleet' || ridesSystemPrompt(fact)) continue;
-    byScope.set(fact.scope, [...(byScope.get(fact.scope) ?? []), fact]);
-  }
-  return {
-    block: block.text,
-    limit,
-    rendered: block.rendered.map((f) => f.id),
-    dropped: block.dropped.map((f) => f.id),
-    scoped: [...byScope]
-      // Alphabetical, so the list an operator reads twice is the same list twice —
-      // insertion order here is the store's recency, which moves under them.
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([scope, facts]) => ({ scope, text: renderScopedKnowledgeNote(facts), facts: facts.map((f) => f.id) })),
   };
 }
