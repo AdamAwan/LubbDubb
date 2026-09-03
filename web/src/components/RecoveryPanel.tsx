@@ -81,7 +81,7 @@ function CrashedCard({
   onDecide: (taskId: string, verdict: RecoveryVerdict) => Promise<unknown> | unknown;
 }) {
   return (
-    <Panel face="shared" density="snug" className="card crashed">
+    <Panel density="padded" className="card crashed">
       <HeadRow className="crashed-head">
         <span className={`badge ${crashed.died}`} title={VERDICT_CAUSE[crashed.died]}>
           {DIED_LABEL[crashed.died]}

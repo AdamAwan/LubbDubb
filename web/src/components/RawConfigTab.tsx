@@ -100,7 +100,7 @@ export function RawConfigTab({
         </div>
       )}
 
-      <Panel face="console" density="flush" as="section" className="cfg-card">
+      <Panel density="flush" className="cfg-card">
         <div className="cfg-rawhead">
           <code>{payload.file}</code>
           <span className="cfg-rawacts">
@@ -129,7 +129,7 @@ export function RawConfigTab({
         />
       </Panel>
 
-      <Panel face="console" density="flush" as="section" className="cfg-card">
+      <Panel density="flush" className="cfg-card">
         <h3>
           What the loader says
           <span className="cfg-more">checked against src/config.ts, not by this page</span>

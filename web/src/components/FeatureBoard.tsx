@@ -100,7 +100,7 @@ export function FeatureBoard({ view, actions }: { view: CockpitView; actions: Co
       ))}
 
       {orphans !== null && (
-        <Panel face="console" density="roomy" as="section" className="cn-fb-card cn-fb-orphans">
+        <Panel density="padded" className="cn-fb-card cn-fb-orphans">
           <div className="cn-fb-top">
             <h3>Work that rolls up nowhere</h3>
             <span className="cn-psub">the tracker says these hang off no container</span>
@@ -141,12 +141,7 @@ function FeatureCard({
   const now = view.now;
   const attention = wantsYou(feature, view);
   return (
-    <Panel
-      face="console"
-      density="roomy"
-      as="section"
-      className={`cn-fb-card${attention === null ? '' : ' cn-fb-wants'}`}
-    >
+    <Panel density="padded" className={`cn-fb-card${attention === null ? '' : ' cn-fb-wants'}`}>
       <div className="cn-fb-top">
         {/* The `f<slot>` class is the Tickets tab's own ladder, reused rather than
             re-declared: the slot is persisted per feature, so one Feature is one

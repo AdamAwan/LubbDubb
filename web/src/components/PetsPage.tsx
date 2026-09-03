@@ -286,7 +286,7 @@ function SpeciesCard({
   const window = entry.hours === null ? null : hourWindow(entry.hours);
   const oneIn = Math.round(1 / (entry.share * meanDrop)).toLocaleString();
   return (
-    <Panel face="shared" density="flush" className={`species-card is-${entry.rarity}${known ? '' : ' is-unknown'}`}>
+    <Panel density="flush" className={`species-card is-${entry.rarity}${known ? '' : ' is-unknown'}`}>
       <div className="species-top">
         <h5>{known ? entry.display : '???'}</h5>
         <span className="species-spacer" />
