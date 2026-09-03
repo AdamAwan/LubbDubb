@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { isAbsolute, join, normalize } from 'node:path';
+import type { WorldSnapshot } from '../types.js';
 import type { ObstacleWorld } from './keys.js';
 
 /**
@@ -48,4 +49,20 @@ function withinTree(path: string): boolean {
   if (path === '' || isAbsolute(path)) return false;
   const normalised = normalize(path);
   return !normalised.startsWith('..') && !normalised.includes('\0');
+}
+
+/**
+ * Every check name the provider is reporting, off a reading of the world.
+ *
+ * The **validation** gate's set and nothing more: a `check` key must name a check
+ * that exists somewhere rather than a phrase an agent wrote. Which of them a
+ * report is *about* is a different question, asked of `Task.ciChecks` or of the
+ * row's own keys, and the two are kept apart because a key that passes the first
+ * and fails the second is a suggestion rather than nonsense.
+ *
+ * One reader for every door, so the intake, the harness's own voice and the model
+ * desk cannot disagree about what the provider is reporting.
+ */
+export function reportedChecks(world: { pullRequests: WorldSnapshot['pullRequests'] } | null): string[] {
+  return [...new Set((world?.pullRequests ?? []).flatMap((pr) => (pr.ciChecks ?? []).map((check) => check.name)))];
 }

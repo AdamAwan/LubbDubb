@@ -183,6 +183,7 @@ import type {
   Obstacle,
   ObstacleBlock,
   ObstacleCondition,
+  ObstacleDeskReading,
   ObstacleEnding,
   ObstacleKey,
   ObstacleSighting,
@@ -1557,6 +1558,34 @@ export class Store {
 
   obstacleBoard(): ObstacleStanding[] {
     return this.obstacles.obstacleBoard();
+  }
+
+  obstacleInbox(): ObstacleStanding[] {
+    return this.obstacles.obstacleInbox();
+  }
+
+  obstacleReading(obstacleId: string): ObstacleDeskReading | null {
+    return this.obstacles.obstacleReading(obstacleId);
+  }
+
+  recordObstacleReading(...args: Parameters<ObstacleStore['recordObstacleReading']>): void {
+    this.obstacles.recordObstacleReading(...args);
+  }
+
+  addObstacleKeys(...args: Parameters<ObstacleStore['addObstacleKeys']>): ReturnType<ObstacleStore['addObstacleKeys']> {
+    return this.obstacles.addObstacleKeys(...args);
+  }
+
+  suggestObstacleMerge(...args: Parameters<ObstacleStore['suggestObstacleMerge']>): void {
+    this.obstacles.suggestObstacleMerge(...args);
+  }
+
+  listObstacleSuggestions(obstacleId: string): ReturnType<ObstacleStore['listObstacleSuggestions']> {
+    return this.obstacles.listObstacleSuggestions(obstacleId);
+  }
+
+  setObstacleKind(...args: Parameters<ObstacleStore['setObstacleKind']>): boolean {
+    return this.obstacles.setObstacleKind(...args);
   }
 
   claimObstacle(id: string): boolean {

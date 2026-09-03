@@ -3,7 +3,7 @@ import type { Store } from '../store/store.js';
 import type { WorldSnapshot } from '../types.js';
 import { gateKeys } from './keys.js';
 import { harnessSightings } from './voice.js';
-import { buildObstacleWorld } from './world.js';
+import { buildObstacleWorld, reportedChecks } from './world.js';
 
 /**
  * The desk that records the harness's own voice on the obstacle board.
@@ -109,16 +109,4 @@ export class ObstacleVoiceDesk {
       for (const key of this.deps.store.listObstacleKeys(obstacle.id)) if (key.kind === 'check') out.add(key.value);
     return out;
   }
-}
-
-/**
- * The check names the provider is reporting, off the reading this pass was handed.
- *
- * The validation gate's set, and it comes from the world the pulse just read
- * rather than from the stored baseline: the transition being reported was seen in
- * exactly this snapshot, and a gate run against an older one could drop the key of
- * a check that has only just appeared.
- */
-function reportedChecks(world: WorldSnapshot): string[] {
-  return [...new Set(world.pullRequests.flatMap((pr) => (pr.ciChecks ?? []).map((check) => check.name)))];
 }

@@ -81,7 +81,7 @@ export function validateRaisedObstacle(
       what: framed.claim,
       words: what,
       whyNotMine,
-      keys: parseKeys(args.keys),
+      keys: parseKeyCandidates(args.keys),
       untilHours: typeof until === 'number' ? until : null,
       // Not validated and not second-guessed: whether this stops *this* task is a
       // fact about the task, which the harness has no reading of. Anything but an
@@ -91,8 +91,16 @@ export function validateRaisedObstacle(
   };
 }
 
-/** `["check:test (windows)", "path/src/x.ts"]` → candidates, dropping what is not one. */
-function parseKeys(raw: unknown): KeyCandidate[] {
+/**
+ * `["check:test (windows)", "path/src/x.ts"]` → candidates, dropping what is not
+ * one.
+ *
+ * Shared with the model desk rather than copied, because **every gate a model's
+ * output passes is the same gate an agent's report passes**: a second reader of
+ * the same spelling is a second thing to be wrong about, and the one that drifted
+ * would be the one nothing tests.
+ */
+export function parseKeyCandidates(raw: unknown): KeyCandidate[] {
   if (!Array.isArray(raw)) return [];
   const out: KeyCandidate[] = [];
   for (const entry of raw) {
