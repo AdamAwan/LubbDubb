@@ -58,6 +58,18 @@ const PATHS = {
     'M8 2.2V5',
     'M6 8.6v1M10 8.6v1',
   ],
+  /**
+   * The fleet's own reading of a diff — spectacles: somebody sat down and read
+   * this. Deliberately not {@link PATHS.eye}, which already means *watching*
+   * (the harness may pick this up); reading a diff and watching an item are
+   * different claims and cannot share a glyph.
+   */
+  review: [
+    'M7 9.4a2.6 2.6 0 1 1-5.2 0 2.6 2.6 0 1 1 5.2 0',
+    'M14.2 9.4a2.6 2.6 0 1 1-5.2 0 2.6 2.6 0 1 1 5.2 0',
+    'M7 9.1c.35-.9 1.65-.9 2 0',
+    'M1.8 8.6 3.5 5.2M14.2 8.6 12.5 5.2',
+  ],
   /** Validation: the checks a goal has to clear. */
   flask: ['M6.4 1.9v4L2.8 12a1.6 1.6 0 0 0 1.4 2.4h7.6A1.6 1.6 0 0 0 13.2 12L9.6 5.9v-4', 'M5.4 1.9h5.2M4.4 9.6h7.2'],
 } as const satisfies Record<string, readonly string[]>;

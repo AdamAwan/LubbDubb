@@ -104,6 +104,8 @@ export type {
   AcceptanceCriterion,
   Plan,
   PlanCaveat,
+  PrReviewState,
+  PrReviewStatus,
   PrReviewThread,
   PrThreadMessage,
   PrThreadState,

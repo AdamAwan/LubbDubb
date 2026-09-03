@@ -9546,3 +9546,259 @@ select:disabled {
   color: var(--text);
   font-size: 12.5px;
 }
+
+/* --- the fleet review's mark ---
+
+   One glyph, tinted by what the reviewer said, with the words in a tooltip of the
+   cockpit's own rather than the browser's `title` — which arrives a second late,
+   cannot be styled, and never arrives at all on a touch screen (the same reason
+   the allowance band has `.al-tip`).
+
+   It is drawn on three surfaces from one component, so everything below is on
+   `.rv` itself rather than on any surface's class: the mark has to sit in a
+   console row, a console masthead and a card without any of them reaching in.
+   → docs/spec/17-cockpit.md#the-fleet-reviews-mark */
+.rv {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  color: var(--muted);
+  cursor: help;
+  /* Room for the badge, which sits on the glyph's shoulder and outside the box:
+     without it the count crowds whatever the row draws next. */
+  margin-right: 3px;
+}
+
+.rv:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+
+.rv-clear {
+  color: var(--green);
+  background: var(--green-fill);
+  border-color: var(--green-line);
+}
+
+.rv-findings {
+  color: var(--red);
+  background: var(--red-fill);
+  border-color: var(--red-line);
+}
+
+.rv-routed {
+  color: var(--amber);
+  background: var(--amber-fill);
+  border-color: var(--amber-line);
+}
+
+/* Dashed, because a decision that has not been taken yet is the one state that is
+   about to change on its own. */
+.rv-deciding {
+  color: var(--blue);
+  background: var(--blue-fill);
+  border-color: var(--blue-line);
+  border-style: dashed;
+}
+
+.rv-skipped {
+  color: var(--grey);
+  border-color: var(--border);
+}
+
+/* Nothing read this one, and the glyph says so before the badge does. */
+.rv-skipped svg {
+  opacity: 0.55;
+}
+
+.rv-elsewhere {
+  color: var(--grey);
+  border-color: var(--border);
+  border-style: dotted;
+}
+
+/* One badge slot, three meanings — the count of findings, the dash of a review
+   that will not happen, the arrow of one that happened elsewhere. A badge rather
+   than a mark drawn *through* the lenses: a stroke across a 15px glyph is mud,
+   where this holds at every size a row uses. */
+.rv-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 13px;
+  height: 13px;
+  padding: 0 2px;
+  border: 1px solid var(--panel);
+  border-radius: var(--r-pill);
+  background: var(--panel-2);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 11px;
+  text-align: center;
+}
+
+.rv-findings .rv-badge {
+  background: var(--red);
+  border-color: var(--red-line);
+  color: var(--on-light);
+}
+
+/* The tooltip. Anchored to the mark's right edge because the mark sits near the
+   right of every row that draws it, so a centred one would leave the panel — and
+   *below* it, because the mark's other surface is a masthead a few pixels under
+   the top of the window, where a tooltip above is a tooltip nobody can read. */
+.rv-tip {
+  position: fixed;
+  z-index: 30;
+  width: 320px;
+  padding: 9px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  text-align: left;
+  white-space: normal;
+  text-transform: none;
+  letter-spacing: 0;
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  box-shadow: 0 4px 14px var(--shadow);
+  /* No pointer events: a tooltip that can be hovered is a tooltip that flickers,
+     the same rule the allowance readout takes. */
+  pointer-events: none;
+}
+
+.rv-tip b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.rv-said {
+  color: var(--text);
+}
+
+.rv-why i {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-style: normal;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--grey);
+}
+
+.rv-tip ul {
+  margin: 0;
+  padding-left: 16px;
+}
+
+.rv-foot {
+  margin-top: 3px;
+  padding-top: 7px;
+  border-top: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--grey);
+}
+
+/* --- the same record at full length, on the pull-request page --- */
+.rv-detail dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 5px 12px;
+}
+
+.rv-detail dt {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--grey);
+  line-height: 1.7;
+}
+
+.rv-detail dd {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.rv-quiet {
+  color: var(--muted);
+}
+
+.rv-word {
+  font-size: 12.5px;
+}
+
+.rv-word.rv-clear {
+  color: var(--green);
+  background: none;
+  border: 0;
+}
+
+.rv-word.rv-findings {
+  color: var(--red);
+  background: none;
+  border: 0;
+}
+
+.rv-word.rv-routed {
+  color: var(--amber);
+  background: none;
+  border: 0;
+}
+
+.rv-word.rv-deciding {
+  color: var(--blue);
+  background: none;
+  border: 0;
+}
+
+.rv-word.rv-skipped,
+.rv-word.rv-elsewhere {
+  color: var(--muted);
+  background: none;
+  border: 0;
+}
+
+.rv-found {
+  margin: 11px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.rv-found li {
+  padding: 7px 9px;
+  background: var(--well);
+  border-left: 2px solid var(--red-line);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.rv-detail-foot {
+  margin: 11px 0 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--grey);
+}
+
+/* The mark's slot with nothing in it, on a list where other rows have one. */
+.rv-none {
+  border-color: transparent;
+}

@@ -30,6 +30,7 @@ import { Ref, TicketLink } from '../components/refs.js';
 import { askPrompt, localRunPrompt } from '../cockpit/desktopLink.js';
 import { DesktopLink } from '../components/DesktopLink.js';
 import { Icon } from '../components/icons.js';
+import { ReviewMark } from '../components/ReviewMark.js';
 import {
   CONTROL_CLASS,
   ControlBar,
@@ -1233,6 +1234,9 @@ function PullRequests({
               <span className="cn-sub">{pr.branch}</span>
             </span>
             <ThreadChip pr={pr} />
+            {/* The fleet's own reading, left of the CI ladder so the two verdicts
+                read in the order the harness produces them. */}
+            <ReviewMark review={pr.review} now={view.now} />
             <CiLadder pr={pr} />
             <CourtChip pr={pr} now={view.now} />
             <span className="cn-refs">
@@ -1249,6 +1253,9 @@ function PullRequests({
               <span className="cn-sub">{pr.branch}</span>
             </span>
             <ThreadChip pr={pr} />
+            {/* The one verdict a dead pull request keeps: what was read is a
+                record, where the other three are about what happens next. */}
+            <ReviewMark review={pr.review} now={view.now} />
             <i className={`cn-chip ${pr.merged ? 'cn-ok' : ''}`}>{pr.merged ? 'merged' : 'closed'}</i>
             <span className="cn-refs">
               <Ref to={`pr:${pr.number}`} />

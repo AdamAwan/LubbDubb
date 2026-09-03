@@ -22,6 +22,7 @@ import { ProfilePicker } from '../components/ProfilePicker.js';
 import { PanelRows, type PanelRowModel, type RowGroup } from './PanelRow.js';
 import { Who } from '../components/who.js';
 import { AgentOnIt } from '../components/AgentOnIt.js';
+import { ReviewMark } from '../components/ReviewMark.js';
 import { orphanCount, orphanGoal } from '../view/orphanGoal.js';
 
 /**
@@ -803,6 +804,9 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
   const theirs = open.filter((pr) => !isYours(pr));
   const grouped = yours.length > 0;
   const ordered = grouped ? [...yours, ...theirs] : open;
+  // Whether the review's column exists on this card at all — see `ReviewMark`'s
+  // `reserve`. An unwatched pull request has no reading and must not bend it.
+  const anyReview = open.some((pr) => pr.review !== undefined);
 
   return (
     <section className="cn-card cn-span2">
@@ -813,7 +817,7 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
       {open.length === 0 && <p className="cn-empty">No pull request is open.</p>}
       <PanelRows
         rows={ordered.map((pr) => {
-          const row = prRow(pr, view, actions, watchLabel);
+          const row = prRow(pr, view, actions, watchLabel, anyReview);
           if (!grouped) return row;
           return { ...row, group: band(isYours(pr), yours.length, theirs.length), who: <Who name={whoAsked(pr)} /> };
         })}
@@ -864,7 +868,13 @@ function band(mine: boolean, yours: number, theirs: number): RowGroup {
  * One open pull request: its checks, whose court it is in, and the toggle that
  * takes it off the harness's books.
  */
-function prRow(pr: OpenPullRequest, view: CockpitView, actions: CockpitActions, watchLabel: string): PanelRowModel {
+function prRow(
+  pr: OpenPullRequest,
+  view: CockpitView,
+  actions: CockpitActions,
+  watchLabel: string,
+  anyReview: boolean,
+): PanelRowModel {
   // The server's verdict, not a second reading of the labels: `unwatched` is the
   // first arm `prAttentionStatus` takes, so on an open PR it *is* the absent tag.
   // Drawn as a spent row for the reason the backlog dims an unwatched goal — the
@@ -919,8 +929,15 @@ function prRow(pr: OpenPullRequest, view: CockpitView, actions: CockpitActions, 
     // reading of a commit that is being replaced. Only while one is actually on
     // it — every other row keeps its checks. The chip is `AgentOnIt`, the same one
     // a plan part draws, because it is the same sentence.
-    reading:
-      onIt === undefined ? <CiLadder pr={pr} /> : <AgentOnIt agentId={onIt.id} note={onIt.note} actions={actions} />,
+    reading: (
+      <>
+        {/* The fleet's own reading of the diff, beside whatever the row's checks
+            are saying — it survives an agent taking the ladder's place, because
+            what was already read does not change when a branch moves. */}
+        <ReviewMark review={pr.review} now={view.now} reserve={anyReview} />
+        {onIt === undefined ? <CiLadder pr={pr} /> : <AgentOnIt agentId={onIt.id} note={onIt.note} actions={actions} />}
+      </>
+    ),
     toggle: (
       <AsyncButton
         className="cn-eye"
