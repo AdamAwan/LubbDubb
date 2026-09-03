@@ -1537,6 +1537,14 @@ export class Store {
     return this.obstacles.listObstacleSightings(obstacleId);
   }
 
+  claimObstacleNotice(obstacleId: string, agentId: string, reason: string): boolean {
+    return this.obstacles.claimObstacleNotice(obstacleId, agentId, reason);
+  }
+
+  obstaclesNoticedBy(agentId: string): Set<string> {
+    return this.obstacles.obstaclesNoticedBy(agentId);
+  }
+
   prReplyRefs(prNumber: number): ReadonlySet<string> {
     return this.prReplies.prReplyRefs(prNumber);
   }

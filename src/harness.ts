@@ -289,6 +289,16 @@ interface HarnessDeps {
   graduations?: { run(): void };
   clusters?: { run(): void };
   /**
+   * Sends the obstacle notices owed to running agents. Absent = no mid-session
+   * channel (tests that do not care), and then an obstacle reaches an agent only
+   * through its own dispatch prompt or its own call to the tool.
+   *
+   * It writes `obstacle_notices` rows and types into live sessions. It staffs
+   * nobody, decides no dispatch, and no rule reads what it writes.
+   * → `docs/spec/32-obstacles.md#delivery`
+   */
+  obstacleNotices?: { run(): void };
+  /**
    * The cross-fleet pool's one desk: polls everybody else's documents into the
    * mirror, and publishes this fleet's when they have moved. Absent = no pool
    * (tests that do not care, and every deployment on the `fake` default), and then
@@ -714,6 +724,17 @@ export class Harness extends EventEmitter {
       // all: nothing waits on a cluster, it takes its own cadence, and the page an
       // operator opens is the only thing that reads what it writes.
       this.deps.clusters?.run();
+      // What has changed about an obstacle since the agents now running were
+      // dispatched — their own reports being taken up or settled, and what a
+      // second voice has since corroborated on the checks they are working.
+      //
+      // **Above `decide` and above the executor**, for `notices`' reason exactly:
+      // the block a dispatch carries is rendered at launch a few lines below, so
+      // an agent dispatched on this pulse reads what is on the board rather than
+      // being told it again a moment later. Beside the other bookkeeping and not
+      // in the dispatcher for `closeOuts`' reason — it staffs nobody, and no rule
+      // reads what it writes.
+      this.deps.obstacleNotices?.run();
       // The distance above `fleet`: what other fleets have vouched for, landed here,
       // and what this fleet has vouched for, sent out.
       //
