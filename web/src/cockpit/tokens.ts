@@ -264,6 +264,14 @@ export const THEME_TOKENS: readonly ThemeToken[] = [
     kind: 'colour',
     why: 'The ground of an amber-tinted box',
   },
+  { name: '--violet-line', label: 'Violet border', group: 'tints', kind: 'colour', why: "A violet tag's edge" },
+  {
+    name: '--violet-fill',
+    label: 'Violet fill',
+    group: 'tints',
+    kind: 'colour',
+    why: 'The ground under a filled violet tag',
+  },
   { name: '--red-line', label: 'Red border', group: 'tints', kind: 'colour', why: 'The edge of a red-tinted box' },
   { name: '--red-fill', label: 'Red fill', group: 'tints', kind: 'colour', why: 'The ground of a red-tinted box' },
   {

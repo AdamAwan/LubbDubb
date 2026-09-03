@@ -74,6 +74,12 @@
      ground of a blue-filled surface" and are set against `--panel`, where a
      reference has to hold at 12px on four different grounds. These are the values
      to argue about if the treatment lands wrong. */
+  /* The violet's tints, owed by the tag once the desk's colour became a tone like
+     any other. Mixes for the reason `--accent-line` is one: the warm fills were
+     hand-tuned against contrast targets and a formula cannot reproduce hand-tuning,
+     but a border and a ground under one hue are arithmetic. */
+  --violet-line: color-mix(in srgb, var(--violet) 40%, var(--well));
+  --violet-fill: color-mix(in srgb, var(--violet) 12%, var(--well));
   --link-line: color-mix(in srgb, var(--blue) 66%, var(--panel-2));
   --link-fill: color-mix(in srgb, var(--blue) 8%, var(--well));
   --link-ink: #7fb8dc;
@@ -468,6 +474,11 @@ body {
   --tone-line: var(--accent-line);
   --tone-fill: var(--accent-fill);
 }
+.t-violet {
+  --tone: var(--violet);
+  --tone-line: var(--violet-line);
+  --tone-fill: var(--violet-fill);
+}
 .t-grey {
   --tone: var(--muted);
   --tone-line: var(--border);
@@ -475,19 +486,38 @@ body {
 }
 
 /* The border is always drawn — the two weights are the same box, so a row of
-   mixed tags keeps one baseline and the fill is the only thing ranking them. */
+   mixed tags keeps one baseline and the fill is the only thing ranking them.
+
+   `inline-flex` with a gap because a tag carries a glyph often enough — a queue
+   rail's `\u21b5`, a count's dot — that the alternative is a margin invented at the
+   call site.
+
+   The radius is the shape token rather than a length, and the console rebinds it
+   below alongside the tones: `--r-sm` and `--cn-r-sm` are the two families' answers
+   to how square a small box is, and a literal here would be a corner no theme can
+   reach. */
 .tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-family: var(--font-mono);
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
   text-transform: uppercase;
-  border-radius: 2px;
-  padding: 2px 6px;
+  border-radius: var(--r-sm);
+  padding: 3px 6px;
   white-space: nowrap;
   border: 1px solid var(--tone-line, var(--border));
   background: none;
   color: var(--tone, var(--muted));
+}
+/* An id the operator types back — a rule name, a prompt id. These are lowercase
+   kebab-case, so the tag's own uppercase would be a lie about the one string on the
+   surface that has to be copied exactly. */
+.tag-lower {
+  text-transform: none;
+  letter-spacing: 0;
 }
 .tag-fill {
   background: var(--tone-fill, var(--panel-2));

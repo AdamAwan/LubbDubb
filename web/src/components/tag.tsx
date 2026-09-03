@@ -36,13 +36,14 @@ import type { JSX, ReactNode } from 'react';
  *
  * → docs/spec/17-cockpit.md#the-tag
  */
-export type TagTone = 'red' | 'amber' | 'green' | 'blue' | 'accent' | 'grey';
+export type TagTone = 'red' | 'amber' | 'green' | 'blue' | 'violet' | 'accent' | 'grey';
 
 const TONE: Record<TagTone, string> = {
   red: 't-red',
   amber: 't-amber',
   green: 't-green',
   blue: 't-blue',
+  violet: 't-violet',
   accent: 't-accent',
   grey: 't-grey',
 };
@@ -52,6 +53,7 @@ export function Tag({
   tone,
   fill,
   dashed,
+  lower,
   title,
   children,
 }: {
@@ -61,6 +63,8 @@ export function Tag({
   fill?: boolean;
   /** The case that is not the plain one: an override, a region outside the diff. */
   dashed?: boolean;
+  /** An id that gets typed back, drawn as its author wrote it. */
+  lower?: boolean;
   title?: string;
   children: ReactNode;
 }): JSX.Element {
@@ -68,6 +72,7 @@ export function Tag({
   if (tone !== undefined) cls.push(TONE[tone]);
   if (fill === true) cls.push('tag-fill');
   if (dashed === true) cls.push('tag-dashed');
+  if (lower === true) cls.push('tag-lower');
   return (
     <span className={cls.join(' ')} title={title}>
       {children}
