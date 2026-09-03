@@ -34,6 +34,7 @@ import { shortfallRef } from '../delivery/shortfall.js';
 import { outstandingWorkNote } from '../mcp/conclusion.js';
 import { operatorInstructionsNote } from '../goalInstructions.js';
 import { attachmentsNote } from '../jobs/attachments.js';
+import { reviewOrigin } from '../review/prReview.js';
 import { retroSubmitOrigin } from '../retro/retro.js';
 import { retroDossier, retroPad } from '../retro/dossier.js';
 import { goalRecord } from '../retro/record.js';
@@ -795,6 +796,8 @@ export class ActionExecutor {
     draft: string;
     /** The agent's verdict: this thread is dealt with, so resolve it once the reply lands. */
     resolve: boolean;
+    /** The caller's dispatch origin, carried so the send can attribute what it created. */
+    originRef: string;
     reason: string;
   }): Promise<{ outcome: DecisionOutcome; detail: string }> {
     const cycleId = `agent-reply:${input.agentId}`;
@@ -804,6 +807,7 @@ export class ActionExecutor {
       commentId: input.commentId,
       draft: input.draft,
       resolve: input.resolve,
+      originRef: input.originRef,
       reason: input.reason,
       rule: null,
       admission: null,
@@ -928,6 +932,7 @@ export class ActionExecutor {
         this.deps.store.setPrThreadReopened(act.prNumber, act.commentId, false);
         this.recordReplySent(act.prNumber, act.commentId, res.commentRef);
       }
+      this.recordReviewPublished(act, res.threadRef);
       const resolution = await this.resolveAnswered(act);
       return audit(
         'executed',
@@ -993,6 +998,32 @@ export class ActionExecutor {
         `used as a fallback: the harness posts under the operator's own credential, so it cannot tell its own ` +
         `reply from theirs.`,
     });
+  }
+
+  /**
+   * Write down the thread the fleet's review published its findings into — the
+   * only thing that can later say whether anybody dealt with them.
+   *
+   * Attributed off the act's **origin**, not off what the comment says: the
+   * reviewer is dispatched at `pr:<n>:review` and its publication is the one
+   * reply that origin ever sends, where every other reply on the pull request
+   * comes from the comment origin or from a rule's draft. Recorded here for
+   * `recordReplySent`'s reason — this is the one place a reply goes out, and the
+   * one place the provider has just named what it created.
+   *
+   * Silent on the three ways it does not apply: another origin's reply, a reply
+   * into an existing thread (a publication opens one), and a provider that will
+   * not name the thread — GitHub's pull-request comments are not threads and
+   * cannot be resolved at all, so there is nothing there to record or to read.
+   * The mark then reads as it did before, which is findings that stand.
+   */
+  private recordReviewPublished(
+    act: { kind: 'reply_draft'; prNumber: number; commentId: string | null; originRef: string | null },
+    threadRef: string | undefined,
+  ): void {
+    if (act.commentId !== null || threadRef === undefined || threadRef === '') return;
+    if (act.originRef !== reviewOrigin(act.prNumber)) return;
+    this.deps.store.recordPrReviewPublished(act.prNumber, threadRef);
   }
 
   /**

@@ -438,6 +438,20 @@ export interface PrReview {
   /** The agent that reported it, so the run behind a verdict is reachable. */
   agentId: string | null;
   reviewedAt: string;
+  /**
+   * The provider's id for the review thread the findings were **published** into,
+   * where the harness sent one and the provider named it. Null everywhere else —
+   * `review.publish` off, a provider whose pull-request comments are not threads
+   * (GitHub's are not), a send that returned no id, and every row written before
+   * the column existed.
+   *
+   * It is a record of what went out, never an inference from a thread's author,
+   * for `pr_replies_sent`' reason: the credential the harness posts under is the
+   * operator's own. What it buys is the one thing the findings list cannot say on
+   * its own — whether anybody has dealt with them — which is
+   * {@link PrReviewState.addressed}.
+   */
+  publishedThread: string | null;
 }
 
 /**
@@ -480,7 +494,12 @@ export interface PrReviewRoute {
 export type PrReviewRouteInput = Omit<PrReviewRoute, 'decidedAt'>;
 
 /** A review as the tool hands it over; the store stamps the rest. */
-export type PrReviewInput = Omit<PrReview, 'reviewedAt'>;
+/**
+ * What `review_report` supplies. `publishedThread` is not part of it: the
+ * reviewer reports first and publishes after, so the thread is written by the
+ * send rather than by the report.
+ */
+export type PrReviewInput = Omit<PrReview, 'reviewedAt' | 'publishedThread'>;
 
 export type IssueState = 'open' | 'closed';
 

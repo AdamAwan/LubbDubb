@@ -263,6 +263,7 @@ interface PrReplyDesk {
     commentId: string | null;
     draft: string;
     resolve: boolean;
+    originRef: string;
     reason: string;
   }): Promise<{ outcome: DecisionOutcome; detail: string }>;
 }

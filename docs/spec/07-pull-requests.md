@@ -1090,6 +1090,13 @@ verdict is the half an operator sees **last**: `deciding` (no route, and the tri
 request nothing has read is the common case, and drawing that as an absent verdict says the review
 found nothing.
 
+**Findings somebody dealt with read as `addressed`.** The verdict does not change — the reviewer found
+what it found, and the list stays on the row — but the mark is a call to look, and one that keeps
+shouting after the thread was resolved is one an operator learns to stop reading. It is true only of
+the thread the fleet itself published into ([the record](#what-the-publication-is-recorded-as)) and only while the current
+reading still carries it as resolved: a thread the provider no longer reports is a thread nothing can
+say was resolved, and "cannot say" is not "dealt with".
+
 **A lens, never a gate.** It reads the same four rows `reviewSatisfied` reads and decides nothing:
 every arm the gate stands down on is an arm the mark names in its own words, so the two cannot
 disagree about whether a review is coming. And it is folded on the server for `ciVerdict`'s reason —
@@ -1207,6 +1214,34 @@ same route a rule-drafted reply takes. It is deliberately not a free channel: wh
 the project's, through the prompt and the charter; where it goes is the harness's. A published finding
 then arrives as an unhandled thread, which rule `pr-review-comment` already answers — so the fix loop for
 a fleet finding is the mature path the fleet already has, and not a second one.
+
+**Both origins may reply, and for a while only one could.** `replyOrigin` fenced the tool to
+`pr:<n>:comments` — the agent answering a reviewer — while the very prompt above dispatched the
+reviewer at `pr:<n>:review` and told it to publish through the same tool. Every deployment with
+`publish` on therefore had its reviewer refused by the call the harness had just ordered, leaving it
+the operator's credential in its own shell, which the same prompt forbids: the findings reached the
+pull request as nothing at all. The fence still holds against `pr:<n>:ci` and `pr:<n>:review-triage`,
+neither of which has anything to say on a thread.
+
+#### What the publication is recorded as
+
+`pr_reviews.published_thread` — the provider's id for the thread the findings went out in, written by
+the send, off the **origin that asked** for the reply and never off what the comment says or who wrote
+it. It is the same discipline as `pr_replies_sent` and for the same reason: the credential the harness
+posts under is the operator's own on a single-operator deployment, so identity can settle nothing here.
+
+Three cases record nothing, and all three read as *not published*, which is the safe direction: a
+reply into an existing thread (a publication opens one), a provider that will not name the thread it
+created, and a provider whose pull-request comments are not threads at all — GitHub's are issue
+comments and cannot be resolved, so there is nothing there to record or later to read. A re-review
+clears the column: the old thread answers findings the new row no longer carries.
+
+What it buys is the one thing the findings list cannot say on its own — whether anybody has dealt with
+them. A person (or the fix agent, through `reply_to_review`'s `resolved`) resolving that thread is the
+statement that they were, and it is what turns the review mark from red to green
+([17](17-cockpit.md#the-fleet-reviews-mark)). Nothing wider is allowed to say it: not every thread on
+the pull request, not a thread whose author matches the credential — either would let somebody else's
+tidy-up report the fleet's findings as answered.
 
 ### The charters
 

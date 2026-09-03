@@ -1,5 +1,23 @@
 import type { PrReview, PrReviewInput } from '../types.js';
+import type { ColumnMigrations } from './migrate.js';
 import type { StoreContext } from './context.js';
+
+/**
+ * `published_thread` arrived after the table did, so it needs its `ALTER TABLE` —
+ * declared here rather than centrally, so "did this column get an entry?" is
+ * answerable without leaving the file that reads it.
+ *
+ * **Nullable, and it needs no backfill.** Null is not a third state waiting to be
+ * resolved: it is exactly what every row written before this existed meant —
+ * nothing recorded a publication of this review — and the only other evidence is
+ * a thread's author, which is the inference `pr_replies_sent` exists to replace.
+ * → `docs/spec/14-persistence.md#when-a-null-means-something`
+ */
+export const PR_REVIEW_COLUMNS: ColumnMigrations = {
+  pr_reviews: {
+    published_thread: 'TEXT',
+  },
+};
 
 /**
  * The `pr_reviews` table: the fleet's own review of a pull request, one row per
@@ -43,7 +61,11 @@ export class PrReviewStore {
            summary = excluded.summary,
            findings = excluded.findings,
            agent_id = excluded.agent_id,
-           reviewed_at = excluded.reviewed_at`,
+           reviewed_at = excluded.reviewed_at,
+           -- Cleared, because this is a *new* reading: the thread the last one was
+           -- published into answers findings this row no longer carries, and a
+           -- resolution on it would report the new ones as dealt with.
+           published_thread = NULL`,
       )
       .run(
         input.prNumber,
@@ -54,7 +76,23 @@ export class PrReviewStore {
         input.agentId,
         reviewedAt,
       );
-    return { ...input, reviewedAt };
+    return { ...input, reviewedAt, publishedThread: null };
+  }
+
+  /**
+   * Write down which thread the findings went out in — called from the one place a
+   * reply is sent, once the provider has named what it created.
+   *
+   * An `UPDATE`, never an upsert: the row means "the fleet read this pull request
+   * and here is what it found", and a publication is not that. A publish with no
+   * review row is a reviewer that commented before it reported, which the prompt
+   * orders the other way round; it records nothing and the next `review_report`
+   * writes the row without a thread, which reads as unpublished — the safe
+   * direction, since the alternative is a `findings` mark claiming somebody dealt
+   * with findings nothing has recorded.
+   */
+  recordPrReviewPublished(prNumber: number, threadId: string): void {
+    this.ctx.db.prepare(`UPDATE pr_reviews SET published_thread=? WHERE pr_number=?`).run(threadId, prNumber);
   }
 
   /**
@@ -77,6 +115,7 @@ interface Row {
   findings: string;
   agent_id: string | null;
   reviewed_at: string;
+  published_thread: string | null;
 }
 
 function hydrate(row: Row): PrReview {
@@ -91,6 +130,10 @@ function hydrate(row: Row): PrReview {
     findings: parseFindings(row.findings),
     agentId: row.agent_id,
     reviewedAt: row.reviewed_at,
+    // `?? null` rather than trusted: a row read on a database the column was only
+    // just added to has it as null, and one from a build that never wrote it has
+    // it undefined through the same `SELECT *`.
+    publishedThread: row.published_thread ?? null,
   };
 }
 

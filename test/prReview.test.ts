@@ -180,6 +180,7 @@ test('the predicates are one reading: unknown is never clear, and off gates noth
     findings: [],
     agentId: null,
     reviewedAt: '2026-01-01T00:00:00.000Z',
+    publishedThread: null,
   };
 
   assert.equal(needsFleetReview(pr, reading(), on), true);

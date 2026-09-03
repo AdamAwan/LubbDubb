@@ -326,7 +326,19 @@ export class AzureDevOpsSourceControlIntegration
     // The id, when Azure named one, is what the next thread read will call this
     // comment — the whole of how a reply is recognised as the fleet's. The URL
     // stays the audit line's reference.
-    return { ok: true, ref: ref.url, ...(ref.id === undefined ? {} : { commentRef: String(ref.id) }) };
+    //
+    // The **thread** rides beside it: Azure names the thread on a create and the
+    // caller already knows it on a reply, and it is what a resolution is keyed on
+    // — the whole of how the review's own published thread is recognised when
+    // somebody closes it.
+    const threadRef =
+      input.commentId !== null ? input.commentId : ref.threadId === undefined ? undefined : String(ref.threadId);
+    return {
+      ok: true,
+      ref: ref.url,
+      ...(ref.id === undefined ? {} : { commentRef: String(ref.id) }),
+      ...(threadRef === undefined ? {} : { threadRef }),
+    };
   }
 
   /**

@@ -5401,16 +5401,31 @@ masthead, tinted by what the reviewer said — green `clear`, red `findings`, am
 blue `deciding`, faint `skipped` and `elsewhere`. It sits left of the CI ladder, so the two verdicts
 read in the order the harness produces them.
 
-**One badge slot on the glyph's shoulder, three meanings** — how many findings, a dash for a review
-that will not happen, an arrow for one that happened somewhere else. A mark drawn _through_ the lenses
-is mud at 15px; a badge beside them holds at every size a row uses.
+**One badge slot on the glyph's shoulder, four meanings** — how many findings, a tick where they have
+been dealt with, a dash for a review that will not happen, an arrow for one that happened somewhere
+else. A mark drawn _through_ the lenses is mud at 15px; a badge beside them holds at every size a row
+uses.
 
-**Everything else is in the tooltip**: the mode, the triage's reason in its own words, what the
-reviewer understood the diff to do, and its findings one line each. The cockpit's own element rather
-than the browser's `title`, which arrives a second late, cannot be styled and never arrives at all on
-a touch screen. The pull-request page draws the same record at full length in its rail, through
-`ReviewDetail` from the same module — the console owns the card, the shared component owns the words,
-so the two surfaces cannot come to word one record differently.
+**Findings somebody dealt with take the clear arm's green**, tick and all: `addressed` on the reading,
+which is the thread the fleet published its findings into reading resolved on the provider
+([07](07-pull-requests.md#what-the-publication-is-recorded-as)). The verdict is unchanged and the
+findings are still listed — what changes is how loudly the row asks to be looked at, and a mark that
+keeps shouting after the thread was resolved is one an operator learns to stop reading.
+
+**The tooltip is a summary; the page is the record.** The heading the `aria-label` carries, what the
+reviewer understood the diff to do, its first two findings and when it read — then `and N more` and a
+line saying the click opens the whole thing. It used to carry the triage's reason and every finding at
+full length, which on a four-finding review ran past the bottom of the window with its own heading
+scrolled off the top, inside an element that takes no pointer events and so cannot be scrolled. The
+cockpit's own element rather than the browser's `title`, which arrives a second late, cannot be styled
+and never arrives at all on a touch screen.
+
+**And the mark is the way there.** On a row it is a `button` onto the pull request's page — where
+`ReviewDetail`, from the same module, draws the same record at full length with the triage's reason
+and every finding — rather than a span with a click handler, which no keyboard reaches. On that page's
+own masthead it stays a plain span: a control that goes where you already are is a dead click. The
+console owns the card, the shared component owns the words, so the two surfaces cannot come to word
+one record differently.
 
 **It is the exception to `icons.tsx`' rule that an icon never appears without its label**, and it
 earns it the way the CI ladder does: a dense list of pull requests, one recurring subject, the words

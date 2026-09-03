@@ -952,7 +952,7 @@ function prRow(
         {/* The fleet's own reading of the diff, beside whatever the row's checks
             are saying — it survives an agent taking the ladder's place, because
             what was already read does not change when a branch moves. */}
-        <ReviewMark review={pr.review} now={view.now} reserve={anyReview} />
+        <ReviewMark review={pr.review} now={view.now} reserve={anyReview} onOpen={() => actions.selectPr(pr.number)} />
         {onIt === undefined ? <CiLadder pr={pr} /> : null}
       </>
     ),

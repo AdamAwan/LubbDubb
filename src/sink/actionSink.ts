@@ -246,6 +246,19 @@ export interface SendResult {
    * → `docs/spec/07-pull-requests.md#review-threads`
    */
   commentRef?: string;
+  /**
+   * The provider's **own id for the thread** this send landed in, in the
+   * vocabulary the read side puts on `PrReviewThread.id` — so a thread the
+   * harness opened can be recognised when somebody resolves it.
+   *
+   * Separate from {@link commentRef}, which names the *comment*: on Azure those
+   * are two different numbers, and a resolution matched against the wrong one
+   * would quietly never match — which reads exactly like a thread nobody closed.
+   * Absent where the provider will not name the thread, and on a provider whose
+   * pull-request comments are not threads at all (GitHub's are not), which is what
+   * leaves the review's publication unrecorded rather than guessed at.
+   */
+  threadRef?: string;
 }
 
 export interface ActionSink {

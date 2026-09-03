@@ -1236,7 +1236,7 @@ function PullRequests({
             <ThreadChip pr={pr} />
             {/* The fleet's own reading, left of the CI ladder so the two verdicts
                 read in the order the harness produces them. */}
-            <ReviewMark review={pr.review} now={view.now} />
+            <ReviewMark review={pr.review} now={view.now} onOpen={() => actions.selectPr(pr.number)} />
             <CiLadder pr={pr} />
             <CourtChip pr={pr} now={view.now} />
             <span className="cn-refs">
@@ -1255,7 +1255,7 @@ function PullRequests({
             <ThreadChip pr={pr} />
             {/* The one verdict a dead pull request keeps: what was read is a
                 record, where the other three are about what happens next. */}
-            <ReviewMark review={pr.review} now={view.now} />
+            <ReviewMark review={pr.review} now={view.now} onOpen={() => actions.selectPr(pr.number)} />
             <i className={`cn-chip ${pr.merged ? 'cn-ok' : ''}`}>{pr.merged ? 'merged' : 'closed'}</i>
             <span className="cn-refs">
               <Ref to={`pr:${pr.number}`} />

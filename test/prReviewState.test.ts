@@ -46,6 +46,7 @@ const REVIEW: PrReview = {
   findings: ['The budget is read inside the loop.'],
   agentId: 'agent_review',
   reviewedAt: '2026-01-01T01:00:00.000Z',
+  publishedThread: null,
 };
 
 test('the review off draws no mark at all', () => {
