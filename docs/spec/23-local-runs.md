@@ -357,7 +357,13 @@ into an empty list or a zero, which would draw a reading nothing took.
   more — not that the application behind it works. Beside it, every TCP port **this run's own processes**
   are listening on, through a `PortLister` (`src/localRun/ports.ts`): PowerShell's
   `Get-NetTCPConnection` and `Win32_Process` on Windows, `ss -ltnp` and `ps` on POSIX with `lsof`
-  behind `ss`, joined by `owners`. Containers never appear — a mapped port belongs to the daemon, not
+  behind `ss`, joined by `owners`. **Windows hands its two tables back base64-encoded**, because the
+  raw ones did not survive the trip: `ConvertTo-Json` escapes every C0 character a command line can
+  carry, and an operator still hit `Bad control character in string literal ... at position 77337` on a
+  table PowerShell had serialised correctly. What a console does to a 150KB line depends on the code
+  page, the host and the redirection, none of which is the harness's to pin down — so the payload is
+  plain ASCII and there is no byte left for anything in between to mistranslate. Containers never
+  appear — a mapped port belongs to the daemon, not
   to anything the session started. `listening: null` is the lister not being able to say. The real
   lister follows the reaper's rule and is wired only beside a real transport: it reads the host's
   process table, and a fake transport mints pids that belong to other people's processes.
