@@ -1444,12 +1444,19 @@ select:disabled {
   color: var(--amber);
   font-variant-numeric: tabular-nums;
 }
+/* One hairline between boxes, none above the first: with a detail under each label
+   the list runs together otherwise, and a box whose text belongs to the box above
+   is the wall of prose this replaced. */
 .caveat-ack-item {
   display: flex;
   align-items: flex-start;
   gap: 8px;
   font-size: 13px;
   cursor: pointer;
+}
+.caveat-ack-item + .caveat-ack-item {
+  border-top: 1px solid var(--amber-line);
+  padding-top: 6px;
 }
 .caveat-ack-item input {
   margin-top: 3px;
@@ -1460,17 +1467,27 @@ select:disabled {
    they agreed to. */
 .caveat-ack-item.done .caveat-ack-text {
   color: var(--muted);
+  font-weight: 400;
 }
 .caveat-ack-body {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
   max-width: 72ch;
   overflow-wrap: anywhere;
+}
+/* The label is the line being ticked, so it carries the weight; the planner's own
+   words sit under it as the quieter thing they are. */
+.caveat-ack-text {
+  font-weight: 500;
+  line-height: 1.35;
 }
 .caveat-ack-detail {
   color: var(--muted);
   font-size: 12px;
+  line-height: 1.45;
+  border-left: 2px solid var(--amber-line);
+  padding-left: 8px;
 }
 .caveat-ack-detail > :first-child {
   margin-top: 0;

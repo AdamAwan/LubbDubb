@@ -139,7 +139,9 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       '- **openQuestions** — the assumption you would most like argued with, and what would change your mind. ' +
       'Be specific about the decision rather than modest about the plan: "I assumed the retry belongs in the ' +
       'client, but if the server owns idempotency it belongs there instead" is useful; "there may be edge ' +
-      'cases" is not. If the operator opens a discussion, this is its agenda.\n\n' +
+      'cases" is not. If the operator opens a discussion, this is its agenda. One or two short sentences: it ' +
+      'is drawn as a tick box the operator must read before they may approve, and the write-up is where the ' +
+      'long version goes.\n\n' +
       'And four that make the rest checkable:\n\n' +
       '- **evidence** — the places you read that the diagnosis rests on, as `path` (+ optional `line`) and a ' +
       '`note` saying what the reader is meant to see. A root cause with no citation cannot be checked, and ' +
@@ -150,7 +152,8 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       '- **reason** — the narrow question of shape: why these parts. Not the fix, not the root cause. One or ' +
       'two sentences, and on a one-part plan it is usually one.\n' +
       '- **risks** and **outOfScope** — what could go wrong with this plan, and what you deliberately left ' +
-      'alone. Both are read as caveats on the plan, so keep them to things that would change a mind.\n\n' +
+      'alone. Both are read as caveats on the plan, so keep them to things that would change a mind — and ' +
+      'keep `risks` to a sentence or two, since it is drawn as a tick box on the approval card.\n\n' +
       '## Per part\n\n' +
       'Slugs are short, lowercase, kebab-case and unique — and stable: a replan merges on them. "scope" names ' +
       'the files or areas that part owns in a sentence; **"touches"** is the same claim as repository paths, ' +

@@ -21,6 +21,17 @@ import { unclaimedIssuePrs, wedgeReasons } from './planWedge.js';
  * what separates this from a warning: the harness can now say the operator saw the
  * blocked part, rather than that it had rendered one.
  *
+ * **The `label` is a title and the `detail` is what it is about.** Every caveat used
+ * to state its whole case in the label, and four of them stacked on a card was the
+ * paragraph back again in checkbox form — three lines of prose per box, with nothing
+ * scannable to tick against. The label names the thing in a few words; the sentence
+ * that explains it, or the planner's own field, goes underneath.
+ *
+ * A planner field rides **whole** — it is the thing being acknowledged, and half of
+ * it under an ellipsis is worse than either the whole of it or none. Keeping it short
+ * enough to read at a verdict is asked of the planner instead, where `risks` and
+ * `openQuestions` are specified (`promptTemplates.ts`, `planDocumentSchema.ts`).
+ *
  * ## What is a caveat and what is not
  *
  * Four sources, and they are two kinds of thing. The planner's own uncertainty —
@@ -48,9 +59,6 @@ import { unclaimedIssuePrs, wedgeReasons } from './planWedge.js';
  * being kept verbatim.
  */
 
-/** How much of a planner's field rides in a caveat's detail before it is cut. */
-const MAX_DETAIL = 1200;
-
 /**
  * Everything this plan raises, in the order an approver meets it: the world's
  * objections first, because they are the ones that stop the plan running at all,
@@ -70,33 +78,32 @@ export function planCaveats(
   wedgeReasons(parts).forEach((reason, i) => {
     caveats.push({
       id: `blocked:${i}`,
-      label: `Its parts are already blocked and cannot be cut. ${reason}`,
-      detail: null,
+      label: 'Parts are blocked and cannot be cut',
+      detail: reason,
     });
   });
   for (const pr of unclaimedIssuePrs(issue, parts, openPrs)) {
     caveats.push({
       id: `unclaimed-pr:${pr.number}`,
-      label:
-        `PR #${pr.number} ("${pr.title}", branch ${pr.branch}) is open for this issue and belongs to no part of ` +
-        `this plan. Approving does not close it, hand it to a part, or count it towards the plan — nothing here ` +
-        `knows which part, if any, it satisfies.`,
-      detail: null,
+      label: `PR #${pr.number} is open on this issue and unclaimed`,
+      detail:
+        `“${pr.title}” on ${pr.branch} belongs to no part of this plan. Approving does not close it, hand it to ` +
+        `a part, or count it towards the plan.`,
     });
   }
   const unsure = plan.openQuestions?.trim();
   if (unsure)
     caveats.push({
       id: 'open-questions',
-      label: 'The planner is not sure about part of this, and approving it decides those questions its way.',
-      detail: clip(unsure),
+      label: 'Open questions — approving decides them the planner’s way',
+      detail: unsure,
     });
   const risks = plan.risks?.trim();
   if (risks)
     caveats.push({
       id: 'risks',
-      label: 'The planner named what could go wrong with this split.',
-      detail: clip(risks),
+      label: 'Risks the planner named',
+      detail: risks,
     });
   return caveats;
 }
@@ -162,9 +169,4 @@ export function proposedCaveats(proposal: Proposal): PlanCaveat[] {
     caveats.push({ id, label, detail: typeof detail === 'string' && detail ? detail : null });
   }
   return caveats;
-}
-
-/** One planner field, bounded — the ask is read on a card, and the plan sheet has the whole of it. */
-function clip(text: string): string {
-  return text.length > MAX_DETAIL ? `${text.slice(0, MAX_DETAIL - 1)}…` : text;
 }

@@ -5306,9 +5306,13 @@ other.
 
 - **A plan approval's caveats are tick boxes, and Approve is held until they are ticked.**
   `CaveatChecklist` draws what the proposal's action declares (`planCaveatsOf` reads the same row the
-  accept route enforces against, so the boxes and the gate cannot disagree), each with the planner's own
-  words beneath it — drawn, not folded behind a disclosure, since a box ticked without the thing it is
-  about on the page is the paragraph again. Amber, not red: a caveat is a precondition on the verdict,
+  accept route enforces against, so the boxes and the gate cannot disagree), each as a **short label
+  with what it is about quietly beneath it** — the label weighted, the detail smaller and behind a hair
+  rule, one hairline between boxes. Drawn, not folded behind a disclosure, since a box ticked without
+  the thing it is about on the page is the paragraph again; the split of label and detail is what keeps
+  four of them a list rather than the wall of prose the checklist replaced
+  ([08](08-planning.md#what-the-plan-raises-is-acknowledged-not-merely-rendered)). The header is
+  `Tick to approve` and a count. Amber, not red: a caveat is a precondition on the verdict,
   not a fault. The button is **disabled with a hint naming how many are outstanding** rather than left
   to 400 — the route refuses it either way ([08](08-planning.md#what-the-plan-raises-is-acknowledged-not-merely-rendered)),
   and this is that answer where the operator is already looking. Reject, Hold and Close stay live: only

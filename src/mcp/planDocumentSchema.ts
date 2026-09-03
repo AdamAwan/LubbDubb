@@ -32,7 +32,13 @@ export const PLAN_DOCUMENT_SCHEMA: Record<string, unknown> = {
         'write the fix, not the shape of the pull requests.',
     },
     reason: { type: 'string', description: 'Why this shape — one or two sentences. Not the fix; the split.' },
-    risks: { type: 'string', description: 'What could go wrong with this split.' },
+    risks: {
+      type: 'string',
+      description:
+        'What could go wrong with this split — one or two short sentences, or a couple of brief bullets. ' +
+        'It is drawn as a tick box the operator must read before they may approve, so keep it to what ' +
+        'would change a mind.',
+    },
     outOfScope: { type: 'string', description: 'What you deliberately left out, and why.' },
     alternatives: {
       type: 'string',
@@ -46,7 +52,8 @@ export const PLAN_DOCUMENT_SCHEMA: Record<string, unknown> = {
       description:
         'What you are least sure about: the assumption you would most like argued with, and what would ' +
         'change your mind. This is the agenda if the operator opens a discussion, so be specific about ' +
-        'the decision rather than modest about the plan.',
+        'the decision rather than modest about the plan. One or two short sentences — it is drawn as a ' +
+        'tick box on the approval card, and the write-up is where the long version belongs.',
     },
     verification: {
       type: 'string',
