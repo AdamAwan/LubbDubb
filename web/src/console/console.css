@@ -2503,6 +2503,14 @@ a.cn-tgl {
 .cn-slot-why {
   justify-content: center;
 }
+/* The reading slot holds *two* verdicts on the pull-request rack — the fleet's
+   review and the checks — and they are about different things, so they need to
+   read as two marks rather than one cluster. The slot's own 6px was the gap
+   between chips on a row, which is not the gap between subjects; with the review
+   badge overhanging 4px into it, the count sat against the checks chip. */
+.cn-slot-read {
+  gap: 10px;
+}
 /* A card that puts a *mark* in the lamp slot rather than a dot — the agent-on-it
    chip, at the head of the row where the eye finds it in the same place on every
    line. Goals in flight and Pull requests both, because they sit one above the
@@ -2518,6 +2526,15 @@ a.cn-tgl {
    declared, and a token set on an ancestor of the element that declares it loses. */
 .cn-lamp-mark .cn-rows {
   --cn-w-lamp: 30px;
+}
+/* The pull-request rack's reading slot holds **three** marks — the fleet's review,
+   the review pack and the checks — where the token's 104px was measured for a
+   glyph and a run of dots. Measured against the widest the three get: two 22px
+   boxes, their gaps, and `CI 2 running`. The card's rather than the token's,
+   because no other card draws all three and a global widening would open a gutter
+   on every rack for a slot only this one fills. → `prRow` */
+.cn-read-marks .cn-rows {
+  --cn-w-read: 158px;
 }
 /* A track in a slot of its own is one bar, not a wrapping list. The goal row's
    own rule lets it wrap to keep it off the title beside it; on the rail the
@@ -2845,39 +2862,6 @@ button.cn-grow {
 }
 .cn-seg.cn-hold {
   background: var(--cn-amber);
-}
-
-/* ci dots */
-.cn-ci {
-  display: flex;
-  gap: 3px;
-}
-.cn-cd {
-  width: 6px;
-  height: 6px;
-  border-radius: 2px;
-  background: var(--cn-track);
-}
-.cn-cd.cn-pass {
-  background: var(--cn-green);
-}
-.cn-cd.cn-fail {
-  /* Red, and it was `--cn-inert` — the grey this sheet's own token block calls
-     deliberately *not* a verdict. At 6px that is the empty track: the single most
-     actionable reading on a pull-request row, drawn as the least. Whose move a red
-     check is is the state column's answer since #651, which leaves the ladder free
-     to answer only whether the thing is broken. */
-  background: var(--cn-red);
-}
-.cn-cd.cn-notours {
-  background: var(--cn-amber);
-}
-.cn-cd.cn-wait {
-  background: var(--cn-accent);
-}
-.cn-cd.cn-mute {
-  background: transparent;
-  border: 1px dashed var(--cn-line-hi);
 }
 
 .cn-empty {

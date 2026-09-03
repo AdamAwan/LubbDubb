@@ -40,6 +40,7 @@ import { applyThreadReopens } from '../prThreads.js';
 import { prAttentionStatus, type PrAttentionContext } from '../prAttention.js';
 import { reviewReading } from '../review/prReview.js';
 import { prReviewState } from '../review/prReviewState.js';
+import { packStandingOf } from '../reviewPacks/standing.js';
 import {
   effectivePickupStates,
   issuePickupStatus,
@@ -665,6 +666,19 @@ export function buildStateSections(
    * the merge.
    */
   const withReview = <T extends PullRequest>(pr: T): T => ({ ...pr, review: reviewStateOf(pr) });
+  /**
+   * The review packs, read once as three columns rather than per row: the rack
+   * asks the same question of twenty pull requests, and `listCurrentReviewPacks`
+   * parses every document to answer it.
+   */
+  const packHeads = once(() => new Map(store.listReviewPackHeads().map((head) => [head.prNumber, head])));
+  /**
+   * Whether a pull request has a pack, and whether it is about the head. Undefined
+   * — no pack, nobody writing one — is what draws no mark, the same silence the
+   * review's own mark keeps on a deployment that has no reviewer.
+   */
+  const packStandingFor = (pr: PullRequest): PullRequest['pack'] =>
+    packStandingOf(packHeads().get(pr.number), pr.headSha, system.reviewPacks.writing(pr.number));
 
   // The open pull requests with their three verdicts folded — hoisted out of the
   // `world` literal below because the local run's rows read the same rows: what has
@@ -686,6 +700,9 @@ export function buildStateSections(
       // the harness held. Same call the dispatcher makes, off the same policy.
       ciVerdict: classifyCiFailures(pr.ciChecks, config.ci, pr.ciChecksWithheld),
       review: reviewStateOf(pr),
+      // The fourth reading, and the only one that is about a *document* rather
+      // than about the pull request: whether somebody has a pack to read.
+      pack: packStandingFor(pr),
     })),
   );
   // Branch → the pull request on it, open rows first so a reopened branch reads as

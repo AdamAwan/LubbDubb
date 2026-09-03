@@ -657,6 +657,33 @@ Layer 2 is code and not prose deliberately. A pack whose middle layer was the au
 would be a surface people approve from without reading the change, which is worse than the review it
 replaces. The prose is support; it is never the thing in the middle.
 
+### On the row
+
+The pull-request rack and the goal page's pull-request card draw **whether there is a pack**, as a
+third mark in the reading slot beside [the fleet's review](17-cockpit.md#the-fleet-reviews-mark) and
+[the checks](17-cockpit.md#the-checks-mark): `PackMark` (`web/src/components/PackMark.tsx`), the
+book glyph in the review mark's own box, tinted `current`, `stale` (badged), `unplaced` or `writing`.
+Absent — no pack, and nobody writing one — draws nothing, the silence the review mark keeps on a
+deployment with no reviewer. → `test/packMark.test.ts`
+
+**A reading, never the control.** Asking for a pack and opening one stay on the pull request's page,
+where `ReviewPackControl` reads the document over its own route and can say everything about it. This
+mark answers the one question a rack of twenty rows can afford to ask of all of them at once — is
+there something written here worth going to read — and its click goes to that page.
+
+**It rides the snapshot, and it is three columns rather than a document.** `PullRequest.pack` is folded
+in `stateSnapshot.ts` from `Store.listReviewPackHeads()` — `(pr_number, head_sha, written_at)` for each
+pull request's newest pack, no `document` column and so no JSON parsed — and from whether an author is
+on the pull request now. `listCurrentReviewPacks` parses every pack it returns, which is the right
+price for a surface that draws them and the wrong one for a fold that runs on every pulse.
+
+**Staleness is by sha and never by time**, the same rule the page's own `packCurrency` keeps: a pack
+is about the commit it was written against, and a pull request whose head has not moved is one the
+pack still describes however long ago it was written. A pull request the provider reported **with no
+head** is `unplaced` and says so, rather than being folded into `current` — the one case that is about
+the provider must not be drawn as the one that is about the pack
+([24](24-environments.md#the-three-verdicts)).
+
 ### The page
 
 This is the output format, and both renderings draw it. It is written for the person, in their

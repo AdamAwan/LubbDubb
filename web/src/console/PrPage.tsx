@@ -6,11 +6,12 @@ import type { OpenPullRequest, PrReviewThread, PrThreadMessage, PrThreadState, P
 import { AsyncButton } from '../components/AsyncButton.js';
 import { CONTROL_CLASS } from '../components/controls.js';
 import { ReviewPackControl } from '../components/ReviewPackControl.js';
+import { CiMark } from '../components/CiMark.js';
 import { ReviewDetail, ReviewMark } from '../components/ReviewMark.js';
 import { PrLink, Ref } from '../components/refs.js';
 import { renderMarkdown } from '../components/markdown.js';
 import { relTime } from '../components/util.js';
-import { CiLadder, CourtChip } from './GoalPage.js';
+import { CourtChip } from './GoalPage.js';
 import { HeadRow } from '../components/panel.js';
 
 /**
@@ -79,7 +80,7 @@ function Masthead({
       </div>
       <div className="cn-prchips">
         <i className={`cn-chip ${STATE_TONE[state] ?? ''}`}>{state}</i>
-        <CiLadder pr={pr} />
+        <CiMark pr={pr} />
         {/* The same mark the row carries, from the same record — the card in the
             rail is where its findings are read. */}
         <ReviewMark review={pr.review} now={view.now} />

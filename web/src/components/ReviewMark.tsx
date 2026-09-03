@@ -1,7 +1,7 @@
-import { useCallback, useRef, useState, type CSSProperties, type JSX } from 'react';
-import { createPortal } from 'react-dom';
+import type { JSX } from 'react';
 import type { PrReviewState, PrReviewStatus } from '../types.js';
 import { Icon } from './icons.js';
+import { Tip, useTip } from './tip.js';
 import { relTime } from './util.js';
 
 /**
@@ -124,8 +124,10 @@ const TIP_FINDINGS = 2;
  * deployment is a claim about a feature nobody turned on.
  *
  * **The one glyph in the cockpit that stands without a written label**, against
- * the rule in `icons.tsx`, and it earns the exception the way the CI ladder does:
- * a dense row of pull requests, one recurring subject, the words one hover away.
+ * the rule in `icons.tsx`, and it earns the exception the way `AgentOnIt` does: a
+ * dense rack of pull requests, one recurring subject, the words one hover away.
+ * The checks beside it are a *chip* and carry their name, because they are the
+ * reading an operator has to act on and the one nobody should have to learn.
  * The `aria-label` carries the same sentence the tooltip heads with, and the
  * tooltip opens on keyboard focus, so the glyph is never the only channel.
  *
@@ -158,35 +160,7 @@ export function ReviewMark({
    */
   onOpen?: () => void;
 }): JSX.Element | null {
-  const anchor = useRef<HTMLElement>(null);
-  const [at, setAt] = useState<CSSProperties | null>(null);
-
-  /**
-   * Where the tooltip goes, measured rather than declared.
-   *
-   * The mark is drawn in three places whose room runs out in opposite directions —
-   * the rack's rows sit hard against the right edge, the pull-request masthead
-   * sits hard against the left and a few pixels under the top of the window — so
-   * any one CSS anchoring is a tooltip clipped off-screen on one of them. Fixed
-   * positioning also takes it out of every card that clips its own overflow.
-   */
-  const place = useCallback(() => {
-    const box = anchor.current?.getBoundingClientRect();
-    if (box === undefined) return;
-    const width = 320;
-    // From the mark's left edge, so the tooltip opens *into* the page rather than
-    // back across whatever the mark is annotating; from its right where that
-    // would leave the window, which is the rack's rows.
-    const left = Math.max(8, Math.min(box.left - 6, window.innerWidth - width - 8));
-    // Below by default, because that is where a tooltip can grow; above only
-    // where there is no room below and there is room above.
-    const below = window.innerHeight - box.bottom;
-    const style: CSSProperties =
-      below < 220 && box.top > below
-        ? { left, bottom: window.innerHeight - box.top + 8, top: 'auto' }
-        : { left, top: box.bottom + 8 };
-    setAt(style);
-  }, []);
+  const tip = useTip();
 
   if (review === undefined) return reserve ? <span className="rv rv-none" aria-hidden="true" /> : null;
   const mark = badge(review);
@@ -201,46 +175,39 @@ export function ReviewMark({
   const Tag = onOpen === undefined ? 'span' : 'button';
   return (
     <Tag
-      ref={anchor as never}
+      ref={tip.anchor as never}
       className={`rv ${tone(review)}${onOpen === undefined ? '' : ' rv-open'}`}
       {...(onOpen === undefined ? { tabIndex: 0, role: 'img' as const } : { type: 'button' as const, onClick: onOpen })}
       aria-label={`Fleet review: ${reviewSaid(review)}${onOpen === undefined ? '' : ' — open the pull request'}`}
-      onMouseEnter={place}
-      onFocus={place}
-      onMouseLeave={() => setAt(null)}
-      onBlur={() => setAt(null)}
+      onMouseEnter={tip.open}
+      onFocus={tip.open}
+      onMouseLeave={tip.close}
+      onBlur={tip.close}
     >
       <Icon name="review" size={15} />
       {mark !== null && <span className="rv-badge">{mark}</span>}
-      {at !== null &&
-        // Portalled to the body, not drawn in place. `position: fixed` is not
-        // enough on its own: a closed pull request's row carries `opacity: .55`,
-        // which is a stacking context — so the tooltip was positioned against the
-        // row rather than the window, painted under the rail's cards, and dimmed to
-        // 55% along with everything else on the row. Out here it is neither.
-        createPortal(
-          <span className="rv-tip" style={at}>
-            <b>{reviewSaid(review)}</b>
-            {more !== null && <span className="rv-said">{more}</span>}
-            {shown.length > 0 && (
-              <ul>
-                {shown.map((f) => (
-                  <li key={f}>{f}</li>
-                ))}
-              </ul>
-            )}
-            {rest > 0 && <span className="rv-more">{`and ${rest} more`}</span>}
-            <span className="rv-foot">
-              {review.status === 'skipped'
-                ? 'a skip is a decision — the merge is not held'
-                : stamp !== null
-                  ? `${review.reviewedAt !== null ? 'reviewed' : 'routed'} ${relTime(stamp, now)}`
-                  : 'nothing recorded yet'}
-              {onOpen !== undefined && ' · click for the whole reading'}
-            </span>
-          </span>,
-          document.body,
-        )}
+      {tip.at !== null && (
+        <Tip at={tip.at}>
+          <b>{reviewSaid(review)}</b>
+          {more !== null && <span className="rv-said">{more}</span>}
+          {shown.length > 0 && (
+            <ul className="rv-list">
+              {shown.map((f) => (
+                <li key={f}>{f}</li>
+              ))}
+            </ul>
+          )}
+          {rest > 0 && <span className="rv-more">{`and ${rest} more`}</span>}
+          <span className="rv-foot">
+            {review.status === 'skipped'
+              ? 'a skip is a decision — the merge is not held'
+              : stamp !== null
+                ? `${review.reviewedAt !== null ? 'reviewed' : 'routed'} ${relTime(stamp, now)}`
+                : 'nothing recorded yet'}
+            {onOpen !== undefined && ' · click for the whole reading'}
+          </span>
+        </Tip>
+      )}
     </Tag>
   );
 }

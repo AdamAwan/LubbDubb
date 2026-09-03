@@ -598,9 +598,10 @@ the type exists to make unrepeatable.
 
 Each row carries the branch, the part's position, that ref's PR with the CI policy's own verdict, and
 whether an agent is on the branch **now** — because then what a run shows is a moving target. There is
-no per-check dot ladder: `CiLadder` is the one thing allowed to classify a check, it lives in the
-console layer, and nothing under `web/src/components/` reaches into that layer. So the server ships
-the classification it has already made and the row draws it in words.
+no per-check reading of its own: `CiMark` ([the checks mark](17-cockpit.md#the-checks-mark)) is the
+one thing allowed to draw `ciVerdict`, and a second classification written for this row would be a
+second chance to disagree with the policy. So the server ships the classification it has already made
+and the row draws it in words.
 
 Rows with more than one option get an expander for the parts behind the tip. **Freshness is agent
 activity, never a commit date**: the snapshot is synchronous and git is not on that path, so the row

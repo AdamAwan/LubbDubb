@@ -998,7 +998,7 @@ Order on the page, top to bottom:
    the work. Both are folded until the work is somewhere
    ([Folding what is not relevant yet](#folding-what-is-not-relevant-yet)).
 6. **Two columns**, from 1200px. The live reading and what is still owed on the left — **pull
-   requests for this goal**, open and closed, with the court chip and the CI ladder, then
+   requests for this goal**, open and closed, with the court chip and the checks mark, then
    **environments** ([Environments](#environments)). On the right, **On this goal** (who is working
    it now, [below](#who-is-on-the-goal)), **What you've asked for**, **The tail** and **Spend**. Below 1200 the two stacks are one
    column.
@@ -1925,20 +1925,20 @@ which was retired, with those parts below it.
 A part's row names its pull request as a way there rather than as text (`PR #412`), the one ref a wave
 carries; the goal it is under is the page it is already on.
 
-**A part carrying an open pull request draws that request's CI ladder and court chip, embedded from
+**A part carrying an open pull request draws that request's checks mark and court chip, embedded from
 the pull-request card rather than re-derived.** The column a part stands in says where it is in
 _dispatch order_ and nothing at all about whether it is moving: "Now" covered a part with red CI, a
 part sitting on a reviewer and a part an agent was mid-way through, and telling the three apart meant
 scrolling to the pull-request card and matching PR numbers by eye — on the one surface whose whole
-job is to be read at a glance. The two components are `CiLadder` and `CourtChip`, the same two
-exports the card draws, for the reason the track strip is folded rather than written: a second
+job is to be read at a glance. The two components are `CiMark` and `CourtChip`, the same two the card
+draws, for the reason the track strip is folded rather than written: a second
 reading of `ciVerdict` or `attention` beside the first is a second chance to classify a check the CI
 policy already classified, or to disagree about whose court a PR is in, from a component sitting
 nowhere near the one it duplicates.
 
-**A dead pull request's word is drawn only where it disagrees with the column.** The ladder is not
-drawn for one at all — on a closed PR the checks are history, which is why the card's own closed rows
-carry a word and no dots — and `merged` under the **Merged** heading is the heading a second time. What
+**A dead pull request's word is drawn only where it disagrees with the column.** The checks are not
+drawn for one at all — on a closed PR they are history, which is why the card's own closed rows carry
+a word and no chip — and `merged` under the **Merged** heading is the heading a second time. What
 survives that cut is the pair that says something the board cannot: a merged pull request on a part
 grouped anywhere else, and a pull request closed without merging.
 
@@ -2008,7 +2008,9 @@ so a closed row still opens the page it links to rather than the gone screen.
 provider reference beside it — never inside it, since one click cannot have two destinations and the
 provider is a different place from the cockpit's page for the same pull request. The
 [review pack](31-review-packs.md#reading-it) is asked for and opened there rather than on this row,
-which is where it sat while there was no pull request page to put it on.
+which is where it sat while there was no pull request page to put it on. What the row keeps is the
+one bit that says whether going there is worth it: the [pack mark](31-review-packs.md#on-the-row),
+third in the reading slot, drawn only where there is a pack or one being written.
 
 One number does come back to the row: how many review threads the fleet still owes an answer, as
 _n on us_. It is drawn only when there is one — a chip reading `0` on every settled pull request is
@@ -2017,16 +2019,16 @@ claim about a review the harness cannot see ([07](07-pull-requests.md#review-thr
 
 Whose court a PR is in is `attention.status`, and which check is red is `ciVerdict`; both are quoted,
 never re-read. The chip prints the server's own word with `attention.reasons` in its title, and the
-ladder is one dot per check the policy classified — failing, not-ours, muted — with **no check name
-written anywhere in this repository**: every one comes off the verdict. Where the provider reported no
-per-check detail at all the aggregate speaks under a generic name rather than drawing nothing, because
-missing detail is not a clean bill of health.
+checks are [their own mark](#the-checks-mark) — with **no check name written anywhere in this
+repository**: every one comes off the verdict. Where the provider reported no per-check detail at all
+the aggregate speaks under a generic name rather than drawing nothing, because missing detail is not a
+clean bill of health.
 
-`CiLadder` is exported from `GoalPage.tsx` and drawn by the overview's rack too — the whole component
-rather than the tone lookup alone, since two readings of one verdict side by side is how the same PR
-comes to wear two tones nobody chose. `CourtChip` stays here: the rack draws the same verdict as the
-word in its state column, which is where every card on the overview puts its state, and this page has
-no such column. `waitedFor` is shared for the chip's reason — the rack draws the same age as a fact.
+`CiMark` is `web/src/components/CiMark.tsx` and every surface draws that one component, since two
+readings of one verdict side by side is how the same PR comes to wear two tones nobody chose.
+`CourtChip` stays in `GoalPage.tsx`: the rack draws the same verdict as the word in its state column,
+which is where every card on the overview puts its state, and this page has no such column.
+`waitedFor` is shared for the chip's reason — the rack draws the same age as a fact.
 
 **And the row itself carries it.** `PanelRowModel.live` puts a green edge down the row and a slow
 sweep across it — the whole line, rather than one more mark in one more slot. That is the honest shape
@@ -2068,7 +2070,7 @@ carries `agentLive` beside `agentId`: a finished agent is still the way to what 
 only a live one is a claim that something is happening now. Folded into one field, a merged part would
 pulse. → `test/goalPage.test.ts`
 
-**A live agent on the branch replaces the ladder, on the overview's rack.** Not beside it —
+**A live agent on the branch replaces the checks, on the overview's rack.** Not beside it —
 it supersedes it: the checks are a reading of a commit the agent is in the middle of replacing, so a
 green dot next to a working agent is the least true thing the row can say. The marker is a way into
 that agent's transcript, and it is drawn from `agentOnBranch` — the two-hop join from an agent's
@@ -2077,13 +2079,12 @@ that will do it slightly differently. **Live agents only**: a finished agent's b
 marker that outlived it would be a pull request that looks staffed forever, which is the one row
 nobody re-checks. The moment the agent ends, the checks come back. → `test/panelRows.test.ts`
 
-**A failing check's dot is red.** It was `--cn-inert` — the grey the token block calls _deliberately
-not a verdict_ — on the reasoning that a red check the harness is already dispatching on is not your
-move. But at 6px that is the empty track, so the most actionable reading on the row was drawn as the
-least, and the row said nothing where it should have said the loudest thing it knows. Whose move it
-is is the state column's answer now, which frees the ladder to answer only _is this broken_: red for
-broken, amber where it is broken and **yours** (`escalate` — the policy says the harness must not
-touch it), dashed where the policy ignores it.
+**A failing check reads red.** It was drawn in `--cn-inert` — the grey the token block calls
+_deliberately not a verdict_ — on the reasoning that a red check the harness is already dispatching on
+is not your move. But at 6px that is the empty track, so the most actionable reading on the row was
+drawn as the least, and the row said nothing where it should have said the loudest thing it knows.
+Whose move it is is the state column's answer now, which frees the checks to answer only _is this
+broken_. → [the checks mark](#the-checks-mark)
 
 **The court chip carries how long a review has been waiting.** A PR carrying
 `attention.reviewWaitingSince` reads `elsewhere · 3d`, with the instant it started waiting in the
@@ -2228,7 +2229,8 @@ for the reason the goal page quotes them.
 What it draws:
 
 - **The masthead** — number, title, branch → base, head, author; then the state chips: open/merged/
-  closed, the CI ladder, approval, `mergeableState`, how many threads are on the fleet, and whose
+  closed, the [checks mark](#the-checks-mark), approval, `mergeableState`, how many threads are on the
+  fleet, and whose
   court it is. The goal's reference sits at the far end of that line, and only the goal's: a ref onto
   this pull request opens this very page, so the provider's own is a control of its own —
   `Open pull request ↗`, the shape the goal page's `Open ticket ↗` already has. The
@@ -2512,7 +2514,7 @@ card is the drift `PanelRowModel` exists to end, one level up.
   the work.
   **A goal wears the live treatment while an agent is on it**, the same edge, tint and sweep the rack
   draws, and the same `AgentOnIt` chip in the same lamp slot. Its **track survives it**, unlike a pull
-  request's checks: on a pull request the marker supersedes the ladder, because those are a verdict on a
+  request's checks: on a pull request the marker supersedes the checks mark, because those are a verdict on a
   commit being replaced, and a goal's track is how far the plan got, which an agent working does not
   make untrue.
   Resolved off the dispatch's **origin** (`agentOnGoal`, through `goalOfOrigin`), not off a branch and
@@ -2523,7 +2525,7 @@ card is the drift `PanelRowModel` exists to end, one level up.
   The track's four colours carry their key in the **hover**: a legend would cost more room than the
   bar, and four tones with nothing to read them against is a reading only somebody who has read the
   source can take.
-- **Pull requests** — every open PR with its court in the state column, its CI ladder, and the watch
+- **Pull requests** — every open PR with its court in the state column, its checks mark, and the watch
   eye pinned left of the title. The **row's name opens
   [its page](#the-pull-request-page)**, and the ref beside it carries **both destinations on one
   token** ([both doors](#a-reference-carries-both-its-doors)): the number opens the cockpit's page,
@@ -5502,12 +5504,15 @@ row, so a reference is findable by _position_ and not only by looking like one. 
 a row **is** from what it **names**. It is drawn on every row of a list, **empty where the row names
 nothing** — a fleet row with no origin renders the group and puts nothing in it — because a rule that
 comes and goes reads as ragged rather than as a column; `:empty` takes the line back off so an empty
-slot is space rather than a tick. Row anatomies differ after that slot (the rack carries a CI ladder and
+slot is space rather than a tick. Row anatomies differ after that slot (the rack carries two marks and
 two buttons, a signal carries its count), so this is a slot rather than a table column, and there is no
 header over it.
 
 **Every selector in that block doubles its class** — `.ref-goal.ref-goal`, not `.ref-goal` — and it has
-to. `console.css` resets its own markup with `.cn button` and `.cn a`, which counts as (0,1,1) and so
+to. The same rule holds for the three marks in the reading slot
+([review](#the-fleet-reviews-mark), [pack](31-review-packs.md#on-the-row), [checks](#the-checks-mark)):
+each is drawn as a `button` on a row, so the reset below took its border, its ground and its ink, and a
+tint that is declared, computed and then thrown away looks exactly like a mark nobody styled. `console.css` resets its own markup with `.cn button` and `.cn a`, which counts as (0,1,1) and so
 outranks a single class, and the console is where most references are drawn. Under one class the reset
 won: `border: 0` took the box off a goal token and `color: inherit` took the colour off every reference
 in the console, which is how a treatment can be right in the stylesheet, green in its test, and on
@@ -5757,8 +5762,8 @@ structurally in `test/workGraph.test.ts`, `test/stacks.test.ts` and `test/prAtte
 The fourth per-item verdict, and the only one drawn as a **glyph alone**: the review mark
 (`web/src/components/ReviewMark.tsx`), one pair of spectacles on a pull request's row and in its
 masthead, tinted by what the reviewer said — green `clear`, red `findings`, amber `routed`, dashed
-blue `deciding`, faint `skipped` and `elsewhere`. It sits left of the CI ladder, so the two verdicts
-read in the order the harness produces them.
+blue `deciding`, faint `skipped` and `elsewhere`. It sits left of [the checks mark](#the-checks-mark),
+so the two verdicts read in the order the harness produces them.
 
 **One badge slot on the glyph's shoulder, four meanings** — how many findings, a tick where they have
 been dealt with, a dash for a review that will not happen, an arrow for one that happened somewhere
@@ -5787,12 +5792,81 @@ console owns the card, the shared component owns the words, so the two surfaces 
 one record differently.
 
 **It is the exception to `icons.tsx`' rule that an icon never appears without its label**, and it
-earns it the way the CI ladder does: a dense list of pull requests, one recurring subject, the words
-one hover away. The `aria-label` carries the same sentence the tooltip heads with and the tooltip opens
+earns it the way `AgentOnIt` does: a dense rack of pull requests, one recurring subject, the words one
+hover away. The checks beside it are a **chip and carry their name**, because they are the reading an
+operator has to act on and the one nobody should have to learn. The `aria-label` carries the same sentence the tooltip heads with and the tooltip opens
 on keyboard focus, so the glyph is never the only channel. The glyph is deliberately not `eye`, which
 already means _watching_ — reading a diff and watching an item are different claims.
 
 Absent where the deployment has no fleet review. → [07](07-pull-requests.md#where-the-operator-sees-it)
+
+### The checks mark
+
+A pull request's CI, drawn as a chip that **says its own name and what it found** — `CI 4/4`,
+`CI 1 failed`, `CI 2 running`, `CI 1 muted` (`web/src/components/CiMark.tsx`). One component on all
+four surfaces that draw checks: the overview's rack, the goal page's pull-request card, a plan part
+carrying an open PR, and the pull-request page's masthead.
+
+**It replaced a ladder of 6px squares**, one per check the policy classified. Those said all of it in
+**hue alone**: no word, no shape between a passing check and a failing one, and their per-check names
+only in a native `title` — which arrives a second late, cannot be styled and never arrives at all on a
+touch screen. A reader who did not already know what the dots were had nowhere to find out, and a
+reader who could not separate the red from the green had nothing at all. On the densest card in the
+cockpit that is the most actionable reading on the row, drawn as the least legible thing on it.
+
+**The fold is verdict first, aggregate second**, which is the harness's own order. `ciVerdict`
+classifies the **failing** checks and is the only thing that knows which failure is the fleet's to fix
+(`dispatch`, red), which is yours (`escalate`, amber — the policy says the harness must not touch it),
+and which the operator has muted (`ignored`, grey — the absence of a verdict, which is what a muted
+check is). Only where it says nothing does `ciStatus` speak, as `n/n`, `running`, `green` or `red`.
+
+**Where words carry a distinction, hue does not carry it alone.** `1 failed`, `1 for you` and
+`1 muted` are three different obligations and three different words; a reader who cannot tell amber
+from red still gets all three. That is the accessibility bargain the ladder could not make, and the
+reason the mark is a chip where [the review's](#the-fleet-reviews-mark) is a glyph — the review is one
+recurring subject read at a glance, and this is the one an operator has to act on.
+
+**A pending check with nothing in flight reads `stalled`, not `running`.** `CiCheck.expired` is the
+provider saying the last run is stale against the branch and resolves only when somebody queues
+another ([07](07-pull-requests.md)); a chip that called that "running" would be the row promising an
+answer that is never coming. Amber, because it is waiting on a person.
+
+**Advisory checks are in no count**, the same silence `ciNeedsAttention` keeps: they are reported for
+visibility, nothing acts on them, and a comment policy counted here would hold a pull request at `3/4`
+forever.
+
+**Missing detail is not a clean bill of health.** Where the provider named no check the aggregate
+speaks under its own name (`CI green`, `CI red`) rather than drawing nothing, and the tooltip says
+whether the detail was never reported or **withheld** by an `off` policy mode
+([02](02-configuration.md#azuredevopspolicychecks)) — two opposite instructions that would otherwise
+look identical on the row. Only `ciStatus: 'unknown'` draws nothing at all: a column of grey chips on a
+provider that reports no checks is a claim about a reading nobody took.
+
+**No check name is written in this repository.** Every name in the chip's tooltip comes off
+`ciChecks`, and every word about what will happen to a failing one comes off `ciVerdict` — the same
+rule the ladder kept, and the reason the browser holds no second copy of the CI policy.
+
+**And the mark is the way there**, on a row: a `button` onto the pull request's page, a plain span on
+that page's own masthead, exactly as the review mark is. → `test/ciMark.test.ts`
+
+### The tooltip the marks share
+
+All three marks draw the cockpit's own hover card (`web/src/components/tip.tsx`) rather than the browser's
+`title`, and it is **one module rather than one per mark**. The placement is measured rather than
+declared — fixed to the window, from the anchor's left edge unless that would leave it, below unless
+there is no room below — and every line of it is a bug somebody has already had: the marks sit in a
+rack hard against the right edge of the window and in a masthead a few pixels under its top, so a
+second copy is a second chance for one of them to be positioned against the wrong edge.
+
+**It is portalled to the body**, which `position: fixed` alone does not achieve: a closed pull
+request's row carries `opacity: .55`, which is a stacking context, so the card was positioned against
+the row rather than the window, painted under the rail's cards, and dimmed to 55% along with the rest
+of the row.
+
+**It opens on keyboard focus as well as hover**, which is what buys the glyph marks their exception to
+`icons.tsx`' rule that an icon never appears without its label, and what makes the reading reachable
+on a touch screen at all. It takes no pointer events — a tooltip that can be hovered is a tooltip that
+flickers — so anything a pointer has to reach belongs on the page the mark opens, never in here.
 
 ## What ships and nothing draws
 
@@ -5800,7 +5874,7 @@ Stated rather than left to be discovered, because a snapshot field with no reade
 from a reader that broke, and because each of these is a decision rather than an omission:
 
 - **`CockpitActions.setStackLanding` has no caller.** The console draws pull requests as a **flat
-  rack** — one row per open PR, ordered by the server, with the court chip and the CI ladder — and not
+  rack** — one row per open PR, ordered by the server, with the court chip and the checks mark — and not
   as chains. The stack model itself is unaffected and is the server's
   ([07](07-pull-requests.md#landing-a-stack)); what is absent is a surface that authorizes landing a
   whole chain. The seam keeps the method because the refusal rules behind it are the server's and a

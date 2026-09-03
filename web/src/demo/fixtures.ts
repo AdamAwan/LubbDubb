@@ -343,6 +343,10 @@ export function buildDemoState(): DemoSeed {
           merged: false,
           health: { blocked: true, reasons: ['CI failing', '1 unresolved comment'] },
           attention: { status: 'harness', reasons: ['an agent is working this branch'] },
+          // The pack marks are a roll-call of their own across these rows, for the
+          // reason the review states below are: an operator learning a mark should
+          // meet every arm of it once.
+          pack: 'current',
           // The six review states below are a roll-call like the pickup statuses'
           // above: an operator learning the mark should meet every arm of it once.
           review: {
@@ -391,6 +395,7 @@ export function buildDemoState(): DemoSeed {
           merged: false,
           health: { blocked: false, reasons: [] },
           attention: { status: 'you', reasons: ['a merge is waiting on your verdict'] },
+          pack: 'stale',
           review: {
             status: 'clear',
             addressed: false,
@@ -430,6 +435,7 @@ export function buildDemoState(): DemoSeed {
           merged: false,
           health: { blocked: true, reasons: ['behind base branch'] },
           attention: { status: 'harness', reasons: ['queued for a base update'] },
+          pack: 'writing',
           review: {
             status: 'routed',
             addressed: false,
