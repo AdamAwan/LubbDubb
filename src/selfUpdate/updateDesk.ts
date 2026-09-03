@@ -1,11 +1,12 @@
 import type { ErrorRecorder } from '../errorLog.js';
 import type { RuntimeControl } from '../runtimeControl.js';
 import type { Store } from '../store/store.js';
-import { readBuildStanding, type BuildStanding } from './buildStanding.js';
+import { pullFastForward, readBuildStanding, type BuildStanding } from './buildStanding.js';
 import {
   applyUpgradeAction,
   autoUpgradeStep,
   buildReading,
+  projectPullability,
   upgradability,
   IDLE_INTENT,
   type BuildReading,
@@ -35,6 +36,7 @@ const SUPERVISOR_ENV = 'LUBBDUBB_SUPERVISOR';
  */
 export class UpdateDesk {
   private standing: BuildStanding | null = null;
+  private project: BuildStanding | null = null;
   private checking: Promise<void> | null = null;
   private lastCheckedMs = 0;
 
@@ -60,8 +62,21 @@ export class UpdateDesk {
       autoUpdate: boolean;
       /** How long an automatic drain waits before it interrupts what is left. Zero waits forever. */
       drainDeadlineMs: number;
+      /**
+       * The *worked* repository, read on this same timer — `config.repoRoot`
+       * against its own remote and `defaultBranch`.
+       *
+       * On the same timer deliberately, and not because it is convenient: these
+       * are two `ls-remote`s answering one question an operator asks once ("is
+       * anything waiting"), and two independent schedules would put the harness
+       * on the network twice as often to tell them apart. Absent, the project
+       * reading is null and nothing about the build changes.
+       */
+      project?: { root: string; remote: string; branch: string };
       /** Injectable so a test can stand in a checkout it controls, or none at all. */
       read?: typeof readBuildStanding;
+      /** The same, for the one git *write* on this desk. */
+      pull?: typeof pullFastForward;
       now?: () => string;
       /** Injectable for the same reason: a test asserts both arms without setting env. */
       supervised?: boolean;
@@ -113,9 +128,25 @@ export class UpdateDesk {
       return this.standing ?? unknownStanding(this.now());
     }
     const read = this.deps.read ?? readBuildStanding;
-    this.checking = read({ remote: this.deps.remote, branch: this.deps.branch, now: this.now })
-      .then((standing) => {
+    const project = this.deps.project;
+    this.checking = Promise.all([
+      read({ remote: this.deps.remote, branch: this.deps.branch, now: this.now }),
+      // Not `Promise.all`-fatal: a project reading is a second opinion about a
+      // different repository, so its failure is a null beside the build's answer
+      // rather than a check that took neither.
+      project
+        ? read({
+            remote: project.remote,
+            branch: project.branch,
+            now: this.now,
+            root: project.root,
+            subject: 'the project checkout',
+          }).catch(() => null)
+        : Promise.resolve(null),
+    ])
+      .then(([standing, projectStanding]) => {
         this.standing = standing;
+        this.project = projectStanding;
       })
       .catch((err: Error) => {
         // The reader is written to return `unavailable` rather than throw, so
@@ -225,7 +256,41 @@ export class UpdateDesk {
       intent: this.deps.store.readUpgradeIntent(),
       live: this.deps.store.countLiveAgents(),
       supervised: this.supervised,
+      project: this.project,
+      projectBranch: this.deps.project?.branch,
     });
+  }
+
+  /**
+   * Fast-forward the project checkout onto its remote branch.
+   *
+   * **Why the cockpit has a button for somebody else's repository.** The project
+   * layer of the config — `lubbdubb.project.json`, the team's committed policy —
+   * is read from `repoRoot`, so a clone three days behind is a harness running a
+   * config the team has already changed. `src/server/main.ts` watches that file
+   * precisely because "it arrives by `git pull`"; this is the pull, and the
+   * watcher it was written for picks the change up on its own poll a second or
+   * two later. Nothing here reloads the config, and nothing here should: one path
+   * applies a config change, and it is the one an operator's own `git pull`
+   * already goes through.
+   *
+   * A refusal is a value with the reason in it, on `request`'s terms — the
+   * request was well-formed and the world simply moved.
+   *
+   * The reading is re-taken **forced** on success, because the whole point of the
+   * click was to change the answer and a card still saying "3 commits waiting" is
+   * a button that looks like it did nothing.
+   */
+  async pullProject(): Promise<{ ok: true; build: BuildReading } | { ok: false; error: string }> {
+    const target = this.deps.project;
+    if (!target) return { ok: false, error: 'no project checkout is being watched' };
+    const verdict = projectPullability(this.project, target.branch);
+    if (!verdict.can) return { ok: false, error: verdict.blocked ?? 'the project checkout cannot be pulled' };
+    const pull = this.deps.pull ?? pullFastForward;
+    const result = await pull({ root: target.root, remote: target.remote, branch: target.branch });
+    if (!result.ok) return { ok: false, error: result.error };
+    await this.check(true);
+    return { ok: true, build: this.reading() };
   }
 
   /**
@@ -243,7 +308,7 @@ export class UpdateDesk {
       intent,
       { action, interrupt: opts.interrupt },
       {
-        upgradable: upgradability(standing),
+        upgradable: upgradability(standing, this.project),
         live: this.deps.store.countLiveAgents(),
         alreadyPaused: this.deps.runtimeControl.paused,
         targetSha: standing.upstream,

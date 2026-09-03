@@ -52,8 +52,13 @@ export interface SelfUpdatePolicy {
 /** The resting intent — what a database with no row, and a finished upgrade, both read as. */
 export const IDLE_INTENT: UpgradeIntent = { state: 'idle', targetSha: null, requestedAt: null, pausedByDrain: false };
 
-/** Whether an update can be applied at all, and why not when it cannot. */
-interface Upgradability {
+/**
+ * Whether an update can be applied at all, and why not when it cannot.
+ *
+ * @public shipped on {@link BuildReading.projectPull}, which the Project card
+ * reads to decide whether to draw its Pull control and what to say instead.
+ */
+export interface Upgradability {
   /** There is something to take, and taking it is a clean fast-forward. */
   can: boolean;
   blocked: string | null;
@@ -72,7 +77,7 @@ interface Upgradability {
  * a hotfix, a branch someone left checked out. Offering a button that will fail in
  * a process the operator is no longer watching is worse than not offering it.
  */
-export function upgradability(standing: BuildStanding): Upgradability {
+export function upgradability(standing: BuildStanding, project?: BuildStanding | null): Upgradability {
   if (standing.unavailable) return { can: false, blocked: standing.unavailable };
   if (standing.behind === 0) return { can: false, blocked: 'this build is current — there is nothing to take' };
   if (standing.dirty)
@@ -80,11 +85,74 @@ export function upgradability(standing: BuildStanding): Upgradability {
       can: false,
       blocked: 'the install directory has uncommitted changes to tracked files; commit or stash them before upgrading',
     };
+  // The *worked* repository, on the same terms. An upgrade is a restart, and a
+  // restart interrupts agents whose worktrees were cut from this checkout — so
+  // uncommitted work sitting in it is work nobody has claimed and the upgrade is
+  // about to walk over. Untracked files are not counted here for the same reason
+  // they are not counted above: `readBuildStanding` reads tracked changes only,
+  // and a stray file is not a change to anything.
+  //
+  // A project reading that could not be taken is **not** a refusal. The install's
+  // own `unavailable` is, because it is the thing being upgraded; this one is a
+  // second opinion about a different repository, and letting an unreachable
+  // project remote take the upgrade button away would park a fleet over a fact
+  // that has nothing to do with the build.
+  if (project?.dirty === true)
+    return {
+      can: false,
+      blocked:
+        'the project checkout has uncommitted changes to tracked files — an upgrade restarts the harness and ' +
+        'interrupts the agents working from it; commit or stash them first',
+    };
   if (standing.ahead > 0)
     return {
       can: false,
       blocked:
         `this build carries ${standing.ahead} commit(s) of its own, so the update is not a fast-forward — ` +
+        'merge or rebase it by hand',
+    };
+  return { can: true, blocked: null };
+}
+
+/**
+ * Can the **project** checkout take what is waiting on its remote?
+ *
+ * The same four questions as {@link upgradability} asked of a different
+ * repository, and worded for it rather than shared with it: "this build is
+ * current" is a sentence about the wrong thing on a card about the worked repo,
+ * and the wording *is* the product on a control that will not run.
+ *
+ * One arm has no counterpart above, because the install directory cannot be in
+ * this state and `repoRoot` routinely is: **the checkout must be on the branch
+ * being pulled.** `git pull --ff-only origin main` on a clone sitting on some
+ * other branch does not fast-forward `main` — it tries to merge `origin/main`
+ * into whatever is checked out, which is a different and unasked-for operation.
+ *
+ * `behind`, `ahead` and `dirty` are all read against that same HEAD, so this arm
+ * is checked before any conclusion is drawn from them.
+ */
+export function projectPullability(standing: BuildStanding | null, branch: string): Upgradability {
+  if (standing === null) return { can: false, blocked: 'no project checkout is being watched' };
+  if (standing.unavailable) return { can: false, blocked: standing.unavailable };
+  if (standing.branch !== branch)
+    return {
+      can: false,
+      blocked:
+        `the project checkout is on ${standing.branch === null ? 'a detached HEAD' : standing.branch}, not ${branch} — ` +
+        'a pull here would merge into that instead of fast-forwarding, so switch it by hand first',
+    };
+  if (standing.behind === 0)
+    return { can: false, blocked: 'the project checkout is up to date — there is nothing to pull' };
+  if (standing.dirty)
+    return {
+      can: false,
+      blocked: 'the project checkout has uncommitted changes to tracked files; commit or stash them before pulling',
+    };
+  if (standing.ahead > 0)
+    return {
+      can: false,
+      blocked:
+        `the project checkout carries ${standing.ahead} commit(s) of its own, so the pull is not a fast-forward — ` +
         'merge or rebase it by hand',
     };
   return { can: true, blocked: null };
@@ -110,6 +178,28 @@ export interface BuildReading {
   supervised: boolean;
   standing: BuildStanding;
   intent: UpgradeIntent;
+  /**
+   * The *worked* repository's standing — `repoRoot` against its own
+   * `defaultBranch` — read on the same timer as the build's and by the same
+   * reader, or null where none was configured or taken.
+   *
+   * Here rather than on a wire field of its own because the two are one reading
+   * in every place that matters: they are taken together, the cockpit draws them
+   * side by side, and {@link upgradability} folds them into one verdict. A second
+   * top-level field would let a cockpit show one without the other, which is the
+   * state neither answer is true in.
+   *
+   * It carries `behind`, `commits` and `dirty` for the same reasons the build's
+   * does. It carries `ahead` too, and nothing reads it: an integration branch this
+   * clone is ahead of is a fact about somebody's local work, not a refusal.
+   */
+  project: BuildStanding | null;
+  /**
+   * Whether the project checkout can be fast-forwarded, and why not when it
+   * cannot — {@link projectPullability}, folded here so the card draws the
+   * server's verdict rather than re-deriving one from the standing beside it.
+   */
+  projectPull: Upgradability;
 }
 
 /**
@@ -125,10 +215,15 @@ export function buildReading(opts: {
   intent: UpgradeIntent;
   live: number;
   supervised: boolean;
+  project?: BuildStanding | null;
+  /** The branch the project checkout is pulled onto — `config.defaultBranch`. */
+  projectBranch?: string;
 }): BuildReading {
   const { standing, intent, live, supervised } = opts;
-  const { can, blocked } = upgradability(standing);
-  const base = { live, upgradable: can, blocked, supervised, standing, intent };
+  const project = opts.project ?? null;
+  const { can, blocked } = upgradability(standing, project);
+  const projectPull = projectPullability(project, opts.projectBranch ?? '');
+  const base = { live, upgradable: can, blocked, supervised, standing, intent, project, projectPull };
 
   if (intent.state === 'draining')
     return {

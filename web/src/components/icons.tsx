@@ -107,6 +107,8 @@ const PATHS = {
   /** Everything the bar keeps folded away — the menu. */
   menu: ['M2.4 4.4h11.2M2.4 8h11.2M2.4 11.6h11.2'],
   /** Validation: the checks a goal has to clear. */
+  /** Take the reading again — the control, not a state. */
+  refresh: ['M12.7 9.4a5.4 5.4 0 1 1-1.3-5.6L14.2 6.4', 'M14.2 2.8V6.4H10.6'],
   flask: ['M6.4 1.9v4L2.8 12a1.6 1.6 0 0 0 1.4 2.4h7.6A1.6 1.6 0 0 0 13.2 12L9.6 5.9v-4', 'M5.4 1.9h5.2M4.4 9.6h7.2'],
 } as const satisfies Record<string, readonly string[]>;
 

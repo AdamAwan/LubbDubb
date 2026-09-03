@@ -1155,9 +1155,67 @@ class DemoServer {
    * `POST /api/findings/:id/promote`, and the only path from a finding to work in
    * either backend: the operator's click is the gate.
    */
-  /** The build fixture, unchanged — see the note on `demoApi.checkBuild`. */
+  /** The build fixture — see the note on `demoApi.checkBuild`. */
   getBuild(): BuildReading {
     return this.state.build;
+  }
+
+  /**
+   * Drain and cancel, modelled; apply, not.
+   *
+   * The split is what the demo can be honest about. A drain is **pure state** —
+   * dispatch pauses and the fleet is allowed to finish, and nothing about that
+   * needs a process — so clicking Queue upgrade moves the card to `draining` here
+   * exactly as it would live, and Cancel puts it back. An apply is a handoff
+   * between two dead processes, which a browser tab has none of, so it stays the
+   * no-op the fixture always was rather than a button that reports a success
+   * nobody could have had.
+   *
+   * `live` is left alone on purpose: the demo's fleet keeps working through the
+   * drain, which is the whole reason a drain is a state you can sit in.
+   */
+  /**
+   * The project checkout catching up: the waiting commits become the ones it has,
+   * and the card goes quiet. Modelled because it is pure state, on `upgrade`'s
+   * terms — see there.
+   */
+  async pullProject(): Promise<{ ok: true; build: BuildReading }> {
+    const build = this.state.build;
+    const project = build.project;
+    if (project && project.unavailable === null && !project.dirty && project.branch === 'main') {
+      build.project = {
+        ...project,
+        head: project.upstream,
+        behind: 0,
+        commits: [],
+        checkedAt: new Date().toISOString(),
+      };
+      build.projectPull = { can: false, blocked: 'the project checkout is up to date — there is nothing to pull' };
+      this.dirty();
+    }
+    return { ok: true, build };
+  }
+
+  async upgrade(action: string): Promise<{ ok: true; build: BuildReading }> {
+    const build = this.state.build;
+    if (action === 'drain' && build.intent.state === 'idle') {
+      build.intent = {
+        state: 'draining',
+        targetSha: build.standing.upstream,
+        requestedAt: new Date().toISOString(),
+        pausedByDrain: true,
+      };
+      build.state = 'draining';
+      build.label = `draining ${build.live}`;
+      this.dirty();
+    }
+    if (action === 'cancel' && build.intent.state !== 'idle') {
+      build.intent = { state: 'idle', targetSha: null, requestedAt: null, pausedByDrain: false };
+      build.state = 'behind';
+      build.label = `${build.standing.behind} behind`;
+      this.dirty();
+    }
+    return { ok: true, build };
   }
 
   /**
@@ -4511,12 +4569,18 @@ export const demoApi = {
   // decide — the panel is absent and this exists only to keep the two API shapes
   // interchangeable.
   decideRecovery: (_taskId: string, _verdict: string) => Promise.resolve({ ok: true as const, remaining: 0 }),
-  // The demo is a browser tab with no process behind it, so there is no build to
-  // upgrade. Both calls hand back the fixture unchanged: the gauge and the panel
-  // render exactly as they do live, and neither control pretends to have worked.
+  // The demo is a browser tab with no process behind it, so there is nothing to
+  // re-read: a check hands the fixture back as it stands, which is what a check
+  // against an unmoved upstream does live too.
   checkBuild: () => Promise.resolve({ ok: true as const, build: getServer().getBuild() }),
-  upgrade: (_action: string, _opts?: { interrupt?: boolean }) =>
-    Promise.resolve({ ok: true as const, build: getServer().getBuild() }),
+  // `drain` and `cancel` are modelled — see `DemoServer.upgrade`. `apply` is the
+  // one that cannot be: there is no process to hand off to.
+  upgrade: (action: string, _opts?: { interrupt?: boolean }) => getServer().upgrade(action),
+  // Modelled in full, unlike the upgrade: a fast-forward is a checkout catching
+  // up with its remote, and *what that looks like* is the whole of what the card
+  // shows. What the demo has no way to do is move a file on disk — so the config
+  // change the pull would have brought with it is the one part left unsaid.
+  pullProject: () => getServer().pullProject(),
   // The local run, which the demo can model honestly because the *state* is the
   // whole feature and the process is not: starting moves the row onto another goal
   // and stopping ends it, exactly as the panel would see it live. What a visitor

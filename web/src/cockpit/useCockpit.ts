@@ -402,6 +402,7 @@ export function useCockpit(): CockpitStatus {
 
       upgrade: (action, opts) => then(api.upgrade(action, opts)),
       checkBuild: () => then(api.checkBuild()),
+      pullProject: () => then(api.pullProject()),
       startLocalRun: (issueNumber, ref) => then(api.startLocalRun(issueNumber, ref)),
       stopLocalRun: () => then(api.stopLocalRun()),
       // Conversational, like `respondAgent`: the server's `dirty` brings the echo.
