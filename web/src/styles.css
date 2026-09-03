@@ -497,7 +497,15 @@ body {
   border-style: dashed;
 }
 
-.btn {
+/* **The class is doubled**, and that is what makes this the app's only button.
+   The console draws inside `.cn`, where `console.css` resets its own markup with
+   `.cn button` at (0,1,1) — stronger than a single class. A bare `.btn` in there
+   lost its ground and its border and drew as text, which is why the console grew
+   a second button family in the first place. At (0,2,0) it does not, so one rule
+   dresses a button wherever it sits and `primary` means one thing in the whole
+   cockpit. Everything below is already (0,2,0) or higher and needs no doubling.
+   → docs/spec/17-cockpit.md#the-button */
+.btn.btn {
   background: var(--panel-2);
   border: 1px solid var(--border);
   color: var(--text);

@@ -10,12 +10,13 @@ import { renderToStaticMarkup } from 'react-dom/server';
 /**
  * The cockpit's one button — `web/src/components/button.tsx`.
  *
- * The drift it replaced was silent in the way this repo cares about. `.cn-btn`
- * was a single class inside `.cn`, where `console.css` resets its own markup with
- * `.cn button` at (0,1,1) — so `.cn-btn.cn-primary` at (0,2,0) drew correctly
- * while every plain console button beside it drew as bare text. The sheet was
- * valid, `npm run check` was green, and the console had one button family on the
- * screen in two shapes.
+ * The drift it replaced was silent in the way this repo cares about. The cockpit
+ * drew two button families for the same four readings, and they had parted company
+ * on shape, radius and accent: a 7px steel-blue primary in a modal and a 4px
+ * vivid-blue one on the goal page, both called "primary". The second family grew
+ * because `console.css` resets its own markup with `.cn button` at (0,1,1), so a
+ * single-class `.btn` in there lost its ground and drew as bare text. `.btn.btn`
+ * answers that at the source, which is why there is one family now.
  * → `docs/spec/17-cockpit.md#the-button`
  */
 
@@ -25,34 +26,27 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 const { Button, buttonClass, withShape } = await import('../web/src/components/button.js');
 
-test('one base class, chosen by family and never both', () => {
-  assert.equal(buttonClass({}), 'btn');
-  assert.equal(buttonClass({ family: 'console' }), 'cn-btn');
-  // The bug this replaced: `AsyncButton` prepended `btn` to whatever string it
-  // was handed, so a console-family async button went out wearing both.
-  for (const look of [
-    {},
-    { family: 'console' as const },
-    { tone: 'primary' as const, ghost: true, size: 'small' as const },
-  ]) {
-    const classes = buttonClass(look).split(' ');
-    assert.equal(
-      classes.filter((c) => c === 'btn' || c === 'cn-btn').length,
-      1,
-      `${JSON.stringify(look)} resolved to ${classes.join(' ')}`,
-    );
-  }
+/**
+ * The base is doubled in the markup as well as in the sheet. `.btn.btn` is what
+ * outranks `console.css`'s `.cn button` reset at (0,1,1), and it only does so if
+ * the element actually carries the class twice — which is the whole reason the
+ * cockpit can have one button family instead of two.
+ */
+test('the base is written twice, so one rule dresses a button anywhere', () => {
+  assert.equal(buttonClass({}), 'btn btn');
+  assert.equal(buttonClass({ tone: 'secondary' }), 'btn btn');
+  assert.equal(buttonClass({ tone: 'primary' }), 'btn btn primary');
 });
 
-test('every weight is spelled in both families', () => {
-  assert.equal(buttonClass({ tone: 'primary' }), 'btn primary');
-  assert.equal(buttonClass({ tone: 'primary', family: 'console' }), 'cn-btn cn-primary');
-  assert.equal(buttonClass({ tone: 'danger' }), 'btn danger');
-  assert.equal(buttonClass({ tone: 'danger', family: 'console' }), 'cn-btn cn-danger');
-  assert.equal(buttonClass({ ghost: true }), 'btn ghost');
-  assert.equal(buttonClass({ ghost: true, family: 'console' }), 'cn-btn cn-ghost');
-  assert.equal(buttonClass({ size: 'small' }), 'btn small');
-  assert.equal(buttonClass({ size: 'small', family: 'console' }), 'cn-btn cn-small');
+test('one vocabulary, and it is the only one', () => {
+  assert.equal(buttonClass({ tone: 'primary' }), 'btn btn primary');
+  assert.equal(buttonClass({ tone: 'danger' }), 'btn btn danger');
+  assert.equal(buttonClass({ ghost: true }), 'btn btn ghost');
+  assert.equal(buttonClass({ size: 'small' }), 'btn btn small');
+  // `secondary` is the plain button spelled out loud: a caller who means "the
+  // quiet one beside the primary" says so rather than says nothing, and it
+  // resolves to the same class list as saying nothing.
+  assert.equal(buttonClass({ tone: 'secondary', ghost: true }), buttonClass({ ghost: true }));
 });
 
 /**
@@ -62,11 +56,11 @@ test('every weight is spelled in both families', () => {
  * combine, and those sites would have had to give up their red to stay quiet.
  */
 test('a destructive button can also be a quiet one', () => {
-  assert.equal(buttonClass({ tone: 'danger', ghost: true, size: 'small' }), 'btn danger ghost small');
+  assert.equal(buttonClass({ tone: 'danger', ghost: true, size: 'small' }), 'btn btn danger ghost small');
 });
 
 test('shape rides beside the tone, never through it', () => {
-  assert.equal(buttonClass({ ghost: true, className: 'work-root-head' }), 'btn ghost work-root-head');
+  assert.equal(buttonClass({ ghost: true, className: 'work-root-head' }), 'btn btn ghost work-root-head');
   assert.deepEqual(withShape({ ghost: true }, 'go'), { ghost: true, className: 'go' });
   assert.deepEqual(withShape({ ghost: true, className: 'go' }, 'no'), { ghost: true, className: 'go no' });
   // A station's shape is conditional at every one of `HumanTaskActions`' sites,
@@ -77,7 +71,7 @@ test('shape rides beside the tone, never through it', () => {
 test('a button is a button, never a form submit', () => {
   const html = renderToStaticMarkup(createElement(Button, { tone: 'primary', children: 'Write' }));
   assert.match(html, /type="button"/, 'a <button> in a <form> submits it unless it says otherwise');
-  assert.match(html, /class="btn primary"/);
+  assert.match(html, /class="btn btn primary"/);
 });
 
 /**
@@ -85,9 +79,12 @@ test('a button is a button, never a form submit', () => {
  *
  * Asserted from the sharp end rather than by counting call sites, the way
  * `test/modal.test.ts` asserts the backdrop: a button written the old way is a
- * button that misses whatever the family learns next — a disabled state, a
- * settled-flash ring, a specificity fix — and that is exactly the failure nothing
- * else in `npm run check` would see.
+ * button that misses whatever the button learns next — a disabled state, a
+ * settled-flash ring, a specificity fix — and, worse, a hand-written `btn` is
+ * single-class, so inside the console it draws as bare text. That is exactly the
+ * failure nothing else in `npm run check` would see. `cn-btn` is banned too: the
+ * console's family is gone, and a call site that reaches for it again is asking
+ * for a second look the app no longer has.
  */
 test('no surface writes a button family of its own', () => {
   const root = fileURLToPath(new URL('../web/src', import.meta.url));

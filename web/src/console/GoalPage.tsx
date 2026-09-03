@@ -803,7 +803,7 @@ function Validation({
             resources={page.checkResources}
             refUrls={refUrls}
             desktopFolder={desktopFolder}
-            look={{ family: 'console' }}
+            look={{ tone: 'secondary' }}
             onResult={(checkId, result, note) =>
               actions.setValidation(issue.number, checkId, { kind: 'result', result, note })
             }

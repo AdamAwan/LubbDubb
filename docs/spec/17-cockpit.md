@@ -1211,37 +1211,38 @@ close, and nothing else in `npm run check` would see it.
 
 ### The button
 
-**One control that does something when pressed** — `Button` in `web/src/components/button.tsx`, dressed
-by the `.btn` block in `styles.css` and the `.cn-btn` block in `console.css`. It is the
-[control kit](#the-control-kit)'s argument a third time, for the family the kit never covered.
+**One control that does something when pressed, drawn one way everywhere** — `Button` in
+`web/src/components/button.tsx`, dressed by the `.btn` block in `styles.css` and by nothing else. It is
+the [control kit](#the-control-kit)'s argument a third time, for the family the kit never covered.
 
-The cockpit drew about two hundred and thirty of these and had no component for any of them.
-`AsyncButton`, `SubmitButton` and `ConfirmButton` owned the _lifecycle_ — the spinner, the settled
-flash, the two-step arm — and took the _look_ as a raw class string, so tone was hand-written at every
-call site and travelled through props as one: `buttonClass="ghost small"`. Three faults rode along
-invisibly.
+The cockpit drew about two hundred and thirty of these across **two** families and had no component for
+any of them. `AsyncButton`, `SubmitButton` and `ConfirmButton` owned the _lifecycle_ — the spinner, the
+settled flash, the two-step arm — and took the _look_ as a raw class string, so tone was hand-written at
+every call site and travelled through props as one: `buttonClass="ghost small"`.
 
-**`.cn-btn` rendered with no ground and no border.** `console.css` resets its own markup with
-`.cn button` at (0,1,1), which outranks a single class — so `.cn-btn.cn-primary` at (0,2,0) drew
-correctly while every plain console button beside it drew as bare text. That is the failure the
-`.th-preset.th-preset` block already warns about, found a second time, in the family the warning was
-written next to. The class is doubled now, for that reason and stated there.
+**There is one family now, and that is the point.** `.cn-btn` and its four modifiers are gone. They were
+a second vocabulary for the same four readings and the two had already parted company: a 7px
+steel-blue primary in a modal and a 4px vivid-blue one on a goal page, both called "primary", with
+nothing saying which was meant. A primary button is the same act wherever it is pressed, so it is the
+same button.
 
-**`AsyncButton` prepended `btn` unconditionally**, so the nine console-family async buttons went out
-as `class="btn cn-btn"`: two base families on one element, settled by source order rather than by
-anything anybody wrote down.
-
-**And a class string cannot say which half it is.** `HumanTaskActions` received `buttonClass` and
-prefixed `btn` onto it at three sites and not at three others, two lines apart; `ValidationSection`
-did the same across five verbs. Neither is visible in a diff, and both render.
+**The second family existed because of a specificity fault, not a design one.** `console.css` resets its
+own markup with `.cn button` at (0,1,1), which outranks a single class — so a `.btn` inside `.cn` lost
+its ground and its border and drew as bare text, and the console grew its own class to get a button
+back. `.btn.btn` in `styles.css` answers that at the source, the same doubling `.th-preset.th-preset`
+already uses, so **`buttonClass` writes the base twice** and one rule dresses a button anywhere. Every
+modifier below it is already (0,2,0) or higher and needs no doubling.
 
 **Tone is a prop, never a class string**, the same rule the [tag](#the-tag) and the control kit keep:
 
-| Prop             | What it says                                               |
-| ---------------- | ---------------------------------------------------------- |
-| `tone="primary"` | the one control a surface expects to be pressed            |
-| `tone="danger"`  | one that destroys something                                |
-| no tone          | the button that is neither — a label rather than a verdict |
+| Prop               | What it says                                                    |
+| ------------------ | --------------------------------------------------------------- |
+| `tone="primary"`   | the one control a surface expects to be pressed                 |
+| `tone="danger"`    | one that destroys something                                     |
+| `tone="secondary"` | the plain one — the default, and it carries no class of its own |
+
+`secondary` is spelled even though it resolves to nothing, because a caller who means "the quiet one
+beside the primary" should be able to say so rather than say nothing.
 
 **Weight is `ghost`, not a third tone**, which is the bargain the tag makes with `fill` read the other
 way up. The quiet button and the ordinary one are the same box in the same colour and the ground is
@@ -1250,32 +1251,31 @@ of `ConfirmButton`'s call sites are. Spelled as a tone those two readings could 
 would have had to give up their red to keep their transparency. `size="small"` is the second weight,
 and it is the one the codebase reaches for most.
 
-**The two families stay two**, for the reason `.t-*` and `.cn-t-*` do: `--accent` is orange and
-`--cn-accent` is blue. `family="console"` picks the base and the whole vocabulary follows it —
-`cn-primary`, `cn-danger`, `cn-ghost`, `cn-small`, the last two new so a weight means the same thing
-whichever family draws it. What is shared is the _component_, not the paint.
-
 **`className` carries shape, never tone.** A surface with geometry of its own — a header row that is a
 toggle, a drop target, a close cross — passes that class beside the props, which is the bargain
-[the review mark](#the-fleet-reviews-mark) already makes with `t-green`. A station that composes on
-top of a caller's tone uses `withShape`, so the caller's half and the station's half stay two things:
+[the review mark](#the-fleet-reviews-mark) already makes with `t-green`. A station that composes on top
+of a caller's tone uses `withShape`, so the caller's half and the station's half stay two things:
 `withShape(look, onCloseTicket === null && 'go')`.
 
-**`buttonClass` is the seam for the components that are not buttons.** The three async components
-resolve their class through it and add their own ring; `DesktopLink` is an `<a>`, because a deep link
-is a destination, and wears whichever row's tone it sits in. It is the same seam `CONTROL_CLASS` is
-for the control kit.
+**`buttonClass` is the seam for the controls that are not buttons.** The three async components resolve
+their class through it and add their own ring; `DesktopLink` is an `<a>`, because a deep link is a
+destination, and wears the button's look through the same call. It is what `CONTROL_CLASS` is for the
+control kit.
 
-**The state a button is in is drawn once, for both families.** `:disabled` and `[aria-busy]` are
-stated on each base, and the settled-flash ring — `is-done` / `is-error` — is unscoped, because the
-ring is the _async components'_ statement rather than one family's. Under `.btn.is-done` a console
-button settled with no feedback at all, so a click that went through and a click the route refused
-looked identical.
+**The state a button is in is drawn once.** `:disabled` and `[aria-busy]` sit on the base, and the
+settled-flash ring — `is-done` / `is-error` — is unscoped, because the ring is the _async components'_
+statement rather than the button's. Under `.btn.is-done` a console button settled with no feedback at
+all, so a click that went through and a click the route refused looked identical.
 
-`test/cockpitButton.test.ts` pins the vocabulary and, from the sharp end, that **no `.tsx` outside
-`button.tsx` writes `btn`, `cn-btn` or `armed` as a class**. A button written the old way is one that
-misses whatever the family learns next — a disabled state, a ring, a specificity fix — and nothing
-else in `npm run check` would see it.
+**This is not the tag's bargain.** `Tag` keeps `.t-*` and `.cn-t-*` as two families on purpose, because
+`--accent` is orange and `--cn-accent` is blue and a tag is a _tint_ that has to sit inside its
+surface's palette. A button is not a tint: it is an act, and an act reads the same everywhere or the
+vocabulary is not one.
+
+`test/cockpitButton.test.ts` pins the vocabulary, the doubled base, and — from the sharp end — that
+**no `.tsx` outside `button.tsx` writes `btn`, `cn-btn` or `armed` as a class**. A hand-written `btn` is
+single-class, so inside the console it draws as bare text; a hand-written `cn-btn` asks for a family
+that no longer exists. Neither is red in `npm run check` any other way.
 
 ### The tag
 

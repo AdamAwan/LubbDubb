@@ -1679,7 +1679,7 @@ test('a key the staged config requires is marked, offered a value, and blocks th
   );
   assert.match(
     html,
-    /<button[^>]*class="btn primary small"[^>]*>Review &amp; write<\/button>/,
+    /<button[^>]*class="btn btn primary small"[^>]*>Review &amp; write<\/button>/,
     'and it is still the surface\u2019s primary control',
   );
   // Named rather than counted: the row is usually in a group the operator has

@@ -119,9 +119,7 @@ export function HatchModal({
           </>
         )}
       </div>
-      <Button family="console" onClick={onClose}>
-        {out ? 'Done' : 'Skip'}
-      </Button>
+      <Button onClick={onClose}>{out ? 'Done' : 'Skip'}</Button>
     </Modal>
   );
 }

@@ -456,7 +456,7 @@ function ConfigFix({ check, actions }: { check: SetupCheck; actions: CockpitActi
   if (fix.kind === 'sheet') {
     return (
       <div className="cn-fix">
-        <Button tone="primary" family="console" onClick={() => actions.openPanel('setup')}>
+        <Button tone="primary" onClick={() => actions.openPanel('setup')}>
           {fix.label}
         </Button>
         {check.remedy !== undefined && <span className="cn-fixwhy">{check.remedy}</span>}
@@ -469,7 +469,6 @@ function ConfigFix({ check, actions }: { check: SetupCheck; actions: CockpitActi
       <div className="cn-fix">
         <Button
           tone="primary"
-          family="console"
           onClick={() =>
             fix.to === 'tickets'
               ? actions.openTab('tickets')
@@ -508,12 +507,12 @@ function ConfigFix({ check, actions }: { check: SetupCheck; actions: CockpitActi
             Set <code>{only}</code> to
             <input className="cn-inline" value={typed} onChange={(e) => setValue(e.target.value)} aria-label={only} />
           </label>
-          <Button family="console" disabled={busy} onClick={write}>
+          <Button disabled={busy} onClick={write}>
             Write it
           </Button>
         </div>
       ) : (
-        <Button tone="primary" family="console" disabled={busy} onClick={write}>
+        <Button tone="primary" disabled={busy} onClick={write}>
           {fix.label}
         </Button>
       )}
@@ -542,12 +541,8 @@ function SettledFix({ applied, actions }: { applied: AppliedFix; actions: Cockpi
         <b>{applied.summary}</b>
         <i className="cn-settled-file">→ {applied.file}</i>
       </span>
-      <Button family="console" onClick={() => void actions.undoConfigFix(applied.checkId)}>
-        Undo
-      </Button>
-      <Button family="console" onClick={() => actions.dismissConfigFix(applied.checkId)}>
-        Dismiss
-      </Button>
+      <Button onClick={() => void actions.undoConfigFix(applied.checkId)}>Undo</Button>
+      <Button onClick={() => actions.dismissConfigFix(applied.checkId)}>Dismiss</Button>
     </div>
   );
 }

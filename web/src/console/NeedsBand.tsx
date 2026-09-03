@@ -117,8 +117,10 @@ function closeTicketFor(task: HumanTask, view: CockpitView): boolean {
 /**
  * What answers this ask — the shared component that owns its verdict, wired the
  * way the stamp desk and the bench wire it. `look` is the one seam a station
- * passes — [`Button`](../components/button.tsx)'s own props — so the console's
- * buttons and a modal's are one component wearing two faces.
+ * passes — [`Button`](../components/button.tsx)'s own props. It is a weight now
+ * rather than a family: the console draws the app's button like everything else,
+ * and what a station still chooses is whether its row wants the solid one or the
+ * quiet one.
  *
  * Null means the row's source is no longer in the snapshot, which is also how the
  * ask panel closes itself: the answer settles the row, the next snapshot drops
@@ -156,7 +158,7 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
         <div className="cn-acts">
           <HumanTaskActions
             task={task}
-            look={{ family: 'console' }}
+            look={{ tone: 'secondary' }}
             noteOnDone={noteOwedOnDone(task, view)}
             onDone={(id, note) => actions.completeHumanTask(id, note)}
             onDecline={(id, note) => actions.declineHumanTask(id, note)}
@@ -196,7 +198,6 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
         <div className="cn-acts">
           <AsyncButton
             tone="primary"
-            family="console"
             onClick={() => actions.setIssueAppraisal(issue.number, 'workable')}
             title="Work it anyway — the harness stops holding pickup and runs a cycle now"
           >
@@ -239,14 +240,12 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
         <div className="cn-acts">
           <AsyncButton
             tone="primary"
-            family="console"
             onClick={() => actions.setIssueProfile(issue.number, proposed)}
             title={`Pin this goal to “${proposed}” and let the funnel move`}
           >
             Use “{proposed}”
           </AsyncButton>
           <AsyncButton
-            family="console"
             onClick={() => actions.setIssueProfile(issue.number, pinned)}
             title={
               pinned === null
@@ -294,17 +293,10 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
           Resuming re-opens that conversation where it stopped.
         </p>
         <div className="cn-acts">
-          <AsyncButton
-            tone="primary"
-            family="console"
-            onClick={() => actions.resumeAgent(agent.id)}
-            pendingLabel="Resuming…"
-          >
+          <AsyncButton tone="primary" onClick={() => actions.resumeAgent(agent.id)} pendingLabel="Resuming…">
             Resume
           </AsyncButton>
-          <Button family="console" onClick={() => actions.select(agent.id)}>
-            Open transcript
-          </Button>
+          <Button onClick={() => actions.select(agent.id)}>Open transcript</Button>
         </div>
       </>
     );
@@ -443,7 +435,7 @@ function WatchFinding({
       <div className="cn-acts">
         <HumanTaskActions
           task={task}
-          look={{ family: 'console' }}
+          look={{ tone: 'secondary' }}
           noteOnDone={null}
           onDone={(id, note) => actions.completeHumanTask(id, note)}
           onDecline={(id, note) => actions.declineHumanTask(id, note)}
@@ -451,7 +443,6 @@ function WatchFinding({
         />
         {canRaise && (
           <Button
-            family="console"
             onClick={() => setRaising(true)}
             title="Raise a bug from this reading — the numbers ride as your own report, and the bug is related back to this goal"
           >
@@ -562,7 +553,6 @@ function AreaPathAsk({
       <div className="cn-acts">
         <AsyncButton
           tone="primary"
-          family="console"
           onClick={() => actions.setIssueAreaPath(issue.number, proposed)}
           title={`File this goal under “${proposed}”`}
         >
@@ -584,7 +574,6 @@ function AreaPathAsk({
               ))}
             </select>
             <AsyncButton
-              family="console"
               disabled={chosen === ''}
               onClick={() => actions.setIssueAreaPath(issue.number, chosen)}
               title="File this goal under the area you picked"
@@ -594,7 +583,6 @@ function AreaPathAsk({
           </>
         )}
         <AsyncButton
-          family="console"
           onClick={() => actions.setIssueAreaPath(issue.number, null)}
           title="This goal wants no area path — stop asking"
         >

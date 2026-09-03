@@ -12,9 +12,7 @@ export function Panel({ title, onClose, children }: { title: string; onClose: ()
     <Modal face="panel" label={title} onClose={onClose}>
       <header className="cn-panel-head">
         <h2>{title}</h2>
-        <Button family="console" onClick={onClose}>
-          Close
-        </Button>
+        <Button onClick={onClose}>Close</Button>
       </header>
       {children}
     </Modal>

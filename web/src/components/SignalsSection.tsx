@@ -75,14 +75,12 @@ export function SignalsSection({
       )}
       <div className="cn-sig-add">
         <Button
-          family="console"
           onClick={() => setOpen('signal')}
           title="Something that should not be happening: an exception, a failure, a retry. Needs a second query proving the code path runs."
         >
           Add a signal
         </Button>
         <Button
-          family="console"
           onClick={() => setOpen('measure')}
           title="One number: a percentile, a rate, a duration. Needs a threshold, or the baseline it is compared against."
         >
@@ -154,26 +152,19 @@ function SignalRow({
       </div>
       <div className="cn-sig-ctrls">
         {check.live ? (
-          <Button family="console" onClick={onEdit}>
-            Edit
-          </Button>
+          <Button onClick={onEdit}>Edit</Button>
         ) : (
-          <AsyncButton family="console" onClick={() => onRule(check.id, true)}>
-            Accept &amp; run
-          </AsyncButton>
+          <AsyncButton onClick={() => onRule(check.id, true)}>Accept &amp; run</AsyncButton>
         )}
         {check.live ? (
           <ConfirmButton
-            family="console"
             label="Delete"
             confirmLabel="Delete it"
             title="Drop this check and the readings taken against it. A check the plan declares comes back on the next replan."
             onConfirm={onDelete}
           />
         ) : (
-          <AsyncButton family="console" onClick={() => onRule(check.id, false)}>
-            Decline
-          </AsyncButton>
+          <AsyncButton onClick={() => onRule(check.id, false)}>Decline</AsyncButton>
         )}
       </div>
     </div>
@@ -397,7 +388,6 @@ function CheckForm({
         <div className="cn-sig-ctrls">
           <AsyncButton
             tone="primary"
-            family="console"
             disabled={refusal !== null}
             onClick={async () => {
               const said = await onSave(declaration(draft));
@@ -410,17 +400,9 @@ function CheckForm({
           >
             Save &amp; run
           </AsyncButton>
-          <Button family="console" onClick={onClose}>
-            Cancel
-          </Button>
+          <Button onClick={onClose}>Cancel</Button>
           {onDelete !== null && (
-            <ConfirmButton
-              family="console"
-              className="cn-sig-spacer"
-              label="Delete"
-              confirmLabel="Delete it"
-              onConfirm={onDelete}
-            />
+            <ConfirmButton className="cn-sig-spacer" label="Delete" confirmLabel="Delete it" onConfirm={onDelete} />
           )}
         </div>
       </div>

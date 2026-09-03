@@ -110,10 +110,10 @@ export function useAsyncAction(): {
  * A button that runs an async `onClick` and shows its progress inline.
  *
  * Its look is [`Button`](./button.tsx)'s, through the same {@link buttonClass}
- * seam: `tone`, `size` and `family` are props and `className` is shape only. It
+ * seam: `tone`, `ghost` and `size` are props and `className` is shape only. It
  * used to take the whole class string and prepend `btn` to it unconditionally,
- * which is how the nine console-family async buttons went out wearing
- * `class="btn cn-btn"` — two base families on one element.
+ * which is how the nine console buttons went out wearing `class="btn cn-btn"` —
+ * two base families on one element, back when there were two.
  *
  * `pendingLabel` replaces the whole label while in flight (pass a
  * bare spinner for icon-only buttons); otherwise a spinner is prepended.
@@ -129,7 +129,6 @@ export function AsyncButton({
   tone,
   ghost,
   size,
-  family,
   className,
   disabled,
   pendingLabel,
@@ -144,7 +143,7 @@ export function AsyncButton({
 } & ButtonLook &
   Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onClick' | 'className' | 'disabled' | 'children'>) {
   const { phase, refusal, run } = useAsyncAction();
-  const cls = buttonClass({ tone, ghost, size, family, className }, flashClass(phase));
+  const cls = buttonClass({ tone, ghost, size, className }, flashClass(phase));
   return (
     <button
       type="button"
@@ -192,13 +191,12 @@ export function SubmitButton({
   tone,
   ghost,
   size,
-  family,
   className,
 }: {
   phase: AsyncPhase;
   children: ReactNode;
 } & ButtonLook) {
-  const cls = buttonClass({ tone, ghost, size, family, className }, flashClass(phase));
+  const cls = buttonClass({ tone, ghost, size, className }, flashClass(phase));
   return (
     <button type="submit" className={cls} disabled={phase === 'pending'} aria-busy={phase === 'pending'}>
       {phase === 'pending' && <span className="spinner" aria-hidden />}

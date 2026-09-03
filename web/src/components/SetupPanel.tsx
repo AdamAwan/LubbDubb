@@ -142,20 +142,18 @@ export function SetupPanel({ onClose }: { onClose: () => void }): React.JSX.Elem
       </div>
 
       <div className="cn-setup-foot">
-        <Button family="console" onClick={onClose}>
-          Cancel
-        </Button>
+        <Button onClick={onClose}>Cancel</Button>
         <span className="cn-setup-hint">
           {preview === null
             ? 'Nothing is written until you have seen the file.'
             : 'Keys your team’s project file already sets are absent on purpose.'}
         </span>
         {preview === null ? (
-          <Button tone="primary" family="console" disabled={busy || resolved === null} onClick={() => void review()}>
+          <Button tone="primary" disabled={busy || resolved === null} onClick={() => void review()}>
             {busy ? 'Preparing…' : 'Show me the file'}
           </Button>
         ) : (
-          <Button tone="primary" family="console" disabled={busy} onClick={() => void write()}>
+          <Button tone="primary" disabled={busy} onClick={() => void write()}>
             {busy ? 'Writing…' : 'Write the file'}
           </Button>
         )}
@@ -300,7 +298,7 @@ function Done(props: { changes: readonly ConfigChange[]; onClose: () => void }):
       </p>
       <div className="cn-setup-foot">
         <span className="cn-setup-hint">Restart the harness to bring the rest in.</span>
-        <Button tone="primary" family="console" onClick={props.onClose}>
+        <Button tone="primary" onClick={props.onClose}>
           Done
         </Button>
       </div>
