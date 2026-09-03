@@ -95,7 +95,7 @@ doing, whether anything is stuck, and sometimes to change it.
 
 ### Steering it
 
-Eight verbs. The first four do less than they sound like:
+Nine verbs. The first five do less than they sound like:
 
 - **\`fleet_control\`** — \`cap\`, \`paused\`, \`pulse\`. Lowering the cap or
   pausing **never stops a running agent**; it stops the next dispatch. Both are in
@@ -110,6 +110,12 @@ Eight verbs. The first four do less than they sound like:
   tool call. **Two kinds are not yours**: a proposal and a crashed agent's question
   are decisions with consequences you cannot see, and each row says so in its
   \`settledBy\`. Say what is waiting and let the operator take them in the cockpit.
+- **\`human_task_settle\`** — the \`humanTasks\` rows, which are **work, not
+  questions**, and are never answered with \`escalation_answer\` (their ids are not
+  escalation ids, and it refuses them). \`done\` only once the thing has actually
+  been done — the operator is the one who does it, so ask rather than assume — and
+  \`declined\` takes a required note, which is what a replan reads. Declining a
+  task backing a plan part leaves that part blocked rather than concluded.
 - **\`goal_control\`** — \`watched\` is the tracker tag that opts work in or out
   (and cascades to everything under a container); \`priority\` is the harness's own
   mark and only re-orders its queue; \`profile\` pins which model the next dispatch
