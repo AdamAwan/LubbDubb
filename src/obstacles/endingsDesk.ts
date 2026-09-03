@@ -36,7 +36,7 @@ type DocsPrompt = (vars: Record<string, string>) => string;
  * note's documentation job, which is an ordinary job the dispatcher ranks and the
  * cap bounds like any other — and it is bounded once more on top of that, to one in
  * flight, because the cut bounds how many agents run and not how many of them this
- * subsystem may be. → `docs/spec/32-obstacles.md#how-an-obstacle-ends`
+ * subsystem may be. → `docs/spec/27-obstacles.md#how-an-obstacle-ends`
  */
 export class ObstacleEndingsDesk {
   /**

@@ -230,7 +230,7 @@ report a fresh one forever.
 A reading is not re-asked inside `environmentHealthIntervalMs` (default 5 minutes), which is its own
 key rather than `environmentProbeIntervalMs` because the costs differ in kind: a probe is asked only
 while something is unconfirmed, and this is asked on every declaring environment whether or not
-anything has shipped. That number *is* the standing cost of the feature, and it is also how stale the
+anything has shipped. That number _is_ the standing cost of the feature, and it is also how stale the
 worst reading on the glass may be while somebody is looking at it.
 
 **Nothing reads what this pass writes.** It opens no gate, holds no obligation, files no bench row and
@@ -249,7 +249,7 @@ place it is actually read, "is anything broken out there", has no goal selected.
 
 It is the one card there that draws **nothing** when it is empty, which is the deliberate exception to
 that page's rule that an empty card still draws: an environment surface on a deployment that
-configured none is a row of question marks announcing a feature as broken. An environment that *is*
+configured none is a row of question marks announcing a feature as broken. An environment that _is_
 configured and has not answered yet draws its row and says so.
 
 The tones are ones the cockpit already defines, so a theme switch needs no new token. `unknown` takes
@@ -300,7 +300,7 @@ The decision is pure and lives with the other three categories in `web/src/cockp
   no chart of last week's outages, and the reason is the one above — this is a status.
 - **An environment's health while nothing else is configured.** `environments` is still the off
   switch for the whole subsystem: `health` alone on an entry with no `at` is not a configuration the
-  policy allows, because `at` is what an environment *is* here.
+  policy allows, because `at` is what an environment _is_ here.
 
 ## Configuring an environment
 
@@ -716,12 +716,12 @@ Stated so a later change does not discover them as bugs:
 
 Five tables, described in [14](14-persistence.md), all owned by `EnvironmentStore`:
 
-| Table                       | One row per               | Written                                               |
-| --------------------------- | ------------------------- | ----------------------------------------------------- |
-| `goal_landings`             | merged pull request       | `OR IGNORE` — a merge is a settled fact               |
-| `environment_reach`         | `(sha, environment)`      | `OR REPLACE` — an observation of something that moves |
-| `goal_arrivals`             | `(goal_ref, environment)` | `OR IGNORE` — arriving twice is not two arrivals      |
-| `environment_gate_releases` | goal                      | `OR REPLACE`, deleted to clear                        |
+| Table                       | One row per               | Written                                                          |
+| --------------------------- | ------------------------- | ---------------------------------------------------------------- |
+| `goal_landings`             | merged pull request       | `OR IGNORE` — a merge is a settled fact                          |
+| `environment_reach`         | `(sha, environment)`      | `OR REPLACE` — an observation of something that moves            |
+| `goal_arrivals`             | `(goal_ref, environment)` | `OR IGNORE` — arriving twice is not two arrivals                 |
+| `environment_gate_releases` | goal                      | `OR REPLACE`, deleted to clear                                   |
 | `environment_health`        | environment               | replaced each reading, `changed_at` held across an unchanged one |
 
 `goal_landings` is keyed on the pull request for `branch_reaps`' reason — a branch name is reusable,

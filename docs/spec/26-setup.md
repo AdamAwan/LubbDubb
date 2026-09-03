@@ -136,18 +136,18 @@ outlive the first three minutes on purpose. That is the argument for their being
 operator finds out on a Tuesday that a token expired, and `eligibility` is how they find out that a
 filter of their own is hiding every tagged item on the tracker.
 
-| Check          | Bad when                                                | Why it is silent                                                                                                                 |
-| -------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `pointed`      | both capabilities are still `fake`                      | the invented world reads exactly like a real one                                                                                 |
-| `credential`   | no route into the selected provider answers             | asked of **both** capabilities, since a deployment may read issues from one provider and PRs from another                        |
-| `identity`     | `userId` is unset                                       | tickets it files go unassigned and its branches are not named as yours ([02](02-configuration.md#userid))                        |
+| Check          | Bad when                                                | Why it is silent                                                                                                                                                |
+| -------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pointed`      | both capabilities are still `fake`                      | the invented world reads exactly like a real one                                                                                                                |
+| `credential`   | no route into the selected provider answers             | asked of **both** capabilities, since a deployment may read issues from one provider and PRs from another                                                       |
+| `identity`     | `userId` is unset                                       | tickets it files go unassigned and its branches are not named as yours ([02](02-configuration.md#userid))                                                       |
 | `fleet`        | the pool is selected and `fleetId` is unset             | the fleet publishes nothing and reads nobody, which is what a deployment that never opted in looks like ([28](28-cross-fleet-pool.md#a-fleet-with-no-name-yet)) |
-| `eligibility`  | tagged work exists and none of it is yours              | the fleet is idle **and correct**, which is the hardest state to tell from broken                                                |
-| `wiring`       | nothing tagged, and nothing ever picked up              | the same, on the one day an empty panel is unreadable because none has ever been full                                            |
-| `agent`        | `agentMode` is `raw`, or `claudeCommand` is not on PATH | a `raw` dispatch writes a transcript and never calls a model                                                                     |
-| `billing`      | `ANTHROPIC_API_KEY` is in the environment               | agents inherit it and the CLI prefers a key with no prompt, so the whole fleet bills the API ([02](02-configuration.md#secrets)) |
-| `prompt-tools` | a prompt override names a tool `raise` replaced         | the tool still works, so nothing is broken — the deployment is one withdrawal away from a call refused with nothing in the logs  |
-| `restart`      | the file holds changes this process is not running      | `warn`, not `bad` — the harness works, it is just not working on what the operator last wrote                                    |
+| `eligibility`  | tagged work exists and none of it is yours              | the fleet is idle **and correct**, which is the hardest state to tell from broken                                                                               |
+| `wiring`       | nothing tagged, and nothing ever picked up              | the same, on the one day an empty panel is unreadable because none has ever been full                                                                           |
+| `agent`        | `agentMode` is `raw`, or `claudeCommand` is not on PATH | a `raw` dispatch writes a transcript and never calls a model                                                                                                    |
+| `billing`      | `ANTHROPIC_API_KEY` is in the environment               | agents inherit it and the CLI prefers a key with no prompt, so the whole fleet bills the API ([02](02-configuration.md#secrets))                                |
+| `prompt-tools` | a prompt override names a tool `raise` replaced         | the tool still works, so nothing is broken — the deployment is one withdrawal away from a call refused with nothing in the logs                                 |
+| `restart`      | the file holds changes this process is not running      | `warn`, not `bad` — the harness works, it is just not working on what the operator last wrote                                                                   |
 
 ### The credential check asks both routes
 
@@ -228,7 +228,7 @@ whole argument stated backwards.
 
 `report_finding`, `knowledge_propose`, `knowledge_notice` and `knowledge_contradict` are **retired**:
 `raise` is the one door, and advertising six ways to file one observation is the taxonomy the intake
-removed ([27](27-knowledge.md#the-doors-that-closed-and-what-is-left-of-them)).
+removed ([27](27-obstacles.md#the-intake)).
 
 They spent a release registered-but-named-nowhere rather than deleted, for one reason — an operator's
 prompt override written before the intake may still name one, and unlike a `PromptId`, whose removal
@@ -402,7 +402,7 @@ mount of an Azure deployment with no PAT, so a yes is remembered for a short win
 subprocess. It is also the one asked most often: `GET /api/setup` runs on every cockpit mount and
 every config apply, and `POST /api/setup/resolve` sits debounced behind the panel's two fields — so
 each was a fresh client and a fresh `GET /user` for an answer that is fixed for a token's lifetime.
-`RealSetupProbes` remembers it, keyed by credential *and* target. Only an answer is remembered: "the
+`RealSetupProbes` remembers it, keyed by credential _and_ target. Only an answer is remembered: "the
 credential did not answer" is the reading this panel exists to correct, so it is re-asked the moment
 the operator exports a token and the page re-reads. → [15](15-integrations.md#rate-limits)
 

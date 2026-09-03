@@ -1,27 +1,33 @@
 # 28 — The cross-fleet pool
 
-Every deployment learns in isolation. [27](27-knowledge.md) models how far a fact carries as a
-first-class axis, and its widest distance is `fleet` — meaning _that one operator's_ fleet. So a
-common problem is solved once per engineer, at full price, on every machine: three people on one
-project each pay an agent to discover that the native builds need `npm ci` before the tests, and none
-of the three ever finds out the others did.
+Every deployment measures itself in isolation. What one fleet cost, where it spent it and what coming
+back to a pull request took is a reading each operator has of their own laptop, and of nothing else —
+so a person deciding whether this is working reads one machine's number with nothing to read it
+against.
 
-This is the distance above `fleet`. It carries two things over one mechanism — the claims one fleet
-has vouched for, so other fleets' agents are not sent to buy them again, and a daily digest of what
-the fleet spent and what coming back to a pull request cost it, so a person can read where the money
-goes across a company rather than across a laptop.
+This is the distance above one fleet. It carries a **daily digest** of what a fleet spent and what its
+returns to pull requests cost, so a person can read where the money goes across a company rather than
+across a laptop — plus, on a person's own say-so, one [shared review pack](#a-third-document-rides-this-and-is-not-a-claim)
+at a time.
 
-**It is a distribution problem and not a measurement one.** `knowledge_facts` already holds claims
-with corroboration and contradiction; `src/issueSpend.ts` already prices a goal; `src/remedyInsights.ts`
-already folds why the fleet came back and what it cost; `src/spendInsights.ts` already partitions
-spend by phase. Nothing here measures anything new. It moves what exists.
+**It carried a second thing and no longer does.** A fleet's vouched **claims** crossed here too, so
+other fleets' agents were not sent to buy them again — and the claim store behind that arm is gone
+([27](27-obstacles.md#what-the-claim-store-left-behind)). There is nothing vouched to publish, and an
+obstacle is about _this_ repository's state right now, which crosses to nobody. The claims arm went
+with it: no `claims.json`, no importer, no mirror of other fleets' prose, and no per-claim opt-out.
+What is documented below as the mechanism — one writer per namespace, a whole-document put, an
+envelope with the version on the outside — is unchanged and carries the digest alone.
+
+**It is a distribution problem and not a measurement one.** `src/issueSpend.ts` already prices a goal;
+`src/remedyInsights.ts` already folds why the fleet came back and what it cost; `src/spendInsights.ts`
+already partitions spend by phase. Nothing here measures anything new. It moves what exists.
 
 ## What it is not
 
-**Not a central mirror of the store.** The volume is wrong, the data-classification surface is wrong,
-and — the objection that actually decides it — a mirror makes the pool authoritative rather than
+**Not a central mirror of anybody's store.** The volume is wrong, the data-classification surface is
+wrong, and — the objection that actually decides it — a mirror makes the pool authoritative rather than
 derived. The moment the pool is the source of truth, an offline laptop is a fleet that has lost its
-knowledge. Every fleet's SQLite stays the truth about that fleet, and everything published is
+own record. Every fleet's SQLite stays the truth about that fleet, and everything published is
 re-derivable from it.
 
 **Not a shared page that tooling edits.** That is the failure mode this design exists to avoid: N
@@ -30,9 +36,9 @@ write one address, so a conflict is not a thing that can happen — see [One wri
 namespace](#one-writer-per-namespace).
 
 **Not authoritative about anything.** Nothing arriving from the pool is dispatched on, held on, ranked
-by or injected into a prompt on its own. [27](27-knowledge.md)'s gate is unchanged in every respect:
-a claim reaches agents when two independent voices agree, and reaches every agent when an operator
-says so.
+by or injected into a prompt. It is read by a page and by nothing else — which is stronger now than it
+was when claims crossed here, because there is no longer an arm that could propose anything locally at
+all.
 
 ## The transport
 
@@ -57,7 +63,7 @@ interface PoolFetchedDocument {
 `unpublish` is the one delete, and it is narrow on purpose: only a
 [shared review pack](#a-third-document-rides-this-and-is-not-a-claim) is ever removed — pruned on the
 pull request's retention clock, or withdrawn because somebody unshared it — so nothing can be asked to
-remove `claims.json`. It is inside this fleet's own directory, so one writer per namespace
+remove `digest.json`. It is inside this fleet's own directory, so one writer per namespace
 is untouched, and removing what is not there is a success — the inverse of a whole-document put has to
 be as retryable as one.
 
@@ -94,8 +100,8 @@ an hourly cadence costs a hash rather than a commit.
 
 ### The payload is opaque to the transport
 
-Versioned JSON. The transport moves bytes; the layer above understands claims and digests. A text-only
-substrate that stores a document in a fenced code block is first-class.
+Versioned JSON. The transport moves bytes; the layer above understands what a digest and a pack are. A
+text-only substrate that stores a document in a fenced code block is first-class.
 
 ### `canRead: false` means publish-only
 
@@ -214,39 +220,23 @@ rather than at write time. A prefix is a coordinate an operator types once, so i
 rest of the coordinates are, and the failure is a boot error naming the key rather than a write into
 whatever the path resolved to.
 
-## Two documents, one envelope
+## One document, one envelope
 
-A claim and a digest differ in every property that decides how a document is written, read, retained
-and consented to.
-
-|              | Claims                                        | Digest                              |
-| ------------ | --------------------------------------------- | ----------------------------------- |
-| Changes when | an operator vouches — weekly at most          | a day's numbers move — hourly       |
-| Content      | free text an agent wrote                      | numbers over closed vocabularies    |
-| Read by      | the importer, per fleet, sentence by sentence | an aggregator, summed across fleets |
-| Retention    | while the claim is true                       | ninety days, rolling                |
-
-So they are two documents at two addresses, each with a companion a person can read
+The digest is published at one address, with a companion a person can read
 ([below](#the-human-readable-companion)):
 
 ```
-<pool.path>/fleets/<fleetId>/claims.json   <pool.path>/fleets/<fleetId>/claims.md
 <pool.path>/fleets/<fleetId>/digest.json   <pool.path>/fleets/<fleetId>/digest.md
 ```
 
-**The cadence difference is the one that decides it.** One document means republishing the claim text
-every time a day's numbers move, so the fleet's file grows a commit an hour with the knowledge diff
-buried in it — and the one history worth having, _when did this fleet start believing this_, becomes
-unreadable. Two files, and the claims file's own history is that record for free.
+**It stays a `kind` on an envelope rather than a bare body**, and that is worth stating now there is
+one of them. `PoolDocument` is still a discriminated union — the shared review pack is a second kind,
+published by a person and never polled — so the layer above splits on `kind` and the transport stays
+opaque. A document whose kind the parser does not know is skipped **per document**, which is what a
+second clock document costs to add and what a stranger's file in a shared wiki costs to ignore.
 
-**The classification difference is the one that would be expensive to get wrong.** Digests are numbers
-over enums; claims are prose that can quote code. Two sections of one document make the consent
-decision all-or-nothing, and a project that may contribute cost figures but not claim text would have
-no way to say so.
-
-One `fetch()` returns both. `PoolDocument` is a discriminated union under a shared envelope and the
-layer above splits on `kind`, so the transport stays opaque and one writer per namespace becomes one
-writer per **address** — strictly stronger, and unchanged in every property that matters.
+**One writer per namespace becomes one writer per address**, which is strictly stronger and unchanged
+in every property that matters.
 
 ### The envelope
 
@@ -265,19 +255,19 @@ it is checked rather than assumed.
 ## The human-readable companion
 
 A pool lives where people already are — a team's wiki, a repository somebody browses on the web. What
-they find there is a JSON document written for an importer, and the fleet's own knowledge is
+they find there is a JSON document written for an aggregator, and the fleet's own numbers are
 consequently readable only by the fleets. So each document is published with a rendering of itself
-beside it, at the same address: markdown for the two clock documents, and for a
+beside it, at the same address: markdown for the digest, and for a
 [shared review pack](#a-third-document-rides-this-and-is-not-a-claim) the HTML companion
 [31](31-review-packs.md#reading-it) specifies. `poolCompanion` in `src/pool/companion.ts` is the one
 place that decides which, because what matters is a property of the pair — every document goes out
 with its companion, written and committed together.
 
-**It is derived output and never an input.** `fetch` names `claims.json` and `digest.json` by name, so
-nothing ever reads a companion back — which is the whole of why it is safe to have one. A markdown file
-the importer parsed would be a second grammar for one fact, free to disagree with the JSON the moment
-either is edited, and it would disagree silently: a hand-corrected sentence in a wiki would arrive at
-every other fleet as a claim the origin never vouched for. `renderPoolMarkdown` in `src/pool/markdown.ts`
+**It is derived output and never an input.** `fetch` names `digest.json` by name, so nothing ever
+reads a companion back — which is the whole of why it is safe to have one. A markdown file the
+aggregator parsed would be a second grammar for one number, free to disagree with the JSON the moment
+either is edited, and it would disagree silently: a hand-corrected figure in a wiki would arrive at
+every other fleet as a reading the origin never took. `renderPoolMarkdown` in `src/pool/markdown.ts`
 is a pure function of the same `PoolDocument` the JSON is serialised from, and holds no state of its own.
 
 **The two files are written and committed together.** The write set is unchanged — still exactly
@@ -301,101 +291,10 @@ agreeing in the data.
 write on a publish that was happening anyway, and a fleet that published one and not the other would be
 a pool whose wiki is right for some fleets and stale for others.
 
-## The claims arm
-
-### What leaves
-
-A fact is in the fleet's document when all four are true:
-
-- its reach is `lookup` or `injected`,
-- its `ruled_at` is not null,
-- its lifetime is standing,
-- it is not marked `keepLocal`.
-
-**`ruled_at` is the vouch, and reading it is what makes the gate mechanical.** It is stamped on any
-move an operator makes, including one that changes nothing ([27](27-knowledge.md#reach--how-far-it-carries)),
-so _a person has read this sentence and ruled on it_ is a column rather than a policy somebody has to
-keep true. The awkward case closes by construction: a claim carried to `lookup` by two agents agreeing
-and never seen by a person carries a null `ruled_at` and does not leave the machine.
-
-### Three refusals
-
-**A notice never crosses.** An expiring fact is a report on today, and by the time it has crossed a
-substrate it is stale. Its resolution condition is worse: `ci-check-green` names a check on a pull
-request in a repository the reader cannot see, so nothing at the far end can evaluate it and the clock
-silently becomes the whole mechanism on the one kind written to have more than one. This is
-[27](27-knowledge.md#what-may-be-committed-to-the-repository)'s argument about committing a notice to
-the repository, one level up and unchanged.
-
-**Only `fleet` scope crosses.** A `goal:` scope dies with its goal, and a `check:` scope names another
-fleet's pipeline — a provider identifier that is fragile _within_ one fleet
-([27](27-knowledge.md#scope--who-it-is-relevant-to)) and meaningless outside it.
-
-**A `graduated` claim never crosses.** It is in the repository now. For a fleet working the same
-repository, git already carries it and publishing would pay for one sentence twice; for a fleet working
-a different one, it was a claim about a repository they do not have. It is
-[27](27-knowledge.md#graduated-is-not-the-top-of-a-ladder--it-is-a-different-medium)'s medium argument
-making itself again.
-
-### What each entry carries
-
-`id` (the origin's own fact id), `claim`, `where`, `vouchedAt`, `corroborations` and `disputes` as
-counts at origin, and `evidence` — the corroborators' own words, capped.
-
-Three omissions, each load-bearing:
-
-- **No claim key.** It is recomputed locally through `src/claims.ts`. A key carried in the document is
-  a second matcher, free to disagree with the one that actually decides whether an arriving claim joins
-  a local row — and it would disagree silently the first time a fleet on an older build published.
-- **No `aboutRef`, no `originRef`.** A ref points into a world the reader cannot see, and
-  `<Ref to={ref}/>` would draw it as a live link to a pull request on somebody else's tracker
-  ([17](17-cockpit.md#links)). What survives the crossing is the words.
-- **No lifetime and no scope**, because of the three refusals above. Everything published stands, and
-  everything published is fleet-scoped.
-
-### What arriving means
-
-An arriving claim is proposed locally through the same path an agent's claim takes, so `claimsMatch`
-decides whether it is a new proposal or agreement with something this fleet already believes, and
-nothing has to know which in advance.
-
-**It lands with exactly one corroboration, attributed to the origin fleet — never the origin's count.**
-A fleet arriving with five corroborations would arrive already past `lookup`, which is auto-promotion
-crossing a machine boundary: the one transition [27](27-knowledge.md#corroboration) reserves for a clock
-or an operator. The origin's counts ride as provenance drawn on the row, in the class that document
-calls a reading and never a trigger. The dispute count is the more useful of the two — _the fleet that
-vouched for this has since had two agents contradict it_ is exactly what an operator needs in front of
-them before promoting it here.
-
-**A pooled corroboration's voice is the origin fleet, and one fleet is one voice** however many entries
-it publishes and however many times it is polled. `distinctCorroborators` counts over goal and session
-transitively today; a pooled row has neither, so the origin fleet folds into that same union in that one
-function rather than becoming a second count beside it.
-
-**This fleet's own document is read back and never landed.** `fetch` returns everyone's, mine included,
-which is what lets the page say whether the last publish actually arrived — but importing it would
-propose this fleet's own claims back to itself carrying its own fleet id as a second voice, and every
-claim an operator vouched for would cross to `lookup` again on the next pulse wearing evidence it had
-itself written. Nothing errors, and it looks exactly like another fleet agreeing.
-
-**A claim this operator has rejected stays rejected, whoever else vouches for it.** An arrival goes
-through `proposeFact` like any other, so the rejection bar refuses it by name. The mirror still records
-that somebody believes it — a reading the operator can act on, and never a way around their own ruling.
-
-### Withdrawal
-
-A claim retired, rejected or superseded at origin is simply not in the next document. No tombstone, no
-delete verb, no ordering — the whole-document put paying for itself again.
-
-**A vanished arrival does not delete the local fact.** By then it may carry local corroborations of its
-own, and deleting on a remote operator's ruling would let one person prune another's store. What happens
-instead is that the withdrawal is recorded and drawn: _the fleet that vouched for this has withdrawn it_.
-A reading, and never a trigger.
-
 ## The project name
 
-Pool-wide, `fleet` scope no longer implies _this repository_. A claim about one project's lint
-configuration is noise to a fleet working a different one, and nothing in the sentence says which.
+Pool-wide, one fleet's numbers are only comparable to another's inside one project: a check name is a
+provider identifier and two pipelines' `test (windows)` are two different jobs.
 
 **The name is declared in `lubbdubb.project.json`, committed with the repository:**
 
@@ -406,8 +305,8 @@ configuration is noise to a fleet working a different one, and nothing in the se
 A committed file travels with the repository. Every clone, every fork and every teammate's deployment
 reads the same string with nobody coordinating — which derivation from `github.owner`/`github.repo`
 cannot match, because it breaks at exactly the fork, mirror and rename cases. A fork keeps the file and
-therefore shares with upstream by default, which is right: a fork hits the same walls. A hard fork that
-has genuinely diverged edits one line.
+therefore shares with upstream by default, which is right: a fork runs the same pipeline. A hard fork
+that has genuinely diverged edits one line.
 
 **There is no derivation fallback.** A pool switched on against a project that declares no name is a
 clear boot error naming the file and the key — the stance `src/integrations/registry.ts` already takes
@@ -419,57 +318,9 @@ layer ([02](02-configuration.md#precedence)), so overriding is possible by const
 normal thing and it costs what it sounds like: a fleet that overrides the name stops sharing with
 everyone else on its own project.
 
-**The name is stamped on each fact as it is written**, because that records what was true when the
-claim was learned rather than what is true when it is published. One additive column and one backfill,
-below.
-
-### The rule the name decides
-
-**The project name never takes part in claim matching.** Making it part of identity would fragment
-exactly the agreement this design exists to gain — the same objection [27](27-knowledge.md) makes about
-matching being inside a scope. What it decides is one thing:
-
-> The project name decides whether a **non-matching** arrival is proposed. It never decides whether a
-> **matching** arrival corroborates.
-
-| Arrival           | Matches a standing local claim | Matches nothing local                  |
-| ----------------- | ------------------------------ | -------------------------------------- |
-| Same project      | corroborates                   | proposed locally, awaiting a ruling    |
-| Different project | **corroborates**               | held in the mirror; proposed to nobody |
-
-Same project is full solve-once: a teammate vouched for something and it lands on your Knowledge page
-as a proposal with their agent's words behind it.
-
-Different project is self-selecting, and that asymmetry is the design. A claim about your project's
-lint configuration never reaches a fleet on another project, because no agent there will ever say that
-sentence. A claim about the toolchain — Windows refusing `rmdir` on a directory a live process holds
-as its cwd, a provider reporting `queued` for a check that never ran — crosses the moment the receiving
-fleet's own agent hits it, arriving as the corroboration that carries their own proposal to `lookup`.
-
-**Two fleets on two projects independently saying one sentence is itself the evidence that the sentence
-does not depend on the project.** No taxonomy, nobody asked to predict relevance to fleets they cannot
-see, and no second control at the vouch. It is [27](27-knowledge.md#corroboration)'s own logic applied
-one level up.
-
-**What it costs, stated plainly.** A cross-project claim does not save the first discovery. The
-receiving fleet still pays to learn it once; what it saves is the second agent onward instead of the
-fifth. Proposing everything to everybody is the alternative, and it is a triage page nobody opens —
-which is worth less than nothing.
-
-### The mirror
-
-Unmatched cross-project arrivals go to a mirror of the parsed documents, keyed on
-`(fleetId, factId)` — **not** into `knowledge_facts`.
-
-It is **derived and wholly replaceable**: rewritten on every poll, so dropping it and re-polling gives
-an identical one. That is what keeps the pool from becoming authoritative locally, and it is not a cost
-this rule adds — the mirror is the table the human-facing page reads anyway.
-
-**Nothing reads the mirror into a prompt, and no tool answers from it.** An agent asking
-`knowledge_ask` is answered from `knowledge_facts` exactly as it is today. Wiring the mirror to that
-tool is the largest surface in this design and the least evidenced part of it — it would put another
-team's unvouched prose in front of an agent — and it is deliberately not built until there is a pool
-with content in it to judge.
+**The name is on the document rather than on any row.** It was stamped onto each fact as it was
+written, because that recorded what was true when the claim was learned; the digest is derived per
+publish from rows the fleet already holds, so the envelope carries it and nothing needs a column.
 
 ## The digest arm
 
@@ -498,13 +349,14 @@ free to disagree with the one that adds up.
 minority and reads as authoritative once summed across nine fleets — `src/remedyInsights.ts` already
 refuses to draw the causes without it. Without the second, a fleet running on a PTY contributes real
 work and no dollars and is drawn as a cheap fleet; a window in which nothing was measured answers null
-and never `$0.00`, which is [27](27-knowledge.md#what-it-costs)'s rule and the reason it exists.
+and never `$0.00`: unmeasured is never free, and a confident zero is the one reading that would be a
+lie.
 
 **Counts and dollars, never percentages.** A share summed across fleets is meaningless. The aggregator
 takes shares from summed counts.
 
 **The dollars are the existing per-account figure** — the filing agent's spend divided evenly across
-the accounts it filed, which is the only claim the data supports and is already stated on the local
+the accounts it filed, which is the only reading the data supports and is already stated on the local
 payload. Re-using it is what stops a fleet's contribution to the company page and its own panel
 disagreeing.
 
@@ -518,10 +370,8 @@ Within one project the names are comparable, because it is one pipeline. _That c
 last month across four engineers' fleets_ is the reading the whole digest arm is for.
 
 So `byCheck` is a **separate section**, and the aggregator's read of it takes a project name as an
-argument. Two sections rather than one with a flag, for the reason `knowledge_corroborations` and
-`knowledge_contradictions` are two tables ([27](27-knowledge.md#contradiction-and-why-it-does-not-delete)):
-a reader that forgot a filter would sum two unrelated pipelines, and two sections make that unreachable
-rather than merely wrong.
+argument. Two sections rather than one with a flag: a reader that forgot a filter would sum two
+unrelated pipelines, and two sections make that unreachable rather than merely wrong.
 
 **A normalised check bucket is refused.** Classifying every check into `lint` / `unit` / `build` / `e2e`
 would let names cross projects, and it is rejected twice over: it is a new measurement invented here
@@ -600,79 +450,68 @@ during a pause, during shutdown and during the upgrade handoff, which is the cla
 
 |                | Attempts when          | At the default cadence (30s busy, 5 minutes idle)         |
 | -------------- | ---------------------- | --------------------------------------------------------- |
-| Claims publish | the document is dirty  | the next pulse — 30s busy, up to five minutes idle        |
-| Claims poll    | every pulse            | the same                                                  |
+| Poll           | every pulse            | 30s busy, up to five minutes idle                         |
 | Digest publish | an hour since the last | the next pulse after the hour                             |
-| Backstop       | an hour since the last | re-derives **both** documents and compares                |
 | Packs          | a share is standing    | the next pulse — and prunes the pull requests long closed |
 
 ### The dirty flag is a hint. The content hash is the truth.
 
-An operator's ruling marks the claims document dirty and the next pulse publishes it. That is the fast
-path, and it is an optimisation rather than a correctness requirement: a flag can be lost to a crash
-between the ruling and the pulse, and that claim would then wait for somebody to rule on another one.
+**There is no fast path left**, and that is what the claims arm's departure took with it: nothing an
+operator does moves a number the way a ruling moved a claim, so the clock is the whole of what makes a
+publish due. The dirty flag survives on the row because a publish that fails leaves it set, and the
+next attempt is the next hour rather than a retry queue.
 
-So on the slow clock the desk re-derives both documents and compares their hash to what is published.
-Different, publish; same, do nothing. Anything the flag misses self-heals within the hour, and the same
-comparison is what makes an hourly cadence cheap — an idle fleet computes a hash and writes nothing,
+On the clock the desk re-derives the document and compares its hash to what is published. Different,
+publish; same, do nothing. The comparison is what makes an hourly cadence cheap — an idle fleet computes a hash and writes nothing,
 and an active fleet changes only today's rows, which a git substrate deltas well. Without it every idle
 fleet commits an identical file twenty-four times a day and the pool's history is almost entirely noise.
 
 ### The publish is never inside a route handler
 
 A route that did the network write would make an operator's click wait on a push to another continent,
-and a failed push there is a 500 on a ruling that **succeeded locally** — the operator told their
-decision failed when the store took it. The store write is the truth and the publish is a consequence.
+and a failed push there is a 500 on something that **succeeded locally** — the operator told their
+action failed when the store took it. The store write is the truth and the publish is a consequence.
+The one route that still asks for a publish is a pack share, and it marks and returns.
 
-**Dirty is a flag and not a queue.** Because the put is a whole replace, five rulings in a minute
-collapse to one publish and a failed push simply stays dirty. There is no pending-change list to lose,
-reorder or replay.
+**Dirty is a flag and not a queue.** Because the put is a whole replace, a failed push simply stays
+dirty. There is no pending-change list to lose, reorder or replay.
 
 ### On boot
 
-The first pulse polls — a deployment may have been off for a week — and runs the backstop rather than
-waiting an hour, so claims vouched while the pool was unreachable go out immediately rather than sixty
+The first pulse polls — a deployment may have been off for a week — and publishes rather than waiting
+an hour, so a day that ran while the pool was unreachable goes out immediately rather than sixty
 minutes later.
 
 ### What the timing actually is
 
-A vouch on one fleet reaches another fleet's page in **ten minutes worst case and about five typical**:
-up to one pulse to publish, up to one more to be polled. That is six to twelve times faster than the
-digest and well inside the gap to the receiving fleet's next dispatch, which is what the speed is for.
+A day's numbers reach another fleet's page within **about an hour**: up to one hour to publish, up to
+one pulse to be polled. The bucket is a day, so that is well inside the resolution anybody reads it at.
 It is not instant, and nothing here should be described as though it were.
 
 ## Data classification
 
-**A promoted claim is already off the machine.** It rides the system prompt of every dispatch to a model
-API, and that happened at the vouch. What the pool changes is who _inside the company_ can read it — a
-compartmentalisation question, not an exfiltration one, and right-sizing it is what keeps the controls
-below proportionate.
+**What crosses is numbers over closed vocabularies**, and that is the whole of the surface now the
+claims arm is gone. A digest row is a day, a key from an enum the harness owns (a spend phase, a remedy
+cause and guard) or a provider's own check name, a count and a dollar figure. There is no free text in
+it, and nothing an agent wrote crosses at all.
 
 The controls, in order:
 
 1. **The project opts in**, in a committed file, through code review. The strongest gate in the design,
    and it costs nothing extra.
-2. **The vouch is the per-claim gate.** A second click to publish would mean nothing is ever published:
-   the pool sits empty and looks like it is working, which is the failure [27](27-knowledge.md#retiring-is-not-rejecting)
-   names about a store nobody prunes, pointed the other way. What changes is the wording — the control
-   says _promote and publish_, so the consequence is not hidden.
-3. **`keepLocal`**, a per-claim opt-out for the one claim in fifty that quotes a customer's
-   configuration. Opt-out rather than opt-in, so the cheap vouch stays cheap.
-4. **Withdrawal is one click and immediate.** Demote, retire, reject or `keepLocal`, and the claim is not
-   in the next publish — which is on the vouch rather than on a timer.
-5. **A secret-pattern backstop that refuses and never rewrites.** A claim matching a high-confidence
-   structured pattern — a key, a token, a private-key header — is not published, and the row says why.
-
-**A scrub is refused.** A customer name is an English noun and no expression matches it. A scrub that
-mostly works is worse than none, because its output _looks_ sanitised, so nobody reads it carefully
-again and the one it missed is now trusted — it fails in the direction where the claim publishes looking
-clean. The backstop above is deliberately the opposite shape: it refuses, and refusing is loud. An
-allowlist is refused for a plainer reason: a claim is a sentence, and there is no structure to allow.
+2. **`byCheck` is the one field that carries anything a person chose**, and what it carries is a
+   provider's own job name. A deployment for which that is sensitive does not publish at all: it is
+   not optional, for [the rule below](#anything-summed-is-mandatory-anything-read-alone-may-be-withheld).
+3. **The secret-pattern backstop is gone with the prose it guarded.** It refused a claim matching a
+   high-confidence structured pattern — a key, a token, a private-key header — and there is no longer a
+   document with a sentence in it to refuse. A pool that carries prose again brings it back, refusing
+   rather than rewriting: a scrub that mostly works is worse than none, because its output _looks_
+   sanitised and the one it missed is now trusted.
 
 ### The limitation to read twice
 
 **The pool has no per-row access control and does not pretend to.** Anyone who can read the pool's
-substrate can read every claim and every number in it, including the ones a page chooses not to draw.
+substrate can read every number in it, including the ones a page chooses not to draw.
 
 That makes **who can read the pool** the actual security control here — not the vouch, not `keepLocal`,
 not the page. It is a deployment decision, and it is to be made deliberately: a pool readable by a whole
@@ -690,11 +529,12 @@ it is a scoreboard turn it off.
 
 ### Anything summed is mandatory; anything read alone may be withheld
 
-The rule the two above are instances of. `byCheck` has no off switch, because an optional field makes
-every aggregate silently partial — a project's total summed over whichever fleets left it on, rendering
-as a complete figure. A claim may be withheld by `keepLocal`, because claims are read one at a time and
-never totalled into a number anybody treats as complete: withholding one leaves nothing corrupted, only
-absent.
+The rule the two above are instances of, and it is the reason there is no per-field opt-out anywhere in
+the digest. `byCheck` has no off switch, because an optional field makes every aggregate silently
+partial — a project's total summed over whichever fleets left it on, rendering as a complete figure.
+The one thing that ever _was_ withheld was a single claim, through `keepLocal`, and that was allowed
+precisely because claims were read one at a time and never totalled: withholding one left nothing
+corrupted, only absent. Nothing in a digest has that shape, so nothing in a digest may be withheld.
 
 ## Configuration
 
@@ -752,7 +592,7 @@ So there are three things instead, and they have to be read together:
 
 - **The desk sits out.** `system.ts` wires no `PoolDesk` while the id is empty, exactly as it wires
   none for the `fake` provider. This is the part that must not be got wrong: the address is
-  `fleets/<fleetId>/claims.json`, so a `?? ''` publishing under `fleets//` puts a document with no
+  `fleets/<fleetId>/digest.json`, so a `?? ''` publishing under `fleets//` puts a document with no
   author in somebody else's repository, and the parse on the other side reads the directory name as
   the address ([The envelope](#the-envelope)). Nothing publishes and nothing polls until the fleet
   has a name.
@@ -793,10 +633,9 @@ commit — which it must be, since committing it is the whole mechanism of the p
 
 ### What is deliberately not a key
 
-- **Retention, and the UTC day.** Stated constants. `KNOWLEDGE_CHARS_PER_TOKEN`'s argument
-  ([27](27-knowledge.md#what-it-costs)) applies unchanged: an operator tuning either would be tuning
-  the answer rather than the thing measured, and two deployments' figures would stop being comparable
-  — which is the one thing a shared page exists to make them.
+- **Retention, and the UTC day.** Stated constants. An operator tuning either would be tuning the
+  answer rather than the thing measured, and two deployments' figures would stop being comparable —
+  which is the one thing a shared page exists to make them.
 - **Whether check names ship.** Anything that is summed is mandatory; an optional field makes every
   aggregate silently partial. See
   [Anything summed is mandatory](#anything-summed-is-mandatory-anything-read-alone-may-be-withheld).
@@ -822,20 +661,22 @@ no swallowed catches.
   an unreachable pool works exactly as a fleet without one.
 - **There is no backoff.** Retry is the next pulse — 30s at its fastest, five minutes on an idle
   fleet; exponential backoff on top would mostly mean a recovered pool taking an hour to be noticed. What it needs instead
-  is that a persistently failing pool is _visible_: one error record per failure, and the Knowledge page
+  is that a persistently failing pool is _visible_: one error record per failure, and the Insights page
   saying when this fleet last published successfully.
 
 ## In the cockpit
 
 The pool is drawn in two places and is a **view** in both. It is never a database.
 
-**On the Knowledge page**, a pooled claim is an ordinary row under the heading its reach puts it in,
-with its origin fleet drawn on it and the origin's corroboration and dispute counts as readings beside
-the local ones. Nothing about the page's grouping changes: a pooled claim is not lifted into a section
-of its own, for the reason a disputed claim is not
-([27](27-knowledge.md#narrowing-is-a-filter-and-a-filter-never-moves-a-claim)) — a section would draw a
-promotion nobody made. The page also says when this fleet last published, and which of its claims are
-in the pool now.
+**On the Insights page**, above the readings it is about: what this fleet has published and when, when
+the pool was last polled, and which fleets have been heard from — the ones ahead of this build drawn as
+such rather than as fleets that have published nothing. It draws nothing at all where no pool is
+configured, because an empty panel there would say in the operator's words that something is broken.
+
+It sat above the Knowledge page until that page went with the claim store behind it
+([27](27-obstacles.md#what-the-claim-store-left-behind)), and Insights is where it belongs anyway: it
+is a reading about what this fleet publishes and reads, on the tab that answers what the fleet is
+costing and reaching.
 
 **The shared insights page** reads the pulled documents live. It is not a committed artefact and there
 is no generated file, so there is nothing for two fleets to conflict on. It opens per project, draws
@@ -845,7 +686,7 @@ Where the page is, which project it is narrowed to and which window it is over a
 (`web/src/cockpit/place.ts`), never a `useState` — a surface held outside the query string is one the
 back button steps over ([17](17-cockpit.md#the-address-bar)). Every colour it draws is a custom property
 on `:root` with an entry in `web/src/cockpit/tokens.ts`, and every reference on it is drawn with
-`<Ref to={ref}/>` — except that a pooled claim's origin has no ref to draw, and its fleet is text.
+`<Ref to={ref}/>` — except that a pooled fleet has no ref to draw, and its name is text.
 
 ## A third document rides this, and is not a claim
 
@@ -853,8 +694,8 @@ _Built_ — specified in [31](31-review-packs.md#sharing-a-pack) rather than her
 fleet's namespace, so it is named where a reader of this document would look for it.
 
 A **review pack** is the restatement of one change for a human reviewer: ideas, claims about the code,
-and the code they point at, embedded. A shared one is published as a third kind of document beside
-`claims.json` and `digest.json`, over the same `PoolTransport`, under the same one-writer-per-namespace
+and the code they point at, embedded. A shared one is published as a second kind of document beside
+`digest.json`, over the same `PoolTransport`, under the same one-writer-per-namespace
 rule — with an HTML companion beside it, rendered the way
 [the markdown companion](#the-human-readable-companion) is: a pure function of the document, written
 together with it, never read back. The companion is the whole of the standalone rendering, for a
@@ -867,30 +708,26 @@ namespace:
 <pool.path>/fleets/<fleetId>/packs/pr-<n>.json   <pool.path>/fleets/<fleetId>/packs/pr-<n>.html
 ```
 
-Which is also why **nothing polls it**. `fetch` names `claims.json` and `digest.json` by name and
-never walks ([the clone](#the-clone-and-its-root)), so a pack is published for a person to open and
-is never read back, landed or mirrored — and `parsePoolDocument` never sees one. `PoolDocumentKind`
-grows the third value and `PoolClockKind` is the two that a clock publishes and
-`pool_publications` tracks: a pack has no dirty flag, no content hash and no cadence, because it goes
-out when a person shares it and comes out when its pull request is long closed. Removing it is the one
-delete a transport does — `unpublish`, narrowed to a pack of this fleet's, so nothing can be asked to
-remove `claims.json`.
+Which is also why **nothing polls it**. `fetch` names `digest.json` by name and never walks
+([the clone](#the-clone-and-its-root)), so a pack is published for a person to open and is never read
+back, landed or mirrored — and `parsePoolDocument` never sees one. `PoolDocumentKind` carries both
+values and `PoolClockKind` is the one a clock publishes and `pool_publications` tracks: a pack has no
+dirty flag, no content hash and no cadence, because it goes out when a person shares it and comes out
+when its pull request is long closed. Removing it is the one delete a transport does — `unpublish`,
+narrowed to a pack of this fleet's, so nothing can be asked to remove `digest.json`.
 
-**It rides the transport and nothing else.** It is not a claim and takes none of the claims arm: no
-corroboration, no vouch, no contradiction, no lifetime, no reach, and nothing about it is ever
-injected into a prompt or read by a rule. Two differences from a claim are worth stating here, because
-both cut against the arrangements above:
+**It rides the transport and nothing else.** Nothing about it is injected into a prompt or read by a
+rule. Two properties are worth stating here, because both cut against the arrangements above:
 
-- **Publishing is a person's act, per pack**, the inverse of `keepLocal`. A claim is one sentence, so
-  the cheap arrangement is to publish and withhold the rare one; a pack is source, in volume. The
-  argument above that a second click means nothing is ever published is accepted as the likely
-  outcome, and taken: a pack unshared costs nobody anything. The secret backstop runs over every
-  embedded line, not only the sentences.
-- **Shared packs are pruned and claims are not.** A claim is durable. A pack for a merged pull request
-  is dead weight in a substrate every fleet clones, and the cost of keeping it is paid by whoever
-  pulls rather than by whoever published. The publishing fleet drops it from its namespace once the
-  pull request has been closed for `closedPrWindowMs`, the clock that drops the pull request from the
-  world; the fleet's own local row is kept.
+- **Publishing is a person's act, per pack.** A digest is derived and goes out on a clock; a pack is
+  source, in volume, and goes nowhere until somebody says so. A pack unshared costs nobody anything.
+  The secret backstop that guarded the claims arm survives here, over every embedded line: a pack is
+  the only prose this pool still carries.
+- **Shared packs are pruned.** A pack for a merged pull request is dead weight in a substrate every
+  fleet clones, and the cost of keeping it is paid by whoever pulls rather than by whoever published.
+  The publishing fleet drops it from its namespace once the pull request has been closed for
+  `closedPrWindowMs`, the clock that drops the pull request from the world; the fleet's own local row
+  is kept.
 - **A pack can also be taken back out on the ask, and that is the same removal.** A pack shared by
   mistake must not wait weeks for the prune, so the share row carries a `withdrawnAt` and the packs
   arm calls the same `unpublish` on the next pulse before it looks at whether the pull request is dead
@@ -901,52 +738,33 @@ both cut against the arrangements above:
 
 ## What nothing does
 
-- **No rule, desk or gate reads a pooled claim.** [27](27-knowledge.md#what-nothing-does)'s stance,
-  inherited whole: nothing is dispatched, held or ranked because of one.
-- **Nothing arrives injected.** The furthest an arrival reaches on its own is `lookup`, and only by
-  agreeing with something a local agent already said.
-- **Nothing auto-publishes.** A claim leaves on a ruling a person made.
-- **Nothing deletes a local fact because a remote fleet withdrew it.**
-- **No reading acts.** The origin's counts, a withdrawal, a stale mirror and a fleet that has not
-  published in a month are all drawn for the person who can act on them, and none of them moves a claim.
+- **No rule, desk or gate reads anything that arrives.** Nothing is dispatched, held or ranked because
+  of a pooled reading.
+- **Nothing arriving reaches a prompt.** There is no arm that could put another fleet's words in front
+  of an agent, and the one that used to is gone with the store behind it
+  ([27](27-obstacles.md#what-the-claim-store-left-behind)).
+- **No reading acts.** A stale mirror and a fleet that has not published in a month are drawn for the
+  person who can act on them, and neither moves anything.
 - **Nothing reads another fleet's faults.** `byFault` is published and never mirrored, never summed and
   never drawn on the shared insights page — see [the faults section](#the-faults-section).
 
 ## Persistence
 
-Three columns, all additive `ALTER TABLE`s declared in `KNOWLEDGE_COLUMNS` (`src/store/knowledge.ts`) —
-two on `knowledge_facts` and one on `knowledge_corroborations`:
+**No columns, and that is the change.** The claims arm needed three additive `ALTER TABLE`s — a
+project stamp on each fact, a per-claim `keep_local`, and the pool fleet a corroborating voice came
+from — and all three went with the tables they were on
+([27](27-obstacles.md#what-the-claim-store-left-behind)). What the digest arm needs is derived per
+publish from rows the fleet already holds, and the envelope carries the project name.
 
-- **`project`** — the project name at the moment the fact was written. **It needs a backfill**, gated on
-  `ensureColumns` reporting that it added the column: null spells _no project_, which would exclude every
-  claim the store already holds from ever being published, and every one of them was in fact learned
-  about the deployment's current project. The migration asserts history rather than guessing at it, and
-  running it on every boot instead would relabel every claim written since.
-  → [14](14-persistence.md#when-a-null-means-something)
-  The name is handed to the store at construction (`new Store(dbPath, clock, project)`) rather than read
-  at publish time, because what is worth recording is the project the claim was **learned** about: a
-  deployment repointed at a second repository would otherwise relabel its whole history. A deployment
-  that declares no name stamps nothing, which is the honest answer rather than a guess.
-- **`keep_local`** — null needs no backfill and is the only true value on every existing row: nothing
-  before this could withhold anything.
-- **`knowledge_corroborations.fleet_id`** — which pool fleet a voice came from, null for a local agent's.
-  Null needs no backfill for `keep_local`'s reason exactly: nothing before this could arrive from a
-  pool. It is what `distinctCorroborators` unions on, so **one fleet is one voice** however many entries
-  it publishes and however many times it is polled.
+### The mirror's own tables
 
-### The one that is silent
+`pool_digest_rows`, `pool_fleets` and this fleet's own `pool_publications` are the three that remain;
+`pool_claims` went with the arm that filled it. Each is created whole by `CREATE TABLE IF NOT EXISTS`
+on any database that lacks one — but being new **once** is what stops one staying exempt, and the first
+column added to any of them later belongs in `ColumnMigrations`.
+→ [14](14-persistence.md#migrations)
 
-**A pooled corroboration is upserted on `(fleetId, factId)` and never appended.** The poller re-reads
-whole documents forever, so an append adds a corroboration on every pulse: with the default heartbeat,
-some two hundred and eighty-eight a day against every pooled claim. Nothing errors. Every pooled claim
-crosses to `lookup` within one pulse and then goes on climbing. And it looks **exactly** like the design
-working — two fleets agreeing, carrying a claim, which is the feature. It would be found by somebody
-wondering why the block is full.
-
-It is in `CLAUDE.md`.
-
-The mirror needs no migration of that kind. Its four tables — `pool_claims`, `pool_digest_rows`,
-`pool_fleets` and this fleet's own `pool_publications` — are new, and a new table is created whole by
-`CREATE TABLE IF NOT EXISTS` on every database that lacks one. But being new **once** is what stops one
-staying exempt, and the first column added to any of them later belongs in `ColumnMigrations` exactly
-as the three above do. → [14](14-persistence.md#migrations)
+**Nothing dropped `pool_claims`.** An existing database still holds whatever its last poll wrote; the
+table simply stops being created, and nothing reads it. The rows are re-derivable from the pool by
+construction, which is what made a mirror safe to keep in the first place — and it is what makes
+deleting one a change an operator asks for rather than one an upgrade takes.

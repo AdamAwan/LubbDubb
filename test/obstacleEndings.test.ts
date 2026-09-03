@@ -35,7 +35,7 @@ import type {
  * the local cycle served; the owner's landing is read off the **existing sweep**
  * and never off the merge; and the clock is a **backstop**, which means it expires
  * a row nothing else settled and can never resolve one early.
- * → `docs/spec/32-obstacles.md#how-an-obstacle-ends`
+ * → `docs/spec/27-obstacles.md#how-an-obstacle-ends`
  */
 
 const NOW = '2026-07-28T12:00:00.000Z';

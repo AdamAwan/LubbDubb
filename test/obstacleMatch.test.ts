@@ -4,7 +4,7 @@ import { extractKeys, gateKeys, type ObstacleWorld } from '../src/obstacles/keys
 import { matchObstacle, nearMatches, resolvingKeys } from '../src/obstacles/match.js';
 
 /**
- * The guard the rest of `docs/spec/32-obstacles.md` leans on.
+ * The guard the rest of `docs/spec/27-obstacles.md` leans on.
  *
  * Deduplication being an index lookup rather than a judgement is what makes every
  * other decision in that document safe to take: the states, the two-voice gate and
@@ -22,7 +22,7 @@ function world(over: Partial<ObstacleWorld> = {}): ObstacleWorld {
   return {
     checks: ['test (windows)', 'lint', 'test (linux)'],
     dispatchChecks: ['test (windows)'],
-    hasPath: (path) => ['src/claims.ts', 'test/knowledge.test.ts', 'src/store/schema.ts'].includes(path),
+    hasPath: (path) => ['src/claims.ts', 'test/obstacleMatch.test.ts', 'src/store/schema.ts'].includes(path),
     branchPaths: [],
     ...over,
   };
@@ -72,7 +72,7 @@ test('a check binds once a test or a path key co-occurs', () => {
   const keys = gateKeys(
     [
       { kind: 'check', value: 'test (windows)' },
-      { kind: 'test', value: 'test/knowledge.test.ts > corroboration' },
+      { kind: 'test', value: 'test/obstacleMatch.test.ts > corroboration' },
     ],
     world(),
   );

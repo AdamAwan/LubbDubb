@@ -385,14 +385,14 @@ is better made against the reading the fold anchored on than against a chip read
 **`limits` is a required argument to `resolveWindow`**, not an optional one, though five of the six keys
 ignore it. A route that forgot it would still answer `?window=session` — over a rolling five hours,
 labelled as the account's, with nothing red. A caller that genuinely has no reading passes `null` and
-says so; `defaultWindow` is that caller, because the default is never `session`.
+says so.
 
-**A reading with no control of its own takes the window the page opens on** (`defaultWindow`). The
-Knowledge page's cost figure ([27](27-knowledge.md#what-it-costs)) is the caller: it draws one number,
-has no time bar, and a second control there would be a second answer to "over what stretch" on a page
-whose whole argument is that one figure should be readable beside another. It is the one reading here
-that dates a run by **when it started** rather than by `runInstant`: the knowledge block is written
-into a launch's arguments once, at the top of the run, where money is spent throughout one.
+`defaultWindow` — the window a reading with no control of its own took — **went with its last caller**,
+the Knowledge page's cost figure. That page and the injected block it priced are gone
+([27](27-obstacles.md#what-the-claim-store-left-behind)), and every reading left here has a time bar of
+its own. A reading that needs one again brings it back rather than reaching for `resolveWindow`
+directly: a caller with no time bar quietly acquiring the `session` window is exactly what the required
+`limits` argument above exists to stop.
 
 **The window is shipped back on every payload** as `InsightsWindowView`, and the page draws that rather
 than the key it asked with. A caption computed in the browser from the key is free to disagree with the
@@ -414,7 +414,7 @@ splits of one pot of money, plus the coverage caveat:
 - **By phase** — `deliberation` (`:plan`, `:appraisal`), `build` (the pickup root and every `:part:`),
   `ci` (`pr:<n>:ci`, `pr:<n>:ci-gate`), `landing` (every other `pr:*`), `evidence` (`:assess`,
   `:retro`), `local` (a local run), `obstacle` (`obstacle:<id>` — a repair for something in the
-  fleet's way, [32](32-obstacles.md#ownership)), `job` (`job:*`) and `other`. A partition: they sum to
+  fleet's way, [27](27-obstacles.md#ownership)), `job` (`job:*`) and `other`. A partition: they sum to
   the fleet total. The issue-subtree phases are `issueOriginRole`'s vocabulary rather than a second one, so **a
   new origin suffix is classified in exactly one place** — an unrecognised suffix surfaces as `other`
   rather than being folded into whichever neighbour looked closest. `local` is the one phase that is
@@ -881,19 +881,16 @@ two from the caller's own task origin and refuses every other caller by name; th
 assert is a column reporting whatever each agent took it to mean, and the counts would be worth
 nothing.
 
-**`undocumented` is the one verdict that may carry a claim**, and it rides on the same call rather
-than a second tool — atomic, exactly as a retrospective's lessons are ([27](27-knowledge.md)).
-A claim on any other guard is **refused rather than dropped**: a claim reaches every later dispatch
-once it is vouched for, so the gate on what may become one has to be visible to the agent raising it.
-The claim goes to the knowledge base through the path `raise` uses, so a wall two other agents have
-already documented is recorded as agreement rather than as a third copy
-([27](27-knowledge.md#the-remedy-arm)). Its provenance is the pull request (`pr:<n>`), resolved from
-the credential rather than asserted.
+**`undocumented` names something written down nowhere, and what an agent does about that is `raise`
+it** — in its own call, on the board that keys and counts it ([27](27-obstacles.md#the-intake)). The
+remedy used to carry a `claim` field of its own, which meant the same sentence reached a different
+store, under a different gate and with no matching, depending on which tool the agent happened to be
+holding. One door, and this is not it: the remedy is the **event record** of one return to a pull
+request and nothing else.
 
-**The remedy row is untouched by any of it.** The account of an event and a durable claim are
-different animals: the row keeps its counts and its dollars, it lands whatever becomes of the claim —
-including under an operator's rejection of it — and nothing on this page is derived from the
-knowledge base.
+**The remedy row is the account of an event, and only that.** It keeps its counts and its dollars, it
+lands whatever an agent does or does not raise beside it, and nothing on this page is derived from the
+obstacle board.
 
 **An account is not a red, and not a run.** One agent that settled four reds in one dispatch files
 one row; a pull request that went red four times over four days collects four. So `accounts` is never

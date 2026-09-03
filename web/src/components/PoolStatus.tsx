@@ -50,7 +50,6 @@ export function PoolStatus({ now }: { now: number }): JSX.Element | null {
   const status = payload?.status ?? null;
   if (status === null) return null;
 
-  const mine = payload?.claims.filter((c) => c.fleetId === status.fleetId).length ?? 0;
   return (
     <section className="pool-status">
       <h3>
@@ -62,17 +61,6 @@ export function PoolStatus({ now }: { now: number }): JSX.Element | null {
       </p>
       <dl className="pool-status-facts">
         <div>
-          <dt>Claims published</dt>
-          <dd>
-            {status.claims.publishedAt === null
-              ? status.claims.dirty
-                ? 'not yet — a publish is pending'
-                : 'not yet'
-              : relTime(status.claims.publishedAt, now)}
-            {status.claims.dirty && status.claims.publishedAt !== null ? ' · changes pending' : ''}
-          </dd>
-        </div>
-        <div>
           <dt>Digest published</dt>
           <dd>{status.digest.publishedAt === null ? 'not yet' : relTime(status.digest.publishedAt, now)}</dd>
         </div>
@@ -81,25 +69,7 @@ export function PoolStatus({ now }: { now: number }): JSX.Element | null {
           {/* Stale is said out loud, never drawn as an empty mirror. */}
           <dd>{status.polledAt === null ? 'never — the pool has not been read yet' : relTime(status.polledAt, now)}</dd>
         </div>
-        <div>
-          <dt>Claims in the pool from others</dt>
-          <dd>{(payload?.claims.length ?? 0) - mine}</dd>
-        </div>
       </dl>
-
-      {status.refusals.length === 0 ? null : (
-        <div className="pool-refusal">
-          <strong>Not published — the secret backstop refused these:</strong>
-          <ul>
-            {status.refusals.map((refusal) => (
-              <li key={refusal.factId}>
-                {refusal.claim} — {refusal.reason}. Nothing was rewritten: a scrub that mostly works publishes looking
-                clean, so this refuses instead.
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
 
       {payload === null || payload.fleets.length === 0 ? null : (
         <div className="pool-fleets">
@@ -110,9 +80,9 @@ export function PoolStatus({ now }: { now: number }): JSX.Element | null {
               <span className="pool-fleet-at">
                 {fleet.ahead
                   ? 'ahead of this build'
-                  : fleet.claimsAt === null
-                    ? 'no claims yet'
-                    : relTime(fleet.claimsAt, now)}
+                  : fleet.digestAt === null
+                    ? 'no digest yet'
+                    : relTime(fleet.digestAt, now)}
               </span>
             </span>
           ))}

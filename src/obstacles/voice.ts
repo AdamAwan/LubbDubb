@@ -24,7 +24,7 @@ import type { CiCheck, PullRequest, WorldSnapshot } from '../types.js';
  * pulse — `diffWorlds`' shape, and for its reason. The two readings themselves are
  * `src/prHealth.ts`', shared with the knowledge notices rather than copied: a
  * second copy of a provider reading is a second thing to be wrong about.
- * → `docs/spec/32-obstacles.md#the-harness-is-a-voice`
+ * → `docs/spec/27-obstacles.md#the-harness-is-a-voice`
  */
 
 /** One thing the harness saw, in the shape the intake records any other sighting in. */

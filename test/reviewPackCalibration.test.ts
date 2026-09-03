@@ -160,9 +160,9 @@ test('the overrides and the plumbing ratio are one reading, and it never reaches
   assert.equal(calibration.plumbing.worst[0]?.prNumber, 7);
 
   // The reading is the operator's, and nothing about it reaches an agent: the
-  // pack the checker would be handed is untouched, and no fact was proposed.
+  // pack the checker would be handed is untouched, and nothing was filed.
   assert.equal(system.store.getCurrentReviewPack(7)!.pack.ideas[0]!.attention, 'skim');
-  assert.equal(system.store.listFacts().length, 0);
+  assert.deepEqual(system.store.listObstacles(), []);
   await app.close();
   system.store.close();
 });

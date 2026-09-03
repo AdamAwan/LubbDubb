@@ -14,7 +14,7 @@ import { reachesAgents } from './lifecycle.js';
  *
  * A row that only ever arrives is a board that only ever grows, and a board that
  * only grows is read past — which is the failure the store this replaces died of
- * from the other direction (`docs/spec/32-obstacles.md#what-went-wrong-last-time`).
+ * from the other direction (`docs/spec/27-obstacles.md#what-went-wrong-last-time`).
  * The four are deliberately unlike each other, because each covers what the others
  * cannot see:
  *
@@ -32,7 +32,7 @@ import { reachesAgents } from './lifecycle.js';
  * - **Decay**, for everything no reading and no owner ever settled.
  *
  * Pure — no I/O, no clock, no store: the world, the landings and the instant all
- * arrive as arguments. → `docs/spec/32-obstacles.md#how-an-obstacle-ends`
+ * arrive as arguments. → `docs/spec/27-obstacles.md#how-an-obstacle-ends`
  */
 
 /**

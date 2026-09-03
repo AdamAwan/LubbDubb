@@ -1,5 +1,8 @@
 <title>Review Pack #684</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link
+  rel="stylesheet"
+  href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600&family=JetBrains+Mono:wght@400;500;700&display=swap"
+/>
 <style>
   :root {
     --ground: #f6f7f9;
@@ -22,29 +25,51 @@
     --del-bg: #fbe9e7;
   }
   @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --ground: #101216; --surface: #171a20; --code-bg: #1b1f27;
-      --ink: #e7e9ee; --muted: #969dab; --faint: #6f7787;
-      --rule: #272c36; --rule-hi: #3a4150;
-      --accent: #a3a9ff; --accent-soft: #21243a;
-      --vermilion: #ef8f77; --vermilion-soft: #2c1c19;
-      --amber: #dfae4a; --amber-soft: #2a2317;
-      --add: #74c996; --add-bg: #16281d;
-      --del: #e88b84; --del-bg: #2b1a1a;
+    :root:not([data-theme='light']) {
+      --ground: #101216;
+      --surface: #171a20;
+      --code-bg: #1b1f27;
+      --ink: #e7e9ee;
+      --muted: #969dab;
+      --faint: #6f7787;
+      --rule: #272c36;
+      --rule-hi: #3a4150;
+      --accent: #a3a9ff;
+      --accent-soft: #21243a;
+      --vermilion: #ef8f77;
+      --vermilion-soft: #2c1c19;
+      --amber: #dfae4a;
+      --amber-soft: #2a2317;
+      --add: #74c996;
+      --add-bg: #16281d;
+      --del: #e88b84;
+      --del-bg: #2b1a1a;
     }
   }
-  :root[data-theme="dark"] {
-    --ground: #101216; --surface: #171a20; --code-bg: #1b1f27;
-    --ink: #e7e9ee; --muted: #969dab; --faint: #6f7787;
-    --rule: #272c36; --rule-hi: #3a4150;
-    --accent: #a3a9ff; --accent-soft: #21243a;
-    --vermilion: #ef8f77; --vermilion-soft: #2c1c19;
-    --amber: #dfae4a; --amber-soft: #2a2317;
-    --add: #74c996; --add-bg: #16281d;
-    --del: #e88b84; --del-bg: #2b1a1a;
+  :root[data-theme='dark'] {
+    --ground: #101216;
+    --surface: #171a20;
+    --code-bg: #1b1f27;
+    --ink: #e7e9ee;
+    --muted: #969dab;
+    --faint: #6f7787;
+    --rule: #272c36;
+    --rule-hi: #3a4150;
+    --accent: #a3a9ff;
+    --accent-soft: #21243a;
+    --vermilion: #ef8f77;
+    --vermilion-soft: #2c1c19;
+    --amber: #dfae4a;
+    --amber-soft: #2a2317;
+    --add: #74c996;
+    --add-bg: #16281d;
+    --del: #e88b84;
+    --del-bg: #2b1a1a;
   }
 
-  * { box-sizing: border-box; }
+  * {
+    box-sizing: border-box;
+  }
 
   body {
     background: var(--ground);
@@ -54,307 +79,684 @@
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: 940px; margin: 0 auto; padding: 0 22px 90px; }
+  .wrap {
+    max-width: 940px;
+    margin: 0 auto;
+    padding: 0 22px 90px;
+  }
 
   /* ---------- masthead ---------- */
 
-  .mast { padding: 40px 0 18px; border-bottom: 2px solid var(--ink); }
+  .mast {
+    padding: 40px 0 18px;
+    border-bottom: 2px solid var(--ink);
+  }
   .kicker {
-    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 11px; font-weight: 500; letter-spacing: 0.14em;
-    text-transform: uppercase; color: var(--faint);
-    display: flex; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 12px;
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--faint);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    margin-bottom: 12px;
   }
   h1 {
-    font-size: clamp(26px, 4vw, 36px); font-weight: 500; line-height: 1.16;
-    letter-spacing: -0.017em; margin: 0 0 12px; text-wrap: balance;
+    font-size: clamp(26px, 4vw, 36px);
+    font-weight: 500;
+    line-height: 1.16;
+    letter-spacing: -0.017em;
+    margin: 0 0 12px;
+    text-wrap: balance;
   }
-  .plain { font-size: 18px; color: var(--muted); margin: 0 0 16px; max-width: 62ch; }
-  .plain b { color: var(--ink); font-weight: 600; }
+  .plain {
+    font-size: 18px;
+    color: var(--muted);
+    margin: 0 0 16px;
+    max-width: 62ch;
+  }
+  .plain b {
+    color: var(--ink);
+    font-weight: 600;
+  }
   .facts {
-    font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: 12px; color: var(--muted);
-    display: flex; flex-wrap: wrap; gap: 6px 18px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
     font-variant-numeric: tabular-nums;
   }
-  .facts b { color: var(--ink); font-weight: 500; }
+  .facts b {
+    color: var(--ink);
+    font-weight: 500;
+  }
 
   /* ---------- gate ---------- */
 
   .gate {
-    margin-top: 22px; border: 1px solid var(--vermilion);
-    background: var(--vermilion-soft); border-radius: 3px; padding: 14px 16px;
-    display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap;
+    margin-top: 22px;
+    border: 1px solid var(--vermilion);
+    background: var(--vermilion-soft);
+    border-radius: 3px;
+    padding: 14px 16px;
+    display: flex;
+    gap: 14px;
+    align-items: baseline;
+    flex-wrap: wrap;
   }
   .gate-tag {
-    font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em;
-    text-transform: uppercase; color: var(--vermilion);
-    border: 1px solid var(--vermilion); border-radius: 2px;
-    padding: 3px 7px; white-space: nowrap;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--vermilion);
+    border: 1px solid var(--vermilion);
+    border-radius: 2px;
+    padding: 3px 7px;
+    white-space: nowrap;
   }
-  .gate p { margin: 0; flex: 1 1 340px; font-size: 16.5px; }
-  .gate a { color: var(--vermilion); text-underline-offset: 2px; }
+  .gate p {
+    margin: 0;
+    flex: 1 1 340px;
+    font-size: 16.5px;
+  }
+  .gate a {
+    color: var(--vermilion);
+    text-underline-offset: 2px;
+  }
 
   /* ---------- section rule ---------- */
 
   .srule {
-    margin: 42px 0 4px; display: flex; align-items: center; gap: 14px;
-    font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: 11px; font-weight: 500; letter-spacing: 0.14em;
-    text-transform: uppercase; color: var(--faint);
+    margin: 42px 0 4px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--faint);
   }
-  .srule::after { content: ""; flex: 1; height: 1px; background: var(--rule); }
+  .srule::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--rule);
+  }
   .srule button {
-    font: inherit; letter-spacing: inherit; text-transform: inherit;
-    background: none; border: none; color: var(--faint);
-    cursor: pointer; padding: 2px 4px; border-radius: 2px;
-    text-decoration: underline; text-underline-offset: 3px;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    background: none;
+    border: none;
+    color: var(--faint);
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 2px;
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
-  .srule button:hover { color: var(--accent); }
-  .srule button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .srule button:hover {
+    color: var(--accent);
+  }
+  .srule button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
 
   /* ---------- idea rows (layer 1) ---------- */
 
-  .ideas { border-bottom: 1px solid var(--rule); }
+  .ideas {
+    border-bottom: 1px solid var(--rule);
+  }
 
-  details { border-top: 1px solid var(--rule); }
-  details > summary { list-style: none; cursor: pointer; }
-  details > summary::-webkit-details-marker { display: none; }
-  summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  details {
+    border-top: 1px solid var(--rule);
+  }
+  details > summary {
+    list-style: none;
+    cursor: pointer;
+  }
+  details > summary::-webkit-details-marker {
+    display: none;
+  }
+  summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
 
   .row {
-    display: grid; grid-template-columns: 30px 68px 1fr auto;
-    gap: 0 14px; align-items: baseline; padding: 15px 8px 15px 4px;
+    display: grid;
+    grid-template-columns: 30px 68px 1fr auto;
+    gap: 0 14px;
+    align-items: baseline;
+    padding: 15px 8px 15px 4px;
   }
-  .ideas > details[open] > summary .row { padding-bottom: 9px; }
-  .ideas > details > summary:hover .row { background: var(--surface); }
+  .ideas > details[open] > summary .row {
+    padding-bottom: 9px;
+  }
+  .ideas > details > summary:hover .row {
+    background: var(--surface);
+  }
 
   .row .n {
-    font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: 11.5px; font-weight: 700; color: var(--faint);
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--faint);
     font-variant-numeric: tabular-nums;
   }
   .att {
-    font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em;
-    text-transform: uppercase; text-align: center;
-    padding: 3px 0; border-radius: 2px; white-space: nowrap;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-align: center;
+    padding: 3px 0;
+    border-radius: 2px;
+    white-space: nowrap;
   }
-  .att-read   { color: var(--vermilion); border: 1px solid var(--vermilion); background: var(--vermilion-soft); }
-  .att-decide { color: var(--amber);     border: 1px solid var(--amber);     background: var(--amber-soft); }
-  .att-skim   { color: var(--faint);     border: 1px dashed var(--rule-hi); }
-  .att-split  { color: var(--muted);     border: 1px dashed var(--rule-hi); }
+  .att-read {
+    color: var(--vermilion);
+    border: 1px solid var(--vermilion);
+    background: var(--vermilion-soft);
+  }
+  .att-decide {
+    color: var(--amber);
+    border: 1px solid var(--amber);
+    background: var(--amber-soft);
+  }
+  .att-skim {
+    color: var(--faint);
+    border: 1px dashed var(--rule-hi);
+  }
+  .att-split {
+    color: var(--muted);
+    border: 1px dashed var(--rule-hi);
+  }
 
   .row h3 {
-    font-size: 18.5px; font-weight: 500; line-height: 1.32;
-    letter-spacing: -0.011em; margin: 0; text-wrap: balance;
+    font-size: 18.5px;
+    font-weight: 500;
+    line-height: 1.32;
+    letter-spacing: -0.011em;
+    margin: 0;
+    text-wrap: balance;
   }
   .row .meta {
-    font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: 11px; color: var(--faint); white-space: nowrap;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--faint);
+    white-space: nowrap;
     font-variant-numeric: tabular-nums;
   }
-  .row .meta .flag { color: var(--vermilion); font-weight: 700; }
-  .ideas > details[open] > summary .row h3 { color: var(--accent); }
+  .row .meta .flag {
+    color: var(--vermilion);
+    font-weight: 700;
+  }
+  .ideas > details[open] > summary .row h3 {
+    color: var(--accent);
+  }
 
   .cue {
-    grid-column: 3; margin-top: 4px;
-    font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: 11px; color: var(--faint);
+    grid-column: 3;
+    margin-top: 4px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--faint);
   }
-  .ideas > details[open] > summary .cue { display: none; }
+  .ideas > details[open] > summary .cue {
+    display: none;
+  }
 
-  .panel { padding: 4px 0 30px 116px; }
+  .panel {
+    padding: 4px 0 30px 116px;
+  }
 
   /* ---------- the walk: code is layer 2 ---------- */
 
   .walk {
-    list-style: none; margin: 0; padding: 0 0 0 22px;
+    list-style: none;
+    margin: 0;
+    padding: 0 0 0 22px;
     border-left: 1px solid var(--rule);
-    display: flex; flex-direction: column; gap: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
     counter-reset: step;
   }
-  .walk > li { position: relative; }
+  .walk > li {
+    position: relative;
+  }
   .walk > li::before {
-    counter-increment: step; content: counter(step);
-    position: absolute; left: -32px; top: 3px;
-    width: 19px; height: 19px; border-radius: 50%;
-    background: var(--ground); border: 1px solid var(--rule-hi);
+    counter-increment: step;
+    content: counter(step);
+    position: absolute;
+    left: -32px;
+    top: 3px;
+    width: 19px;
+    height: 19px;
+    border-radius: 50%;
+    background: var(--ground);
+    border: 1px solid var(--rule-hi);
     color: var(--faint);
-    font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: 9.5px; font-weight: 700;
-    display: flex; align-items: center; justify-content: center;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 9.5px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .a-head {
-    display: flex; gap: 6px 12px; align-items: baseline; flex-wrap: wrap;
+    display: flex;
+    gap: 6px 12px;
+    align-items: baseline;
+    flex-wrap: wrap;
     margin-bottom: 7px;
   }
   .path {
-    font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: 12.5px; font-weight: 500; color: var(--ink); word-break: break-word;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--ink);
+    word-break: break-word;
   }
-  .path b { color: var(--accent); font-weight: 500; }
-  .path.dashed { color: var(--muted); font-weight: 400; }
-  .gist { font-size: 16px; color: var(--muted); flex: 1 1 100%; margin: 0 0 8px; }
-  .gist strong { color: var(--ink); font-weight: 600; }
+  .path b {
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .path.dashed {
+    color: var(--muted);
+    font-weight: 400;
+  }
+  .gist {
+    font-size: 16px;
+    color: var(--muted);
+    flex: 1 1 100%;
+    margin: 0 0 8px;
+  }
+  .gist strong {
+    color: var(--ink);
+    font-weight: 600;
+  }
 
   .tag {
-    font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em;
-    text-transform: uppercase; padding: 2px 5px; border-radius: 2px; white-space: nowrap;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 2px 5px;
+    border-radius: 2px;
+    white-space: nowrap;
   }
-  .tag-diff { color: var(--add); border: 1px solid var(--add); }
-  .tag-un   { color: var(--muted); border: 1px dashed var(--rule-hi); }
-  .tag-key  { color: var(--accent); border: 1px solid var(--accent); background: var(--accent-soft); }
-  .tag-bad  { color: var(--vermilion); border: 1px solid var(--vermilion); background: var(--vermilion-soft); }
+  .tag-diff {
+    color: var(--add);
+    border: 1px solid var(--add);
+  }
+  .tag-un {
+    color: var(--muted);
+    border: 1px dashed var(--rule-hi);
+  }
+  .tag-key {
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    background: var(--accent-soft);
+  }
+  .tag-bad {
+    color: var(--vermilion);
+    border: 1px solid var(--vermilion);
+    background: var(--vermilion-soft);
+  }
 
   /* code block */
   .code {
-    border: 1px solid var(--rule); border-radius: 3px;
-    background: var(--code-bg); overflow: hidden;
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    background: var(--code-bg);
+    overflow: hidden;
   }
-  .code.dashed { border-style: dashed; background: transparent; }
+  .code.dashed {
+    border-style: dashed;
+    background: transparent;
+  }
   .code-cap {
-    font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: 10.5px; color: var(--faint); letter-spacing: 0.04em;
-    padding: 6px 12px; border-bottom: 1px solid var(--rule); background: var(--surface);
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10.5px;
+    color: var(--faint);
+    letter-spacing: 0.04em;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--rule);
+    background: var(--surface);
   }
-  .code.dashed .code-cap { background: transparent; border-bottom-style: dashed; }
+  .code.dashed .code-cap {
+    background: transparent;
+    border-bottom-style: dashed;
+  }
   pre {
-    margin: 0; padding: 10px 0; overflow-x: auto;
-    font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: 12px; line-height: 1.62; color: var(--ink);
+    margin: 0;
+    padding: 10px 0;
+    overflow-x: auto;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 12px;
+    line-height: 1.62;
+    color: var(--ink);
     tab-size: 2;
   }
-  pre span.l { display: block; padding: 0 12px 0 10px; border-left: 3px solid transparent; }
-  pre span.p { background: var(--add-bg); border-left-color: var(--add); color: var(--add); }
-  pre span.m { background: var(--del-bg); border-left-color: var(--del); color: var(--del); }
-  pre span.n { color: var(--muted); }
-  pre span.cm { color: var(--faint); }
+  pre span.l {
+    display: block;
+    padding: 0 12px 0 10px;
+    border-left: 3px solid transparent;
+  }
+  pre span.p {
+    background: var(--add-bg);
+    border-left-color: var(--add);
+    color: var(--add);
+  }
+  pre span.m {
+    background: var(--del-bg);
+    border-left-color: var(--del);
+    color: var(--del);
+  }
+  pre span.n {
+    color: var(--muted);
+  }
+  pre span.cm {
+    color: var(--faint);
+  }
 
   /* why toggle — layer 3 */
-  details.why { border-top: none; margin-top: 6px; }
-  details.why > summary {
-    font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: 11px; letter-spacing: 0.05em; color: var(--accent);
-    padding: 3px 0; display: inline-block;
+  details.why {
+    border-top: none;
+    margin-top: 6px;
   }
-  details.why > summary:hover { text-decoration: underline; }
-  details.why > summary::before { content: "▸ "; }
-  details.why[open] > summary::before { content: "▾ "; }
+  details.why > summary {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    color: var(--accent);
+    padding: 3px 0;
+    display: inline-block;
+  }
+  details.why > summary:hover {
+    text-decoration: underline;
+  }
+  details.why > summary::before {
+    content: '▸ ';
+  }
+  details.why[open] > summary::before {
+    content: '▾ ';
+  }
   .why-body {
-    border-left: 2px solid var(--rule-hi); padding: 4px 0 2px 14px;
+    border-left: 2px solid var(--rule-hi);
+    padding: 4px 0 2px 14px;
     margin: 6px 0 0 2px;
   }
-  .why-body p { margin: 0; font-size: 16px; color: var(--muted); max-width: 64ch; }
-  .why-body p + p { margin-top: 9px; }
-  .why-body p strong { color: var(--ink); font-weight: 600; }
+  .why-body p {
+    margin: 0;
+    font-size: 16px;
+    color: var(--muted);
+    max-width: 64ch;
+  }
+  .why-body p + p {
+    margin-top: 9px;
+  }
+  .why-body p strong {
+    color: var(--ink);
+    font-weight: 600;
+  }
   .stamp {
-    font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: 10px; color: var(--faint); letter-spacing: 0.04em;
-    display: block; margin-bottom: 5px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10px;
+    color: var(--faint);
+    letter-spacing: 0.04em;
+    display: block;
+    margin-bottom: 5px;
   }
   code {
-    font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: 0.85em; background: var(--code-bg);
-    padding: 1px 4px; border-radius: 2px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.85em;
+    background: var(--code-bg);
+    padding: 1px 4px;
+    border-radius: 2px;
   }
 
   /* ---------- claims ---------- */
 
   .claims-head {
-    font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
-    color: var(--faint); margin: 26px 0 0;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--faint);
+    margin: 26px 0 0;
   }
   .claims {
-    margin: 10px 0 0; padding: 0; list-style: none;
-    display: flex; flex-direction: column; gap: 7px;
+    margin: 10px 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
   }
   .claims li {
-    display: grid; grid-template-columns: 92px 1fr; gap: 12px;
-    align-items: start; font-size: 15.5px; color: var(--muted);
+    display: grid;
+    grid-template-columns: 92px 1fr;
+    gap: 12px;
+    align-items: start;
+    font-size: 15.5px;
+    color: var(--muted);
   }
   .v {
-    font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: 9.5px; font-weight: 700; letter-spacing: 0.07em;
-    text-transform: uppercase; text-align: center; padding: 3px 0; border-radius: 2px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    text-align: center;
+    padding: 3px 0;
+    border-radius: 2px;
   }
-  .v-ok { color: var(--accent); border: 1px solid var(--accent); }
-  .v-no { color: var(--vermilion); border: 1px solid var(--vermilion); background: var(--vermilion-soft); }
-  .v-un { color: var(--amber); border: 1px dashed var(--amber); }
+  .v-ok {
+    color: var(--accent);
+    border: 1px solid var(--accent);
+  }
+  .v-no {
+    color: var(--vermilion);
+    border: 1px solid var(--vermilion);
+    background: var(--vermilion-soft);
+  }
+  .v-un {
+    color: var(--amber);
+    border: 1px dashed var(--amber);
+  }
 
   /* ---------- finding ---------- */
 
   .finding {
-    border: 1px solid var(--vermilion); border-radius: 3px;
-    background: var(--surface); overflow: hidden; margin-top: 14px;
+    border: 1px solid var(--vermilion);
+    border-radius: 3px;
+    background: var(--surface);
+    overflow: hidden;
+    margin-top: 14px;
   }
   .finding > h3 {
-    margin: 0; padding: 13px 18px; font-size: 19px; font-weight: 600;
-    letter-spacing: -0.01em; background: var(--vermilion-soft);
+    margin: 0;
+    padding: 13px 18px;
+    font-size: 19px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    background: var(--vermilion-soft);
     border-bottom: 1px solid var(--vermilion);
   }
-  .fbody { padding: 16px 18px 18px; }
-  .fbody > p { margin: 0 0 12px; color: var(--muted); max-width: 66ch; }
-  .fbody > p:last-child { margin-bottom: 0; }
-  .fbody strong { color: var(--ink); font-weight: 600; }
-  .fbody .code { margin: 0 0 14px; }
-  .fgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; margin-bottom: 14px; }
-
-  .tscroll { overflow-x: auto; }
-  table {
-    border-collapse: collapse; width: 100%;
-    font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: 11.5px; font-variant-numeric: tabular-nums; margin: 0;
+  .fbody {
+    padding: 16px 18px 18px;
   }
-  th, td { text-align: right; padding: 5px 12px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
-  th { color: var(--faint); font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase; font-size: 10px; border-bottom: 1px solid var(--rule-hi); }
-  td:first-child, th:first-child { text-align: left; }
-  tr.bad td { color: var(--vermilion); }
+  .fbody > p {
+    margin: 0 0 12px;
+    color: var(--muted);
+    max-width: 66ch;
+  }
+  .fbody > p:last-child {
+    margin-bottom: 0;
+  }
+  .fbody strong {
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .fbody .code {
+    margin: 0 0 14px;
+  }
+  .fgrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .tscroll {
+    overflow-x: auto;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+    margin: 0;
+  }
+  th,
+  td {
+    text-align: right;
+    padding: 5px 12px;
+    border-bottom: 1px solid var(--rule);
+    white-space: nowrap;
+  }
+  th {
+    color: var(--faint);
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    font-size: 10px;
+    border-bottom: 1px solid var(--rule-hi);
+  }
+  td:first-child,
+  th:first-child {
+    text-align: left;
+  }
+  tr.bad td {
+    color: var(--vermilion);
+  }
 
   /* ---------- closing ---------- */
 
-  .order { margin-top: 14px; }
-  .order ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
-  .order li { color: var(--muted); }
-  .order li strong { color: var(--ink); font-weight: 600; }
-
-  .colophon { margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--rule); }
-  .colophon > summary {
-    font-family: "JetBrains Mono", ui-monospace, monospace;
-    font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
-    color: var(--faint); cursor: pointer;
+  .order {
+    margin-top: 14px;
   }
-  .colophon > summary:hover { color: var(--accent); }
-  .colophon p { font-size: 15.5px; line-height: 1.65; color: var(--muted); max-width: 66ch; margin: 14px 0 0; }
-  .colophon b { color: var(--ink); font-weight: 600; }
+  .order ol {
+    margin: 0;
+    padding-left: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .order li {
+    color: var(--muted);
+  }
+  .order li strong {
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  .colophon {
+    margin-top: 40px;
+    padding-top: 18px;
+    border-top: 1px solid var(--rule);
+  }
+  .colophon > summary {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--faint);
+    cursor: pointer;
+  }
+  .colophon > summary:hover {
+    color: var(--accent);
+  }
+  .colophon p {
+    font-size: 15.5px;
+    line-height: 1.65;
+    color: var(--muted);
+    max-width: 66ch;
+    margin: 14px 0 0;
+  }
+  .colophon b {
+    color: var(--ink);
+    font-weight: 600;
+  }
 
   @media (max-width: 720px) {
-    body { font-size: 16px; }
-    .row { grid-template-columns: 24px 1fr; gap: 0 10px; }
-    .row .att { grid-column: 2; grid-row: 2; justify-self: start; padding: 3px 7px; margin-top: 7px; }
-    .row h3 { grid-column: 2; grid-row: 1; }
-    .row .meta { grid-column: 2; grid-row: 3; margin-top: 6px; }
-    .cue { grid-column: 2; }
-    .panel { padding-left: 22px; }
-    .claims li { grid-template-columns: 1fr; gap: 3px; }
-    .v { justify-self: start; padding: 3px 8px; }
-    pre { font-size: 11px; }
+    body {
+      font-size: 16px;
+    }
+    .row {
+      grid-template-columns: 24px 1fr;
+      gap: 0 10px;
+    }
+    .row .att {
+      grid-column: 2;
+      grid-row: 2;
+      justify-self: start;
+      padding: 3px 7px;
+      margin-top: 7px;
+    }
+    .row h3 {
+      grid-column: 2;
+      grid-row: 1;
+    }
+    .row .meta {
+      grid-column: 2;
+      grid-row: 3;
+      margin-top: 6px;
+    }
+    .cue {
+      grid-column: 2;
+    }
+    .panel {
+      padding-left: 22px;
+    }
+    .claims li {
+      grid-template-columns: 1fr;
+      gap: 3px;
+    }
+    .v {
+      justify-self: start;
+      padding: 3px 8px;
+    }
+    pre {
+      font-size: 11px;
+    }
   }
 </style>
 
 <div class="wrap">
-
   <header class="mast">
     <div class="kicker"><span>Review pack</span><span>LubbDubb #684</span><span>85bf621</span></div>
     <h1>A new &ldquo;5h session&rdquo; time range on the Insights page</h1>
     <p class="plain">
       The Usage badge can tell you your 5-hour limit is 78% used, but nothing could tell you
-      <b>what used it</b>. This adds a time range that matches those exact 5 hours, and makes the badge
-      a button that takes you there.
+      <b>what used it</b>. This adds a time range that matches those exact 5 hours, and makes the badge a button that
+      takes you there.
     </p>
     <div class="facts">
       <span><b>5</b> ideas</span>
@@ -367,8 +769,10 @@
 
   <div class="gate">
     <span class="gate-tag">Blocked</span>
-    <p>The author says the code does one thing. It doesn&rsquo;t. <a href="#finding">Read the finding</a> &mdash;
-      it&rsquo;s one small decision, and it affects idea 02. Everything else checked out.</p>
+    <p>
+      The author says the code does one thing. It doesn&rsquo;t. <a href="#finding">Read the finding</a> &mdash;
+      it&rsquo;s one small decision, and it affects idea 02. Everything else checked out.
+    </p>
   </div>
 
   <div class="srule">
@@ -377,7 +781,6 @@
   </div>
 
   <div class="ideas">
-
     <!-- ============ 01 ============ -->
     <details>
       <summary>
@@ -392,13 +795,14 @@
 
       <div class="panel">
         <ol class="walk">
-
           <li>
             <div class="a-head">
               <span class="path">src/insightsWindow.ts<b>:135</b></span>
               <span class="tag tag-diff">changed +16</span>
             </div>
-            <p class="gist">Three possible answers: we know, nobody ever told us, or what we were told is out of date.</p>
+            <p class="gist">
+              Three possible answers: we know, nobody ever told us, or what we were told is out of date.
+            </p>
             <div class="code">
               <div class="code-cap">new type</div>
               <pre><span class="l p">+type SessionAnchor =</span>
@@ -412,14 +816,20 @@
 <span class="l p">+  | { kind: 'unreported' }</span>
 <span class="l p">+  | { kind: 'stale'; capturedAt: string; resetsAt: string };</span></pre>
             </div>
-            <details class="why"><summary>why three, not two</summary><div class="why-body">
-              <p><span class="stamp">author &middot; 13:04</span>
-                The last two both mean &ldquo;we don&rsquo;t know&rdquo;, but for different reasons, and the page needs
-                to say which. Lump them together and you show people the last 5 hours and call it their session &mdash;
-                which looks right and isn&rsquo;t.</p>
-              <p>Also deliberately not exported. The front end can only refer to this shape through the one approved
-                route, so the two can&rsquo;t drift apart.</p>
-            </div></details>
+            <details class="why">
+              <summary>why three, not two</summary>
+              <div class="why-body">
+                <p>
+                  <span class="stamp">author &middot; 13:04</span> The last two both mean &ldquo;we don&rsquo;t
+                  know&rdquo;, but for different reasons, and the page needs to say which. Lump them together and you
+                  show people the last 5 hours and call it their session &mdash; which looks right and isn&rsquo;t.
+                </p>
+                <p>
+                  Also deliberately not exported. The front end can only refer to this shape through the one approved
+                  route, so the two can&rsquo;t drift apart.
+                </p>
+              </div>
+            </details>
           </li>
 
           <li>
@@ -447,12 +857,17 @@
 <span class="l p">+  };</span>
 <span class="l p">+}</span></pre>
             </div>
-            <details class="why"><summary>why those two rejections</summary><div class="why-body">
-              <p><span class="stamp">author &middot; 13:07</span>
-                Reset time already passed means the window rolled over and nobody noticed. More than 5 hours away means
-                the number is nonsense &mdash; a 5-hour window can&rsquo;t reset further off than 5 hours. Either way,
-                using it would put the start time somewhere nothing actually reported.</p>
-            </div></details>
+            <details class="why">
+              <summary>why those two rejections</summary>
+              <div class="why-body">
+                <p>
+                  <span class="stamp">author &middot; 13:07</span> Reset time already passed means the window rolled
+                  over and nobody noticed. More than 5 hours away means the number is nonsense &mdash; a 5-hour window
+                  can&rsquo;t reset further off than 5 hours. Either way, using it would put the start time somewhere
+                  nothing actually reported.
+                </p>
+              </div>
+            </details>
           </li>
 
           <li>
@@ -460,7 +875,9 @@
               <span class="path dashed">src/store/rateLimits.ts<b>:54</b></span>
               <span class="tag tag-un">not in this PR</span>
             </div>
-            <p class="gist">Where that reset time comes from in the first place. <strong>Open this to judge step 2.</strong></p>
+            <p class="gist">
+              Where that reset time comes from in the first place. <strong>Open this to judge step 2.</strong>
+            </p>
             <div class="code dashed">
               <div class="code-cap">existing code, unchanged &mdash; shown because you need it</div>
               <pre><span class="l n">  readRateLimits(): AccountRateLimits | null {</span>
@@ -474,12 +891,16 @@
 <span class="l n">    };</span>
 <span class="l n">  }</span></pre>
             </div>
-            <details class="why"><summary>why it&rsquo;s here</summary><div class="why-body">
-              <p><span class="stamp">added for context</span>
-                One row, overwritten by whichever agent reported most recently. Whether the reset time can be trusted
-                at all is decided in this file, and this file is not in the PR. Reviewing #684 file by file, you would
-                never see it.</p>
-            </div></details>
+            <details class="why">
+              <summary>why it&rsquo;s here</summary>
+              <div class="why-body">
+                <p>
+                  <span class="stamp">added for context</span> One row, overwritten by whichever agent reported most
+                  recently. Whether the reset time can be trusted at all is decided in this file, and this file is not
+                  in the PR. Reviewing #684 file by file, you would never see it.
+                </p>
+              </div>
+            </details>
           </li>
 
           <li>
@@ -487,7 +908,9 @@
               <span class="path">web/src/components/InsightsPage.tsx<b>:340</b></span>
               <span class="tag tag-diff">changed +53</span>
             </div>
-            <p class="gist">The note above the chart. Three properly different messages, in the same order as the type.</p>
+            <p class="gist">
+              The note above the chart. Three properly different messages, in the same order as the type.
+            </p>
             <div class="code">
               <div class="code-cap">new component, abridged</div>
               <pre><span class="l p">+  if (session.kind === 'unreported')</span>
@@ -508,11 +931,16 @@
 <span class="l p">+    &lt;/p&gt;</span>
 <span class="l p">+  );</span></pre>
             </div>
-            <details class="why"><summary>why not one message with a word swapped</summary><div class="why-body">
-              <p><span class="stamp">author &middot; 13:31</span>
-                If nobody ever reported a window, the note explains that API-key logins don&rsquo;t have limits at all.
-                That&rsquo;s normal, not an error. Saying &ldquo;out of date&rdquo; there would be wrong and worrying.</p>
-            </div></details>
+            <details class="why">
+              <summary>why not one message with a word swapped</summary>
+              <div class="why-body">
+                <p>
+                  <span class="stamp">author &middot; 13:31</span> If nobody ever reported a window, the note explains
+                  that API-key logins don&rsquo;t have limits at all. That&rsquo;s normal, not an error. Saying
+                  &ldquo;out of date&rdquo; there would be wrong and worrying.
+                </p>
+              </div>
+            </details>
           </li>
 
           <li>
@@ -536,12 +964,17 @@
 <span class="l cm"> // …and in resolveSession, the label that gets sent:</span>
 <span class="l p">+  label: anchor.kind === 'anchored' ? '5h session' : 'Last 5h',</span></pre>
             </div>
-            <details class="why"><summary>why this is the load-bearing one</summary><div class="why-body">
-              <p><span class="stamp">author &middot; 13:38</span>
-                Without this, the note in step 4 is decoration. People read the button, not the small print under it.
-                If the button still says &ldquo;5h session&rdquo; while the note says &ldquo;this isn&rsquo;t really
-                your session&rdquo;, everyone believes the button.</p>
-            </div></details>
+            <details class="why">
+              <summary>why this is the load-bearing one</summary>
+              <div class="why-body">
+                <p>
+                  <span class="stamp">author &middot; 13:38</span> Without this, the note in step 4 is decoration.
+                  People read the button, not the small print under it. If the button still says &ldquo;5h
+                  session&rdquo; while the note says &ldquo;this isn&rsquo;t really your session&rdquo;, everyone
+                  believes the button.
+                </p>
+              </div>
+            </details>
           </li>
 
           <li>
@@ -559,23 +992,42 @@
 <span class="l p">+A window that resets in ninety minutes opened three and a half hours ago, and a</span>
 <span class="l p">+breakdown of the last five hours is a breakdown of a different five hours.</span></pre>
             </div>
-            <details class="why"><summary>note</summary><div class="why-body">
-              <p><span class="stamp">added afterwards</span>
-                Read this instead of the code if you want the rules rather than the implementation.</p>
-            </div></details>
+            <details class="why">
+              <summary>note</summary>
+              <div class="why-body">
+                <p>
+                  <span class="stamp">added afterwards</span> Read this instead of the code if you want the rules rather
+                  than the implementation.
+                </p>
+              </div>
+            </details>
           </li>
-
         </ol>
 
         <p class="claims-head">What the author claims &middot; checked by a second agent</p>
         <ul class="claims">
-          <li><span class="v v-ok">True</span><span>All three cases can happen, and each gets its own message.
-            Tested at <code>insightsWindow.test.ts:224</code>.</span></li>
-          <li><span class="v v-ok">True</span><span>The front end can only reach this data through the approved route
-            (<code>wire.ts:2328</code>). No back door.</span></li>
-          <li><span class="v v-un">Can&rsquo;t tell</span><span>The note says cost and the usage percentage
-            &ldquo;move together but aren&rsquo;t the same thing&rdquo;. That&rsquo;s about how Anthropic measures
-            usage. Nothing in this codebase can settle it. <strong>You decide.</strong></span></li>
+          <li>
+            <span class="v v-ok">True</span
+            ><span
+              >All three cases can happen, and each gets its own message. Tested at
+              <code>insightsWindow.test.ts:224</code>.</span
+            >
+          </li>
+          <li>
+            <span class="v v-ok">True</span
+            ><span
+              >The front end can only reach this data through the approved route (<code>wire.ts:2328</code>). No back
+              door.</span
+            >
+          </li>
+          <li>
+            <span class="v v-un">Can&rsquo;t tell</span
+            ><span
+              >The note says cost and the usage percentage &ldquo;move together but aren&rsquo;t the same thing&rdquo;.
+              That&rsquo;s about how Anthropic measures usage. Nothing in this codebase can settle it.
+              <strong>You decide.</strong></span
+            >
+          </li>
         </ul>
       </div>
     </details>
@@ -586,7 +1038,9 @@
         <div class="row">
           <span class="n">02</span>
           <span class="att att-read">Read</span>
-          <h3>This time range doesn&rsquo;t end at &ldquo;now&rdquo; &mdash; and three other bits of code assumed it did</h3>
+          <h3>
+            This time range doesn&rsquo;t end at &ldquo;now&rdquo; &mdash; and three other bits of code assumed it did
+          </h3>
           <span class="meta">4 steps &middot; 11 changes &middot; <span class="flag">1 false claim</span></span>
         </div>
         <div class="cue">Changes an assumption other code already relied on. Most likely place for a bug.</div>
@@ -594,7 +1048,6 @@
 
       <div class="panel">
         <ol class="walk">
-
           <li>
             <div class="a-head">
               <span class="path">src/insightsWindow.ts<b>:186</b></span>
@@ -612,13 +1065,17 @@
 <span class="l n">   now: number;</span>
 <span class="l n"> }</span></pre>
             </div>
-            <details class="why"><summary>why not just work it out from the span</summary><div class="why-body">
-              <p><span class="stamp">author &middot; 13:12</span>
-                The trend chart used to derive this from the length of the time range. Fine for the other five. Not for
-                this one: this range is &ldquo;however much of the 5 hours has happened so far&rdquo;, which changes
-                minute by minute. The bars would get wider while you watched, and you&rsquo;d be comparing bars of
-                different widths without knowing.</p>
-            </div></details>
+            <details class="why">
+              <summary>why not just work it out from the span</summary>
+              <div class="why-body">
+                <p>
+                  <span class="stamp">author &middot; 13:12</span> The trend chart used to derive this from the length
+                  of the time range. Fine for the other five. Not for this one: this range is &ldquo;however much of the
+                  5 hours has happened so far&rdquo;, which changes minute by minute. The bars would get wider while you
+                  watched, and you&rsquo;d be comparing bars of different widths without knowing.
+                </p>
+              </div>
+            </details>
           </li>
 
           <li>
@@ -646,12 +1103,17 @@
 <span class="l p">+  };</span>
 <span class="l p">+}</span></pre>
             </div>
-            <details class="why"><summary>why span and period differ here</summary><div class="why-body">
-              <p><span class="stamp">author &middot; 13:16</span>
-                Two different things on purpose. The chart shows what&rsquo;s happened so far. The trend compares your
-                last eight full 5-hour windows, lined up on the real reset times &mdash; a bar sitting half in one
-                window and half in the next would be comparing something the limit was never applied to.</p>
-            </div></details>
+            <details class="why">
+              <summary>why span and period differ here</summary>
+              <div class="why-body">
+                <p>
+                  <span class="stamp">author &middot; 13:16</span> Two different things on purpose. The chart shows
+                  what&rsquo;s happened so far. The trend compares your last eight full 5-hour windows, lined up on the
+                  real reset times &mdash; a bar sitting half in one window and half in the next would be comparing
+                  something the limit was never applied to.
+                </p>
+              </div>
+            </details>
           </li>
 
           <li>
@@ -677,11 +1139,16 @@
 <span class="l m">-  return new Date(window.now - TREND_PERIODS * window.spanMs).toISOString();</span>
 <span class="l p">+  return new Date(window.period.endMs - TREND_PERIODS * window.period.spanMs)…</span></pre>
             </div>
-            <details class="why"><summary>why this is the easy one to get wrong</summary><div class="why-body">
-              <p><span class="stamp">author &middot; 13:19</span>
-                Add the new field, forget to repoint the readers, and everything still compiles and every test still
-                passes. Nothing goes red. It just carries on using the old value.</p>
-            </div></details>
+            <details class="why">
+              <summary>why this is the easy one to get wrong</summary>
+              <div class="why-body">
+                <p>
+                  <span class="stamp">author &middot; 13:19</span> Add the new field, forget to repoint the readers, and
+                  everything still compiles and every test still passes. Nothing goes red. It just carries on using the
+                  old value.
+                </p>
+              </div>
+            </details>
           </li>
 
           <li>
@@ -689,10 +1156,14 @@
               <span class="path">src/insightsWindow.ts<b>:336</b> and <b>:86</b></span>
               <span class="tag tag-bad">claim is false</span>
             </div>
-            <p class="gist">The chart&rsquo;s own start, and the rule that keeps it 30 minutes wide.
-              <strong>These two fight each other.</strong></p>
+            <p class="gist">
+              The chart&rsquo;s own start, and the rule that keeps it 30 minutes wide.
+              <strong>These two fight each other.</strong>
+            </p>
             <div class="code">
-              <div class="code-cap">two places, 250 lines apart &mdash; shown together because that&rsquo;s the bug</div>
+              <div class="code-cap">
+                two places, 250 lines apart &mdash; shown together because that&rsquo;s the bug
+              </div>
               <pre><span class="l n"> export function timelineSpan(window: ResolvedWindow, earliestMs: number | null) {</span>
 <span class="l p">+  if (window.key === 'session')</span>
 <span class="l p">+    return {</span>
@@ -707,24 +1178,43 @@
 <span class="l p">+  return Math.ceil(Math.max(spanMs, SESSION_MIN_SPAN_MS) / SESSION_BUCKETS);</span>
 <span class="l p">+}</span></pre>
             </div>
-            <details class="why" open><summary>what the checker found</summary><div class="why-body">
-              <p><span class="stamp">checker</span>
-                20 bars starting at the window&rsquo;s start, each at least 90 seconds wide, is 30 minutes of chart.
-                On a window that reset 4 minutes ago, 26 of those minutes haven&rsquo;t happened yet.
-                <a href="#finding" style="color: var(--vermilion);">Read the finding</a> before approving this idea.</p>
-            </div></details>
+            <details class="why" open>
+              <summary>what the checker found</summary>
+              <div class="why-body">
+                <p>
+                  <span class="stamp">checker</span>
+                  20 bars starting at the window&rsquo;s start, each at least 90 seconds wide, is 30 minutes of chart.
+                  On a window that reset 4 minutes ago, 26 of those minutes haven&rsquo;t happened yet.
+                  <a href="#finding" style="color: var(--vermilion)">Read the finding</a> before approving this idea.
+                </p>
+              </div>
+            </details>
           </li>
-
         </ol>
 
         <p class="claims-head">What the author claims &middot; checked by a second agent</p>
         <ul class="claims">
-          <li><span class="v v-ok">True</span><span>Those really are the only two places reading the old value.
-            Searched the whole codebase and the tests.</span></li>
-          <li><span class="v v-ok">True</span><span>Nothing changes for the other five ranges &mdash; the new field
-            works out to exactly the old number. Tested at <code>insightsWindow.test.ts:291</code>.</span></li>
-          <li><span class="v v-no">False</span><span>&ldquo;Showing time that hasn&rsquo;t happened yet would leave
-            empty bars on the right.&rdquo; It does leave them, for 30 minutes.</span></li>
+          <li>
+            <span class="v v-ok">True</span
+            ><span
+              >Those really are the only two places reading the old value. Searched the whole codebase and the
+              tests.</span
+            >
+          </li>
+          <li>
+            <span class="v v-ok">True</span
+            ><span
+              >Nothing changes for the other five ranges &mdash; the new field works out to exactly the old number.
+              Tested at <code>insightsWindow.test.ts:291</code>.</span
+            >
+          </li>
+          <li>
+            <span class="v v-no">False</span
+            ><span
+              >&ldquo;Showing time that hasn&rsquo;t happened yet would leave empty bars on the right.&rdquo; It does
+              leave them, for 30 minutes.</span
+            >
+          </li>
         </ul>
       </div>
     </details>
@@ -743,7 +1233,6 @@
 
       <div class="panel">
         <ol class="walk">
-
           <li>
             <div class="a-head">
               <span class="path">src/insightsWindow.ts<b>:225</b></span>
@@ -762,11 +1251,16 @@
 <span class="l p">+  return resolveWindow(DEFAULT_INSIGHTS_WINDOW, now, null);   <span class="cm">// default is never 'session'</span></span>
 <span class="l n"> }</span></pre>
             </div>
-            <details class="why"><summary>why required and not optional</summary><div class="why-body">
-              <p><span class="stamp">author &middot; 13:26</span>
-                Optional, a page that forgot it still works. It quietly shows the last 5 hours and labels them your
-                session. Nothing errors. Required means the compiler catches it.</p>
-            </div></details>
+            <details class="why">
+              <summary>why required and not optional</summary>
+              <div class="why-body">
+                <p>
+                  <span class="stamp">author &middot; 13:26</span> Optional, a page that forgot it still works. It
+                  quietly shows the last 5 hours and labels them your session. Nothing errors. Required means the
+                  compiler catches it.
+                </p>
+              </div>
+            </details>
           </li>
 
           <li>
@@ -799,15 +1293,21 @@
 <span class="l cm">5 call sites. All 5 are in the 4 files above.</span></pre>
             </div>
           </li>
-
         </ol>
 
         <p class="claims-head">What the author claims &middot; checked by a second agent</p>
         <ul class="claims">
-          <li><span class="v v-ok">True</span><span>5 call sites, 5 updated. The 24 in tests all pass
-            <code>null</code> deliberately.</span></li>
-          <li><span class="v v-ok">True</span><span>The default range is <code>7d</code> in both the back end and the
-            front end, so it can never accidentally be the session range.</span></li>
+          <li>
+            <span class="v v-ok">True</span
+            ><span>5 call sites, 5 updated. The 24 in tests all pass <code>null</code> deliberately.</span>
+          </li>
+          <li>
+            <span class="v v-ok">True</span
+            ><span
+              >The default range is <code>7d</code> in both the back end and the front end, so it can never accidentally
+              be the session range.</span
+            >
+          </li>
         </ul>
       </div>
     </details>
@@ -821,12 +1321,13 @@
           <h3>The Usage badge is now a button you can click</h3>
           <span class="meta">4 steps &middot; 9 changes</span>
         </div>
-        <div class="cue">A product call, not a technical one. Plus the file you&rsquo;d expect to change here, and didn&rsquo;t.</div>
+        <div class="cue">
+          A product call, not a technical one. Plus the file you&rsquo;d expect to change here, and didn&rsquo;t.
+        </div>
       </summary>
 
       <div class="panel">
         <ol class="walk">
-
           <li>
             <div class="a-head">
               <span class="path">web/src/console/TopBar.tsx<b>:696</b></span>
@@ -850,12 +1351,16 @@
 <span class="l m">-  &lt;/div&gt;</span>
 <span class="l p">+  &lt;/button&gt;</span></pre>
             </div>
-            <details class="why"><summary>why Economics and not the default page</summary><div class="why-body">
-              <p><span class="stamp">author &middot; 13:44</span>
-                The page&rsquo;s normal default is a week. That answers a different question with a much bigger number,
-                and the number is what people remember. The hover text is unchanged, so anyone who just glances at the
-                badge loses nothing.</p>
-            </div></details>
+            <details class="why">
+              <summary>why Economics and not the default page</summary>
+              <div class="why-body">
+                <p>
+                  <span class="stamp">author &middot; 13:44</span> The page&rsquo;s normal default is a week. That
+                  answers a different question with a much bigger number, and the number is what people remember. The
+                  hover text is unchanged, so anyone who just glances at the badge loses nothing.
+                </p>
+              </div>
+            </details>
           </li>
 
           <li>
@@ -868,11 +1373,16 @@
               <pre><span class="l m">-const INSIGHTS_WINDOWS: readonly InsightsWindow[] = ['6h', '24h', '7d', '30d', 'all'];</span>
 <span class="l p">+const INSIGHTS_WINDOWS: readonly InsightsWindow[] = ['session', '6h', '24h', '7d', '30d', 'all'];</span></pre>
             </div>
-            <details class="why"><summary>why this one line matters</summary><div class="why-body">
-              <p><span class="stamp">author &middot; 13:46</span>
-                The repo requires anything that counts as &ldquo;where am I&rdquo; to live in the URL. Skip this and
-                the button works once, then breaks the moment someone hits back or reloads.</p>
-            </div></details>
+            <details class="why">
+              <summary>why this one line matters</summary>
+              <div class="why-body">
+                <p>
+                  <span class="stamp">author &middot; 13:46</span> The repo requires anything that counts as
+                  &ldquo;where am I&rdquo; to live in the URL. Skip this and the button works once, then breaks the
+                  moment someone hits back or reloads.
+                </p>
+              </div>
+            </details>
           </li>
 
           <li>
@@ -909,22 +1419,33 @@
 <span class="l n"> 96:    name: '--well',</span>
 <span class="l n">191:    name: '--border-lo',</span></pre>
             </div>
-            <details class="why"><summary>why this is the risky spot</summary><div class="why-body">
-              <p><span class="stamp">added for context</span>
-                The repo says every new colour must be registered here or it breaks the light theme, and only one test
-                in the whole suite reads CSS at all. New CSS was added, so this is the obvious place for the PR to be
-                quietly wrong. It isn&rsquo;t &mdash; no new colours were invented.</p>
-            </div></details>
+            <details class="why">
+              <summary>why this is the risky spot</summary>
+              <div class="why-body">
+                <p>
+                  <span class="stamp">added for context</span> The repo says every new colour must be registered here or
+                  it breaks the light theme, and only one test in the whole suite reads CSS at all. New CSS was added,
+                  so this is the obvious place for the PR to be quietly wrong. It isn&rsquo;t &mdash; no new colours
+                  were invented.
+                </p>
+              </div>
+            </details>
           </li>
-
         </ol>
 
         <p class="claims-head">What the author claims &middot; checked by a second agent</p>
         <ul class="claims">
-          <li><span class="v v-ok">True</span><span>All six colours already exist in <code>tokens.ts</code>. No
-            hard-coded colours added.</span></li>
-          <li><span class="v v-ok">True</span><span>The new range was added to all three lists that have to agree
-            about it &mdash; the type, the request validator, and the URL.</span></li>
+          <li>
+            <span class="v v-ok">True</span
+            ><span>All six colours already exist in <code>tokens.ts</code>. No hard-coded colours added.</span>
+          </li>
+          <li>
+            <span class="v v-ok">True</span
+            ><span
+              >The new range was added to all three lists that have to agree about it &mdash; the type, the request
+              validator, and the URL.</span
+            >
+          </li>
         </ul>
       </div>
     </details>
@@ -961,12 +1482,17 @@
 <span class="l m">-  &lt;title&gt;{`${fmtUsd(b.costUsd)} — the 24h from ${…}`}&lt;/title&gt;</span>
 <span class="l p">+  &lt;title&gt;{`${fmtUsd(b.costUsd)} — the ${each} from ${…}`}&lt;/title&gt;</span></pre>
             </div>
-            <details class="why"><summary>how long this has been wrong</summary><div class="why-body">
-              <p><span class="stamp">author &middot; 13:56</span>
-                The chart used to be daily, so it counted the bars and wrote &ldquo;12d ago&rdquo;. When time ranges
-                were added nobody updated it, so a 6-hour view was labelled &ldquo;12d ago&rdquo;. Old bug. The session
-                range made it obvious &mdash; &ldquo;20d ago&rdquo; right next to a line naming the exact 5 hours.</p>
-            </div></details>
+            <details class="why">
+              <summary>how long this has been wrong</summary>
+              <div class="why-body">
+                <p>
+                  <span class="stamp">author &middot; 13:56</span> The chart used to be daily, so it counted the bars
+                  and wrote &ldquo;12d ago&rdquo;. When time ranges were added nobody updated it, so a 6-hour view was
+                  labelled &ldquo;12d ago&rdquo;. Old bug. The session range made it obvious &mdash; &ldquo;20d
+                  ago&rdquo; right next to a line naming the exact 5 hours.
+                </p>
+              </div>
+            </details>
           </li>
 
           <li>
@@ -983,22 +1509,30 @@
 <span class="l p">+  return hours &lt; 24 ? `${Math.round(hours)}h` : `${Math.round(hours / 24)}d`;</span>
 <span class="l p">+}</span></pre>
             </div>
-            <details class="why"><summary>why not reuse the existing label</summary><div class="why-body">
-              <p><span class="stamp">author &middot; 13:58</span>
-                The existing one reads &ldquo;6h buckets&rdquo;, which is fine on the toolbar and wrong in the middle
-                of a sentence.</p>
-            </div></details>
+            <details class="why">
+              <summary>why not reuse the existing label</summary>
+              <div class="why-body">
+                <p>
+                  <span class="stamp">author &middot; 13:58</span> The existing one reads &ldquo;6h buckets&rdquo;,
+                  which is fine on the toolbar and wrong in the middle of a sentence.
+                </p>
+              </div>
+            </details>
           </li>
         </ol>
 
         <p class="claims-head">What the author claims &middot; checked by a second agent</p>
         <ul class="claims">
-          <li><span class="v v-ok">True</span><span>No hard-coded &ldquo;d&rdquo; or &ldquo;24h&rdquo; left in the
-            chart, and the screen-reader label was updated too.</span></li>
+          <li>
+            <span class="v v-ok">True</span
+            ><span
+              >No hard-coded &ldquo;d&rdquo; or &ldquo;24h&rdquo; left in the chart, and the screen-reader label was
+              updated too.</span
+            >
+          </li>
         </ul>
       </div>
     </details>
-
   </div>
 
   <div class="srule" id="finding"><span>The one problem</span></div>
@@ -1022,33 +1556,73 @@
 <span class="l p">buckets: SESSION_BUCKETS,   <span class="cm">// always 20 — so the chart is always ≥ 30 min wide</span></span></pre>
       </div>
 
-      <p>A window that reset 4 minutes ago has 4 minutes of history. The chart draws 30 minutes of it.
+      <p>
+        A window that reset 4 minutes ago has 4 minutes of history. The chart draws 30 minutes of it.
         <strong>26 of those minutes are in the future</strong> &mdash; exactly the empty bars on the right the first
-        comment says this design avoids.</p>
+        comment says this design avoids.
+      </p>
 
-      <p>For the first half hour after a reset &mdash; <strong>which is exactly when someone who just got rate-limited
-        comes looking</strong> &mdash; up to <strong>85% of the chart is empty</strong>.</p>
+      <p>
+        For the first half hour after a reset &mdash;
+        <strong>which is exactly when someone who just got rate-limited comes looking</strong> &mdash; up to
+        <strong>85% of the chart is empty</strong>.
+      </p>
 
       <div class="tscroll">
         <table>
-          <thead><tr><th>Time since reset</th><th>Bar width</th><th>Chart runs past now by</th><th>Empty bars</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Time since reset</th>
+              <th>Bar width</th>
+              <th>Chart runs past now by</th>
+              <th>Empty bars</th>
+            </tr>
+          </thead>
           <tbody>
-            <tr class="bad"><td>4 min</td><td>90s</td><td>26 min</td><td>17 of 20</td></tr>
-            <tr class="bad"><td>15 min</td><td>90s</td><td>15 min</td><td>10 of 20</td></tr>
-            <tr><td>30 min</td><td>90s</td><td>&mdash;</td><td>none</td></tr>
-            <tr><td>1 hour</td><td>3 min</td><td>&mdash;</td><td>none</td></tr>
-            <tr><td>3 hours</td><td>9 min</td><td>&mdash;</td><td>none</td></tr>
+            <tr class="bad">
+              <td>4 min</td>
+              <td>90s</td>
+              <td>26 min</td>
+              <td>17 of 20</td>
+            </tr>
+            <tr class="bad">
+              <td>15 min</td>
+              <td>90s</td>
+              <td>15 min</td>
+              <td>10 of 20</td>
+            </tr>
+            <tr>
+              <td>30 min</td>
+              <td>90s</td>
+              <td>&mdash;</td>
+              <td>none</td>
+            </tr>
+            <tr>
+              <td>1 hour</td>
+              <td>3 min</td>
+              <td>&mdash;</td>
+              <td>none</td>
+            </tr>
+            <tr>
+              <td>3 hours</td>
+              <td>9 min</td>
+              <td>&mdash;</td>
+              <td>none</td>
+            </tr>
           </tbody>
         </table>
       </div>
 
-      <p style="margin-top:14px;"><strong>Probably not a code bug.</strong> The 30-minute rule may well be right and
-        the comment just overstated. But they can&rsquo;t both stand: either the comment admits the exception, or the
-        chart stops at now. That&rsquo;s the author&rsquo;s call, which is why this is flagged rather than guessed at.</p>
+      <p style="margin-top: 14px">
+        <strong>Probably not a code bug.</strong> The 30-minute rule may well be right and the comment just overstated.
+        But they can&rsquo;t both stand: either the comment admits the exception, or the chart stops at now.
+        That&rsquo;s the author&rsquo;s call, which is why this is flagged rather than guessed at.
+      </p>
 
-      <p style="font-size:14px;color:var(--faint);">Numbers worked out by copying the two functions and running them.
-        The repo&rsquo;s dependencies aren&rsquo;t installed in this environment, so that&rsquo;s the maths, not the
-        real module.</p>
+      <p style="font-size: 14px; color: var(--faint)">
+        Numbers worked out by copying the two functions and running them. The repo&rsquo;s dependencies aren&rsquo;t
+        installed in this environment, so that&rsquo;s the maths, not the real module.
+      </p>
     </div>
   </div>
 
@@ -1058,8 +1632,10 @@
     <ol>
       <li><strong>Sort out the problem above.</strong> One decision, and it affects idea 02.</li>
       <li><strong>Idea 02 needs the most care.</strong> It changed something other code already relied on.</li>
-      <li><strong>Ideas 01 and 04 are judgement calls, not code.</strong> Is renaming the button the right way to admit
-        we don&rsquo;t know? Should a status badge become a link?</li>
+      <li>
+        <strong>Ideas 01 and 04 are judgement calls, not code.</strong> Is renaming the button the right way to admit we
+        don&rsquo;t know? Should a status badge become a link?
+      </li>
       <li><strong>Idea 03 is routine</strong> and has been checked for you. Skim it.</li>
       <li><strong>Idea 05 is a separate PR</strong> that ended up in this one. Review it or ask for the split.</li>
     </ol>
@@ -1067,22 +1643,29 @@
 
   <details class="colophon">
     <summary>How this was put together, and what&rsquo;s fake in this demo</summary>
-    <p><b>The notes.</b> The agent that wrote the code wrote the notes as it went. Anything marked with a time was
+    <p>
+      <b>The notes.</b> The agent that wrote the code wrote the notes as it went. Anything marked with a time was
       written before it knew whether the change worked. At the end it grouped them into the 5 ideas and added the
-      &ldquo;for context&rdquo; notes &mdash; but it could not edit what it had already written. That&rsquo;s what
-      stops it telling a tidy story backwards from a passing test run.</p>
-    <p><b>The checking.</b> A second agent got the code and none of the first one&rsquo;s reasoning. Its only job was
-      to mark each claim true, false, or can&rsquo;t tell. 14 claims: 12 true, 1 false, 1 can&rsquo;t tell. One false
-      claim blocks the PR.</p>
-    <p><b>Dashed boxes</b> are files that are <em>not</em> in the PR. They&rsquo;re here either because you can&rsquo;t
+      &ldquo;for context&rdquo; notes &mdash; but it could not edit what it had already written. That&rsquo;s what stops
+      it telling a tidy story backwards from a passing test run.
+    </p>
+    <p>
+      <b>The checking.</b> A second agent got the code and none of the first one&rsquo;s reasoning. Its only job was to
+      mark each claim true, false, or can&rsquo;t tell. 14 claims: 12 true, 1 false, 1 can&rsquo;t tell. One false claim
+      blocks the PR.
+    </p>
+    <p>
+      <b>Dashed boxes</b> are files that are <em>not</em> in the PR. They&rsquo;re here either because you can&rsquo;t
       judge the change without them, or because they&rsquo;re the file you&rsquo;d expect to have changed and
-      deliberately didn&rsquo;t.</p>
-    <p><b>What&rsquo;s fake.</b> Built after the fact from an already-merged commit, so the timestamps are made up and
+      deliberately didn&rsquo;t.
+    </p>
+    <p>
+      <b>What&rsquo;s fake.</b> Built after the fact from an already-merged commit, so the timestamps are made up and
       the notes are worked out from the code rather than captured while it was written. The code, the counts, the
-      searches, the colour check and the problem found are all real and were verified against the actual repo.
-      Capturing the notes at the time is the part that still needs building.</p>
+      searches, the colour check and the problem found are all real and were verified against the actual repo. Capturing
+      the notes at the time is the part that still needs building.
+    </p>
   </details>
-
 </div>
 
 <script>
@@ -1091,9 +1674,10 @@
     var ideas = Array.prototype.slice.call(document.querySelectorAll('.ideas > details'));
     btn.addEventListener('click', function () {
       var opening = btn.textContent === 'open all';
-      ideas.forEach(function (d) { d.open = opening; });
+      ideas.forEach(function (d) {
+        d.open = opening;
+      });
       btn.textContent = opening ? 'close all' : 'open all';
     });
   })();
 </script>
-

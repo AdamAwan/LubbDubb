@@ -17,7 +17,7 @@ import type { RuntimeControl } from './runtimeControl.js';
  *
  * The arms mutate the running `Config` object as well as poking the consumer,
  * because the object *is* the late reader for anything read through a closure
- * (`system.ts`'s `knowledgeBlock`). That mirrors {@link RuntimeControl}, which the
+ * That mirrors {@link RuntimeControl}, which the
  * cap and pause flag have always worked this way through.
  *
  * → `docs/spec/02-configuration.md#liveness`
@@ -81,29 +81,6 @@ const LIVE_ARMS: Readonly<Record<string, LiveArm>> = {
   // would keep sending replies for as long as it took to bounce the harness.
   sendPrRepliesWithoutApproval: (next, deps) => {
     deps.running.sendPrRepliesWithoutApproval = next.sendPrRepliesWithoutApproval;
-  },
-  // `system.ts` renders the knowledge block through a closure at every agent
-  // launch, reading `config.knowledgeBlockChars` each time — so assigning onto the
-  // running object *is* the arm, and the next dispatch uses it.
-  knowledgeBlockChars: (next, deps) => {
-    deps.running.knowledgeBlockChars = next.knowledgeBlockChars;
-  },
-  // `buildStateSnapshot` reads the running config by reference at every poll and
-  // takes the staleness verdict there, so assigning onto it *is* the arm — the
-  // colours' arm and the colours' reason. Live because this is a reading an
-  // operator tunes while looking at the page it changes: a key that silently
-  // needed a restart would be a number they widened, watched do nothing, and
-  // widened again.
-  knowledgeScopeStaleDays: (next, deps) => {
-    deps.running.knowledgeScopeStaleDays = next.knowledgeScopeStaleDays;
-  },
-  // `knowledgeScopeStaleDays`' arm and its reason: the snapshot reads the running
-  // config by reference at every poll and takes the cold reading there, so assigning
-  // onto it *is* the arm. Live because it is a number an operator tunes while
-  // looking at the page it folds — a restart-only one would be a number they
-  // widened, watched do nothing, and widened again.
-  knowledgeColdDays: (next, deps) => {
-    deps.running.knowledgeColdDays = next.knowledgeColdDays;
   },
   // `buildStateSnapshot` reads the running config by reference at every poll and
   // ships the colours to the cockpit, so assigning onto it *is* the arm: a colour

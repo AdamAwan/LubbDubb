@@ -9,10 +9,10 @@ import type { NearCandidate } from './match.js';
  *
  * One tool, and the discriminator is a single boolean an agent can always answer —
  * *would a fix make this go away?* Not two tools: an agent choosing a shelf is an
- * agent choosing wrongly, which `docs/spec/27-knowledge.md` established at the cost
+ * agent choosing wrongly, which the claim store this replaced established at the cost
  * of finding out.
  *
- * Pure — no I/O, no clock, no store. → `docs/spec/32-obstacles.md#the-intake`
+ * Pure — no I/O, no clock, no store. → `docs/spec/27-obstacles.md#the-intake`
  */
 
 /** How many prior sightings a standing row hands back. */
@@ -147,7 +147,7 @@ function directiveFor(state: ObstacleState, ownerRef: string | null, blocksMe: b
   // telling it to carry on makes it spin. It is the one thing here the harness
   // cannot judge for itself — whether this stops *this* task is a fact about the
   // task — so the agent says it, exactly as it says whether a fix would end the
-  // thing. → `docs/spec/32-obstacles.md#blocked-is-an-answer`
+  // thing. → `docs/spec/27-obstacles.md#blocked-is-an-answer`
   if (blocksMe) {
     return (
       'You cannot finish. Conclude `blocked`, naming this obstacle by the id in this answer. Your goal ' +

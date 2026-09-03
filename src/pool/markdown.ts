@@ -1,11 +1,5 @@
 import { PHASE_ORDER, type SpendPhase } from '../spendInsights.js';
-import type {
-  PoolClaimsDocument,
-  PoolClockDocument,
-  PoolClockKind,
-  PoolDigestDocument,
-  PoolDigestRow,
-} from '../types.js';
+import type { PoolClockDocument, PoolClockKind, PoolDigestDocument, PoolDigestRow } from '../types.js';
 import { poolCauseLabel, poolPhaseLabel } from './aggregate.js';
 import { POOL_RETENTION_DAYS, utcDay } from './digestArm.js';
 
@@ -38,7 +32,7 @@ export function poolMarkdownPath(fleetId: string, kind: PoolClockKind): string {
 
 /** One document as the page a person reads. Pure — same document in, same bytes out. */
 export function renderPoolMarkdown(document: PoolClockDocument): string {
-  const body = document.kind === 'claims' ? claimsBody(document) : digestBody(document);
+  const body = digestBody(document);
   return `${[...heading(document), ...body]
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
@@ -48,7 +42,7 @@ export function renderPoolMarkdown(document: PoolClockDocument): string {
 function heading(document: PoolClockDocument): string[] {
   const source = `${document.kind}.json`;
   return [
-    `# ${document.project} — ${document.kind === 'claims' ? 'what this fleet has vouched for' : 'daily digest'}`,
+    `# ${document.project} — daily digest`,
     '',
     // In the file rather than only in the spec: the person who finds this in a wiki
     // and edits it is the one who most needs telling that the next publish wins.
@@ -58,33 +52,6 @@ function heading(document: PoolClockDocument): string[] {
       `**Published** ${timestamp(document.publishedAt)} · **Harness** ${document.harnessVersion}`,
     '',
   ];
-}
-
-function claimsBody(document: PoolClaimsDocument): string[] {
-  if (document.claims.length === 0) return ['This fleet has vouched for nothing yet.'];
-  const lines = [
-    `${document.claims.length} claim${document.claims.length === 1 ? '' : 's'}, each ruled on by an operator here. ` +
-      // Said in the file for the reason the spec says it: the counts are the loudest
-      // numbers on the page, and a reader who takes them as a threshold has the
-      // corroboration gate exactly backwards.
-      `The counts are this fleet's own — a reading, and never a trigger.`,
-    '',
-  ];
-  for (const claim of document.claims) {
-    const facts = [
-      claim.where === null ? null : `**Where** ${claim.where}`,
-      `**Vouched** ${claim.vouchedAt.slice(0, 10)}`,
-      `**Corroborations** ${claim.corroborations}`,
-      `**Disputes** ${claim.disputes}`,
-    ].filter((fact): fact is string => fact !== null);
-    lines.push(`## ${oneLine(claim.claim)}`, '', facts.join(' · '), '');
-    if (claim.evidence.length > 0) {
-      lines.push('<details><summary>What the agents said</summary>', '');
-      for (const word of claim.evidence) lines.push(`- ${oneLine(word)}`);
-      lines.push('', '</details>', '');
-    }
-  }
-  return lines;
 }
 
 /** One section of the digest: where its rows are, what its key means, and what it counts. */
@@ -272,16 +239,4 @@ function daysBefore(day: string, days: number): string {
 
 function timestamp(iso: string): string {
   return `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
-}
-
-/**
- * A claim's own words on one line.
- *
- * A claim is free text an agent wrote, and a newline inside one would end the
- * heading or the list item it is being drawn as — the rest of the sentence then
- * renders as body text under a truncated heading, which reads as a claim the fleet
- * did not make.
- */
-function oneLine(text: string): string {
-  return text.replace(/\s+/g, ' ').trim();
 }

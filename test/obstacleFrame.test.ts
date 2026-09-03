@@ -1,12 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { stripOwnFrame } from '../src/knowledge/frame.js';
-import { validateRaise } from '../src/knowledge/knowledge.js';
 import { claimKey, claimsMatch } from '../src/claims.js';
 
 /**
  * Taking the caller's own task out of the claim it raised
- * (`docs/spec/27-knowledge.md#the-frame-is-not-the-claim`).
+ * (`docs/spec/27-obstacles.md#the-intake`).
  *
  * The expensive half is not the wording — it is that the ref sits **inside the
  * claim key**, so no other agent's sentence can equal it or contain it, and the
@@ -64,43 +63,4 @@ test('the strip is what lets two agents on two goals agree at all', () => {
     claimsMatch(claimKey(stripOwnFrame(first, 'pr:512').claim), claimKey(stripOwnFrame(second, 'pr:733').claim)),
     'and the unframed pair must be one claim',
   );
-});
-
-test('raise keeps the agent’s own sentence verbatim, and never refuses over framing', () => {
-  const parsed = validateRaise(
-    { claim: 'test X is flaky and nothing to do with PR 512', evidence: 'Re-ran it on a clean tree: green.' },
-    'pr:512',
-  );
-  assert.ok(parsed.ok);
-  assert.equal(parsed.proposal.claim, 'test X is flaky');
-  assert.equal(parsed.framing.removed, 'pr:512');
-  // The agent's original wording, first and verbatim — where the task context has
-  // always belonged, and what an operator reads to decide whether the fleet should
-  // be told this.
-  assert.ok(parsed.proposal.evidence.startsWith('As raised: test X is flaky and nothing to do with PR 512'));
-  assert.ok(parsed.proposal.evidence.includes('Re-ran it on a clean tree: green.'));
-
-  // `aboutRef` is never `originRef`, arriving at the same rule from the other end:
-  // a claim filed as being *about* its own goal would carry the ref straight back
-  // into the row the strip took it out of.
-  const own = validateRaise(
-    { claim: 'The seed script runs before the migrations.', evidence: 'saw it', ref: 'pr:512' },
-    'pr:512',
-  );
-  assert.ok(own.ok);
-  assert.equal(own.proposal.aboutRef, null);
-  // Somebody else's work is exactly what the field is for, and is kept.
-  const theirs = validateRaise(
-    { claim: 'The seed script runs before the migrations.', evidence: 'saw it', ref: 'pr:733' },
-    'pr:512',
-  );
-  assert.ok(theirs.ok);
-  assert.equal(theirs.proposal.aboutRef, 'pr:733');
-
-  // Nothing added when nothing was removed: an evidence field that quietly gained
-  // a copy of the claim on every call would be a second copy of it on every row.
-  const clean = validateRaise({ claim: 'knip runs every rule at error.', evidence: 'check went red' }, 'pr:512');
-  assert.ok(clean.ok);
-  assert.equal(clean.framing.removed, null);
-  assert.equal(clean.proposal.evidence, 'check went red');
 });

@@ -1,6 +1,6 @@
 /**
  * Taking the caller's own task out of the claim it raised
- * (`docs/spec/27-knowledge.md#the-frame-is-not-the-claim`).
+ * (`docs/spec/27-obstacles.md#the-intake`).
  *
  * An agent working `pr:512` writes down what it saw: *"test X is flaky and nothing
  * to do with PR 512."* Every word of it is true, and it is the wrong sentence —
@@ -25,7 +25,7 @@
  */
 
 /** What a strip did, so the caller can say so rather than doing it quietly. */
-export interface FramedClaim {
+interface FramedClaim {
   /** The claim with the caller's own ref out of it, or the claim unchanged. */
   claim: string;
   /** The ref that was removed, or null when the claim never named it. */

@@ -3864,7 +3864,7 @@ button.cn-grow {
 }
 
 /* ---------------------------------------------------------------------------
-   The obstacle board (docs/spec/32-obstacles.md#in-the-cockpit).
+   The obstacle board (docs/spec/27-obstacles.md#in-the-cockpit).
 
    Every colour is a `var()`, never a literal, because a hex at a use site is a
    surface that stays dark when somebody switches to Light and the only thing in

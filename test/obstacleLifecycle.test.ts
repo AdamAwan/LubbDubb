@@ -17,7 +17,7 @@ import type { ObstacleState } from '../src/types.js';
  * rather than intended. Gating every durable claim on an operator's click meant its
  * output when nobody visited the page was exactly zero, and neglect had no degraded
  * mode — a queue only a human empties is exactly how the last attempt died
- * (`docs/spec/32-obstacles.md#what-went-wrong-last-time`). A convention would not
+ * (`docs/spec/27-obstacles.md#what-went-wrong-last-time`). A convention would not
  * have caught it.
  *
  * So this file fails when a state is added without an automatic exit, and it carves

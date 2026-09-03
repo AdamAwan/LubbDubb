@@ -175,7 +175,7 @@ test('a pack is shared only when somebody shares it, and the document and its co
     false,
     'the pack is never fetched back',
   );
-  assert.equal(system.store.listFacts().length, 0, 'a shared pack proposes no knowledge');
+  assert.deepEqual(system.store.listObstacles(), [], 'a shared pack files nothing');
   assert.equal(system.store.listErrors().length, 0);
 
   const after = (await app.inject({ method: 'GET', url: '/api/prs/7/review-pack' })).json() as ReviewPackPayload;

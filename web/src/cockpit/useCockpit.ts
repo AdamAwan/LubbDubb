@@ -348,11 +348,7 @@ export function useCockpit(): CockpitStatus {
       viewReviewPack: (prNumber) =>
         go(prNumber === null ? { reviewPack: null, reviewIdea: null } : { reviewPack: prNumber }),
       openReviewIdea: (id) => go({ reviewIdea: id }),
-      viewFact: (id) => go({ fact: id }),
-      // One `go` for however many of the five moved: they are one place, and two
-      // calls would push two history entries for a single change of question.
-      setKnowledgeQuery: (next) => go(next),
-      // One `go` for both, for `setKnowledgeQuery`'s reason: which row is unfolded
+      // One `go` for both: which row is unfolded
       // and whether the terminal tail is open are one place, and two calls would
       // push two history entries for a single move.
       setObstacleQuery: (next) => go(next),
@@ -421,19 +417,6 @@ export function useCockpit(): CockpitStatus {
       renamePet: (id, name) => then(api.renamePet(id, name)),
       placePet: (id, placed) => then(api.placePet(id, placed)),
       blendPet: (id) => then(api.blendPet(id)),
-      setFactReach: (id, reach) => then(api.setFactReach(id, reach)),
-      mergeFacts: (id, members) => then(api.mergeFacts(id, members)),
-      // A store write and never a publish: the desk's next pulse re-derives the
-      // document and puts it, so an operator's click never waits on a push to
-      // another continent.
-      setFactKeepLocal: (id, keepLocal) => then(api.setFactKeepLocal(id, keepLocal)),
-      raiseFact: (claim, originRef) => then(api.raiseFact(claim, originRef)),
-      exitFact: (id, exit) => then(api.exitFact(id, exit)),
-      settleGraduation: (id, outcome) => then(api.settleGraduation(id, outcome)),
-      // A read, so no refetch: the evidence behind one claim rides its own route
-      // precisely because it must not be pulled along by the state poll.
-      factDetail: (id) => api.knowledgeFact(id),
-      resolveContradiction: (id, ruling) => then(api.resolveContradiction(id, ruling)),
       completeHumanTask: (id, note) => then(api.completeHumanTask(id, note)),
       declineHumanTask: (id, note) => then(api.declineHumanTask(id, note)),
       closeHumanTaskTicket: (id, note) => then(api.closeHumanTaskTicket(id, note)),
@@ -539,14 +522,6 @@ export function useCockpit(): CockpitStatus {
       viewingScratchpad: place.scratchpad,
       viewingReviewPack: place.reviewPack,
       reviewIdea: place.reviewIdea,
-      viewingFact: place.fact,
-      knowledgeView: place.knowledgeView,
-      knowledgeShow: place.knowledgeShow,
-      knowledgeSort: place.knowledgeSort,
-      knowledgeDesc: place.knowledgeDesc,
-      knowledgeFolded: place.knowledgeFolded,
-      knowledgeQueue: place.knowledgeQueue,
-      knowledgeOpen: place.knowledgeOpen,
       viewingObstacle: place.obstacle,
       obstacleEnded: place.obstacleEnded,
       insightsView: place.insightsView,

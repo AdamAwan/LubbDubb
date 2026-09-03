@@ -31,22 +31,8 @@
  * happen that they cannot do by reading the issue.
  */
 
-import { validateClaimText } from '../knowledge/knowledge.js';
-
 /** A document long enough to be a real write-up, short enough not to be a pasted transcript. */
 export const MAX_RETRO_DOCUMENT = 20_000;
-
-/**
- * How many lessons one retrospective may propose (issue #355 phase 2).
- *
- * The scarce resource on this path is not storage: every lesson lands `proposed`
- * and is worth nothing until a person has read it and vouched for it. A run
- * teaches one or two things about *working* this repository; a write-up that
- * files fifteen has stopped discriminating — and fifteen plausible claims are
- * read less carefully than two, which is the failure the gate itself cannot
- * catch. The cap is therefore on the reader's attention, not on the table.
- */
-const MAX_RETRO_LESSONS = 5;
 
 /** The summary is the station's one line and the fleet's scannable reading of the run. */
 const MAX_RETRO_SUMMARY = 400;
@@ -92,17 +78,10 @@ export function retroSubmitOrigin(
  * the document, and a retrospective nobody opens has not been written. The document
  * is **trimmed rather than refused** (`MAX_PLAN_DOCUMENT_CHARS`' rule): an over-long
  * write-up must not sink the whole submission after the work of assembling it.
- *
- * The lessons are **optional, and never sink the submission** — a run that taught
- * nothing general is the common case, and a retrospective that files no lesson is
- * a complete retrospective. See {@link parseLessons} for what happens to the ones
- * that do not fit.
  */
 export function validateRetrospective(
   args: Record<string, unknown>,
-):
-  | { ok: true; summary: string; document: string; trimmed: boolean; lessons: string[]; lessonsDropped: number }
-  | { ok: false; error: string } {
+): { ok: true; summary: string; document: string; trimmed: boolean } | { ok: false; error: string } {
   const summary = typeof args.summary === 'string' ? args.summary.replace(/\s+/g, ' ').trim() : '';
   if (!summary) {
     return {
@@ -128,50 +107,5 @@ export function validateRetrospective(
     };
   }
   const trimmed = raw.length > MAX_RETRO_DOCUMENT;
-  const { lessons, dropped } = parseLessons(args.lessons);
-  return {
-    ok: true,
-    summary,
-    document: trimmed ? raw.slice(0, MAX_RETRO_DOCUMENT) : raw,
-    trimmed,
-    lessons,
-    lessonsDropped: dropped,
-  };
-}
-
-/**
- * The lessons a submission carries, and what happens to the ones that do not fit.
- *
- * **Dropped whole, never trimmed** — the opposite of the document's rule, and the
- * difference is what truncation leaves behind. Half a write-up is a shorter
- * write-up; half a lesson is a *different claim*, still promotable, and the one
- * safeguard this whole feature rests on is a person reading the claim before
- * vouching for it. So an over-long lesson is dropped and the count is handed back
- * — the agent is told, the operator is never shown a mangled assertion, and
- * neither of those is silent.
- *
- * A missing or malformed `lessons` is no lessons rather than a refusal, for
- * {@link validateRetrospective}'s stated reason: the write-up must not sink over
- * a field the run had nothing to put in.
- */
-function parseLessons(raw: unknown): { lessons: string[]; dropped: number } {
-  if (!Array.isArray(raw)) return { lessons: [], dropped: 0 };
-  const lessons: string[] = [];
-  let dropped = 0;
-  for (const entry of raw) {
-    const parsed = validateClaimText(entry);
-    if (!parsed.ok) {
-      dropped += 1;
-      continue;
-    }
-    // Over the cap is a drop like any other, and counted like any other: an agent
-    // that filed eight is told two did not land, rather than being left to assume
-    // all eight are waiting for a reader.
-    if (lessons.length >= MAX_RETRO_LESSONS) {
-      dropped += 1;
-      continue;
-    }
-    lessons.push(parsed.claim);
-  }
-  return { lessons, dropped };
+  return { ok: true, summary, document: trimmed ? raw.slice(0, MAX_RETRO_DOCUMENT) : raw, trimmed };
 }

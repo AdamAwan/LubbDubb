@@ -21,7 +21,7 @@ import { buildObstacleWorld, reportedChecks } from './world.js';
  *
  * On the pulse and not in `src/dispatcher/` for the notice desk's reason: it
  * staffs nobody, holds nothing, and no rule reads what it writes.
- * → `docs/spec/32-obstacles.md#the-harness-is-a-voice`
+ * → `docs/spec/27-obstacles.md#the-harness-is-a-voice`
  */
 export class ObstacleVoiceDesk {
   constructor(private readonly deps: { store: Store; errors?: ErrorRecorder }) {}
@@ -47,7 +47,7 @@ export class ObstacleVoiceDesk {
         // it, and would file a *keyless* duplicate instead: a row nothing can
         // deliver, match or ever end. Silence is the honest answer, and the row is
         // already there for the first agent's locating report to carry to
-        // `standing`. → `docs/spec/32-obstacles.md#a-key-alone-is-not-always-enough`
+        // `standing`. → `docs/spec/27-obstacles.md#a-key-alone-is-not-always-enough`
         if (held.has(seen.checkName)) continue;
         // The gates, run against the harness's own reading. `dispatchChecks` is the
         // grounding set, and for a report with no dispatch behind it that is the
