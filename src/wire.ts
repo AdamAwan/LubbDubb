@@ -58,6 +58,7 @@ import type { PrAttention } from './prAttention.js';
 import type { PoolStatus } from './pool/poolDesk.js';
 import type { PoolRollup } from './pool/aggregate.js';
 import type { PrHealth } from './prHealth.js';
+import type { PrPackStanding } from './reviewPacks/standing.js';
 import type { PrReviewState } from './review/prReviewState.js';
 import type { ControlState } from './runtimeControl.js';
 import type { RunningConfigGroup } from './server/runningConfig.js';
@@ -175,6 +176,17 @@ export interface PullRequest extends WorldPullRequest {
   attention?: PrAttention;
   /** What the harness will do about each *failing* check, from `classifyCiFailures`. */
   ciVerdict?: CiVerdict;
+  /**
+   * Whether this pull request has a **review pack**, and whether it is about the
+   * head — the mark on its row (`src/reviewPacks/standing.ts`). Absent means no
+   * pack and nobody writing one, which is what draws no mark.
+   *
+   * A standing rather than the pack: the pack is a document, read over its own
+   * route by the page that draws it, and shipping twenty of them on every pulse to
+   * answer one bit per row is the trade this field exists not to make.
+   * → `docs/spec/31-review-packs.md#on-the-row`
+   */
+  pack?: PrPackStanding;
   /**
    * Where this pull request stands with the fleet's own reviewer — the mark on
    * its row and the card on its page (`src/review/prReviewState.ts`).
@@ -2360,6 +2372,13 @@ export type {
 export type { RemedyCauseTotal, RemedyInsights, RemedyKindHealth, RemedyRow } from './remedyInsights.js';
 export type { RemedyCause, RemedyGuard, RemedyKind } from './types.js';
 export type { McpChannel } from './types.js';
+/**
+ * One CI check as its provider names it. On the wire because the cockpit's checks
+ * mark draws the list `ciStatus` folds — a re-export rather than a re-declaration,
+ * so the chip names exactly what the policy matched.
+ * → `docs/spec/17-cockpit.md#the-checks-mark`
+ */
+export type { CiCheck } from './types.js';
 // The pool's own shapes. A wire type either **is** a domain type or `extends` it,
 // so these are re-exports rather than re-declarations — the cockpit reads exactly
 // what the store holds. → `docs/spec/28-cross-fleet-pool.md`
@@ -2367,6 +2386,8 @@ export type { PoolClockKind, PoolDigestRow, PoolFleetReading, PoolPublication } 
 export type { PoolStatus } from './pool/poolDesk.js';
 /** The fleet review as the cockpit draws it. → `docs/spec/07-pull-requests.md#the-fleet-review` */
 export type { PrReviewState, PrReviewStatus } from './review/prReviewState.js';
+/** Whether a pull request has a review pack. → `docs/spec/31-review-packs.md#on-the-row` */
+export type { PrPackStanding } from './reviewPacks/standing.js';
 export type { PoolRollup, PoolRollupRow } from './pool/aggregate.js';
 /** What `POST /api/issues/:number/dismiss-run` stopped on its way out. */
 export type { RunClearOut } from './floor/endRun.js';

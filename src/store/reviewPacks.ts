@@ -53,6 +53,13 @@ export const REVIEW_PACK_COLUMNS: ColumnMigrations = {
  * also a record of what somebody did to it, regenerating against a new head throws
  * their marks away.
  */
+/** One pull request's current pack, without its document. → {@link ReviewPackStore.listReviewPackHeads} */
+export interface ReviewPackHead {
+  prNumber: number;
+  headSha: string;
+  writtenAt: string;
+}
+
 export class ReviewPackStore {
   constructor(private readonly ctx: StoreContext) {}
 
@@ -107,6 +114,36 @@ export class ReviewPackStore {
       .prepare(`SELECT document, written_at FROM review_packs WHERE pr_number=? ORDER BY written_at DESC, rowid DESC`)
       .all(prNumber) as PackRow[];
     return rows.map((r) => ({ pack: JSON.parse(r.document) as ReviewPack, writtenAt: r.written_at }));
+  }
+
+  /**
+   * Every pull request's current pack as **three columns**, newest first — the
+   * pull request, the head it was written against, and when.
+   *
+   * Beside {@link listCurrentReviewPacks} rather than instead of it, and the
+   * difference is the `document` column: that one parses every pack it returns,
+   * which is the right price for a surface that draws them and the wrong one for
+   * the state snapshot, which folds this on **every pulse** to answer one question
+   * per row — is there a pack, and is it about this head. Nothing here reads the
+   * document, so nothing here has to.
+   * → `docs/spec/31-review-packs.md#on-the-row`
+   */
+  listReviewPackHeads(): ReviewPackHead[] {
+    const rows = this.ctx.db
+      .prepare(
+        `SELECT pr_number, head_sha, written_at FROM review_packs
+         ORDER BY pr_number ASC, written_at DESC, rowid DESC`,
+      )
+      .all() as HeadRow[];
+    const heads = new Map<number, ReviewPackHead>();
+    // First row per pull request wins: the ordering above puts the newest there,
+    // the same tie-break `listReviewPacks` takes so the two cannot name different
+    // packs as current.
+    for (const row of rows) {
+      if (heads.has(row.pr_number)) continue;
+      heads.set(row.pr_number, { prNumber: row.pr_number, headSha: row.head_sha, writtenAt: row.written_at });
+    }
+    return [...heads.values()];
   }
 
   /**
@@ -329,6 +366,11 @@ export class ReviewPackStore {
 
 interface PackRow {
   document: string;
+  written_at: string;
+}
+interface HeadRow {
+  pr_number: number;
+  head_sha: string;
   written_at: string;
 }
 interface ShareRow {

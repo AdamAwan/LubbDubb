@@ -30,6 +30,8 @@ import { Ref, TicketLink } from '../components/refs.js';
 import { askPrompt, localRunPrompt } from '../cockpit/desktopLink.js';
 import { DesktopLink } from '../components/DesktopLink.js';
 import { Icon } from '../components/icons.js';
+import { CiMark } from '../components/CiMark.js';
+import { PackMark } from '../components/PackMark.js';
 import { ReviewMark } from '../components/ReviewMark.js';
 import {
   CONTROL_CLASS,
@@ -1059,13 +1061,13 @@ function Part({
           PR closed unmerged — is the one thing the board cannot say for itself. */}
       {pr !== null && (pr.open || pr.pr.merged !== (group === 'merged')) && (
         <span className="cn-pstate">
-          {/* The ladder is drawn for an open pull request only, which is what the
+          {/* The checks are drawn for an open pull request only, which is what the
               pull-request card does with the same two components: on a dead PR
               the checks are history, and the card's closed rows carry a word and
-              no dots for exactly that reason. */}
+              no chip for exactly that reason. */}
           {pr.open ? (
             <>
-              <CiLadder pr={pr.pr} />
+              <CiMark pr={pr.pr} />
               <CourtChip pr={pr.pr} now={now} />
             </>
           ) : (
@@ -1235,10 +1237,11 @@ function PullRequests({
               <span className="cn-sub">{pr.branch}</span>
             </span>
             <ThreadChip pr={pr} />
-            {/* The fleet's own reading, left of the CI ladder so the two verdicts
+            {/* The fleet's own reading, left of the checks so the two verdicts
                 read in the order the harness produces them. */}
             <ReviewMark review={pr.review} now={view.now} onOpen={() => actions.selectPr(pr.number)} />
-            <CiLadder pr={pr} />
+            <PackMark pack={pr.pack} onOpen={() => actions.selectPr(pr.number)} />
+            <CiMark pr={pr} onOpen={() => actions.selectPr(pr.number)} />
             <CourtChip pr={pr} now={view.now} />
             <span className="cn-refs">
               <Ref to={`pr:${pr.number}`} />
@@ -1642,7 +1645,7 @@ export function waitedFor(sinceIso: string, now: number): string {
  * Whose court a pull request is in, with how long it has been waiting where that
  * arm means it.
  *
- * Exported for the pull-request page for `CiLadder`'s reason: the chip is a
+ * Exported for the pull-request page for `CiMark`'s reason: the chip is a
  * reading of `attention`, and a second one written beside it would be a second
  * opinion about a verdict the server already took.
  */
@@ -1661,46 +1664,6 @@ export function CourtChip({ pr, now }: { pr: OpenPullRequest; now: number }): JS
       {pr.attention.status}
       {waited && <span className="cn-chip-age"> · {waited}</span>}
     </i>
-  );
-}
-
-/**
- * One dot per check the CI policy classified, in the policy's own three
- * categories, and the aggregate under its generic name when the provider reported
- * no per-check detail at all. No check name is written here — every one comes off
- * the verdict.
- *
- * Exported for the overview's rack for `courtTone`'s reason: the ladder is a
- * reading of `ciVerdict`, and a second one written beside it would be a second
- * chance to classify a check the policy already classified.
- */
-export function CiLadder({ pr }: { pr: PullRequest }): JSX.Element | null {
-  const verdict = pr.ciVerdict;
-  const dots: { name: string; tone: string }[] = [
-    ...(verdict?.dispatch ?? []).map((m) => ({ name: m.name, tone: 'cn-fail' })),
-    ...(verdict?.escalate ?? []).map((m) => ({ name: m.name, tone: 'cn-notours' })),
-    ...(verdict?.ignored ?? []).map((m) => ({ name: m.name, tone: 'cn-mute' })),
-  ];
-  if (dots.length === 0) {
-    // Missing detail is not a clean bill of health, so the aggregate speaks for
-    // itself under the generic name rather than drawing nothing.
-    const tone =
-      pr.ciStatus === 'passing'
-        ? 'cn-pass'
-        : pr.ciStatus === 'failing'
-          ? 'cn-fail'
-          : pr.ciStatus === 'pending'
-            ? 'cn-wait'
-            : null;
-    if (tone === null) return null;
-    dots.push({ name: 'quality gates', tone });
-  }
-  return (
-    <span className="cn-ci">
-      {dots.map((d) => (
-        <i className={`cn-cd ${d.tone}`} key={d.name} title={d.name} />
-      ))}
-    </span>
   );
 }
 

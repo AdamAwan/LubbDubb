@@ -17,7 +17,7 @@ import { absorbSinglePlanStatus, backfillWholePlanParts, PlanStore, PLAN_COLUMNS
 import { ValidationStore, VALIDATION_COLUMNS, VALIDATION_REBUILDS } from './validation.js';
 import { IssueVerdictStore, ISSUE_VERDICT_COLUMNS, ISSUE_VERDICT_RENAMES } from './issueVerdicts.js';
 import { ScratchStore, SCRATCH_COLUMNS } from './scratch.js';
-import { ReviewPackStore, REVIEW_PACK_COLUMNS } from './reviewPacks.js';
+import { ReviewPackStore, REVIEW_PACK_COLUMNS, type ReviewPackHead } from './reviewPacks.js';
 import { RateLimitStore } from './rateLimits.js';
 import { UpgradeStore } from './upgrades.js';
 import { openPetsFromBeforeEggs, PetStore, PET_COLUMNS } from './pets.js';
@@ -862,6 +862,10 @@ export class Store {
   }
   listReviewPacks(prNumber: number): ReviewPackRecord[] {
     return this.reviewPacks.listReviewPacks(prNumber);
+  }
+
+  listReviewPackHeads(): ReviewPackHead[] {
+    return this.reviewPacks.listReviewPackHeads();
   }
   listCurrentReviewPacks(): ReviewPackRecord[] {
     return this.reviewPacks.listCurrentReviewPacks();
