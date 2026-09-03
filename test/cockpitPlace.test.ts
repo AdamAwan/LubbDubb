@@ -10,6 +10,7 @@ import {
   widenedFor,
   type Place,
 } from '../web/src/cockpit/place.js';
+import { DEFAULT_TICKET_VIEW, readTicketView } from '../web/src/cockpit/ticketView.js';
 import { GOAL_SECTIONS } from '../web/src/view/goalPage.js';
 
 const at = (over: Partial<Place> = {}): Place => ({ ...NOWHERE, ...over });
@@ -26,7 +27,7 @@ test('every place round-trips through the query string', () => {
     at({ tab: 'tickets', ticketTracking: 'frozen', ticketState: 'In Review' }),
     at({ tab: 'tickets', ticketFeature: 812, ticketGroup: 'flat', ticketOrder: 'changed' }),
     at({ tab: 'tickets', ticketFeature: 'none' }),
-    at({ tab: 'tickets', ticketView: 'card' }),
+    at({ tab: 'tickets', ticketView: 'table' }),
     at({ tab: 'tickets', ticketView: 'card', ticketColumns: ['Closed', 'Removed'] }),
     at({ tab: 'tickets', ticketColumns: ['Removed'] }),
     at({ panel: 'record' }),
@@ -348,19 +349,73 @@ test('the tickets panel reads the widening back and offers the way out of it', (
   assert.match(panel, /className="tickets-widened"/);
 });
 
-test('the table is the default view, so it costs no query parameter', () => {
+test('the board is the default view, so it costs no query parameter', () => {
   assert.equal(placeQuery(at({ tab: 'tickets' })), '?tab=tickets');
-  assert.equal(readPlace('?tab=tickets').ticketView, 'table');
+  assert.equal(readPlace('?tab=tickets').ticketView, 'card');
   // An unknown view resolves to the default rather than to nothing, like every other
   // validated parameter here.
-  assert.equal(readPlace('?tab=tickets&view=kanban').ticketView, 'table');
+  assert.equal(readPlace('?tab=tickets&view=kanban').ticketView, 'card');
+});
+
+/**
+ * The remembered view is a *default*, and both halves of the codec take it — the
+ * omitted value and the value the parser fills in have to be the same one, or a
+ * bare URL would read back as a place nobody was on and every reload would flip
+ * the tab's layout (#714).
+ */
+test('the remembered view is what a bare tickets URL means, in both directions', () => {
+  assert.equal(readPlace('?tab=tickets', 'table').ticketView, 'table');
+  assert.equal(readPlace('?tab=tickets', 'card').ticketView, 'card');
+  // The URL still outranks it: a link somebody sends opens on the view they were
+  // looking at, whatever this browser prefers.
+  assert.equal(readPlace('?tab=tickets&view=card', 'table').ticketView, 'card');
+  assert.equal(readPlace('?tab=tickets&view=table', 'card').ticketView, 'table');
+  // And the other end omits the remembered one, so each place keeps one spelling.
+  assert.equal(placeQuery(at({ tab: 'tickets', ticketView: 'table' }), 'table'), '?tab=tickets');
+  assert.equal(placeQuery(at({ tab: 'tickets', ticketView: 'card' }), 'table'), '?tab=tickets&view=card');
+  for (const remembered of ['table', 'card'] as const) {
+    for (const view of ['table', 'card'] as const) {
+      const place = at({ tab: 'tickets', ticketView: view });
+      assert.deepEqual(readPlace(placeQuery(place, remembered), remembered), place, `${view} under ${remembered}`);
+    }
+  }
+});
+
+test('a stored view is validated on the way in, like every parameter the operator can reach', () => {
+  assert.equal(readTicketView('table'), 'table');
+  assert.equal(readTicketView('card'), 'card');
+  assert.equal(readTicketView(null), DEFAULT_TICKET_VIEW);
+  assert.equal(readTicketView('kanban'), DEFAULT_TICKET_VIEW);
+  assert.equal(readTicketView(''), DEFAULT_TICKET_VIEW);
+  assert.equal(DEFAULT_TICKET_VIEW, 'card', 'the tab opens on the board');
+  // `NOWHERE` states the same value, so `readPlace('')` and the record agree.
+  assert.equal(NOWHERE.ticketView, DEFAULT_TICKET_VIEW);
+});
+
+/**
+ * The preference is written on the *deliberate* switch and nowhere else. A
+ * `popstate` and the boot normalisation both set the place without going through
+ * `setTicketQuery`, so remembering there would make the back button — or somebody
+ * else's link — this browser's default.
+ */
+test('the layout is remembered from the toggle, not from wherever the place came from', () => {
+  const hook = readFileSync('web/src/cockpit/useCockpit.ts', 'utf8');
+  assert.match(hook, /setTicketQuery: \(next\) => \{[\s\S]*?saveTicketView\(next\.ticketView\)/);
+  const nav = readFileSync('web/src/cockpit/useNavigation.ts', 'utf8');
+  assert.ok(!nav.includes('saveTicketView'), 'navigation never writes the preference');
+  // Read once and frozen: re-reading after a switch would give the new place the
+  // query string of the one before it, and `useNavigation` pushes nothing when the
+  // query is unchanged — a switch with no history entry to step back through.
+  assert.equal(nav.match(/loadTicketView\(\)/g)?.length, 1);
+  assert.match(nav, /readPlace\(location\.search, remembered\.current\)/);
+  assert.match(nav, /placeQuery\(pending\.current, remembered\.current\)/);
 });
 
 test('hidden columns are the exception, so an untouched board is a bare URL', () => {
   // Hidden rather than shown, for `collapsed`'s reason: the default is the empty
   // list, and a state that appears in the tracker later shows up on its own rather
   // than being invisibly excluded by a list written before it existed.
-  assert.equal(placeQuery(at({ tab: 'tickets', ticketView: 'card' })), '?tab=tickets&view=card');
+  assert.equal(placeQuery(at({ tab: 'tickets', ticketView: 'table' })), '?tab=tickets&view=table');
   assert.deepEqual(readPlace('?tab=tickets').ticketColumns, []);
 });
 

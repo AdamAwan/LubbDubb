@@ -1,5 +1,6 @@
 import type { ConfigTab, ConsolePanel, ConsoleTab, InsightsView } from './actions.js';
 import { GOAL_SECTIONS } from '../view/goalPage.js';
+import { DEFAULT_TICKET_VIEW, type TicketView } from './ticketView.js';
 import type {
   InsightsWindow,
   TicketOrder,
@@ -183,10 +184,14 @@ export interface Place {
    *
    * A place rather than a `useState` for the reason every field here is one: a view
    * switched and then stepped back out of has to come back, and a link somebody
-   * sends has to open on the view they were looking at. Defaults to the table, which
-   * is what the tab has always been.
+   * sends has to open on the view they were looking at.
+   *
+   * The default is the **remembered** one — `web/src/cockpit/ticketView.ts`, read
+   * once at mount and passed to both `readPlace` and `placeQuery` — falling back to
+   * the board. Both halves take it, or the omitted value and the value the parser
+   * fills in would be different views and every bare URL would flip on reload.
    */
-  ticketView: 'table' | 'card';
+  ticketView: TicketView;
   /**
    * The board columns hidden from view — the **hidden** ones, not the shown ones.
    *
@@ -308,7 +313,10 @@ export const NOWHERE: Place = {
   ticketFeature: null,
   ticketGroup: 'feature',
   ticketOrder: 'added',
-  ticketView: 'table',
+  // The board, and `NOWHERE` states it as the constant rather than the remembered
+  // value: this is the record a bare URL means with nothing stored, and a module
+  // constant that read storage would make `readPlace('')` and `NOWHERE` differ.
+  ticketView: DEFAULT_TICKET_VIEW,
   ticketColumns: [],
 };
 
@@ -380,7 +388,7 @@ const TICKET_WATCH: readonly TicketWatchFilter[] = ['any', 'watched', 'unwatched
 const TICKET_TRACKING: readonly TicketTrackingFilter[] = ['any', 'live', 'frozen'];
 const TICKET_GROUP = ['feature', 'flat'] as const;
 const TICKET_ORDER: readonly TicketOrder[] = ['added', 'changed', 'cost'];
-const TICKET_VIEW: readonly Place['ticketView'][] = ['table', 'card'];
+const TICKET_VIEW: readonly TicketView[] = ['table', 'card'];
 // Every member of `ConsolePanel` bar the ask, which carries its own parameter. A
 // panel missing from here is not merely unshareable: the place round-trips through
 // the query string, so an unlisted name is parsed straight back to null and the
@@ -423,7 +431,7 @@ function param(query: URLSearchParams, key: string): string | null {
  * unrecognised tab or panel is not an error worth a screen — it is a place that
  * does not exist, and the answer to that is the overview.
  */
-export function readPlace(search: string): Place {
+export function readPlace(search: string, remembered: TicketView = DEFAULT_TICKET_VIEW): Place {
   const query = new URLSearchParams(search);
   const tab = param(query, 'tab');
   const panel = param(query, 'panel');
@@ -479,7 +487,10 @@ export function readPlace(search: string): Place {
     ticketFeature: readFeature(param(query, 'feature')),
     ticketGroup: TICKET_GROUP.find((g) => g === param(query, 'group')) ?? 'feature',
     ticketOrder: TICKET_ORDER.find((o) => o === param(query, 'order')) ?? 'added',
-    ticketView: TICKET_VIEW.find((v) => v === param(query, 'view')) ?? 'table',
+    // The remembered view is the fallback, so a bare `?tab=tickets` opens on the
+    // layout this browser last chose. An unknown `?view=` lands here too, like
+    // every other junk value.
+    ticketView: TICKET_VIEW.find((v) => v === param(query, 'view')) ?? remembered,
     ticketColumns: readStrings(param(query, 'hide')),
   };
 }
@@ -665,7 +676,7 @@ function readNumbers(value: string | null): number[] {
  * sound: two spellings of one place would push a history entry that goes
  * nowhere.
  */
-export function placeQuery(place: Place): string {
+export function placeQuery(place: Place, remembered: TicketView = DEFAULT_TICKET_VIEW): string {
   const query = new URLSearchParams();
   if (place.tab !== 'overview') query.set('tab', place.tab);
   if (place.goal !== null) query.set('goal', place.goal);
@@ -709,7 +720,9 @@ export function placeQuery(place: Place): string {
   if (place.ticketFeature !== null) query.set('feature', String(place.ticketFeature));
   if (place.ticketGroup !== 'feature') query.set('group', place.ticketGroup);
   if (place.ticketOrder !== 'added') query.set('order', place.ticketOrder);
-  if (place.ticketView !== 'table') query.set('view', place.ticketView);
+  // Omitted when it is the remembered one, which is the value `readPlace` fills in
+  // — the pair has to agree, or a bare URL would read back as a different place.
+  if (place.ticketView !== remembered) query.set('view', place.ticketView);
   // Sorted on the way out as on the way in, so hiding A then B and B then A are
   // one place rather than two history entries.
   if (place.ticketColumns.length > 0) {

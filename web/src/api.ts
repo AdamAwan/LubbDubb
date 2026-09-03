@@ -602,7 +602,8 @@ const realApi = {
   // A plan's revisions and the last amendment as a diff, fetched when the sheet is
   // opened. Not polled, for the retrospective's reason: every revision carries a
   // write-up, so a replanned plan would put several of them into each poll.
-  getPlanHistory: (planId: string) => authFetch(`/api/plans/${planId}/history`).then((r) => json<PlanHistory>(r)),
+  getPlanHistory: (planId: string) =>
+    authFetch(`/api/plans/${encodeURIComponent(planId)}/history`).then((r) => json<PlanHistory>(r)),
   // A reviewer's confirmation that one acceptance criterion holds. Keyed on the
   // criterion's text, which is what the server stores — an index would move under a
   // re-worded list and carry the tick onto something nobody looked at.

@@ -22,6 +22,7 @@ import type { GoalPageView } from './goalPage.js';
 import { buildPrPage } from './prPage.js';
 import type { PrPageView } from './prPage.js';
 import type { ConfigTab, ConsolePanel, ConsoleTab, InsightsView } from '../cockpit/actions.js';
+import { DEFAULT_TICKET_VIEW, type TicketView } from '../cockpit/ticketView.js';
 
 /**
  * Everything the console draws, derived once per render and handed over as plain data.
@@ -131,7 +132,7 @@ export interface CockpitView {
   ticketFeature: number | 'none' | null;
   ticketGroup: 'feature' | 'flat';
   ticketOrder: TicketOrder;
-  ticketView: 'table' | 'card';
+  ticketView: TicketView;
   ticketColumns: string[];
   /** The agent whose drawer is open, if any. */
   selectedAgent: Agent | null;
@@ -355,7 +356,7 @@ interface ViewInputs {
   ticketFeature?: number | 'none' | null;
   ticketGroup?: 'feature' | 'flat';
   ticketOrder?: TicketOrder;
-  ticketView?: 'table' | 'card';
+  ticketView?: TicketView;
   ticketColumns?: string[];
   /** Optional for `collapsed`'s reason: the default is what a bare URL means. */
 }
@@ -429,7 +430,10 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     ticketFeature: input.ticketFeature ?? null,
     ticketGroup: input.ticketGroup ?? 'feature',
     ticketOrder: input.ticketOrder ?? 'added',
-    ticketView: input.ticketView ?? 'table',
+    // The constant rather than a second literal: this default is only reached by a
+    // caller that forwards no view at all, and the two disagreeing would draw the
+    // table on a tab whose toggle says cards.
+    ticketView: input.ticketView ?? DEFAULT_TICKET_VIEW,
     ticketColumns: input.ticketColumns ?? [],
 
     // The snapshot first, then the open goal's fetched history: a row on that

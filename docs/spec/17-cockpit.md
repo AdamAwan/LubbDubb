@@ -467,7 +467,7 @@ once.
 | `feature`                            | one feature by issue number, or `none` for the orphans; every feature is the absent value                                                                                                                                                                                                                                                                                                                                                          |
 | `group`                              | how the list is arranged: `flat`; `feature` is the absent value                                                                                                                                                                                                                                                                                                                                                                                    |
 | `order`                              | how the Tickets tab is ordered: `cost`; `added` is the absent value                                                                                                                                                                                                                                                                                                                                                                                |
-| `view`                               | the Tickets tab's layout: `card` for the board of state columns; `table` is the absent value                                                                                                                                                                                                                                                                                                                                                       |
+| `view`                               | the Tickets tab's layout: `table` for the list, `card` for the board of state columns. The absent value is the **remembered** one, which is the board until this browser chooses otherwise → [below](#the-view-is-remembered)                                                                                                                                                                                                                      |
 | `hide`                               | the board columns folded away, as `Closed,Removed` — the **hidden** ones, so an untouched board is a bare URL                                                                                                                                                                                                                                                                                                                                      |
 
 **The query string rather than the path**, for three reasons that are one reason — nothing else has to
@@ -494,6 +494,10 @@ console does not would make the first real move look like a change when it is no
 
 `test/cockpitPlace.test.ts` pins the codec — the round trip for every destination, the bare URL, the
 single spelling, an unknown value reading as the overview, and an ask id surviving encoding.
+
+Identifiers carried from the address bar are encoded before they become API path segments. In
+particular, a hand-typed plan id cannot turn the plan-history request's `../` characters into path
+syntax; `test/cockpitApi.test.ts` pins that boundary.
 
 **Reaching the URL is only the first leg.** A `Place` field is carried to the surface that draws it
 through the view model — `useCockpit` hands the fields to `buildViewModel`, which defaults each one it
@@ -2440,9 +2444,10 @@ Every item the tracker's assignment filter has returned since the harness first 
 not, live or frozen — and, since the backlog was folded into it (#351), **the one surface triage
 happens on**. Where [the record](#the-record-panel) is what the harness _did_, this is what it was
 **asked** to do, and what you are asking it to do next. It has two views — a table and a
-board of state columns — and the table is the default because it is what the tab has always been: the
-tracker id, the ticket, the readings, the cost and the date, each row taking the list's tracks by
-subgrid so the columns line up however long one title runs.
+board of state columns — and since #714 the **board** is the default, with whichever one the operator
+last chose remembered ([below](#the-view-is-remembered)). The table is the tracker id, the ticket, the
+readings, the cost and the date, each row taking the list's tracks by subgrid so the columns line up
+however long one title runs.
 
 **Two facts about state writes ride on the snapshot**, because neither is the cockpit's to infer.
 `canSetWorkItemState` is asked of the connector — `setWorkItemState` _throws_ where no integration
@@ -2571,6 +2576,32 @@ somebody actually said: an assessor's shortfall, the operator's toggle, or the w
 which on a running fleet is most of the ones in progress — the column then said "fell short" about
 work that had not finished yet. Where the goal has got to is the row's state and the dispatcher's own
 pickup reasons; this chip is for how the harness _left_ it.
+
+### The view is remembered
+
+The board is what an operator who has never touched the toggle gets: the columns are the tracker's own
+states, so the tab opens saying where the work has got to rather than asking the reader to read a date
+column for it (#714). Whichever view they switch to is then **remembered across sessions** —
+`web/src/cockpit/ticketView.ts`, in `localStorage` beside [the theme](#the-theme) and for its reason
+exactly: it is a property of _this browser_ and not of the harness, and a server-side setting would
+make one of two people on one deployment wrong.
+
+It stays a `Place` field all the same — a view switched and stepped back out of has to come back, and a
+link somebody sends has to open on the view they were looking at. What is stored is only the **default**
+`?view=` falls back to, and **both halves of the codec take it**: `readPlace` fills it in and
+`placeQuery` omits it, so a bare `?tab=tickets` means "the one I use" and each place keeps
+[one spelling](#the-address-bar). An operator who prefers the table therefore gets `?view=table` written
+into the links they send, which is the point — the reader gets the view the sender was on, not the
+sender's preference.
+
+Two things about _when_ it is read and written, and both are load-bearing:
+
+- **Written from the toggle only.** `setTicketQuery` is where the switch and the board's way back to
+  the table come through; a `popstate` and the boot normalisation set the place without it. Writing it
+  from the place itself would make the back button — or somebody else's link — this browser's default.
+- **Read once, at mount, and frozen for the life of the page.** Re-reading it after a switch would give
+  the new place the same query string as the place before it, and `useNavigation` pushes nothing when
+  the query is unchanged: the switch would be a move the back button has no entry to undo.
 
 ### The board, and what a card says
 

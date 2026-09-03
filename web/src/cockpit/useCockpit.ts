@@ -6,6 +6,7 @@ import type { AppliedFix } from '../view/needsYou.js';
 import { useNow } from '../hooks.js';
 import { buildViewModel, type CockpitView } from '../view/viewModel.js';
 import { useNavigation } from './useNavigation.js';
+import { saveTicketView } from './ticketView.js';
 import { homeTab } from './place.js';
 import type { CockpitActions } from './actions.js';
 import { fireNotifications, loadNotifyPrefs, notifiableChanges, notifySnapshot } from './notify.js';
@@ -377,7 +378,15 @@ export function useCockpit(): CockpitStatus {
       openTab: (next) => go({ tab: next }),
       // One `go` for however many of the three moved: they are one place, and two
       // calls would push two history entries for a single change of question.
-      setTicketQuery: (next) => go(next),
+      setTicketQuery: (next) => {
+        // The one deliberate switch of the layout: the toggle and the board's way
+        // back to the table both come through here, where a `popstate` and the
+        // boot normalisation do not. So this is where the preference is written —
+        // remembering what the back button restored, or what a link somebody sent
+        // opened on, would make somebody else's URL this browser's default.
+        if (next.ticketView !== undefined) saveTicketView(next.ticketView);
+        go(next);
+      },
       collapseFeature: (issueNumber, collapsed) =>
         go((current) => ({
           collapsed: collapsed

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { NOWHERE, placeQuery, readPlace, type Place } from './place.js';
+import { DEFAULT_TICKET_VIEW, loadTicketView, type TicketView } from './ticketView.js';
 
 /**
  * The cockpit's place, kept in the address bar so the browser's own back button
@@ -51,10 +52,16 @@ type PlacePatch<P> = (P & Record<Exclude<keyof P, keyof Place>, never>) | ((plac
 type Go = <P extends Partial<Place>>(patch: PlacePatch<P>) => void;
 
 export function useNavigation(): { place: Place; go: Go } {
+  // The tickets tab's remembered layout, which is the default `?view=` means and
+  // the value `placeQuery` omits. Read once and frozen for the life of the page:
+  // re-reading it after a switch would give the new place the same query string as
+  // the one before it, and a push that changes nothing is a switch the back button
+  // cannot undo. `localStorage` is guarded inside `loadTicketView`.
+  const remembered = useRef<TicketView>(typeof location === 'undefined' ? DEFAULT_TICKET_VIEW : loadTicketView());
   // `location` is simply undefined under node, which is how the cockpit's
   // modules are imported by the tests — the same reason `readToken` guards.
   const [place, setPlace] = useState<Place>(() =>
-    typeof location === 'undefined' ? NOWHERE : readPlace(location.search),
+    typeof location === 'undefined' ? NOWHERE : readPlace(location.search, remembered.current),
   );
   // What the address bar is about to say. `place` lags it by a render, and the
   // second `go` of a tick must not patch the first one's input.
@@ -63,7 +70,7 @@ export function useNavigation(): { place: Place; go: Go } {
 
   useEffect(() => {
     const onPop = () => {
-      const next = readPlace(location.search);
+      const next = readPlace(location.search, remembered.current);
       pending.current = next;
       setPlace(next);
     };
@@ -71,7 +78,7 @@ export function useNavigation(): { place: Place; go: Go } {
     // Normalise the entry we booted on — a hand-typed `?tab=bogus` reads as the
     // overview, and leaving the URL saying otherwise would make the first real
     // move look like a change when it is not.
-    const query = placeQuery(pending.current);
+    const query = placeQuery(pending.current, remembered.current);
     if (query !== location.search) history.replaceState(null, '', location.pathname + query);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
@@ -84,7 +91,7 @@ export function useNavigation(): { place: Place; go: Go } {
     scheduled.current = true;
     queueMicrotask(() => {
       scheduled.current = false;
-      const query = placeQuery(pending.current);
+      const query = placeQuery(pending.current, remembered.current);
       if (query === location.search) return;
       history.pushState(null, '', location.pathname + query);
     });
