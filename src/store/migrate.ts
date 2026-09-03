@@ -53,6 +53,35 @@ export function renameTables(db: Database.Database, renames: readonly TableRenam
   }
 }
 
+/**
+ * A table left behind by an arm that was **retired**, declared by the module that
+ * owned it — the same rule {@link ColumnMigrations} follows, for the same reason.
+ *
+ * Deleting `CREATE TABLE IF NOT EXISTS` stops a table being made; it never removes
+ * one. So a database from before the retirement keeps the table and its rows for
+ * ever, holding disk and answering `.schema` with an arm nobody is running — while
+ * a database made afterwards has never heard of it. Two shapes in the field for one
+ * build is exactly what the migrations exist to close.
+ *
+ * **A name goes here only when its rows are re-derivable or worthless**, because
+ * unlike a rename this is not reversible and there is no old table left as
+ * evidence. `pool_claims` qualifies twice over: it was a mirror of other fleets'
+ * documents, rewritten whole on every poll, and nothing has read it since the arm
+ * went.
+ *
+ * **A retired name is never given to a new table.** This runs on every boot — it
+ * has to, since a database that has not booted since the retirement is the one
+ * still holding the table — so a name re-used later would have its rows dropped on
+ * every start, silently, by a migration written years before it.
+ * → `docs/spec/14-persistence.md#retiring-a-table`
+ */
+export function dropRetiredTables(db: Database.Database, tables: readonly string[]): void {
+  for (const table of tables) {
+    if (!tableExists(db, table)) continue;
+    db.exec(`DROP TABLE ${table}`);
+  }
+}
+
 function tableExists(db: Database.Database, table: string): boolean {
   return db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`).get(table) !== undefined;
 }

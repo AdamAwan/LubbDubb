@@ -788,7 +788,11 @@ on any database that lacks one — but being new **once** is what stops one stay
 column added to any of them later belongs in `ColumnMigrations`.
 → [14](14-persistence.md#migrations)
 
-**Nothing dropped `pool_claims`.** An existing database still holds whatever its last poll wrote; the
-table simply stops being created, and nothing reads it. The rows are re-derivable from the pool by
-construction, which is what made a mirror safe to keep in the first place — and it is what makes
-deleting one a change an operator asks for rather than one an upgrade takes.
+**`pool_claims` is dropped on the next boot** (`POOL_RETIRED_TABLES`,
+[14](14-persistence.md#retiring-a-table)). Deleting its `CREATE TABLE IF NOT EXISTS` stopped it being
+made and removed nothing, so an existing database held whatever its last poll wrote — for ever, unread,
+while a database made since had never heard of it. What makes the drop safe rather than a data loss is
+what made the mirror safe to keep in the first place: the rows were derived, rewritten whole on every
+poll, and re-derivable from the pool by construction. That is the test, and not "nothing reads it" —
+an operator's own rows would stay, and the knowledge tables the claim store left behind do
+([14](14-persistence.md#a-migration-that-must-run-once)).
