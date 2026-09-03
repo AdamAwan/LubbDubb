@@ -3,8 +3,8 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { SCHEMA } from './schema.js';
 import { systemClock, type Clock, type StoreContext } from './context.js';
-import { ensureColumns, rebuildTables, renameTables } from './migrate.js';
-import { PoolStore, type PoolDigestMirrorRow } from './pool.js';
+import { dropRetiredTables, ensureColumns, rebuildTables, renameTables } from './migrate.js';
+import { POOL_RETIRED_TABLES, PoolStore, type PoolDigestMirrorRow } from './pool.js';
 import { backfillTaskDispatchKind, TaskStore, TASK_COLUMNS } from './tasks.js';
 import { JobStore, JOB_COLUMNS } from './jobs.js';
 import { JobScheduleStore, JOB_SCHEDULE_COLUMNS } from './schedules.js';
@@ -247,6 +247,11 @@ export class Store {
     // an empty table up under the new name beside the full one under the old, and
     // leave every row that predates the rename invisible with nothing red.
     renameTables(this.db, ISSUE_VERDICT_RENAMES);
+    // And what a retired arm left behind: deleting a `CREATE TABLE IF NOT EXISTS`
+    // stops a table being made and never removes one, so without this a database
+    // from before the retirement keeps the table for ever while a fresh one has
+    // never heard of it. Only rows that are derived or worthless — see the function.
+    dropRetiredTables(this.db, POOL_RETIRED_TABLES);
     // Before the schema, and around it: a table whose *key* changed is renamed
     // out of the way so `SCHEMA`'s own definition creates the new shape, then its
     // rows are copied across resolving the old key into the new one. All in one
