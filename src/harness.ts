@@ -1387,6 +1387,14 @@ export class Harness extends EventEmitter {
     }
     this.prevWorld = world;
     store.setWorldBaseline(world);
+    // The window's rows, kept past the window. `closedPullRequests` carries a pull
+    // request for `closedPrWindowMs` and then forgets it, and a goal's page drew its
+    // closed rows off that list alone — so a goal delivered last month said no pull
+    // request had ever named it. Written here rather than on the merge itself for
+    // the reason `LandingDesk` sweeps: a hook on the transition loses every close
+    // that happened while the harness was down, while the window re-reports one for
+    // hours. → `docs/spec/14-persistence.md#the-closed-pull-request-archive`
+    store.archiveClosedPrs(world.closedPullRequests ?? []);
   }
 
   // Typed emit/on overrides for a nicer call site (repo convention).

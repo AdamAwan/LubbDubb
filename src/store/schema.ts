@@ -1053,6 +1053,26 @@ CREATE TABLE IF NOT EXISTS pr_replies_sent (
   PRIMARY KEY (pr_number, comment_ref)
 );
 
+-- The last reading of every pull request that has left the open set (see
+-- PrArchiveStore), kept for good. WorldSnapshot.closedPullRequests is a window --
+-- it carries a merge for closedPrWindowMs and then forgets it -- and the goal
+-- page's closed rows were drawn straight off it, so a goal's pull requests
+-- disappeared from its page hours after they merged. A row here is a fact about
+-- the past and never a reading of the present: nothing re-fetches it and nothing
+-- acts on it. Upserted on the number, so the window re-reporting the same merge
+-- every pulse refreshes the row rather than appending to it. The table is new, so
+-- it needs no ColumnMigrations entry -- but a table being new once does not keep
+-- it exempt, and a column added later will.
+CREATE TABLE IF NOT EXISTS pr_archive (
+  number        INTEGER PRIMARY KEY,
+  -- The provider's own instant, NULL when it never dated the close. The sort falls
+  -- back to first_seen_at so such a row still lands beside its neighbours.
+  closed_at     TEXT,
+  first_seen_at TEXT NOT NULL,  -- when the harness first archived it; survives every later replace
+  updated_at    TEXT NOT NULL,
+  snapshot      TEXT NOT NULL   -- the whole PullRequest as the world last reported it, JSON
+);
+
 CREATE TABLE IF NOT EXISTS decisions (
   id         TEXT PRIMARY KEY,
   cycle_id   TEXT NOT NULL,

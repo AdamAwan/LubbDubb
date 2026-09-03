@@ -1127,6 +1127,27 @@ export interface CockpitState {
    * harness can still act on.
    */
   retainedRuns: Issue[];
+  /**
+   * Every pull request the world has ever reported closed, as it was last read.
+   *
+   * `world.closedPullRequests` is a **window** — `closedPrWindowMs` wide — so the
+   * goal page's closed rows drawn off it alone disappeared a few hours after the
+   * work merged, and the page of a goal delivered last month said no pull request
+   * had ever named it. These rows are the same pull requests kept past the window,
+   * out of `pr_archive`.
+   *
+   * **Stale by construction, and only ever drawn.** Nothing re-fetches an archived
+   * pull request and no rule reads this list; the folds the open list carries
+   * (`health`, `attention`, `ciVerdict`) are absent here for the reason they are
+   * absent on `world.closedPullRequests` — nothing acts on a dead pull request, so
+   * nothing folds a verdict for one.
+   *
+   * Beside `world` rather than inside it: the world is one instant as the connector
+   * reported it, and an all-time list folded into it would make every reader that
+   * takes `closedPullRequests` for "recently" wrong at once.
+   * → `docs/spec/14-persistence.md#the-closed-pull-request-archive`
+   */
+  archivedPullRequests: PullRequest[];
   /** The multi-PR plan graph: one plan per planned issue, and every plan's parts. */
   plans: Plan[];
   /**
