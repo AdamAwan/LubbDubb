@@ -7,10 +7,13 @@ import type {
   LocalRunTargetView,
   LocalRunTurn,
   LocalRunView,
+  LocalValidationView,
 } from '../types.js';
 import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 import { ConfirmButton } from './ConfirmButton.js';
 import { Ref } from './refs.js';
+import { inFlight, localValidationSaid } from '../view/localValidation.js';
+import { ValidateLocallyModal } from './ValidateLocallyModal.js';
 import { TranscriptPane } from './TranscriptPane.js';
 import { elapsed, fmtUsd, relTime } from './util.js';
 
@@ -76,6 +79,9 @@ export function LocalRunPanel({
   onStop,
   onMessage,
   onRefresh,
+  onValidate,
+  validation,
+  validationConfigured,
   fetchOutput,
 }: {
   run: LocalRunView | null;
@@ -94,6 +100,15 @@ export function LocalRunPanel({
   onStop: () => Promise<unknown> | unknown;
   onMessage: (text: string) => Promise<unknown> | unknown;
   onRefresh: () => Promise<unknown> | unknown;
+  /**
+   * Ask for the goal in the environment to be validated. Takes the number because
+   * the panel knows it and the caller would only re-derive it from the same row.
+   */
+  onValidate: (issueNumber: number, opts: { refresh?: boolean }) => Promise<unknown> | unknown;
+  /** The running goal's latest validation, so the panel can say one is in flight. */
+  validation: LocalValidationView | null;
+  /** `localRun.instruction` is set — the same gate the goal page's control reads. */
+  validationConfigured: boolean;
   fetchOutput: () => Promise<string[]>;
 }): JSX.Element {
   const [picked, setPicked] = useState<Pick | null>(null);
@@ -104,6 +119,9 @@ export function LocalRunPanel({
   // operator's own choice and wins from then on.
   const [outputOpen, setOutputOpen] = useState<boolean | null>(null);
   const [pickerOpen, setPickerOpen] = useState<boolean | null>(null);
+  // Whether the refresh question is open. The swap question never arises on this
+  // panel — the run in front of it is the goal being validated.
+  const [askRefresh, setAskRefresh] = useState(false);
 
   // Polled while the run is live, off the clock the panel already has rather than a
   // timer of its own — `tick` is the dependency that does it, and it is deliberate
@@ -149,6 +167,18 @@ export function LocalRunPanel({
   const idle = live && run.status === 'running' && turn === null;
   const canRefresh = stale && idle;
   const canMessage = idle && run.holdsSession;
+  // The goal in the environment, as a number — every question below is about it.
+  const runNumber = run === null ? null : Number(/^issue:(\d+)$/.exec(run.originRef)?.[1] ?? Number.NaN);
+  const runsAGoal = runNumber !== null && Number.isFinite(runNumber);
+  // Offered on the same terms the goal page offers it, and one more that is this
+  // panel's own: the run has to be idle. A validation dispatched mid-turn would
+  // have its agent poll an environment that is being talked to.
+  const canValidate =
+    idle &&
+    runsAGoal &&
+    validationConfigured &&
+    !inFlight(validation) &&
+    (runNumber === null ? false : (targets.find((t) => t.issueNumber === runNumber)?.runnable ?? false));
   const goalTitle =
     run === null ? null : (goals.find((g) => `issue:${String(g.number)}` === run.originRef)?.title ?? null);
 
@@ -207,7 +237,7 @@ export function LocalRunPanel({
             <span className={`lrun-dot ${tone(run)}`} aria-hidden />
             <h3>{run === null ? 'Nothing has been run locally' : <StatusLine run={run} now={now} />}</h3>
           </div>
-          {run !== null && (canRefresh || (live && run.status !== 'stopping')) && (
+          {run !== null && (canRefresh || canValidate || (live && run.status !== 'stopping')) && (
             <div className="lrun-actions">
               {canRefresh && (
                 // Primary, and only while there is something to pick up: the one
@@ -222,6 +252,20 @@ export function LocalRunPanel({
                   }
                 >
                   Refresh
+                </AsyncButton>
+              )}
+              {canValidate && runNumber !== null && (
+                // Primary too, and beside Refresh rather than instead of it: they
+                // are the two things worth doing to an environment that is up, and
+                // an operator who wants both wants them in that order. The swap
+                // question cannot arise here — this *is* the goal that is running —
+                // so the only question left is the stale one.
+                <AsyncButton
+                  className="primary"
+                  onClick={() => (stale ? setAskRefresh(true) : onValidate(runNumber, {}))}
+                  title="Send one agent to write a test plan against what is running, drive it in a browser, and report on the goal's page"
+                >
+                  Validate #{runNumber}
                 </AsyncButton>
               )}
               {live && run.status !== 'stopping' && (
@@ -244,6 +288,18 @@ export function LocalRunPanel({
           )}
         </header>
 
+        {askRefresh && run !== null && runNumber !== null && (
+          <ValidateLocallyModal
+            mode="refresh"
+            issueNumber={runNumber}
+            issueTitle={goalTitle ?? `#${String(runNumber)}`}
+            targetRef={run.ref}
+            run={run}
+            runTitle={goalTitle}
+            onSubmit={(opts) => Promise.resolve(onValidate(runNumber, opts))}
+            onClose={() => setAskRefresh(false)}
+          />
+        )}
         {run !== null && (
           <>
             <p className="lrun-meta">
@@ -268,6 +324,16 @@ export function LocalRunPanel({
               <p className={`lrun-stage${phase === null && said !== null ? ' lrun-stage-said' : ''}`}>
                 <span className="lrun-stage-turn">{TURN_LABEL[turn]}</span>
                 {phase !== null ? ` · ${phase}` : said !== null ? ` · ${said}` : '…'}
+              </p>
+            )}
+            {/* A validation in flight, in the same stage line the run's own turns
+                use: it is the other thing that takes minutes with somebody
+                watching, and it belongs beside the environment it is being run
+                against rather than only on the goal's page. */}
+            {validation !== null && inFlight(validation) && (
+              <p className="lrun-stage">
+                <span className="lrun-stage-turn">validating</span>
+                {` · ${localValidationSaid(validation)}`}
               </p>
             )}
             {/* What the session said — its own account of the run, which is the only

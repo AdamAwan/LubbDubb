@@ -16,36 +16,37 @@ cockpit's frequent state polling is never throttled.
 static SPA, and a list of route modules it mounts in order. Everything else lives beside the thing it
 is about.
 
-| Module                  | Holds                                                                                                                                                                                                                                           |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `routes/state.ts`       | `/api/state`, `/api/prompts`, `/api/config`, `/api/ci-policy`, `/api/mcp`, `/api/health`                                                                                                                                                        |
-| `routes/agents.ts`      | One agent's transcript and the files it wrote, and respond / kill / complete / interrupt / extend a stall park                                                                                                                                  |
-| `routes/artifacts.ts`   | `/artifacts/:id` and `/attachments/:id`, their capability signers, and the path confinement                                                                                                                                                     |
-| `routes/control.ts`     | `/api/pulse`, `/api/errors/clear`, `/api/control`, `/api/prs/:number/watch`                                                                                                                                                                     |
-| `routes/escalations.ts` | The whole "Needs you" inbox: escalations, proposals, recovery                                                                                                                                                                                   |
-| `routes/humanTasks.ts`  | Work only a person can do: filing one, and the two ways it settles                                                                                                                                                                              |
-| `routes/ingress.ts`     | `/ingress/github` and `/ingress/azure` — the inbound webhook endpoint, its own body parser and its bounds                                                                                                                                       |
-| `routes/issues.ts`      | Watch, priority, conclusion, appraisal, delivered, shortfall, dismiss-run                                                                                                                                                                       |
-| `routes/jobs.ts`        | `/api/jobs`, `/api/jobs/:id/cancel`, `/api/upnext/order`, `/api/upnext/profile`                                                                                                                                                                 |
-| `routes/plans.ts`       | Plan history, replan, acceptance ticks, part model pins                                                                                                                                                                                         |
-| `routes/validation.ts`  | One validation check's current reading — result, defer, waive, reset — and who runs it                                                                                                                                                          |
-| `routes/watches.ts`     | The post-deploy watch's two operator verbs: ruling on a check an agent declared, and extending a window                                                                                                                                         |
-| `routes/schedules.ts`   | Recurring briefs: write, edit, run now, delete                                                                                                                                                                                                  |
-| `routes/spend.ts`       | `/api/spend` and `/api/spend/trend` — the breakdown behind the cost indicators, and its trend                                                                                                                                                   |
-| `routes/allowance.ts`   | `/api/allowance` — the account's usage percentage over time, and the work that spent it                                                                                                                                                         |
-| `routes/readings.ts`    | `/api/retrospectives/:ref`, `/api/scratchpads/:ref`                                                                                                                                                                                             |
-| `routes/reviewPacks.ts` | `/api/prs/:number/review-pack` — asking for a review pack, reading the one a pull request has, sharing it into the pool and taking it back out, the reviewer's three marks on an idea, and `/api/review-calibration` ([31](31-review-packs.md)) |
-| `routes/reliability.ts` | `/api/reliability` — run outcomes, CI health, and why the fleet came back                                                                                                                                                                       |
-| `routes/mcpUsage.ts`    | `/api/mcp/usage` — which MCP tools the fleet reached for, and which it never did                                                                                                                                                                |
-| `routes/pool.ts`        | `/api/pool`, `/api/pool/insights` and the pool's one write — the cross-fleet pool ([28](28-cross-fleet-pool.md))                                                                                                                                |
-| `routes/work.ts`        | The work graph and its ignore / file verdicts                                                                                                                                                                                                   |
-| `routes/tickets.ts`     | Every item the tracker has returned since the harness first swept, and the filters over it                                                                                                                                                      |
-| `routes/localRun.ts`    | The machine's one dev environment: start it on a goal, stop it, type into it, move its checkout to the tip, read what is holding it up                                                                                                          |
-| `routes/stacks.ts`      | The one verdict on a whole chain of stacked pull requests: land it, or call that off                                                                                                                                                            |
-| `routes/upgrade.ts`     | Asking the harness to take a build, and the interrupt that overrides its refusal                                                                                                                                                                |
-| `routes/pets.ts`        | The vivarium: opening a shell, feeding, naming, standing and blending                                                                                                                                                                           |
-| `routes/setup.ts`       | The first-run surface's two reads, before there is a deployment to configure                                                                                                                                                                    |
-| `stateSnapshot.ts`      | `buildStateSnapshot` and the readings it folds                                                                                                                                                                                                  |
+| Module                      | Holds                                                                                                                                                                                                                                           |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `routes/state.ts`           | `/api/state`, `/api/prompts`, `/api/config`, `/api/ci-policy`, `/api/mcp`, `/api/health`                                                                                                                                                        |
+| `routes/agents.ts`          | One agent's transcript and the files it wrote, and respond / kill / complete / interrupt / extend a stall park                                                                                                                                  |
+| `routes/localValidation.ts` | Validating a goal on this machine: the press, and calling one off. → [32](32-local-validation.md)                                                                                                                                               |
+| `routes/artifacts.ts`       | `/artifacts/:id`, `/attachments/:id` and `/local-validations/:id/files/:name`, their capability signers, and the path confinement                                                                                                               |
+| `routes/control.ts`         | `/api/pulse`, `/api/errors/clear`, `/api/control`, `/api/prs/:number/watch`                                                                                                                                                                     |
+| `routes/escalations.ts`     | The whole "Needs you" inbox: escalations, proposals, recovery                                                                                                                                                                                   |
+| `routes/humanTasks.ts`      | Work only a person can do: filing one, and the two ways it settles                                                                                                                                                                              |
+| `routes/ingress.ts`         | `/ingress/github` and `/ingress/azure` — the inbound webhook endpoint, its own body parser and its bounds                                                                                                                                       |
+| `routes/issues.ts`          | Watch, priority, conclusion, appraisal, delivered, shortfall, dismiss-run                                                                                                                                                                       |
+| `routes/jobs.ts`            | `/api/jobs`, `/api/jobs/:id/cancel`, `/api/upnext/order`, `/api/upnext/profile`                                                                                                                                                                 |
+| `routes/plans.ts`           | Plan history, replan, acceptance ticks, part model pins                                                                                                                                                                                         |
+| `routes/validation.ts`      | One validation check's current reading — result, defer, waive, reset — and who runs it                                                                                                                                                          |
+| `routes/watches.ts`         | The post-deploy watch's two operator verbs: ruling on a check an agent declared, and extending a window                                                                                                                                         |
+| `routes/schedules.ts`       | Recurring briefs: write, edit, run now, delete                                                                                                                                                                                                  |
+| `routes/spend.ts`           | `/api/spend` and `/api/spend/trend` — the breakdown behind the cost indicators, and its trend                                                                                                                                                   |
+| `routes/allowance.ts`       | `/api/allowance` — the account's usage percentage over time, and the work that spent it                                                                                                                                                         |
+| `routes/readings.ts`        | `/api/retrospectives/:ref`, `/api/scratchpads/:ref`                                                                                                                                                                                             |
+| `routes/reviewPacks.ts`     | `/api/prs/:number/review-pack` — asking for a review pack, reading the one a pull request has, sharing it into the pool and taking it back out, the reviewer's three marks on an idea, and `/api/review-calibration` ([31](31-review-packs.md)) |
+| `routes/reliability.ts`     | `/api/reliability` — run outcomes, CI health, and why the fleet came back                                                                                                                                                                       |
+| `routes/mcpUsage.ts`        | `/api/mcp/usage` — which MCP tools the fleet reached for, and which it never did                                                                                                                                                                |
+| `routes/pool.ts`            | `/api/pool`, `/api/pool/insights` and the pool's one write — the cross-fleet pool ([28](28-cross-fleet-pool.md))                                                                                                                                |
+| `routes/work.ts`            | The work graph and its ignore / file verdicts                                                                                                                                                                                                   |
+| `routes/tickets.ts`         | Every item the tracker has returned since the harness first swept, and the filters over it                                                                                                                                                      |
+| `routes/localRun.ts`        | The machine's one dev environment: start it on a goal, stop it, type into it, move its checkout to the tip, read what is holding it up                                                                                                          |
+| `routes/stacks.ts`          | The one verdict on a whole chain of stacked pull requests: land it, or call that off                                                                                                                                                            |
+| `routes/upgrade.ts`         | Asking the harness to take a build, and the interrupt that overrides its refusal                                                                                                                                                                |
+| `routes/pets.ts`            | The vivarium: opening a shell, feeding, naming, standing and blending                                                                                                                                                                           |
+| `routes/setup.ts`           | The first-run surface's two reads, before there is a deployment to configure                                                                                                                                                                    |
+| `stateSnapshot.ts`          | `buildStateSnapshot` and the readings it folds                                                                                                                                                                                                  |
 
 Each module exports one `register(app, ctx)` — the `RouteModule` type in `routes/context.ts` — and
 takes a `RouteContext` of `{system, hub, artifactKey, artifactSigner}`. It is the facade shape
@@ -2052,6 +2053,42 @@ are different situations with different next steps.
 
 `POST /api/agents/:id/kill` stays available on a park — it is the only other verdict — and settles it
 the way it settles any other agent.
+
+### `POST /api/issues/:number/validate-locally`
+
+`{swap?, refresh?}` — bring this goal's code up in the machine's dev environment and put one agent on
+driving it. Answers `{ok, validation}`.
+
+**Two consents, and both can only be given before the runner is called.** A different goal's run live
+and no `swap` is a **409** naming what is running, its ref and its status, because by the time
+`start` is reached that environment is already coming down. `refresh` moves the checkout to the tip
+first — a `reset --hard` under a running server, so never automatic. A second press on a goal already
+being validated is a **409** carrying the row, and nothing configured to start is a **400** naming
+`localRun.instruction`.
+
+The row is recorded against the run that is **now** up rather than the one that was, because a
+refresh rewrites the commit and the pin has to be what is actually checked out.
+
+**It runs a cycle**, unlike every route in the local-run group below: the rule dispatches into the
+_beginning_ of the bring-up, and waiting for the next heartbeat would spend those minutes on nothing.
+→ [32](32-local-validation.md#the-press)
+
+### `POST /api/issues/:number/validate-locally/cancel`
+
+Settles an open validation `abandoned`; **404** when there is none. Required rather than a
+convenience: an operator who kills the validator from its drawer otherwise leaves a row nobody will
+ever report against, and the control on the goal stays absent for good.
+
+### `GET /local-validations/:id/files/:name`
+
+One screenshot a validating agent saved. Outside `/api` and capability-authorized for
+`/attachments/:id`'s reason word for word — it is loaded as an `<img src>` beside the finding it
+belongs to, and a subresource fetch carries no `Authorization` header.
+
+The **directory** comes from the stored row and the **name** from the request, which is the one thing
+here the two routes above do not do: so the name is refused as a path before it is joined, and the
+join is re-confined to the row's own directory afterwards. Either check alone would do; both are what
+keeps that true if the schema ever widens.
 
 ### `POST /api/local-run`
 

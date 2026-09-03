@@ -118,6 +118,18 @@ const LIVE_ARMS: Readonly<Record<string, LiveArm>> = {
   'localRun.url': (next, deps) => {
     deps.running.localRun = next.localRun;
   },
+  // Read through a thunk by the dispatch rules and by the snapshot, so assigning
+  // the object onto the running config *is* the arm — `localRun`'s arrangement,
+  // for its reason. Live because the instruction is the field an operator corrects
+  // between one validation and the next: a run that came back blocked because it
+  // could not sign in should be answerable by editing a text box and pressing the
+  // button again, not by restarting the harness.
+  'localValidation.instruction': (next, deps) => {
+    deps.running.localValidation = next.localValidation;
+  },
+  'localValidation.browser': (next, deps) => {
+    deps.running.localValidation = next.localValidation;
+  },
   // `PetKeeper` closed over `config.pets` at construction and reads
   // `policy.visible` on every `state()`, so the field is assigned onto the object
   // it holds — replacing `running.pets` wholesale would leave the keeper on the

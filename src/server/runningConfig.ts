@@ -195,6 +195,7 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
       'ci',
       'pets',
       'localRun',
+      'localValidation',
       'environments',
       'environmentProbeIntervalMs',
       'environmentHealthIntervalMs',

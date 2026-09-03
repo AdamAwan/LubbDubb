@@ -1162,7 +1162,13 @@ kit](#the-control-kit) rather than as class strings.
 | --------------- | ----------------------------------------------------- |
 | Run state       | Working / Done / Abandon… — one segmented control     |
 | Steer the work  | Give instructions, Watch, Prioritise, the profile pin |
+| Check the work  | Validate locally                                      |
 | Leave this page | Ask Claude Code ↗, Open ticket ↗, File a new bug    |
+
+_Check the work_ is one control and still its own group, because it is the only one here whose effect
+is on **the operator's own machine** rather than on the tracker or on the queue. The whole group is
+absent when there is nothing to press — a caption over nothing is furniture — and the card below says
+which of the three reasons it is. → [32](32-local-validation.md#the-cockpit)
 
 The row was nine controls at one weight that **wrapped**, so no control had a stable position and no
 muscle memory could form. Grouping was the first fix; the captions are the second, and they are the

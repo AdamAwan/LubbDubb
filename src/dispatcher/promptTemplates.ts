@@ -37,6 +37,8 @@ type PromptId =
   | 'feature-summary'
   | 'validation-check'
   | 'validation-failed'
+  | 'local-validation'
+  | 'local-validation-fix'
   | 'obstacle-repair'
   | 'obstacle-ticket-body'
   | 'local-run'
@@ -504,6 +506,25 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       '**You cannot record a result on this check, and you should not try.** The reading belongs to whoever took it: they ran the procedure and you did not. Your job is the account of why it failed, not a second opinion on whether it did — and if what you find is that it passes now, that is a sentence for the person who will re-run it, not a reading of your own.\n\n' +
       '**Do not conclude from the code alone.** A green build, a passing test suite and code that looks correct are none of them this check — it exists precisely because those had all happened and it failed anyway. If you cannot reproduce the failure, say that, and say what you tried.',
     doc: "Sent to a code agent when a validation check on a delivered goal was recorded as `failed` (rule `validation-failed`). The check's own procedure and expectation, and the reading being diagnosed with its note and who took it, are *appended* to the rendered prompt rather than interpolated, so an override that never learned about them cannot silently drop the halves the agent cannot start without. The agent is in a read-only checkout and fixes nothing: it diagnoses, and escalates, amends the check or raises what it learned. Placeholders: {number} {title} {letter} {root}.",
+  },
+  'local-validation': {
+    placeholders: ['number', 'title'],
+    template:
+      'The operator has asked for issue #{number} ("{title}") to be validated on their own machine. The harness is bringing this goal\'s code up in the machine\'s one dev environment right now, and you are going to write a test plan for the change, run it against the running application, and say what you found.\n\n' +
+      'This is not a code review and it is not the test suite. Both of those have already happened, and neither of them opens the thing and uses it. What is being asked for is the reading nothing else in the deployment can take: whether the change actually works when somebody drives it.\n\n' +
+      'Everything you need is appended below — the goal, its plan, what the operator already says it has to satisfy, where the environment is and how to reach it. Read the diff on this branch first: the plan is for **what changed**, not for the whole product.\n\n' +
+      'The environment takes minutes to come up and you were dispatched at the start of that, so write the plan first — the wait is free if you spend it reading. Then watch for the environment, run your plan against it one step at a time, and report once.\n\n' +
+      'You are in a read-only checkout. Nothing here is to be committed or pushed, and the environment belongs to the operator: do not start it, stop it, restart it or type into it. If your plan turns out to need something this deployment has not got, that is a real answer — report it rather than working around it.',
+    doc: "Sent to a code agent when an operator presses Validate locally on a goal (rule `local-validation`). Everything the agent cannot act without — the goal, the plan, the goal's validation checks as input, the environment's URL and checkout, the operator's `localValidation.instruction`, whether it has a browser, and the rules of the run — is *appended* to the rendered prompt rather than interpolated, so an override that never learned about them cannot silently drop the half that matters. The agent reads the environment through `local_run_read`, records its plan with `local_validation_plan` and answers once with `local_validation_report`. Placeholders: {number} {title}.",
+  },
+  'local-validation-fix': {
+    placeholders: ['number', 'title'],
+    template:
+      'Issue #{number} ("{title}") was validated on the operator\'s own machine and the validation failed. An agent brought the code up, drove the application through a test plan, and wrote down what went wrong. Fix it.\n\n' +
+      'What it found is appended below, with the plan it ran. Work on the branch you are on — it is the branch that was validated, and it is where the change lives.\n\n' +
+      "Reproduce before you change anything. A finding is one agent's reading of a running application, taken without being able to ask anybody what was intended, so it can be wrong about which half is broken and it can be wrong about whether anything is. If a finding describes behaviour that is actually correct, say so and leave the code alone: changing working code to satisfy a mistaken finding is the one outcome here that is worse than doing nothing.\n\n" +
+      'Commit and push what you fix. Do not open a pull request — if this branch has one your push reaches it, and if it has not, opening one belongs to the work this branch is part of rather than to this dispatch.',
+    doc: 'Sent to a code agent when a local validation was reported `failed` with findings (rule `local-validation-fix`). It runs on the branch that was validated, writable, and the findings and the plan that produced them are *appended* to the rendered prompt rather than interpolated. It fixes and pushes; it opens no pull request and records no reading on the validation, which belongs to the agent that took it. Placeholders: {number} {title}.',
   },
   'obstacle-repair': {
     placeholders: ['claim'],

@@ -92,8 +92,10 @@ test('every API route declared under routes/ refuses an unauthenticated request'
     // as an `<img src>` (issue #249). Neither can carry an `Authorization` header,
     // so each authorizes itself with a short-lived per-subject capability and the
     // prefix guard does *not* apply — but each must still refuse a bare request,
-    // which is what makes moving them out of `/api` safe. Asserted here so neither
-    // can silently become reachable.
+    // which is what makes moving them out of `/api` safe. Asserted here so none of
+    // them can silently become reachable. A validation's screenshots are the third
+    // of that kind and answer the same way: an `<img src>` beside a finding, on a
+    // capability minted per file into the snapshot.
     // The third and newest route outside `/api`, and the only **inbound** one: a
     // webhook provider can no more present a cockpit token than a navigation can, so
     // the ingress endpoint authorizes each delivery itself — GitHub's HMAC over the
@@ -107,7 +109,11 @@ test('every API route declared under routes/ refuses an unauthenticated request'
       assert.equal(res.statusCode, 404, `${route.url} must answer 404 with no ingress secret configured`);
       continue;
     }
-    if (route.url.startsWith('/artifacts/') || route.url.startsWith('/attachments/')) {
+    if (
+      route.url.startsWith('/artifacts/') ||
+      route.url.startsWith('/attachments/') ||
+      route.url.startsWith('/local-validations/')
+    ) {
       const res = await app.inject({ method: route.method, url: route.url });
       assert.equal(res.statusCode, 401, `${route.url} must refuse a request carrying no capability`);
       continue;

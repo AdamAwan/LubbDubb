@@ -2407,3 +2407,172 @@ test('the row is absent, not zeroed, where no environment declares a check', () 
   assert.ok(env !== undefined, 'and it is drawn as soon as one environment answers');
   assert.equal(env.tone, 'ill', 'wearing the tint its worst reading earns');
 });
+
+/**
+ * Validating a goal on the operator's own machine, drawn.
+ *
+ * The control's absence is asserted in all three of its arms, because absence is
+ * what this surface uses instead of a disabled button — and an absence with no
+ * sentence beside it is indistinguishable from a feature that does not work here.
+ */
+test('the goal header offers Validate locally only where an agent could run it', () => {
+  const ref = 'issue:390';
+  const offered = render(goalView(() => undefined, ref));
+  assert.ok(offered.includes('Validate locally'), 'a runnable, configured goal with nothing in flight');
+  assert.ok(offered.includes('Check the work'), 'the group caption is what explains the control under it');
+
+  // No branch of its own: there is nothing to check out, so there is nothing to run.
+  const noBranch = decode(
+    render(
+      goalView((state) => {
+        const target = state.localRunTargets.find((t) => t.issueNumber === 390);
+        if (target) target.runnable = false;
+      }, ref),
+    ),
+  );
+  assert.ok(!noBranch.includes('Validate locally'));
+  assert.ok(noBranch.includes('no branch of its own'), 'the card says why the control is not there');
+
+  // Nothing configured to start the project at all.
+  const unconfigured = decode(
+    render(
+      goalView((state) => {
+        state.config.localRunConfigured = false;
+      }, ref),
+    ),
+  );
+  assert.ok(!unconfigured.includes('Validate locally'));
+  assert.ok(unconfigured.includes('localRun.instruction'), 'and names the field that would fix it');
+
+  // One already running: the chip replaces the control rather than sitting beside it.
+  const inFlight = decode(
+    render(
+      goalView((state) => {
+        const goal = state.world.issues.find((i) => i.number === 390);
+        if (goal?.localValidation)
+          goal.localValidation = { ...goal.localValidation, status: 'dispatched', phase: 'driving' };
+      }, ref),
+    ),
+  );
+  assert.ok(!inFlight.includes('Validate locally'));
+  assert.ok(inFlight.includes('running the plan'), 'the chip says which minute of it we are in');
+});
+
+/**
+ * Each phase gets its own words, and they come off the server's fold rather than
+ * being worked out here — a cockpit with its own opinion about which stage a run is
+ * in would be a second reading drawn beside the row it describes.
+ */
+test('the local validation chip words each phase of a run in flight', () => {
+  const ref = 'issue:390';
+  const said: [string, string][] = [
+    ['queued', 'waiting for a slot'],
+    ['planning', 'writing the test plan'],
+    ['environment', 'waiting for the environment'],
+    ['driving', 'running the plan'],
+  ];
+  for (const [phase, words] of said) {
+    const html = decode(
+      render(
+        goalView((state) => {
+          const goal = state.world.issues.find((i) => i.number === 390);
+          if (goal?.localValidation)
+            goal.localValidation = {
+              ...goal.localValidation,
+              status: phase === 'queued' ? 'pending' : 'dispatched',
+              phase: phase as never,
+            };
+        }, ref),
+      ),
+    );
+    assert.ok(html.includes(words), `phase "${phase}" reads as "${words}"`);
+  }
+});
+
+/**
+ * The report is the deliverable, and every part of it is a thing an operator would
+ * otherwise have to go and reproduce: what was found, where, and what was actually
+ * exercised.
+ */
+test('the local validation card draws the findings, the pages and the plan it ran', () => {
+  const html = decode(render(goalView(() => undefined, 'issue:390', ['localValidation'])));
+  assert.ok(html.includes('A job with no schema is accepted'), 'the finding');
+  assert.ok(html.includes('blocker'), 'and what it is worth');
+  assert.ok(html.includes('http://localhost:5173/jobs/new'), 'the page it was found on');
+  assert.ok(html.includes('The test plan it wrote'), 'the plan, folded');
+  assert.ok(html.includes('<details'), 'a browser-owned fold, not a Place');
+  // What tells this card apart from the validation plan above it.
+  assert.ok(html.includes('an agent, in your own dev environment'));
+});
+
+/** A settled pass reads a step back, the way a settled check does one card over. */
+test('a passed local validation reads settled and offers nothing to do', () => {
+  const html = decode(
+    render(
+      goalView(
+        (state) => {
+          const goal = state.world.issues.find((i) => i.number === 390);
+          if (goal?.localValidation)
+            goal.localValidation = { ...goal.localValidation, status: 'passed', findings: [], phase: null };
+        },
+        'issue:390',
+        ['localValidation'],
+      ),
+    ),
+  );
+  assert.ok(html.includes('cn-lv-passed'), 'drawn a step back');
+  assert.ok(!html.includes('Call it off'), 'there is nothing left to call off');
+  assert.ok(!html.includes('blocker'), 'and nothing outstanding to draw');
+});
+
+/**
+ * The panel's own button, on the environment it is about. The swap question cannot
+ * arise here — the run in front of it *is* the goal — so the only gate left is that
+ * nothing else is going on in the session.
+ */
+test('the local run panel offers Validate only while the environment is idle', () => {
+  // The panel over a mutated state — `view` takes a view and this test is about
+  // what the run underneath it says.
+  const panel = (mutate: (state: CockpitView['state']) => void = () => undefined): string => {
+    const state = buildDemoState().state;
+    mutate(state);
+    return decode(
+      render({
+        ...buildViewModel({
+          state,
+          now: Date.now(),
+          connected: true,
+          demo: true,
+          setup: null,
+          selected: null,
+          liveOutput: new Map(),
+          tails: new Map(),
+          lastPulseAt: Date.now(),
+          viewingPlan: null,
+          viewingRetro: null,
+          hatching: null,
+          viewingScratchpad: null,
+          insightsView: 'economics',
+          insightsWindow: '7d',
+          selectedGoal: null,
+          consolePanel: 'localRun',
+          tab: 'overview',
+        }),
+      }),
+    );
+  };
+
+  assert.ok(panel().includes('Validate #'), 'an idle, running environment');
+  assert.ok(
+    !panel((state) => {
+      if (state.localRun) state.localRun = { ...state.localRun, turn: 'message' };
+    }).includes('Validate #'),
+    'a turn in flight is not a moment to start one',
+  );
+  assert.ok(
+    !panel((state) => {
+      if (state.localRun) state.localRun = { ...state.localRun, status: 'starting' };
+    }).includes('Validate #'),
+    'nor is an environment still coming up',
+  );
+});

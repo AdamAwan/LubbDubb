@@ -55,7 +55,10 @@ import { planApproval } from './rules/planApproval.js';
 import { planBlocked } from './rules/planBlocked.js';
 import { planPart } from './rules/planPart.js';
 import { issuePickup } from './rules/issuePickup.js';
+import { localValidation } from './rules/localValidation.js';
+import { localValidationFix } from './rules/localValidationFix.js';
 import { validateCheck } from './rules/validateCheck.js';
+import { DEFAULT_LOCAL_VALIDATION, type LocalValidationPolicy } from '../localValidation/policy.js';
 import { featureSummary } from './rules/featureSummary.js';
 import { validationFailed } from './rules/validationFailed.js';
 
@@ -95,6 +98,8 @@ const STAGES: Partial<Record<StageRuleId, (s: StageContext) => void>> = {
   'plan-blocked': planBlocked,
   'plan-part': planPart,
   'issue-pickup': issuePickup,
+  'local-validation': localValidation,
+  'local-validation-fix': localValidationFix,
   'validate-check': validateCheck,
   'validation-failed': validationFailed,
   'feature-summary': featureSummary,
@@ -145,6 +150,7 @@ export class RuleDispatcher implements Dispatcher {
   /** Only the one field any rule reads — see the constructor's narrowing below. */
   private readonly validation: Pick<ValidationPolicy, 'desktopClaimMinutes'>;
   private readonly validationRoot: string;
+  private readonly localValidation: () => LocalValidationPolicy;
   private readonly review: PrReviewPolicy;
   private readonly reviewCharters: PrReviewCharters;
   private ci: CiPolicy;
@@ -184,6 +190,7 @@ export class RuleDispatcher implements Dispatcher {
     reviewCharters: PrReviewCharters = { routing: null, modes: {} },
     watchNote = '',
     watchDeclareNote = '',
+    localValidation: () => LocalValidationPolicy = () => DEFAULT_LOCAL_VALIDATION,
   ) {
     this.watchNote = watchNote;
     this.watchDeclareNote = watchDeclareNote;
@@ -196,6 +203,7 @@ export class RuleDispatcher implements Dispatcher {
       desktopClaimMinutes: validation.desktopClaimMinutes ?? DEFAULT_VALIDATION.desktopClaimMinutes,
     };
     this.validationRoot = validationRoot;
+    this.localValidation = localValidation;
     this.defaultBranch = defaultBranch;
     this.prRefStyle = prRefStyle;
     this.ci = { checks: ci.checks ?? [] };
@@ -619,6 +627,13 @@ export class RuleDispatcher implements Dispatcher {
       watchNote: this.watchNote,
       watchDeclareNote: this.watchDeclareNote,
       validationRoot: this.validationRoot,
+      liveLocalRun: ctx.localRun ?? null,
+      localValidations: ctx.localValidations ?? [],
+      // Read through the thunk on every decision rather than snapshotted at
+      // construction, which is what makes both `localValidation` keys live: the
+      // instruction an operator corrects between one validation and the next
+      // reaches the next one without a restart.
+      localValidation: this.localValidation(),
       validationClaimMinutes: this.validation.desktopClaimMinutes,
       // `workItemStates` narrows both work-item rules' config to non-null. Narrowed
       // once, here, so each stage reads it off a value the type system already

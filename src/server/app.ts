@@ -12,7 +12,12 @@ import { debugLog } from '../debug.js';
 import type { RouteModule } from './routes/context.js';
 import { register as registerAgents } from './routes/agents.js';
 import { register as registerAllowance } from './routes/allowance.js';
-import { artifactSignerFor, attachmentSignerFor, register as registerArtifacts } from './routes/artifacts.js';
+import {
+  artifactSignerFor,
+  attachmentSignerFor,
+  localValidationFileSignerFor,
+  register as registerArtifacts,
+} from './routes/artifacts.js';
 import { register as registerControl } from './routes/control.js';
 import { register as registerEscalations } from './routes/escalations.js';
 import { register as registerFeatures } from './routes/features.js';
@@ -21,6 +26,7 @@ import { register as registerIngress } from './routes/ingress.js';
 import { register as registerIssues } from './routes/issues.js';
 import { register as registerJobs } from './routes/jobs.js';
 import { register as registerLocalRun } from './routes/localRun.js';
+import { register as registerLocalValidation } from './routes/localValidation.js';
 import { register as registerMcpUsage } from './routes/mcpUsage.js';
 import { register as registerObstacles } from './routes/obstacles.js';
 import { register as registerPets } from './routes/pets.js';
@@ -61,6 +67,7 @@ const ROUTE_MODULES: RouteModule[] = [
   registerIssues,
   registerJobs,
   registerLocalRun,
+  registerLocalValidation,
   registerMcpUsage,
   registerObstacles,
   registerPets,
@@ -274,6 +281,7 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     artifactKey,
     artifactSigner: artifactKey ? artifactSignerFor(artifactKey) : undefined,
     attachmentSigner: artifactKey ? attachmentSignerFor(artifactKey) : undefined,
+    localValidationFileSigner: artifactKey ? localValidationFileSignerFor(artifactKey) : undefined,
   };
   for (const registerRoutes of ROUTE_MODULES) registerRoutes(app, ctx);
 

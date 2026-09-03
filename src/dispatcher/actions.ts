@@ -91,6 +91,37 @@ const pin = {
   profile: z.string().min(1).nullable().default(null),
 };
 
+/**
+ * MCP servers this dispatch carries **beside** the harness's own, and the local
+ * validation row it is for.
+ *
+ * Both are set by the two `local-validation*` rules and by nothing else, and both
+ * exist for the same reason the CI checks do: the executor has to record something
+ * structural on the task row, and re-deriving it from the origin string at the
+ * other end would be a parser where a field will do.
+ *
+ * `mcpServers` defaults to an empty list rather than null, so a launch that
+ * declared none is the same shape as one that never heard of them.
+ */
+const extraTools = {
+  mcpServers: z
+    .array(
+      z.object({
+        // The `mcpServers` key, which every `mcp__<key>__<tool>` permission name is
+        // derived from — so the grammar is the grammar of a permission rule, and a
+        // key with a `_` or a space in it would grant something else or nothing.
+        key: z.string().regex(/^[a-z][a-z0-9-]*$/, 'an MCP server key is lower-case letters, digits and hyphens'),
+        command: z.string().min(1),
+        args: z.array(z.string()).default([]),
+      }),
+    )
+    .default([]),
+  localValidation: z
+    .object({ id: z.string().min(1), as: z.enum(['validation', 'fix']) })
+    .nullable()
+    .default(null),
+};
+
 const ActionSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('dispatch_code_agent'),
@@ -119,6 +150,7 @@ const ActionSchema = z.discriminatedUnion('type', [
     ...part,
     ...pin,
     ...checkout,
+    ...extraTools,
     ...base,
   }),
   z.object({

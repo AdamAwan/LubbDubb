@@ -29,6 +29,7 @@ import { StackLandingStore } from './landings.js';
 import { BranchReapStore } from './branchReaps.js';
 import { dropPartialGoalArrivals, ENVIRONMENT_COLUMNS, EnvironmentStore, repairPartRefGoals } from './environments.js';
 import { dateInterruptionsFromBeforeTheStamp, LocalRunStore, LOCAL_RUN_COLUMNS } from './localRuns.js';
+import { LocalValidationStore, LOCAL_VALIDATION_COLUMNS } from './localValidations.js';
 import { WatchStore, WATCH_COLUMNS } from './watches.js';
 import { PrWatchSeedStore } from './prWatchSeeds.js';
 import { WorkItemLinkStore } from './workItemLinks.js';
@@ -104,6 +105,8 @@ import type {
   McpCallInput,
   CostDelta,
   LocalRun,
+  LocalValidation,
+  LocalValidationFinding,
   LocalRunStatus,
   LocalRunUsageDelta,
   Pet,
@@ -217,6 +220,7 @@ export class Store {
   private readonly environments: EnvironmentStore;
   private readonly watches: WatchStore;
   private readonly localRuns: LocalRunStore;
+  private readonly localValidations: LocalValidationStore;
   private readonly prWatchSeeds: PrWatchSeedStore;
   private readonly workItemLinks: WorkItemLinkStore;
   private readonly reviewWaitStore: ReviewWaitStore;
@@ -274,6 +278,7 @@ export class Store {
       TICKET_COLUMNS,
       PET_COLUMNS,
       LOCAL_RUN_COLUMNS,
+      LOCAL_VALIDATION_COLUMNS,
       ENVIRONMENT_COLUMNS,
       WATCH_COLUMNS,
       PR_REVIEW_ROUTE_COLUMNS,
@@ -360,6 +365,7 @@ export class Store {
     this.environments = new EnvironmentStore(ctx);
     this.watches = new WatchStore(ctx);
     this.localRuns = new LocalRunStore(ctx);
+    this.localValidations = new LocalValidationStore(ctx);
     this.prWatchSeeds = new PrWatchSeedStore(ctx);
     this.workItemLinks = new WorkItemLinkStore(ctx);
     this.reviewWaitStore = new ReviewWaitStore(ctx);
@@ -1265,6 +1271,57 @@ export class Store {
   }
   addLocalRunUsage(id: string, delta: LocalRunUsageDelta): void {
     this.localRuns.addLocalRunUsage(id, delta);
+  }
+
+  // -- Local validations (the fleet driving that environment) ----------------
+
+  createLocalValidation(input: {
+    originRef: string;
+    runId: string;
+    ref: string;
+    commit: string | null;
+  }): LocalValidation {
+    return this.localValidations.createLocalValidation(input);
+  }
+  getLocalValidation(id: string): LocalValidation | null {
+    return this.localValidations.getLocalValidation(id);
+  }
+  latestLocalValidation(originRef: string): LocalValidation | null {
+    return this.localValidations.latestLocalValidation(originRef);
+  }
+  listLatestLocalValidations(): LocalValidation[] {
+    return this.localValidations.listLatestLocalValidations();
+  }
+  listOpenLocalValidations(): LocalValidation[] {
+    return this.localValidations.listOpenLocalValidations();
+  }
+  listLocalValidationsAwaitingFix(): LocalValidation[] {
+    return this.localValidations.listLocalValidationsAwaitingFix();
+  }
+  markLocalValidationDispatched(id: string, taskId: string): void {
+    this.localValidations.markLocalValidationDispatched(id, taskId);
+  }
+  markLocalValidationFix(id: string, taskId: string): void {
+    this.localValidations.markLocalValidationFix(id, taskId);
+  }
+  setLocalValidationPlan(id: string, plan: string): void {
+    this.localValidations.setLocalValidationPlan(id, plan);
+  }
+  recordLocalValidationReport(
+    id: string,
+    result: {
+      status: 'passed' | 'failed' | 'blocked';
+      summary: string;
+      findings: LocalValidationFinding[];
+      visited: string[];
+      screenshots: string[];
+      note: string | null;
+    },
+  ): LocalValidation | null {
+    return this.localValidations.recordLocalValidationReport(id, result);
+  }
+  abandonLocalValidation(id: string, note: string): LocalValidation | null {
+    return this.localValidations.abandonLocalValidation(id, note);
   }
 
   // -- PR watch seeds (the harness's own PRs, already tagged) ---------------

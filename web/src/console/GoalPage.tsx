@@ -47,6 +47,17 @@ import { WorkRecord } from '../components/WorkRecord.js';
 import { NeedsBand } from './NeedsBand.js';
 import { OrphanBand } from './OrphanBand.js';
 import { AgentOnIt } from '../components/AgentOnIt.js';
+import { ValidateLocallyModal } from '../components/ValidateLocallyModal.js';
+import { LocalValidationReport } from './LocalValidationReport.js';
+import {
+  inFlight,
+  localValidationOffer,
+  localValidationSaid,
+  localValidationTone,
+  STATUS_WORD,
+  validateLocallyQuestion,
+  type LocalValidationTone,
+} from '../view/localValidation.js';
 
 /**
  * Where each of the track's stages jumps to. Anchors, not refs — one element on
@@ -58,6 +69,21 @@ import { AgentOnIt } from '../components/AgentOnIt.js';
  * rather than a control that does nothing, which is the cockpit's most repeated
  * bug and the one thing this strip must not become.
  */
+/**
+ * The local validation card's anchor, beside {@link ANCHOR} rather than in it: no
+ * track stage lands here, because a run somebody asked for is not a stage of the
+ * goal's life. The chip is what jumps to it.
+ */
+const LOCAL_VALIDATION_ANCHOR = 'cn-local-validation';
+
+/** The chip classes each tone wears, in the goal header's own vocabulary. */
+const CHIP_TONE: Record<LocalValidationTone, string> = {
+  up: 'cn-ok',
+  busy: 'cn-warn',
+  bad: 'cn-bad',
+  off: '',
+};
+
 const ANCHOR: Record<GoalStageAt, string> = {
   plan: 'cn-plan',
   validation: 'cn-validation',
@@ -152,6 +178,7 @@ export function GoalPage({
         desktopFolder={view.state.config.desktopFolder}
         fold={folds.validation}
       />
+      <LocalValidation page={page} view={view} actions={actions} fold={folds.localValidation} />
       <Signals page={page} actions={actions} refUrls={view.state.refUrls} fold={folds.signals} />
       <div className="cn-gcols">
         <div className="cn-stack">
@@ -380,6 +407,39 @@ function Header({
   const moreWork = issue.conclusion.verdict === 'more_work';
   const [instructing, setInstructing] = useState(false);
   const [endingRun, setEndingRun] = useState(false);
+  // Which question pressing Validate locally raises, or null while it is open on
+  // nothing. Local state and not `Place`: a modal is not a destination.
+  const [validating, setValidating] = useState<'swap' | 'refresh' | null>(null);
+  // The refusal from a post that went straight through — the one path with no modal
+  // to land it in. Without somewhere to say it, a 409 from a race would be a click
+  // that did nothing, which is the failure the two required notes already taught
+  // this page to avoid. → [17](../../../docs/spec/17-cockpit.md)
+  const [validateRefusal, setValidateRefusal] = useState<string | null>(null);
+  const run = view.state.localRun;
+  const target = view.state.localRunTargets.find((t) => t.issueNumber === issue.number);
+  const offer = localValidationOffer(issue, target, config.localRunConfigured);
+  // What is in the environment now, for the swap modal's sentence. Read off the
+  // goals the cockpit already holds rather than shipped a second time: the modal
+  // names it, and a title it cannot find is one it leaves out.
+  const runTitle =
+    run === null
+      ? null
+      : (view.state.world.issues.find((i) => `issue:${String(i.number)}` === run.originRef)?.title ?? null);
+  const onValidate = () => {
+    const question = validateLocallyQuestion(issue.number, run);
+    if (question !== null) {
+      setValidating(question);
+      return;
+    }
+    setValidateRefusal(null);
+    void actions
+      .validateLocally(issue.number)
+      .catch((err: unknown) =>
+        setValidateRefusal(
+          err instanceof Error && err.message ? err.message : 'That was refused, and nothing said why.',
+        ),
+      );
+  };
   // What ending the run costs, or null when it costs nothing: the route refuses a
   // dismissal with no note while the plan is flagged
   // ([20](../../../docs/spec/20-validation.md#where-it-lands)), and the button
@@ -472,6 +532,25 @@ function Header({
           >
             <Icon name="flask" size={12} />
             Validation · {issue.validation.passed + issue.validation.waived} of {issue.validation.total} settled
+          </button>
+        )}
+        {/* What the fleet found driving this goal on the operator's own machine,
+            beside the plan's verdict and separate from it: one is a checklist
+            somebody keeps, the other is a run somebody asked for. In flight it is
+            the only thing drawn about the validation, and it says which minute of
+            it we are in — the control above is absent while one is running. */}
+        {issue.localValidation !== null && (
+          <button
+            type="button"
+            className={`cn-chip cn-ghverdict cn-jump ${CHIP_TONE[localValidationTone(issue.localValidation.status)]}`}
+            onClick={() => jumpTo(LOCAL_VALIDATION_ANCHOR, folds.localValidation)}
+            title={issue.localValidation.summary ?? 'Go to what the local validation found'}
+          >
+            <Icon name="flask" size={12} />
+            Local validation ·{' '}
+            {inFlight(issue.localValidation)
+              ? localValidationSaid(issue.localValidation)
+              : STATUS_WORD[issue.localValidation.status]}
           </button>
         )}
         {/* The measurements, in one run at the end rather than as three more chips.
@@ -618,6 +697,24 @@ function Header({
             onPick={(profile) => void actions.setIssueProfile(issue.number, profile)}
           />
         </ControlGroup>
+        {/* Checking the work, which is neither steering it nor leaving the page:
+            it asks the fleet to bring this goal up on the operator's own machine
+            and drive it. Its own group because it is the only control here whose
+            effect is on *this machine* rather than on the tracker or the queue —
+            and the whole group is absent when there is nothing to press, since a
+            caption over nothing is furniture. */}
+        {offer.offered && (
+          <ControlGroup caption="Check the work" icon="flask" divider>
+            <ControlButton
+              icon="flask"
+              tone="primary"
+              onClick={onValidate}
+              title="Bring this goal's code up in your dev environment and send one agent to write a test plan, drive the running application through it, and report here. Asks first if something else is running."
+            >
+              Validate locally
+            </ControlButton>
+          </ControlGroup>
+        )}
         {/* The three controls whose effect is not on this goal: two destinations,
             and the one that starts a second ticket about it. Grouping them is what
             answers "how is filing a bug different from giving instructions" —
@@ -660,6 +757,11 @@ function Header({
           )}
         </ControlGroup>
       </ControlBar>
+      {validateRefusal !== null && (
+        <p className="launch-error" role="alert">
+          {validateRefusal}
+        </p>
+      )}
       {instructing && (
         <InstructionModal
           issueNumber={issue.number}
@@ -678,6 +780,18 @@ function Header({
           instructions={standing}
           onSubmit={(note) => actions.dismissRun(issue.number, note)}
           onClose={() => setEndingRun(false)}
+        />
+      )}
+      {validating !== null && run !== null && (
+        <ValidateLocallyModal
+          mode={validating}
+          issueNumber={issue.number}
+          issueTitle={issue.title}
+          targetRef={target?.target.ref ?? null}
+          run={run}
+          runTitle={runTitle}
+          onSubmit={(opts) => actions.validateLocally(issue.number, opts)}
+          onClose={() => setValidating(null)}
         />
       )}
       {raisingBug && (
@@ -735,6 +849,74 @@ function StateChip({ state, colours }: { state: string; colours: Readonly<Record
     <i className="cn-chip" style={colour === null ? undefined : { color: colour, borderColor: colour }}>
       {state}
     </i>
+  );
+}
+
+/**
+ * What the fleet found driving this goal on the operator's own machine.
+ *
+ * **Its own card, under the validation plan.** Not a band inside it, which is the
+ * cheaper shape and the wrong one: that card is a checklist against the
+ * *delivered* goal and folds until the work has shipped, and this is an
+ * exploratory run against work still in flight — folded inside it, the report an
+ * operator asked for two minutes ago would be hidden on exactly the unshipped goal
+ * they asked about. Under it rather than over, because the plan's checks are the
+ * standing statement of what this goal has to do and a run is one look at it.
+ *
+ * The card is drawn even with nothing in it, the page's rule for every other card:
+ * a surface that vanishes when it is empty is one an operator cannot learn.
+ */
+function LocalValidation({
+  page,
+  view,
+  actions,
+  fold,
+}: {
+  page: GoalPageView;
+  view: CockpitView;
+  actions: CockpitActions;
+  fold: Fold;
+}): JSX.Element {
+  const { issue } = page;
+  const validation = issue.localValidation;
+  const target = view.state.localRunTargets.find((t) => t.issueNumber === issue.number);
+  const offer = localValidationOffer(issue, target, view.state.config.localRunConfigured);
+  // Which of this goal's agents are still going, so the report gives a finished one
+  // a door rather than a pulse. The same `LIVE_AGENT` set the header counts with,
+  // rather than a second opinion about what "running" means.
+  const liveAgents = new Set(page.agents.filter((a) => LIVE_AGENT.has(a.agent.status)).map((a) => a.agent.id));
+
+  return (
+    <section className="cn-card" id={LOCAL_VALIDATION_ANCHOR}>
+      <h3>
+        <Disclosure open={fold.open} onToggle={fold.onToggle} label="Local validation" />
+        <i className="cn-n">
+          {validation === null
+            ? 'never run'
+            : inFlight(validation)
+              ? localValidationSaid(validation)
+              : STATUS_WORD[validation.status]}
+        </i>
+        {/* What tells this apart from the card above it, on the card itself: that
+            one is a person's checklist, this is an agent's run at the machine in
+            front of them. Without the sentence the two read as the same feature
+            drawn twice. */}
+        <span className="cn-more">an agent, in your own dev environment</span>
+      </h3>
+      {fold.open && (
+        <div className="cn-vin">
+          <LocalValidationReport
+            validation={validation}
+            why={offer.offered ? null : offer.why}
+            issueNumber={issue.number}
+            liveAgents={liveAgents}
+            refUrls={view.state.refUrls}
+            now={view.now}
+            actions={actions}
+          />
+        </div>
+      )}
+    </section>
   );
 }
 

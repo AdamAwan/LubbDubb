@@ -29,6 +29,7 @@ import type {
   IssueFiled,
   Job,
   LocalRunView,
+  LocalValidationView,
   JobSchedule,
   McpChannelPayload,
   McpInsights,
@@ -70,6 +71,7 @@ import type { ReviewPackReading, WsClient } from '../api.js';
 import type { ValidationAct } from '../cockpit/actions.js';
 import { buildDemoState, demoPlanHistory } from './fixtures.js';
 import { isContainerType } from '../issueGroups.js';
+import { inFlight } from '../view/localValidation.js';
 import { planCaveatsOf } from '../planCaveats.js';
 import { buildGoalPage } from '../view/goalPage.js';
 
@@ -161,6 +163,7 @@ function injectedIssue(
     | 'conclusion'
     | 'delivery'
     | 'instructions'
+    | 'localValidation'
     | 'retrospective'
     | 'scratchpad'
     | 'shortfall'
@@ -184,6 +187,8 @@ function injectedIssue(
     spend: null,
     // And nothing has planned it, so it has no validation plan at all.
     validation: null,
+    // Nor has anybody asked for it to be validated on the machine.
+    localValidation: null,
   };
 }
 
@@ -217,6 +222,74 @@ function toolLines(at: string, tool: string, summary: string, done: string, body
  * folding the panel now draws it with. The times are literals like every other demo
  * value — nothing here reads a clock.
  */
+/** How long the demo's scripted validation sits on each phase. */
+const VALIDATION_TICK_MS = 1800;
+
+/**
+ * The demo's validation, one step per tick: queued, planning, waiting for the
+ * environment, driving it, then a failure with something worth looking at.
+ *
+ * It ends `failed` rather than `passed` on the fixtures' usual argument — a demo of
+ * a feature has to show the case the feature is *for*, and the case this one is for
+ * is a change that looked finished and did not work. A pass draws two lines and
+ * demonstrates nothing about why anybody would press the button.
+ */
+const VALIDATION_STEPS: readonly ((row: LocalValidationView) => Partial<LocalValidationView>)[] = [
+  () => ({ status: 'dispatched', phase: 'planning', dispatchedAt: new Date().toISOString() }),
+  () => ({
+    phase: 'environment',
+    plan: [
+      '## What changed',
+      '',
+      'The catalogue now accepts a per-item schema, and the job form posts one. Three things to drive:',
+      '',
+      '1. **A job with a schema is accepted.** Open /jobs/new, fill the form with a valid schema and submit.',
+      '   A pass is a 201 and the job listed with its schema on /jobs.',
+      '2. **A job with no schema is refused.** Submit the same form with the schema field empty.',
+      '   A pass is the form staying put with a message naming the field.',
+      '3. **An existing job still opens.** Open a job created before this change from /jobs.',
+      '   A pass is the detail page rendering with no schema section rather than an error.',
+    ].join('\n'),
+  }),
+  () => ({ phase: 'driving' }),
+  () => ({
+    status: 'failed',
+    phase: null,
+    endedAt: new Date().toISOString(),
+    summary:
+      'Steps 1 and 3 pass: a job with a schema is accepted and listed, and a job from before the change opens ' +
+      'with no schema section. Step 2 does not — the form accepts an empty schema and the API takes it, so the ' +
+      'validation this change exists to add is not applied on the path a person actually uses.',
+    findings: [
+      {
+        title: 'A job with no schema is accepted',
+        detail:
+          'Opened /jobs/new, filled in title and payload, left the schema field empty and submitted. Expected the ' +
+          'form to stay put naming the field; the request went out and came back 201, and the job is listed with ' +
+          'an empty schema.',
+        severity: 'blocker',
+        url: 'http://localhost:5173/jobs/new',
+        screenshot: null,
+      },
+      {
+        title: 'The validation message reads "undefined"',
+        detail:
+          'Submitting a malformed schema does refuse it, but the message under the field reads "undefined" rather ' +
+          'than saying what is wrong with it.',
+        severity: 'nit',
+        url: 'http://localhost:5173/jobs/new',
+        screenshot: null,
+      },
+    ],
+    visited: ['http://localhost:5173/jobs/new', 'http://localhost:5173/jobs'],
+    // No bytes to serve in a demo with no server, and an `<img>` pointed at a path
+    // that answers nothing is a demo of a broken feature. The fixtures' attachment
+    // rule, one surface over.
+    screenshots: [],
+    files: [],
+  }),
+];
+
 const BRINGUP: readonly { phase: string; lines: readonly string[] }[] = [
   {
     phase: 'starting the containers',
@@ -311,6 +384,9 @@ class DemoServer {
   private bringUp = BRINGUP.length;
   /** Which step of {@link TEARDOWN} is next. */
   private teardown = TEARDOWN.length;
+  /** Which step of the scripted validation is next. Past the end = nothing scheduled. */
+  private validating = VALIDATION_STEPS.length;
+  private validationSeq = 1;
   /** Where a message or refresh turn's script is up to; past the end is quiet. */
   private reply = MESSAGE_TURN.length;
   private deskBeats = 0;
@@ -1549,6 +1625,110 @@ class DemoServer {
     // reading that only appeared at the end would demonstrate the opposite of it.
     this.state.localRun = { ...run, phase: step.phase, ...localRunSpent(run, 0.06) };
     this.dirty();
+  }
+
+  /**
+   * Ask for a goal to be validated locally.
+   *
+   * The refusals are the server's, because they are what the modal exists to answer:
+   * a swap without consent, and a second validation on a goal already being
+   * validated. Everything after that is scripted by {@link advanceValidation} — the
+   * demo has no agent, and what it is demonstrating is the row moving through its
+   * phases in front of somebody watching.
+   */
+  validateLocally(issue: number, opts: { swap?: boolean; refresh?: boolean } = {}): Promise<{ ok: true }> {
+    const goal = this.state.world.issues.find((i) => i.number === issue);
+    if (goal === undefined) return Promise.reject(new Error(`#${String(issue)} is not a goal here.`));
+    if (goal.localValidation !== null && inFlight(goal.localValidation))
+      return Promise.reject(new Error(`#${String(issue)} is already being validated locally.`));
+    const target = this.state.localRunTargets.find((t) => t.issueNumber === issue);
+    if (target?.runnable !== true)
+      return Promise.reject(new Error(`#${String(issue)} has no branch of its own to run.`));
+    const live = this.state.localRun;
+    if (live !== null && live.live && live.originRef !== `issue:${String(issue)}` && opts.swap !== true) {
+      const running = /^issue:(\d+)$/.exec(live.originRef)?.[1] ?? live.originRef;
+      return Promise.reject(
+        new Error(
+          `#${running} is running locally on ${live.ref} (${live.status}). Validating #${String(issue)} stops it ` +
+            'first, which takes as long as this project takes to shut down. Send `swap` to go ahead.',
+        ),
+      );
+    }
+    if (live === null || !live.live || live.originRef !== `issue:${String(issue)}`) void this.startLocalRun(issue);
+    const now = new Date().toISOString();
+    const run = this.state.localRun;
+    goal.localValidation = {
+      id: `lv-${String(issue)}-${String(this.validationSeq++)}`,
+      originRef: `issue:${String(issue)}`,
+      runId: run?.id ?? 'run-1',
+      ref: run?.ref ?? 'main',
+      commit: run?.commit ?? DEMO_TIP,
+      status: 'pending',
+      requestedAt: now,
+      dispatchedAt: null,
+      endedAt: null,
+      taskId: null,
+      fixTaskId: null,
+      plan: null,
+      summary: null,
+      findings: [],
+      visited: [],
+      screenshots: [],
+      note: null,
+      phase: 'queued',
+      files: [],
+      agent: null,
+      fixAgent: null,
+    };
+    this.validating = 0;
+    this.dirty();
+    this.armValidation(issue);
+    return Promise.resolve({ ok: true as const });
+  }
+
+  /** Call one off — the operator's own answer, and the only one that needs no reason. */
+  cancelLocalValidation(issue: number): Promise<{ ok: true }> {
+    const goal = this.state.world.issues.find((i) => i.number === issue);
+    const row = goal?.localValidation ?? null;
+    if (goal === undefined || row === null || !inFlight(row))
+      return Promise.reject(new Error(`Nothing is being validated locally on #${String(issue)}.`));
+    goal.localValidation = {
+      ...row,
+      status: 'abandoned',
+      phase: null,
+      endedAt: new Date().toISOString(),
+      note: 'called off from the cockpit',
+    };
+    this.dirty();
+    return Promise.resolve({ ok: true as const });
+  }
+
+  /**
+   * Walk the scripted validation one step per tick.
+   *
+   * On a timer rather than on a poll, unlike the bring-up beside it: the goal page
+   * has no log to fetch, so there is nothing this could ride. It re-arms only while
+   * there are steps left, so a demo left open does not tick for ever.
+   */
+  private armValidation(issue: number): void {
+    setTimeout(() => {
+      this.advanceValidation(issue);
+    }, VALIDATION_TICK_MS);
+  }
+
+  private advanceValidation(issue: number): void {
+    const goal = this.state.world.issues.find((i) => i.number === issue);
+    const row = goal?.localValidation ?? null;
+    // Stops the moment the row is no longer in flight, which is what Call it off
+    // does to it — a scripted step written onto an abandoned row would undo the
+    // operator's own answer a second and a half later.
+    if (goal === undefined || row === null || !inFlight(row)) return;
+    const step = VALIDATION_STEPS[this.validating];
+    if (step === undefined) return;
+    this.validating += 1;
+    goal.localValidation = { ...row, ...step(row) };
+    this.dirty();
+    if (VALIDATION_STEPS[this.validating] !== undefined) this.armValidation(issue);
   }
 
   /**
@@ -4587,6 +4767,9 @@ export const demoApi = {
   // cannot get here is a server on a port, and nothing here pretends otherwise —
   // the URL is the fixture's, and it will not answer.
   startLocalRun: (issue: number, ref?: string) => getServer().startLocalRun(issue, ref),
+  validateLocally: (issue: number, opts?: { swap?: boolean; refresh?: boolean }) =>
+    getServer().validateLocally(issue, opts),
+  cancelLocalValidation: (issue: number) => getServer().cancelLocalValidation(issue),
   stopLocalRun: () => getServer().stopLocalRun(),
   messageLocalRun: (text: string) => getServer().messageLocalRun(text),
   refreshLocalRun: () => getServer().refreshLocalRun(),

@@ -252,6 +252,16 @@ interface HarnessDeps {
    */
   localRun?: { noteAlive(): void };
   /**
+   * The local-validation desk's sweep: settles the rows nobody will ever answer —
+   * the environment went away, or the agent ended without reporting.
+   *
+   * On the pulse rather than a timer of its own because what it reads is the store,
+   * and it runs **above the dispatch** so the rule never proposes an agent for a row
+   * this beat is about to abandon. Absent = nothing is swept, which is every test
+   * that does not name one. → [32](../docs/spec/32-local-validation.md)
+   */
+  localValidations?: { sweep(): void };
+  /**
    * Watches the harness's own build, and advances a drain that has run dry. Absent
    * = the watch is off, which is a supported configuration and every test that does
    * not name one. It decides no dispatch: what it can pause is the same `paused`
@@ -1091,6 +1101,13 @@ export class Harness extends EventEmitter {
       // pull request for ever. → `src/review/reviewedElsewhere.ts`
       if (readWorld) await this.askReviewedElsewhere(store, dispatchWorld);
 
+      // Above the dispatch, so the rule below never proposes an agent for a row this
+      // beat is about to abandon: a validation whose environment was stopped or
+      // swapped is settled here, and the two arms then read the same table in the
+      // same state. The runner's own `changed` calls it too, so the usual case is
+      // that this finds nothing to do.
+      this.deps.localValidations?.sweep();
+
       const plan = await this.deps.dispatcher.decide({
         world: dispatchWorld,
         // Which of `world.issues` above are retained runs rather than the tracker's
@@ -1117,6 +1134,12 @@ export class Harness extends EventEmitter {
         // whether a check was handed to the fleet and whether anybody has
         // recorded a reading against it — never what it says.
         validationChecks: store.listAllValidationChecks(),
+        // The one dev environment on this machine, and the validations pinned to
+        // it. Rule `local-validation` reads both to answer the question its own row
+        // cannot: is the environment this reading was planned against still the one
+        // that is up. Nothing else in the pipeline knows local runs exist.
+        localRun: store.liveLocalRun(),
+        localValidations: [...store.listOpenLocalValidations(), ...store.listLocalValidationsAwaitingFix()],
         conclusions,
         deliveries,
         deliverySignals,

@@ -6,6 +6,7 @@ import type {
   InsightsWindow,
   JobAttachmentInput,
   LocalRunView,
+  LocalValidationView,
   RecoveryVerdict,
   StackLanding,
   StateSection,
@@ -727,6 +728,15 @@ const realApi = {
   refreshLocalRun: () => post<{ ok: true; run: LocalRunView }>('/api/local-run/refresh'),
   // Its own fetch rather than a field on the snapshot: two hundred lines on every
   // heartbeat is a log nobody has open, paid for forever.
+  // Validating a goal against that environment: bring its code up, and put one
+  // agent on driving it. `swap` is the operator's consent to taking the environment
+  // from another goal — without it the server answers 409 with what is running, and
+  // the caller asks. `refresh` moves the checkout to the tip first, which is never
+  // automatic.
+  validateLocally: (issue: number, opts: { swap?: boolean; refresh?: boolean } = {}) =>
+    post<{ ok: true; validation: LocalValidationView }>(`/api/issues/${String(issue)}/validate-locally`, opts),
+  cancelLocalValidation: (issue: number) =>
+    post<{ ok: true; validation: LocalValidationView }>(`/api/issues/${String(issue)}/validate-locally/cancel`),
   localRunOutput: () => authFetch('/api/local-run/output').then((r) => json<{ lines: string[] }>(r)),
   killAgent: (id: string) => post(`/api/agents/${id}/kill`),
   completeAgent: (id: string) => post(`/api/agents/${id}/complete`),

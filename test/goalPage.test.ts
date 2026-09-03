@@ -754,3 +754,25 @@ test('the record has no relevant moment, so it never opens itself', () => {
   const page = buildGoalPage(state, `issue:${issue.number}`, [])!;
   assert.equal(goalSectionsOpen(page).record, false);
 });
+
+/**
+ * The local validation card opens when there is a row and folds when there is not.
+ *
+ * Simpler than its neighbours for a reason worth stating: this card is not about a
+ * stage of the goal's life, it is about a thing somebody pressed. Either they
+ * pressed it or they did not, and the heading says which either way.
+ */
+test('the local validation card opens exactly when there is something in it', () => {
+  const state = buildDemoState().state;
+  const issue = state.world.issues[0]!;
+  const page = buildGoalPage(state, `issue:${issue.number}`, [])!;
+
+  const never: GoalPageView = { ...page, issue: { ...page.issue, localValidation: null } };
+  assert.equal(goalSectionsOpen(never).localValidation, false, 'a goal nobody has validated draws a folded card');
+
+  const asked: GoalPageView = {
+    ...page,
+    issue: { ...page.issue, localValidation: { status: 'failed' } as never },
+  };
+  assert.equal(goalSectionsOpen(asked).localValidation, true);
+});

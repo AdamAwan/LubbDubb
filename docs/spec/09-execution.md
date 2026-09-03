@@ -901,8 +901,11 @@ else left to give ([below](#reclaiming-a-stranded-slot)).
 
 ### The read-only checkout
 
-Three dispatches need a repository and no branch: the goal appraisal ([06](06-issue-pickup.md)), the
-assessment and a handed-over validation check ([20](20-validation.md)). Each is told in its prompt not
+Four dispatches need a repository and no branch: the goal appraisal ([06](06-issue-pickup.md)), the
+assessment, a handed-over validation check ([20](20-validation.md)), and a local validation
+([32](32-local-validation.md)) — which is the one of them cut from a **commit** rather than a branch,
+because the branch it is about moves while it runs and a plan written against a different tree from
+the one being driven is the failure that feature's whole pin exists to prevent. Each is told in its prompt not
 to commit or push anything, and each is cut from the default branch for the reason it says out loud —
 the state it is asked about is _on_ it.
 
