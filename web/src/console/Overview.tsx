@@ -25,6 +25,7 @@ import { Who } from '../components/who.js';
 import { AgentOnIt } from '../components/AgentOnIt.js';
 import { ReviewMark } from '../components/ReviewMark.js';
 import { orphanCount, orphanGoal } from '../view/orphanGoal.js';
+import { Tag, type TagTone } from '../components/tag.js';
 
 /**
  * What is shown when no goal is selected: eight cards, rows rather than pictures.
@@ -467,7 +468,7 @@ function RunwayBand({ view }: { view: CockpitView }): JSX.Element {
       <span className="cn-runway-read" title={runwayTitle(r)}>
         {runwayReading(r)}
       </span>
-      <span className="cn-tag">{RUNWAY_LABEL[r.state]}</span>
+      <Tag>{RUNWAY_LABEL[r.state]}</Tag>
       <span className="cn-runway-say">{view.state.control.paused ? 'Dispatch is paused.' : r.headline}</span>
       {/* The same four buckets whatever the state, so a glance across a week
           reads as one shape changing rather than as several different bands. */}
@@ -1000,7 +1001,11 @@ function goalRow(issue: Issue, view: CockpitView, actions: CockpitActions): Pane
             Only ever drawn for an environment holding the goal *whole* — `partial`
             has no furthest anything, and a chip claiming one would be the boolean
             rollup the reach fold exists to refuse. */}
-        {furthest !== null && <i className="cn-chip cn-ok">{furthest}</i>}
+        {furthest !== null && (
+          <Tag tone="green" fill>
+            {furthest}
+          </Tag>
+        )}
         {/* A retained run: the tracker's copy is stale, the harness's record is not. */}
         {issue.stale !== undefined && <StaleChip stale={issue.stale} now={view.now} />}
         {/* Not a `<Ref>` and not a button: the row's title already opens this goal,
@@ -1008,9 +1013,9 @@ function goalRow(issue: Issue, view: CockpitView, actions: CockpitActions): Pane
             one thing the link rule forbids outright. The way to fix it is the band
             on the page the row opens. */}
         {orphan !== null && (
-          <i className="cn-chip cn-orphan-chip" title="This goal hangs off no Feature — open it to place it">
+          <Tag tone="amber" fill title="This goal hangs off no Feature — open it to place it">
             ▲ no Feature
-          </i>
+          </Tag>
         )}
       </>
     ),
@@ -1405,9 +1410,7 @@ function queueRow(item: QueueItem, view: CockpitView, actions: CockpitActions): 
       // top of the panel with nothing anywhere connecting the order to the click
       // that caused it.
       item.expedited === true ? (
-        <i className="cn-chip" title="Its goal is marked a priority, so everything under it is ranked first">
-          priority
-        </i>
+        <Tag title="Its goal is marked a priority, so everything under it is ranked first">priority</Tag>
       ) : undefined,
     // What this row will run on, and the one place it can be changed before it
     // runs. The queue is where the judgement is available — an operator reading
@@ -1479,7 +1482,11 @@ function healthRow(reading: EnvironmentHealthReading, now: number): PanelRowMode
     // with a page. Said in the model rather than left out, which is the field's
     // whole purpose.
     refs: null,
-    chips: <i className={`cn-chip ${healthTone(reading)}`}>{reading.tier ?? reading.state}</i>,
+    chips: (
+      <Tag tone={healthTone(reading)} fill>
+        {reading.tier ?? reading.state}
+      </Tag>
+    ),
     // The check's own sentences, verbatim and joined — or the harness's account of
     // why it has none, which is a different thing and never dressed as one.
     why: reading.reasons.length > 0 ? reading.reasons.join(' · ') : reading.detail,
@@ -1509,10 +1516,10 @@ const HEALTH_SAID: Record<EnvironmentHealthReading['state'], string> = {
  * An **untiered** `unhealthy` takes red: a severity nobody stated is not a reason
  * to draw an outage quietly.
  */
-function healthTone(reading: EnvironmentHealthReading): string {
-  if (reading.state === 'healthy') return 'cn-ok';
-  if (reading.state === 'unknown') return 'cn-stall';
-  return reading.tier === 'orange' ? 'cn-stall' : 'cn-you';
+function healthTone(reading: EnvironmentHealthReading): TagTone {
+  if (reading.state === 'healthy') return 'green';
+  if (reading.state === 'unknown') return 'amber';
+  return reading.tier === 'orange' ? 'amber' : 'red';
 }
 
 /** An orange is the harness holding its nerve; a red — or an untiered one — is your move. */

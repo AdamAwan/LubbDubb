@@ -423,11 +423,18 @@ function Facts({ facts }: { facts?: readonly RowFact[] }): JSX.Element | null {
  * the button rather than its child, since a tooltip inside a control is read out
  * as part of the control's own name.
  */
+/**
+ * The three readings a row's own word can carry: something is being asked of you,
+ * something is held, or the row is simply going. `quiet` takes no tone — it is the
+ * absence of a verdict, not a fourth one.
+ */
+const WHY_TONE: Record<string, string> = { ask: 't-red tag-fill', hold: 't-amber tag-fill', quiet: '' };
+
 function Why({ row }: { row: PanelRowModel }): JSX.Element | null {
   const why = row.why != null && row.why !== '' ? row.why : null;
   const label = row.whyLabel;
   if (why === null && label === undefined) return null;
-  const tone = label === undefined ? '' : ` cn-why-chip cn-t-${row.whyTone ?? 'quiet'}`;
+  const tone = label === undefined ? '' : ` cn-why-chip tag ${WHY_TONE[row.whyTone ?? 'quiet']}`;
   return (
     <span className="cn-why">
       <button

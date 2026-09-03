@@ -6,6 +6,7 @@ import type { SetupCheck, SetupFix } from '../types.js';
 import { relTime } from '../components/util.js';
 import { Ref, refLabel } from '../components/refs.js';
 import { Button } from '../components/button.js';
+import { Tag } from '../components/tag.js';
 
 /** One word per kind, shared with the goal page so a row and the band it opens name the ask the same. */
 export const KIND_LABEL: Record<NeedKind, string> = {
@@ -306,7 +307,7 @@ function Row({
   const body = (
     <>
       <div className="cn-qkind">
-        <i className="cn-tag">
+        <Tag>
           {/* Hidden from the reading order on purpose: the word beside it is
                 the label, and a screen reader announcing "black diamond bench"
                 is worse than one announcing "bench". */}
@@ -314,7 +315,7 @@ function Row({
             {KIND_SYMBOL[row.kind]}
           </span>
           {KIND_LABEL[row.kind]}
-        </i>
+        </Tag>
         {row.raisedAt !== '' && <i className="cn-qage">{relTime(row.raisedAt, now)}</i>}
       </div>
       <p className="cn-qtitle">{row.title}</p>
@@ -357,12 +358,12 @@ function Row({
         >
           <div className="cn-qin">
             <div className="cn-qkind">
-              <i className="cn-tag">
+              <Tag>
                 <span className="cn-sym" aria-hidden="true">
                   {KIND_SYMBOL[row.kind]}
                 </span>
                 {KIND_LABEL[row.kind]}
-              </i>
+              </Tag>
             </div>
             <p className="cn-qtitle">{row.title}</p>
             {row.check.remedy !== undefined && <div className="cn-qmeta">{row.check.remedy}</div>}

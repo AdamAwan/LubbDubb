@@ -5215,42 +5215,6 @@ select:disabled {
   gap: 2px 6px;
   margin-top: 3px;
 }
-/* The tracker's word for what a thing *is*, tinted by family rather than by
-   literal type: five hues over an open vocabulary, and an unrecognised type keeps
-   the untinted border it had before there were tones. Quieter than `.tickets-state`
-   one line up — the state is a reading that changes, the type never does, so it
-   must not compete with it for the same glance. */
-.tickets-type {
-  display: inline-flex;
-  align-items: center;
-  padding: 0 5px;
-  border-radius: 4px;
-  border: 1px solid var(--cn-line);
-  color: var(--cn-fg-faint);
-  font-size: 10.5px;
-  font-style: normal;
-  white-space: nowrap;
-}
-.tickets-type.bug {
-  border-color: var(--cn-red-line);
-  color: var(--cn-red);
-}
-.tickets-type.story {
-  border-color: var(--cn-green-line);
-  color: var(--cn-green);
-}
-.tickets-type.debt {
-  border-color: var(--cn-amber-line);
-  color: var(--cn-amber);
-}
-.tickets-type.container {
-  border-color: var(--cn-violet-line);
-  color: var(--cn-violet);
-}
-.tickets-type.task {
-  border-color: var(--cn-blue-line);
-  color: var(--cn-blue-ink);
-}
 .tickets-row.closed .tickets-name {
   color: var(--cn-fg-dim);
 }

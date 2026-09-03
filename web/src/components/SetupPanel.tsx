@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import type { ConfigChange, SetupPayload, SetupResolvePayload } from '../types.js';
 import { Button } from './button.js';
+import { Tag } from './tag.js';
 
 /**
  * Point the fleet at a project: one screen, pre-answered, and the file it writes.
@@ -265,9 +266,9 @@ function Preview({ preview }: { preview: { text: string; changes: readonly Confi
             <tr key={change.path}>
               <td className="cn-setup-val">{change.path}</td>
               <td>
-                <span className={change.applied ? 'cn-tag cn-good' : 'cn-tag cn-warn'}>
+                <Tag tone={change.applied ? 'green' : 'amber'} fill>
                   {change.applied ? 'now' : 'at restart'}
-                </span>
+                </Tag>
               </td>
             </tr>
           ))}

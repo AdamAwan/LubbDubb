@@ -14,6 +14,7 @@ import { ConfirmButton } from './ConfirmButton.js';
 import { Ref } from './refs.js';
 import { absDate, relTime, untilTime } from './util.js';
 import { HeadRow } from './panel.js';
+import { Tag, type TagTone } from './tag.js';
 
 /**
  * The obstacle board — *what is blocking the fleet, and what owns each one*.
@@ -200,6 +201,17 @@ export function ObstaclesPage({
 }
 
 /** The states nothing further is owed about. Muted is a person's, and sits with them. */
+/**
+ * What each state of an obstacle asks of a reader: one standing is a gate, one
+ * somebody has taken is in hand, one that is over is over. `sighted`, `dormant`
+ * and `muted` carry no verdict and so take no tone — the word is the whole of it.
+ */
+const OBSTACLE_TONE: Partial<Record<ObstacleState, TagTone>> = {
+  standing: 'amber',
+  owned: 'blue',
+  resolved: 'green',
+};
+
 const TERMINAL: ReadonlySet<ObstacleState> = new Set<ObstacleState>(['resolved', 'dormant', 'muted']);
 
 /**
@@ -290,7 +302,9 @@ function Row({
         </button>
         {/* Beside the control, never inside it. */}
         <span className="cn-refs">{obstacle.ownerRef !== null && <Ref to={obstacle.ownerRef} />}</span>
-        <span className={`ob-state s-${obstacle.state}`}>{obstacle.state}</span>
+        <Tag tone={OBSTACLE_TONE[obstacle.state]} fill={OBSTACLE_TONE[obstacle.state] !== undefined}>
+          {obstacle.state}
+        </Tag>
         {obstacle.kind === 'note' && <span className="ob-kind">note</span>}
       </HeadRow>
 

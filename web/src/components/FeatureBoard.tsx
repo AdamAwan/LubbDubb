@@ -20,6 +20,7 @@ import type {
   FeatureWorkingRow,
 } from '../types.js';
 import { Panel } from './panel.js';
+import { Tag, type TagTone } from './tag.js';
 
 /**
  * The feature board — the fleet's work read one tier up (issue #—).
@@ -154,7 +155,7 @@ function FeatureCard({
         <span className="cn-refs">
           <Ref to={`issue:${feature.number}`} />
         </span>
-        {feature.workItemState !== null && <span className="cn-chip">{feature.workItemState}</span>}
+        {feature.workItemState !== null && <Tag>{feature.workItemState}</Tag>}
       </div>
 
       <Bar counts={feature.counts} />
@@ -370,6 +371,12 @@ const BLOCK_WORD: Record<FeatureBlockKind, string> = {
   fellShort: 'fell short',
 };
 
+/** An agent stopped waiting is a fault; a decision nobody has made is a gate. */
+const BLOCK_TONE: Record<FeatureBlockKind, TagTone> = {
+  question: 'red',
+  fellShort: 'amber',
+};
+
 function BlockedLine({
   row,
   now,
@@ -384,7 +391,9 @@ function BlockedLine({
       {/* Two words and not one: `asked` is an agent stopped waiting for a reply,
           `fell short` is a decision nobody has made. A reader owes each a
           different thing. */}
-      <span className={`cn-chip cn-fb-b-${row.kind}`}>{BLOCK_WORD[row.kind]}</span>{' '}
+      <Tag tone={BLOCK_TONE[row.kind]} fill>
+        {BLOCK_WORD[row.kind]}
+      </Tag>{' '}
       <GoalLink number={row.number} title={row.title} actions={actions} />
       <span className="cn-fb-said">“{row.summary}”</span>
       <span className="cn-psub">{relAge(row.since, now)}</span>
@@ -520,6 +529,20 @@ const STANDING_WORD: Record<FeatureChildStanding, string> = {
   unwatched: 'not watched',
 };
 
+/**
+ * The same four hues the standing's own word takes in the legend below, now on the
+ * chip itself. It had none: `cn-fb-c-*` tints a `b` and the chip wearing it was
+ * plain, so the column that says how a child stood said it in one colour.
+ */
+const STANDING_TONE: Record<FeatureChildStanding, TagTone | undefined> = {
+  delivered: 'green',
+  inFlight: 'blue',
+  fellShort: 'red',
+  settled: undefined,
+  queued: undefined,
+  unwatched: 'amber',
+};
+
 function barLabel(counts: FeatureCounts): string {
   const parts = (Object.keys(STANDING_WORD) as FeatureChildStanding[])
     .filter((s) => counts[s] > 0)
@@ -611,7 +634,9 @@ function Children({
                 </button>
               </td>
               <td>
-                <span className={`cn-chip cn-fb-c-${row.standing}`}>{STANDING_WORD[row.standing]}</span>
+                <Tag tone={STANDING_TONE[row.standing]} fill={STANDING_TONE[row.standing] !== undefined}>
+                  {STANDING_WORD[row.standing]}
+                </Tag>
               </td>
               {/* The harness's own outcome word, beside the standing rather than
                   instead of it: a re-picked goal is in flight and still carries
