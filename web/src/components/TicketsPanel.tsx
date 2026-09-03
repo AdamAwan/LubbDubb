@@ -396,7 +396,7 @@ export function TicketsPanel({ query, onQuery, view, actions, now }: TicketsPane
         />
       ) : (
         <RefLinksExtended refUrls={refUrls}>
-          <Panel face="console" density="flush" as="section" className="tickets-card">
+          <Panel density="flush" className="tickets-card">
             <div className={`tickets-rows by-${query.order} ${query.group === 'feature' ? 'grouped' : ''}`}>
               <div className="tickets-thead">
                 <span>#</span>

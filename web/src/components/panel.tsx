@@ -13,25 +13,35 @@ import type { JSX, ReactNode } from 'react';
  * cannot reach; and `.finding-card` and `.lesson-card` had become the same five
  * declarations twice, under two names, with no live call site left on either.
  *
- * **The rules it keeps:**
+ * **One frame, one ground, one corner.** The first collapse kept a `face` prop —
+ * `shared` or `console`, the two token families — and a `roomy` inset beside the
+ * ordinary one, on the argument that each was a real distinction. Neither held:
  *
- * - **Density is a step, never a value.** `flush` for a frame whose children pad
- *   themselves — a card with a header band — `snug` for the ordinary one, `roomy`
- *   for a frame that is the page's subject. Three steps, on `--pad-*`, so a
- *   fourth padding is a decision somebody has to make on purpose.
- * - **The face is a prop, never a class string** — the precedent
- *   [`Modal`](./Modal.tsx) sets. The `--cn-*` console family and the shared family
- *   are a real distinction rather than a namespace
- *   ([17](../../../docs/spec/17-cockpit.md#tokens)): `--panel` sits two steps
- *   lighter than `--cn-panel`, and each family keeps its own radius step. A caller
- *   names which one it is drawing, and neither sheet learns the other's names.
- * - **A radius is its family's step.** `--r-md` for the shared face, `--cn-r` for
- *   the console's, and no frame writes a length. A literal here is the same
- *   failure a colour literal is — square everywhere is the operator's setting, and
- *   a hard `7px` is a corner no setting moves.
- * - **`className` is a modifier, never a second face.** What the frame *is* stays
- *   with the call site — a tint on a card that wants attention, a column layout,
- *   an `overflow: hidden` — and every one of those rules already outranks the base.
+ * - **Every frame in the cockpit renders inside the console.** The four call sites
+ *   that named the shared face — the escalation card, the recovery banner, a pet
+ *   card, a species card — are drawn by `NeedsBand`, `ConsoleRoot` and the two Pets
+ *   surfaces, all of them under `.cn`. So `face` never chose between two grounds a
+ *   frame might sit on; it chose whether a card would be two steps lighter and
+ *   square where every card around it was `--cn-panel` and rounded. The families
+ *   stay a real distinction where they draw on different grounds — a drawer and a
+ *   modal are mounted outside the console — but that is `Modal`'s business, not a
+ *   box's. The frame draws `--cn-panel` because that is where every frame is.
+ * - **`roomy` was one call site, 4px from `snug`.** A step used once is not a ramp;
+ *   `flush` versus padded is structural — whether the frame or its children own the
+ *   inset, which is what a full-bleed header band needs — and "10px or 14px" is not
+ *   a decision anybody can take on principle. Two steps, and the second inset went
+ *   with the prop: `--pad` is the frame's inset, and a second one is a token
+ *   somebody adds on purpose.
+ * - **`as='section'` bought nothing.** A `<section>` is a landmark only with an
+ *   accessible name, and the frame passed none — thirteen call sites were asking
+ *   for a generic element with a different tag name, and no rule in either sheet
+ *   selected on it.
+ *
+ * What is left is one variation, and it earns its keep: **who owns the inset.**
+ *
+ * **`className` is a modifier, never a second face.** What the frame *is* stays
+ * with the call site — a tint on a card that wants attention, a column layout, an
+ * `overflow: hidden` — and every one of those rules already outranks the base.
  *
  * {@link HeadRow} is the same argument for the row across the top of one: flex,
  * centred, 8px, wrapping was the single most duplicated declaration set in the
@@ -40,22 +50,16 @@ import type { JSX, ReactNode } from 'react';
  *
  * → docs/spec/17-cockpit.md#the-frame
  */
-export function Panel({ face, density, as, className, children }: PanelProps): JSX.Element {
-  const Element = as ?? 'div';
+export function Panel({ density, className, children }: PanelProps): JSX.Element {
   const cls = ['pl'];
-  if (face === 'console') cls.push('pl-cn');
-  if (density !== 'flush') cls.push(density === 'roomy' ? 'pl-roomy' : 'pl-snug');
+  if (density === 'padded') cls.push('pl-pad');
   if (className !== undefined) cls.push(className);
-  return <Element className={cls.join(' ')}>{children}</Element>;
+  return <div className={cls.join(' ')}>{children}</div>;
 }
 
 interface PanelProps {
-  /** Which token family the frame draws in — never which colours. */
-  face: 'shared' | 'console';
-  /** `flush` where the frame's own children carry the inset. */
-  density: 'flush' | 'snug' | 'roomy';
-  /** `section` where the frame is a landmark rather than a box. */
-  as?: 'div' | 'section';
+  /** Who owns the inset: `flush` where the frame's own children carry it. */
+  density: 'flush' | 'padded';
   /** A modifier on the frame — `cfg-pending`, `cn-fb-wants` — never a second face. */
   className?: string;
   children?: ReactNode;

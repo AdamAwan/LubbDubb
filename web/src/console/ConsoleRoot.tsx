@@ -9,7 +9,6 @@ import { needBody } from './NeedsBand.js';
 import { GoalPage } from './GoalPage.js';
 import { PrPage } from './PrPage.js';
 import { Overview } from './Overview.js';
-import { Panel } from './Panel.js';
 import { RecoveryPanel } from '../components/RecoveryPanel.js';
 import { TicketsPanel } from '../components/TicketsPanel.js';
 import { FeatureBoard } from '../components/FeatureBoard.js';
@@ -28,6 +27,8 @@ import { ObstaclesPage } from '../components/ObstaclesPage.js';
 import { SchedulePanel } from '../components/SchedulePanel.js';
 import { InjectPanel } from '../components/InjectPanel.js';
 import { ConfirmButton } from '../components/ConfirmButton.js';
+import { Modal } from '../components/Modal.js';
+import { Button } from '../components/button.js';
 import { relTime } from '../components/util.js';
 import { Ref } from '../components/refs.js';
 
@@ -443,6 +444,37 @@ const PANEL_TITLE: Record<Exclude<ConsolePanel, null | { ask: string }>, string>
 };
 
 /**
+ * The console's full-surface overlay: {@link Modal}'s `panel` face, and the head
+ * this console draws on it.
+ *
+ * Local, and not a `Panel`. It was `console/Panel.tsx` — a second exported
+ * component under the name the *frame* has, so which box you got depended on
+ * which file the import resolved to. A modal is not a frame: it has a backdrop, it
+ * has three ways out, and both of those are {@link Modal}'s. What was left is a
+ * header of two elements, used twice, right here — which is a local function, not
+ * a shared component. → docs/spec/17-cockpit.md#the-frame
+ */
+function PanelShell({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+}): JSX.Element {
+  return (
+    <Modal face="panel" label={title} onClose={onClose}>
+      <header className="cn-panel-head">
+        <h2>{title}</h2>
+        <Button onClick={onClose}>Close</Button>
+      </header>
+      {children}
+    </Modal>
+  );
+}
+
+/**
  * Whichever panel is in front, or nothing.
  *
  * The **ask** panel is the destination for a queue row with no goal page to be
@@ -462,17 +494,17 @@ function renderPanel(view: CockpitView, actions: CockpitActions): JSX.Element | 
     const body = needBody(row, view, actions);
     if (body === null) return null;
     return (
-      <Panel title={`${KIND_SYMBOL[row.kind]} Needs you · ${KIND_LABEL[row.kind]}`} onClose={close}>
+      <PanelShell title={`${KIND_SYMBOL[row.kind]} Needs you · ${KIND_LABEL[row.kind]}`} onClose={close}>
         <AskSubject row={row} actions={actions} />
         <div className="cn-pbody">{body}</div>
-      </Panel>
+      </PanelShell>
     );
   }
 
   return (
-    <Panel title={PANEL_TITLE[panel]} onClose={close}>
+    <PanelShell title={PANEL_TITLE[panel]} onClose={close}>
       <div className="cn-pbody">{panelBody(panel, view, actions)}</div>
-    </Panel>
+    </PanelShell>
   );
 }
 

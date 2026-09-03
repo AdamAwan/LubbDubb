@@ -28,7 +28,6 @@ import { PRESETS } from '../web/src/cockpit/theme.js';
 
 const { buildDemoState } = await import('../web/src/demo/fixtures.js');
 const { ConsoleRoot } = await import('../web/src/console/ConsoleRoot.js');
-const { Panel } = await import('../web/src/console/Panel.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
 const { goalIssue } = await import('../web/src/view/goalPage.js');
 const { hasPrPage } = await import('../web/src/view/prPage.js');
@@ -502,18 +501,15 @@ test('a panel draws its backdrop and its close button, both of them ways out', (
   // The third way out is Escape, registered in an effect. `renderToStaticMarkup`
   // runs no effects, so the listener is out of reach here — the two exits that
   // are in the markup are the ones this pins.
-  const html = renderToStaticMarkup(
-    createElement(Panel, {
-      title: 'Findings',
-      onClose: () => undefined,
-      children: createElement('p', null, 'body'),
-    }),
-  );
+  //
+  // Rendered through the console rather than by calling the shell directly: the
+  // panel is `Modal`'s `panel` face plus a head, and both of those are reached the
+  // way an operator reaches them — by opening one.
+  const html = render(view({ consolePanel: 'faults' }));
 
   assert.ok(html.includes('cn-backdrop'), 'the backdrop is an exit and must be drawn');
   assert.ok(html.includes('Close'), 'the button is an exit and must be drawn');
-  assert.ok(html.includes('Findings'));
-  assert.ok(html.includes('body'), 'a panel draws what it was handed');
+  assert.ok(html.includes('<h2>Faults</h2>'));
 });
 
 test('the rail carries every blocking kind in one list', () => {

@@ -82,10 +82,10 @@
      uncommon band with it and owes these nothing. Faint on purpose: the band is a
      grouping, and a tint strong enough to read as a status would make twenty
      catalogue entries look like twenty verdicts. */
-  --tier-common-fill: color-mix(in srgb, var(--grey) 12%, var(--panel));
-  --tier-uncommon-fill: color-mix(in srgb, var(--green) 8%, var(--panel));
-  --tier-rare-fill: color-mix(in srgb, var(--blue) 9%, var(--panel));
-  --tier-mythic-fill: color-mix(in srgb, var(--accent) 9%, var(--panel));
+  --tier-common-fill: color-mix(in srgb, var(--grey) 12%, var(--cn-panel));
+  --tier-uncommon-fill: color-mix(in srgb, var(--green) 8%, var(--cn-panel));
+  --tier-rare-fill: color-mix(in srgb, var(--blue) 9%, var(--cn-panel));
+  --tier-mythic-fill: color-mix(in srgb, var(--accent) 9%, var(--cn-panel));
   /* Ink on a light or warm fill: the ground colour, not near-black — a panel's
      lettering is the panel's own shadow, not ink from somewhere else. */
   --on-light: #1c1b1a;
@@ -140,13 +140,14 @@
   --r-lg: 0;
   --r-pill: 0;
 
-  /* The two insets a frame is allowed to have. Three steps counting `flush`, and
-     three is the point: the cockpit reached five paddings between 6px 8px and
-     14px 16px with nothing choosing between them, so the fix is not a better
-     spread but a ramp short enough that picking a step is a decision.
-     → docs/spec/17-cockpit.md#the-frame */
-  --pad-snug: 10px 12px;
-  --pad-roomy: 14px 16px;
+  /* The inset a frame gives its contents, where the frame gives one at all. One
+     value, not a ramp: the cockpit reached five paddings between 6px 8px and
+     14px 16px with nothing choosing between them, and a ramp is only a fix if
+     each step answers a question. `flush` versus padded does — it says whether
+     the frame or its children own the inset, which is what a full-bleed header
+     band needs — and 10px versus 14px does not. A second inset is a token
+     somebody adds on purpose. → docs/spec/17-cockpit.md#the-frame */
+  --pad: 10px 12px;
 
   --font-ui: 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: 'Cascadia Mono', Consolas, ui-monospace, 'SF Mono', Menlo, monospace;
@@ -1123,33 +1124,29 @@ select:disabled {
 
 /* ---------- the frame, and the head row ----------
    One definition each, drawn by `Panel` and `HeadRow` (`components/panel.tsx`), so
-   a call site names a face and a density and never a ground, an edge or a corner.
+   a call site names who owns the inset and never a ground, an edge or a corner.
 
    Placed high in the sheet on purpose: every modifier a call site still carries —
    `.escalation`, `.cfg-pending`, `.cn-fb-orphans` — weighs the same (0,1,0) as the
    base, so source order is what lets a card tint its own border. A rule that wants
    to override the frame goes below this and nothing has to be `!important`.
 
-   The two faces are the two token families, which are a real distinction and not a
-   namespace: `--panel` sits two steps lighter than `--cn-panel`, and each family
-   keeps its own radius step rather than sharing one.
+   One ground, and it is the console's. There was a second block here for a
+   `--panel` face, on the argument that the two token families are a real
+   distinction — which they are, where they draw on different grounds. A frame
+   never does: every `Panel` in the cockpit renders under `.cn`, so the shared face
+   was four cards drawn two steps lighter and square in the middle of a console of
+   `--cn-panel` cards with an 8px corner. The families still part company on the
+   overlays, which mount outside the console; that is `Modal`'s `face`, not a box's.
    → docs/spec/17-cockpit.md#the-frame */
 .pl {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
+  background: var(--cn-panel);
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r);
   min-width: 0;
 }
-.pl-cn {
-  background: var(--cn-panel);
-  border-color: var(--cn-line);
-  border-radius: var(--cn-r);
-}
-.pl-snug {
-  padding: var(--pad-snug);
-}
-.pl-roomy {
-  padding: var(--pad-roomy);
+.pl-pad {
+  padding: var(--pad);
 }
 
 /* Flex, centred, 8px, wrapping — the most duplicated declaration set in this sheet,

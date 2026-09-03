@@ -181,7 +181,7 @@ export function EscalationCard({
       : null;
 
   return (
-    <Panel face="shared" density="snug" className="card escalation">
+    <Panel density="padded" className="card escalation">
       <div className="card-head">
         <span className="badge escalate">{escalation.type.replace(/_/g, ' ')}</span>
         {questions && (

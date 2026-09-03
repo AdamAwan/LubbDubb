@@ -125,11 +125,7 @@ function PetCard({
   // says so first, because a button that always refuses is worse than no button.
   const flawed = pet.flaw !== null;
   return (
-    <Panel
-      face="shared"
-      density="snug"
-      className={`pet-card${dissolved ? ' is-dissolved' : ''}${flawed ? ' is-flawed' : ''}`}
-    >
+    <Panel density="padded" className={`pet-card${dissolved ? ' is-dissolved' : ''}${flawed ? ' is-flawed' : ''}`}>
       <div className="pet-frame">
         <PetSprite pet={pet} size={84} beatMs={2400} />
       </div>

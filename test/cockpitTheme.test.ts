@@ -563,8 +563,8 @@ test('the frame draws its corner and its inset through tokens', () => {
     }
   }
   assert.deepEqual(offenders, [], `a frame no theme can reshape:\n${offenders.join('\n')}`);
-  // Both faces and both densities, or the selector test stopped matching them.
-  assert.equal(seen, 4, `only ${seen} frame blocks found — the sweep is not reaching them`);
+  // The frame and its one inset, or the selector test stopped matching them.
+  assert.equal(seen, 2, `only ${seen} frame blocks found — the sweep is not reaching them`);
 });
 
 /**

@@ -75,7 +75,7 @@ export function ReviewWrite({
 
       {preview && (
         <div className="cfg-diff">
-          <Panel face="console" density="flush" as="section" className="cfg-card">
+          <Panel density="flush" className="cfg-card">
             <h3>
               {payload.file}
               <span className="cfg-more">{countChanged(payload.text, preview.text)} lines changed</span>
@@ -94,7 +94,7 @@ export function ReviewWrite({
             </p>
           </Panel>
 
-          <Panel face="console" density="flush" as="section" className="cfg-card">
+          <Panel density="flush" className="cfg-card">
             <h3>What it does</h3>
             {preview.changes.map((change) => (
               <div className="cfg-eff" key={change.path}>

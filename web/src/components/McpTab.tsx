@@ -62,7 +62,7 @@ export function McpTab() {
         </p>
       )}
 
-      <Panel face="console" density="flush" as="section" className="cfg-card mcp-step">
+      <Panel density="flush" className="cfg-card mcp-step">
         <h3>
           <span className="mcp-n">1</span> Register it, once
         </h3>
@@ -79,7 +79,7 @@ export function McpTab() {
         </p>
       </Panel>
 
-      <Panel face="console" density="flush" as="section" className="cfg-card mcp-step">
+      <Panel density="flush" className="cfg-card mcp-step">
         <h3>
           <span className="mcp-n">2</span> Ask for a check
         </h3>
@@ -95,7 +95,7 @@ export function McpTab() {
         </p>
       </Panel>
 
-      <Panel face="console" density="flush" as="section" className="cfg-card mcp-step">
+      <Panel density="flush" className="cfg-card mcp-step">
         <h3>
           <span className="mcp-n">3</span> What it can do
         </h3>

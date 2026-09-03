@@ -715,18 +715,11 @@ export const THEME_TOKENS: readonly ThemeToken[] = [
     why: 'A console chip or control',
   },
   {
-    name: '--pad-snug',
+    name: '--pad',
     label: 'Frame inset',
     group: 'shape',
     kind: 'space',
     why: 'How much room a card gives its contents',
-  },
-  {
-    name: '--pad-roomy',
-    label: 'Frame inset, roomy',
-    group: 'shape',
-    kind: 'space',
-    why: 'The same, on a panel that is the page’s subject',
   },
   { name: '--font-ui', label: 'Interface face', group: 'type', kind: 'font', why: 'Every word that is not code' },
   {

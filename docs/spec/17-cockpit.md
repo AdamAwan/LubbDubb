@@ -1351,27 +1351,46 @@ copies do:
 > literals. `.finding-card` and `.lesson-card` had become the same five declarations twice under two
 > names — with no live call site left on either.
 
-**Density is a step, never a value.** Three, counting the one that is no inset at all:
+**One variation, and it is who owns the inset.**
 
-| Density | Inset         | Drawn for                                                  |
-| ------- | ------------- | ---------------------------------------------------------- |
-| `flush` | none          | a frame whose own children pad — a card with a header band |
-| `snug`  | `--pad-snug`  | the ordinary card                                          |
-| `roomy` | `--pad-roomy` | a frame that is the page's subject                         |
+| Density  | Inset   | Drawn for                                                  |
+| -------- | ------- | ---------------------------------------------------------- |
+| `flush`  | none    | a frame whose own children pad — a card with a header band |
+| `padded` | `--pad` | every other frame                                          |
 
-The ramp is deliberately shorter than the spread it replaces. The fix for five paddings nobody chose
-is not a better-argued five; it is a set small enough that picking a step is a decision, and a sixth
-inset is a token somebody has to add on purpose. `--pad-snug` and `--pad-roomy` are on `:root` and in
-[the registry](#the-theme) under Corners and density, so they follow an operator the way the corners
-already do.
+That distinction is structural: a card with a full-bleed header band cannot carry an inset of its
+own without double-insetting the band, so the frame has to be told which of the two it is. **The
+insets under it were not.** The first collapse shipped a three-step ramp — `snug` at 10px 12px and
+`roomy` at 14px 16px — on the argument that a ramp short enough to make picking a step a decision is
+the fix for five paddings nobody chose. In use it was two call sites and one, 4px apart, and no
+principle told anybody which: "the page's subject" describes a Feature card and an escalation card
+equally well. A step used once is not a ramp. One inset, `--pad`, on `:root` and in
+[the registry](#the-theme) under Corners and density, and a second is a token somebody adds on
+purpose.
 
-**The face is a prop, never a class string** — the precedent [the modal](#the-modal) sets. The
-`--cn-*` console family and the shared family are a real distinction rather than a namespace
-([Tokens](#tokens)), so `face` names which of the two a frame draws in and neither sheet learns the
-other's names. **Each family keeps its own radius step** — `--r-md` for the shared face, `--cn-r` for
-the console's — and no frame writes a length. A radius literal is the same failure a colour literal
-is, one property over: square-everywhere is the operator's setting, and a hard `7px` is a corner no
-setting moves.
+**One ground, and it is the console's.** The frame also carried a `face` prop — `shared` or
+`console`, the two token families, on the argument the [Tokens](#tokens) section makes: they are a
+real distinction and not a namespace. They are, on the surfaces that draw on different grounds — a
+drawer and a plan sheet mount outside the console, and that is what [`Modal`](#the-modal)'s `face`
+is for. **A frame is never one of those.** All four call sites that named the shared face — the
+escalation card, the recovery banner, a pet card, a species card — are drawn by `NeedsBand`,
+`ConsoleRoot` and the two Pets surfaces, every one of them under `.cn`. So `face` was not choosing
+between two grounds a card might sit on; it was making four cards two steps lighter and square in
+the middle of a console of `--cn-panel` cards with an 8px corner. The frame draws `--cn-panel`,
+`--cn-line` and `--cn-r`, because that is where every frame is. The tier fills on a species card are
+mixed over the same ground for the same reason — a band tinted over a ground its card no longer has
+is a seam.
+
+**There is no `as` prop.** Thirteen call sites asked for `<section>`, and a `<section>` is a landmark
+only when it has an accessible name — which the frame passed none of, and cannot, since it takes no
+ARIA props. Thirteen generic elements with a different tag name, selected on by no rule in either
+sheet.
+
+**There is no second `Panel`.** `console/Panel.tsx` exported one too: a full-surface overlay, under
+the name the frame has, so which box a file got depended on which path its import resolved to. It
+was [`Modal`](#the-modal)'s `panel` face plus a two-element header, used twice — now `PanelShell`,
+local to `ConsoleRoot.tsx`, where those two call sites are. A backdrop and three ways out are the
+modal's; a shared component was never what was left over.
 
 **`className` is a modifier, never a second face.** What makes a frame _that_ frame stays at the call
 site — `.cn-fb-wants` tinting a Feature that wants a person, `.cfg-pending` bordering staged edits,
