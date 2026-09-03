@@ -5209,7 +5209,11 @@ other.
   and this is that answer where the operator is already looking. Reject, Hold and Close stay live: only
   releasing the work is gated. The same checklist is drawn on the plan sheet, above its own Approve,
   because that is the other surface the plan can be released from — and the surface where it has
-  actually been read.
+  actually been read. There it is **capped at ~28vh and scrolls itself**, and `.pm-body` keeps a
+  floor of its own: the sheet is one column whose middle scrolls between a fixed head and a fixed
+  decision bar, so every line the checklist grows by comes straight out of the plan being read —
+  a plan raising several caveats, each with the planner's words under it, otherwise leaves a slot a
+  few lines tall to read it in.
 
 A **shortfall proposal carries a third arm**, `Overrule the assessment`, beside Approve and Reject.
 The other two settle what to _do_ about the assessor's finding; this one settles the finding itself.
