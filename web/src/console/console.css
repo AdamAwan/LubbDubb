@@ -199,6 +199,17 @@
 .cn-issue-btn:hover {
   color: var(--text);
 }
+/* The question hand-off wears the same face as the compose control beside it —
+   same spot, same moment, and an operator should not have to learn two of them.
+   Its own class rather than a second `.cn-issue-btn`: that class is what
+   `console.test.ts` reads to tell the bar's two faces apart, and a deep link
+   answering to it would make the offline bar look like it could still compose. */
+.cn-ask-btn {
+  color: var(--link-ink);
+}
+.cn-ask-btn:hover {
+  color: var(--text);
+}
 .cn-dot {
   width: 7px;
   height: 7px;

@@ -1,6 +1,7 @@
 import { loadDeploymentConfig } from '../config.js';
 import { watchConfigFile } from '../configWatch.js';
 import { UPGRADE_EXIT_CODE } from '../selfUpdate/handoff.js';
+import { installRoot } from '../selfUpdate/buildStanding.js';
 import { buildSystem } from '../system.js';
 import { installDesktopSkill } from '../validation/desktopSkill.js';
 import { buildApp } from './app.js';
@@ -56,7 +57,12 @@ async function main(): Promise<void> {
   // fleet's: a false return is a harness whose checks are all run by the fleet,
   // not a failed start, and the boot lines below say which of the two happened.
   const desktopReady = await system.desktop.listen();
-  if (desktopReady) installDesktopSkill(config.validation.desktopSkillPath, system.errors);
+  // The skill is handed the harness's *own* checkout as well, because the session
+  // it is written for opens on `repoRoot` — the repository the fleet works on — and
+  // the two are different directories except while LubbDubb is dogfooding itself.
+  // A question about the harness's behaviour answered from the harness's output is
+  // the confident wrong answer the skill's own `ask` section warns about.
+  if (desktopReady) installDesktopSkill(config.validation.desktopSkillPath, system.errors, installRoot());
 
   // Runs before the boot cycle, though the hold does not depend on that: the
   // harness re-asks every pulse, so what this ordering buys is only that the very

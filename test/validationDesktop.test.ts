@@ -801,6 +801,37 @@ test('the skill installs, and says what it is for without restating the procedur
 });
 
 /**
+ * The one thing in the file that is about *this machine* rather than about the
+ * channel, and the reason it is appended rather than spliced in.
+ *
+ * The session this skill is written for opens on `repoRoot` — the repository the
+ * fleet works on — and the cockpit's *Got a question?* control collects plenty of
+ * questions that are about the harness instead: why nothing picked a goal up, why
+ * a rule did not fire. Without a path, those are answered from the harness's
+ * output, which is the confident wrong answer the `ask` section already warns
+ * about; with one spliced into the body, there are two documents to keep in step.
+ */
+test('the skill names LubbDubb\u2019s own checkout when there is one, and is unchanged when there is not', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-skill-root-'));
+  const path = join(dir, 'SKILL.md');
+  assert.ok(installDesktopSkill(path, undefined, '/srv/lubbdubb'));
+  const written = readFileSync(path, 'utf8');
+  // Appended: the body arrives whole, and the note is behind it.
+  assert.ok(written.startsWith(DESKTOP_SKILL), 'the body is untouched');
+  assert.match(written, /\/srv\/lubbdubb/);
+  // The two halves that keep it from being read as an invitation: the record is
+  // still the answer, and that checkout is the running harness.
+  assert.match(written, /The record first, the source second/);
+  assert.match(written, /Change nothing there/);
+
+  // A deployment running from a tarball resolves no root, and a section naming a
+  // directory that is not there is worse than no section.
+  const bare = join(dir, 'BARE.md');
+  assert.ok(installDesktopSkill(bare, undefined, null));
+  assert.equal(readFileSync(bare, 'utf8'), DESKTOP_SKILL);
+});
+
+/**
  * What the cockpit is shipped, and why it is a projection rather than the row.
  *
  * `claimIsLive` is the single definition of "claimed", so a claim past its expiry

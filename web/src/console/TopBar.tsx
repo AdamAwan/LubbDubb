@@ -6,6 +6,8 @@ import type { CockpitActions, ConsoleTab } from '../cockpit/actions.js';
 import { FleetControl } from '../components/FleetControl.js';
 import { ExtLink, fmtUsd, relTime } from '../components/util.js';
 import { RaiseIssueModal } from '../components/RaiseIssueModal.js';
+import { DesktopLink } from '../components/DesktopLink.js';
+import { questionPrompt } from '../cockpit/desktopLink.js';
 import { untriagedCount } from '../worldBuckets.js';
 
 /**
@@ -237,6 +239,32 @@ function Ident({ view, actions }: { view: CockpitView; actions: CockpitActions }
       {/* Local state and not `Place`: a half-typed report is not somewhere you can
           come back to, so it is not somewhere the URL should be able to send you.
           `GoalPage`'s compose modals are held the same way. */}
+      {/* The bar's second way out, and the one that answers rather than files.
+          Most of what arrives as an issue about the fleet is not a fault in it —
+          it is "why has this not moved", which the harness's own record answers in
+          a sentence and which nobody asks because asking meant opening a client,
+          finding the checkout and remembering the skill. This is that, as a
+          control: a `DesktopLink` onto the repository the fleet works, with
+          `/lubbdubb ` in the composer and the question left to the operator.
+
+          Beside *Raise an issue* deliberately. The two are the same moment —
+          something looks wrong — and the cheaper reading of it is offered first;
+          drawn anywhere else, the expensive one stays the only one on the bar.
+
+          Unconditional, like every other deep link: it reaches only the machine
+          the browser is on, and `DesktopLink` puts the command in the title for
+          exactly the operator it cannot reach. */}
+      <span className="cn-issue">
+        <DesktopLink
+          className="cn-ask-btn"
+          folder={view.state.config.desktopFolder}
+          prompt={questionPrompt()}
+          ready="waiting for your question"
+          explain="which answers it from the harness’s own record of the work, and says so when the record is silent."
+        >
+          Got a question?
+        </DesktopLink>
+      </span>
       {composing && (
         <RaiseIssueModal
           probe={actions.probeFilingTarget}

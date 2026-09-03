@@ -226,7 +226,7 @@ Five surfaces and one shell.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│ ident ↗issue │ Overview Tickets② Knowledge① Insights │ Fleet ⏸ 14s  Usage 5h 62% 7d 30% … ⚙ │ top bar
+│ ident ↗issue ?ask │ Overview Tickets② Knowledge① Insights │ Fleet ⏸ 14s  Usage 5h 62% 7d 30% … ⚙ │ top bar
 ├────────────────────────────────────────────────────────────────────────┤
 │ the recovery banner, when a previous run left work orphaned            │
 ├───────────────┬────────────────────────────────────────────────────────┤
@@ -2925,8 +2925,24 @@ answers nothing in it. `.cn-issue` sizes it out of the wordmark's weight through
 and `.cn-issue-btn` gives the button the link's colours through the token layer, since `console.css`
 styling `.ext-ref` directly is what this stylesheet is tested not to do.
 
-**Both faces go to LubbDubb's own repository, and neither follows `github.owner`/`github.repo`** (issue
-#449). Those name the repo the fleet _works on_, which is LubbDubb's only while it is dogfooding itself.
+**Beside it is `Got a question?`, which answers instead of filing.** Most of what reaches the tracker
+as a complaint about the fleet is not a fault in it — it is _why has this not moved_, which the
+harness's own record settles in a sentence, and which nobody asked because asking meant opening a
+client, finding the checkout and remembering the skill. The control is that, as a link: a
+`DesktopLink` (`questionPrompt`, `web/src/cockpit/desktopLink.ts`) carrying `/lubbdubb ` and the
+checkout the fleet works on, so the operator's own Claude Code opens with the skill in the composer
+and the cursor after it. It carries **no argument**, unlike the four hand-offs drawn beside the thing
+they address: this one is drawn beside the wordmark, before the operator has decided which goal the
+question is about, and the skill routes on the words they type — a goal number in them is the goal
+job, none is the fleet one ([20](20-validation.md#the-skill)). Unsent for `Ask`'s reason one step
+further along: there is not even a subject yet.
+
+It sits beside `Raise an issue` because the two are the same moment — something looks wrong — and the
+cheaper reading of it should be the one nearer to hand. Unconditional, like every other deep link,
+and with the command in its title for the operator whose machine the link cannot reach.
+
+**Both faces of `Raise an issue` go to LubbDubb's own repository, and neither follows
+`github.owner`/`github.repo`** (issue #449). Those name the repo the fleet _works on_, which is LubbDubb's only while it is dogfooding itself.
 A fault in the cockpit belongs on the cockpit's tracker whatever repo the deployment is pointed at — the
 bug #449 reported was this control filing a cockpit complaint into a customer's backlog. The fallback URL
 is a constant in `TopBar.tsx` and lands on the _form_ rather than the repo or the issue list, because the

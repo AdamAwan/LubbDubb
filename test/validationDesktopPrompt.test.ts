@@ -13,6 +13,7 @@ import {
   desktopDeepLink,
   discussPrompt,
   localRunPrompt,
+  questionPrompt,
 } from '../web/src/cockpit/desktopLink.js';
 
 // The classic runtime, as `console.test.ts` sets it up and for its reason.
@@ -34,6 +35,7 @@ const { DesktopLink } = await import('../web/src/components/DesktopLink.js');
 
 const SOURCE = readFileSync(new URL('../web/src/components/ValidationSection.tsx', import.meta.url), 'utf8');
 const GOAL_PAGE = readFileSync(new URL('../web/src/console/GoalPage.tsx', import.meta.url), 'utf8');
+const TOP_BAR = readFileSync(new URL('../web/src/console/TopBar.tsx', import.meta.url), 'utf8');
 
 const desktop = (props: { folder: string; prompt: string; explain: string; ready?: string }): string =>
   renderToStaticMarkup(createElement(DesktopLink, { ...props, className: 'btn', children: 'Go' }));
@@ -172,4 +174,41 @@ test('the control sits with the hand-over, on an unrun check', () => {
   assert.ok(unrun.includes('Run it in Claude Code'), 'the desktop hand-off is drawn on an unrun check');
   assert.ok(unrun.includes('<DesktopLink'), 'and it is drawn through the one control that opens that client');
   assert.ok(unrun.includes('Hand to the fleet'), 'beside the fleet hand-over');
+});
+
+/**
+ * The bar's own hand-off, which is the only one drawn beside nothing.
+ *
+ * Every other deep link is next to the goal, plan or check it addresses. This one
+ * is next to the wordmark, because the question it exists for — *why is this not
+ * being done?* — is asked before the operator has decided which goal it is about,
+ * and was until now asked of a person or not at all.
+ */
+test('the bar’s question control prefills the skill and nothing else', () => {
+  // No argument: the bar knows of no goal, and the skill routes on the words the
+  // operator types after it — a number in them is the goal job, none is the fleet
+  // one. A subject guessed here would be a session opened on a different question.
+  assert.equal(questionPrompt(), '/lubbdubb ');
+
+  // Unsent, like Ask and for one step further along the same reason: there is not
+  // even a subject yet, so `q` fills the composer and stops.
+  const html = desktop({
+    folder: '/home/you/shop',
+    prompt: questionPrompt(),
+    explain: 'which answers it.',
+    ready: 'waiting for your question',
+  });
+  assert.match(html, /title="Opens your own Claude Code with &quot;\/lubbdubb&quot; waiting for your question, /);
+
+  // Drawn through `DesktopLink` on the checkout the fleet works, with no condition
+  // in front of it: the link reaches only the machine the browser is on, and the
+  // component is what leaves the command readable for the operator it cannot reach.
+  assert.ok(
+    /<DesktopLink[\s\S]*?prompt=\{questionPrompt\(\)\}/.test(TOP_BAR),
+    'the top bar links to the question prompt',
+  );
+  assert.ok(
+    /<DesktopLink[\s\S]*?folder=\{view\.state\.config\.desktopFolder\}/.test(TOP_BAR),
+    'and opens it on the repository the fleet works on',
+  );
 });
