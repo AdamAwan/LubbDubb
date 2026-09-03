@@ -1,10 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildSystem, type System } from '../src/system.js';
 import { buildApp } from '../src/server/app.js';
+import { localValidationFileSignerFor } from '../src/server/routes/artifacts.js';
+import { verifyArtifactCapability } from '../src/server/artifactCapability.js';
 import { loadConfig } from '../src/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
@@ -644,4 +647,49 @@ test('the launch document carries both servers, and never lets an extra take the
 
   await system.mcp.close();
   system.store.close();
+});
+
+test('every signer the route context declares is forwarded to the snapshot', () => {
+  // The bug this pins, and the reason it is structural rather than behavioural: the
+  // screenshot signer was built in `buildApp` and never named on `RouteContext`, so
+  // it was an excess property on an inferred object literal — allowed, dropped in
+  // silence at the boundary, and every screenshot URL shipped unsigned. It
+  // type-checked, every test passed, and the only symptom was a 401 on an image.
+  //
+  // Asserted over *whatever* signers the context declares, so the next one is
+  // covered by having been declared rather than by somebody remembering this test.
+  const context = readFileSync(new URL('../src/server/routes/context.ts', import.meta.url), 'utf8');
+  const route = readFileSync(new URL('../src/server/routes/state.ts', import.meta.url), 'utf8');
+  const signers = [...context.matchAll(/^\s{2}(\w*[Ss]igner)\?:/gm)].map((m) => m[1] as string);
+  assert.ok(signers.length >= 3, `expected the context to declare signers, found ${String(signers.length)}`);
+
+  const destructure = /export function register\([\s\S]*?\}: RouteContext/.exec(route)?.[0] ?? '';
+  const snapshot = route.slice(route.indexOf('buildStateSnapshot(system'));
+  for (const signer of signers) {
+    assert.ok(destructure.includes(signer), `the state route does not take ${signer} off its context`);
+    // Both arms: a whole snapshot and a sectioned one are the same reading, and a
+    // signer forwarded to one of them ships unsigned URLs on every poll that asks
+    // for sections — which is every poll after the first.
+    assert.equal(
+      snapshot.split(signer).length - 1,
+      2,
+      `${signer} must reach both buildStateSnapshot and buildStateSections`,
+    );
+  }
+});
+
+test('a screenshot capability is bound to the one file it names', () => {
+  // The name is the only part of the address a caller could vary, so the subject is
+  // the pair — `attachmentSubject`'s namespacing, one route over. A capability for
+  // one screenshot opening another would make the whole directory readable from any
+  // single signed URL the snapshot ever shipped.
+  const key = randomBytes(32);
+  const sign = localValidationFileSignerFor(key);
+  const token = sign('lv1', 'shot.png');
+  const now = Date.now();
+  assert.ok(verifyArtifactCapability(key, token, 'local-validation:lv1:shot.png', now));
+  assert.ok(!verifyArtifactCapability(key, token, 'local-validation:lv1:other.png', now), 'not another file');
+  assert.ok(!verifyArtifactCapability(key, token, 'local-validation:lv2:shot.png', now), 'not another validation');
+  // And never an attachment or an artifact, whose ids live in their own namespaces.
+  assert.ok(!verifyArtifactCapability(key, token, 'lv1', now));
 });

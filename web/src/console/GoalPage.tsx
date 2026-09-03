@@ -425,20 +425,19 @@ function Header({
     run === null
       ? null
       : (view.state.world.issues.find((i) => `issue:${String(i.number)}` === run.originRef)?.title ?? null);
-  const onValidate = () => {
+  const onValidate = async (): Promise<void> => {
     const question = validateLocallyQuestion(issue.number, run);
+    // A question opens a modal and posts nothing, so there is no request to hold a
+    // pending state on — the modal is the feedback.
     if (question !== null) {
       setValidating(question);
       return;
     }
     setValidateRefusal(null);
-    void actions
-      .validateLocally(issue.number)
-      .catch((err: unknown) =>
-        setValidateRefusal(
-          err instanceof Error && err.message ? err.message : 'That was refused, and nothing said why.',
-        ),
-      );
+    // Awaited rather than fired and forgotten: the button reads its pending state
+    // off this promise, and the post behind it starts an environment and runs a
+    // cycle. Rejections reach `onRefused`, which is what draws the sentence.
+    await actions.validateLocally(issue.number);
   };
   // What ending the run costs, or null when it costs nothing: the route refuses a
   // dismissal with no note while the plan is flagged
@@ -705,14 +704,32 @@ function Header({
             caption over nothing is furniture. */}
         {offer.offered && (
           <ControlGroup caption="Check the work" icon="flask" divider>
-            <ControlButton
-              icon="flask"
-              tone="primary"
+            {/* An `AsyncButton` rather than a `ControlButton`, and that is not a
+                styling choice: the post behind it starts a dev environment and runs
+                a cycle, so it is seconds of work, and a control that looked
+                unpressed for those seconds got pressed again. This one disables
+                itself while the request is in flight, says so, and lands the
+                route's own refusal in its title — which is also what retires the
+                separate refusal line this header used to draw. */}
+            <AsyncButton
+              className={`${CONTROL_CLASS} primary`}
               onClick={onValidate}
+              onRefused={setValidateRefusal}
+              pendingLabel={
+                <>
+                  <Icon name="flask" />
+                  Starting…
+                </>
+              }
               title="Bring this goal's code up in your dev environment and send one agent to write a test plan, drive the running application through it, and report here. Asks first if something else is running."
             >
-              Validate locally
-            </ControlButton>
+              <Icon name="flask" />
+              {/* The label carries whether this has been done before. A goal that
+                  has been validated and one that never has are different states,
+                  and the chip beside it says the verdict but not that the button is
+                  the thing that produced it. */}
+              {issue.localValidation === null ? 'Validate locally' : 'Validate locally again'}
+            </AsyncButton>
           </ControlGroup>
         )}
         {/* The three controls whose effect is not on this goal: two destinations,

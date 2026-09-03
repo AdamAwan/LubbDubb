@@ -25,6 +25,14 @@ export interface RouteContext {
    */
   attachmentSigner?: (attachmentId: string) => string;
   /**
+   * Mints the capability in each local-validation screenshot URL — see
+   * `localValidationFileSignerFor`. Declared here rather than only built in
+   * `buildApp`, because the context is what the state route destructures: a signer
+   * the type does not name is an excess property on an inferred literal, dropped in
+   * silence at this boundary, and every screenshot URL then ships unsigned.
+   */
+  localValidationFileSigner?: (id: string, name: string) => string;
+  /**
    * The per-run key `/artifacts/:id` and `/attachments/:id` verify those
    * capabilities against; null when auth is off.
    */
