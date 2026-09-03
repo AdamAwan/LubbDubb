@@ -34,7 +34,11 @@ const actions = new Proxy({}, { get: () => () => undefined }) as CockpitActions;
  */
 function stateWith(mutate: (state: AppState, goal: Issue) => void = () => {}): AppState {
   const state = buildDemoState().state as AppState;
-  state.config = { ...state.config, featureBoard: true };
+  // `canPlaceWorkItem` and **not** `featureBoard`: the warning is gated on the
+  // tracker being able to take the write, never on the operator having asked for a
+  // Features tab. The fixtures leave the tab off, which is deliberate — that pair
+  // is the deployment the band used to be silent on (issue #683).
+  state.config = { ...state.config, canPlaceWorkItem: true };
   const goal = state.world.issues[0];
   assert.ok(goal, 'the demo fixtures must carry at least one issue');
   goal.parent = null;
@@ -129,15 +133,31 @@ test('only a tracker that reports an orphan is an orphan', () => {
 });
 
 /**
- * The board's flag is the other half of the gate, and it is the operator's answer
- * to whether the tier above their stories exists at all. Without it the warning
- * is a dead end: nothing on the deployment can write a parent, and nothing draws
- * the roll-up the warning is about.
+ * The other half of the gate, and the only half that ever carried an argument:
+ * where the tracker cannot be handed a parent, the warning is a dead end and is
+ * drawn nowhere.
  */
-test('the warning is silent where there is no feature board', () => {
+test('the warning is silent where nothing can write a parent', () => {
   const state = stateWith();
-  state.config = { ...state.config, featureBoard: false };
+  state.config = { ...state.config, canPlaceWorkItem: false };
   assert.equal(orphanGoal(state, firstGoal(state)), null);
+});
+
+/**
+ * The regression this separation exists for (issue #683). `featureBoard` is that
+ * same probe **and** the operator's own flag, and the flag is about wanting the
+ * tier above one's stories drawn as a *tab*. Gated on it, a real Azure board with
+ * Features and Epics in it and six goals rolling up to nothing said nothing at
+ * all, because nobody had asked for the tab — and the rail does not cover the gap,
+ * since its row rides inside `issue.appraisal`.
+ *
+ * So the fixture pair here is the one that used to be silent and must not be: the
+ * tab off, the tracker able to take the write.
+ */
+test('the warning does not need the operator to have asked for a Features tab', () => {
+  const state = stateWith();
+  state.config = { ...state.config, featureBoard: false, canPlaceWorkItem: true };
+  assert.notEqual(orphanGoal(state, firstGoal(state)), null);
 });
 
 /**
@@ -207,7 +227,7 @@ test('the count is a fold of the same predicate', () => {
     'the count must be the rows',
   );
 
-  state.config = { ...state.config, featureBoard: false };
+  state.config = { ...state.config, canPlaceWorkItem: false };
   assert.equal(orphanCount(state, issues), 0, 'and zero wherever the predicate is silent');
 });
 

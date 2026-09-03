@@ -1391,17 +1391,27 @@ claim something is waiting while offering no way to answer it.
 #### A goal with no parent Feature
 
 Above every band and every card, between the header and the track, a goal that hangs off nothing gets
-an amber warning of its own. It is not one of the bands above and wears no tone class: the tone
+an amber warning of its own, wherever the tracker could be handed a parent — the feature board's flag
+is not part of this. It is not one of the bands above and wears no tone class: the tone
 families are the _needs-you_ palette, and a goal is an orphan whether or not the rail is holding a row
 about it.
 
 The reading is `orphanGoal` (`web/src/view/orphanGoal.ts`), and it is three facts read fresh on every
 draw:
 
-- **`config.featureBoard`** — the operator's flag _and_ a provider that can place a work item, the
-  same conjunction `featureBoardOn` gates the board itself on ([the two gates](#the-two-gates)). An
-  operator who has not asked for the tier above their stories has not asked to be told which stories
-  are missing from it, and where nothing can write a parent the warning would be a dead end.
+- **`config.canPlaceWorkItem`** — the connector's own answer to whether one item can be hung off
+  another, asked once on the server exactly as `canCloseIssue` and `canSetWorkItemState` are. Where it
+  is false the warning would be a dead end rather than a warning, and it is drawn nowhere.
+
+  It was **`config.featureBoard`**, which is that same probe _and_ the operator's own flag, folded by
+  `featureBoardOn` ([the two gates](#the-two-gates)). The argument for the conjunction was that
+  somebody who has not asked for the tier above their stories has not asked to be told which stories
+  are missing from it — but that argument is about a **tab**, and this band is about a fact: the goal
+  merges, closes, and rolls up to nothing. One flag was answering both questions with the tab's
+  answer, so a real Azure board with Features and Epics in it, six goals hanging off nothing, and a
+  tracker that would take the write said nothing at all, because nobody had asked for the tab. The
+  rail does not cover that gap either — its row rides inside `issue.appraisal`, and five of those six
+  had no appraisal row. → [#683](https://github.com/AdamAwan/LubbDubb/issues/683)
 - **`issue.parent === null`** — the tracker saying this item hangs off nothing. `undefined` is a
   provider that tracks no hierarchy at all, and folding the two together is the silent direction: an
   amber band on every goal of every GitHub deployment.
