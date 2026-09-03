@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   audit:
-    name: npm audit
+    name: Dependency advisories
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,17 +31,17 @@ jobs:
       # Hard gate. Runtime dependencies are the ones an attacker can reach in a
       # deployed harness, and they are clean — so a new high-severity advisory
       # here fails the build rather than printing into a log nobody opens.
-      - name: npm audit — runtime dependencies (hard gate)
+      #
+      # Read from OSV rather than `npm audit`: the registry's audit endpoint is being
+      # retired, and began answering these runners `400 Invalid package tree` for a
+      # lockfile that is provably in sync. scripts/audit.ts has the whole account.
+      - name: Advisory gate — runtime dependencies
         run: npm run audit
 
-      # Advisory. The dev toolchain ships to nobody, and the remaining advisories
-      # are eslint's bundled minimatch@3 -> brace-expansion, which is fixed only in
-      # brace-expansion@5 — an ESM-era rewrite whose CommonJS build exports
-      # `{ expand }` rather than a bare function, so an `overrides` pin to it makes
-      # `npm audit` read 0 while minimatch@3 throws at require time. eslint 10 drops
-      # the dependency, and eslint-plugin-react still peers on `^9.7`. Revisit when
-      # it supports eslint 10, then fold this into the gate above.
-      - name: npm audit — full tree (advisory)
+      # Advisory. The dev toolchain ships to nobody, so an advisory reachable only
+      # from it is worth reading rather than worth blocking every PR on — which is
+      # what a transitive one nobody can upgrade past would otherwise do.
+      - name: Advisory scan — full tree (advisory)
         run: npm run audit:all
         continue-on-error: true
 
