@@ -1394,17 +1394,28 @@ claim something is waiting while offering no way to answer it.
 #### A goal with no parent Feature
 
 Above every band and every card, between the header and the track, a goal that hangs off nothing gets
-an amber warning of its own. It is not one of the bands above and wears no tone class: the tone
+an amber warning of its own, wherever the tracker could be handed a parent — the feature board's flag
+is not part of this. It is not one of the bands above and wears no tone class: the tone
 families are the _needs-you_ palette, and a goal is an orphan whether or not the rail is holding a row
 about it.
 
 The reading is `orphanGoal` (`web/src/view/orphanGoal.ts`), and it is three facts read fresh on every
 draw:
 
-- **`config.featureBoard`** — the operator's flag _and_ a provider that can place a work item, the
-  same conjunction `featureBoardOn` gates the board itself on ([the two gates](#the-two-gates)). An
-  operator who has not asked for the tier above their stories has not asked to be told which stories
-  are missing from it, and where nothing can write a parent the warning would be a dead end.
+- **`config.canPlaceWorkItem`** — the connector's own answer to whether one item can be hung off
+  another, asked once on the server exactly as `canCloseIssue` and `canSetWorkItemState` are. Where it
+  is false the warning would be a dead end rather than a warning, and it is drawn nowhere.
+
+  It was **`config.featureBoard`**, which is that same probe _and_ the operator's own flag, folded by
+  `featureBoardOn` ([the two gates](#the-two-gates)). The argument for the conjunction was that
+  somebody who has not asked for the tier above their stories has not asked to be told which stories
+  are missing from it — but that argument is about a **tab**, and this band is about a fact: the goal
+  merges, closes, and rolls up to nothing. One flag was answering both questions with the tab's
+  answer, so a real Azure board with Features and Epics in it, six goals hanging off nothing, and a
+  tracker that would take the write said nothing at all, because nobody had asked for the tab. The
+  rail does not cover that gap either — its row rides inside `issue.appraisal`, and five of those six
+  had no appraisal row. → [#683](https://github.com/AdamAwan/LubbDubb/issues/683)
+
 - **`issue.parent === null`** — the tracker saying this item hangs off nothing. `undefined` is a
   provider that tracks no hierarchy at all, and folding the two together is the silent direction: an
   amber band on every goal of every GitHub deployment.
@@ -2949,6 +2960,14 @@ set now, and a second one for six rows would be a second colour system for six g
 box among six list rows reads as a banner rather than as a reading, which is the opposite of what a
 tone is for.
 
+**A row can also be _pending_, which is a fact and not a quantity** (`MenuEntry.pending`) — an unsaved
+theme edit on Config, and so far only that. It draws a dot beside the word rather than a value, and it
+lights the menu's own button along with the tones: a mark visible only once the menu is open is the same
+invisibility the mark was added to fix. → [the theme](#the-theme)
+
+**A zero mutes a row; it never removes one.** The strip's own rule, carried into the fold — a row that
+vanished on the days it had nothing to say would be one an operator had to hunt for.
+
 **It closes on Escape and on focus leaving the group** — the pair a keyboard and a pointer each need.
 Not a document-level listener: that is a third thing to unsubscribe on a component the shell mounts and
 unmounts with the connection.
@@ -3905,6 +3924,26 @@ Three things about the drawing that are decisions rather than details:
   whose cleanup reverts it**, and the bar states the cost: a reload drops them. Saving is not a visual
   event — the colours are already on screen — so the bar has to make a statement, or a Save that appears
   to do nothing gets pressed twice.
+- **The bar's statement is carried off the section by a dot on the Config row.** The bar lives on the
+  Theme section and the preview does not, so once you leave, an unsaved theme is drawn exactly like a
+  saved one and nothing says an edit is pending — the cost stops being visible at the moment it starts to
+  matter. The section publishes `dirty` to a module store in `theme.ts` (`setThemeUnsaved`), which
+  [the bar's menu](#the-bars-menu) and the Theme tab inside Config read through `useThemeUnsaved`. It is
+  a module store and not React state because the two ends are not in one tree, and it is **not** on
+  `Place` and **not** persisted: an unsaved edit is a fact about this tab, not a destination, and a flag
+  surviving a reload would mark a draft the reload dropped. The publishing effect has **no cleanup**, for
+  the same reason the applier has none — unmounting the section must not clear the marker. A dot rather
+  than a count on every surface, because what is pending is one edit however many tokens it moved, and
+  Config carries no value at all.
+
+  **It reaches the menu's own button as well as the Config row inside it** — `MenuEntry.pending` is what
+  the row draws, and the button's flag dot reads it beside the tones. Config moved behind that button
+  after the mark shipped on a cog on the strip, and a mark visible only once the menu is open is the same
+  invisibility one fold further in, which is the whole of what #680 was.
+
+- **The dirty sentence never counts zero.** A preset change sets `dirty` but moves no token, so
+  "**0** tokens changed · unsaved" read as "nothing pending" and got left unsaved (issue #680). With no
+  token moved the bar names the preset instead: `Preset ‹label›, unsaved — a reload drops it`.
 - **A preview card cannot lie about its preset.** Each preset block in `theme.css` carries a second
   selector, `[data-theme-swatch='x']`, and a card is a `<span>` with that attribute whose swatches read
   `var(--bg)` and friends — so a card's colours arrive through the same declaration block as the theme.
@@ -5275,7 +5314,11 @@ other.
   and this is that answer where the operator is already looking. Reject, Hold and Close stay live: only
   releasing the work is gated. The same checklist is drawn on the plan sheet, above its own Approve,
   because that is the other surface the plan can be released from — and the surface where it has
-  actually been read.
+  actually been read. There it is **capped at ~28vh and scrolls itself**, and `.pm-body` keeps a
+  floor of its own: the sheet is one column whose middle scrolls between a fixed head and a fixed
+  decision bar, so every line the checklist grows by comes straight out of the plan being read —
+  a plan raising several caveats, each with the planner's words under it, otherwise leaves a slot a
+  few lines tall to read it in.
 
 A **shortfall proposal carries a third arm**, `Overrule the assessment`, beside Approve and Reject.
 The other two settle what to _do_ about the assessor's finding; this one settles the finding itself.

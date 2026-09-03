@@ -604,6 +604,24 @@
 .cn-menu-row.cn-tone-watch .cn-ic {
   color: var(--cn-amber);
 }
+/* An unsaved theme edit, marked where the theme's own save bar cannot reach — a dot
+   rather than a count, since what is pending is a fact and Config carries no value
+   at all. It is on the *row* and on the menu's own button, because a mark visible
+   only once the menu is open is the same invisibility one fold further in.
+   → issue #680 */
+.cn-menu-row.cn-pending .cn-ic {
+  color: var(--cn-amber);
+}
+.cn-menu-row.cn-pending span::after {
+  content: '';
+  display: inline-block;
+  margin-left: 6px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--cn-amber);
+  vertical-align: 1px;
+}
 
 /* the nav, in the bar: the page's primary navigation, so it is drawn at the
    bar's own size rather than the small type the readings wear — and it sits in

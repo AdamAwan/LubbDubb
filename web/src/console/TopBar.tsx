@@ -10,6 +10,7 @@ import { RaiseIssueModal } from '../components/RaiseIssueModal.js';
 import { DesktopLink } from '../components/DesktopLink.js';
 import { questionPrompt } from '../cockpit/desktopLink.js';
 import { untriagedCount } from '../worldBuckets.js';
+import { useThemeUnsaved } from '../hooks.js';
 
 /**
  * The nav's destinations, in reading order — the order the tabs are drawn in.
@@ -707,6 +708,13 @@ interface MenuEntry extends MenuReading {
   key: string;
   icon: 'alert' | 'rocket' | 'download' | 'globe' | 'book' | 'gear';
   label: string;
+  /**
+   * Something is waiting on this row that its value cannot say — an unsaved theme
+   * edit on Config, and so far only that (issue #680). A **dot and not a count**,
+   * for the reason Config carries no value at all: what is pending is a fact, not a
+   * quantity.
+   */
+  pending?: boolean;
   onPick: () => void;
 }
 
@@ -732,7 +740,7 @@ interface MenuEntry extends MenuReading {
  * than a panel of its own, because the reasons and the per-environment rows are the
  * card's and a second surface drawing them is a second place for them to disagree.
  */
-export function menuEntries(view: CockpitView, actions: CockpitActions): MenuEntry[] {
+export function menuEntries(view: CockpitView, actions: CockpitActions, themeUnsaved = false): MenuEntry[] {
   const faults = view.state.errors.length;
   // The queue, not the history: a launched brief that has been dispatched is
   // an agent in the Fleet, and counting it here would have the reading climb as
@@ -806,7 +814,10 @@ export function menuEntries(view: CockpitView, actions: CockpitActions): MenuEnt
       value: null,
       tone: null,
       quiet: false,
-      title: 'Config — how this harness is configured',
+      pending: themeUnsaved,
+      title: themeUnsaved
+        ? 'Config — an unsaved theme edit is pending; a reload drops it'
+        : 'Config — how this harness is configured',
       onPick: () => actions.openConfig({}),
     },
   ];
@@ -825,8 +836,13 @@ export function menuEntries(view: CockpitView, actions: CockpitActions): MenuEnt
  */
 function BarMenu({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const [open, setOpen] = useState(false);
-  const entries = menuEntries(view, actions);
-  const flagged = entries.some((entry) => entry.tone !== null);
+  // The theme's live preview persists when you leave its section, on purpose, but
+  // the bar that states what that costs does not — so an unsaved theme was
+  // indistinguishable from a saved one everywhere else in the cockpit (#680). It
+  // has to reach the *button*, not only the row it belongs to: a mark visible only
+  // once the menu is open is the same invisibility one fold further in.
+  const entries = menuEntries(view, actions, useThemeUnsaved());
+  const flagged = entries.some((entry) => entry.tone !== null || entry.pending === true);
   const title = flagged ? 'More — something in here wants a look' : 'More — faults, launch, build, record and config';
   return (
     <div
@@ -856,7 +872,9 @@ function BarMenu({ view, actions }: { view: CockpitView; actions: CockpitActions
               key={entry.key}
               type="button"
               role="menuitem"
-              className={`cn-menu-row ${entry.quiet ? 'cn-quiet' : ''} ${entry.tone === null ? '' : `cn-tone-${entry.tone}`}`}
+              className={`cn-menu-row ${entry.quiet ? 'cn-quiet' : ''} ${entry.pending === true ? 'cn-pending' : ''} ${
+                entry.tone === null ? '' : `cn-tone-${entry.tone}`
+              }`}
               title={entry.title}
               onClick={() => {
                 setOpen(false);

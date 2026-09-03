@@ -300,6 +300,31 @@ test('the bar folds its ways-in behind one menu, and keeps the two gauges out of
 });
 
 /**
+ * An unsaved theme edit reaches the Config row **and** the button in front of it.
+ *
+ * The mark exists because the theme section's save bar does not leave the section,
+ * so once you walk away an unsaved theme looks exactly like a saved one (issue
+ * #680). It shipped on a cog on the strip; Config is behind a menu now, and a mark
+ * visible only once that menu is open is the same invisibility one fold further in
+ * — so `pending` is what lights the button's flag dot beside the tones.
+ */
+test('an unsaved theme edit marks the Config row and the menu button in front of it', () => {
+  const saved = menuEntries(view(), actions, false).find((entry) => entry.key === 'config');
+  assert.equal(saved?.pending, false, 'a saved theme marks Config anyway');
+
+  const pending = menuEntries(view(), actions, true).find((entry) => entry.key === 'config');
+  assert.equal(pending?.pending, true, 'an unsaved theme edit leaves Config unmarked');
+  assert.match(pending.title, /unsaved theme edit/, 'and the row does not say what is pending');
+
+  // The button's own dot reads `pending` beside the tones, which is what carries the
+  // mark off the closed menu. Asserted through the same predicate `BarMenu` uses.
+  assert.ok(
+    menuEntries(view(), actions, true).some((entry) => entry.tone !== null || entry.pending === true),
+    'nothing in front of the menu says an edit is pending',
+  );
+});
+
+/**
  * `Issue!` and `Question?` sit at the readings' end of the bar, not against the
  * wordmark — and they stay together.
  *

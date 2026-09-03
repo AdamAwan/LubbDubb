@@ -171,7 +171,10 @@ export class LocalRunWatch extends EventEmitter {
     const declared = declaredPort(run.url);
     const probe = this.deps.probe ?? probePort;
     const answering = declared === null ? null : await probe(declared.host, declared.port, PROBE_TIMEOUT_MS);
-    const listening = run.pid === null ? null : await this.deps.ports.listening(run.pid);
+    // Asked with the checkout as well as the pid, and answerable from either — so a
+    // run whose session this harness no longer holds still reports its ports, which
+    // is the state a restart leaves and the one an operator most wants read.
+    const listening = await this.deps.ports.listening({ pid: run.pid, dir: run.dir });
     return {
       checkedAt: at,
       declared: declared === null || answering === null ? null : { ...declared, answering },

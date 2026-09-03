@@ -816,6 +816,21 @@ interface CockpitConfig {
    */
   canClosePr: boolean;
   /**
+   * Whether the provider can hang one work item off another — the parent half of a
+   * placement, which is what the missing-parent warning offers to fix.
+   *
+   * Asked of the connector for `canSetWorkItemState`'s reason, and shipped for the
+   * same one. It is deliberately **not** {@link featureBoard}: that field is the
+   * conjunction with the operator's own flag, and the flag is about wanting the
+   * tier above one's stories drawn as a *tab*. Gating the warning on it meant an
+   * operator who had never asked for that tab was never told which of their goals
+   * roll up to nothing — a different question, and one whose answer their tracker
+   * could take (issue #683). Where this is false the warning would be a dead end
+   * and is drawn nowhere, which is the half of the old conjunction that carried the
+   * argument.
+   */
+  canPlaceWorkItem: boolean;
+  /**
    * Whether this deployment has a feature board — the operator's `featureBoard`
    * flag **and** a provider with a container hierarchy to roll up.
    *

@@ -8,7 +8,10 @@ import {
   isTokenValue,
   PRESETS,
   readThemePrefs,
+  setThemeUnsaved,
+  subscribeThemeUnsaved,
   THEME_KEY,
+  themeUnsaved,
   type ThemePrefs,
   type ThemeTarget,
 } from '../web/src/cockpit/theme.js';
@@ -488,4 +491,38 @@ test('accent-color is inherited from a container, never declared on a control', 
     ],
     'the hue belongs to the surface a box lands on',
   );
+});
+
+/**
+ * The unsaved-theme marker. The section's save bar is the only sentence about an
+ * unsaved edit and it does not leave the section, so the flag is what the bar's
+ * menu and
+ * the Theme tab read (issue #680). Two properties matter and neither is visible at
+ * a call site: a change reaches subscribers, and an unchanged write does not — a
+ * store that notified on every publish would re-render the whole top bar on every
+ * frame of a dragged colour input.
+ * → docs/spec/17-cockpit.md#the-section
+ */
+test('the unsaved-theme flag notifies on a change and only on a change', () => {
+  let calls = 0;
+  const stop = subscribeThemeUnsaved(() => {
+    calls += 1;
+  });
+  assert.equal(themeUnsaved(), false);
+
+  setThemeUnsaved(true);
+  assert.equal(themeUnsaved(), true);
+  assert.equal(calls, 1);
+
+  setThemeUnsaved(true);
+  assert.equal(calls, 1, 'a publish of the value already held is not a change');
+
+  setThemeUnsaved(false);
+  assert.equal(themeUnsaved(), false);
+  assert.equal(calls, 2);
+
+  stop();
+  setThemeUnsaved(true);
+  assert.equal(calls, 2, 'unsubscribing stops the notifications');
+  setThemeUnsaved(false);
 });

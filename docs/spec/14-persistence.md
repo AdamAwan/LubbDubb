@@ -248,9 +248,10 @@ runs every rule at error and an exported function with no caller is a failure. T
 rows already stamped on a running deployment are harmless; the next migration that needs the mechanism
 brings it back, under a **fresh** id, and everything above still governs it.
 
-**Nothing dropped a table.** The knowledge tables simply stopped being created: an existing database
-still holds its rows, and an upgrade that deleted them would be a data loss nobody asked for and
-nothing could undo. A `DROP` is a change an operator asks for, on the day they want the disk back.
+**Nothing dropped the knowledge tables**, and the reason is what [Retiring a
+table](#retiring-a-table) turns into a rule: they held facts an agent vouched for and an operator kept,
+which no poll would ever write again, so an upgrade that deleted them would be a data loss nobody asked
+for and nothing could undo.
 
 They all run from `Store`'s constructor beside the `ensureColumns` pass, before any module is
 constructed, let alone reads. The rebuild pass runs before all of them — it is what applies `SCHEMA`
@@ -268,6 +269,30 @@ is exactly the case this table exists for. `CREATE TABLE IF NOT EXISTS` never al
 so a column added without an `ensureColumns` entry is invisible on every database from before that
 column existed — "this table is fresh, so it needs no entry" is only ever true on the day the table is
 introduced.
+
+### Retiring a table
+
+Deleting a `CREATE TABLE IF NOT EXISTS` stops a table being made. It never removes one — so a database
+from before the retirement keeps the table and its rows for ever, while a database made since has
+never heard of it. **Two shapes in the field for one build** is the thing every migration above exists
+to close, and a retirement is no exception to it.
+
+`dropRetiredTables(db, tables)` (`src/store/migrate.ts`) is that path, declared by the module that
+owned the table — `POOL_RETIRED_TABLES` in `pool.ts` — and applied from `Store`'s constructor beside
+`renameTables`, before any module is constructed. It needs nothing recorded to say it has run: the
+table's existence is what says the drop is outstanding, and the drop is what removes it.
+
+**A name goes on that list only when its rows are derived or worthless.** Unlike a rename this is not
+reversible and leaves no old table as evidence. `pool_claims` qualifies twice over — it mirrored other
+fleets' documents and was rewritten whole on every poll, and nothing has read it since the claims arm
+went ([28](28-cross-fleet-pool.md#the-mirrors-own-tables)). The knowledge tables above are the
+counter-example and stay exactly where they are: an operator's own vouched facts are not re-derivable
+from anything, and reclaiming that disk is a change they ask for rather than one an upgrade takes.
+
+**A retired name is never given to a new table.** The drop runs on every boot — it has to, since the
+database that has not booted since the retirement is precisely the one still holding the table — so a
+name re-used later would have its rows dropped on every start, silently, by a migration written long
+before it.
 
 ## Tables
 

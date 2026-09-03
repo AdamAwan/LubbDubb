@@ -29,14 +29,23 @@ import type { AppState, Issue } from '../types.js';
  * has no Features to hang anything off. `null` is the tracker saying this item
  * has no parent, which is the whole subject. An object is a parent.
  *
- * ## Why the feature board's flag gates it
+ * ## Why it is gated on the tracker and not on the board flag
  *
- * Same conjunction the board itself is gated on, read off the one field that
- * already carries it: `config.featureBoard` is the operator's flag **and** a
- * provider that can place a work item, folded server-side by `featureBoardOn`. An
- * operator who has not asked for the tier above their stories has not asked to be
- * told which stories are missing from it — and on a deployment where nothing can
- * write a parent, the warning would be a dead end rather than a warning.
+ * `config.canPlaceWorkItem` — the connector's own answer to "can I hang one item
+ * off another", the same probe the rail's placement asks and the placement routes
+ * are gated on. Where it is false the warning would be a dead end rather than a
+ * warning, so it is drawn nowhere.
+ *
+ * It used to be `config.featureBoard`, which is that same probe **and** the
+ * operator's own flag, folded server-side by `featureBoardOn`. The argument was
+ * that somebody who has not asked for the tier above their stories has not asked
+ * to be told which stories are missing from it. That argument is about a *tab*.
+ * The warning is about a fact — this goal merges, closes and rolls up to nothing —
+ * and one flag was answering both questions with the tab's answer: on a real Azure
+ * board with Features and Epics in it, six orphans and a tracker that would happily
+ * take the write, the band had never once drawn because nobody had asked for a
+ * Features tab (issue #683). The rail's row does not cover the gap either: it rides
+ * inside `issue.appraisal`, so a goal nothing has appraised has no row.
  */
 interface OrphanGoal {
   /**
@@ -64,11 +73,11 @@ interface OrphanGoal {
 /**
  * Whether this goal is an orphan worth warning about, and what to offer if so.
  *
- * Null is "nothing to say", and it is the answer on every GitHub deployment,
- * every deployment with the board off, and every goal that has a parent.
+ * Null is "nothing to say", and it is the answer on every GitHub deployment, every
+ * deployment whose tracker cannot be handed a parent, and every goal that has one.
  */
 export function orphanGoal(state: AppState, issue: Issue): OrphanGoal | null {
-  if (!state.config.featureBoard) return null;
+  if (!state.config.canPlaceWorkItem) return null;
   // Never `!issue.parent`: `undefined` is a provider with no hierarchy, and folding
   // it in here is the silent direction — an amber band on every goal on GitHub.
   if (issue.parent !== null) return null;

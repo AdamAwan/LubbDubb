@@ -493,5 +493,80 @@ test('a clone whose origin is not the configured remote is refused rather than w
     () => transport.publish(envelopeDoc({ fleetId: 'alice@acme-api' })),
     /not the configured remote/,
   );
-  assert.equal(remoteFile(other, 'fleets/alice@acme-api/claims.json'), null, 'and nothing reached the wrong pool');
+  assert.equal(remoteFile(other, 'fleets/alice@acme-api/digest.json'), null, 'and nothing reached the wrong pool');
+});
+
+/**
+ * The file a retired kind left behind.
+ *
+ * `claims.json` was a second clock document until the claims arm went
+ * (28-cross-fleet-pool). The type narrowed to `digest` and the parser stopped
+ * having a grammar for it, but the transport went on naming it in every fleet's
+ * directory — so a pool that had ever run the old build fetched its own stale file
+ * and recorded `unknown document kind "claims"` on every pulse, for as long as the
+ * file existed. `fetch` names the kinds that exist, and nothing else in the
+ * namespace is read.
+ */
+test('a document from a retired kind is not fetched, and reads as no document at all', async () => {
+  const remote = poolRemote();
+  const writer = mkdtempSync(join(tmpdir(), 'lubbdubb-pool-retired-'));
+  execFileSync('git', ['clone', '-q', '--branch', 'main', remote, writer]);
+  const namespace = join(writer, 'fleets', 'alice@acme-api');
+  mkdirSync(namespace, { recursive: true });
+  writeFileSync(join(namespace, 'claims.json'), '{"pool":1,"kind":"claims","fleetId":"alice@acme-api"}', 'utf8');
+  writeFileSync(
+    join(namespace, 'digest.json'),
+    serialisePoolDocument(envelopeDoc({ fleetId: 'alice@acme-api' })),
+    'utf8',
+  );
+  execFileSync('git', ['add', '-A'], { cwd: writer });
+  execFileSync('git', ['commit', '-q', '-m', 'seed'], { cwd: writer });
+  execFileSync('git', ['push', '-q', 'origin', 'main'], { cwd: writer });
+
+  const root = join(mkdtempSync(join(tmpdir(), 'lubbdubb-pool-retired-read-')), 'pool');
+  const transport = new GitPoolTransport({ root, remote, branch: 'main', path: '', fleetId: 'bob@acme-api' });
+  const fetched = await transport.fetch();
+
+  assert.equal(fetched.length, 1, 'the stale file is not a document and is not handed up to be refused');
+  assert.match(fetched[0]!.text, /"kind": "digest"/);
+});
+
+/**
+ * And the file itself goes, on the next publish.
+ *
+ * Nobody else can remove it — one writer per namespace cuts both ways — so a pool
+ * heals as its fleets upgrade, each clearing its own. The companion matters as much
+ * as the document: a wiki that keeps a page about an arm that is gone is a wiki
+ * that describes a harness nobody is running.
+ */
+test("a publish clears what a retired kind left in this fleet's own namespace, and only its own", async () => {
+  const remote = poolRemote();
+  const writer = mkdtempSync(join(tmpdir(), 'lubbdubb-pool-prune-'));
+  execFileSync('git', ['clone', '-q', '--branch', 'main', remote, writer]);
+  for (const fleet of ['alice@acme-api', 'bob@acme-api']) {
+    mkdirSync(join(writer, 'fleets', fleet), { recursive: true });
+    writeFileSync(join(writer, 'fleets', fleet, 'claims.json'), '{"pool":1,"kind":"claims"}', 'utf8');
+    writeFileSync(join(writer, 'fleets', fleet, 'claims.md'), '# claims\n', 'utf8');
+  }
+  execFileSync('git', ['add', '-A'], { cwd: writer });
+  execFileSync('git', ['commit', '-q', '-m', 'seed'], { cwd: writer });
+  execFileSync('git', ['push', '-q', 'origin', 'main'], { cwd: writer });
+
+  const root = join(mkdtempSync(join(tmpdir(), 'lubbdubb-pool-prune-clone-')), 'pool');
+  const transport = new GitPoolTransport({ root, remote, branch: 'main', path: '', fleetId: 'alice@acme-api' });
+  await transport.publish(envelopeDoc({ fleetId: 'alice@acme-api' }));
+
+  assert.equal(remoteFile(remote, 'fleets/alice@acme-api/claims.json'), null);
+  assert.equal(remoteFile(remote, 'fleets/alice@acme-api/claims.md'), null, 'the wiki page goes with the document');
+  assert.notEqual(remoteFile(remote, 'fleets/alice@acme-api/digest.json'), null, 'the publish still published');
+  assert.notEqual(
+    remoteFile(remote, 'fleets/bob@acme-api/claims.json'),
+    null,
+    "another fleet's is not this fleet's to delete",
+  );
+
+  // The second publish finds nothing to clear: `git add` on a path that never
+  // existed is a fatal pathspec error, so a deployment that predates nothing must
+  // not be paying one.
+  await transport.publish(envelopeDoc({ fleetId: 'alice@acme-api', publishedAt: '2026-01-02T00:00:00.000Z' }));
 });

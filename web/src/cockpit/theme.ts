@@ -211,3 +211,42 @@ export function applyToken(name: string, value: string | null, target: ThemeTarg
   if (value !== null && isTokenValue(name, value)) target.style.setProperty(name, value);
   else target.style.removeProperty(name);
 }
+
+/**
+ * Whether the Theme section is holding an edit that has not been saved.
+ *
+ * Module state and a listener set rather than React state, because the two ends
+ * are not in one tree: the section is inside the config page and the marker is on
+ * the top bar's cog, which outlives it. It is not {@link Place} state either — an
+ * unsaved edit is a fact about this tab, not a destination, and putting it in the
+ * query string would make the back button undo it.
+ *
+ * It is deliberately **not** persisted. The draft lives in the section's own state
+ * and dies with the tab, so a flag that outlived a reload would mark a pending
+ * edit that no longer exists.
+ *
+ * The section publishes on every change and **never clears on unmount** — leaving
+ * the section keeps the preview, so the cost has to stay visible off-page, which
+ * is the whole reason this exists. → docs/spec/17-cockpit.md#the-section
+ */
+let unsaved = false;
+const unsavedListeners = new Set<() => void>();
+
+export function setThemeUnsaved(next: boolean): void {
+  if (next === unsaved) return;
+  unsaved = next;
+  for (const listener of unsavedListeners) listener();
+}
+
+/** @public read through `useThemeUnsaved` by the top bar and the config tabs */
+export function themeUnsaved(): boolean {
+  return unsaved;
+}
+
+/** @public subscribed to by `useThemeUnsaved` */
+export function subscribeThemeUnsaved(listener: () => void): () => void {
+  unsavedListeners.add(listener);
+  return () => {
+    unsavedListeners.delete(listener);
+  };
+}
