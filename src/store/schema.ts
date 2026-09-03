@@ -1745,6 +1745,23 @@ CREATE TABLE IF NOT EXISTS obstacle_notices (
   PRIMARY KEY (obstacle_id, agent_id)
 );
 
+-- Which goal is parked behind which obstacle: the blocked verdict's row.
+--
+-- origin_ref is the primary key, so a goal is behind one obstacle at a time — the
+-- one the agent named, which is the one it could not get past. Not a member of the
+-- issue-verdict matrix (src/store/verdicts.ts): those four answer "is the work
+-- finished" and clear each other, and this answers "can it be worked at all right
+-- now". Its exit is the obstacle rather than the issue, so the desk that clears it
+-- reads the board and never the goal.
+CREATE TABLE IF NOT EXISTS obstacle_blocks (
+  origin_ref  TEXT PRIMARY KEY,
+  obstacle_id TEXT NOT NULL,
+  agent_id    TEXT,
+  task_id     TEXT,
+  note        TEXT NOT NULL,      -- what the agent said it could not get past
+  created_at  TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS rate_limit_readings (
   captured_at               TEXT PRIMARY KEY,
   five_hour_used_percentage REAL,

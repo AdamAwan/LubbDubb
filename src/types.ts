@@ -5223,6 +5223,55 @@ export interface ObstacleSighting {
   createdAt: string;
 }
 
+/**
+ * A row on the board with everything that reads it needs, assembled once.
+ *
+ * The voice count is the store's own (`obstacleVoices`), never a second fold of
+ * the sightings: the number that carries a row to `standing` and the number a
+ * repair dispatch is judged against are the same number.
+ */
+export interface ObstacleStanding {
+  obstacle: Obstacle;
+  /** Every way into it, suggestions included — the reader decides which bind. */
+  keys: ObstacleKey[];
+  /** How many independent voices have said it. */
+  voices: number;
+  /** The goals that have said it, deduplicated. A priority flag expands over these. */
+  goalRefs: string[];
+  /**
+   * The voices in their **own words**, oldest first — the sentences behind the
+   * one-line claim. Carried on the row because everything that puts an obstacle in
+   * front of somebody wants them: a claim in somebody else's words is exactly what
+   * this store exists because agents cannot match on.
+   */
+  words: string[];
+}
+
+/**
+ * One goal parked behind an obstacle — the `blocked` verdict's row.
+ *
+ * Its own table rather than a fifth member of the verdict matrix
+ * (`src/store/verdicts.ts`), and the distinction is what keeps it safe: the four
+ * verdicts there all answer *is this goal's work finished*, and each clears the
+ * ones it contradicts. This answers a different question — *can it be worked at
+ * all right now* — and its exit is the **obstacle**, not the issue. Folding it in
+ * would have a block clear a delivery, which is delivered work handed back to the
+ * fleet (`docs/spec/20-validation.md#when-a-check-fails`, the same failure from
+ * the other side).
+ */
+export interface ObstacleBlock {
+  /** The goal, as `issue:<n>` — the origin every pickup gate keys on. */
+  originRef: string;
+  /** The obstacle that stopped it. The block ends when this one stops reaching agents. */
+  obstacleId: string;
+  /** The agent that could not finish, and its task. Null for neither, today. */
+  agentId: string | null;
+  taskId: string | null;
+  /** What the agent said it could not get past. Required, as every conclusion's note is. */
+  note: string;
+  createdAt: string;
+}
+
 /** A row on the board. */
 export interface Obstacle {
   id: string;

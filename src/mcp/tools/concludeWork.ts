@@ -1,4 +1,4 @@
-import { CONCLUSION_VERDICT_HELP, CONCLUSION_VERDICTS, validateConclusion } from '../conclusion.js';
+import { BLOCKED_STATUS, CONCLUSION_STATUSES, CONCLUSION_VERDICT_HELP, validateConclusion } from '../conclusion.js';
 import { toolError } from '../protocol.js';
 import { DONE_REMINDER } from '../../agents/agentProtocol.js';
 import type { ToolFactory } from './context.js';
@@ -11,14 +11,23 @@ export const concludeWork: ToolFactory = ({ deps, agent, ok }) => ({
     '"waiting on test" from "still has work in it", so if you say nothing the harness parks the ' +
     'ticket and waits for a human rather than guessing. Say "done" only if everything the issue ' +
     'asked for is delivered; say "more_work" if you did part of it or found more is needed, and the ' +
-    'issue will come back round with your note in front of the next agent.',
+    'issue will come back round with your note in front of the next agent. Say "blocked", naming the ' +
+    'obstacle you raised, if you could not finish because of something that is not this goal at all — the ' +
+    'goal parks until that clears rather than coming back round for the next agent to hit the same wall.',
   inputSchema: {
     type: 'object',
     properties: {
       status: {
         type: 'string',
-        enum: [...CONCLUSION_VERDICTS],
-        description: CONCLUSION_VERDICTS.map((v) => `${v}: ${CONCLUSION_VERDICT_HELP[v]}`).join('. '),
+        enum: [...CONCLUSION_STATUSES],
+        description: CONCLUSION_STATUSES.map((v) => `${v}: ${CONCLUSION_VERDICT_HELP[v]}`).join('. '),
+      },
+      obstacle: {
+        type: 'string',
+        description:
+          'Required for blocked, ignored otherwise: the id of the obstacle that stopped you, as raise ' +
+          'answered it. The goal is parked while that obstacle stands and comes back on its own when it ' +
+          'clears — so this is what makes blocked a park rather than a dead end.',
       },
       note: {
         type: 'string',
@@ -33,6 +42,24 @@ export const concludeWork: ToolFactory = ({ deps, agent, ok }) => ({
   handler: (args) => {
     const parsed = validateConclusion(args);
     if (!parsed.ok) return toolError(`Conclusion rejected: ${parsed.error}`);
+    // Its own path because it is its own record: a block writes no conclusion row
+    // at all. The two verdicts below say something about the *work*; this says the
+    // work could not be attempted, and the thing that lifts it is the board rather
+    // than anybody's opinion about whether the goal is finished.
+    if (parsed.verdict === BLOCKED_STATUS) {
+      const blocked = deps.agents.recordBlocked(agent.id, parsed.obstacleId, parsed.note);
+      if (!blocked.ok) return toolError(blocked.error);
+      return ok({
+        concluded: true,
+        issue: blocked.block.originRef,
+        status: BLOCKED_STATUS,
+        note:
+          `Recorded. ${blocked.block.originRef} is parked behind ${blocked.block.obstacleId} and nothing ` +
+          `further will be dispatched for it until that obstacle stops reaching agents — then it comes back ` +
+          `on its own, with no one having to remember it. Stop here: do not go fixing the obstacle. ` +
+          DONE_REMINDER,
+      });
+    }
     // Structural identity, and here it carries more than attribution: the
     // origin decides whether there is anything to conclude at all. A part
     // agent is refused rather than scoped down — see `conclusionOrigin`.

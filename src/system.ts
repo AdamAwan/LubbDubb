@@ -44,6 +44,8 @@ import { KnowledgeClusterDesk } from './knowledge/cluster.js';
 import { KnowledgeGraduationDesk } from './knowledge/graduationDesk.js';
 import { KnowledgeNoticeDesk } from './knowledge/noticeDesk.js';
 import { ObstacleNoticeDesk } from './obstacles/noticeDesk.js';
+import { ObstacleOwnershipDesk } from './obstacles/ownershipDesk.js';
+import { trackerCoordinates } from './mcp/findings.js';
 import { PrNamingDesk } from './prNamingDesk.js';
 import { DeliveryCloseOutDesk } from './delivery/closeOutDesk.js';
 import { ValidationAskDesk } from './validation/askDesk.js';
@@ -1218,6 +1220,25 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // ownership of, or spends its session on one two other goals have corroborated.
   const obstacleNotices = new ObstacleNoticeDesk({ store, fleet: agents, errors });
 
+  // Who owns each standing obstacle, and which goals the board has let back out
+  // (`docs/spec/32-obstacles.md`, phase 3). Always wired, like the desks above:
+  // with an empty board it does nothing, and a deployment without it is one where
+  // an obstacle two goals corroborated sits on the board for ever with nobody on
+  // it — which is the state the fleet was in before any of this existed.
+  //
+  // The filing arm is off where no tracker is configured: `trackerCoordinates`
+  // is the one gate every filing route already asks, so a deployment with nowhere
+  // to file simply never files rather than raising a provider error every pulse.
+  const obstacleOwnership = new ObstacleOwnershipDesk({
+    store,
+    filing: trackerCoordinates(config) ? filing : undefined,
+    // The item's **body**, not a prompt — nothing is dispatched to write it. How a
+    // ticket should read is house style, which is what an override is for.
+    ticketBody: (vars) => prompts.render('obstacle-ticket-body', vars),
+    watchLabel,
+    errors,
+  });
+
   // The distance above `fleet` (issue #28): what this fleet has vouched for, carried
   // to the others, and a daily digest of what it spent. Wired **only when the pool
   // is selected** — unlike the two desks above, which are always on: with
@@ -1319,6 +1340,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     graduations,
     clusters,
     obstacleNotices,
+    obstacleOwnership,
     pool,
     heartbeatIntervalMs: config.heartbeatIntervalMs,
     idleHeartbeatIntervalMs: config.idleHeartbeatIntervalMs,

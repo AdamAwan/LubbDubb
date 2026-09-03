@@ -8,6 +8,8 @@ import type {
   IssueDelivery,
   IssueShortfall,
   Job,
+  ObstacleBlock,
+  ObstacleStanding,
   Plan,
   PlanAmendment,
   PlanPart,
@@ -259,6 +261,24 @@ export interface DispatchContext {
    * been written, which holds nothing and summarises every Feature once.
    */
   featureSummaryKeys?: { originRef: string; standingKey: string }[];
+  /**
+   * The obstacle board — every row with its keys, its voice count and the goals
+   * that reported it (`Store.obstacleBoard`).
+   *
+   * Read by rule `obstacle-repair`, which is the one rule this subsystem has, and
+   * by the priority expansion. Absent/empty means the board is empty or nothing
+   * wired it, and then no repair is ever proposed — the safe absence: the fleet
+   * works around obstacles, which is what it did before this existed.
+   */
+  obstacles?: ObstacleStanding[];
+  /**
+   * The goals parked behind an obstacle — the `blocked` verdict's rows
+   * (`Store.listObstacleBlocks`). **This gates pickup**: an issue whose block still
+   * stands is not eligible for the funnel, exactly as a delivered one is not.
+   * Absent/empty means nothing is parked, which is every deployment until an agent
+   * concludes `blocked`.
+   */
+  obstacleBlocks?: ObstacleBlock[];
   /** How many more agents may be started this cycle (concurrency headroom). */
   agentHeadroom: number;
   /** Recent audit decisions, so a persistent PR signal isn't re-notified to an agent every cycle. */

@@ -10,6 +10,7 @@ import type {
   IssueConclusionVerdict,
   KnowledgeFact,
   KnowledgeGraduation,
+  ObstacleBlock,
   PadDecision,
   PartOutcomeKind,
   PlanPart,
@@ -71,6 +72,11 @@ export interface AgentToolTarget {
     verdict: IssueConclusionVerdict,
     note: string,
   ): { ok: true; conclusion: IssueConclusion } | { ok: false; error: string };
+  recordBlocked(
+    agentId: string,
+    obstacleId: string,
+    note: string,
+  ): { ok: true; block: ObstacleBlock } | { ok: false; error: string };
   recordAssessment(
     agentId: string,
     verdict: AssessmentVerdict,

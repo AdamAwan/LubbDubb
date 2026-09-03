@@ -102,6 +102,14 @@ export const raise: ToolFactory = ({ deps, agent, task, ok }) => {
             'them out of what you wrote and the dispatch you are on. Anything that names nothing real is ' +
             'dropped and your report is kept — nothing here is ever refused for a key.',
         },
+        blocks_me: {
+          type: 'boolean',
+          description:
+            'True only if this stops you finishing the task you were dispatched for — the base will not ' +
+            'build, the thing you must change is behind it. Not "it is annoying" and not "it made this ' +
+            'slower": say true and you will be told to conclude `blocked`, which parks your goal until the ' +
+            'obstacle clears rather than failing it. Everything else, carry on and work around it.',
+        },
         until: {
           type: 'number',
           description:
@@ -273,6 +281,7 @@ export const raise: ToolFactory = ({ deps, agent, task, ok }) => {
             sightings: deps.store.listObstacleSightings(outcome.obstacle.id),
             mine: outcome.sightingId,
             near: outcome.near,
+            blocksMe: report.blocksMe,
           }),
         });
       }

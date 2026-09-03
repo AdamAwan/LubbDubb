@@ -100,6 +100,15 @@ const RULES = [
       'A job the operator queued from the cockpit is drained before any world-driven rule, claiming the next free slot first — so a manual request takes priority, and simply waits in the queue when the fleet is at capacity.',
   },
 
+  // ---- The fleet's own way, before the work it is in the way of. -----------
+  {
+    id: 'obstacle-repair',
+    kind: 'rule',
+    name: 'Something is blocking the fleet',
+    description:
+      'An obstacle two or more agents reported — and which is blocking the fleet *now*, meaning a base branch is red or three independent voices have hit it — gets one code agent to fix it. It is the second of the two ways an obstacle gets an owner (the other is a ticket, filed by the ownership desk and ranked like any other goal), and it is a capability rather than a convenience: a store that can queue work can put agents on the fleet. So it is one rule, here where it can be seen, taking the headroom cut like every other candidate — and bounded on top of that to **one repair in flight at a time**, because the cut bounds how many agents run and not how many of them this rule may be. It sits above every world-driven rule because what it dispatches for is, by construction, in front of the work those rules are about to propose: an agent sent to a red base is an agent sent to the reason the next four dispatches would have failed. Nothing an agent calls reaches it — no agent stakes a claim on an obstacle, because a lock an agent takes is a lock an agent forgets. A repair that spends its attempt cap escalates rather than looping: an obstacle three agents could not clear is what an operator wants to be told about.',
+  },
+
   // ---- PR concerns. Four of these collect concerns for one branch; the ------
   // order they appear in here *is* the urgency order the fold reads.
   {

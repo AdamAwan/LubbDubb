@@ -19,6 +19,7 @@ import type {
   IssueConclusionVerdict,
   KnowledgeFact,
   KnowledgeGraduation,
+  ObstacleBlock,
   PartOutcomeKind,
   PlanPart,
   Remedy,
@@ -1581,6 +1582,59 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       this.store.settleInstructions(origin.originRef);
       this.emit('conclusion', { agentId, taskId: task.id, conclusion });
       return { ok: true, conclusion };
+    });
+  }
+
+  /**
+   * Park the goal this agent could not finish behind the obstacle that stopped it.
+   *
+   * **It writes no conclusion.** `done` and `more_work` are the agent's statement
+   * about the *work*; this says the work could not be attempted, so there is
+   * nothing to declare about whether the goal is finished — and a `more_work` row
+   * written here would send the goal straight back to pickup, which is the next
+   * agent hitting the same wall. The park's exit is the **obstacle**: the
+   * ownership desk clears the block the moment the row stops reaching agents, and
+   * nobody has to remember the goal.
+   *
+   * The same {@link conclusionOrigin} gate as a conclusion, so a part agent, a
+   * planner and an assessor are refused here for the reasons they are refused
+   * there — with the same sentences, since being blocked does not change whose
+   * verdict it is.
+   *
+   * The obstacle must exist: an id that names nothing is a park with nothing to
+   * lift it, and a typo an agent can fix this turn is worth refusing over.
+   * → `docs/spec/32-obstacles.md#blocked-is-an-answer`
+   */
+  recordBlocked(
+    agentId: string,
+    obstacleId: string,
+    note: string,
+  ): { ok: true; block: ObstacleBlock } | { ok: false; error: string } {
+    return this.withCaller(agentId, ({ task }) => {
+      const origin = conclusionOrigin(task.originRef);
+      if (!origin.ok) return { ok: false, error: origin.error };
+      const obstacle = this.store.getObstacle(obstacleId);
+      if (!obstacle) {
+        return {
+          ok: false,
+          error:
+            `No obstacle has that id (${obstacleId}), so nothing was recorded and your goal is not parked. ` +
+            `Name the id raise answered with — and if you have not raised what stopped you, raise it first: ` +
+            `a block that names nothing is a goal nothing brings back.`,
+        };
+      }
+      const block = this.store.recordObstacleBlock({
+        originRef: origin.originRef,
+        obstacleId,
+        agentId,
+        taskId: task.id,
+        note,
+      });
+      // Settled for {@link recordConclusion}'s reason and with no exception for
+      // this arm: the operator's standing instructions were in this agent's
+      // prompt, and this note is its answer to them.
+      this.store.settleInstructions(origin.originRef);
+      return { ok: true, block };
     });
   }
 

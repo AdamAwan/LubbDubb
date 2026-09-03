@@ -299,6 +299,19 @@ interface HarnessDeps {
    */
   obstacleNotices?: { run(): void };
   /**
+   * Gives a standing obstacle an owner — a ticket, or the repair dispatch rule
+   * `obstacle-repair` has already made — and lets a goal parked behind one back
+   * into pickup once the board stops reaching agents with it. Absent = nothing
+   * owns anything (tests that do not care), and then an obstacle two goals
+   * corroborated sits on the board for ever.
+   *
+   * It writes `obstacles` and `obstacle_blocks` rows and files tracker items. It
+   * staffs nobody: the repair dispatch is a rule's, proposed through the candidate
+   * list and subject to the headroom cut, and this desk only records that it
+   * happened. → `docs/spec/32-obstacles.md#ownership`
+   */
+  obstacleOwnership?: { run(world: WorldSnapshot): Promise<void> };
+  /**
    * The cross-fleet pool's one desk: polls everybody else's documents into the
    * mirror, and publishes this fleet's when they have moved. Absent = no pool
    * (tests that do not care, and every deployment on the `fake` default), and then
@@ -735,6 +748,18 @@ export class Harness extends EventEmitter {
       // in the dispatcher for `closeOuts`' reason — it staffs nobody, and no rule
       // reads what it writes.
       this.deps.obstacleNotices?.run();
+      // Who owns each of them, and which goals the board has let back out.
+      //
+      // **Above `decide`**, and both halves matter: a block cleared here is a goal
+      // rule `issue-pickup` sees this pulse rather than next, and a row owned here
+      // reads as owned in the prompt of every dispatch composed a few lines below
+      // — an agent told *do not fix it, #841 has it* on the pulse the ticket was
+      // filed rather than a pulse later. Below the notices for the same reason
+      // they sit above `decide`: an agent whose report was taken up is told so by
+      // the pulse that took it. Awaited but never blocking — every failure inside
+      // is recorded and non-fatal, and a tracker that will not answer costs the
+      // ticket and nothing else.
+      await this.deps.obstacleOwnership?.run(world);
       // The distance above `fleet`: what other fleets have vouched for, landed here,
       // and what this fleet has vouched for, sent out.
       //
@@ -1033,6 +1058,14 @@ export class Harness extends EventEmitter {
         prReviews: store.listPrReviews(),
         prReviewRoutes: store.listPrReviewRoutes(),
         prReviewedElsewhere: store.prsReviewedElsewhere(),
+        // The obstacle board, and the goals parked behind one. Rule
+        // `obstacle-repair` is the only rule that reads the first; the second
+        // gates pickup, exactly as a delivery verdict does. Read here beside every
+        // other store read, so the cycle stays the only thing that touches the
+        // store — and read *after* the ownership desk above, so a block it cleared
+        // this pulse is a goal the funnel sees now.
+        obstacles: store.obstacleBoard(),
+        obstacleBlocks: store.listObstacleBlocks(),
         // The goal tags and the profiles they may name, so a dispatch on a pinned
         // issue is priced by the pin rather than by its rule.
         modelPins: this.deps.modelPins,

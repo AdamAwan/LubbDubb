@@ -1,6 +1,6 @@
-import type { GoalPriority, Issue, Plan, PlanPart, PullRequest } from '../types.js';
+import type { GoalPriority, Issue, ObstacleBlock, ObstacleStanding, Plan, PlanPart, PullRequest } from '../types.js';
 import { issueBranch } from './issuePickup.js';
-import { issueOriginRole } from '../issueOrigins.js';
+import { issueOriginRole, obstacleOriginId } from '../issueOrigins.js';
 
 /** What the expansion below needs of the world — the whole of it, so the caller can pass a slice. */
 interface GoalWorld {
@@ -12,6 +12,19 @@ interface GoalWorld {
   plans: readonly Plan[];
   /** Every plan part, for the pull request a part has already opened. */
   parts: readonly PlanPart[];
+  /**
+   * The obstacle board, for the third family below. Absent on a caller that has
+   * not wired it, and then a repair dispatch is simply never expedited — the
+   * ranking it had before obstacles existed.
+   */
+  obstacles?: readonly ObstacleStanding[];
+  /**
+   * The goals parked behind an obstacle, for the same family. A flagged goal
+   * waiting on one is the strongest case there is for lifting its repair, and it
+   * is the one case the voices above cannot see: a goal may be blocked by an
+   * obstacle two other goals reported.
+   */
+  obstacleBlocks?: readonly ObstacleBlock[];
 }
 
 /**
@@ -31,6 +44,13 @@ interface GoalWorld {
  *   plan's parts, the planner, the appraisal, the assessor, the retrospective and the
  *   validation checks. Asked through that function rather than by `startsWith` for
  *   its own reason: a bare prefix test matches `issue:19:plan` for goal 1.
+ * - **The repair dispatches for what is in the goal's way**, on origin
+ *   `obstacle:<id>`, where the flagged goal is one of the voices that reported the
+ *   obstacle or is parked behind it. Classified through `obstacleOriginId` rather
+ *   than by a prefix test for `issueOriginRole`'s reason: an origin this module
+ *   does not recognise stops expanding under the flag silently. A repair is the
+ *   thing standing between the goal and any progress at all, so a priority that
+ *   stopped short of it would rank everything except what unblocks the work.
  * - **The pull requests the goal's work opened**, whose origins (`pr:<m>:ci`,
  *   `pr:<m>:comments`, …) name the PR and never the goal. Resolved the three ways
  *   the cockpit's `goalOfPr` resolves it — a part's own `prNumber`, the issue's
@@ -74,8 +94,18 @@ export function expeditedOrigins(goals: readonly GoalPriority[], world: GoalWorl
     if (part.prNumber !== null && flaggedPlans.has(part.planId)) prNumbers.add(part.prNumber);
   }
 
+  const flaggedGoals = new Set(numbers.map((n) => `issue:${n}`));
+  const flaggedObstacles = new Set([
+    ...(world.obstacles ?? [])
+      .filter((row) => row.goalRefs.some((ref) => flaggedGoals.has(ref)))
+      .map((row) => row.obstacle.id),
+    ...(world.obstacleBlocks ?? []).filter((b) => flaggedGoals.has(b.originRef)).map((b) => b.obstacleId),
+  ]);
+
   return (originRef: string): boolean => {
     for (const n of numbers) if (issueOriginRole(n, originRef) !== null) return true;
+    const obstacle = obstacleOriginId(originRef);
+    if (obstacle !== null) return flaggedObstacles.has(obstacle);
     const pr = /^pr:(\d+)(?::|$)/.exec(originRef);
     return pr ? prNumbers.has(Number(pr[1])) : false;
   };
