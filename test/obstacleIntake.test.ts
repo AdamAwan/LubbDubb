@@ -18,7 +18,7 @@ import type { Agent } from '../src/types.js';
  * come back with the answer, in one round trip, with no model call and nothing to
  * wait for. What is asserted here is what that answer is allowed to contain at
  * each state, and the one thing the tool refuses.
- * → `docs/spec/32-obstacles.md#the-intake`
+ * → `docs/spec/27-obstacles.md#the-intake`
  */
 
 function build(): System {
@@ -74,7 +74,7 @@ interface Lookup {
   near: { id: string; what: string }[];
 }
 
-const WHAT = 'test/knowledge.test.ts is timing out on the windows runner';
+const WHAT = 'test/obstacleMatch.test.ts is timing out on the windows runner';
 
 test('one report is not evidence: it lands sighted, reaches nobody, and is told so', async () => {
   const system = build();
@@ -106,7 +106,7 @@ test('one report is not evidence: it lands sighted, reaches nobody, and is told 
       .listObstacleKeys(row!.id)
       .map((k) => `${k.kind}:${k.value}`)
       .sort(),
-    ['check:test (windows)', 'test:test/knowledge.test.ts'],
+    ['check:test (windows)', 'test:test/obstacleMatch.test.ts'],
   );
   system.store.close();
 });
@@ -121,7 +121,7 @@ test('a second goal carries it to standing, and only then are the first words ha
   });
   const second = spawnAgent(system, 'issue:88');
   const res = await callTool(system, second, 'raise', {
-    what: 'the windows job hangs in test/knowledge.test.ts',
+    what: 'the windows job hangs in test/obstacleMatch.test.ts',
     why_not_mine: 'Fresh worktree, no changes of mine in that file.',
     fix_makes_it_go_away: true,
   });
@@ -157,7 +157,7 @@ test('one goal saying it twice is one voice', async () => {
 test('an agent may not report its own breakage, and nothing is recorded when it tries', async () => {
   const system = build();
   const agent = spawnAgent(system, 'pr:412:ci');
-  system.store.recordFile(agent.id, { path: 'test/knowledge.test.ts', tool: 'Edit', promoted: false });
+  system.store.recordFile(agent.id, { path: 'test/obstacleMatch.test.ts', tool: 'Edit', promoted: false });
 
   const res = await callTool(system, agent, 'raise', {
     what: WHAT,
@@ -167,7 +167,7 @@ test('an agent may not report its own breakage, and nothing is recorded when it 
   // The only enforcement of *fix what you broke* that is not a sentence in a
   // prompt — and it names the file, so the refusal is one the agent can act on.
   assert.equal(res.isError, true);
-  assert.match(res.text, /test\/knowledge\.test\.ts/);
+  assert.match(res.text, /test\/obstacleMatch\.test\.ts/);
   assert.deepEqual(system.store.listObstacles(), []);
   system.store.close();
 });
@@ -193,11 +193,11 @@ test('why_not_mine is required, and a key that names nothing is dropped rather t
   const values = system.store.listObstacleKeys(row.id).map((k) => k.value);
   assert.ok(!values.includes('nightly-smoke'));
   assert.ok(!values.includes('src/does/not/exist.ts'));
-  assert.ok(values.includes('test/knowledge.test.ts'));
+  assert.ok(values.includes('test/obstacleMatch.test.ts'));
   system.store.close();
 });
 
-test('a note is not an obstacle: it goes on being a claim about the repository', async () => {
+test('a note lands on the board like an obstacle, and is marked as one', async () => {
   const system = build();
   const agent = spawnAgent(system, 'issue:12');
   const res = await callTool(system, agent, 'raise', {
@@ -206,9 +206,11 @@ test('a note is not an obstacle: it goes on being a claim about the repository',
     fix_makes_it_go_away: false,
   });
   assert.equal(res.isError, false);
-  // The discriminator, and the whole of the routing. Nothing lands on the board,
-  // and the claim store is where it has always been until the last of 32 lands.
-  assert.deepEqual(system.store.listObstacles(), []);
-  assert.equal(system.store.listFacts().length, 1);
+  // The discriminator, and the whole of the routing: one intake, one board, and a
+  // column saying which of the two doors the row is at. There is nowhere else a
+  // note can land any more — the claim store it used to go to is gone.
+  const rows = system.store.listObstacles();
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.kind, 'note');
   system.store.close();
 });

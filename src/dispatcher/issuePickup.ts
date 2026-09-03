@@ -294,7 +294,7 @@ export interface IssuePickupContext {
    * The goals parked behind an obstacle and the board that lifts them — the same
    * two lists the `eligibleIssues` filter gates on, so the chip predicts it.
    * Absent = nothing parked, which is every deployment until an agent concludes
-   * `blocked`. → `docs/spec/32-obstacles.md#blocked-is-an-answer`
+   * `blocked`. → `docs/spec/27-obstacles.md#blocked-is-an-answer`
    */
   obstacleBlocks?: ObstacleBlock[];
   obstacles?: ObstacleStanding[];
@@ -424,7 +424,7 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
   // something that is not this goal, and the goal comes back when the board stops
   // reaching agents with it. Asked through the same pure `blockedGoals` the rule
   // gates on and the ownership desk sweeps with, so the chip cannot promise what
-  // the next cycle refuses. → `docs/spec/32-obstacles.md#blocked-is-an-answer`
+  // the next cycle refuses. → `docs/spec/27-obstacles.md#blocked-is-an-answer`
   const block = blockedGoals(ctx.obstacleBlocks ?? [], ctx.obstacles ?? []).get(origin);
   if (block) {
     return {

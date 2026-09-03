@@ -713,17 +713,14 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'the ticket and finishes this task: without it the operator sees a filing that never completed. ' +
       'If an existing item already covers this, do not write a second — call link_ticket with that ' +
       'item\u2019s ref ("issue:314") instead, and it is linked rather than filed.',
+    retired: true,
     doc:
-      'Sent to a desk agent when an operator clicks "File ticket" on a claim. The agent writes the ' +
-      'ticket; since #394 the **harness** creates it, so this prompt no longer carries a `gh`/`az` ' +
-      'command and an agent cannot forget a label, a type or an assignee. Override this to control ' +
-      'how tickets are worded. Candidate duplicates from the harness\u2019s ticket mirror are appended ' +
-      'after this text rather than interpolated, so an override cannot silently drop them. ' +
-      '{kind} and {kindHelp} are still filled and no longer used by the text above: they named a ' +
-      'four-word taxonomy the harness stopped asking agents for, and a placeholder cannot be ' +
-      'withdrawn the way a value can \u2014 an unfilled one is left in the prompt verbatim, so an ' +
-      'override written against the older book would ship a literal {kind} to the agent. ' +
-      'Placeholders: {kind} {kindHelp} {ref} {summary} {originRef} {tracker}.',
+      '**Retired — no longer rendered.** It was sent to a desk agent when an operator clicked "File ' +
+      'ticket" on a claim, and the claim store it filed from is gone (`docs/spec/27-obstacles.md`). ' +
+      'What files a ticket now is the obstacle ownership desk, which composes the body mechanically ' +
+      'through `obstacle-ticket-body` rather than dispatching an agent to write one — a row on the ' +
+      'board already carries every sighting in its author\u2019s own words, which is what this prompt ' +
+      'was asking an agent to assemble. An override left here still loads; it is simply not sent.',
   },
   'docs-change': {
     placeholders: ['ref', 'summary', 'originRef'],

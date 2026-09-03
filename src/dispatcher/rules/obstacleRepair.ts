@@ -45,7 +45,7 @@ const WORDS_SHOWN = 3;
  * `obstacle:<id>`, classified in `src/issueOrigins.ts`. Left unclassified it reads
  * as `unrecognised`: it stops expanding under a goal's priority flag, and its
  * spend files under "other" — and neither is red.
- * → `docs/spec/32-obstacles.md#ownership`
+ * → `docs/spec/27-obstacles.md#ownership`
  */
 export function obstacleRepair(s: StageContext): void {
   // One at a time, counted off the origins the fleet is actually working rather

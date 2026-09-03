@@ -2,7 +2,7 @@ import { poolCompanion } from '../../pool/companion.js';
 import { poolDocumentAddress, poolDocumentPath, poolPackPath, serialisePoolDocument } from '../../pool/document.js';
 import { reviewPackCompanionPath } from '../../reviewPacks/companion.js';
 import type { PoolFetchedDocument, PoolPackRef, PoolTransport } from '../../pool/transport.js';
-import type { PoolClockDocument, PoolClockKind, PoolDocument } from '../../types.js';
+import type { PoolClockDocument, PoolDocument } from '../../types.js';
 
 /**
  * The pool substrate every test uses, and the default provider.
@@ -74,12 +74,6 @@ export class FakePoolTransport implements PoolTransport {
    */
   seedText(_fleetId: string, path: string, entry: PoolFetchedDocument): this {
     this.documents.set(path, entry);
-    return this;
-  }
-
-  /** Drop a clock document, which is what a withdrawal at origin looks like from here. */
-  withdraw(fleetId: string, kind: PoolClockKind): this {
-    this.documents.delete(poolDocumentPath(fleetId, kind));
     return this;
   }
 

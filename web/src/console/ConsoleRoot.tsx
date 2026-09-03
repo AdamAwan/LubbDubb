@@ -15,7 +15,6 @@ import { TicketsPanel } from '../components/TicketsPanel.js';
 import { FeatureBoard } from '../components/FeatureBoard.js';
 import { ConfigPage } from '../components/ConfigPage.js';
 import { RecordPanel } from '../components/RecordPanel.js';
-import { KnowledgePanel } from '../components/KnowledgePanel.js';
 import { PoolStatus } from '../components/PoolStatus.js';
 import { LaunchPanel } from '../components/LaunchPanel.js';
 import { SetupPanel } from '../components/SetupPanel.js';
@@ -147,12 +146,23 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
       // still holds. The window and the open reading are handed in from `Place`
       // rather than held inside it, so a link to one carries both.
       return (
-        <InsightsPage
-          view={view.insightsView}
-          window={view.insightsWindow}
-          poolProject={view.poolProject}
-          actions={actions}
-        />
+        <>
+          {/* This fleet's own side of the cross-fleet pool, above the readings it is
+              about: what has been published, when the pool was last read, and which
+              fleets have been heard from. It sat above the claim store's page until
+              that page went, and Insights is where it belongs anyway — it is a
+              reading about what this fleet publishes and reads, on the tab that
+              answers what the fleet is costing and reaching. It draws nothing at all
+              when no pool is configured; an empty panel there would say something is
+              broken. → docs/spec/28-cross-fleet-pool.md#in-the-cockpit */}
+          <PoolStatus now={view.now} />
+          <InsightsPage
+            view={view.insightsView}
+            window={view.insightsWindow}
+            poolProject={view.poolProject}
+            actions={actions}
+          />
+        </>
       );
     case 'tickets':
       // Embedded exactly as Insights is, and for the same reason: it reaches its
@@ -193,71 +203,10 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
       // component that does is not reaching. Which row is unfolded and whether the
       // terminal tail is open ride in from `Place`, so a link to either opens on it.
       //
-      // **Not in the nav.** `TopBar`'s `TABS` deliberately does not carry this one:
-      // it is reachable by URL only until the operator says otherwise.
-      // → docs/spec/32-obstacles.md#in-the-cockpit
+      // **In the nav**, in the slot Knowledge held: `TopBar`'s `TABS` carries it
+      // since the operator lifted the URL-only rule it shipped under.
+      // → docs/spec/27-obstacles.md#in-the-cockpit
       return <ObstaclesPage open={view.viewingObstacle} ended={view.obstacleEnded} now={view.now} actions={actions} />;
-    case 'knowledge':
-      // A destination since the nav gained it, and drawn here rather than in a
-      // panel for the reason the tickets tab is not one either: ruling on the
-      // fleet's claims is a sitting, and a panel does it over the top of the rail
-      // the ask that sent you here came from. The claim whose provenance is open
-      // rides in from `Place` (`view.viewingFact`), so a link to one opens on it.
-      //
-      // One page and one card, because there is one store: what an agent noticed,
-      // what working a goal taught and what the fleet knows are the same act read
-      // by the same person, and three surfaces asking one question is how an
-      // operator ends up ruling on the same claim twice.
-      return (
-        <>
-          {/* This fleet's own side of the cross-fleet pool, above the claims it is
-              about: what has been published, when the pool was last read, and which
-              claims the secret backstop refused. It draws nothing at all when no pool
-              is configured — an empty panel there would say something is broken.
-              → docs/spec/28-cross-fleet-pool.md#in-the-cockpit */}
-          <PoolStatus now={view.now} />
-          <KnowledgePanel
-            facts={view.state.knowledge}
-            graduations={view.state.knowledgeGraduations}
-            similarities={view.state.knowledgeSimilarities}
-            delivery={view.state.knowledgeDelivery}
-            cost={view.state.knowledgeCost}
-            canFileTickets={view.state.config.canFileTickets}
-            now={view.now}
-            refUrls={view.state.refUrls}
-            viewingFact={view.viewingFact}
-            query={{
-              view: view.knowledgeView,
-              show: view.knowledgeShow,
-              sort: view.knowledgeSort,
-              desc: view.knowledgeDesc,
-              fold: view.knowledgeFolded,
-              standing: view.knowledgeQueue,
-              open: view.knowledgeOpen,
-            }}
-            onQuery={(next) =>
-              actions.setKnowledgeQuery({
-                ...(next.view !== undefined && { knowledgeView: next.view }),
-                ...(next.show !== undefined && { knowledgeShow: next.show }),
-                ...(next.sort !== undefined && { knowledgeSort: next.sort }),
-                ...(next.desc !== undefined && { knowledgeDesc: next.desc }),
-                ...(next.fold !== undefined && { knowledgeFolded: next.fold }),
-                ...(next.standing !== undefined && { knowledgeQueue: next.standing }),
-                ...(next.open !== undefined && { knowledgeOpen: next.open }),
-              })
-            }
-            onReach={(id, reach) => actions.setFactReach(id, reach)}
-            onExit={(id, exit) => actions.exitFact(id, exit)}
-            onRaise={(claim, originRef) => actions.raiseFact(claim, originRef)}
-            onSettleGraduation={(id, outcome) => actions.settleGraduation(id, outcome)}
-            onDetail={(id) => actions.factDetail(id)}
-            onResolveContradiction={(id, ruling) => actions.resolveContradiction(id, ruling)}
-            onViewFact={(id) => actions.viewFact(id)}
-            onKeepLocal={(id, keepLocal) => actions.setFactKeepLocal(id, keepLocal)}
-            onMerge={(id, members) => actions.mergeFacts(id, members)}
-          />
-        </>
-      );
     case 'features':
       // Gated exactly as the vivarium is, and for the same reason: a deployment
       // with no board has no tab to reach this, but a stale URL still can. The

@@ -64,7 +64,6 @@ import type { ConfigChange } from './configApply.js';
 import type { ReliabilityInsights, RunTally } from './reliabilityInsights.js';
 import type { ReviewCalibration } from './reviewPacks/calibration.js';
 import type { RemedyInsights } from './remedyInsights.js';
-import type { KnowledgeCost } from './knowledge/cost.js';
 import type { AllowanceInsights } from './allowanceInsights.js';
 import type { SpendInsights } from './spendInsights.js';
 import type { McpInsights } from './mcpInsights.js';
@@ -86,7 +85,6 @@ import type {
   EnvironmentHealthReading,
   ErrorLogEntry,
   Escalation,
-  FactReach,
   GoalArrival,
   GoalAppraisalVerdict,
   GoalEnvironmentReach,
@@ -110,12 +108,6 @@ import type {
   PetStage,
   PetWallet,
   JobSchedule,
-  KnowledgeContradiction,
-  KnowledgeCorroboration,
-  KnowledgeFact,
-  KnowledgeGraduation,
-  KnowledgeSimilarity,
-  GraduationReading,
   LocalRun,
   LocalRunFreshness,
   LocalRunPorts,
@@ -145,7 +137,6 @@ import type {
   WatchReading,
   WatchWindow,
   PoolFleetReading,
-  PoolMirroredClaim,
   StallPark,
   TaskSummary,
   ValidationCheck,
@@ -410,217 +401,6 @@ export interface CockpitWorld extends WorldSnapshot {
  * it is a join across `agent_files` and `tasks` that the cockpit does not hold and
  * should not have to.
  */
-/**
- * A lesson, plus whether agents are actually getting it (issue #355 phase 3).
- *
- * The one thing the operator can see and the agent must not: a promoted lesson is
- * mirrored into the knowledge base as an injected fleet claim, and *that* is what
- * the system-prompt block renders — newest-vouched first, up to
- * `knowledgeBlockChars`, whole claims dropped at the bound. So this flag is the
- * knowledge block's answer read back through the lesson it came from, never a
- * second reading of its own: one block is delivered, and both panels have to be
- * describing it.
- *
- * Per row rather than as a count, because a count says "two are not reaching
- * agents" and leaves the operator to work out which two before they can retire
- * something to make room.
- */
-/**
- * A fact, plus the count that promoted it (issue #27 phase 2).
- *
- * The count is {@link distinctCorroborators}' answer, taken server-side beside
- * the rows it counts and never re-derived in the browser — two observations are
- * one corroborator if they share a goal *or* a session, transitively, which is a
- * rule about a re-dispatch inheriting a conversation and not something a list
- * length can express. A second count in the view layer would be free to disagree
- * with the one that carries a claim to `lookup`, and both would look like counts
- * of the same rows.
- *
- * The words behind the count are deliberately **not** here: evidence runs to
- * thousands of characters per observation and this list is polled, so the
- * provenance a reader opens a row for rides its own route
- * (`GET /api/knowledge/facts/:id`) — the argument `docs/spec/16-http-api.md#bulk-text`
- * makes about every other body of text on this snapshot.
- */
-export interface KnowledgeFactView extends KnowledgeFact {
-  /** How many independent corroborators say so. Two is what carries a proposal to `lookup`. */
-  corroborations: number;
-  /**
-   * How many independent voices dispute it, over the whole life of the claim.
-   *
-   * Counted by the same union over goal and session the agreement count uses, and
-   * out of a **different table**: a contradiction is not a corroboration and never
-   * reaches the count that promotes.
-   */
-  contradictions: number;
-  /**
-   * What fraction of everything said about this claim disputes it — the server's
-   * division and never the browser's.
-   *
-   * Shipped rather than derived for `distinctCorroborators`' reason exactly: the
-   * two counts beside it are counts of *voices*, so a ratio taken from them in the
-   * view layer would be arithmetic over numbers whose rule it does not know, and
-   * free to disagree with the one the page claims to be showing.
-   *
-   * **A reading and never a trigger.** Nothing is demoted, lapsed or deleted by
-   * it: a claim right in general and wrong at one edge attracts contradictions
-   * because it is being used, and a count that acted would kill the store's most
-   * valuable claims first.
-   */
-  contradictionRatio: number;
-  /** Disputes nobody has ruled on — the queue, where the ratio is the reading. */
-  openContradictions: number;
-  /**
-   * How often an agent asked for this claim and was answered with it (issue #27
-   * phase 7) — every ask, over the whole life of the claim, and no window.
-   *
-   * The one signal a `lookup` claim has that an injected one cannot. There is no
-   * way to measure whether an injected line was *read*, and this page does not
-   * pretend there is; a lookup claim is different because an agent had to go and
-   * want it.
-   *
-   * **Explicit asks only.** A `lookup` claim also reaches agents through the
-   * task-prompt append of every dispatch its scope matches, and counting that
-   * would make this a count of dispatches matching a scope — a fact about the
-   * fleet's week rather than about the claim, under a label that says otherwise.
-   *
-   * **A reading and never a trigger**, like every other number on this row.
-   */
-  asks: number;
-  /** The most recent ask, so the count can be dated. Null when there has been none. */
-  lastAskedAt: string | null;
-  /**
-   * Whether this fact's `check:` scope has matched nothing in
-   * `knowledgeScopeStaleDays` and the provider is not reporting the check either —
-   * a job probably renamed or re-matrixed, which stops the fact being delivered
-   * *silently* (issue #27 phase 7).
-   *
-   * The verdict is the server's for the ratio's reason: it is a comparison against
-   * a configured window, taken beside the dispatches and the world it reads, and a
-   * "days since" taken from `Date.now()` in the browser would be a second
-   * implementation of it. Always false for a `fleet` or `goal:` scope, which have
-   * no such failure.
-   */
-  scopeStale: boolean;
-  /**
-   * The most recent dispatch that carried this check, or null if none ever has —
-   * the evidence behind {@link scopeStale}, so the page can date the reading
-   * rather than assert it.
-   */
-  scopeLastMatchedAt: string | null;
-  /**
-   * Whether this claim has gone **cold**: a `proposal` nobody has agreed with, no
-   * agent has asked for and no operator has ruled on, older than
-   * `knowledgeColdDays`.
-   *
-   * The verdict is the server's for `scopeStale`'s reason — it is a comparison
-   * against a configured window, and an age taken from `Date.now()` in the browser
-   * would be a second implementation of it, free to disagree with the count on the
-   * fold beside it.
-   *
-   * **A reading about drawing and nothing else.** It moves no reach, takes no claim
-   * out of any prompt — a proposal is in none — and the next corroboration makes it
-   * warm again. Always false while `knowledgeColdDays` is `0`.
-   */
-  cold: boolean;
-}
-
-/**
- * One contradiction as the page draws it: what the agent saw, and the amendment
- * filed with it (issue #27 phase 5).
- *
- * The amendment rides along because an operator cannot answer a contradiction
- * without reading the sentence being offered in place of the claim, and the fact
- * list this page polls is bounded — a claim whose amendment had fallen off the end
- * of it would draw three controls over a proposal nobody could read.
- */
-export interface KnowledgeContradictionView extends KnowledgeContradiction {
-  /** The amendment as its own claim, or null if it has since been deleted. */
-  amendment: KnowledgeFact | null;
-}
-
-/**
- * One graduation as the page draws it: the row, plus what the harness reads the
- * pull request as (issue #27 phase 6).
- *
- * **The reading is projected server-side and never derived here.** It is
- * `graduationReading`'s answer over the work graph — the same function the sweep
- * settles on — so the page cannot draw a verdict the desk did not take. A browser
- * that worked it out from a pull request's status would be a second implementation
- * of "did this land", free to disagree with the one that actually moves a claim out
- * of every prompt, with nothing red when it does.
- *
- * `unknown` is the reading that asks for something: the pull request left the world
- * without ever being seen closed, so the harness will not say either way, and the
- * row draws the two controls that answer it.
- */
-export interface KnowledgeGraduationView extends KnowledgeGraduation {
-  reading: GraduationReading;
-}
-
-/**
- * How far an operator can say a claim carries — the body of
- * `POST /api/knowledge/facts/:id/reach`, and the whole write surface the cockpit
- * has on this store.
- *
- * Narrowed out of {@link FactReach} rather than written again, so it cannot drift
- * from the state machine it is a subset of. Two members are missing on purpose:
- * nothing moves a claim back to `proposal` — "nobody has agreed with this" is not
- * something an operator can restore — and `committed` is a documentation pull
- * request landing (phase 6), so setting the reach without opening one would take
- * the claim out of every prompt while putting it nowhere.
- */
-export type FactRuling = Extract<FactReach, 'lookup' | 'injected' | 'retired' | 'rejected'>;
-
-/**
- * `GET /api/knowledge/facts/:id` — one fact with the observations behind it, in
- * the observers' own words, fetched when a reader opens the row.
- */
-export interface KnowledgeFactPayload {
-  fact: KnowledgeFactView;
-  corroborations: KnowledgeCorroboration[];
-  /**
-   * The disputes, resolved ones included — a surface that draws only the open ones
-   * cannot show an operator that they already answered this claim once.
-   */
-  contradictions: KnowledgeContradictionView[];
-}
-
-/**
- * What an agent actually receives from the knowledge base, computed from the same
- * two renderers the launch and the dispatch use (issue #27 phase 3).
- *
- * A store this size cannot be governed without it. The reach machine says where a
- * claim *stands*; this says what is *sent*, and the two come apart the moment the
- * character cap bites — silently, and only for the operator, because the agent is
- * told a count and never which claims it is missing.
- *
- * **Projected server-side, never re-derived in the browser.** What fits is
- * returned by `renderKnowledgeBlock`, and a meter drawn from a plain character
- * count in the cockpit would be exactly the second implementation of "what fits"
- * that rule exists to prevent — free to disagree with the one that actually ran,
- * with both looking like counts of the same characters.
- */
-export interface KnowledgeDeliveryView {
-  /** The system-prompt block verbatim, as the next launch will carry it. `''` when nothing renders. */
-  block: string;
-  /** The bound the block was rendered under — `knowledgeBlockChars`. */
-  limit: number;
-  /** The facts the block carries, newest-vouched first, by id. */
-  rendered: string[];
-  /** The injected fleet facts the cap left out, by id. Nobody is reading these. */
-  dropped: string[];
-  /**
-   * What a dispatch matching one scope has appended to its **task** prompt — one
-   * entry per `check:` or `goal:` scope with anything deliverable in it.
-   *
-   * Per scope rather than per dispatch because a dispatch matches several at once
-   * (its goal, and every check it answers) and the set of dispatches is not
-   * enumerable; a dispatch matching two of these entries receives both lists, run
-   * through the same renderer in one pass.
-   */
-  scoped: { scope: string; text: string; facts: string[] }[];
-}
 
 /**
  * The local run as the cockpit reads it.
@@ -1095,16 +875,7 @@ interface CockpitUsage {
  * report, its progress note and every file it writes are all `fleet`, and none of
  * them can change a goal's pickup verdict.
  */
-export type StateSection =
-  | 'harness'
-  | 'control'
-  | 'goals'
-  | 'plans'
-  | 'fleet'
-  | 'knowledge'
-  | 'queue'
-  | 'inbox'
-  | 'activity';
+export type StateSection = 'harness' | 'control' | 'goals' | 'plans' | 'fleet' | 'queue' | 'inbox' | 'activity';
 
 /**
  * The whole `/api/state` payload — `buildStateSnapshot`'s declared return type and
@@ -1403,55 +1174,6 @@ export interface CockpitState {
   attachmentUrls: Record<string, string>;
   /** Paths two concurrently-running agents both wrote (issue #113). */
   overlaps: FileOverlap[];
-  /**
-   * What the fleet's knowledge actually delivers, from the renderers that deliver
-   * it (issue #27 phase 3) — the system-prompt block against its budget, and the
-   * scoped appends a matching dispatch carries.
-   */
-  knowledgeDelivery: KnowledgeDeliveryView;
-  /**
-   * What the fleet knows about working this repository, newest first — every
-   * reach, **the rejected ones included** (issue #27 phase 2).
-   *
-   * The rejected rows ship for `lessons`' reason twice over: the page is the
-   * governance, so a surface drawing only what it let through cannot show an
-   * operator that a claim was killed — and the bar that keeps a killed claim from
-   * being re-proposed is invisible everywhere else.
-   */
-  knowledge: KnowledgeFactView[];
-  /**
-   * What the injected block costs, in the dollars the rest of the cockpit uses and
-   * over the window Insights opens on (issue #27 phase 7).
-   *
-   * Measured rather than modelled: the block's share of the fleet's own input,
-   * applied to the fleet's own recorded spend. There is no price table here and
-   * there must not be one — it would be a second statement about money, free to
-   * disagree with `costUsd` silently. The one estimate is characters into tokens,
-   * which nothing in the harness can measure, and it is shipped as a number so the
-   * page can say so.
-   */
-  knowledgeCost: KnowledgeCost;
-  /**
-   * Every attempt to put a claim in the repository, newest first — the abandoned
-   * ones included (issue #27 phase 6).
-   *
-   * A separate list rather than a field on the fact, because a fact can have more
-   * than one over its life: a pull request closed unmerged leaves the claim exactly
-   * where it was and an operator free to try again, and the page draws both the
-   * attempt that failed and the one in flight.
-   */
-  knowledgeGraduations: KnowledgeGraduationView[];
-  /**
-   * Which proposals a machine thinks are one claim, as pairs — most alike first.
-   *
-   * **Suggestions, and the page draws them as clusters an operator merges with a
-   * click.** Nothing here has joined, promoted or barred anything: `claimsMatch` is
-   * strict and untouched, and this is `claimsSimilar`'s advisory answer. Shipped as
-   * rows for the reason every other count on that page is server-side — a
-   * similarity recomputed in the browser is free to disagree with the one an
-   * operator acted on. → [27](../docs/spec/27-knowledge.md#one-claim-written-two-ways)
-   */
-  knowledgeSimilarities: KnowledgeSimilarity[];
   /**
    * Bugs the operator raised from a story row, oldest first — `filing` while the
    * desk agent writes one, `filed` with a ref once it exists.
@@ -2504,9 +2226,6 @@ export type {
   EnvironmentHealthTier,
   ErrorLogEntry,
   Escalation,
-  FactLifetime,
-  FactReach,
-  FactScope,
   GoalArrival,
   GoalEnvironmentReach,
   GoalReachStatus,
@@ -2517,17 +2236,6 @@ export type {
   JobAttachment,
   JobAttachmentInput,
   JobSchedule,
-  ContradictionResolution,
-  ContradictionRuling,
-  FactExit,
-  GraduationOutcome,
-  GraduationReading,
-  GraduationTarget,
-  KnowledgeContradiction,
-  KnowledgeCorroboration,
-  KnowledgeFact,
-  KnowledgeGraduation,
-  KnowledgeSimilarity,
   Obstacle,
   ObstacleKey,
   ObstacleSighting,
@@ -2598,7 +2306,6 @@ export type { QueueItem } from './dispatcher/dispatcher.js';
 export type { DispatchRule } from './dispatcher/rules.js';
 export type { PromptTemplateDescription } from './dispatcher/promptTemplates.js';
 export type { FileOverlap } from './fileOverlap.js';
-export type { KnowledgeCost } from './knowledge/cost.js';
 export type { UnrecordedWork } from './graph/unrecorded.js';
 export type { RunningConfigGroup } from './server/runningConfig.js';
 export type { RunningConfigEntry } from './server/runningConfig.js';
@@ -2627,14 +2334,7 @@ export type { McpChannel } from './types.js';
 // The pool's own shapes. A wire type either **is** a domain type or `extends` it,
 // so these are re-exports rather than re-declarations — the cockpit reads exactly
 // what the store holds. → `docs/spec/28-cross-fleet-pool.md`
-export type {
-  PoolClaim,
-  PoolClockKind,
-  PoolDigestRow,
-  PoolFleetReading,
-  PoolMirroredClaim,
-  PoolPublication,
-} from './types.js';
+export type { PoolClockKind, PoolDigestRow, PoolFleetReading, PoolPublication } from './types.js';
 export type { PoolStatus } from './pool/poolDesk.js';
 export type { PoolRollup, PoolRollupRow } from './pool/aggregate.js';
 /** What `POST /api/issues/:number/dismiss-run` stopped on its way out. */
@@ -2884,8 +2584,6 @@ export interface PoolStatePayload {
   status: PoolStatus | null;
   /** Every fleet the mirror has heard from — including the ones ahead of this build. */
   fleets: PoolFleetReading[];
-  /** The mirror's claims, newest vouch first. Drawn as readings; nothing acts on one. */
-  claims: PoolMirroredClaim[];
 }
 
 /**
@@ -2903,7 +2601,7 @@ export interface PoolInsightsPayload {
 }
 
 // ---------------------------------------------------------------------------
-// The obstacle board (`/api/obstacles`) → `docs/spec/32-obstacles.md#in-the-cockpit`
+// The obstacle board (`/api/obstacles`) → `docs/spec/27-obstacles.md#in-the-cockpit`
 
 /**
  * One row of the board as the tab draws it: the standing the harness already
@@ -2933,7 +2631,7 @@ export interface ObstacleBoardRow extends ObstacleStanding {
  * *Turns an agent did not spend* is the figure everyone wants and nothing
  * measures, so it is not here and must not be added: a number invented to sit
  * beside four real ones is the one thing on the page that would be a lie, and it
- * would be the one quoted. → `docs/spec/32-obstacles.md#in-the-cockpit`
+ * would be the one quoted. → `docs/spec/27-obstacles.md#in-the-cockpit`
  */
 export interface ObstacleBoardCounts {
   /** Every voice on every row, the harness's own included. */
@@ -2953,7 +2651,7 @@ export interface ObstacleBoardCounts {
 
 /**
  * Whether agents call the intake at all — the one thing
- * [32](docs/spec/32-obstacles.md#what-is-not-settled) leaves unsettled, as a number
+ * [27](docs/spec/27-obstacles.md#what-is-not-settled) leaves unsettled, as a number
  * rather than an impression.
  *
  * Three counts and the span they were taken over, rather than a rate computed

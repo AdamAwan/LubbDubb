@@ -431,7 +431,7 @@ export class RuleDispatcher implements Dispatcher {
     // obstacle stops reaching agents, which the ownership desk sweeps for on the
     // pulse. Asked through the same pure `blockedGoals` the desk asks, so the gate
     // and the sweep cannot disagree about which goals are parked.
-    // → `docs/spec/32-obstacles.md#blocked-is-an-answer`
+    // → `docs/spec/27-obstacles.md#blocked-is-an-answer`
     const blocked = blockedGoals(ctx.obstacleBlocks ?? [], ctx.obstacles ?? []);
 
     // The runs in the issue list that the tracker has forgotten (issue #234).

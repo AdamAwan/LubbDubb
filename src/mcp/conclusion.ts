@@ -26,7 +26,7 @@ const CONCLUSION_VERDICTS = ['done', 'more_work'] as const satisfies readonly Is
  * standing statement about its own run, and a block is a park whose exit is the
  * **obstacle** rather than the issue — a desk lifts it when the board does, with
  * nobody having declared anything about whether the goal is finished.
- * → `docs/spec/32-obstacles.md#blocked-is-an-answer`
+ * → `docs/spec/27-obstacles.md#blocked-is-an-answer`
  */
 export const BLOCKED_STATUS = 'blocked';
 

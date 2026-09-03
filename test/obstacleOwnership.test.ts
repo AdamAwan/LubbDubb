@@ -25,7 +25,7 @@ import type { Issue, Obstacle, ObstacleBlock, ObstacleStanding, PullRequest } fr
  * it breaks: **never an agent** — the claim is a constraint, not an instruction;
  * **two doors and only two** — a ticket, or one bounded rule; and **blocked is a
  * park, not a failure** — the goal comes back on its own when the board lets it.
- * → `docs/spec/32-obstacles.md#ownership`
+ * → `docs/spec/27-obstacles.md#ownership`
  */
 
 const NOW = '2026-07-28T12:00:00.000Z';

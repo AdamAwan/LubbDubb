@@ -26,7 +26,6 @@ function bare(): RetroDossierInput {
     decisions: [],
     escalations: [],
     proposals: [],
-    claims: [],
     agentCount: 0,
     delivery: null,
     shortfall: null,
@@ -174,14 +173,14 @@ test('a sparse list survives alongside a saturated one, and every cap names its 
   const text = retroDossier({
     ...bare(),
     decisions: Array.from({ length: 300 }, (_, i) => ({ ...routine(i), outcome: 'deferred' }) as never),
-    claims: [{ aboutRef: 'issue:41', claim: 'the one claim on this run' } as never],
     escalations: Array.from(
       { length: 20 },
       (_, i) => ({ type: 'answer_question', status: 'answered', prompt: `q${i}`, response: null }) as never,
     ),
   });
 
-  assert.match(text, /the one claim on this run/, 'three hundred decisions must not crowd out one claim');
+  // Three hundred decisions must not crowd out twenty escalations.
+
   assert.match(text, /280 of the 300 decisions that went another way are not shown here/);
   assert.match(text, /8 of the 20 escalations are not shown here/);
   assert.match(text, /q19/, 'the newest escalations are the ones kept');

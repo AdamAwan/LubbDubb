@@ -19,7 +19,7 @@ import type { Agent, Obstacle, ObstacleKey, ObstacleState } from '../src/types.j
  * is broken: **once per agent per obstacle, ever**; **never to the reporter or
  * the owner**; **never for anything else**. A chatty channel is skimmed, and then
  * the message that mattered is skimmed too.
- * → `docs/spec/32-obstacles.md#delivery`
+ * → `docs/spec/27-obstacles.md#delivery`
  */
 
 /** One row as the pure decision reads it. */

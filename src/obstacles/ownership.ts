@@ -11,7 +11,7 @@ import type { ObstacleStanding, PullRequest } from '../types.js';
  * rather than an instruction. Nothing here writes anything; it says which door a
  * row is at, and the desk and the rule each take their own.
  *
- * Pure — no I/O, no clock, no store. → `docs/spec/32-obstacles.md#ownership`
+ * Pure — no I/O, no clock, no store. → `docs/spec/27-obstacles.md#ownership`
  */
 
 /**
@@ -78,7 +78,7 @@ function blockingNow(row: ObstacleStanding, redBaseChecks: ReadonlySet<string>):
  * The ticket, from the sightings — title, body and the goal it is filed against.
  *
  * **Written by the harness, not by a model.** Composing the prose from the
- * sightings is a job a model may do (`docs/spec/32-obstacles.md#what-may-be-decided-by-a-model-and-what-may-not`),
+ * sightings is a job a model may do (`docs/spec/27-obstacles.md#what-may-be-decided-by-a-model-and-what-may-not`),
  * and the desk that would is a later phase; until then the ticket says what the
  * board holds, in the reporters' own words, which is the thing an operator would
  * have to go and read otherwise.

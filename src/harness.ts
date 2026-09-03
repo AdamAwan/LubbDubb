@@ -296,7 +296,7 @@ interface HarnessDeps {
    *
    * It writes `obstacle_notices` rows and types into live sessions. It staffs
    * nobody, decides no dispatch, and no rule reads what it writes.
-   * → `docs/spec/32-obstacles.md#delivery`
+   * → `docs/spec/27-obstacles.md#delivery`
    */
   obstacleNotices?: { run(): void };
   /**
@@ -308,7 +308,7 @@ interface HarnessDeps {
    *
    * It writes `obstacles`, `obstacle_keys` and `obstacle_sightings` rows. It
    * staffs nobody, decides no dispatch, and no rule reads what it writes.
-   * → `docs/spec/32-obstacles.md#the-harness-is-a-voice`
+   * → `docs/spec/27-obstacles.md#the-harness-is-a-voice`
    */
   obstacleVoice?: { run(prev: WorldSnapshot | null, next: WorldSnapshot): void };
   /**
@@ -323,7 +323,7 @@ interface HarnessDeps {
    * and the one column that says which door a row is at. It moves no state, takes
    * no owner and resolves nothing — it is the harness's secretary and deliberately
    * not its judge.
-   * → `docs/spec/32-obstacles.md#what-may-be-decided-by-a-model-and-what-may-not`
+   * → `docs/spec/27-obstacles.md#what-may-be-decided-by-a-model-and-what-may-not`
    */
   obstacleDesk?: { run(): Promise<void> };
   /**
@@ -336,7 +336,7 @@ interface HarnessDeps {
    * It writes `obstacles` and `obstacle_blocks` rows and files tracker items. It
    * staffs nobody: the repair dispatch is a rule's, proposed through the candidate
    * list and subject to the headroom cut, and this desk only records that it
-   * happened. → `docs/spec/32-obstacles.md#ownership`
+   * happened. → `docs/spec/27-obstacles.md#ownership`
    */
   obstacleOwnership?: { run(world: WorldSnapshot): Promise<void> };
   /**
@@ -348,7 +348,7 @@ interface HarnessDeps {
    * It writes `obstacles`, `obstacle_conditions` and `obstacle_writeups` rows, and
    * queues one documentation job at a time for a standing note. It staffs nobody
    * else and no rule reads what it writes.
-   * → `docs/spec/32-obstacles.md#how-an-obstacle-ends`
+   * → `docs/spec/27-obstacles.md#how-an-obstacle-ends`
    */
   obstacleEndings?: { run(world: WorldSnapshot): void };
   /**

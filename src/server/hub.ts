@@ -134,7 +134,6 @@ export class Hub {
     // rides inside /api/state, so the refetch a `dirty` triggers is the whole
     // delivery — and the point of hearing it here at all is that the page shows a
     // proposal the moment it is filed rather than on the next pulse.
-    agents.on('fact', () => this.broadcast({ type: 'dirty', sections: ['knowledge'] }));
     // The file-events hook recorded a written file. The drawer's "files changed"
     // list is its own route now, so the only thing on the snapshot this can move is
     // `overlaps` — hence `fleet`, and hence the point of scoping at all: this fires

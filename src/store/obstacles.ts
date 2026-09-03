@@ -39,7 +39,7 @@ import type { StoreContext } from './context.js';
  *
  * The tables were new once, and being new *once* is what stops that keeping them
  * exempt: `obstacles.ended_by` is the first column added to one of them after the
- * fact, so it is declared below. → `docs/spec/32-obstacles.md`
+ * fact, so it is declared below. → `docs/spec/27-obstacles.md`
  *
  * **It needs no backfill, and that is a reading rather than an omission.** A null
  * `ended_by` means *this row has not ended*, which is true of every row in every
@@ -249,7 +249,7 @@ export class ObstacleStore {
    * between the two able to send it again; written first, the same crash loses a
    * notice to an agent that is in all likelihood already gone. The primary key
    * makes the same claim unwinnable twice, so two desks on one pulse cannot both
-   * take it either. → `docs/spec/32-obstacles.md#delivery`
+   * take it either. → `docs/spec/27-obstacles.md#delivery`
    */
   claimObstacleNotice(obstacleId: string, agentId: string, reason: string): boolean {
     const result = this.ctx.db
@@ -273,7 +273,7 @@ export class ObstacleStore {
    * (`src/obstacles/delivery.ts`) writes nothing — it is a paragraph appended to a
    * prompt — so a page that summed the two would be drawing a number half of which
    * nothing counted. Read only by the cockpit, and drawn under the name of what it
-   * actually counts. → `docs/spec/32-obstacles.md#in-the-cockpit`
+   * actually counts. → `docs/spec/27-obstacles.md#in-the-cockpit`
    */
   obstacleNoticesSent(): number {
     const row = this.ctx.db.prepare(`SELECT COUNT(*) AS n FROM obstacle_notices`).get() as { n: number };
@@ -295,7 +295,7 @@ export class ObstacleStore {
    * `owned` with no owner is released by {@link releaseObstacle} at the top of the
    * next pass, so a crash mid-filing costs a pulse rather than a row nobody can
    * ever own.
-   * → `docs/spec/32-obstacles.md#ownership`
+   * → `docs/spec/27-obstacles.md#ownership`
    */
   claimObstacle(id: string): boolean {
     const at = this.ctx.now();
@@ -381,7 +381,7 @@ export class ObstacleStore {
    *
    * `dormant` narrows further, in the caller's own predicate as well as here: decay
    * is *nothing has said it*, which an owned row cannot be.
-   * → `docs/spec/32-obstacles.md#how-an-obstacle-ends`
+   * → `docs/spec/27-obstacles.md#how-an-obstacle-ends`
    */
   endObstacle(id: string, state: 'resolved' | 'dormant', endedBy: ObstacleEnding): boolean {
     const result = this.ctx.db
@@ -408,7 +408,7 @@ export class ObstacleStore {
    *
    * `ended_by` is cleared with the move for {@link setState}'s reason: a row being
    * told to the fleet must not go on naming an ending that took it.
-   * → `docs/spec/32-obstacles.md#states`
+   * → `docs/spec/27-obstacles.md#states`
    */
   muteObstacle(id: string, muted: boolean): boolean {
     const at = this.ctx.now();
@@ -551,7 +551,7 @@ export class ObstacleStore {
    * branch name in it into a `path` key that the check beside it then grounds —
    * which is the harness carrying a row to `standing` on its own reading, through a
    * door the rules close everywhere else.
-   * → `docs/spec/32-obstacles.md#the-harness-is-a-voice`
+   * → `docs/spec/27-obstacles.md#the-harness-is-a-voice`
    */
   obstacleInbox(): ObstacleStanding[] {
     const read = new Map(

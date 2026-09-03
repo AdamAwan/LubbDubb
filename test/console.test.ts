@@ -1983,42 +1983,6 @@ test('the local run panel offers the message box only while something holds an i
   assert.ok(busy.includes('replying'), 'and the stage line says which turn is in flight');
 });
 
-test('the knowledge page draws the retired claims too', () => {
-  // The load-bearing half of the prune surface: a claim that vanished on being
-  // retired would leave no way to tell a list you have finished with from one that
-  // lost rows, and "retired" would read as "deleted" — which is exactly the
-  // collision the two words were separated to avoid.
-  //
-  // Asserted on the list, which is the surface the rule is about: nothing there is
-  // folded by default, and the retired tail is drawn open. The queue revises that
-  // for itself and is asserted below on what the revision actually rests on.
-  const v = view({ tab: 'knowledge', knowledgeView: 'list' });
-  const retired = v.state.knowledge.find((f) => f.reach === 'retired');
-  assert.ok(retired, 'the demo fixtures must carry a retired claim to draw');
-  // The first plain run of the fixture's text: markdown renders its inline code
-  // into its own element, so a longer slice would be split across nodes.
-  assert.ok(decode(render(v)).includes(retired.claim.slice(0, 28)), 'a pruned claim stays visible');
-});
-
-test('the knowledge queue folds the settled tail, and the fold says what it holds', () => {
-  // What "nothing is folded by default" was protecting, kept by the thing that
-  // replaces it: the queue draws one claim and puts the tails behind folds, and a
-  // fold that states its own size cannot let *retired* read as *deleted* — the tail
-  // is named, its count is on the heading, and one click has it back.
-  const v = view({ tab: 'knowledge' });
-  const html = decode(render(v));
-  const settled = v.state.knowledge.filter(
-    (f) => f.reach === 'graduated' || f.reach === 'superseded' || f.reach === 'retired' || f.reach === 'rejected',
-  );
-  assert.ok(settled.length > 0, 'the demo fixtures must carry a settled tail to count');
-  assert.ok(html.includes('Settled'), 'the fold has to be named on the page it is folding');
-  assert.ok(html.includes(`· ${settled.length}`), 'and it has to say how many rows it holds');
-  // The three headings that reach an agent carry no fold on the list and are not
-  // folded here either — a page that can hide what the fleet is being told is not a
-  // governance surface. They are what an empty queue draws.
-  assert.ok(!html.includes('▸ Live notices'), 'what reaches an agent is never behind a fold');
-});
-
 /**
  * The demo carries no goal-less ask on purpose — every fixture pull request has a
  * ticket that owns it — so the orphan is built here: the state the harness does
@@ -2114,7 +2078,7 @@ test('each tab replaces the last, and a selected goal outranks every one of them
  */
 test('the work graph is a panel reached from the bar, not a nav destination', () => {
   const nav = render(view()).split('</nav>')[0] ?? '';
-  for (const label of ['Overview', 'Tickets', 'Knowledge', 'Insights']) {
+  for (const label of ['Overview', 'Tickets', 'Obstacles', 'Insights']) {
     assert.ok(nav.includes(`>${label}`), `the nav is missing ${label}`);
   }
   assert.ok(!nav.includes('>Work'), 'the record is not a nav destination — it is the Record reading');

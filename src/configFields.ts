@@ -287,24 +287,6 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'How many times a mid-run crash is re-attached before the run is failed.',
   },
   {
-    path: 'knowledgeBlockChars',
-    type: 'number',
-    access: 'plain',
-    why: 'Cap on the knowledge block an agent is launched with. Read at every launch.',
-  },
-  {
-    path: 'knowledgeScopeStaleDays',
-    type: 'number',
-    access: 'plain',
-    why: 'How long a check scope may match nothing before the Knowledge page says so. A reading — nothing is demoted by it. 0 turns it off.',
-  },
-  {
-    path: 'knowledgeColdDays',
-    type: 'number',
-    access: 'plain',
-    why: 'How long a proposal nobody agreed with and nobody asked for is drawn before the Knowledge page folds it away. A reading — nothing is demoted by it. 0 turns it off.',
-  },
-  {
     path: 'mcpArgsRetentionDays',
     type: 'number',
     access: 'plain',

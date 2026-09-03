@@ -22,11 +22,6 @@ import type {
   CiPolicyPayload,
   FilingTargetProbe,
   IssueFiled,
-  ContradictionRuling,
-  FactExit,
-  FactRuling,
-  GraduationOutcome,
-  KnowledgeFactPayload,
   PetCatalogue,
   PlanHistory,
   McpChannelPayload,
@@ -362,13 +357,10 @@ const realApi = {
   // Write a note into the repository now rather than when the endings desk reaches
   // it — one at a time across the whole fleet, whichever door asks.
   writeDownObstacle: (id: string) => post<{ ok: true }>(`/api/obstacles/${encodeURIComponent(id)}/write-up`, {}),
-  // This fleet's own side of the pool, plus the mirror. Fetched on the Knowledge
-  // page rather than riding the snapshot, for `getMcpUsage`'s reason: it is other
-  // teams' prose, and the snapshot comes round every couple of seconds.
+  // This fleet's own side of the pool, plus the mirror. Fetched on the Insights
+  // page rather than riding the snapshot, for `getMcpUsage`'s reason: it is ninety
+  // days of rows per fleet, and the snapshot comes round every couple of seconds.
   getPool: () => authFetch('/api/pool').then((r) => json<PoolStatePayload>(r)),
-  /** Withhold one claim from the pool, or put it back. Never publishes — the desk does. */
-  setFactKeepLocal: (id: string, keepLocal: boolean) =>
-    post<{ ok: true }>(`/api/knowledge/facts/${encodeURIComponent(id)}/keep-local`, { keepLocal }),
   // The prompt book, fetched on open for the opposite reason to the work graph:
   // it is read once at boot, so polling it would be paying for a constant.
   /**
@@ -689,48 +681,6 @@ const realApi = {
   placePet: (id: string, placed: boolean) => post<{ ok: true }>(`/api/pets/${id}/place`, { placed }),
   blendPet: (id: string) => post<{ ok: true }>(`/api/pets/${id}/blend`, {}),
 
-  // Knowledge (#27). The operator's whole arm of the one claim store: where a
-  // claim stands, where it goes when it leaves, and — the one write that is not a
-  // ruling — a claim they wrote down themselves, which lands a proposal like every
-  // other. Nothing here files a claim on an agent's behalf: agents raise through
-  // the tool channel, on a scoped credential rather than this bearer token. The
-  // detail is fetched per row rather than polled, because the evidence behind one
-  // claim is thousands of characters the snapshot has no business carrying for rows
-  // nobody has opened.
-  knowledgeFact: (id: string) =>
-    authFetch(`/api/knowledge/facts/${encodeURIComponent(id)}`).then((r) => json<KnowledgeFactPayload>(r)),
-  setFactReach: (id: string, reach: FactRuling) =>
-    post<{ ok: true }>(`/api/knowledge/facts/${encodeURIComponent(id)}/reach`, { reach }),
-  // Folding a suggested cluster into the claim the operator kept. **One call**, for
-  // the reason answering a contradiction is one: moving the voices and superseding
-  // the members are two halves of one decision, and a pair of calls can half-land —
-  // a survivor carrying four voices beside four live phrasings of itself, or four
-  // superseded rows whose voices went nowhere.
-  mergeFacts: (id: string, members: string[]) =>
-    post<{ ok: true }>(`/api/knowledge/facts/${encodeURIComponent(id)}/merge`, { members }),
-  // Answering a contradiction (#27 phase 5). **One call**, because adopting an
-  // amendment is one act: promoting it and superseding the claim it replaces are
-  // two halves of one decision, and a pair of calls can half-land — the sharper
-  // claim injected beside the blunter one, both in the same block, saying
-  // different things to every agent.
-  resolveContradiction: (id: string, body: ContradictionRuling) =>
-    post<{ ok: true }>(`/api/knowledge/contradictions/${encodeURIComponent(id)}/resolve`, body),
-  // Sending a claim on — a documentation pull request, a job, or a ticket. **One
-  // call**, because opening the work and recording that it is on its way are two
-  // halves of one act: a job nothing links to lands and takes the claim out of no
-  // prompt. It does not move the reach — the claim goes on being delivered until
-  // the exit is actually taken.
-  exitFact: (id: string, body: FactExit) =>
-    post<{ ok: true }>(`/api/knowledge/facts/${encodeURIComponent(id)}/exit`, body),
-  // Writing one down yourself. It lands a proposal like everything else: the
-  // surface is one gate, not one gate and a bypass for whoever is at the keyboard.
-  raiseFact: (claim: string, originRef: string | null) =>
-    post<{ ok: true }>('/api/knowledge/facts', { claim, originRef }),
-  // What became of one the harness cannot read for itself — a pull request that
-  // left the world without ever being seen closed. The sweep says `unknown` rather
-  // than guessing merged, and this is the answer to it.
-  settleGraduation: (id: string, outcome: GraduationOutcome) =>
-    post<{ ok: true }>(`/api/knowledge/graduations/${encodeURIComponent(id)}/settle`, { outcome }),
   // Work only a person can do. `done` settles it and concludes any plan step it
   // backs, which releases whatever was waiting; `decline` settles it the other way
   // and deliberately does not conclude the step, so nothing downstream starts.

@@ -62,10 +62,6 @@ export function goalRecord(store: Store, issueOriginRef: string): RetroDossierIn
       .listProposals()
       .filter((p) => mine(p.ref))
       .reverse(),
-    claims: store
-      .listFactsForGoal(issueOriginRef)
-      .filter((f) => mine(f.originRef))
-      .reverse(),
     agentCount: agents.length,
     delivery: store.getDelivery(issueOriginRef),
     shortfall: store.getShortfall(issueOriginRef),

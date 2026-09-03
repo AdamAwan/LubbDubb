@@ -42,14 +42,14 @@ arithmetic is sound; the input is not.
 So each completed run's calendar span has its **human holds** subtracted. What is left is how long
 the goal occupied the fleet, which is what the drain is a drain of.
 
-| Hold                | Evidence                                               |
-| ------------------- | ------------------------------------------------------ |
-| Close-out           | `human_tasks` `close_out`, `created_at → resolved_at`  |
-| Validation          | `human_tasks` `validate`, same span                    |
-| A step for a person | `human_tasks` `ask` **with a `part_id`**               |
+| Hold                | Evidence                                                   |
+| ------------------- | ---------------------------------------------------------- |
+| Close-out           | `human_tasks` `close_out`, `created_at → resolved_at`      |
+| Validation          | `human_tasks` `validate`, same span                        |
+| A step for a person | `human_tasks` `ask` **with a `part_id`**                   |
 | The profile gate    | `issue_appraisals`, `decided_at → profile_answered_at`\*\* |
-| A standing delivery | `issue_deliveries`, `decided_at →` the end of the run  |
-| An escalation       | `escalations`, `created_at → answered_at`              |
+| A standing delivery | `issue_deliveries`, `decided_at →` the end of the run      |
+| An escalation       | `escalations`, `created_at → answered_at`                  |
 
 **The tail stays in.** This subtracts human-wait, never work. A CI fix, a review thread and a
 write-up are all still inside the span, which is exactly why agent durations remain the wrong
@@ -135,13 +135,13 @@ issue, and the lens re-reads that one function's answer — it never asks the wo
 of its own, which is what stops it and rule `issue-pickup` coming to different conclusions about the
 same issue.
 
-| Bucket        | Pickup status                                      | What it means                                   |
-| ------------- | -------------------------------------------------- | ----------------------------------------------- |
-| **Inflight**  | `active` · `has_pr` · `planning`                   | The fleet is on it. Drains over time.           |
+| Bucket        | Pickup status                                          | What it means                                   |
+| ------------- | ------------------------------------------------------ | ----------------------------------------------- |
+| **Inflight**  | `active` · `has_pr` · `planning`                       | The fleet is on it. Drains over time.           |
 | **Queued**    | `eligible` · `blocked` · `cooldown` · `appraisal`\*    | Unstarted supply the fleet may take.            |
-| **Reservoir** | `unwatched`                                        | Not supply. One watch write away from being it. |
+| **Reservoir** | `unwatched`                                            | Not supply. One watch write away from being it. |
 | **Held**      | `escalated` · `delivered` · `retained` · `appraisal`\* | Parked on a person. The fleet cannot drain it.  |
-| **Gone**      | `done`                                             | —                                               |
+| **Gone**      | `done`                                                 | —                                               |
 
 `blocked` is in **queued** and it is the healthiest number on the card: it means more work than
 slots, which is the condition this whole module exists to keep a deployment in. A count that dropped

@@ -38,7 +38,7 @@ type TicketBody = (vars: Record<string, string>) => string;
  * On the pulse and not in `src/dispatcher/` for the notice desk's reason: it
  * staffs nobody itself and no rule reads what it writes — rule `obstacle-repair`
  * reads the **board**, which is the same board an agent's report writes.
- * → `docs/spec/32-obstacles.md#ownership`
+ * → `docs/spec/27-obstacles.md#ownership`
  */
 export class ObstacleOwnershipDesk {
   /**
@@ -160,7 +160,7 @@ export class ObstacleOwnershipDesk {
     // to it, so the ticket says one thing once; a deployment with no reader wired
     // gets the composition and the operator's own `obstacle-ticket-body` template
     // exactly as before.
-    // → `docs/spec/32-obstacles.md#what-may-be-decided-by-a-model-and-what-may-not`
+    // → `docs/spec/27-obstacles.md#what-may-be-decided-by-a-model-and-what-may-not`
     const written = this.deps.store.obstacleReading(row.obstacle.id);
     try {
       const ref = await filing({

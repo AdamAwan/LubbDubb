@@ -1,14 +1,7 @@
 import type { ErrorRecorder } from '../errorLog.js';
 import { packSecretRefusal } from '../reviewPacks/secrets.js';
 import type { Store } from '../store/store.js';
-import type {
-  PoolClockDocument,
-  PoolClockKind,
-  PoolMirroredClaim,
-  PoolPackDocument,
-  ReviewPackShare,
-} from '../types.js';
-import { buildClaimsDocument, importClaims, type PoolRefusal } from './claimsArm.js';
+import type { PoolClockDocument, PoolClockKind, PoolPackDocument, ReviewPackShare } from '../types.js';
 import { buildDigestDocument } from './digestArm.js';
 import { POOL_SCHEMA_VERSION, parsePoolDocument, poolContentHash } from './document.js';
 import type { PoolTransport } from './transport.js';
@@ -55,15 +48,6 @@ import type { PoolTransport } from './transport.js';
  * → `docs/spec/28-cross-fleet-pool.md#the-clocks`
  */
 export class PoolDesk {
-  /**
-   * The refusals from the last derivation, for the Knowledge page.
-   *
-   * In memory rather than a table: it is a property of the *current* store contents
-   * re-derived on every pass, so a row would be a second copy of something already
-   * derivable — the mirror's own argument, one arm over.
-   */
-  private refusals: PoolRefusal[] = [];
-
   /**
    * The last successful poll, or null while there has never been one.
    *
@@ -112,7 +96,6 @@ export class PoolDesk {
     const boot = this.firstPass;
     this.firstPass = false;
     if (this.deps.transport.canRead) await this.poll();
-    await this.publishKind('claims', boot);
     await this.publishKind('digest', boot);
     await this.carryPacks();
   }
@@ -294,9 +277,7 @@ export class PoolDesk {
       project: this.deps.project,
       canRead: this.deps.transport.canRead,
       polledAt: this.polledAt,
-      claims: this.deps.store.getPoolPublication('claims'),
       digest: this.deps.store.getPoolPublication('digest'),
-      refusals: this.refusals,
     };
   }
 
@@ -327,7 +308,6 @@ export class PoolDesk {
             this.deps.store.recordPoolFleetReading({
               fleetId: parsed.fleetId,
               project: null,
-              claimsAt: null,
               digestAt: null,
               ahead: true,
             });
@@ -337,46 +317,36 @@ export class PoolDesk {
         this.record(`Skipped a pool document: ${parsed.detail}`, null);
         continue;
       }
-      this.land(parsed.document, now);
+      this.land(parsed.document);
     }
     this.polledAt = now;
   }
 
   /**
-   * One parsed document into the mirror, and — for claims — into the knowledge base.
+   * One parsed document into the mirror.
    *
    * **This fleet's own document is read back and never landed.** `fetch` returns
    * everyone's, mine included, which is what lets the page say whether the last
-   * publish actually arrived — but importing it would propose this fleet's own
-   * claims back to itself carrying its own fleet id as a second voice, and every
-   * claim an operator vouched for would cross to `lookup` again on the next pulse
-   * wearing evidence it had itself written. Nothing would error, and it would look
-   * like another fleet agreeing.
+   * publish actually arrived — but landing it would fold this fleet's own numbers
+   * back into the aggregate as another fleet's. Nothing would error, and it would
+   * look like the pool working.
    */
-  private land(document: PoolClockDocument, now: string): void {
+  private land(document: PoolClockDocument): void {
     try {
       if (document.fleetId === this.deps.fleetId) {
         this.deps.store.recordPoolFleetReading({
           fleetId: document.fleetId,
           project: document.project,
-          claimsAt: document.kind === 'claims' ? document.publishedAt : null,
-          digestAt: document.kind === 'digest' ? document.publishedAt : null,
+          digestAt: null,
           ahead: false,
         });
         return;
       }
-      if (document.kind === 'digest') {
-        this.deps.store.replacePoolFleetDigest(document.fleetId, document.project, document);
-      } else {
-        const arrivals = importClaims(this.deps.store, document, { project: this.deps.project, now });
-        const mirrored: PoolMirroredClaim[] = arrivals.map(({ outcome: _outcome, ...claim }) => claim);
-        this.deps.store.replacePoolFleetClaims(document.fleetId, mirrored);
-      }
+      this.deps.store.replacePoolFleetDigest(document.fleetId, document.project, document);
       this.deps.store.recordPoolFleetReading({
         fleetId: document.fleetId,
         project: document.project,
-        claimsAt: document.kind === 'claims' ? document.publishedAt : null,
-        digestAt: document.kind === 'digest' ? document.publishedAt : null,
+        digestAt: document.publishedAt,
         ahead: false,
       });
     } catch (error) {
@@ -387,10 +357,8 @@ export class PoolDesk {
   /**
    * Publish one document if it needs publishing.
    *
-   * The two arms differ only in what makes them due, and the hash decides both: the
-   * claims arm is due when an operator's ruling marked it dirty, the digest arm when
-   * an hour has gone by — and either way what actually goes out is decided by
-   * comparing the freshly derived content against what was last published.
+   * What makes it due is the clock, and the hash decides what actually goes out:
+   * the freshly derived content is compared against what was last published.
    */
   private async publishKind(kind: PoolClockKind, boot: boolean): Promise<void> {
     const publication = this.deps.store.getPoolPublication(kind);
@@ -399,9 +367,9 @@ export class PoolDesk {
       boot ||
       publication.checkedAt === null ||
       new Date(now).getTime() - new Date(publication.checkedAt).getTime() >= this.deps.digestIntervalMs;
-    // The claims arm's fast path; the digest arm has no fast path at all, because
-    // nothing an operator does moves a number the way a ruling moves a claim.
-    if (!slowClockDue && !(kind === 'claims' && publication.dirty)) return;
+    // No fast path: nothing an operator does moves a number the way a ruling moved
+    // a claim, so the clock is the whole of what makes this due.
+    if (!slowClockDue) return;
 
     let document: PoolClockDocument;
     try {
@@ -435,10 +403,7 @@ export class PoolDesk {
       harnessVersion: this.deps.harnessVersion,
       now,
     };
-    if (kind === 'digest') return buildDigestDocument(this.deps.store, context);
-    const derived = buildClaimsDocument(this.deps.store, context);
-    this.refusals = derived.refusals;
-    return derived.document;
+    return buildDigestDocument(this.deps.store, context);
   }
 
   /**
@@ -466,8 +431,5 @@ export interface PoolStatus {
   canRead: boolean;
   /** The last successful poll, or null. Never folded into "nobody has published anything". */
   polledAt: string | null;
-  claims: import('../types.js').PoolPublication;
   digest: import('../types.js').PoolPublication;
-  /** Claims the secret backstop refused, and why. Refusing is loud by design. */
-  refusals: PoolRefusal[];
 }

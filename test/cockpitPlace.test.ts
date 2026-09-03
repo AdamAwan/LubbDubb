@@ -32,24 +32,9 @@ test('every place round-trips through the query string', () => {
     at({ panel: 'record' }),
     at({ goal: 'issue:142' }),
     at({ tab: 'tickets', goal: 'issue:142', agent: 'agent-7' }),
-    at({ tab: 'knowledge' }),
-    at({ tab: 'knowledge', knowledgeView: 'table' }),
-    at({ tab: 'knowledge', knowledgeShow: 'waiting' }),
-    at({ tab: 'knowledge', knowledgeSort: 'asks', knowledgeDesc: true }),
-    at({ tab: 'knowledge', knowledgeSort: 'claim' }),
-    // A column read from the other end while it is the one the page opens on: the
-    // pair is one parameter, so `reach` ascending is a bare URL and `reach`
-    // descending has to still be a place.
-    at({ tab: 'knowledge', knowledgeDesc: true }),
-    at({ tab: 'knowledge', knowledgeFolded: ['rejected', 'retired'] }),
-    at({
-      tab: 'knowledge',
-      knowledgeView: 'table',
-      knowledgeShow: 'settled',
-      knowledgeSort: 'disputes',
-      knowledgeDesc: true,
-    }),
-    at({ tab: 'knowledge', fact: 'fact_abc', knowledgeFolded: ['graduated'] }),
+    at({ tab: 'obstacles' }),
+    at({ tab: 'obstacles', obstacle: 'obs_abc' }),
+    at({ tab: 'obstacles', obstacle: 'obs_abc', obstacleEnded: true }),
     at({ panel: 'faults' }),
     at({ panel: 'launch' }),
     at({ panel: { ask: 'esc-9' } }),
@@ -156,7 +141,7 @@ test('a place has exactly one spelling', () => {
  * the goal. → `docs/spec/17-cockpit.md#nesting`
  */
 test('a goal or a pull request is read under a tab that could have led to it', () => {
-  for (const tab of ['insights', 'knowledge', 'pets', 'config']) {
+  for (const tab of ['insights', 'obstacles', 'pets', 'config']) {
     assert.equal(readPlace(`?tab=${tab}&goal=issue:142`).tab, 'overview', `${tab} does not list goals`);
     assert.equal(readPlace(`?tab=${tab}&pr=706`).tab, 'overview', `${tab} does not list pull requests`);
   }
@@ -225,19 +210,22 @@ test('a link to the retired work tab lands where its triage went', () => {
 });
 
 /**
- * Findings and lessons became sections of the knowledge page rather than panels of
- * their own, and every saved link to either spells a panel name `PANELS` no longer
- * knows.
+ * Knowledge, findings and lessons all named the claim store, which is gone. Every
+ * saved link to any of them — a tab, a panel, or a panel with a `fact` id beside
+ * it — lands on the obstacle board, which is the surface that replaced it.
  *
- * Without the alias an unknown panel parses back to null and the link opens the
- * overview with the rest of the place still in the URL — a stranded link, and a
- * silent one. It is a panel alias rather than a tab one for the same reason
- * `knowledge` is: an explicit tab is the operator saying where they meant to be,
- * and an alias must never overrule one.
+ * Without the alias an unknown tab or panel parses back to the overview with the
+ * rest of the place still in the URL — a stranded link, and a silent one. The
+ * panel arm is a panel alias rather than a tab one for `work`'s reason: an
+ * explicit tab is the operator saying where they meant to be, and an alias must
+ * never overrule one.
  */
-test('links to the retired findings and lessons panels land on the knowledge page', () => {
-  assert.equal(readPlace('?panel=findings').tab, 'knowledge');
-  assert.equal(readPlace('?panel=lessons').tab, 'knowledge');
+test('links to the retired knowledge, findings and lessons surfaces land on the obstacle board', () => {
+  assert.equal(readPlace('?tab=knowledge').tab, 'obstacles');
+  assert.equal(readPlace('?panel=knowledge').tab, 'obstacles');
+  assert.equal(readPlace('?panel=knowledge&fact=fact_abc').tab, 'obstacles', 'the fact id is simply dropped');
+  assert.equal(readPlace('?panel=findings').tab, 'obstacles');
+  assert.equal(readPlace('?panel=lessons').tab, 'obstacles');
   assert.equal(readPlace('?panel=findings').panel, null, 'and open no panel over it');
   assert.equal(
     readPlace('?panel=lessons&goal=issue:142').goal,

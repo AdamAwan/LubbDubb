@@ -29,7 +29,7 @@ filling slots in a shared page.
 What keeps that from swallowing the cockpit's rules is the split on **behaviour weight**:
 
 - **Shared** (`web/src/components/`) — anything with an async flow, a refusal rule or hold semantics:
-  `EscalationCard`, `RecoveryPanel`, `HumanTaskActions`, `KnowledgePanel`, `LaunchPanel`,
+  `EscalationCard`, `RecoveryPanel`, `HumanTaskActions`, `ObstaclesPage`, `LaunchPanel`,
   `SchedulePanel`, `InjectPanel`, `FleetControl`, `AgentDrawer`, the modals, the buttons and the leaf
   helpers. The escalation 409 rules, the recovery verdicts and the decline-needs-a-note refusal get
   exactly one implementation, and the console **embeds** them rather than redrawing them.
@@ -226,7 +226,7 @@ Five surfaces and one shell.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│ ident ↗issue ?ask │ Overview Tickets② Knowledge① Insights │ Fleet ⏸ 14s  Usage 5h 62% 7d 30% … ⚙ │ top bar
+│ ident ↗issue ?ask │ Overview Tickets② Obstacles Insights │ Fleet ⏸ 14s  Usage 5h 62% 7d 30% … ⚙ │ top bar
 ├────────────────────────────────────────────────────────────────────────┤
 │ the recovery banner, when a previous run left work orphaned            │
 ├───────────────┬────────────────────────────────────────────────────────┤
@@ -234,7 +234,7 @@ Five surfaces and one shell.
 │ ┌───────────┐ │                                                        │
 │ │ Blocking  │ │                                                        │
 │ │ escalation│ │             the situation area                         │
-│ │ plan      │ │  (a tab — overview, tickets, knowledge, insights, pets, │
+│ │ plan      │ │  (a tab — overview, tickets, obstacles, insights, pets,│
 │ │ permission│ │   or a goal)                                           │
 │ │ Yours     │ │                                                        │
 │ │ bench     │ │                                                        │
@@ -286,28 +286,29 @@ single back button labelled with the rung beneath it, which on a pull request dr
 and left the tab the page hung off entirely off screen — so the label being wrong was a thing only the
 click revealed.
 
-What is _not_ nesting: **Insights' readings, the Knowledge tab's layouts and the config sections are
+What is _not_ nesting: **Insights' readings, the Tickets tab's layouts and the config sections are
 facets of one page, not pages under it.** Each is on `Place` — they are places, and a link to one has
 to work — but the strip that switches them is the navigation, and a crumb over it would offer a parent
 that is the page you are already on. A back control that goes nowhere is worse than none.
 
-The **nav** is four tabs: Overview, Tickets, Knowledge and Insights. Every button clears _both_ pieces
+The **nav** is four tabs: Overview, Tickets, Obstacles and Insights. Every button clears _both_ pieces
 of state, because a nav click means "go here" and either half left standing would land somewhere else.
 
-**A destination is not the same thing as a nav slot.** Config and Pets are reachable without being
-drawn there, and [Obstacles](32-obstacles.md#in-the-cockpit) is reachable by URL _only_ — deliberately,
-until the operator says otherwise. `TABS` in `place.ts` is therefore wider than `TABS` in `TopBar.tsx`,
-and the two are separate lists on purpose: the address bar must round-trip every destination, or a link
-somebody saved parses straight back to the overview with nothing saying so, while what the nav costs is
-the most expensive space in the cockpit and is spent one tab at a time.
+**A destination is not the same thing as a nav slot.** Config and Pets are reachable without being drawn
+there, and `TABS` in `place.ts` is therefore wider than `TABS` in `TopBar.tsx`. The two are separate
+lists on purpose: the address bar must round-trip every destination, or a link somebody saved parses
+straight back to the overview with nothing saying so, while what the nav costs is the most expensive
+space in the cockpit and is spent one tab at a time. Obstacles was the standing example of the gap —
+reachable by URL only, deliberately, while the operator decided — and it is in the nav now, which is
+what the two lists being separate made possible without either of them being wrong at any point.
 
-**Two of them carry a badge, and it is a number and nothing else** (`navBadge`, `TopBar.tsx`). Tickets
-carries the untriaged count — `untriagedCount` (`web/src/worldBuckets.ts`) over the same watch bucket
-the tab's Unwatched filter uses — and Knowledge carries `factsNeedingYou`, the corroborated claims
-nobody has ruled on. Each is the same number the surface behind it draws, so the badge and the rows
-cannot differ, and each is hidden at zero because a badge that always shows is one nobody reads.
+**One of them carries a badge, and it is a number and nothing else** (`navBadge`, `TopBar.tsx`).
+Tickets carries the untriaged count — `untriagedCount` (`web/src/worldBuckets.ts`) over the same watch
+bucket the tab's Unwatched filter uses. It is the same number the surface behind it draws, so the badge
+and the rows cannot differ, and it is hidden at zero because a badge that always shows is one nobody
+reads.
 
-Tickets used to spell its out — `2 to triage` — and that half is worth stating. Both badges answer one
+Tickets used to spell it out — `2 to triage` — and that half is worth stating. A badge answers one
 question, _is there anything here for me_, and the answer is the digit: the words were a sentence in the
 one row an operator glances at without reading, and they widened the button by however long they happened
 to be, which is the thing the nav most has to not do. The sentence survives as the button's `title`,
@@ -316,15 +317,19 @@ radius, so one digit is a circle and three a lozenge rather than the button chan
 of the number in it, and its margin is in the stylesheet rather than a space in the markup, since a space
 is a line-break opportunity and a badge wrapping under its own label is a nav two rows tall.
 
-**Knowledge is the third in reading order, and it was a panel until it was a tab.** A count on the bar
-that opened a sheet said the fleet's written record is a thing you glance at, and the sheet drew over the
-queue rail the ask that sent you there came from. Ruling on a claim is triage — a sitting, several times
-a day, exactly like the tickets tab beside it — so what it wanted was the situation area and a way back,
-which is what a tab is. `readPlace` aliases `?panel=knowledge` onto it (`PANEL_ALIASES`), because
-`knowledge` is not a panel name any more and every link an operator saved to a claim spells one: without
-the alias it parses back to null and lands on the overview with the fact id still in the URL. An explicit
-`?tab=` still wins, since an alias for a panel that no longer exists must not overrule the operator
-saying where they meant to be.
+**Obstacles is the third in reading order, and it holds the slot Knowledge held.** Knowledge was a panel
+before it was a tab, and it is neither now: the claim store behind it is gone
+([27](27-obstacles.md#what-the-claim-store-left-behind)), and the board that replaced it took the slot
+rather than a fifth — two tabs answering one question is how an operator ends up ruling on the same
+thing twice. It carries **no badge**, and that is the whole of it rather than an omission: Knowledge's
+badge counted corroborated claims nobody had ruled on, which is a queue only a person emptied, and
+nothing on the board is waiting on a decision. `readPlace` aliases `?tab=knowledge`, `?panel=knowledge`,
+`?panel=findings` and `?panel=lessons` all onto Obstacles, because every link an operator saved to any
+of them spells a name the parser no longer knows: without the alias each parses back to the overview
+with the rest of the place still in the URL. The `fact` id beside one is **dropped** rather than
+carried — there is no longer a row it could open, and a parameter kept for a page that cannot honour it
+is a stranded link one layer down. An explicit `?tab=` still wins over a panel alias, since an alias
+must not overrule the operator saying where they meant to be.
 
 **Work was the second of these and is not a destination any more** ([below](#the-record-panel)). Every
 part of it had found a better home — a goal's own record onto its goal page, the unrecorded-work
@@ -437,37 +442,30 @@ modals — and nothing that answers _what is true_. It replaced ten independent 
 page on the tickets tab is **one** place, and stepping back out of it has to restore all three at
 once.
 
-| Parameter                            | Carries                                                                                                                                                                                                                                                                                                                                                                                                  |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tab`                                | `tickets` / `knowledge` / `insights`; the overview is the absent value. `backlog` and `work` are aliases for `tickets`, and `?panel=knowledge` for `knowledge`, so links to a deleted tab or a promoted panel still land. Narrowed by `homeTab` whenever `goal` or `pr` is set — a link naming one of those is a place one rung in, and the tab is the rung under it → [nesting](#nesting)               |
-| `goal`                               | the open goal page, as `issue:<n>`. It outranks `tab`, which it is drawn over and which the crumb's first rung names                                                                                                                                                                                                                                                                                     |
-| `pr`                                 | the open [pull request page](#the-pull-request-page), by number. It outranks `goal`, which it is drawn over and which is the crumb's second rung; a value that is not a positive integer is nowhere                                                                                                                                                                                                      |
-| `panel`                              | `knowledge` / `faults` / `launch` / `build` / `record` / `localRun` / `setup` / `pets`                                                                                                                                                                                                                                                                                                                   |
-| `ask`                                | the queue row a `{ ask }` panel is showing                                                                                                                                                                                                                                                                                                                                                               |
-| `agent`                              | the open drawer's agent                                                                                                                                                                                                                                                                                                                                                                                  |
-| `plan` / `retro` / `pad`             | the plan sheet, the retrospective, the notepad                                                                                                                                                                                                                                                                                                                                                           |
-| `pack`                               | the pull request whose [review pack](#the-review-pack) is open over the goal page, by number                                                                                                                                                                                                                                                                                                             |
-| `idea`                               | which idea of that pack is unfolded, by the id the author minted, or `all` for the open-all control. Carried only under `pack`: a fold on a page that is not open is not a place                                                                                                                                                                                                                         |
-| `fact`                               | the claim whose provenance is open on the Knowledge tab, by fact id                                                                                                                                                                                                                                                                                                                                      |
-| `kn`                                 | the Knowledge tab's layout: `list` for the nine headings, `table` for one sortable row per claim; `queue` — one claim at a time — is the absent value. Not `view`, which the Tickets tab and Insights already share → [27](27-knowledge.md#the-queue-is-the-page)                                                                                                                                        |
-| `q`                                  | which claim the Knowledge queue is standing on, by fact id. On `Place` and not a `useState` for the usual reason: a reload has to land on the card the operator was ruling on, and the back button has to step back through the ones behind it → [27](27-knowledge.md#the-queue-is-the-page)                                                                                                             |
-| `show`                               | how the Knowledge tab is narrowed: `waiting` / `reaching` / `settled`; `all` is the absent value. A filter, never a move — a claim stays under the heading its reach puts it in                                                                                                                                                                                                                          |
-| `sort`                               | the Knowledge table's order, `-` for the far end: `-asks` is most-asked-for first; `reach` ascending is the absent value                                                                                                                                                                                                                                                                                 |
-| `fold`                               | the Knowledge tails an operator has **folded away**, as `rejected,retired` — the folded ones, so the page as it stands is a bare URL and nothing is hidden on arrival                                                                                                                                                                                                                                    |
-| `see`                                | the Knowledge **queue's** three folds an operator has **opened**, as `cold,settled` — the other way round from `fold`, and a second parameter rather than that one read backwards: the queue's tails start shut where the list's start drawn, and one parameter meaning the opposite thing depending on `kn` is the drift these are spelled apart to avoid → [27](27-knowledge.md#the-queue-is-the-page) |
-| `obs`                                | the obstacle whose sightings are unfolded on the Obstacles tab, by id. Not `fact` or `q`, which the Knowledge tab owns — two pages reading one parameter is a page that opens showing whatever the other was set to → [32](32-obstacles.md#in-the-cockpit)                                                                                                                                               |
-| `ended`                              | whether the Obstacles tab's terminal tail is **opened**. Opened rather than folded away, so the page as it stands is a bare URL; what a fold would otherwise cost is paid for by the heading stating its own size → [32](32-obstacles.md#in-the-cockpit)                                                                                                                                                 |
-| `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                                                                                                                                                                                                                                                                                                 |
-| `open`                               | the goal page's reference sections held open, as `record,ticket`                                                                                                                                                                                                                                                                                                                                         |
-| `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                                                                                                                                                                                                                                                                                        |
-| `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched`; `any` is the absent value                                                                                                                                                                                                                                                                                                                       |
-| `tracking`                           | what the harness is doing about it: `any` / `frozen`; `live` is the absent value, since the tab is the surface work happens on                                                                                                                                                                                                                                                                           |
-| `state`                              | its tracker axis, in the tracker's own word; `any` is the absent value. `open` / `closed` are read as the old `tracking` axis                                                                                                                                                                                                                                                                            |
-| `feature`                            | one feature by issue number, or `none` for the orphans; every feature is the absent value                                                                                                                                                                                                                                                                                                                |
-| `group`                              | how the list is arranged: `flat`; `feature` is the absent value                                                                                                                                                                                                                                                                                                                                          |
-| `order`                              | how the Tickets tab is ordered: `cost`; `added` is the absent value                                                                                                                                                                                                                                                                                                                                      |
-| `view`                               | the Tickets tab's layout: `card` for the board of state columns; `table` is the absent value                                                                                                                                                                                                                                                                                                             |
-| `hide`                               | the board columns folded away, as `Closed,Removed` — the **hidden** ones, so an untouched board is a bare URL                                                                                                                                                                                                                                                                                            |
+| Parameter                            | Carries                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tab`                                | `tickets` / `obstacles` / `insights`; the overview is the absent value. `backlog` and `work` are aliases for `tickets`, and `knowledge` for `obstacles` — as are the `knowledge`, `findings` and `lessons` panel names — so links to a deleted tab or a retired panel still land. Narrowed by `homeTab` whenever `goal` or `pr` is set — a link naming one of those is a place one rung in, and the tab is the rung under it → [nesting](#nesting) |
+| `goal`                               | the open goal page, as `issue:<n>`. It outranks `tab`, which it is drawn over and which the crumb's first rung names                                                                                                                                                                                                                                                                                                                               |
+| `pr`                                 | the open [pull request page](#the-pull-request-page), by number. It outranks `goal`, which it is drawn over and which is the crumb's second rung; a value that is not a positive integer is nowhere                                                                                                                                                                                                                                                |
+| `panel`                              | `faults` / `launch` / `build` / `record` / `localRun` / `setup` / `pets`                                                                                                                                                                                                                                                                                                                                                                           |
+| `ask`                                | the queue row a `{ ask }` panel is showing                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `agent`                              | the open drawer's agent                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `plan` / `retro` / `pad`             | the plan sheet, the retrospective, the notepad                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `pack`                               | the pull request whose [review pack](#the-review-pack) is open over the goal page, by number                                                                                                                                                                                                                                                                                                                                                       |
+| `idea`                               | which idea of that pack is unfolded, by the id the author minted, or `all` for the open-all control. Carried only under `pack`: a fold on a page that is not open is not a place                                                                                                                                                                                                                                                                   |
+| `obs`                                | the obstacle whose sightings are unfolded on the Obstacles tab, by id → [27](27-obstacles.md#in-the-cockpit)                                                                                                                                                                                                                                                                                                                                       |
+| `ended`                              | whether the Obstacles tab's terminal tail is **opened**. Opened rather than folded away, so the page as it stands is a bare URL; what a fold would otherwise cost is paid for by the heading stating its own size → [27](27-obstacles.md#in-the-cockpit)                                                                                                                                                                                           |
+| `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `open`                               | the goal page's reference sections held open, as `record,ticket`                                                                                                                                                                                                                                                                                                                                                                                   |
+| `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched`; `any` is the absent value                                                                                                                                                                                                                                                                                                                                                                 |
+| `tracking`                           | what the harness is doing about it: `any` / `frozen`; `live` is the absent value, since the tab is the surface work happens on                                                                                                                                                                                                                                                                                                                     |
+| `state`                              | its tracker axis, in the tracker's own word; `any` is the absent value. `open` / `closed` are read as the old `tracking` axis                                                                                                                                                                                                                                                                                                                      |
+| `feature`                            | one feature by issue number, or `none` for the orphans; every feature is the absent value                                                                                                                                                                                                                                                                                                                                                          |
+| `group`                              | how the list is arranged: `flat`; `feature` is the absent value                                                                                                                                                                                                                                                                                                                                                                                    |
+| `order`                              | how the Tickets tab is ordered: `cost`; `added` is the absent value                                                                                                                                                                                                                                                                                                                                                                                |
+| `view`                               | the Tickets tab's layout: `card` for the board of state columns; `table` is the absent value                                                                                                                                                                                                                                                                                                                                                       |
+| `hide`                               | the board columns folded away, as `Closed,Removed` — the **hidden** ones, so an untouched board is a bare URL                                                                                                                                                                                                                                                                                                                                      |
 
 **The query string rather than the path**, for three reasons that are one reason — nothing else has to
 agree with the console about where it is served from. The token arrives in the fragment and is
@@ -2868,10 +2866,9 @@ lands somewhere else entirely, so Back returns to the filter and the list re-rea
 ## The top bar and the panels
 
 The strip carries the ident, the nav, the fleet gauge, and six readings: **Usage**, **Faults**,
-**Launch**, **Local**, **Build**, **Env** — then **Record**, then the Config cog. Findings and Lessons were two of these
-until the three claim stores became one; the nav's Knowledge badge is the reading for all of it now,
-and one destination with one number is what stops an operator ruling on the same claim in two places.
-Each is one subject
+**Launch**, **Local**, **Build**, **Env** — then **Record**, then the Config cog. Findings and Lessons
+were two of these until the claim stores merged, and the merged store has since gone with the count
+that stood for all of it. Each is one subject
 stated once, in a plain label-and-number face. None reaches `api.js`: every one is a method on
 `CockpitActions`, and the fleet cap is the shared `FleetControl`, which is already on that seam.
 
@@ -2992,11 +2989,6 @@ Three rules hold them:
 - **A zero count mutes a reading; it never removes it.** The gauge staying put is what lets an operator
   glance at the same spot every time rather than hunting for a control that reflows when its number
   happens to hit zero.
-- **The Knowledge count is on the nav, not here.** It counts the corroborated claims nobody has ruled
-  on: what wants the operator is the claim two agents
-  on two goals already agreed on. A count of what is already vouched for would tick up on their own
-  click and never come down, and one that included a single agent's unseconded note would never come
-  down either. The number did not change when the page became a destination — only where it is drawn.
 - **Launch counts the queue, not the history.** A launched brief that has been dispatched is an
   agent in the Fleet, and counting it here would have the reading climb as work starts rather than as
   it waits.
@@ -3112,173 +3104,26 @@ for them to disagree.
 
 Four panels open from the bar, the ask panel opens from a queue row ([the rail](#the-queue-rail--needs-you)), and Settings is a shell-owned modal beside them:
 
-- **Knowledge** — `KnowledgePanel`, and a **nav destination rather than a panel** since the top bar was
-  tidied: what the fleet has written down about working this repository, and how far each claim carries
-  (#27 phase 2). It is drawn in the situation area for the tickets tab's reason — ruling on claims is
-  triage done in a sitting, and a sheet over the console covers the queue rail the ask that sent you
-  here came from. It is described here with the panels because everything below is about the surface
-  rather than its placement, and `ConsoleRoot` mounts the same component either way. Reach is a state
-  machine rather than a status, so it is a page of sections: **Live notices** with their clocks,
-  **Needs you**, then **Injected**, **On lookup**, **One voice**, **Gone somewhere better**,
-  **Superseded**, **Retired**, and the **Rejected** tail. Read top to bottom in the order things
-  demand attention rather than in the order of the machine.
+- **Obstacles** — `ObstaclesPage`, a **nav destination rather than a panel**, and the tab that
+  replaced Knowledge (`web/src/components/ObstaclesPage.tsx`, over `GET /api/obstacles`). What is in
+  the fleet's way, what owns each one, and — behind a fold on the row — the sightings in their authors'
+  own words with the key that matched each. It is described here with the panels because everything
+  about the surface is the same either way, and `ConsoleRoot` mounts the page for the tab.
 
-  **The page opens on a queue**, and the sections above are what `?kn=list` draws: the oldest claim
-  that needs a ruling, one card at a time, with the evidence under it, and the tails behind three
-  counted folds. → [27](27-knowledge.md#the-queue-is-the-page)
+  **It is read-mostly, and it has no badge.** _What is blocking the fleet, and what owns each one_ —
+  not a queue, not a triage surface, and nothing on it is waiting on a decision. Four controls, none
+  of them on any path: mute, own it, retire, and write it down. → [27](27-obstacles.md#in-the-cockpit)
 
-  **One page and one card, because there is one store.** What an agent noticed outside its own task,
-  what working a goal taught, and what the fleet knows were three surfaces asking the same question of
-  the same person — _somebody raised a claim; what is it for?_ — from three places with three counts on
-  the bar. An operator who has to remember two more surfaces is an operator who rules on one of them
-  and lets the others fill up, which is the failure this page exists to prevent: a claim nobody has
-  ruled on reaches nobody, and looks exactly like a claim nobody raised. `FactCard` is the one row now,
-  and the badge is one number.
+  **What was here before it was the claim store's page**, and that store is gone
+  ([27](27-obstacles.md#what-the-claim-store-left-behind)): with it went the queue, the nine sections,
+  the table, the reach controls, the exits, the composer an operator wrote a claim in, and the budget
+  meter that drew what the injected block was costing. The cross-fleet pool's status strip, which was
+  drawn above it, is on [Insights](28-cross-fleet-pool.md#in-the-cockpit) now — it is a reading about
+  what this fleet publishes and reads, on the tab that answers what the fleet is costing and reaching.
 
-  **The exits sit on the row beside the reach buttons**, because they are the same kind of decision
-  made in the same moment: how far this claim carries, and whether it belongs here at all. What was two
-  panels' worth of buttons — _Queue job_, _File ticket_, _Dismiss_ on a finding; _Promote_, _Retire_ on
-  a lesson — is one group of controls. **Queue job** puts an agent on the claim now; **File ticket**
-  hands it to the tracker so it waits its turn there; **Commit to the repository** opens the
-  documentation pull request. Each is drawn only where the store would take it, so a control that would
-  be refused is not offered: the ticket exit needs a tracker (`config.canFileTickets`), the docs exit
-  needs a standing claim that already reaches somebody, and all three need a claim that has not already
-  left. → [27](27-knowledge.md#sending-a-claim-on)
-
-  **There is no Dismiss control, and its absence is the point.** Dismissing a finding meant _an
-  operator answered this, and a later report is not folded silently into it_ — which is exactly what
-  **Reject** already does and says. What dismissing did _not_ mean is now sayable separately, as
-  **Retire**. Two words for two acts, where the old surfaces had one word each meaning both.
-
-  **A claim an operator writes down themselves** goes in the composer at the top of the page — the
-  Lessons panel's, kept, and now writing a `knowledge_facts` row. It lands a **proposal** like anything
-  an agent raises, and the page says so under the button: the surface is one gate, not one gate and a
-  bypass for whoever happens to be at the keyboard. Two fields, and the second is the provenance — the
-  goal it was learned on, optional, because an operator writing down what they already know has no goal
-  behind it and a defaulted one would date the claim to work that did not teach it.
-
-  **A row says where it went**, once it has gone: the exit it took, drawn as a chip, and the pull
-  request or the ticket it produced drawn as a `<Ref>` beside it rather than inside it — one click
-  cannot have two destinations, and a row that names a pull request and offers no way there is this
-  cockpit's most repeated bug.
-
-  **Live notices** is the one section drawing rows nobody vouched for. A notice is an expiring
-  observation, and it is the one thing agreement alone puts in front of every agent — so the blurb
-  says that, says the clock is what makes it safe, and says that the harness raises its own: a check
-  that went red and green on one commit, and a check red on a branch other pull requests are based on
-  (#27 phase 4). A row that carries a resolution condition draws it, because a notice ending when the
-  world settles it rather than when its clock runs out is otherwise invisible.
-
-  **Retire is one click and Reject is two**, and that asymmetry is the surface stating the difference
-  between them. Retiring says the claim is not carried any more; rejecting says it is not true and
-  bars it from coming back. A prune has to be the cheap act here — an operator who has to be sure
-  before tidying is an operator who does not tidy — while a bar is paid for by the agent refused, by
-  name, for saying something true next quarter. A retired row carries **Carry again** and nothing
-  else: bringing one back is an ordinary ruling rather than an appeal, because nothing was ever
-  judged. → [27](27-knowledge.md#retiring-is-not-rejecting)
-
-  **It draws what it stopped.** The rejected tail is not a courtesy: this page is the whole of the
-  governance, a surface showing only what it let through cannot tell an operator that a claim was
-  killed, and the rejection bar — which is what stops two agents re-proposing next week what was
-  killed today — is invisible everywhere else in the harness. **Superseded** is the same argument for
-  the claims an amendment replaced: they were not judged untrue, and a page that dropped them would
-  lose the record of what the fleet used to be told.
-
-  **A disputed claim stays in the section its reach puts it in** (#27 phase 5). Nothing here is
-  demoted by a count, so lifting a contradicted claim out of _Injected_ would draw a demotion that did
-  not happen — a claim right in general and wrong at one edge attracts contradictions because it is
-  being used. What the row carries instead is the count of disputing voices, the ratio of them to
-  everything said about the claim, and — while any dispute is open — how many are left to answer.
-  Both numbers are the server's, the ratio included: they are counts of _voices_ rather than of rows,
-  so a division taken here would be arithmetic over numbers this layer does not know the rule for.
-
-  **The three answers to a contradiction sit inside the row's provenance**, beside the words that ask
-  for them and beside the amendment being offered: an operator choosing between the claim and the
-  sentence written to replace it has to read both, and a control where only one was visible would ask
-  for the decision with half of it hidden. _Adopt the amendment_ is **one** control and one call —
-  promoting the amendment and superseding the claim are two halves of one decision, and a pair of
-  calls could leave the sharper claim in the block beside the blunter one it was written to replace.
-  _Narrow it yourself_ opens the claim for rewriting in place. _Dismiss_ is the only one of the three
-  that leaves the fact where it was.
-
-  **Committing a claim to the repository is one control and one call** (#27 phase 6). It is offered on
-  a standing claim at `lookup` or `injected` — the two the store will take — and it asks where the
-  claim goes before it opens anything: the document that already owns the subject, which the agent
-  finds, or `CLAUDE.md`, which costs a sentence. That asymmetry is the control's whole job. CLAUDE.md
-  is loaded into every agent's context on every dispatch and its length is asserted rather than
-  intended, so the arm that could be taken by clicking past it is the arm that would get taken; the
-  sentence — what breaks _silently_ without the claim — is required by the body's shape and is
-  appended to the agent's prompt, where it is checked rather than obeyed.
-
-  **The click moves nothing.** The claim keeps its reach and goes on being delivered while its
-  documentation pull request is in review, because a claim taken out of every prompt the moment
-  somebody queues a docs job is one the fleet stops being told for a pull request that may be closed
-  unmerged. While a graduation is going the row says so and draws **the pull request as a reference**;
-  a graduation that did not land says that instead, and the control comes back. The **Committed to the
-  repository** section draws the pull request that put each claim there, so the section is a record of
-  where the fleet's knowledge went rather than a list of names.
-
-  **A row whose reading is `unknown` draws the two controls that answer it** — _it merged_ / _it did
-  not_ — beside that pull request. That reading is the harness declining to guess: a pull request that
-  left the world without ever being seen closed reads as merged only by inference, and acting on it
-  would take a claim out of every prompt for something that may never have merged. The reading itself
-  is the sweep's own answer shipped on the row, never worked out here — a second implementation of
-  "did this land" is free to disagree with the one that actually moves a claim.
-
-  Four reach controls and no fifth, and none of them files anything — and none of them is what put a notice
-  at `injected`, which is the store's own doing: agents propose through the tool channel,
-  so a page that could write a claim would be writing one with no observation behind it. Promote,
-  demote, reject — a `ConfirmButton`, since a rejection is terminal and what comes back is an amendment
-  an agent files — and **keep**, which looks like a no-op and is not: `lookup` is both where two agents
-  agreeing puts a claim and where an operator parks one that is true but not worth every agent's
-  context, so saying "it belongs here" is the ruling that takes the row out of _Needs you_. Without it
-  the section would ask again forever.
-
-  A row carries the claim, its **scope as a reference** — a `goal:` scope is the goal itself, a
-  `check:` scope is the provider's own identifier and says so — its corroboration count, and its
-  provenance. The count is `distinctCorroborators`' answer taken server-side (`KnowledgeFactView` in
-  `src/wire.ts`), never a length counted in the browser: two observations are one corroborator if they
-  share a goal or a session, so a second count here would be free to disagree with the one that
-  actually promotes. **What the observers saw** is a click and its own fetch — evidence runs to
-  thousands of characters per observation and the snapshot is polled — and the open row is `?fact=<id>`
-  on `Place`, so it is a link somebody can send.
-
-  **Two further readings on the row, and neither of them acts.** A `check:` row whose scope has matched
-  nothing in `knowledgeScopeStaleDays`, and whose check the provider is not reporting either, is marked
-  **scope has drifted**: a renamed or re-matrixed job stops a claim being delivered _silently_, and this
-  is the only surface that can say so. A `lookup` row says **how often it was asked for**, including
-  when that is never — explicit `knowledge_ask` calls only, never delivery by a matching scope, which
-  is the harness putting a claim in front of an agent that did not want it. The drifted claim stays in
-  the section its reach puts it in, and nothing is demoted for want of demand.
-  → [27](27-knowledge.md#what-it-costs)
-
-  What working a goal taught is a claim in this store like any other, so this page and the block show the same
-  claims; the panel says so at the top rather than leaving a reader to work out which surface is
-  authoritative.
-
-  **The Injected section carries a budget meter**, drawn against `knowledgeBlockChars`, and marks the
-  claims the cap left out — the `over the cap` reading, per row, on the store that
-  now delivers. Both are the block renderer's own answer, projected onto the wire
-  (`KnowledgeDeliveryView`): a meter drawn from a character count taken in the browser would be exactly
-  the second implementation of "what fits" that rule exists to prevent.
-
-  **And under the meter, what the block costs.** The characters are the cap; the dollars are the
-  purchase, in the money the Insights page reports and over the window it opens on. Every figure is the
-  server's — the share, the total and the per-dispatch division alike — because it is arithmetic over a
-  token estimate and a fleet total whose rule this layer does not know, and a division taken here would
-  be free to disagree with the spend drawn a tab away. A window in which nothing reported usage draws
-  **"cannot be priced"** rather than `$0.00`: unmeasured is never free, and a zero there would be the
-  one number on the page that is a lie. → [27](27-knowledge.md#what-it-costs)
-
-  **And the page ends with what an agent actually receives** — the system-prompt block verbatim, and
-  the task-prompt append for each scope with anything deliverable left in it once the block has taken
-  what it carries (since #27 phase 4 that is every injected claim but a goal-scoped one), from the
-  same two renderers the launch and the dispatch use. Per scope rather than per dispatch, because a
-  dispatch matches its goal and every check it answers at once and the set of dispatches is not a list.
-  The reach machine says where a claim _stands_; this says what is _sent_, and the two come apart at
-  the cap — silently, since the agent is told a count and never which claims it is missing.
-  The per-row `over the cap` chip carries the idea in miniature; a store this size cannot be governed without
-  it. → [27](27-knowledge.md#in-the-cockpit)
+  **Every link to any of those surfaces lands on this tab.** `?tab=knowledge`, `?panel=knowledge`
+  (with or without `&fact=`), `?panel=findings` and `?panel=lessons` are aliased in `readPlace`; the
+  `fact` id is dropped, because there is no longer a row it could open.
 
 - **Faults** — the recorded failures, forty rows, the surface you went looking for rather than a crop
   for a column. It offers a **two-step clear**, drawn **above** the rows and **at zero rows as well**:
@@ -3586,7 +3431,7 @@ styles are in `web/src/styles.css` for the same reason, drawing `--cn-*` tokens 
 prefix boundary is by component family, [not by file](#tokens).
 
 The tab is inserted **beside Tickets** rather than appended, because the two are one backlog read at
-two altitudes and a reader moving between them should not cross Knowledge to do it. A goal is still
+two altitudes and a reader moving between them should not cross the obstacle board to do it. A goal is still
 opened, and still acted on, on its own page: the board links down and never grows a control of its
 own.
 
@@ -5205,7 +5050,7 @@ Nothing new reaches for them; new code draws a reference with `<Ref>`.
 
 **Every reference the UI shows is routed through one of these (#199), with no exceptions.** So the goal
 page's pull requests and its plan waves, the overview's fleet, rack, up-next and world-signal rows, the
-tickets rows, the knowledge page, escalations, the plan sheet, the recovery cards, the agent drawer,
+tickets rows, the obstacle board, escalations, the plan sheet, the recovery cards, the agent drawer,
 the spend and reliability tables and the work-tree panel all draw links wherever there is somewhere to
 go.
 
@@ -5275,10 +5120,9 @@ rules, and the split between the first two is the whole of it:
 - **Captured output stays `<pre>`.** An escalation's `recentOutput` and a draft reply are what the
   process emitted, and preformatted is what they _are_. Markdown-rendering them would reflow columns
   that mean something.
-- **A field the operator scans is drawn as one line.** A claim is a line or two by validation
-  ([27](27-knowledge.md)) and clamped in CSS regardless, because a row filed before the three-field
-  split holds an entire report in it and the fold kept it whole rather than guessing where the seams
-  were.
+- **A field the operator scans is drawn as one line.** An obstacle's claim is one line by the intake's
+  own rule ([27](27-obstacles.md#the-intake)) and clamped in CSS regardless, because free text an agent
+  wrote is free text however it was asked for.
 
 ### Tracker-authored prose
 
@@ -5411,7 +5255,7 @@ disagree with what the dispatcher does:
 `health.reasons`, `QueueItem.reason`, `pickup.reasons` and the appraisal summary are quoted, never parsed —
 the rule that keeps the cockpit from holding a second opinion about a decision made elsewhere, drawn
 inches from the first. The **lenses** that produce them — the work graph (`src/graph/`), `buildStacks`,
-`prAttentionStatus`, `knowledge` and `overlaps` — stay read-only views out of `src/dispatcher/`, asserted
+`prAttentionStatus` and `overlaps` — stay read-only views out of `src/dispatcher/`, asserted
 structurally in `test/workGraph.test.ts`, `test/stacks.test.ts` and `test/prAttention.test.ts`.
 
 ## What ships and nothing draws

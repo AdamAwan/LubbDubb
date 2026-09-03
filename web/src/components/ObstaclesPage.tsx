@@ -21,7 +21,7 @@ import { absDate, relTime, untilTime } from './util.js';
  * that stands until the operator lifts it in writing. A nav slot is the most
  * expensive space in the cockpit, and the one question this subsystem has not
  * settled is whether agents call its tool at all
- * ([32](../../../docs/spec/32-obstacles.md#what-is-not-settled)); the answer to
+ * ([27](../../../docs/spec/27-obstacles.md#what-is-not-settled)); the answer to
  * that is the call rate below, and it arrives as a number whether or not anybody
  * is looking.
  *
@@ -46,7 +46,7 @@ import { absDate, relTime, untilTime } from './util.js';
  * **Everything terminal is behind a fold that states its own size.** A tail that
  * names itself and its count cannot be mistaken for rows that went missing, and it
  * is what stops *resolved* reading as *deleted* — which is what
- * [27](../../../docs/spec/27-knowledge.md#the-queue-is-the-page) spent nine open
+ * the retired claim store's own page spent nine open
  * sections buying.
  *
  * **It draws what it counts and never what it would like to.** Sightings, goals
@@ -58,7 +58,7 @@ import { absDate, relTime, untilTime } from './util.js';
  * It fetches, so it lives here rather than under `console/` — the sanctioned route
  * the tickets tab and Insights already take, asserted in `test/console.test.ts`.
  *
- * → `docs/spec/32-obstacles.md#in-the-cockpit`, `docs/spec/17-cockpit.md`
+ * → `docs/spec/27-obstacles.md#in-the-cockpit`, `docs/spec/17-cockpit.md`
  */
 export function ObstaclesPage({
   open,

@@ -16,7 +16,7 @@ import type { ObstacleKeyKind } from '../types.js';
  *
  * Pure — no I/O, no clock, no store. What the world holds arrives as
  * {@link ObstacleWorld}, so the gates can be tested without one.
- * → `docs/spec/32-obstacles.md#where-a-key-comes-from`
+ * → `docs/spec/27-obstacles.md#where-a-key-comes-from`
  */
 
 /** A key before any gate has looked at it. */
@@ -129,7 +129,7 @@ export function extractKeys(input: {
  * what is being normalised is somebody else's output and outside this
  * repository's control. A runner image changes its error prefix and one obstacle
  * silently becomes two, or worse, two become one.
- * → `docs/spec/32-obstacles.md#signature-and-cmd-do-not-bind`
+ * → `docs/spec/27-obstacles.md#signature-and-cmd-do-not-bind`
  */
 function errorSignature(evidence: string): string | null {
   const line = evidence
