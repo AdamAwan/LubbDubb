@@ -34,6 +34,7 @@ function row(id: string, over: Partial<Obstacle> = {}, checks: string[] = ['test
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     lastSeenAt: '2026-01-01T00:00:00.000Z',
+    endedBy: null,
     ...over,
   };
   const keys: ObstacleKey[] = checks.map((value, i) => ({

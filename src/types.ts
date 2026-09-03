@@ -5287,4 +5287,75 @@ export interface Obstacle {
   updatedAt: string;
   /** The newest sighting, which is what decay reads. */
   lastSeenAt: string;
+  /**
+   * What ended it, or null while nothing has — the terminal states' own record of
+   * which of the four endings took the row.
+   *
+   * Null on every row a build before the endings wrote, and that is the honest
+   * reading rather than a hole a backfill has to fill: nothing could write
+   * `resolved` or `dormant` then, so no row that predates this column has ended at
+   * all. → `docs/spec/32-obstacles.md#how-an-obstacle-ends`
+   */
+  endedBy: ObstacleEnding | null;
 }
+
+/**
+ * Which of the four endings took a row.
+ *
+ * Recorded because the four are not interchangeable to anybody reading the board
+ * afterwards: a `condition` is the world saying it cleared, a `landing` is the
+ * owner's work shipping, an `expiry` is a clock running out on something no
+ * reading ever settled, and `decay` is nothing having said it for
+ * `obstacleDormantMs`. Read by nothing that decides.
+ */
+export type ObstacleEnding = 'condition' | 'landing' | 'expiry' | 'decay' | 'written-down';
+
+/**
+ * A condition the harness can evaluate, written by the harness and **never by an
+ * agent**.
+ *
+ * Settling one means reading a world object pulse after pulse, and the only party
+ * that can promise to do that is the one already reading it — an agent naming a
+ * condition would be naming something nothing watches.
+ * → `docs/spec/32-obstacles.md#how-an-obstacle-ends`
+ */
+export interface ObstacleCondition {
+  id: string;
+  obstacleId: string;
+  /** One kind to start: the named check going green on the named branch. */
+  kind: 'check-green';
+  /** The provider's own check name — a binding `check` key of the row. */
+  checkName: string;
+  /** The branch the harness saw it failing on, as the world named it. */
+  branch: string;
+  /**
+   * The first of the **two consecutive real world readings** a resolution needs, or
+   * null while the condition is not currently met. A reading that finds it unmet
+   * clears it, so "consecutive" is a fact about the column rather than a promise.
+   */
+  metAt: string | null;
+  createdAt: string;
+}
+
+/**
+ * A note being written into the repository: the documentation job opened for it,
+ * and what became of that job.
+ *
+ * One row per note, ever — the primary key is the obstacle. A note whose write-up
+ * was abandoned is not queued again: it stays `standing` and decays like anything
+ * else, where a retry on every pulse would be this subsystem spending the fleet on
+ * itself. → `docs/spec/32-obstacles.md#how-an-obstacle-ends`
+ */
+export interface ObstacleWriteUp {
+  obstacleId: string;
+  jobId: string;
+  /** The pull request the job opened, stamped as soon as the graph shows one. */
+  prRef: string | null;
+  /** `landed` or `abandoned`; null while the job is still going. */
+  outcome: ObstacleWriteUpOutcome | null;
+  createdAt: string;
+  settledAt: string | null;
+}
+
+/** What became of a note's documentation change. `unknown` settles nothing and is never stored. */
+export type ObstacleWriteUpOutcome = 'landed' | 'abandoned';

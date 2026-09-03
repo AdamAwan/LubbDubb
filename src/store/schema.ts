@@ -1680,7 +1680,8 @@ CREATE TABLE IF NOT EXISTS obstacles (
   until      TEXT,                 -- the reporter's clock, read only by the backstop; null for most
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
-  last_seen_at TEXT NOT NULL       -- the newest sighting, which is what decay reads
+  last_seen_at TEXT NOT NULL,      -- the newest sighting, which is what decay reads
+  ended_by   TEXT                  -- condition | landing | expiry | decay | written-down; null while nothing has
 );
 
 -- What identifies an obstacle: a fact about the world, never a sentence about it.
@@ -1762,6 +1763,47 @@ CREATE TABLE IF NOT EXISTS obstacle_blocks (
   created_at  TEXT NOT NULL
 );
 
+-- The conditions the harness has promised to watch for an obstacle, and how far
+-- through the two consecutive readings each one is.
+--
+-- Written by the harness and never by an agent: settling one means reading a world
+-- object pulse after pulse, and the only party that can promise to do that is the
+-- one already reading it. An agent naming a condition would be naming something
+-- nothing watches.
+--
+-- met_at is the *first* of the two consecutive real world readings a resolution
+-- needs, and a reading that finds the condition unmet clears it back to null — so
+-- "two consecutive" is a fact about this column rather than a promise. A local
+-- cycle serves no reading at all and never touches these rows: a resolution on a
+-- stale reading closes an obstacle that is still live, the fleet pays for it
+-- again, and nothing is red.
+CREATE TABLE IF NOT EXISTS obstacle_conditions (
+  id          TEXT PRIMARY KEY,
+  obstacle_id TEXT NOT NULL,
+  kind        TEXT NOT NULL,       -- check-green, the one kind to start
+  check_name  TEXT NOT NULL,       -- the provider's own name, from a binding check key
+  branch      TEXT NOT NULL,       -- the branch the harness saw it failing on
+  met_at      TEXT,                -- the first of the two readings; null while unmet
+  created_at  TEXT NOT NULL,
+  UNIQUE (obstacle_id, check_name, branch)
+);
+
+-- A note being written into the repository: the documentation job, and what became
+-- of it.
+--
+-- obstacle_id is the primary key, so a note is written up **once, ever**. A
+-- write-up that was abandoned leaves the note standing to decay like anything
+-- else; re-queueing it every pulse would be the subsystem whose point is not
+-- spending the fleet twice on one thing spending it on itself.
+CREATE TABLE IF NOT EXISTS obstacle_writeups (
+  obstacle_id TEXT PRIMARY KEY,
+  job_id      TEXT NOT NULL,
+  pr_ref      TEXT,                -- stamped as soon as the graph shows one
+  outcome     TEXT,                -- landed | abandoned; null while it is still going
+  created_at  TEXT NOT NULL,
+  settled_at  TEXT
+);
+
 CREATE TABLE IF NOT EXISTS rate_limit_readings (
   captured_at               TEXT PRIMARY KEY,
   five_hour_used_percentage REAL,
@@ -1806,4 +1848,6 @@ CREATE INDEX IF NOT EXISTS idx_obstacle_sightings_obstacle ON obstacle_sightings
 -- The mid-session desk asks one question per live agent: what has this one already
 -- been told? The primary key leads on the obstacle, so that read needs its own.
 CREATE INDEX IF NOT EXISTS idx_obstacle_notices_agent ON obstacle_notices(agent_id);
+-- obstacle_conditions needs no index of its own: every read of it is by
+-- obstacle_id, which is the leading column of the UNIQUE above.
 `;

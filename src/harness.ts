@@ -312,6 +312,18 @@ interface HarnessDeps {
    */
   obstacleOwnership?: { run(world: WorldSnapshot): Promise<void> };
   /**
+   * Ends an obstacle: a condition the harness watches met on two consecutive real
+   * readings, the owner landing, the reporter's clock running out, or nothing
+   * having said it for `obstacleDormantMs`. Absent = nothing ever ends (tests that
+   * do not care), and then a row stands where its sightings put it for ever.
+   *
+   * It writes `obstacles`, `obstacle_conditions` and `obstacle_writeups` rows, and
+   * queues one documentation job at a time for a standing note. It staffs nobody
+   * else and no rule reads what it writes.
+   * → `docs/spec/32-obstacles.md#how-an-obstacle-ends`
+   */
+  obstacleEndings?: { run(world: WorldSnapshot): void };
+  /**
    * The cross-fleet pool's one desk: polls everybody else's documents into the
    * mirror, and publishes this fleet's when they have moved. Absent = no pool
    * (tests that do not care, and every deployment on the `fake` default), and then
@@ -760,6 +772,22 @@ export class Harness extends EventEmitter {
       // is recorded and non-fatal, and a tracker that will not answer costs the
       // ticket and nothing else.
       await this.deps.obstacleOwnership?.run(world);
+      // And how each of them ends: a condition the harness promised to watch, the
+      // owner landing, the reporter's clock, or nothing having said it for a week.
+      //
+      // **Skipped on a local cycle, and not for the provider-traffic reason most of
+      // the others are.** A resolution fires on two consecutive *real* world
+      // readings, and the resolving read is never one the local cycle served: a
+      // local cycle re-serves the snapshot the last real one read, so counting it
+      // would take one reading twice and close an obstacle that is still live —
+      // the fleet then pays for it again, and nothing is red.
+      //
+      // **Below the ownership desk**, because it reads the owner the desk above may
+      // have just written, and above `decide` for the notice desk's reason: a row
+      // resolved here has left the prompt of every dispatch composed a few lines
+      // below, rather than being told to one more agent and taken back a pulse
+      // later. Every failure inside is recorded and non-fatal.
+      if (readWorld) this.deps.obstacleEndings?.run(world);
       // The distance above `fleet`: what other fleets have vouched for, landed here,
       // and what this fleet has vouched for, sent out.
       //

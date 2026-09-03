@@ -59,17 +59,21 @@ export const OBSTACLE_STATES_A_PERSON_MUST_LEAVE: readonly ObstacleState[] = ['m
 export const OBSTACLE_EXITS: Record<ObstacleState, readonly ObstacleExit[]> = {
   sighted: [
     { to: 'standing', by: 'evidence', how: 'a second independent voice says it' },
+    { to: 'resolved', by: 'clock', how: "the reporter's own until ran out on it" },
     { to: 'dormant', by: 'clock', how: 'nothing re-reports it inside obstacleDormantMs' },
     { to: 'muted', by: 'person', how: 'an operator says never tell the fleet this' },
   ],
   standing: [
     { to: 'owned', by: 'harness', how: 'the pulse files a ticket or a repair dispatch for it' },
-    { to: 'resolved', by: 'evidence', how: 'the world was observed to clear it' },
+    { to: 'resolved', by: 'evidence', how: 'the world was observed to clear it, on two consecutive readings' },
+    { to: 'resolved', by: 'evidence', how: "a note's documentation change landed, off the work graph" },
+    { to: 'resolved', by: 'clock', how: "the reporter's own until ran out on it" },
     { to: 'dormant', by: 'clock', how: 'nothing re-reports it inside obstacleDormantMs' },
     { to: 'muted', by: 'person', how: 'an operator says never tell the fleet this' },
   ],
   owned: [
     { to: 'resolved', by: 'evidence', how: 'the owner landed, off the landing sweep' },
+    { to: 'resolved', by: 'evidence', how: 'the world was observed to clear it, on two consecutive readings' },
     { to: 'standing', by: 'harness', how: 'the owner went away without landing' },
     { to: 'muted', by: 'person', how: 'an operator says never tell the fleet this' },
   ],

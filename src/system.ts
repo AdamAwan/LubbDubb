@@ -43,6 +43,7 @@ import { KNOWLEDGE_READ_LIMIT, renderKnowledgeBlock } from './knowledge/block.js
 import { KnowledgeClusterDesk } from './knowledge/cluster.js';
 import { KnowledgeGraduationDesk } from './knowledge/graduationDesk.js';
 import { KnowledgeNoticeDesk } from './knowledge/noticeDesk.js';
+import { ObstacleEndingsDesk } from './obstacles/endingsDesk.js';
 import { ObstacleNoticeDesk } from './obstacles/noticeDesk.js';
 import { ObstacleOwnershipDesk } from './obstacles/ownershipDesk.js';
 import { trackerCoordinates } from './mcp/findings.js';
@@ -1242,6 +1243,23 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     errors,
   });
 
+  // How each of them ends (`docs/spec/32-obstacles.md`, phase 4). Always wired,
+  // like the two desks above: without it a row stands where its sightings put it
+  // for ever, and a board that only grows is read past — which is what the store
+  // this replaces died of.
+  //
+  // The `docs-change` template a promoted claim already renders, and deliberately
+  // not a second id: everything it says about checking a claim before writing it
+  // down and finding the document that owns it is exactly as true of a note two
+  // agents corroborated, and an operator who overrode it to say where
+  // documentation lives in their repository said that once.
+  const obstacleEndings = new ObstacleEndingsDesk({
+    store,
+    dormantMs: config.obstacleDormantMs,
+    docsPrompt: (vars) => prompts.render('docs-change', vars),
+    errors,
+  });
+
   // The distance above `fleet` (issue #28): what this fleet has vouched for, carried
   // to the others, and a daily digest of what it spent. Wired **only when the pool
   // is selected** — unlike the two desks above, which are always on: with
@@ -1344,6 +1362,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     clusters,
     obstacleNotices,
     obstacleOwnership,
+    obstacleEndings,
     pool,
     heartbeatIntervalMs: config.heartbeatIntervalMs,
     idleHeartbeatIntervalMs: config.idleHeartbeatIntervalMs,

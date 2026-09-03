@@ -42,6 +42,7 @@ function standing(over: Partial<Obstacle> = {}, extra: Partial<ObstacleStanding>
       createdAt: NOW,
       updatedAt: NOW,
       lastSeenAt: NOW,
+      endedBy: null,
       ...over,
     },
     keys: [

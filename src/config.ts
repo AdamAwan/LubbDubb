@@ -485,6 +485,24 @@ export interface Config {
    */
   closedPrWindowMs: number;
   /**
+   * How long an obstacle nobody re-reports and nothing owns stays on the board
+   * before it goes `dormant`.
+   *
+   * **Decay is one of the four endings, and the only one that covers what no
+   * reading can see** — a bug in code nobody is touching, a line of documentation
+   * the code stopped agreeing with. A row that only ever arrives is a board that
+   * only grows, and a board that only grows is read past: it is what the store this
+   * replaces died of.
+   *
+   * The keys survive it, so nothing is lost by decaying early — a matching report
+   * reopens the row at `standing` with its whole history rather than filing a
+   * second one, which is the only way a fix that did not stick is visible as a
+   * recurrence. So the number is chosen against the *other* cost: a week is long
+   * enough that a genuinely live obstacle nobody happened to hit over a weekend is
+   * still on the board on Monday. → `docs/spec/32-obstacles.md#how-an-obstacle-ends`
+   */
+  obstacleDormantMs: number;
+  /**
    * The environments a goal's landed work travels to after it merges, and how to
    * ask each one whether it has a given commit.
    *
@@ -1111,6 +1129,7 @@ const DEFAULTS: Config = {
   review: DEFAULT_PR_REVIEW,
   localRun: DEFAULT_LOCAL_RUN,
   closedPrWindowMs: 6 * 60 * 60 * 1000,
+  obstacleDormantMs: 7 * 24 * 60 * 60 * 1000,
   // Empty is the off switch, not an empty list of something switched on.
   environments: [],
   environmentProbeIntervalMs: 5 * 60 * 1000,
