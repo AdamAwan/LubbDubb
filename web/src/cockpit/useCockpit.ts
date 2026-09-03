@@ -433,6 +433,7 @@ export function useCockpit(): CockpitStatus {
       setIssueParent: (n, parent) => then(api.setIssueParent(n, parent)),
       setIssueAreaPath: (n, areaPath) => then(api.setIssueAreaPath(n, areaPath)),
       setPartProfile: (planId, slug, profile) => then(api.setPartProfile(planId, slug, profile)),
+      restartPart: (planId, slug) => then(api.restartPart(planId, slug)),
       setIssueConclusion: (n, verdict) => then(api.setIssueConclusion(n, verdict)),
       setIssueAppraisal: (n, verdict) => then(api.setIssueAppraisal(n, verdict)),
       addInstruction: (n, text) => then(api.addInstruction(n, text)),

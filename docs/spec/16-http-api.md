@@ -1943,6 +1943,47 @@ pending part costs and an operator re-pricing one about to go out wants that to 
 part already dispatched keeps what its task row stored, since resolution happens once, at dispatch.
 Returns `{ ok: true, part }`. → [02](02-configuration.md#pinning-one-goal-to-a-profile)
 
+### `POST /api/plans/:id/restart-part`
+
+`{ slug }`. Takes one plan part with an **in-flight pull request** back to `ready`, so rule
+`plan-part` works it again against the declaration the plan carries now — the operator's way out of an
+amendment that rewrote a part somebody is already halfway through building. 404 when the plan or the
+part is unknown.
+
+Three writes, in this order, and skipping any one of them makes it a no-op or worse:
+
+1. `ActionSink.closePr` — `observePartPr`'s first reading is "an open PR on the branch → `in_review`",
+   so a row reset on its own is undone by the reconciler on the very next pulse. This is the only step
+   that aborts the rest: it is the write on somebody else's system, and a part handed back to the
+   fleet with its pull request still open is one the reconciler drags back into review having deleted
+   its branch. On a failure nothing else has run, the part is exactly where it was, and the provider's
+   own sentence comes back as the 400.
+2. The branch, local then remote — `Worktrees.deleteBranch` (the lease _and_ the ref) and then
+   `ActionSink.deleteBranch`. `WorktreeManager.ensure` is reuse-first, so a branch left standing hands
+   the re-dispatched agent the commits the amendment just invalidated as its own starting point, and a
+   remote copy still carrying them refuses its push as a non-fast-forward. Both are best effort, as
+   [the reap](07-pull-requests.md#reaping-a-merged-branch)'s are: each failure is recorded and named in
+   `detail` rather than failing the restart.
+3. `Store.updatePlanPart` — `status: 'ready'`, `prNumber: null`, `branch: null` — **last**, so nothing
+   is dispatched until every step that could hold it back has been attempted.
+
+Then `world:changed` and a cycle, so the new run starts rather than waiting out a heartbeat. Returns
+`{ ok: true, part, detail }`, where `detail` is what actually happened in the operator's terms.
+
+Four refusals, all 400 and each naming its reason (`partRestartRefusal`, so the route and any surface
+that explains itself read one function):
+
+| Condition                         | Why                                                                                        |
+| --------------------------------- | ------------------------------------------------------------------------------------------ |
+| the part is `merged`/`concluded`  | restarting it asks the fleet to redo delivered work; amend the plan for a new part instead |
+| the part has no `prNumber`        | there is nothing to close, and it is already scheduled against the current declaration     |
+| a live agent on it                | the restart would delete the worktree an agent is sitting in                               |
+| `connector.canClosePr()` is false | `closePr` would throw, and the reconciler would put the part straight back into review     |
+
+**Nothing automatic reaches it.** Applying an amendment does not close a pull request: closing a
+reviewable one on the strength of a diff in a scope field is outward-facing and effectively
+irreversible, so it stays a person's act. → [08](08-planning.md#restarting-a-part)
+
 ### `POST /api/issues/:number/validation/:checkId/{result,defer,waive,reset}`
 
 Four routes, one write. `result` takes `{result: 'passed'|'failed', note}`, `defer` takes

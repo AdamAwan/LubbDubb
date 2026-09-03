@@ -609,6 +609,17 @@ export interface CockpitActions {
    * inherits the goal's pin again.
    */
   setPartProfile(planId: string, slug: string, profile: string | null): Promise<void>;
+  /**
+   * Restart one plan part: close the pull request it has open, drop its branch,
+   * and hand the part back to the fleet against the declaration the plan carries
+   * now — the operator's answer to an amendment that rewrote a part somebody is
+   * already halfway through building.
+   *
+   * On the seam for every mutation's reason: `console/` may not import `api.js`.
+   * **Never automatic** — applying an amendment reaches nothing here; closing a
+   * reviewable pull request is a person's act.
+   */
+  restartPart(planId: string, slug: string): Promise<void>;
   setIssueConclusion(issueNumber: number, verdict: 'done' | 'more_work' | null): Promise<void>;
   /**
    * Override the goal appraisal's verdict (#158). On the seam rather than in the

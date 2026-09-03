@@ -54,6 +54,10 @@ function countingSink(
     replies,
     resolved,
     canCloseIssue: () => false,
+    canClosePr: () => false,
+    closePr: (): never => {
+      throw new Error('closePr is not scripted in this test');
+    },
     canResolvePrThread: () => script.canResolve !== false,
     async resolvePrThread({ prNumber, commentId }) {
       if (script.resolveThrows) throw new Error(script.resolveThrows);

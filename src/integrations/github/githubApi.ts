@@ -110,6 +110,13 @@ export interface GitHubApi {
   /** Edit an existing issue comment in place, by its comment id. */
   updateIssueComment(commentId: number, body: string): Promise<GhCommentRef>;
   mergePull(number: number, method: MergeMethod): Promise<GhMergeResult>;
+  /**
+   * Close a pull request without merging it — `state: 'closed'` on the pulls API.
+   * Idempotent: closing a closed pull request is a no-op that succeeds. GitHub
+   * carries no close *reason* for a pull request the way it does for an issue, so
+   * unlike {@link closeIssue} there is nothing to state.
+   */
+  closePull(number: number): Promise<void>;
   /** Add (`present`) or remove a label on a PR. PRs are issues for the labels API. Idempotent. */
   setPullLabel(number: number, label: string, present: boolean): Promise<void>;
   /** Add (`present`) or remove a label on an issue — the watch/ignore toggle. Idempotent. */

@@ -2,7 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { orderedProfiles } from '../../agents/modelPolicy.js';
 import { planAmendmentProposalRef, planProposalRef } from '../../proposals/proposals.js';
-import { acceptanceCriteria } from '../../plans/parts.js';
+import { acceptanceCriteria, planIssueNumber } from '../../plans/parts.js';
+import { partRestartRefusal, restartPlanPart } from '../../plans/partRestart.js';
 import { latestPlanDiff, proposedPlanDiff } from '../../plans/planDiff.js';
 import { amendmentWarnings, supersedePlanAmendments } from '../../plans/planAmendment.js';
 import { planNarrative, planPartInputs, validatePlanDocument } from '../../plans/planDocument.js';
@@ -179,6 +180,52 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       // to go out wants that to land before it does.
       await harness.runCycle('manual');
       return { ok: true, part: updated };
+    }),
+  );
+
+  // Restart a part an amendment has overtaken: close its pull request, drop its
+  // branch, and put the row back to `ready` so rule `plan-part` schedules it again
+  // against the declaration the plan carries **now**.
+  //
+  // **Operator-triggered, and nothing else may reach it.** Applying an amendment
+  // deliberately stops no running work — a part keeps its branch, its PR and its
+  // status, and the diff the operator read is the diff of the *declaration*.
+  // Closing a reviewable pull request on the strength of a rewritten scope field is
+  // outward-facing and effectively irreversible, so it stays a person's act.
+  //
+  // Every refusal is a returned 400 naming the reason, never a throw: the four
+  // conditions are ordinary states a part can be in, and `setErrorHandler` means
+  // *unanticipated*. → `docs/spec/08-planning.md#restarting-a-part`
+  const RestartPartBody = z.object({ slug: requiredText('slug is required — the part being restarted') });
+  app.post(
+    '/api/plans/:id/restart-part',
+    checked({ params: IdParams, body: RestartPartBody }, async ({ params, body, reply }) => {
+      const plan = store.getPlan(params.id);
+      if (!plan) return reply.code(404).send({ error: 'plan not found' });
+      const part = store.listPlanParts(plan.id).find((p) => p.slug === body.slug);
+      if (!part) return reply.code(404).send({ error: `plan ${params.id} has no part "${body.slug}"` });
+      const issueNumber = planIssueNumber(plan.originRef);
+      if (issueNumber === null)
+        return reply.code(400).send({ error: `${plan.originRef} names no issue, so its parts have no branch to drop` });
+      // The capability is asked of the connector, exactly as the close-out row's
+      // asks it: the cockpit reads the same flag off `config.canClosePr` and draws
+      // no control where it is false, so this is the backstop rather than the notice.
+      const refusal = partRestartRefusal(part, store.listTasks(), system.connector.canClosePr());
+      if (refusal !== null) return reply.code(400).send({ error: refusal });
+
+      const done = await restartPlanPart(
+        { store, sink: system.connector, worktrees: system.worktrees, errors: system.errors },
+        part,
+        issueNumber,
+      );
+      if (!done.ok) return reply.code(400).send({ error: done.error });
+      hub.broadcast({ type: 'world:changed' });
+      // A cycle, for the reason the part-profile pin runs one and rather more so:
+      // the pull request just left the provider's open list, and the part is
+      // dispatchable again — an operator who restarts a part wants the new run to
+      // start, not to wait out a heartbeat for it.
+      await harness.runCycle('manual');
+      return { ok: true, part: done.part, detail: done.detail };
     }),
   );
 }

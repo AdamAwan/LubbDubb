@@ -11,6 +11,7 @@ import type {
   IssueLabelInput,
   PrBaseInput,
   PrBaseUpdateInput,
+  PrCloseInput,
   PrCreateInput,
   PrLabelInput,
   PrMergeInput,
@@ -157,6 +158,25 @@ export interface PrMergeCapable {
 
 export function isPrMergeCapable(x: Integration): x is Integration & PrMergeCapable {
   return typeof (x as Partial<PrMergeCapable>).mergePr === 'function';
+}
+
+/**
+ * An integration that can **close** a pull request without merging it — the plan
+ * part restart's superseded PR ([08](../../docs/spec/08-planning.md#restarting-a-part)).
+ *
+ * Its own capability rather than a method on {@link PrMergeCapable}, for
+ * {@link IssueCloseCapable}'s reason: merging and abandoning are different
+ * provider operations reached through different fields, and a provider may
+ * genuinely have one without the other. Both providers here implement it, and
+ * both make it idempotent — GitHub patches `state`, Azure patches `status`, and
+ * neither minds being told what is already true.
+ */
+export interface PrCloseCapable {
+  closePr(input: PrCloseInput): Promise<SendResult>;
+}
+
+export function isPrCloseCapable(x: Integration): x is Integration & PrCloseCapable {
+  return typeof (x as Partial<PrCloseCapable>).closePr === 'function';
 }
 
 /**

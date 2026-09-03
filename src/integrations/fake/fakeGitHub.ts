@@ -4,6 +4,7 @@ import type {
   BranchDeleteInput,
   PrBaseInput,
   PrBaseUpdateInput,
+  PrCloseInput,
   PrCreateInput,
   PrLabelInput,
   PrMergeInput,
@@ -21,6 +22,7 @@ import type {
   Integration,
   PrBaseCapable,
   PrBaseUpdateCapable,
+  PrCloseCapable,
   PrCreateCapable,
   PrLabelCapable,
   PrMergeCapable,
@@ -56,6 +58,7 @@ export class FakeGitHubIntegration
     PrReplyCapable,
     PrThreadResolveCapable,
     PrMergeCapable,
+    PrCloseCapable,
     PrLabelCapable,
     PrCreateCapable,
     PrTitleCapable,
@@ -208,6 +211,29 @@ export class FakeGitHubIntegration
     this.world.mutate((world) => mutatePr(world, input.prNumber, (pr) => (pr.merged = true)));
     const ref = `fake-merge_${nanoid(6)}`;
     return { ok: true, ref };
+  }
+
+  /**
+   * The outbound side of closing a pull request that will not be merged — the plan
+   * part restart (`src/plans/partRestart.ts`).
+   *
+   * Unlike {@link mergePr} this **moves the row**, exactly as the `pr_closed`
+   * injection does and for its reason: a closed pull request that stayed in the
+   * open list would be read by `observePartPr` as still `in_review`, which is the
+   * one thing the restart exists to get past — so a fake that only flagged it
+   * would let the whole feature pass its tests while doing nothing in production.
+   *
+   * Idempotent: a pull request the open list no longer carries is a success, which
+   * is what makes pressing restart twice safe.
+   */
+  closePr(input: PrCloseInput): Promise<SendResult> {
+    this.world.mutate((world) => {
+      const idx = world.pullRequests.findIndex((p) => p.number === input.prNumber);
+      if (idx === -1) return;
+      const [pr] = world.pullRequests.splice(idx, 1);
+      world.closedPullRequests.push({ ...pr!, merged: false, state: 'closed', closedAt: new Date().toISOString() });
+    });
+    return Promise.resolve({ ok: true, ref: `fake-close_${nanoid(6)}` });
   }
 
   /**

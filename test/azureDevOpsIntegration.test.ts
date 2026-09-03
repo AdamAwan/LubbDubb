@@ -114,6 +114,8 @@ interface Recorded {
   titleSets: Array<{ id: number; title: string }>;
   baseSets: Array<{ id: number; base: string }>;
   deletedBranches: string[];
+  /** Pull requests `abandonPullRequest` was called for — the restart's close. */
+  abandoned: number[];
 }
 
 function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded } {
@@ -144,6 +146,7 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     titleSets: [],
     baseSets: [],
     deletedBranches: [],
+    abandoned: [],
   };
   const api: AzureDevOpsApi = {
     async createPull(input) {
@@ -155,6 +158,9 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     },
     async setPullBase(id, base) {
       recorded.baseSets.push({ id, base });
+    },
+    async abandonPullRequest(pullRequestId) {
+      recorded.abandoned.push(pullRequestId);
     },
     async deleteBranch(branch) {
       recorded.deletedBranches.push(branch);
@@ -1361,6 +1367,17 @@ test('linkWorkItem hangs the pull request off the work item, provider-side', asy
   const res = await issues.linkWorkItem({ number: 101, prNumber: 88 });
   assert.equal(res.ok, true);
   assert.deepEqual(recorded.workItemLinks, [{ id: 101, pullRequestId: 88 }]);
+});
+
+test('closePr abandons a pull request, with no remembered merge commit', async () => {
+  const { api, recorded } = fakeApi();
+  const sc = new AzureDevOpsSourceControlIntegration({ api });
+
+  // Unlike `mergePr`, which refuses without the head commit a snapshot recorded:
+  // Azure asks for one only to *complete* a pull request, so an abandon works on
+  // one this process never read.
+  assert.deepEqual(await sc.closePr({ prNumber: 88 }), { ok: true, ref: 'pr:88' });
+  assert.deepEqual(recorded.abandoned, [88]);
 });
 
 test('deleteBranch reaps a merged branch, and an already-absent one is still a success', async () => {

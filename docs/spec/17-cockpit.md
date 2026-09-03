@@ -4594,6 +4594,14 @@ the stack edge spelled out as a sentence — a rejoin says _both_ out loud, whic
 wrote outside what it declared — the plan disagreeing with reality, which is the thing the surface
 exists to surface.
 
+**A part in review carries a restart**, beside its PR chip: a two-step `ConfirmButton` that closes the
+pull request, drops the branch and puts the part back to `ready`
+([08](08-planning.md#restarting-a-part)). Offered only on `in_review`, which is exactly the state that
+means an open pull request with no agent running — the other states are refusals the route would have
+to explain. And drawn **not at all** where `config.canClosePr` is false, the way the board draws no
+drag where `canSetWorkItemState` is false: the whole feature is absent on a provider that cannot close
+a pull request, rather than a control that fails on the deployments nobody tested.
+
 ### The validation digest
 
 `ValidationDigest` (`web/src/components/ValidationSection.tsx`) — the checks this plan proposes,

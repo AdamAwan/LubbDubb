@@ -4,6 +4,7 @@ import type {
   CiCheckRequeueInput,
   MergeMethod,
   PrBaseInput,
+  PrCloseInput,
   PrCreateInput,
   PrLabelInput,
   PrMergeInput,
@@ -22,6 +23,7 @@ import type {
   CiEvidenceCapable,
   Integration,
   PrBaseCapable,
+  PrCloseCapable,
   PrCreateCapable,
   PrLabelCapable,
   PrMergeCapable,
@@ -95,6 +97,7 @@ export class AzureDevOpsSourceControlIntegration
     PrReplyCapable,
     PrThreadResolveCapable,
     PrMergeCapable,
+    PrCloseCapable,
     PrLabelCapable,
     PrCreateCapable,
     PrTitleCapable,
@@ -347,6 +350,17 @@ export class AzureDevOpsSourceControlIntegration
     const result = await this.opts.api.completePullRequest(input.prNumber, commit, input.method);
     const ok = result.status === 'completed' || result.status === 'queued';
     return { ok, ref: result.status };
+  }
+
+  /**
+   * Close a pull request that will not be merged — `abandoned` on Azure, which is
+   * the same word the closed-window read maps to `closed`. Unlike {@link mergePr}
+   * it needs no remembered head commit: Azure asks for one only to complete, so an
+   * abandon works on a pull request this process never snapshotted.
+   */
+  async closePr(input: PrCloseInput): Promise<SendResult> {
+    await this.opts.api.abandonPullRequest(input.prNumber);
+    return { ok: true, ref: `pr:${input.prNumber}` };
   }
 
   async setPrLabel(input: PrLabelInput): Promise<SendResult> {

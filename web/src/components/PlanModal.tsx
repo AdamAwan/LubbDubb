@@ -20,6 +20,7 @@ import { DesktopLink } from './DesktopLink.js';
 import { CaveatChecklist, heldTitle, useAcknowledgements } from './CaveatChecklist.js';
 import { planCaveatsOf } from '../planCaveats.js';
 import { AsyncButton } from './AsyncButton.js';
+import { ConfirmButton } from './ConfirmButton.js';
 import { renderMarkdown } from './markdown.js';
 import { PlanMap } from './PlanMap.js';
 import { ProfilePicker } from './ProfilePicker.js';
@@ -73,6 +74,8 @@ export function PlanModal({
   onOpenGoal,
   onAcceptance,
   onPartProfile,
+  onRestartPart,
+  canClosePr,
   profiles,
   defaultProfile,
   desktopFolder,
@@ -126,6 +129,19 @@ export function PlanModal({
   onAcceptance: (planId: string, slug: string, criterion: string, met: boolean) => Promise<unknown> | unknown;
   /** Override which profile one part runs on, or clear it back to inheriting the goal's pin (#342). */
   onPartProfile: (planId: string, slug: string, profile: string | null) => Promise<unknown> | unknown;
+  /**
+   * Close a part's pull request, drop its branch and hand the part back to the
+   * fleet — the way out of an amendment that rewrote work already in review.
+   */
+  onRestartPart: (planId: string, slug: string) => Promise<unknown> | unknown;
+  /**
+   * `config.canClosePr` — whether this deployment's provider can close a pull
+   * request at all. False draws no restart control anywhere on the sheet, the way
+   * the board draws no drag where `canSetWorkItemState` is false: a button that
+   * closed nothing would take the part back to `ready` and let the reconciler put
+   * it straight back into review.
+   */
+  canClosePr: boolean;
   /** The profiles a part may be pinned to, cheapest first, and what an unpinned one falls back to. */
   profiles: { name: string; description: string }[];
   defaultProfile: string | null;
@@ -381,6 +397,7 @@ export function PlanModal({
                           onPin={(pin) => setPins({ ...pins, [part.slug]: pin })}
                           onAcceptance={(criterion, met) => onAcceptance(plan.id, part.slug, criterion, met)}
                           onPartProfile={(profile) => onPartProfile(plan.id, part.slug, profile)}
+                          onRestart={canClosePr ? () => onRestartPart(plan.id, part.slug) : undefined}
                           profiles={profiles}
                           defaultProfile={defaultProfile}
                         />
@@ -875,6 +892,7 @@ function PartBlock({
   onPin,
   onAcceptance,
   onPartProfile,
+  onRestart,
   profiles,
   defaultProfile,
 }: {
@@ -888,6 +906,11 @@ function PartBlock({
   onPin: (pin: Pin) => void;
   onAcceptance: (criterion: string, met: boolean) => Promise<unknown> | unknown;
   onPartProfile: (profile: string | null) => Promise<unknown> | unknown;
+  /**
+   * Undefined where this deployment's provider cannot close a pull request — the
+   * control is then absent rather than drawn and refused.
+   */
+  onRestart: (() => Promise<unknown> | unknown) | undefined;
   profiles: { name: string; description: string }[];
   defaultProfile: string | null;
 }) {
@@ -944,6 +967,19 @@ function PartBlock({
             >
               {queue.status === 'dispatching' ? '▶ now' : queue.status}
             </span>
+          )}
+          {/* Only where it applies: a part in review has a pull request open and no
+              agent on it (an agent still working is `dispatched`), which is exactly
+              the state an amendment overtakes. Two clicks, because closing somebody's
+              open pull request is not undoable from here. */}
+          {onRestart && part.status === 'in_review' && part.prNumber !== null && (
+            <ConfirmButton
+              className="small"
+              label="↺ restart"
+              confirmLabel="close the PR and restart"
+              title={`Close PR #${part.prNumber}, drop its branch, and put "${part.slug}" back to ready so it is worked again against the plan as it stands now.`}
+              onConfirm={onRestart}
+            />
           )}
           {pinnable && (
             <span className="pm-part-pins">
