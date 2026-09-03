@@ -732,6 +732,18 @@ the answer turns out to be that the plan is wrong. Everything about
 _how_ to run a given check comes back from the tools, which read the live plan; a skill that restated
 any of it would be a second copy of the procedure, drifting.
 
+**One section is appended rather than written into the body**: where LubbDubb's _own_ checkout is,
+when `installRoot()` resolves one (`desktopSkillDocument`, handed the root by `src/server/main.ts`).
+The session this skill is written for opens on `repoRoot` — the repository the fleet **works on** —
+and the cockpit's [Question?](17-cockpit.md#the-top-bar-and-the-panels) control collects plenty of questions
+that are about the harness instead: why nothing picked a goal up, why a rule did not fire. Answered
+from the harness's output those get the shape of confident wrong answer the `ask` section already
+warns about. The note says to read the record first and the source second, and to change nothing in
+that checkout — it is the running harness, and the fleet cuts its worktrees from it. Appended and not
+spliced in, the prompt templates' rule: a path interpolated into the body is a second thing to keep
+in step. A deployment running from a tarball resolves no root and gets the body unchanged, because a
+section naming a directory that is not there is worse than no section.
+
 It is always overwritten, and says so in its own body — telling an operator's edits from a stale copy
 has no honest implementation, and a skill that silently stopped being refreshed would describe a
 channel that had since changed. There is no key to stop it: the skill is the channel's interface, so

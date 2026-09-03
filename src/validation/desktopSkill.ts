@@ -398,6 +398,51 @@ which check if more than one is outstanding.
 `;
 
 /**
+ * The skill as it is written to disk: the body above, plus — when the harness can
+ * see its own checkout — a note saying where that checkout is.
+ *
+ * **Appended, never interpolated.** The body is one fixed document, and a path
+ * spliced into it would be a second thing to keep in step every time either moves;
+ * the same argument the prompt templates are built on. A deployment running from a
+ * tarball resolves no root and gets the body unchanged, which is the honest answer
+ * — a section naming a directory that is not there is worse than no section.
+ *
+ * It exists because of what the cockpit's *Question?* control actually
+ * collects. The deep link opens the session on `repoRoot`, the repository the
+ * fleet **works on**, and most questions are about that work. But a fair share are
+ * not — "why has nothing picked this up", "is this a bug in LubbDubb" — and the
+ * two repositories are different directories on this machine except while LubbDubb
+ * is dogfooding itself. Without this note the session answers a question about the
+ * harness from the harness's *output*, which is the shape of confident wrong answer
+ * the `ask` section already warns about.
+ * → `docs/spec/26-setup.md`
+ */
+function desktopSkillDocument(harnessRoot: string | null): string {
+  if (harnessRoot === null) return DESKTOP_SKILL;
+  return `${DESKTOP_SKILL}
+## Where LubbDubb's own source is
+
+This session is open on the repository the fleet **works on**. LubbDubb itself —
+the harness, the cockpit, the dispatcher — is a different checkout, at:
+
+    ${harnessRoot}
+
+Read it when the question is about the harness's own behaviour rather than about
+the work: why a goal was not picked up, why a rule did not fire, why the cockpit
+shows what it shows. \`docs/spec/\` there is the specification, one document per
+subsystem, and \`docs/README.md\` is its index.
+
+- **The record first, the source second.** \`fleet_status\` and \`goal_read\` say
+  what this deployment actually did. The source says what it is meant to do, and
+  the answer to "why is this not being done" is usually a hold the record names —
+  not a bug.
+- **Change nothing there.** That checkout is the running harness, and the fleet
+  cuts its worktrees from it. A fault worth fixing is worth filing: say so, and
+  leave it to the operator's cockpit, which files it on LubbDubb's own tracker.
+`;
+}
+
+/**
  * Install (or refresh) the skill. Best-effort by contract, like everything else
  * on this channel: a failure is recorded and the harness carries on, because the
  * tools still work when the operator asks for them in their own words.
@@ -408,10 +453,10 @@ which check if more than one is outstanding.
  * setting that turns the writing off; the file says so in its own body, and
  * `validation.desktopSkillPath` is the only way to put it somewhere else.
  */
-export function installDesktopSkill(path: string, errors?: ErrorRecorder): boolean {
+export function installDesktopSkill(path: string, errors?: ErrorRecorder, harnessRoot: string | null = null): boolean {
   try {
     mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, DESKTOP_SKILL);
+    writeFileSync(path, desktopSkillDocument(harnessRoot));
     return true;
   } catch (err) {
     errors?.record({
