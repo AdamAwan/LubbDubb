@@ -1,8 +1,9 @@
 # 32 — Obstacles
 
 **Partly built.** The spine is running: the tables, the keys and their three gates, the matcher, the
-states, the intake, both delivery channels, ownership and the `blocked` verdict. What is not yet
-built carries its own marker, section by section — the ways an obstacle ends, and the cockpit tab.
+states, the intake, both delivery channels, ownership, the `blocked` verdict and the four ways an
+obstacle ends. What is not yet built carries its own marker, section by section — the model desk,
+the harness's own voice, and the cockpit tab.
 It supersedes [27](27-knowledge.md) on landing — that document describes the claim store this
 replaces, and what it says is true of the harness today; a **note** still lands there, through the
 same intake, until the last of these sections is built. The change that lands the last of them deletes
@@ -185,7 +186,7 @@ be.
 | `sighted`  | One voice has said it. It may be that goal's own doing.  | Nobody.                                            |
 | `standing` | **Two independent voices** have said it.                 | Every dispatch its keys match, and running agents. |
 | `owned`    | Something is fixing it.                                  | The same, plus _do not fix it_.                    |
-| `resolved` | The world was observed to clear it, or the owner landed. | Nobody. Keeps its keys.                            |
+| `resolved` | The world cleared it, the owner landed, or a clock ran out. | Nobody. Keeps its keys.                        |
 | `dormant`  | Nothing has re-reported it inside `obstacleDormantMs`.   | Nobody. Keeps its keys.                            |
 | `muted`    | You said never tell the fleet this.                      | Nobody.                                            |
 
@@ -202,11 +203,11 @@ voice. Anything the count cannot tell apart from an echo is not a second voice.
 **One report is not evidence.** It is also the case the harness cannot tell apart from an agent
 mis-diagnosing its own breakage, which is why `sighted` reaches nobody.
 
-The states and their exits are declared in `src/obstacles/lifecycle.ts`, and what moves a row today
-is a report: `sighted` on the first voice, `standing` on the second, and back to `standing` from a
-terminal state on a re-report. `owned` is written on the pulse by the ownership desk
-(`src/obstacles/ownershipDesk.ts`). **Not yet built:** nothing writes `resolved` or `dormant` —
-those are the world-condition and decay phases, and each is marked below.
+The states and their exits are declared in `src/obstacles/lifecycle.ts`. A report moves a row to
+`sighted` on the first voice, `standing` on the second, and back to `standing` from a terminal state
+on a re-report; `owned` is written on the pulse by the ownership desk
+(`src/obstacles/ownershipDesk.ts`), and `resolved` and `dormant` by the endings desk
+(`src/obstacles/endingsDesk.ts`) below.
 
 ### The harness is a voice
 
@@ -464,32 +465,60 @@ allowance on it.
 
 ## How an obstacle ends
 
-**Not yet built.** A row stands where its sightings put it; nothing settles, lands, expires or
-decays one yet. `obstacleDormantMs` is named here and is not yet a setting.
+Four endings, on the pulse, in `src/obstacles/endings.ts` (the readings) and
+`src/obstacles/endingsDesk.ts` (the desk that acts on them), below the ownership desk so it reads
+the owner that desk may have just written. Which one took a row is recorded on it as `endedBy`,
+because the four are not interchangeable to anybody reading the board afterwards.
 
 - **A condition the harness can evaluate**, written by the harness and never by an agent. Settling one
   means reading a world object pulse after pulse, and the only party that can promise to do that is the
   one already reading it — an agent naming a condition would be naming something nothing watches. One
   kind to start, the named check going green on the named branch; also met when the check stops being
   reported and when the pull request leaves the open set. A check sitting at `pending` does not meet
-  it: a re-run in flight is not a green one.
-- **The owner landing**, read off the existing landing sweep and never off the merge itself. The merge
-  SHA has a `closedPrWindowMs` shelf life, so a hook on the transition loses the landing to any restart
-  that straddles it ([24](24-environments.md#recording-a-landing)).
+  it: a re-run in flight is not a green one. A provider reporting no per-check detail at all is *no
+  reading*, never *no longer reported*, or a deployment with detail switched off would resolve its
+  whole board at once — the [three verdicts](24-environments.md#the-three-verdicts) again. **Every**
+  condition on a row must be met and not any of them: an obstacle red on two branches is not over
+  when one goes green. The rows are `obstacle_conditions`, keyed on `(obstacle, check, branch)` so a
+  still-red check re-promises nothing.
+- **The owner landing**, read off the existing landing sweep (`Store.listGoalLandings`) and never off
+  the merge itself. The merge SHA has a `closedPrWindowMs` shelf life, so a hook on the transition
+  loses the landing to any restart that straddles it
+  ([24](24-environments.md#recording-a-landing)). Only the **ticket** door is reachable this way,
+  because the sweep files a landing under a goal root and a repair dispatch owns a row as
+  `obstacle:<id>`, which is no goal: its own ending is the condition it was dispatched against, or
+  the two below.
 - **A clock, as a backstop and never as the mechanism.** The intake's `until` seeds it and nothing
   else reads that field: it expires a row that no condition and no owner ever settled, and it cannot
   resolve one early. A timer alone either drops an obstacle while it is still true, and the fleet
   rediscovers it, or keeps one alive after the fix landed, which teaches every agent to disbelieve a
-  check that is now genuinely broken. Both silent.
-- **Decay.** No report for `obstacleDormantMs` and no owner → `dormant`. The keys survive, so a
-  re-report reopens rather than refiles.
+  check that is now genuinely broken. Both silent. A row **said again after its deadline** has
+  outlived the estimate and the clock stops applying to it: the deadline is stamped once, from the
+  first report, so a row that reopens after it would otherwise be expired by the very next pulse and
+  the re-report would buy nothing.
+- **Decay.** No report for `obstacleDormantMs` ([02](02-configuration.md)) and no owner
+  → `dormant`, read off `last_seen_at` and never `updated_at`: a row re-reported daily and never
+  promoted is not dormant. The keys survive, so a re-report reopens rather than refiles.
 - **A note ends by being written into the repository.** A `standing` note gets a documentation change;
   on merge it is `resolved` and leaves every prompt, because an agent reads it from the tree and keeping
-  it delivered pays for one sentence twice.
+  it delivered pays for one sentence twice. It is the `docs-change` template a promoted claim already
+  renders, with what the voices said **appended** rather than interpolated
+  ([05](05-dispatcher.md#prompt-templates)) — and the job is an ordinary one, ranked and priced like
+  any other, bounded to **one in flight** for the repair rule's reason. What became of it is read off
+  the work graph (`obstacle_writeups`), which remembers a merge long after `closedPullRequests` has
+  forgotten it; a merge the graph only *inferred* settles nothing. One write-up per note, ever: an
+  abandoned one leaves the note standing to decay, where a retry every pulse would be the subsystem
+  whose point is not spending the fleet twice on one thing spending it on itself.
 
 **A resolution fires on two consecutive real world readings**, and the resolving read is never one the
-local cycle served. A resolution on a stale reading closes an obstacle that is still live, the fleet
-pays for it again, and nothing is red.
+local cycle served — the desk is skipped on a local cycle, which re-serves the reading the last real
+one took, and a condition found unmet clears its own stamp so *consecutive* is a fact about a column
+rather than a promise. A resolution on a stale reading closes an obstacle that is still live, the
+fleet pays for it again, and nothing is red.
+
+Nothing here moves a `muted` row, and nothing restamps a row that has already ended: the guard is on
+the states an ending may take, so an operator's silence is never argued with and the ending that took
+a row is the first one that did, not whichever sweep noticed second.
 
 ## In the cockpit
 

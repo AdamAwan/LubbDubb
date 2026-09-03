@@ -182,9 +182,13 @@ import type {
   BugFiling,
   Obstacle,
   ObstacleBlock,
+  ObstacleCondition,
+  ObstacleEnding,
   ObstacleKey,
   ObstacleSighting,
   ObstacleStanding,
+  ObstacleWriteUp,
+  ObstacleWriteUpOutcome,
   WorldEvent,
   WorldEventInput,
   WorldEventKind,
@@ -1577,6 +1581,63 @@ export class Store {
 
   clearObstacleBlock(originRef: string): void {
     this.obstacles.clearObstacleBlock(originRef);
+  }
+
+  endObstacle(id: string, state: 'resolved' | 'dormant', endedBy: ObstacleEnding): boolean {
+    return this.obstacles.endObstacle(id, state, endedBy);
+  }
+
+  watchObstacleCondition(...args: Parameters<ObstacleStore['watchObstacleCondition']>): void {
+    this.obstacles.watchObstacleCondition(...args);
+  }
+
+  listObstacleConditions(obstacleId: string): ObstacleCondition[] {
+    return this.obstacles.listObstacleConditions(obstacleId);
+  }
+
+  setObstacleConditionMet(id: string, met: boolean): void {
+    this.obstacles.setObstacleConditionMet(id, met);
+  }
+
+  /**
+   * Queue the documentation job a note is written up by, and record the write-up
+   * against it in the same transaction.
+   *
+   * One write for both, `exitFact`'s shape and for its reason: a job with no
+   * write-up is a documentation change nothing will ever settle a note from, and a
+   * write-up naming no job is a note the board shows as on its way somewhere
+   * nothing is taking it.
+   *
+   * The job carries **no origin**. A note is about the repository rather than about
+   * a world item, and the graph adopts a job by its origin — so attributing this
+   * one to whichever goal happened to hit the note first would file the work under
+   * somebody else's issue.
+   */
+  writeUpObstacle(obstacleId: string, work: { title: string; prompt: string }): Job {
+    const write = this.db.transaction((): Job => {
+      // A `code` job: it writes files in a tree, so it needs a worktree and a
+      // branch to open the pull request from.
+      const job = this.jobs.createJob({ title: work.title, prompt: work.prompt, kind: 'code' });
+      this.obstacles.recordObstacleWriteUp(obstacleId, job.id);
+      return job;
+    });
+    return write();
+  }
+
+  obstaclesWrittenUp(): Set<string> {
+    return this.obstacles.obstaclesWrittenUp();
+  }
+
+  openObstacleWriteUps(): ObstacleWriteUp[] {
+    return this.obstacles.openObstacleWriteUps();
+  }
+
+  noteObstacleWriteUpPr(obstacleId: string, prRef: string): void {
+    this.obstacles.noteObstacleWriteUpPr(obstacleId, prRef);
+  }
+
+  settleObstacleWriteUp(obstacleId: string, outcome: ObstacleWriteUpOutcome): boolean {
+    return this.obstacles.settleObstacleWriteUp(obstacleId, outcome);
   }
 
   prReplyRefs(prNumber: number): ReadonlySet<string> {

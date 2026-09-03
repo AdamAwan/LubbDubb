@@ -5,11 +5,15 @@ import type { GatedKey } from '../obstacles/keys.js';
 import type {
   Obstacle,
   ObstacleBlock,
+  ObstacleCondition,
+  ObstacleEnding,
   ObstacleKey,
   ObstacleKind,
   ObstacleSighting,
   ObstacleStanding,
   ObstacleState,
+  ObstacleWriteUp,
+  ObstacleWriteUpOutcome,
 } from '../types.js';
 import type { ColumnMigrations } from './migrate.js';
 import type { StoreContext } from './context.js';
@@ -31,11 +35,17 @@ import type { StoreContext } from './context.js';
  * report to the winner. Two agents reporting in the same millisecond cannot both
  * create a row, and neither waits.
  *
- * The five tables are new, so they need no {@link OBSTACLE_COLUMNS} entries — and
- * being new *once* is what stops that keeping them exempt: the first column added
- * to any of them later belongs there. → `docs/spec/32-obstacles.md`
+ * The tables were new once, and being new *once* is what stops that keeping them
+ * exempt: `obstacles.ended_by` is the first column added to one of them after the
+ * fact, so it is declared below. → `docs/spec/32-obstacles.md`
+ *
+ * **It needs no backfill, and that is a reading rather than an omission.** A null
+ * `ended_by` means *this row has not ended*, which is true of every row in every
+ * database that predates the column: nothing could write `resolved` or `dormant`
+ * before the endings existed, so there is no row whose null is standing in for an
+ * ending nobody recorded. → CLAUDE.md, "when a null means something"
  */
-export const OBSTACLE_COLUMNS: ColumnMigrations = {};
+export const OBSTACLE_COLUMNS: ColumnMigrations = { obstacles: { ended_by: 'TEXT' } };
 
 /** What one report says, before any of it has been matched. */
 interface ObstacleReport {
@@ -93,6 +103,26 @@ interface ObstacleRow {
   created_at: string;
   updated_at: string;
   last_seen_at: string;
+  ended_by: string | null;
+}
+
+interface ConditionRow {
+  id: string;
+  obstacle_id: string;
+  kind: string;
+  check_name: string;
+  branch: string;
+  met_at: string | null;
+  created_at: string;
+}
+
+interface WriteUpRow {
+  obstacle_id: string;
+  job_id: string;
+  pr_ref: string | null;
+  outcome: string | null;
+  created_at: string;
+  settled_at: string | null;
 }
 
 interface KeyRow {
@@ -306,6 +336,131 @@ export class ObstacleStore {
     }));
   }
 
+  /**
+   * End a row, and record which of the endings took it.
+   *
+   * Guarded on the states an ending may take, which is what keeps every ending
+   * honest at once: **`muted` is never moved** — an operator said never tell the
+   * fleet this, and a world reading that un-muted a row would be the harness
+   * arguing with them — and a row already `resolved` or `dormant` keeps the ending
+   * that first took it rather than being restamped by whichever sweep noticed
+   * second.
+   *
+   * `dormant` narrows further, in the caller's own predicate as well as here: decay
+   * is *nothing has said it*, which an owned row cannot be.
+   * → `docs/spec/32-obstacles.md#how-an-obstacle-ends`
+   */
+  endObstacle(id: string, state: 'resolved' | 'dormant', endedBy: ObstacleEnding): boolean {
+    const result = this.ctx.db
+      .prepare(
+        `UPDATE obstacles SET state=?, ended_by=?, updated_at=?
+           WHERE id=? AND state IN ('sighted','standing','owned')`,
+      )
+      .run(state, endedBy, this.ctx.now(), id);
+    return result.changes > 0;
+  }
+
+  /**
+   * Promise to watch one condition, or say nothing where it is already promised.
+   *
+   * `INSERT OR IGNORE` against the UNIQUE on `(obstacle_id, check_name, branch)`:
+   * the harness re-reads the same red check every pulse it is still red, and a row
+   * per pulse would be a board of duplicate promises whose `met_at` columns
+   * disagreed about how far through the two readings the condition was.
+   *
+   * Nothing an agent calls reaches this. An agent naming a condition would be
+   * naming something nothing watches.
+   */
+  watchObstacleCondition(input: { obstacleId: string; kind: 'check-green'; checkName: string; branch: string }): void {
+    this.ctx.db
+      .prepare(
+        `INSERT OR IGNORE INTO obstacle_conditions (id, obstacle_id, kind, check_name, branch, met_at, created_at)
+         VALUES (?,?,?,?,?,NULL,?)`,
+      )
+      .run(`obc-${nanoid(8)}`, input.obstacleId, input.kind, input.checkName, input.branch, this.ctx.now());
+  }
+
+  /** Every condition the harness has promised to watch for one row, oldest first. */
+  listObstacleConditions(obstacleId: string): ObstacleCondition[] {
+    const rows = this.ctx.db
+      .prepare(`SELECT * FROM obstacle_conditions WHERE obstacle_id=? ORDER BY created_at ASC, rowid ASC`)
+      .all(obstacleId) as ConditionRow[];
+    return rows.map(toCondition);
+  }
+
+  /**
+   * Stamp a condition as met by *this* reading, or clear it because this reading
+   * says it is not.
+   *
+   * The stamp is the first of the two consecutive real world readings a resolution
+   * needs, and clearing on an unmet reading is what makes them consecutive rather
+   * than merely two. Only the transitions are written: a condition met on ten
+   * readings running keeps the instant of the first, so the column says when the
+   * world started agreeing rather than when it was last asked.
+   */
+  setObstacleConditionMet(id: string, met: boolean): void {
+    if (!met) {
+      this.ctx.db.prepare(`UPDATE obstacle_conditions SET met_at=NULL WHERE id=? AND met_at IS NOT NULL`).run(id);
+      return;
+    }
+    this.ctx.db
+      .prepare(`UPDATE obstacle_conditions SET met_at=? WHERE id=? AND met_at IS NULL`)
+      .run(this.ctx.now(), id);
+  }
+
+  /**
+   * Record the documentation job a note is being written up by.
+   *
+   * `OR IGNORE` on the obstacle's own primary key, so a note is written up **once,
+   * ever**: a write-up that was abandoned leaves the note standing to decay like
+   * anything else, where re-queueing it every pulse would be the subsystem whose
+   * point is not spending the fleet twice on one thing spending it on itself.
+   */
+  recordObstacleWriteUp(obstacleId: string, jobId: string): void {
+    this.ctx.db
+      .prepare(
+        `INSERT OR IGNORE INTO obstacle_writeups (obstacle_id, job_id, pr_ref, outcome, created_at, settled_at)
+         VALUES (?,?,NULL,NULL,?,NULL)`,
+      )
+      .run(obstacleId, jobId, this.ctx.now());
+  }
+
+  /** Every note that has ever been written up, settled or not — what stops a second attempt. */
+  obstaclesWrittenUp(): Set<string> {
+    const rows = this.ctx.db.prepare(`SELECT obstacle_id FROM obstacle_writeups`).all() as { obstacle_id: string }[];
+    return new Set(rows.map((row) => row.obstacle_id));
+  }
+
+  /** The write-ups the work graph can still settle — what the sweep walks. */
+  openObstacleWriteUps(): ObstacleWriteUp[] {
+    const rows = this.ctx.db
+      .prepare(`SELECT * FROM obstacle_writeups WHERE outcome IS NULL ORDER BY created_at ASC`)
+      .all() as WriteUpRow[];
+    return rows.map(toWriteUp);
+  }
+
+  /**
+   * Stamp the pull request a write-up's job opened, once and never again.
+   *
+   * Before the verdict and separately from it, for the graduation sweep's reason:
+   * a write-up that lands and one that is closed unmerged both need the reference
+   * drawn, and the graph's memory of which job produced a pull request outlives
+   * neither.
+   */
+  noteObstacleWriteUpPr(obstacleId: string, prRef: string): void {
+    this.ctx.db
+      .prepare(`UPDATE obstacle_writeups SET pr_ref=? WHERE obstacle_id=? AND pr_ref IS NULL AND outcome IS NULL`)
+      .run(prRef, obstacleId);
+  }
+
+  /** End a write-up. Guarded on it being open, so two passes cannot both settle one. */
+  settleObstacleWriteUp(obstacleId: string, outcome: ObstacleWriteUpOutcome): boolean {
+    const result = this.ctx.db
+      .prepare(`UPDATE obstacle_writeups SET outcome=?, settled_at=? WHERE obstacle_id=? AND outcome IS NULL`)
+      .run(outcome, this.ctx.now(), obstacleId);
+    return result.changes > 0;
+  }
+
   /** Let a goal back into pickup. The desk's whole act — nothing else is written. */
   clearObstacleBlock(originRef: string): void {
     this.ctx.db.prepare(`DELETE FROM obstacle_blocks WHERE origin_ref=?`).run(originRef);
@@ -413,6 +568,9 @@ export class ObstacleStore {
       createdAt: at,
       updatedAt: at,
       lastSeenAt: at,
+      // Nothing has ended it, which is what null says everywhere this column is
+      // read — including on every row written before the column existed.
+      endedBy: null,
     };
     this.ctx.db
       .prepare(
@@ -506,10 +664,15 @@ export class ObstacleStore {
    * a row whose state is unchanged is not a row nothing has said.
    */
   private setState(obstacle: Obstacle, state: ObstacleState, at: string): Obstacle {
+    // `ended_by` goes back to null with it, because no state {@link
+    // stateAfterSighting} can write is a terminal one: a row reopened by a matching
+    // report is standing again, and one that went on saying which ending took it
+    // would be a row the board describes as over while it is being told to the
+    // fleet.
     this.ctx.db
-      .prepare(`UPDATE obstacles SET state=?, updated_at=?, last_seen_at=? WHERE id=?`)
+      .prepare(`UPDATE obstacles SET state=?, ended_by=NULL, updated_at=?, last_seen_at=? WHERE id=?`)
       .run(state, at, at, obstacle.id);
-    return { ...obstacle, state, updatedAt: at, lastSeenAt: at };
+    return { ...obstacle, state, endedBy: null, updatedAt: at, lastSeenAt: at };
   }
 }
 
@@ -524,6 +687,30 @@ function toObstacle(row: ObstacleRow): Obstacle {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     lastSeenAt: row.last_seen_at,
+    endedBy: (row.ended_by as ObstacleEnding | null) ?? null,
+  };
+}
+
+function toCondition(row: ConditionRow): ObstacleCondition {
+  return {
+    id: row.id,
+    obstacleId: row.obstacle_id,
+    kind: row.kind as ObstacleCondition['kind'],
+    checkName: row.check_name,
+    branch: row.branch,
+    metAt: row.met_at,
+    createdAt: row.created_at,
+  };
+}
+
+function toWriteUp(row: WriteUpRow): ObstacleWriteUp {
+  return {
+    obstacleId: row.obstacle_id,
+    jobId: row.job_id,
+    prRef: row.pr_ref,
+    outcome: (row.outcome as ObstacleWriteUpOutcome | null) ?? null,
+    createdAt: row.created_at,
+    settledAt: row.settled_at,
   };
 }
 

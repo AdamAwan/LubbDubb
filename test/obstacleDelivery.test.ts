@@ -154,6 +154,7 @@ function row(over: Partial<Obstacle>, keys: Partial<ObstacleKey>[]): { obstacle:
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
       lastSeenAt: '2026-01-01T00:00:00.000Z',
+      endedBy: null,
       ...over,
     },
     keys: keys.map((key, i) => ({

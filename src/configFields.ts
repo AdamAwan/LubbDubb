@@ -162,6 +162,13 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'How far back a provider looks for pull requests that have left the open set.',
   },
   {
+    path: 'obstacleDormantMs',
+    type: 'number',
+    ms: true,
+    access: 'plain',
+    why: 'How long an obstacle nobody re-reports and nothing owns stays on the board before it goes dormant. Its keys survive, so a re-report reopens it rather than filing a second one.',
+  },
+  {
     path: 'environments',
     type: 'json',
     // `fileOnly` for `whitelistedApprovals`' reason and not because the shape is
