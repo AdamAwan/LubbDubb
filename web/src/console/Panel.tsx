@@ -1,4 +1,5 @@
 import { Modal } from '../components/Modal.js';
+import { Button } from '../components/button.js';
 
 /**
  * A full-surface panel with three ways out — the backdrop, the button and
@@ -11,9 +12,9 @@ export function Panel({ title, onClose, children }: { title: string; onClose: ()
     <Modal face="panel" label={title} onClose={onClose}>
       <header className="cn-panel-head">
         <h2>{title}</h2>
-        <button className="cn-btn" onClick={onClose}>
+        <Button family="console" onClick={onClose}>
           Close
-        </button>
+        </Button>
       </header>
       {children}
     </Modal>

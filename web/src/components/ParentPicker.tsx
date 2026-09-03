@@ -55,7 +55,8 @@ export function ParentPicker({
     <div className="cn-acts">
       {proposed !== null && (
         <AsyncButton
-          className="cn-btn cn-primary"
+          tone="primary"
+          family="console"
           onClick={() => actions.setIssueParent(issue.number, proposed)}
           title={`Hang this goal off #${proposed}`}
         >
@@ -81,7 +82,8 @@ export function ParentPicker({
             ))}
           </select>
           <AsyncButton
-            className={`cn-btn ${proposed === null ? 'cn-primary' : ''}`}
+            family="console"
+            tone={proposed === null ? 'primary' : undefined}
             disabled={chosen === ''}
             onClick={() => actions.setIssueParent(issue.number, Number(chosen))}
             title="Hang this goal off the container you picked"
@@ -91,7 +93,7 @@ export function ParentPicker({
         </>
       )}
       <AsyncButton
-        className="cn-btn"
+        family="console"
         onClick={() => actions.setIssueParent(issue.number, null)}
         title="This goal belongs under nothing — stop asking"
       >

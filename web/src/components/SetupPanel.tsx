@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import type { ConfigChange, SetupPayload, SetupResolvePayload } from '../types.js';
+import { Button } from './button.js';
 
 /**
  * Point the fleet at a project: one screen, pre-answered, and the file it writes.
@@ -141,22 +142,22 @@ export function SetupPanel({ onClose }: { onClose: () => void }): React.JSX.Elem
       </div>
 
       <div className="cn-setup-foot">
-        <button className="cn-btn" onClick={onClose}>
+        <Button family="console" onClick={onClose}>
           Cancel
-        </button>
+        </Button>
         <span className="cn-setup-hint">
           {preview === null
             ? 'Nothing is written until you have seen the file.'
             : 'Keys your team’s project file already sets are absent on purpose.'}
         </span>
         {preview === null ? (
-          <button className="cn-btn cn-primary" disabled={busy || resolved === null} onClick={() => void review()}>
+          <Button tone="primary" family="console" disabled={busy || resolved === null} onClick={() => void review()}>
             {busy ? 'Preparing…' : 'Show me the file'}
-          </button>
+          </Button>
         ) : (
-          <button className="cn-btn cn-primary" disabled={busy} onClick={() => void write()}>
+          <Button tone="primary" family="console" disabled={busy} onClick={() => void write()}>
             {busy ? 'Writing…' : 'Write the file'}
-          </button>
+          </Button>
         )}
       </div>
       {error !== null && <p className="cn-setup-err">{error}</p>}
@@ -299,9 +300,9 @@ function Done(props: { changes: readonly ConfigChange[]; onClose: () => void }):
       </p>
       <div className="cn-setup-foot">
         <span className="cn-setup-hint">Restart the harness to bring the rest in.</span>
-        <button className="cn-btn cn-primary" onClick={props.onClose}>
+        <Button tone="primary" family="console" onClick={props.onClose}>
           Done
-        </button>
+        </Button>
       </div>
     </div>
   );

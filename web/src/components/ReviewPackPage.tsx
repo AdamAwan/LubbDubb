@@ -294,12 +294,12 @@ function Share({
   }
   const share = sharing.share;
   const button = (label: string) => (
-    <AsyncButton className="ghost small" onClick={onShare} onRefused={onRefused} pendingLabel="sharing…">
+    <AsyncButton ghost size="small" onClick={onShare} onRefused={onRefused} pendingLabel="sharing…">
       {label}
     </AsyncButton>
   );
   const unshare = (
-    <AsyncButton className="ghost small" onClick={onUnshare} onRefused={onRefused} pendingLabel="unsharing…">
+    <AsyncButton ghost size="small" onClick={onUnshare} onRefused={onRefused} pendingLabel="unsharing…">
       Unshare
     </AsyncButton>
   );
@@ -423,7 +423,7 @@ function AskAgain({
 }): JSX.Element {
   return (
     <>
-      <AsyncButton className="ghost small" onClick={onAsk} onRefused={onRefused} pendingLabel="asking…">
+      <AsyncButton ghost size="small" onClick={onAsk} onRefused={onRefused} pendingLabel="asking…">
         Ask again
       </AsyncButton>
       {refused !== null && <p className="rp-refusal">{refused}</p>}
@@ -569,7 +569,7 @@ function IdeaRow({
             </div>
           )}
           <div className="rp-marks">
-            <AsyncButton className="ghost small" onClick={() => onRead(!marks.read)} pendingLabel="marking…">
+            <AsyncButton ghost size="small" onClick={() => onRead(!marks.read)} pendingLabel="marking…">
               {marks.read ? 'Mark unread' : 'Mark read'}
             </AsyncButton>
             <label className="rp-override">

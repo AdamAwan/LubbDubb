@@ -1668,10 +1668,19 @@ test('a key the staged config requires is marked, offered a value, and blocks th
   assert.ok(html.includes('cfg-need'), 'the row is marked as needed');
   assert.ok(html.includes('cfg-suggest'), 'the suggestion is offered as a control');
   assert.ok(html.includes('adam@lubbdubb'), 'and it is userId@pool.project');
+  // Matched on the attributes rather than on their order: the control is a
+  // `<Button>`, which spreads the caller's attributes before it resolves the
+  // class, so a rendering-order assertion here would fail on a change that moved
+  // nothing an operator can see.
   assert.match(
     html,
-    /<button class="btn primary small" disabled="">Review &amp; write<\/button>/,
+    /<button[^>]*\bdisabled=""[^>]*>Review &amp; write<\/button>/,
     'the write is refused while the requirement is unmet',
+  );
+  assert.match(
+    html,
+    /<button[^>]*class="btn primary small"[^>]*>Review &amp; write<\/button>/,
+    'and it is still the surface\u2019s primary control',
   );
   // Named rather than counted: the row is usually in a group the operator has
   // already navigated away from.

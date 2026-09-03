@@ -5,6 +5,7 @@ import { ConfirmButton } from './ConfirmButton.js';
 import { expectation, WatchReadingLine } from './WatchDigest.js';
 import { renderMarkdown } from './markdown.js';
 import { HeadRow } from './panel.js';
+import { Button } from './button.js';
 
 /**
  * The goal's declared checks, on the goal's own page, with the controls that
@@ -73,22 +74,20 @@ export function SignalsSection({
         <CheckForm kind={open} taken={taken} onSave={onSave} onClose={() => setOpen(null)} onDelete={null} />
       )}
       <div className="cn-sig-add">
-        <button
-          type="button"
-          className="cn-btn"
+        <Button
+          family="console"
           onClick={() => setOpen('signal')}
           title="Something that should not be happening: an exception, a failure, a retry. Needs a second query proving the code path runs."
         >
           Add a signal
-        </button>
-        <button
-          type="button"
-          className="cn-btn"
+        </Button>
+        <Button
+          family="console"
           onClick={() => setOpen('measure')}
           title="One number: a percentile, a rate, a duration. Needs a threshold, or the baseline it is compared against."
         >
           Add a measure
-        </button>
+        </Button>
         <span className="cn-sub">
           Saving puts the query to an environment once, with your credential — which is why it is asked.
         </span>
@@ -155,24 +154,24 @@ function SignalRow({
       </div>
       <div className="cn-sig-ctrls">
         {check.live ? (
-          <button type="button" className="cn-btn" onClick={onEdit}>
+          <Button family="console" onClick={onEdit}>
             Edit
-          </button>
+          </Button>
         ) : (
-          <AsyncButton className="cn-btn" onClick={() => onRule(check.id, true)}>
+          <AsyncButton family="console" onClick={() => onRule(check.id, true)}>
             Accept &amp; run
           </AsyncButton>
         )}
         {check.live ? (
           <ConfirmButton
-            className="cn-btn cn-danger"
+            family="console"
             label="Delete"
             confirmLabel="Delete it"
             title="Drop this check and the readings taken against it. A check the plan declares comes back on the next replan."
             onConfirm={onDelete}
           />
         ) : (
-          <AsyncButton className="cn-btn" onClick={() => onRule(check.id, false)}>
+          <AsyncButton family="console" onClick={() => onRule(check.id, false)}>
             Decline
           </AsyncButton>
         )}
@@ -397,7 +396,8 @@ function CheckForm({
         ))}
         <div className="cn-sig-ctrls">
           <AsyncButton
-            className="cn-btn cn-primary"
+            tone="primary"
+            family="console"
             disabled={refusal !== null}
             onClick={async () => {
               const said = await onSave(declaration(draft));
@@ -410,12 +410,13 @@ function CheckForm({
           >
             Save &amp; run
           </AsyncButton>
-          <button type="button" className="cn-btn" onClick={onClose}>
+          <Button family="console" onClick={onClose}>
             Cancel
-          </button>
+          </Button>
           {onDelete !== null && (
             <ConfirmButton
-              className="cn-btn cn-danger cn-sig-spacer"
+              family="console"
+              className="cn-sig-spacer"
               label="Delete"
               confirmLabel="Delete it"
               onConfirm={onDelete}

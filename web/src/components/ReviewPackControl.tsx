@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type JSX } from 'react';
 import { api, type ReviewPackReading } from '../api.js';
 import { packCurrency, packStanding } from '../view/reviewPack.js';
 import { AsyncButton } from './AsyncButton.js';
+import { Button } from './button.js';
 
 /** The row re-reads on this clock while an author or a checker is on the pull request. */
 const AGENT_POLL_MS = 4000;
@@ -94,7 +95,7 @@ export function ReviewPackControl({
     if (!canAsk) return null;
     return (
       <span className="rp-ctl">
-        <AsyncButton className="ghost small" onClick={ask} onRefused={setRefusal} pendingLabel="asking…">
+        <AsyncButton ghost size="small" onClick={ask} onRefused={setRefusal} pendingLabel="asking…">
           Review pack
         </AsyncButton>
         {refusal !== null && <span className="rp-ctl-refusal">{refusal}</span>}
@@ -125,9 +126,9 @@ export function ReviewPackControl({
   return (
     <span className="rp-ctl">
       {state}
-      <button type="button" className="btn ghost small" onClick={onOpen}>
+      <Button ghost size="small" onClick={onOpen}>
         Open pack
-      </button>
+      </Button>
     </span>
   );
 }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { PetView } from '../types.js';
 import { Modal } from './Modal.js';
 import { PetSprite } from './PetSprite.js';
+import { Button } from './button.js';
 
 /**
  * The shell coming off, over the surface the operator was already looking at.
@@ -118,9 +119,9 @@ export function HatchModal({
           </>
         )}
       </div>
-      <button type="button" className="cn-btn" onClick={onClose}>
+      <Button family="console" onClick={onClose}>
         {out ? 'Done' : 'Skip'}
-      </button>
+      </Button>
     </Modal>
   );
 }

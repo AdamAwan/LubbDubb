@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import { buttonClass } from './button.js';
+import type { ButtonLook } from './button.js';
 
 /**
  * Inline saving-feedback primitives. Every cockpit button that hits the server
@@ -105,9 +107,15 @@ export function useAsyncAction(): {
 }
 
 /**
- * A button that runs an async `onClick` and shows its progress inline. `className`
- * is the set of `.btn` modifiers (e.g. `primary`, `ghost`) — the base `btn` class
- * is applied here. `pendingLabel` replaces the whole label while in flight (pass a
+ * A button that runs an async `onClick` and shows its progress inline.
+ *
+ * Its look is [`Button`](./button.tsx)'s, through the same {@link buttonClass}
+ * seam: `tone`, `size` and `family` are props and `className` is shape only. It
+ * used to take the whole class string and prepend `btn` to it unconditionally,
+ * which is how the nine console-family async buttons went out wearing
+ * `class="btn cn-btn"` — two base families on one element.
+ *
+ * `pendingLabel` replaces the whole label while in flight (pass a
  * bare spinner for icon-only buttons); otherwise a spinner is prepended.
  *
  * A refusal replaces the button's `title` while it stands, so the reason is one
@@ -118,7 +126,11 @@ export function AsyncButton({
   onClick,
   onRefused,
   children,
-  className = '',
+  tone,
+  ghost,
+  size,
+  family,
+  className,
   disabled,
   pendingLabel,
   ...rest
@@ -127,12 +139,12 @@ export function AsyncButton({
   /** The route's own words when this click was refused. Called on every rejection. */
   onRefused?: (message: string) => void;
   children: ReactNode;
-  className?: string;
   disabled?: boolean;
   pendingLabel?: ReactNode;
-} & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onClick' | 'className' | 'disabled' | 'children'>) {
+} & ButtonLook &
+  Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onClick' | 'className' | 'disabled' | 'children'>) {
   const { phase, refusal, run } = useAsyncAction();
-  const cls = ['btn', className, flashClass(phase)].filter(Boolean).join(' ');
+  const cls = buttonClass({ tone, ghost, size, family, className }, flashClass(phase));
   return (
     <button
       type="button"
@@ -177,13 +189,16 @@ export function AsyncButton({
 export function SubmitButton({
   phase,
   children,
-  className = '',
+  tone,
+  ghost,
+  size,
+  family,
+  className,
 }: {
   phase: AsyncPhase;
   children: ReactNode;
-  className?: string;
-}) {
-  const cls = ['btn', className, flashClass(phase)].filter(Boolean).join(' ');
+} & ButtonLook) {
+  const cls = buttonClass({ tone, ghost, size, family, className }, flashClass(phase));
   return (
     <button type="submit" className={cls} disabled={phase === 'pending'} aria-busy={phase === 'pending'}>
       {phase === 'pending' && <span className="spinner" aria-hidden />}

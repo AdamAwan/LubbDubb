@@ -18,7 +18,8 @@ export function FleetControl({ live, cap, paused }: { live: number; cap: number;
     <div className={`fleet-control ${paused ? 'paused' : ''}`}>
       <span className="fc-label">cap</span>
       <AsyncButton
-        className="ghost fc-step"
+        ghost
+        className="fc-step"
         onClick={() => setCap(cap - 1)}
         disabled={cap <= 0}
         title="Lower the cap"
@@ -30,7 +31,8 @@ export function FleetControl({ live, cap, paused }: { live: number; cap: number;
         {live}/{cap}
       </span>
       <AsyncButton
-        className="ghost fc-step"
+        ghost
+        className="fc-step"
         onClick={() => setCap(cap + 1)}
         title="Raise the cap"
         pendingLabel={spinner}

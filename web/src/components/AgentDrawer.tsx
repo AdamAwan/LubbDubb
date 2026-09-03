@@ -9,6 +9,7 @@ import { FlagChips } from './FlagChips.js';
 import { Modal } from './Modal.js';
 import { FilesList } from './FilesList.js';
 import { TranscriptPane } from './TranscriptPane.js';
+import { Button } from './button.js';
 
 /**
  * How often the drawer re-reads the persisted transcript while the run is live.
@@ -192,9 +193,7 @@ export function AgentDrawer({
           {agent.status !== 'done' && (
             <ConfirmButton label="Kill" confirmLabel="Confirm kill" pendingLabel="Killing…" onConfirm={onKill} />
           )}
-          <button className="btn" onClick={onClose}>
-            Close
-          </button>
+          <Button onClick={onClose}>Close</Button>
         </div>
       </div>
       {task && (task.originTitle || task.originSummary || task.dispatchReason || task.model) && (
@@ -260,7 +259,7 @@ export function AgentDrawer({
       {limitParked && (
         <div className="park-notice">
           <b>Parked on a usage limit.</b> {agent.waitingReason ?? 'This account has no usage allowance left right now.'}
-          <AsyncButton className="primary" onClick={onResume} pendingLabel="Resuming…">
+          <AsyncButton tone="primary" onClick={onResume} pendingLabel="Resuming…">
             Resume
           </AsyncButton>
         </div>
@@ -281,7 +280,7 @@ export function AgentDrawer({
           }}
         >
           <input placeholder="Type into this agent…" value={text} onChange={(e) => setText(e.target.value)} />
-          <SubmitButton phase={send.phase} className="primary">
+          <SubmitButton phase={send.phase} tone="primary">
             Send
           </SubmitButton>
         </form>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { AsyncButton } from './AsyncButton.js';
 import { Modal } from './Modal.js';
+import { Button } from './button.js';
 
 /**
  * Where the operator says what they want done next on a goal.
@@ -55,10 +56,10 @@ export function InstructionModal({
       foot={
         <>
           <span className="spacer" />
-          <button className="btn ghost" onClick={onClose}>
+          <Button ghost onClick={onClose}>
             cancel
-          </button>
-          <AsyncButton className="primary" disabled={text.trim().length === 0} onClick={submit}>
+          </Button>
+          <AsyncButton tone="primary" disabled={text.trim().length === 0} onClick={submit}>
             send to the fleet
           </AsyncButton>
         </>

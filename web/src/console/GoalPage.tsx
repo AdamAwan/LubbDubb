@@ -47,6 +47,7 @@ import { WorkRecord } from '../components/WorkRecord.js';
 import { NeedsBand } from './NeedsBand.js';
 import { OrphanBand } from './OrphanBand.js';
 import { AgentOnIt } from '../components/AgentOnIt.js';
+import { Button } from '../components/button.js';
 
 /**
  * Where each of the track's stages jumps to. Anchors, not refs — one element on
@@ -802,7 +803,7 @@ function Validation({
             resources={page.checkResources}
             refUrls={refUrls}
             desktopFolder={desktopFolder}
-            buttonClass="cn-btn"
+            look={{ family: 'console' }}
             onResult={(checkId, result, note) =>
               actions.setValidation(issue.number, checkId, { kind: 'result', result, note })
             }
@@ -1369,9 +1370,9 @@ function Environments({
       {page.gateHold !== null && (
         <div className="cn-criteria">
           <p>{page.gateHold}</p>
-          <button className="btn ghost" onClick={() => setReleasing(true)}>
+          <Button ghost onClick={() => setReleasing(true)}>
             not waiting on an environment
-          </button>
+          </Button>
         </div>
       )}
       {page.gateRelease !== null && (
@@ -1380,9 +1381,9 @@ function Environments({
             Not waiting on an environment — “{page.gateRelease.note}”
             <span className="cn-sub"> · {relTime(page.gateRelease.releasedAt, now)}</span>
           </p>
-          <button className="btn ghost" onClick={() => void actions.releaseEnvironmentGate(number, false)}>
+          <Button ghost onClick={() => void actions.releaseEnvironmentGate(number, false)}>
             wait for one after all
-          </button>
+          </Button>
         </div>
       )}
       {releasing && page.gateHold !== null && (

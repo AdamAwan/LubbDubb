@@ -12,6 +12,7 @@ import {
 } from '../cockpit/theme.js';
 import { THEME_TOKENS, TOKEN_GROUPS, type ThemeToken, type TokenGroup } from '../cockpit/tokens.js';
 import { ColourField } from './ColourField.js';
+import { Button } from './button.js';
 
 /**
  * The theme: a preset, and any token moved off it.
@@ -179,9 +180,9 @@ export function ThemeSettings() {
           Show every token
         </label>
         {changed > 0 && (
-          <button className="btn ghost small" onClick={resetAll}>
+          <Button ghost size="small" onClick={resetAll}>
             Reset to {presetLabel}
-          </button>
+          </Button>
         )}
       </div>
 
@@ -270,12 +271,12 @@ export function ThemeSettings() {
           )}
         </span>
         <span className="th-baracts">
-          <button className="btn ghost small" onClick={revert} disabled={!dirty}>
+          <Button ghost size="small" onClick={revert} disabled={!dirty}>
             Revert unsaved
-          </button>
-          <button className="btn small" onClick={save} disabled={!dirty}>
+          </Button>
+          <Button size="small" onClick={save} disabled={!dirty}>
             Save
-          </button>
+          </Button>
         </span>
       </div>
     </div>

@@ -2036,12 +2036,19 @@
   gap: 6px;
   flex-wrap: wrap;
 }
-.cn-sig-row .cn-btn {
-  padding: 4px 10px;
-  font-size: 11.5px;
-}
-.cn-btn.cn-danger {
+.cn-btn.cn-btn.cn-danger {
   color: var(--cn-red-ink);
+}
+/* Armed = one destructive click away, the same statement `.btn.danger.armed`
+   makes in the shared family: filled red and pulsing, so the confirm is
+   deliberate. `armed-pulse` is declared once, in `styles.css`. */
+.cn-btn.cn-btn.cn-danger.armed,
+.cn-btn.cn-btn.cn-danger.armed:hover {
+  background: var(--cn-red-ink);
+  border-color: var(--cn-red-ink);
+  color: var(--cn-on-accent);
+  font-weight: 600;
+  animation: armed-pulse 1.2s ease-in-out infinite;
 }
 .cn-sig-form {
   display: flex;
@@ -2969,21 +2976,54 @@ button.cn-grow {
   gap: 8px;
   margin-top: 10px;
 }
-.cn-btn {
+/* The console family's button, and the counterpart to the shared sheet's `.btn`.
+   `Button` (`web/src/components/button.tsx`) is the only thing that writes these
+   class names; the vocabulary here mirrors the shared family's one for one, so a
+   tone means the same thing whichever family a surface draws in.
+
+   **The class is doubled**, for the reason the theme section's controls are
+   (`styles.css`, `.th-preset.th-preset`): this family is drawn inside `.cn`, and
+   `.cn button` resets its own markup at (0,1,1) — stronger than a single class.
+   Under a single class every plain `.cn-btn` rendered with no ground and no
+   border while `.cn-btn.cn-primary` at (0,2,0) rendered correctly, so the console
+   had one button family drawn two ways with nothing saying which was meant. */
+.cn-btn.cn-btn {
   border: 1px solid var(--cn-line);
   background: var(--cn-panel-2);
   border-radius: var(--cn-r-sm);
   padding: 7px 14px;
   color: var(--cn-fg-dim);
 }
-.cn-btn.cn-primary {
+.cn-btn.cn-btn.cn-primary {
   background: var(--cn-accent);
   border-color: var(--cn-accent);
   color: var(--cn-on-accent);
   font-weight: 600;
 }
-.cn-btn:hover {
+.cn-btn.cn-btn:hover {
   border-color: var(--cn-line-hi);
+}
+/* The quiet weight: the same box with no ground, for a control that sits beside
+   the one a surface expects to be pressed. */
+.cn-btn.cn-btn.cn-ghost {
+  background: transparent;
+}
+/* The small weight, which the signals row had written out as a descendant rule
+   before the vocabulary was a prop. */
+.cn-btn.cn-btn.cn-small {
+  padding: 4px 10px;
+  font-size: 11.5px;
+}
+/* Half-lit and not clickable, and the progress cursor while a request is in
+   flight — the shared family states both on `.btn`, and a console-family button
+   is the same control. */
+.cn-btn.cn-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.cn-btn.cn-btn[aria-busy='true'] {
+  cursor: progress;
+  opacity: 0.85;
 }
 
 .cn-ctx {

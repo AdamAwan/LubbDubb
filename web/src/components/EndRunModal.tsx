@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { AsyncButton } from './AsyncButton.js';
 import { Modal } from './Modal.js';
+import { Button } from './button.js';
 
 /**
  * The confirmation ending a run asks for — what it is about to destroy, and, on a
@@ -90,11 +91,11 @@ export function EndRunModal({
       foot={
         <>
           <span className="spacer" />
-          <button className="btn ghost" onClick={onClose}>
+          <Button ghost onClick={onClose}>
             cancel
-          </button>
+          </Button>
           <AsyncButton
-            className="danger"
+            tone="danger"
             disabled={required && trimmed.length === 0}
             onRefused={setRefusal}
             onClick={submit}

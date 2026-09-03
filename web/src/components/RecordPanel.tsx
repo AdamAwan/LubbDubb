@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import type { WorkNodeView } from '../types.js';
 import { Ref, RefLinksExtended } from './refs.js';
 import { WorkRow } from './workTree.js';
+import { Button } from './button.js';
 
 /**
  * The durable record of what the harness did — the one surface that outlives the
@@ -77,15 +78,15 @@ export function RecordPanel({ now }: { now: number }) {
               here would make its record unreachable rather than relocated. So the
               rows stay, drawn as references, and the component picks the
               destination. */}
-          <button
-            type="button"
-            className="btn ghost work-goals-head"
+          <Button
+            ghost
+            className="work-goals-head"
             onClick={() => setShowGoals(!showGoals)}
             title="Each of these is drawn in full on its own goal page"
           >
             <span className="work-caret">{showGoals ? '▾' : '▸'}</span>
             {goals.length} {goals.length === 1 ? 'goal' : 'goals'} — each on its own page
-          </button>
+          </Button>
           {showGoals && (
             <RefLinksExtended refUrls={rootUrls}>
               {goals.map((root) => (
@@ -103,11 +104,7 @@ export function RecordPanel({ now }: { now: number }) {
       )}
       {loose.map((root) => (
         <div className="work-root" key={root.ref}>
-          <button
-            type="button"
-            className="btn ghost work-root-head"
-            onClick={() => setOpen(open === root.ref ? null : root.ref)}
-          >
+          <Button ghost className="work-root-head" onClick={() => setOpen(open === root.ref ? null : root.ref)}>
             <span className="work-caret">{open === root.ref ? '▾' : '▸'}</span>
             <span className="work-title">{root.title}</span>
             <span className={`chip small${root.terminal ? ' ok' : ''}`}>{root.status}</span>
@@ -115,7 +112,7 @@ export function RecordPanel({ now }: { now: number }) {
                 `<a>` nested in one is invalid interactive content. The expanded
                 subtree draws this same root node with its ref linked. */}
             <span className="muted mono">{root.ref}</span>
-          </button>
+          </Button>
           {open === root.ref &&
             (subtree === null ? (
               <p className="muted work-loading">Reading the record…</p>

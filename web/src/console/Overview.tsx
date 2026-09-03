@@ -125,15 +125,15 @@ function Build({ view, actions }: { view: CockpitView; actions: CockpitActions }
               one is a button whose own state says it has nothing to do. */}
           {waiting ? (
             <>
-              <AsyncButton className="cn-btn cn-primary" onClick={() => actions.upgrade('apply')}>
+              <AsyncButton tone="primary" family="console" onClick={() => actions.upgrade('apply')}>
                 Apply now
               </AsyncButton>
-              <AsyncButton className="cn-btn" onClick={() => actions.upgrade('cancel')}>
+              <AsyncButton family="console" onClick={() => actions.upgrade('cancel')}>
                 Cancel
               </AsyncButton>
             </>
           ) : (
-            <AsyncButton className="cn-btn cn-primary" onClick={() => actions.upgrade('drain')}>
+            <AsyncButton tone="primary" family="console" onClick={() => actions.upgrade('drain')}>
               Queue upgrade
             </AsyncButton>
           )}
@@ -141,7 +141,7 @@ function Build({ view, actions }: { view: CockpitView; actions: CockpitActions }
               reaped, recorded and restored on the way back up — so the danger tone
               put an alarm colour on an ordinary decision, beside the safe path it
               is only a variant of. Weight separates the two here, never hue. */}
-          <AsyncButton className="cn-btn" onClick={() => actions.upgrade('apply', { interrupt: true })}>
+          <AsyncButton family="console" onClick={() => actions.upgrade('apply', { interrupt: true })}>
             Force upgrade
           </AsyncButton>
         </div>
@@ -200,7 +200,7 @@ function Project({ view, actions }: { view: CockpitView; actions: CockpitActions
           button gone" is the only question a missing control ever raises. */}
       {view.state.build.projectPull.can ? (
         <div className="cn-acts">
-          <AsyncButton className="cn-btn cn-primary" onClick={() => actions.pullProject()}>
+          <AsyncButton tone="primary" family="console" onClick={() => actions.pullProject()}>
             Pull
           </AsyncButton>
         </div>
@@ -607,7 +607,7 @@ function agentRow(agent: Agent, view: CockpitView, actions: CockpitActions): Pan
     // than inside it, since the row's own click opens the transcript.
     action: limited ? (
       <AsyncButton
-        className="cn-btn"
+        family="console"
         onClick={() => actions.resumeAgent(agent.id)}
         title={agent.waitingReason ?? 'Resume this agent now the limit has cleared'}
         pendingLabel="Resuming…"

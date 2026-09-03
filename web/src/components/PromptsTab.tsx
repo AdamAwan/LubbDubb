@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import type { PromptTemplateView } from '../types.js';
 import { Modal } from './Modal.js';
+import { Button } from './button.js';
 
 /**
  * What the harness says to its agents. Every agent-facing prompt the rule
@@ -87,7 +88,7 @@ function PromptList({
     <ul className="prompt-list">
       {book.templates.map((t) => (
         <li key={t.id}>
-          <button className="btn ghost prompt-row" onClick={() => onShow(t)}>
+          <Button ghost className="prompt-row" onClick={() => onShow(t)}>
             <code className="prompt-id">{t.id}</code>
             {t.overridden && <span className="chip warn">overridden</span>}
             {/* A retired id is still loadable — removing it would stop a customised
@@ -95,7 +96,7 @@ function PromptList({
                 left on one is doing nothing. Said here rather than left to look live. */}
             {t.retired && <span className="chip">retired</span>}
             <span className="muted prompt-doc">{firstSentence(t.doc)}</span>
-          </button>
+          </Button>
         </li>
       ))}
     </ul>
@@ -117,9 +118,9 @@ function PromptModal({
         <code className="prompt-id">{prompt.id}</code>
         {prompt.overridden && <span className="chip warn">overridden</span>}
         {prompt.retired && <span className="chip">retired</span>}
-        <button className="btn ghost prompt-close" onClick={onClose} aria-label="Close">
+        <Button ghost className="prompt-close" onClick={onClose} aria-label="Close">
           ✕
-        </button>
+        </Button>
       </header>
       <p className="muted">{prompt.doc}</p>
       {prompt.retired && (

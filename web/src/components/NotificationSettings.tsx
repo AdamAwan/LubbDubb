@@ -9,6 +9,7 @@ import {
   type NotifyPrefs,
   type NotifyTestResult,
 } from '../cockpit/notify.js';
+import { Button } from './button.js';
 
 /**
  * Desktop notifications: the switch, the browser's grant, and the categories.
@@ -130,14 +131,14 @@ export function NotificationSettings() {
                 </span>
               </label>
             ))}
-          <button className="btn small settings-test" onClick={runTest}>
+          <Button size="small" className="settings-test" onClick={runTest}>
             Send a test notification
-          </button>
+          </Button>
         </>
       ) : (
-        <button className="btn small" disabled={permission === 'denied'} onClick={() => void turnOn()}>
+        <Button size="small" disabled={permission === 'denied'} onClick={() => void turnOn()}>
           Enable notifications
-        </button>
+        </Button>
       )}
 
       {test !== null && <p className="muted settings-hint">{NOTIFY_TEST_WORDING[test]}</p>}

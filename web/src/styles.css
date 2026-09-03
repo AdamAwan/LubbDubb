@@ -567,11 +567,17 @@ a.btn {
   opacity: 0.85;
 }
 /* Saving feedback: a green ✓ / red ✕ ring that flashes when an async action settles.
-   A box-shadow ring layers over any button background without shifting layout. */
-.btn.is-done {
+   A box-shadow ring layers over any button background without shifting layout.
+
+   Unscoped rather than `.btn.is-done`, because the ring is the *async* components'
+   statement rather than one family's: `AsyncButton` draws console-family buttons
+   too, and under `.btn.is-done` those settled with no feedback at all — a click
+   that went through and a click the route refused looked identical. Nothing else
+   writes these two names; `button.tsx` is the only place they are spelled. */
+.is-done {
   animation: btn-flash-ok 0.9s ease-out;
 }
-.btn.is-error {
+.is-error {
   animation: btn-flash-err 0.9s ease-out;
   border-color: var(--red);
 }
