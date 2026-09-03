@@ -121,11 +121,7 @@ function CrashedCard({
 
       <div className="crashed-actions">
         {crashed.restorable ? (
-          <AsyncButton
-            className="primary"
-            title={VERDICT_HELP.restore}
-            onClick={() => onDecide(crashed.taskId, 'restore')}
-          >
+          <AsyncButton tone="primary" title={VERDICT_HELP.restore} onClick={() => onDecide(crashed.taskId, 'restore')}>
             Restore
           </AsyncButton>
         ) : (
@@ -136,7 +132,7 @@ function CrashedCard({
         <AsyncButton title={VERDICT_HELP.requeue} onClick={() => onDecide(crashed.taskId, 'requeue')}>
           Requeue
         </AsyncButton>
-        <AsyncButton className="danger" title={VERDICT_HELP.remove} onClick={() => onDecide(crashed.taskId, 'remove')}>
+        <AsyncButton tone="danger" title={VERDICT_HELP.remove} onClick={() => onDecide(crashed.taskId, 'remove')}>
           Remove
         </AsyncButton>
       </div>

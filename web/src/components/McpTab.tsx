@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import type { McpChannelPayload } from '../types.js';
 import { Panel } from './panel.js';
+import { Button } from './button.js';
 
 /**
  * How to point the operator's **own** Claude Code at this harness.
@@ -132,8 +133,9 @@ function Command({ text }: { text: string }) {
   return (
     <div className="mcp-cmd">
       <code>{text}</code>
-      <button
-        className="btn ghost small"
+      <Button
+        ghost
+        size="small"
         onClick={() => {
           void navigator.clipboard.writeText(text).then(
             () => setCopied(true),
@@ -142,7 +144,7 @@ function Command({ text }: { text: string }) {
         }}
       >
         {copied ? 'Copied' : 'Copy'}
-      </button>
+      </Button>
     </div>
   );
 }

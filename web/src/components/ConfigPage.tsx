@@ -12,6 +12,7 @@ import { PromptsTab } from './PromptsTab.js';
 import { RawConfigTab } from './RawConfigTab.js';
 import { ReviewWrite } from './ReviewWrite.js';
 import { ThemeSettings } from './ThemeSettings.js';
+import { Button } from './button.js';
 
 /**
  * Configuration, as a surface rather than a modal.
@@ -113,9 +114,9 @@ export function ConfigPage({ view, actions }: { view: CockpitView; actions: Cock
           </span>
         </div>
         <div className="cfg-headacts">
-          <button className="btn ghost small" onClick={load}>
+          <Button ghost size="small" onClick={load}>
             Reload from disk
-          </button>
+          </Button>
         </div>
       </div>
 

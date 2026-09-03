@@ -1,5 +1,6 @@
 import type { GoalWatch, GoalWatchInput, WatchReadingVerdict } from '../types.js';
 import { renderMarkdown } from './markdown.js';
+import { Button } from './button.js';
 
 /**
  * The post-deploy watch, as the plan sheet draws it: each declared check with its
@@ -166,12 +167,12 @@ function Pending({ check, onRule }: { check: GoalWatch; onRule: ((id: string, ac
       </p>
       {onRule !== null && (
         <div className="pm-wrule">
-          <button className="btn small" onClick={() => onRule(check.id, true)}>
+          <Button size="small" onClick={() => onRule(check.id, true)}>
             Accept
-          </button>
-          <button className="btn small ghost" onClick={() => onRule(check.id, false)}>
+          </Button>
+          <Button ghost size="small" onClick={() => onRule(check.id, false)}>
             Decline
-          </button>
+          </Button>
         </div>
       )}
     </div>

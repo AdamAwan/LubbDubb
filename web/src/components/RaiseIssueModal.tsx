@@ -3,6 +3,7 @@ import type { FilingTargetProbe, IssueFiled } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
 import { ExtLink } from './util.js';
 import { Modal } from './Modal.js';
+import { Button } from './button.js';
 
 /**
  * Which of the three readings the modal is showing, from the one piece of state
@@ -142,11 +143,11 @@ export function RaiseIssueModal({
       foot={
         <>
           <span className="spacer" />
-          <button className="btn ghost" onClick={onClose}>
+          <Button ghost onClick={onClose}>
             {filed === null ? 'cancel' : 'close'}
-          </button>
+          </Button>
           {filed === null && (
-            <AsyncButton className="primary" disabled={!canSubmit} onClick={submit}>
+            <AsyncButton tone="primary" disabled={!canSubmit} onClick={submit}>
               raise issue
             </AsyncButton>
           )}

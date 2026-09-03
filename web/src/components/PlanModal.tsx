@@ -30,6 +30,7 @@ import { partOriginOf, planIssueOf, refLink, relTime } from './util.js';
 import { Modal } from './Modal.js';
 import { Ref } from './refs.js';
 import { HeadRow } from './panel.js';
+import { buttonClass } from './button.js';
 
 /**
  * The plan sheet — the whole plan, in one scroll, as the record of what was agreed.
@@ -538,7 +539,7 @@ export function PlanModal({
           {decidable && (
             <>
               <AsyncButton
-                className="ghost"
+                ghost
                 title="Sends it back to the planner with your note. Parts nothing has started for are retired."
                 onClick={() => onDecide(decidable.id, 'reject', composeNote(pins, live, note))}
               >
@@ -549,7 +550,7 @@ export function PlanModal({
                     that should not be worked at all — which is the reading this
                     panel, where the plan has actually been read, most often produces. */}
               <AsyncButton
-                className="ghost"
+                ghost
                 // The note is posted on the tracker as the closing comment, so a
                 // close with an empty box would shut somebody's ticket for a
                 // reason nobody can read.
@@ -564,14 +565,14 @@ export function PlanModal({
                 Close the ticket
               </AsyncButton>
               <AsyncButton
-                className="ghost"
+                ghost
                 title="Put a draft closing comment in the box to edit — nothing is posted until you close the ticket"
                 onClick={async () => setNote(await onCommentDraft(decidable.id))}
               >
                 Draft a comment
               </AsyncButton>
               <AsyncButton
-                className="ghost"
+                ghost
                 title="Stops watching the ticket and sends this plan back to the planner. Nothing is scheduled for it — watch it again and a fresh plan is written."
                 onClick={() => onBackOut(decidable.id, 'hold', note.trim() || undefined)}
               >
@@ -579,7 +580,7 @@ export function PlanModal({
               </AsyncButton>
               {issueNumber !== null && (
                 <DesktopLink
-                  className="btn ghost"
+                  className={buttonClass({ ghost: true })}
                   folder={desktopFolder}
                   prompt={discussPrompt(issueNumber)}
                   explain={discuss}
@@ -588,7 +589,7 @@ export function PlanModal({
                 </DesktopLink>
               )}
               <AsyncButton
-                className="primary"
+                tone="primary"
                 // Held, not hidden: the checklist above says what is outstanding
                 // and the hint on the button says how many. The route refuses it
                 // either way — this is that answer, a step earlier.
@@ -620,7 +621,7 @@ export function PlanModal({
                 to argue about a plan it cannot then change. */}
           {(plan.status === 'awaiting_approval' || plan.status === 'active') && !decidable && issueNumber !== null && (
             <DesktopLink
-              className="btn ghost"
+              className={buttonClass({ ghost: true })}
               folder={desktopFolder}
               prompt={discussPrompt(issueNumber)}
               explain={discuss}
@@ -629,7 +630,7 @@ export function PlanModal({
             </DesktopLink>
           )}
           <AsyncButton
-            className="ghost"
+            ghost
             title="Ask the planner again from the plan's current state. Nothing is torn down."
             onClick={() => onReplan(plan.id)}
           >
@@ -969,7 +970,7 @@ function PartBlock({
               open pull request is not undoable from here. */}
           {onRestart && part.status === 'in_review' && part.prNumber !== null && (
             <ConfirmButton
-              className="small"
+              size="small"
               label="↺ restart"
               confirmLabel="close the PR and restart"
               title={`Close PR #${part.prNumber}, drop its branch, and put "${part.slug}" back to ready so it is worked again against the plan as it stands now.`}

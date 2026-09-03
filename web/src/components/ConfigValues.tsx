@@ -4,6 +4,7 @@ import { isStateColour } from '../stateColour.js';
 import { ColourField } from './ColourField.js';
 import type { ConfigChange, RunningConfigEntry, RunningConfigGroup, RunningConfigPayload } from '../types.js';
 import { Panel } from './panel.js';
+import { Button } from './button.js';
 
 /**
  * The values section: every configurable leaf, grouped, editable.
@@ -292,12 +293,13 @@ export function ConfigValues({
           </span>
           <div className="cfg-dirtyacts">
             {unmet.length > 0 && unmet[0] && unmet[0].group !== shown?.title && (
-              <button className="btn ghost small" onClick={() => onGroup(unmet[0]?.group ?? null)}>
+              <Button ghost size="small" onClick={() => onGroup(unmet[0]?.group ?? null)}>
                 Show it
-              </button>
+              </Button>
             )}
-            <button
-              className="btn ghost small"
+            <Button
+              ghost
+              size="small"
               onClick={() => {
                 setDrafts({});
                 onStage({ set: {}, clear: [] });
@@ -305,10 +307,10 @@ export function ConfigValues({
               }}
             >
               Discard all
-            </button>
-            <button className="btn primary small" disabled={broken || unmet.length > 0} onClick={onReview}>
+            </Button>
+            <Button tone="primary" size="small" disabled={broken || unmet.length > 0} onClick={onReview}>
               Review &amp; write
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -339,9 +341,9 @@ function PendingCard({
               <input type="checkbox" checked={interrupt} onChange={(e) => setInterrupt(e.target.checked)} />
               stop running agents
             </label>
-            <button className="btn small" disabled={busy} onClick={() => onRestart(interrupt)}>
+            <Button size="small" disabled={busy} onClick={() => onRestart(interrupt)}>
               Apply and restart
-            </button>
+            </Button>
           </span>
         ) : (
           <span className="cfg-more chip small">no supervisor</span>
@@ -415,9 +417,9 @@ function Row({
             typed it. Offered while the field is empty, whether or not anything
             requires it yet. */}
         {entry.suggestion !== undefined && raw === '' && !locked && staged !== 'cleared' && (
-          <button className="btn ghost small cfg-suggest" onClick={() => onEdit(entry.suggestion ?? '')}>
+          <Button ghost size="small" className="cfg-suggest" onClick={() => onEdit(entry.suggestion ?? '')}>
             Use <code>{entry.suggestion}</code>
-          </button>
+          </Button>
         )}
         {required && (
           <span className="cfg-bad">
@@ -457,15 +459,15 @@ function Row({
 
       <div className="cfg-act">
         {staged ? (
-          <button className="btn ghost small" onClick={onUndo}>
+          <Button ghost size="small" onClick={onUndo}>
             Undo
-          </button>
+          </Button>
         ) : (
           !entry.isDefault &&
           !locked && (
-            <button className="btn ghost small" onClick={onReset}>
+            <Button ghost size="small" onClick={onReset}>
               Reset
-            </button>
+            </Button>
           )
         )}
       </div>
@@ -592,8 +594,9 @@ function ColourMap({
           <i className="tickets-state" style={{ color: colour, borderColor: colour }}>
             {state}
           </i>
-          <button
-            className="btn ghost small"
+          <Button
+            ghost
+            size="small"
             title={`Stop colouring "${state}" — it goes back to the reading it had before`}
             onClick={() => {
               const { [state]: _dropped, ...rest } = map;
@@ -601,7 +604,7 @@ function ColourMap({
             }}
           >
             Remove
-          </button>
+          </Button>
         </div>
       ))}
 
@@ -621,9 +624,9 @@ function ColourMap({
             <option key={state} value={state} />
           ))}
         </datalist>
-        <button className="btn small" disabled={adding.trim() === ''} onClick={add}>
+        <Button size="small" disabled={adding.trim() === ''} onClick={add}>
           Add
-        </button>
+        </Button>
         {Object.keys(map).length === 0 && (
           <span className="muted">Nothing is coloured — every state draws as it always has.</span>
         )}

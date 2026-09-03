@@ -4,6 +4,7 @@ import type { JobSchedule } from '../types.js';
 import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 import { ConfirmButton } from './ConfirmButton.js';
 import { relTime } from './util.js';
+import { Button } from './button.js';
 
 /**
  * A clock face, drawn inline beside the brief sheet for the same reason that
@@ -87,10 +88,10 @@ export function SchedulePanel({ schedules, onChanged }: { schedules: JobSchedule
   return (
     <div className="launch sched">
       <div className="launch-head">
-        <button className="btn ghost" onClick={() => setOpen((o) => !o)}>
+        <Button ghost onClick={() => setOpen((o) => !o)}>
           <ClockMark />
           {open ? '× New schedule' : '+ New schedule'}
-        </button>
+        </Button>
         {schedules.length > 0 && (
           <span className="chip small" title="Recurrences that queue a brief on a clock">
             {schedules.filter((s) => s.enabled).length} running
@@ -122,9 +123,9 @@ export function SchedulePanel({ schedules, onChanged }: { schedules: JobSchedule
           <ul className="sched-examples">
             {EXAMPLES.map((example) => (
               <li key={example.cron}>
-                <button type="button" className="btn ghost small" onClick={() => setCron(example.cron)}>
+                <Button ghost size="small" onClick={() => setCron(example.cron)}>
                   <code>{example.cron}</code> {example.label}
-                </button>
+                </Button>
               </li>
             ))}
           </ul>
@@ -154,7 +155,7 @@ export function SchedulePanel({ schedules, onChanged }: { schedules: JobSchedule
                 <option value="desk">desk agent</option>
               </select>
             </label>
-            <SubmitButton phase={submit.phase} className="primary">
+            <SubmitButton phase={submit.phase} tone="primary">
               Save schedule
             </SubmitButton>
           </div>
@@ -181,21 +182,22 @@ export function SchedulePanel({ schedules, onChanged }: { schedules: JobSchedule
                 {schedule.lastFiredAt ? `ran ${relTime(schedule.lastFiredAt)}` : 'never run'}
               </span>
               <AsyncButton
-                className="ghost"
+                ghost
                 onClick={() => api.runSchedule(schedule.id).then(onChanged)}
                 title="Queue this schedule's job now, without moving its next run"
               >
                 run now
               </AsyncButton>
               <AsyncButton
-                className="ghost"
+                ghost
                 onClick={() => api.updateSchedule(schedule.id, { enabled: !schedule.enabled }).then(onChanged)}
                 title={schedule.enabled ? 'Stop firing, keep the recurrence' : 'Start firing again from now'}
               >
                 {schedule.enabled ? 'pause' : 'resume'}
               </AsyncButton>
               <ConfirmButton
-                className="ghost small"
+                ghost
+                size="small"
                 label="delete"
                 confirmLabel="delete?"
                 title="Forget this recurrence — the jobs it already queued are untouched"

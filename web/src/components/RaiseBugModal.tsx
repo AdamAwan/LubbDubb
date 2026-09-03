@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { AsyncButton } from './AsyncButton.js';
 import { Modal } from './Modal.js';
+import { Button } from './button.js';
 
 /**
  * Where the operator says what is wrong.
@@ -69,10 +70,10 @@ export function RaiseBugModal({
       foot={
         <>
           <span className="spacer" />
-          <button className="btn ghost" onClick={onClose}>
+          <Button ghost onClick={onClose}>
             cancel
-          </button>
-          <AsyncButton className="primary" disabled={summary.trim().length === 0} onClick={submit}>
+          </Button>
+          <AsyncButton tone="primary" disabled={summary.trim().length === 0} onClick={submit}>
             raise bug
           </AsyncButton>
         </>

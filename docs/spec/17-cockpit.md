@@ -1179,14 +1179,14 @@ real distinction rather than a namespace ([Tokens](#tokens)), so `face` names wh
 the overlay wears and neither sheet has to learn the other's names. There are six, and a caller
 cannot mint a seventh:
 
-| face     | backdrop                | surface       | drawn for                                     |
-| -------- | ----------------------- | ------------- | --------------------------------------------- |
-| `modal`  | `.plan-modal-backdrop`  | `.plan-modal` | the composers, the readers, the filers        |
-| `sheet`  | `.plan-modal-backdrop`  | `.plan-sheet` | the plan, which is wider and scrolls its middle |
-| `drawer` | `.drawer-backdrop`      | `.drawer`     | the agent drawer, pinned to an edge           |
-| `panel`  | `.cn-backdrop`          | `.cn-panel`   | the console's panels — a `<section>`          |
-| `hatch`  | `.cn-backdrop`          | `.cn-hatch`   | the hatching ceremony                         |
-| `prompt` | `.prompt-backdrop`      | `.prompt-modal` | the prompt-template viewer                  |
+| face     | backdrop               | surface         | drawn for                                       |
+| -------- | ---------------------- | --------------- | ----------------------------------------------- |
+| `modal`  | `.plan-modal-backdrop` | `.plan-modal`   | the composers, the readers, the filers          |
+| `sheet`  | `.plan-modal-backdrop` | `.plan-sheet`   | the plan, which is wider and scrolls its middle |
+| `drawer` | `.drawer-backdrop`     | `.drawer`       | the agent drawer, pinned to an edge             |
+| `panel`  | `.cn-backdrop`         | `.cn-panel`     | the console's panels — a `<section>`            |
+| `hatch`  | `.cn-backdrop`         | `.cn-hatch`     | the hatching ceremony                           |
+| `prompt` | `.prompt-backdrop`     | `.prompt-modal` | the prompt-template viewer                      |
 
 The classes are the ones those surfaces already wore, so adopting the overlay is a change of _who
 writes the class_ and not a restyling: the two sheets are untouched.
@@ -1209,6 +1209,74 @@ as it stayed true; it is a rule now.
 may write a backdrop class.** A fourteenth modal written the old way is a modal Escape does not
 close, and nothing else in `npm run check` would see it.
 
+### The button
+
+**One control that does something when pressed, drawn one way everywhere** — `Button` in
+`web/src/components/button.tsx`, dressed by the `.btn` block in `styles.css` and by nothing else. It is
+the [control kit](#the-control-kit)'s argument a third time, for the family the kit never covered.
+
+The cockpit drew about two hundred and thirty of these across **two** families and had no component for
+any of them. `AsyncButton`, `SubmitButton` and `ConfirmButton` owned the _lifecycle_ — the spinner, the
+settled flash, the two-step arm — and took the _look_ as a raw class string, so tone was hand-written at
+every call site and travelled through props as one: `buttonClass="ghost small"`.
+
+**There is one family now, and that is the point.** `.cn-btn` and its four modifiers are gone. They were
+a second vocabulary for the same four readings and the two had already parted company: a 7px
+steel-blue primary in a modal and a 4px vivid-blue one on a goal page, both called "primary", with
+nothing saying which was meant. A primary button is the same act wherever it is pressed, so it is the
+same button.
+
+**The second family existed because of a specificity fault, not a design one.** `console.css` resets its
+own markup with `.cn button` at (0,1,1), which outranks a single class — so a `.btn` inside `.cn` lost
+its ground and its border and drew as bare text, and the console grew its own class to get a button
+back. `.btn.btn` in `styles.css` answers that at the source, the same doubling `.th-preset.th-preset`
+already uses, so **`buttonClass` writes the base twice** and one rule dresses a button anywhere. Every
+modifier below it is already (0,2,0) or higher and needs no doubling.
+
+**Tone is a prop, never a class string**, the same rule the [tag](#the-tag) and the control kit keep:
+
+| Prop               | What it says                                                    |
+| ------------------ | --------------------------------------------------------------- |
+| `tone="primary"`   | the one control a surface expects to be pressed                 |
+| `tone="danger"`    | one that destroys something                                     |
+| `tone="secondary"` | the plain one — the default, and it carries no class of its own |
+
+`secondary` is spelled even though it resolves to nothing, because a caller who means "the quiet one
+beside the primary" should be able to say so rather than say nothing.
+
+**Weight is `ghost`, not a third tone**, which is the bargain the tag makes with `fill` read the other
+way up. The quiet button and the ordinary one are the same box in the same colour and the ground is
+what ranks them — so a _destructive_ button can also be a quiet one, `tone="danger" ghost`, which two
+of `ConfirmButton`'s call sites are. Spelled as a tone those two readings could not combine and both
+would have had to give up their red to keep their transparency. `size="small"` is the second weight,
+and it is the one the codebase reaches for most.
+
+**`className` carries shape, never tone.** A surface with geometry of its own — a header row that is a
+toggle, a drop target, a close cross — passes that class beside the props, which is the bargain
+[the review mark](#the-fleet-reviews-mark) already makes with `t-green`. A station that composes on top
+of a caller's tone uses `withShape`, so the caller's half and the station's half stay two things:
+`withShape(look, onCloseTicket === null && 'go')`.
+
+**`buttonClass` is the seam for the controls that are not buttons.** The three async components resolve
+their class through it and add their own ring; `DesktopLink` is an `<a>`, because a deep link is a
+destination, and wears the button's look through the same call. It is what `CONTROL_CLASS` is for the
+control kit.
+
+**The state a button is in is drawn once.** `:disabled` and `[aria-busy]` sit on the base, and the
+settled-flash ring — `is-done` / `is-error` — is unscoped, because the ring is the _async components'_
+statement rather than the button's. Under `.btn.is-done` a console button settled with no feedback at
+all, so a click that went through and a click the route refused looked identical.
+
+**This is not the tag's bargain.** `Tag` keeps `.t-*` and `.cn-t-*` as two families on purpose, because
+`--accent` is orange and `--cn-accent` is blue and a tag is a _tint_ that has to sit inside its
+surface's palette. A button is not a tint: it is an act, and an act reads the same everywhere or the
+vocabulary is not one.
+
+`test/cockpitButton.test.ts` pins the vocabulary, the doubled base, and — from the sharp end — that
+**no `.tsx` outside `button.tsx` writes `btn`, `cn-btn` or `armed` as a class**. A hand-written `btn` is
+single-class, so inside the console it draws as bare text; a hand-written `cn-btn` asks for a family
+that no longer exists. Neither is red in `npm run check` any other way.
+
 ### The tag
 
 **One tinted badge** — `Tag` in `web/src/components/tag.tsx`, dressed by the `.tag` and `.t-*` blocks
@@ -1225,13 +1293,13 @@ valid, both tags render, and the drift is visible only to somebody holding the t
 
 **Tone is a prop, never a class string**, the same rule the [control kit](#the-control-kit) keeps:
 
-| Tone     | What it says                                            |
-| -------- | ------------------------------------------------------- |
-| `red`    | a fault, or a claim that did not hold                   |
-| `amber`  | a gate — a call somebody has to make                    |
-| `green`  | something landed, or held                               |
-| `blue`   | something to read                                       |
-| `accent` | the one thing on this surface worth going to first      |
+| Tone     | What it says                                             |
+| -------- | -------------------------------------------------------- |
+| `red`    | a fault, or a claim that did not hold                    |
+| `amber`  | a gate — a call somebody has to make                     |
+| `green`  | something landed, or held                                |
+| `blue`   | something to read                                        |
+| `accent` | the one thing on this surface worth going to first       |
 | `grey`   | a label rather than a verdict — and the default, omitted |
 
 **Weight is `fill`, not a second hue.** The outlined and the filled tag are the same box in the same
@@ -1243,7 +1311,7 @@ diff being walked, a label a person overrode the checker on.
 The tint itself is six alias blocks — `.t-red`, `.t-amber`, `.t-green`, `.t-blue`, `.t-accent`,
 `.t-grey` — each setting `--tone`, `--tone-line` and `--tone-fill` from `:root` and from nowhere else,
 for exactly the reason [`.cn-t-*` is an alias](#tokens): a declaration on a tone class shadows an
-inherited value unconditionally, so a tint written there is a tint no theme can reach *inside* a tone.
+inherited value unconditionally, so a tint written there is a tint no theme can reach _inside_ a tone.
 `--accent-line` was owed by this and is new — the one tag drawn in the accent bordered in `--accent`
 itself, at full strength, and out-shouted the red one beside it.
 
@@ -1252,7 +1320,7 @@ family's mirror of the console's `.cn-t-*` and not a merge with it: a console-fa
 `cn-tag` under a `cn-t-*` row, and `Tag` draws the shared family only.
 
 **The alias is reusable without the component**, and two surfaces take it that way. The [review
-mark](#the-fleet-reviews-mark) and the plan sheet's diff rows each carry their own arm class *beside* a
+mark](#the-fleet-reviews-mark) and the plan sheet's diff rows each carry their own arm class _beside_ a
 `t-*` alias — `rv-clear t-green`, `pm-dtag dropped t-red` — because those elements have descendants
 tinted by the arm (the mark's count badge) or a shape of their own; what they give up is the copy of
 the triple, which is the thing that drifts. Four `.rv-*` rules and three `.pm-dtag` rules collapse to
@@ -1285,11 +1353,11 @@ copies do:
 
 **Density is a step, never a value.** Three, counting the one that is no inset at all:
 
-| Density | Inset            | Drawn for                                                       |
-| ------- | ---------------- | --------------------------------------------------------------- |
-| `flush` | none             | a frame whose own children pad — a card with a header band       |
-| `snug`  | `--pad-snug`     | the ordinary card                                                 |
-| `roomy` | `--pad-roomy`    | a frame that is the page's subject                                |
+| Density | Inset         | Drawn for                                                  |
+| ------- | ------------- | ---------------------------------------------------------- |
+| `flush` | none          | a frame whose own children pad — a card with a header band |
+| `snug`  | `--pad-snug`  | the ordinary card                                          |
+| `roomy` | `--pad-roomy` | a frame that is the page's subject                         |
 
 The ramp is deliberately shorter than the spread it replaces. The fix for five paddings nobody chose
 is not a better-argued five; it is a set small enough that picking a step is a decision, and a sixth
@@ -1305,7 +1373,7 @@ the console's — and no frame writes a length. A radius literal is the same fai
 is, one property over: square-everywhere is the operator's setting, and a hard `7px` is a corner no
 setting moves.
 
-**`className` is a modifier, never a second face.** What makes a frame *that* frame stays at the call
+**`className` is a modifier, never a second face.** What makes a frame _that_ frame stays at the call
 site — `.cn-fb-wants` tinting a Feature that wants a person, `.cfg-pending` bordering staged edits,
 `.tickets-card` clipping its rows — and every one of those weighs (0,1,0) just as the base does, so
 `.pl` sits high in the sheet and source order is what lets a card override its own frame.
@@ -1321,12 +1389,12 @@ set in the cockpit — eleven names for one row, in two sheets, differing in not
 said `center` or `baseline`. `HeadRow` is that row once, and **alignment is the only axis**:
 `baseline` where the row is words of two sizes rather than a row of boxes.
 
-A different *gap* is a different row and keeps its own rule. The 6px variants — `.finding-head`,
+A different _gap_ is a different row and keeps its own rule. The 6px variants — `.finding-head`,
 `.pm-part-head`, `.cn-prchips` — are not folded in, because folding 6px into 8px would be a
 restyling rather than a collapse, and the point of this one is that nothing on the screen moves.
 
 `test/cockpitTheme.test.ts` pins both from the sharp end, as shapes rather than name lists so a
-twelfth cannot be written: a block whose whole content *is* that declaration set is a hand-written
+twelfth cannot be written: a block whose whole content _is_ that declaration set is a hand-written
 head row, and a `.pl*` block whose radius or padding is anything but a `var()` naming a `:root` token
 is a frame no theme can reshape.
 
@@ -1355,10 +1423,10 @@ surfaces up together.
 
 **The ramp is two steps, and a third would be a size somebody picked.**
 
-| step    | token                       | what it is                                                                       |
-| ------- | --------------------------- | -------------------------------------------------------------------------------- |
-| `lb`    | `--label-size` (11px)       | the section label: the caption over a block, a group, a panel                     |
-| `lb-sm` | `--label-size-sm` (10px)    | the dense one: a table's column heads, a stat tile's word above its figure        |
+| step    | token                    | what it is                                                                 |
+| ------- | ------------------------ | -------------------------------------------------------------------------- |
+| `lb`    | `--label-size` (11px)    | the section label: the caption over a block, a group, a panel              |
+| `lb-sm` | `--label-size-sm` (10px) | the dense one: a table's column heads, a stat tile's word above its figure |
 
 The dense step earns its place on one argument: those labels sit in a grid of many, over figures they
 must not compete with. Everything else that used to be 9.5px, 10.5px or 11.5px was one of these two

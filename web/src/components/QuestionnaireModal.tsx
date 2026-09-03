@@ -82,7 +82,7 @@ export function QuestionnaireModal({
           {answered} of {questions.length} answered
         </span>
         <AsyncButton
-          className="primary"
+          tone="primary"
           // Nothing to send is not a refusal worth a round trip: the route
           // rejects an all-blank set, and the button saying so first is cheaper.
           disabled={answered === 0}

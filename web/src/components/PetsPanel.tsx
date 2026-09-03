@@ -213,7 +213,8 @@ function PetCard({
               Open it
             </button>
             <AsyncButton
-              className="ghost small"
+              ghost
+              size="small"
               disabled={full}
               title={full ? `The vivarium holds ${slots} — take one out first` : undefined}
               onClick={() => onPlace(pet.id, !pet.placed)}
@@ -223,14 +224,15 @@ function PetCard({
           </>
         ) : dissolved || flawed ? null : (
           <>
-            <AsyncButton className="ghost small" disabled={balance < 100} onClick={() => onFeed(pet.id, 100)}>
+            <AsyncButton ghost size="small" disabled={balance < 100} onClick={() => onFeed(pet.id, 100)}>
               Feed 100
             </AsyncButton>
-            <AsyncButton className="ghost small" disabled={toNext <= 0} onClick={() => onFeed(pet.id, toNext)}>
+            <AsyncButton ghost size="small" disabled={toNext <= 0} onClick={() => onFeed(pet.id, toNext)}>
               {pet.beatsToNextStage === null ? 'Grown' : `Feed ${toNext.toLocaleString()}`}
             </AsyncButton>
             <AsyncButton
-              className="ghost small"
+              ghost
+              size="small"
               disabled={full}
               title={full ? `The vivarium holds ${slots} — take one out first` : undefined}
               onClick={() => onPlace(pet.id, !pet.placed)}
@@ -238,7 +240,8 @@ function PetCard({
               {pet.placed ? 'Take out' : 'Put out'}
             </AsyncButton>
             <AsyncButton
-              className="ghost small"
+              ghost
+              size="small"
               disabled={!duplicate}
               title={
                 duplicate

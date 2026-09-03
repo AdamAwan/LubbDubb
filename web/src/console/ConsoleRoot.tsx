@@ -625,7 +625,7 @@ function FaultLog({ view, actions }: { view: CockpitView; actions: CockpitAction
     <>
       <div className="cn-acts">
         <ConfirmButton
-          className="ghost"
+          ghost
           label="Clear"
           confirmLabel="Delete every recorded fault?"
           title={`Delete all ${errors.length} recorded faults — this cannot be undone, for any cockpit`}

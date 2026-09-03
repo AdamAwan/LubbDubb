@@ -5,6 +5,7 @@ import type { AppliedFix, NeedGroup, NeedKind, NeedRow } from '../view/needsYou.
 import type { SetupCheck, SetupFix } from '../types.js';
 import { relTime } from '../components/util.js';
 import { Ref, refLabel } from '../components/refs.js';
+import { Button } from '../components/button.js';
 
 /** One word per kind, shared with the goal page so a row and the band it opens name the ask the same. */
 export const KIND_LABEL: Record<NeedKind, string> = {
@@ -455,9 +456,9 @@ function ConfigFix({ check, actions }: { check: SetupCheck; actions: CockpitActi
   if (fix.kind === 'sheet') {
     return (
       <div className="cn-fix">
-        <button type="button" className="cn-btn cn-primary" onClick={() => actions.openPanel('setup')}>
+        <Button tone="primary" onClick={() => actions.openPanel('setup')}>
           {fix.label}
-        </button>
+        </Button>
         {check.remedy !== undefined && <span className="cn-fixwhy">{check.remedy}</span>}
       </div>
     );
@@ -466,9 +467,8 @@ function ConfigFix({ check, actions }: { check: SetupCheck; actions: CockpitActi
   if (fix.kind === 'goto') {
     return (
       <div className="cn-fix">
-        <button
-          type="button"
-          className="cn-btn cn-primary"
+        <Button
+          tone="primary"
           onClick={() =>
             fix.to === 'tickets'
               ? actions.openTab('tickets')
@@ -482,7 +482,7 @@ function ConfigFix({ check, actions }: { check: SetupCheck; actions: CockpitActi
           }
         >
           {fix.label}
-        </button>
+        </Button>
       </div>
     );
   }
@@ -507,14 +507,14 @@ function ConfigFix({ check, actions }: { check: SetupCheck; actions: CockpitActi
             Set <code>{only}</code> to
             <input className="cn-inline" value={typed} onChange={(e) => setValue(e.target.value)} aria-label={only} />
           </label>
-          <button type="button" className="cn-btn" disabled={busy} onClick={write}>
+          <Button disabled={busy} onClick={write}>
             Write it
-          </button>
+          </Button>
         </div>
       ) : (
-        <button type="button" className="cn-btn cn-primary" disabled={busy} onClick={write}>
+        <Button tone="primary" disabled={busy} onClick={write}>
           {fix.label}
-        </button>
+        </Button>
       )}
       {check.remedy !== undefined && !editable && <span className="cn-fixwhy">{check.remedy}</span>}
     </div>
@@ -541,12 +541,8 @@ function SettledFix({ applied, actions }: { applied: AppliedFix; actions: Cockpi
         <b>{applied.summary}</b>
         <i className="cn-settled-file">→ {applied.file}</i>
       </span>
-      <button type="button" className="cn-btn" onClick={() => void actions.undoConfigFix(applied.checkId)}>
-        Undo
-      </button>
-      <button type="button" className="cn-btn" onClick={() => actions.dismissConfigFix(applied.checkId)}>
-        Dismiss
-      </button>
+      <Button onClick={() => void actions.undoConfigFix(applied.checkId)}>Undo</Button>
+      <Button onClick={() => actions.dismissConfigFix(applied.checkId)}>Dismiss</Button>
     </div>
   );
 }

@@ -88,7 +88,10 @@ test('the head, the foot and the guard are drawn once, for every caller', () => 
   // The head is a `HeadRow` now — the shared row, wearing the modal's own modifier.
   assert.match(html, /class="hdr pm-head"/);
   assert.match(html, /class="pm-title">Raise a bug</);
-  assert.match(html, /class="btn ghost small pm-close"/);
+  // `btn` twice is the base, not a slip: `.btn.btn` is what outranks
+  // `console.css`'s `.cn button` reset, and it only does so if the markup carries
+  // the class twice. → docs/spec/17-cockpit.md#the-button
+  assert.match(html, /class="btn btn ghost small pm-close"/);
   assert.match(html, /class="pm-foot"/);
   // The name is the visible title where there is one, so no caller has to repeat it.
   assert.match(html, /role="dialog" aria-modal="true" aria-label="Raise a bug"/);

@@ -255,7 +255,7 @@ function NoPack({
         Nobody has asked for a pack on #{prNumber}. Asking spends two agent runs — an author and a checker — and the
         pack arrives here when the first has finished.
       </p>
-      <AsyncButton className="primary small" onClick={onAsk} onRefused={onRefused} pendingLabel="asking…">
+      <AsyncButton tone="primary" size="small" onClick={onAsk} onRefused={onRefused} pendingLabel="asking…">
         Ask for a review pack
       </AsyncButton>
       {refused !== null && <p className="rp-refusal">{refused}</p>}

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import type { RunningConfigPayload } from '../types.js';
 import { Panel } from './panel.js';
+import { Button } from './button.js';
 
 /**
  * The file, edited as a file.
@@ -75,8 +76,9 @@ export function RawConfigTab({
           <b>The file changed on disk</b>
           <span>by something other than this page. Your edits here are unsaved.</span>
           <div className="cfg-bacts">
-            <button
-              className="btn ghost small"
+            <Button
+              ghost
+              size="small"
               onClick={() => {
                 // Keep typing against the new baseline. The write will still be
                 // refused if it moves again — this only says "I have seen it".
@@ -84,16 +86,16 @@ export function RawConfigTab({
               }}
             >
               Keep mine
-            </button>
-            <button
-              className="btn small"
+            </Button>
+            <Button
+              size="small"
               onClick={() => {
                 setText(payload.text);
                 setBaseline(payload.revision);
               }}
             >
               Reload
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -105,16 +107,17 @@ export function RawConfigTab({
             {verdict && (
               <span className={`cfg-badge ${verdict.ok ? 'ok' : 'err'}`}>{verdict.ok ? 'valid' : 'refused'}</span>
             )}
-            <button className="btn ghost small" disabled={!dirty} onClick={() => setText(payload.text)}>
+            <Button ghost size="small" disabled={!dirty} onClick={() => setText(payload.text)}>
               Discard edits
-            </button>
-            <button
-              className="btn primary small"
+            </Button>
+            <Button
+              tone="primary"
+              size="small"
               disabled={!dirty || busy || verdict?.ok === false}
               onClick={() => void write()}
             >
               {busy ? 'Writing…' : 'Write'}
-            </button>
+            </Button>
           </span>
         </div>
         <textarea

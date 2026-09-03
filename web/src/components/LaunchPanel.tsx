@@ -4,6 +4,7 @@ import type { AppState, Job } from '../types.js';
 import { AttachmentStrip } from './AttachmentStrip.js';
 import { SubmitButton, AsyncButton, useAsyncAction } from './AsyncButton.js';
 import { relTime } from './util.js';
+import { Button } from './button.js';
 
 /**
  * The brief sheet: a blue page with three written lines, drawn inline rather than
@@ -146,10 +147,10 @@ export function LaunchPanel({
   return (
     <div className="launch">
       <div className="launch-head">
-        <button className="btn ghost" onClick={() => setOpen((o) => !o)}>
+        <Button ghost onClick={() => setOpen((o) => !o)}>
           <BriefMark />
           {open ? '× New brief' : '+ New brief'}
-        </button>
+        </Button>
         {queued.length > 0 && (
           <span className="chip small" title="Briefs waiting for a free slot">
             {queued.length} queued
@@ -205,15 +206,15 @@ export function LaunchPanel({
                   <span className="launch-attachment-name" title={image.name}>
                     {image.name}
                   </span>
-                  <button
-                    type="button"
-                    className="btn ghost launch-attachment-drop"
+                  <Button
+                    ghost
+                    className="launch-attachment-drop"
                     title="Remove this attachment"
                     aria-label={`Remove ${image.name}`}
                     onClick={() => setAttached((current) => current.filter((a) => a.id !== image.id))}
                   >
                     ×
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>
@@ -245,15 +246,14 @@ export function LaunchPanel({
                 e.target.value = '';
               }}
             />
-            <button
-              type="button"
-              className="btn ghost"
+            <Button
+              ghost
               title="Attach an image — or paste or drop one into the prompt"
               onClick={() => picker.current?.click()}
             >
               Attach image
-            </button>
-            <SubmitButton phase={submit.phase} className="primary">
+            </Button>
+            <SubmitButton phase={submit.phase} tone="primary">
               Launch
             </SubmitButton>
           </div>
@@ -273,7 +273,7 @@ export function LaunchPanel({
               <span className="chip small">{job.kind}</span>
               <span className="muted launch-age">{relTime(job.createdAt)}</span>
               <AsyncButton
-                className="ghost"
+                ghost
                 onClick={() => api.cancelJob(job.id).then(onChanged)}
                 title="Remove this brief from the queue"
               >

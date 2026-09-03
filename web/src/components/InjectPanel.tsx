@@ -3,6 +3,7 @@ import { injectDemoEvent } from '../api.js';
 import type { WorldSnapshot } from '../types.js';
 import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 import { Label } from './label.js';
+import { Button } from './button.js';
 
 /**
  * The "make the world move" panel — a **demo-only** control, rendered only under
@@ -67,9 +68,9 @@ export function InjectPanel({ onInjected, world }: { onInjected: () => void; wor
       >
         Conflict #{firstPr}
       </AsyncButton>
-      <button className="btn ghost" onClick={() => setOpen((o) => !o)}>
+      <Button ghost onClick={() => setOpen((o) => !o)}>
         {open ? 'Hide raw' : 'Raw JSON'}
-      </button>
+      </Button>
       {open && (
         <form
           className="raw"
@@ -90,7 +91,7 @@ export function InjectPanel({ onInjected, world }: { onInjected: () => void; wor
             value={raw}
             onChange={(e) => setRaw(e.target.value)}
           />
-          <SubmitButton phase={rawSubmit.phase} className="primary">
+          <SubmitButton phase={rawSubmit.phase} tone="primary">
             Inject
           </SubmitButton>
         </form>

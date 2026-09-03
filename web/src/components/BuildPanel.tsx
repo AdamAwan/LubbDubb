@@ -45,7 +45,7 @@ export function BuildPanel({
             checked {relTime(standing.checkedAt, now)}
           </p>
         </div>
-        <AsyncButton className="btn ghost" onClick={() => onCheck()}>
+        <AsyncButton ghost onClick={() => onCheck()}>
           Check now
         </AsyncButton>
       </header>
@@ -124,15 +124,15 @@ function Controls({
     return (
       <HeadRow className="build-controls">
         {intent.state === 'ready' ? (
-          <AsyncButton className="btn primary" onClick={() => onUpgrade('apply')}>
+          <AsyncButton tone="primary" onClick={() => onUpgrade('apply')}>
             Upgrade now
           </AsyncButton>
         ) : (
-          <AsyncButton className="btn" onClick={() => onUpgrade('apply', { interrupt: true })}>
+          <AsyncButton onClick={() => onUpgrade('apply', { interrupt: true })}>
             Don&apos;t wait — interrupt {live} and upgrade
           </AsyncButton>
         )}
-        <AsyncButton className="btn ghost" onClick={() => onUpgrade('cancel')}>
+        <AsyncButton ghost onClick={() => onUpgrade('cancel')}>
           Cancel
         </AsyncButton>
         <p className="build-note">
@@ -146,14 +146,10 @@ function Controls({
 
   return (
     <HeadRow className="build-controls">
-      <AsyncButton className="btn primary" onClick={() => onUpgrade('drain')}>
+      <AsyncButton tone="primary" onClick={() => onUpgrade('drain')}>
         {live > 0 ? `Drain and upgrade (${live} running)` : 'Upgrade'}
       </AsyncButton>
-      {live > 0 && (
-        <AsyncButton className="btn" onClick={() => onUpgrade('apply', { interrupt: true })}>
-          Upgrade now
-        </AsyncButton>
-      )}
+      {live > 0 && <AsyncButton onClick={() => onUpgrade('apply', { interrupt: true })}>Upgrade now</AsyncButton>}
       <p className="build-note">
         {live > 0
           ? 'Draining pauses dispatch and waits for the fleet to finish; nothing is interrupted. Upgrading now stops ' +

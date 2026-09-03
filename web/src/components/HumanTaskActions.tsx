@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import type { HumanTask } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
+import { Button, withShape } from './button.js';
+import type { ButtonLook } from './button.js';
 
 /** What the one confirm button says, per verb — three arms, one box. */
 const CONFIRM_LABEL: Record<'done' | 'declined' | 'close', string> = {
@@ -21,9 +23,11 @@ const CONFIRM_TITLE: Record<'done' | 'declined' | 'close', string> = {
  * Shared rather than redrawn at each station, and for the reason `EscalationCard`
  * is: this is the piece with an async flow and a rule that can refuse, so it has
  * exactly one implementation and the station embeds it. What the station owns is
- * its own chrome, and what it passes is `buttonClass`, the same seam
- * `ConfirmButton` already takes so a `.fx-btn` and a `.btn ghost` are one
- * component wearing two faces.
+ * its own chrome, and what it passes is `look` — [`Button`](./button.tsx)'s own
+ * props, so a console-family row and a modal's ghost row are one component
+ * wearing two faces. It used to pass a *class string*, and the two halves of one
+ * — the caller's tone and this station's own `go`/`no` — were interpolated at six
+ * sites, three of which prefixed `btn` and three of which did not.
  *
  * **Done** settles it, and where the task backs a plan step it concludes that
  * part, releasing every sibling that named it. **Decline** takes a note the
@@ -52,15 +56,15 @@ const CONFIRM_TITLE: Record<'done' | 'declined' | 'close', string> = {
  */
 export function HumanTaskActions({
   task,
-  buttonClass = 'ghost',
+  look = { ghost: true },
   noteOnDone = null,
   onDone,
   onDecline,
   onCloseTicket = null,
 }: {
   task: HumanTask;
-  /** The caller's button modifiers — `cn-tgl` on a goal page, `ghost` in a modal. */
-  buttonClass?: string;
+  /** The caller's tone — the console family on a goal page, ghost in a modal. */
+  look?: ButtonLook;
   /**
    * Why marking *this* row done costs a sentence, or null when it costs nothing.
    * The station resolves it, because whether the route will refuse is a fact
@@ -96,7 +100,7 @@ export function HumanTaskActions({
         {onCloseTicket !== null &&
           (noteOnDone === null ? (
             <AsyncButton
-              className={`${buttonClass} go`}
+              {...withShape(look, 'go')}
               onClick={() => {
                 setRefusal(null);
                 return onCloseTicket(task.id);
@@ -107,20 +111,19 @@ export function HumanTaskActions({
               Close the ticket
             </AsyncButton>
           ) : (
-            <button
-              type="button"
-              className={`btn ${buttonClass} go`}
+            <Button
+              {...withShape(look, 'go')}
               onClick={() => open('close')}
               title="Close the item in the tracker — and say what you are doing about what is outstanding"
             >
               Close the ticket…
-            </button>
+            </Button>
           ))}
         {noteOnDone === null ? (
           <AsyncButton
             // Secondary where the close is on offer: two `go` buttons side by side
             // would put the record of the act and the act itself on one footing.
-            className={`${buttonClass}${onCloseTicket === null ? ' go' : ''}`}
+            {...withShape(look, onCloseTicket === null && 'go')}
             onClick={() => {
               setRefusal(null);
               return onDone(task.id);
@@ -131,23 +134,17 @@ export function HumanTaskActions({
             Done
           </AsyncButton>
         ) : (
-          <button
-            type="button"
-            className={`btn ${buttonClass}${onCloseTicket === null ? ' go' : ''}`}
+          <Button
+            {...withShape(look, onCloseTicket === null && 'go')}
             onClick={() => open('done')}
             title="You did it — and this one asks what you are doing about what is outstanding"
           >
             Done…
-          </button>
+          </Button>
         )}
-        <button
-          type="button"
-          className={`btn ${buttonClass}`}
-          onClick={() => open('declined')}
-          title="You will not be doing this"
-        >
+        <Button {...look} onClick={() => open('declined')} title="You will not be doing this">
           Decline
-        </button>
+        </Button>
       </span>
       {saying !== null && (
         <div className="human-task-decline">
@@ -167,7 +164,7 @@ export function HumanTaskActions({
             onChange={(e) => setNote(e.currentTarget.value)}
           />
           <AsyncButton
-            className={`${buttonClass} ${saying === 'declined' ? 'no' : 'go'}`}
+            {...withShape(look, saying === 'declined' ? 'no' : 'go')}
             disabled={note.trim().length === 0}
             onRefused={setRefusal}
             onClick={async () => {

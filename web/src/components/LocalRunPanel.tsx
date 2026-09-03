@@ -214,7 +214,7 @@ export function LocalRunPanel({
                 // Primary, and only while there is something to pick up: the one
                 // action the panel is asking for. Gone the moment it is not.
                 <AsyncButton
-                  className="primary"
+                  tone="primary"
                   onClick={() => onRefresh()}
                   title={
                     refreshConfigured
@@ -416,7 +416,7 @@ export function LocalRunPanel({
               should be. The rows are the instruction. */}
           {picked !== null && chosenFacts !== null && (
             <div className="lrun-go">
-              <AsyncButton className="primary" onClick={() => onStart(picked.issueNumber, picked.ref)}>
+              <AsyncButton tone="primary" onClick={() => onStart(picked.issueNumber, picked.ref)}>
                 {`${live ? 'Swap to' : 'Start'} #${String(picked.issueNumber)}`}
               </AsyncButton>
               {/* The ref, on the button's own line: this is the last chance to see what
