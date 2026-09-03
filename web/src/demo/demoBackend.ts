@@ -226,6 +226,15 @@ function toolLines(at: string, tool: string, summary: string, done: string, body
 const VALIDATION_TICK_MS = 1800;
 
 /**
+ * How long the demo takes to answer a press.
+ *
+ * The real route brings an environment up and runs a cycle before it replies, so the
+ * button sits in its pending state for seconds. This is the shortest delay that
+ * still shows that rather than hiding it.
+ */
+const REQUEST_MS = 900;
+
+/**
  * The demo's validation, one step per tick: queued, planning, waiting for the
  * environment, driving it, then a failure with something worth looking at.
  *
@@ -1683,7 +1692,11 @@ class DemoServer {
     this.validating = 0;
     this.dirty();
     this.armValidation(issue);
-    return Promise.resolve({ ok: true as const });
+    // Deliberately not instant. The real route starts a dev environment and runs a
+    // cycle before it answers, which is seconds — long enough that a control with no
+    // pending state got pressed twice. A demo that resolved immediately would
+    // demonstrate the opposite of the feedback this button now has.
+    return new Promise((resolve) => setTimeout(() => resolve({ ok: true as const }), REQUEST_MS));
   }
 
   /** Call one off — the operator's own answer, and the only one that needs no reason. */
