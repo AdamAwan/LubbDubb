@@ -750,13 +750,19 @@ function goalRef(): string {
 function goalView(
   mutate: (state: CockpitView['state']) => void = () => {},
   ref: string = goalRef(),
-  /** The reference footer's disclosures to open — `[]` is the page as it arrives. */
+  /**
+   * The sections the operator has opened — `[]` is the page at whatever the goal's
+   * own progress makes it, which is what a bare URL means.
+   */
   goalOpen: readonly string[] = [],
+  /** And the ones they have folded away. Both, because neither is the default. */
+  goalShut: readonly string[] = [],
 ): CockpitView {
   const state = buildDemoState().state;
   mutate(state);
   return buildViewModel({
     goalOpen,
+    goalShut,
     state,
     now: Date.now(),
     connected: true,
@@ -1271,25 +1277,84 @@ test('the ticket is drawn as HTML when the tracker wrote HTML', () => {
 });
 
 /**
- * The reference footer arrives shut, and its state is the address bar's.
+ * The ticket arrives folded on a goal already under way, and its state is the
+ * address bar's.
  *
- * Both halves are the point. Shut, because neither surface is owed anything — the
- * ticket is read once at pickup and the record is what is left after the snapshot
- * forgets — and between them they used to put a screen and a half of prose in
- * front of everything still moving. Named while shut, because a section that
- * vanished would be a page that had lost it.
+ * Folded, because it has been read: on a goal with a plan, pull requests and a
+ * validation sheet it is a screen of prose between the track and the work. Named
+ * while folded, because a section that vanished would be a page that had lost it.
  *
  * And it is a `Place`, so a link to a goal's ticket body opens on it and the back
  * button steps out of a disclosure it stepped into. Held in a `useState` all of
  * that fails silently, which is why it is pinned here rather than left to reading.
  */
-test('the reference footer arrives shut, and opens from the place', () => {
+test('the ticket arrives folded on a goal under way, and opens from the place', () => {
   const shut = render(goalView());
   assert.ok(shut.includes('The ticket'), 'the ticket is named even while it is folded away');
   assert.ok(!shut.includes('as it stood at pickup</span><div class="cn-tick"'), 'and its body is not drawn');
 
   const open = render(goalView(() => {}, goalRef(), ['ticket']));
-  assert.ok(open.includes('cn-tick'), 'the place is what opens it');
+  assert.ok(open.includes('class="cn-tick"'), 'the place is what opens it');
+});
+
+/**
+ * The other half of the same rule: a goal nobody has planned yet opens *on* its
+ * ticket, because that is the only thing on the page with anything in it.
+ *
+ * And the operator's word outranks the reading in both directions — `?shut=ticket`
+ * folds the one the goal's own progress would have opened. Without that arm the
+ * two lists collapse to one and a card folded away springs back the moment the
+ * goal moves, which is the silent half of this change.
+ */
+test('a goal nobody has planned opens on its ticket, unless the operator folded it', () => {
+  const fresh = goalView((s) => {
+    s.plans = [];
+    s.planParts = [];
+    s.agents = [];
+    s.world = { ...s.world, pullRequests: [] };
+  });
+  const page = fresh.goalPage;
+  assert.ok(page, 'the fixture goal must resolve to a page');
+  const bare = { ...fresh, goalPage: { ...page, plan: null, parts: [], openPullRequests: [], agents: [] } };
+  assert.ok(render(bare).includes('class="cn-tick"'), 'the ticket is the page on a goal with nothing else on it');
+
+  assert.ok(
+    !render({ ...bare, goalShut: new Set(['ticket']) }).includes('class="cn-tick"'),
+    'and the operator folding it outranks that reading',
+  );
+});
+
+/**
+ * The pipeline cards a goal has not reached yet are named and shut, and the
+ * track's own jump is what opens one.
+ *
+ * A card drawn open on "no checks", "nothing declared" and "not shipped" is three
+ * screens of furniture between the plan and the work; a card that *vanished* would
+ * be a feature announcing itself as broken. Folded is the third answer, and the
+ * heading still carries the count.
+ */
+test('validation and signals are folded on a goal that has not shipped', () => {
+  const v = goalView();
+  const page = v.goalPage;
+  assert.ok(page, 'the fixture goal must resolve to a page');
+  const nowhere = {
+    ...v,
+    goalPage: {
+      ...page,
+      checks: [],
+      signals: page.signals.map((s) => ({ ...s, live: true, proposal: null })),
+      environments: [
+        { environment: 'prod' as const, status: 'absent' as const, landed: 0, total: 2, at: null, opens: [] },
+      ],
+    },
+  };
+  const html = render(nowhere);
+  assert.ok(html.includes('Validation'), 'the card is named — a surface that vanishes when quiet looks broken');
+  assert.ok(!html.includes('cn-vin'), 'and its body is not drawn while there is nothing in it');
+  assert.ok(html.includes('0/1 reached'), 'a folded environments card still says how far the work has got');
+
+  const open = render({ ...nowhere, goalOpen: new Set(['validation']) });
+  assert.ok(open.includes('cn-vin'), 'the place is what opens it');
 });
 
 test('a held goal is a way into the goal it names', () => {
