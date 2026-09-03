@@ -9,7 +9,8 @@ import { fileURLToPath } from 'node:url';
 // violation of the rule it pins would have merged green on that platform.
 
 import * as React from 'react';
-import { createElement } from 'react';
+import { createElement, isValidElement } from 'react';
+import type { ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { buildViewModel } from '../web/src/view/viewModel.js';
 import type { CockpitView } from '../web/src/view/viewModel.js';
@@ -784,7 +785,7 @@ function goalView(
  * that is how it is actually reached, and the crumb naming the goal is half of what
  * makes the page a rung of the ladder rather than a fourth destination.
  */
-function prView(prNumber: number, ref: string = 'issue:412'): CockpitView {
+function prView(prNumber: number, ref: string | null = 'issue:412'): CockpitView {
   const state = buildDemoState().state;
   return buildViewModel({
     state,
@@ -841,6 +842,60 @@ test('the crumb draws every rung of the ladder, not just the one beneath', () =>
   // of words that looks like navigation.
   assert.equal((crumb.match(/<button/g) ?? []).length, 2, 'both rungs above are controls');
   assert.ok(/cn-crumbnow[^>]*>PR #412/.test(crumb), 'and the page you are on is not one');
+});
+
+/**
+ * The first element of a named component in a rendered tree, without a DOM.
+ *
+ * `renderToStaticMarkup` answers what a page *looks* like; a crumb rung is a
+ * handler, and what it does is only visible by holding the element. Components
+ * are not called on the way down — the tree above a crumb is host elements and
+ * fragments, and calling the rest would run hooks with no renderer under them.
+ */
+function findComponent(node: unknown, name: string): ReactElement | null {
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const hit = findComponent(child, name);
+      if (hit !== null) return hit;
+    }
+    return null;
+  }
+  if (!isValidElement(node)) return null;
+  if (typeof node.type === 'function' && node.type.name === name) return node;
+  return findComponent((node.props as { children?: unknown }).children, name);
+}
+
+/**
+ * The middle rung has to *go* to the goal, not merely leave the pull request.
+ *
+ * The overview's pull-request rack opens this page with no goal underneath — the
+ * place holds `pr` and nothing else — so `selectPr(null)`, which relies on the
+ * goal already being there, dropped straight past the rung the operator had just
+ * clicked and landed on the tab. The label said "the goal" and the click said
+ * "the overview". → `docs/spec/17-cockpit.md#the-pull-request-page`
+ */
+test('the goal rung leads to the goal even when the page was opened without one', () => {
+  const view = prView(412, null);
+  const goal = view.prPage?.goal;
+  assert.ok(goal, 'the pull request still knows the goal that owns it');
+  const calls: Array<[string, unknown]> = [];
+  const recorder = new Proxy(
+    {},
+    { get: (_t, name: string) => (arg: unknown) => calls.push([name, arg]) },
+  ) as CockpitActions;
+
+  // Called rather than rendered: `ConsoleRoot` holds no hooks, and one call is
+  // the whole of the way to the element that carries the handler.
+  const crumb = findComponent(ConsoleRoot({ view, actions: recorder }), 'PrCrumb');
+  assert.ok(crumb, 'the pull request page draws its crumb');
+  const trail = (crumb.type as (props: unknown) => ReactElement)(crumb.props).props.trail as ReadonlyArray<{
+    label: string;
+    go: () => void;
+  }>;
+  const rung = trail.find((step) => step.label.startsWith(`#${goal.number}`));
+  assert.ok(rung, 'the goal is a rung on the trail');
+  rung.go();
+  assert.deepEqual(calls, [['selectGoal', view.prPage?.goalRef]], 'and standing on it opens that goal');
 });
 
 /**

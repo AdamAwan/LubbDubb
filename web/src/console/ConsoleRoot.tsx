@@ -327,14 +327,20 @@ function GoalGone({ ref_, tab, actions }: { ref_: string; tab: ConsoleTab; actio
  * always one.
  */
 function PrCrumb({ page, tab, actions }: { page: PrPageView; tab: ConsoleTab; actions: CockpitActions }): JSX.Element {
+  const goalRef = page.goalRef;
   return (
     <Crumb
       trail={[
         tabStep(tab, actions),
-        // The rung between, and only when there is one. `selectPr(null)` alone is
-        // the whole of the way there — the goal underneath was never cleared.
-        ...(page.goal !== null
-          ? [{ label: `#${page.goal.number} ${page.goal.title}`, go: () => actions.selectPr(null) }]
+        // The rung between, and only when there is one. It *selects* the goal
+        // rather than merely clearing the pull request: this page is reached by a
+        // `<Ref>` from anywhere — the overview's pull-request rack among them —
+        // and on that way in the place underneath holds no goal at all, so
+        // `selectPr(null)` alone lands on the tab and the rung the operator just
+        // clicked is skipped. The ref is the page's own reading of what owns it,
+        // which is what the rung is labelled off.
+        ...(page.goal !== null && goalRef !== null
+          ? [{ label: `#${page.goal.number} ${page.goal.title}`, go: () => actions.selectGoal(goalRef) }]
           : []),
       ]}
       here={`PR #${page.pr.number}`}
