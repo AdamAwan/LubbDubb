@@ -261,6 +261,26 @@ export interface PullRequest {
    */
   author?: string;
   /**
+   * That **the credential the harness posts under** opened this pull request —
+   * resolved by the provider against the viewer identity the token actually is,
+   * never against `filters.prAuthor`, which is a *filter* and says only which pull
+   * requests were fetched.
+   *
+   * The gate that keeps the fleet off a colleague's work. `ownWorkOnly` widens the
+   * fetch to the pull requests a person *handed* the operator ({@link
+   * viewerAssignment}), so "it is in the world" stopped meaning "it is ours" — and
+   * without this field a review thread on somebody else's pull request reads to
+   * every rule exactly like one on the harness's own, which is a fleet answering
+   * another team's reviewers. → `src/prOwnership.ts`
+   *
+   * **Absent means the provider cannot say**, and every reader must then fall back
+   * to the branch shape rather than assuming either answer: `false` is a positive
+   * statement that somebody else opened this, and only `false` takes a pull
+   * request out of the dispatch world.
+   * → `docs/spec/07-pull-requests.md#whose-pull-request-is-it`
+   */
+  viewerAuthored?: boolean;
+  /**
    * That **you personally** have already given this pull request an approving
    * verdict — your own vote in the reviewer list, never the fold in
    * {@link approved}, which is any reviewer's.

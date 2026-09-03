@@ -131,7 +131,7 @@ export function readWorldItem(
 function prView(pr: PullRequest, world: WorldSnapshot): Record<string, unknown> {
   // The *unfiltered* open list: an unwatched PR is hidden from dispatch but is
   // still a real base, so attribution must see it — the same reason
-  // `DispatchContext` carries `unwatchedPrs` alongside the dispatch world.
+  // `DispatchContext` carries `hiddenPrs` alongside the dispatch world.
   const openPrs = world.pullRequests;
   const base = basePrOf(pr, openPrs);
   const inherited = inheritedCiFailure(pr, openPrs);

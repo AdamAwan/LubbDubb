@@ -10,6 +10,7 @@ import type { RuntimeControl } from './runtimeControl.js';
 import { diffWorlds } from './world/worldDiff.js';
 import { buildReadPlan, type ReadLanes } from './world/readPlan.js';
 import { awaitingReview, isPrWatched } from './prHealth.js';
+import { isSomeoneElsesPr } from './prOwnership.js';
 
 import { rejectionSignalQuery } from './proposals/proposals.js';
 import { deliverySignalQuery } from './delivery/delivery.js';
@@ -34,7 +35,7 @@ import type { BranchReapDesk } from './branchReapDesk.js';
 import type { EnvironmentDesk } from './environments/environmentDesk.js';
 import type { ScheduleDesk } from './schedules/scheduleDesk.js';
 import type { WorkGraphRecorder } from './graph/workGraphRecorder.js';
-import type { Action, WorldEvent, WorldSnapshot } from './types.js';
+import type { Action, PullRequest, WorldEvent, WorldSnapshot } from './types.js';
 import { applyThreadReopens } from './prThreads.js';
 import type { UpcomingPlan } from './wire.js';
 import { isActiveTask } from './tasks.js';
@@ -1003,16 +1004,25 @@ export class Harness extends EventEmitter {
       const liveAgents = store.countLiveAgents();
       const headroom = this.deps.runtime.paused ? 0 : Math.max(0, this.deps.runtime.cap - liveAgents);
 
-      // A PR without the watch tag is one nobody opted in — the harness's own are
-      // tagged as they are opened (`src/prWatch.ts`), so what is left here is
-      // somebody else's work, or work an operator has taken off the fleet. Hide them
-      // from the dispatch view so *both* dispatchers leave them alone uniformly — no
-      // CI fix, base update, comment note, or merge. The world used for
-      // diffing/baseline above is untouched, and the cockpit snapshot reads the
-      // connector directly, so an unwatched PR stays fully visible (with its health
+      // Two reasons a pull request is not the fleet's to touch, and one gate.
+      //
+      // Without the watch tag nobody opted it in — the harness's own are tagged as
+      // they are opened (`src/prWatch.ts`), so what is left is work an operator has
+      // taken off the fleet. And a pull request a *colleague* opened is never the
+      // fleet's however it is tagged: `ownWorkOnly` widens the fetch to the ones
+      // somebody assigned the operator, which is how another team's review threads
+      // reached rule `pr-review-comment` and got answered by an agent. The provider
+      // says which those are (`PullRequest.viewerAuthored`); a provider that cannot
+      // say hides nothing, so the tag stays the only gate on those deployments.
+      //
+      // Hidden from the dispatch view so *both* dispatchers leave them alone
+      // uniformly — no CI fix, base update, comment note, reply or merge. The world
+      // used for diffing/baseline above is untouched, and the cockpit snapshot reads
+      // the connector directly, so a hidden PR stays fully visible (with its health
       // and its tags) — it is just not acted on.
       const label = this.deps.prWatchLabel;
-      const unwatchedPrs = world.pullRequests.filter((pr) => !isPrWatched(pr, label));
+      const actedOn = (pr: PullRequest): boolean => isPrWatched(pr, label) && !isSomeoneElsesPr(pr);
+      const hiddenPrs = world.pullRequests.filter((pr) => !actedOn(pr));
 
       // The other half of #234: the runs the tracker has forgotten join the
       // dispatcher's issue list, so a goal whose ticket was closed by the very PR
@@ -1027,10 +1037,10 @@ export class Harness extends EventEmitter {
       // change removes without a test failing.
       const retainedIssues = retainedRunIssues(store.listIssueRuns(), world.issues);
       const dispatchWorld: WorldSnapshot =
-        unwatchedPrs.length > 0 || retainedIssues.length > 0
+        hiddenPrs.length > 0 || retainedIssues.length > 0
           ? {
               ...world,
-              pullRequests: world.pullRequests.filter((pr) => isPrWatched(pr, label)),
+              pullRequests: world.pullRequests.filter(actedOn),
               issues: [...world.issues, ...retainedIssues],
             }
           : world;
@@ -1062,8 +1072,8 @@ export class Harness extends EventEmitter {
         // from one a provider set.
         retainedIssues: retainedIssues.map((i) => i.number),
         // Hidden from dispatch, but still open — the issue-pickup gate has to see
-        // them or an unwatched PR reads as merged and its issue gets a second agent.
-        unwatchedPrs,
+        // them or a hidden PR reads as merged and its issue gets a second agent.
+        hiddenPrs,
         tasks,
         agents,
         openEscalations,

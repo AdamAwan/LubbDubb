@@ -429,6 +429,12 @@ and under a team review rule it is one the operator's whole org shares. The same
 `prAuthor` filter, since a pull request that never enters the world cannot report anything
 ([02](02-configuration.md#ownworkonly)).
 
+**Whose pull request it is** is that same `user.login` against the viewer, reported as
+`viewerAuthored` — on the closed-PR window too, because the branch reap acts on that list. It is what
+keeps the fleet off the assigned pull requests the widened filter just admitted, and a provider that
+does not resolve it costs the operator that gate silently
+([07](07-pull-requests.md#whose-pull-request-is-it)).
+
 **Who opened it** is `user.login` off the same list payload, and **whether the viewer has already
 approved** is their own latest review in `listPullReviews` — the read the snapshot already makes for
 `computeApproved`, asked of one reviewer rather than all of them. Latest-per-reviewer, on the same
@@ -458,6 +464,11 @@ Behaviour worth knowing:
   the match fails twice over, and the flag is checked anyway rather than relying on that. The
   comparison is case-insensitive, because a UPN is. The same match widens the `prAuthor` filter
   ([02](02-configuration.md#ownworkonly)).
+- **Whose pull request it is.** `createdBy.uniqueName` against the viewer's UPN, case-insensitively,
+  reported as `viewerAuthored` — on the closed list as well as the active one, because the branch reap
+  acts on that. Compared on the UPN and never on `displayName`, which is a label two people can share.
+  This is the gate that keeps the fleet off the pull requests the widened reviewer match just admitted
+  ([07](07-pull-requests.md#whose-pull-request-is-it)).
 - **Who opened it, and whether you have answered.** `createdBy.displayName` (the UPN behind it, and
   nothing where Azure reports neither) becomes `PullRequest.author`; the viewer's own vote of 10 or 5
   in the same reviewer list becomes `viewerApproved`. **Their vote, never `computeApproved`'s fold** —

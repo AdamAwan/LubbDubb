@@ -190,7 +190,7 @@ stack keeps its own. A status policy is evaluated per pull request, so each rung
 of its own to clear — suppressing those would park the whole stack on the bottom one, which is the
 mirror-image failure of the multiplication above.
 
-Both predicates take the **unfiltered** open list — the dispatch world plus `ctx.unwatchedPrs` — so an
+Both predicates take the **unfiltered** open list — the dispatch world plus `ctx.hiddenPrs` — so an
 unwatched base still attributes.
 
 ### `retargetsFor(openPrs, closedPrs, defaultBranch)`
@@ -368,6 +368,61 @@ the source-control half that went old; any stale source at all stops the settle.
 and the world, which is what keeps the lens out of the harness's per-pulse decision path. The only
 place the model is consulted is `landingScope`, at the click, in the route.
 
+## Whose pull request is it
+
+`isOurPr(pr, prAuthorConfigured)` / `isSomeoneElsesPr(pr)` (`src/prOwnership.ts`), asked in one place
+because several paths need it and two wordings of "which pull requests are mine" would drift.
+
+**`PullRequest.viewerAuthored` is the answer, and the provider is the only thing that can give it.**
+It is the pull request's author compared against the identity the credential actually is — the
+viewer — never against `filters.prAuthor`. Both providers set it on the open list and on the
+closed-PR window, at no extra request: the author rides on the payload the snapshot already reads.
+
+**`prAuthor` is not that answer**, and stopped being a usable proxy for it the day `ownWorkOnly`
+widened the fetch to the pull requests a colleague **assigned** the operator
+([#a-pull-request-a-person-put-on-you](#a-pull-request-a-person-put-on-you)). With the filter set,
+somebody else's pull request is in the world *by design* — so reading "it was fetched" as "it is
+ours" had the harness renaming a colleague's pull request, tagging it for watching, reaping its
+branch on merge, and, through rule `pr-review-comment`, **dispatching an agent that answered their
+reviewers**. On a single-operator deployment nothing about that is red: the reply is posted under the
+operator's own account, so it reads to the other team as the operator talking.
+
+So the filter survives only as the fallback where authorship is unknown:
+
+| `viewerAuthored` | `isOurPr`                                         | `isSomeoneElsesPr` |
+| ---------------- | ------------------------------------------------- | ------------------ |
+| `true`           | yes                                               | no                 |
+| `false`          | no — under every arm, dispatch branch included    | **yes**            |
+| absent           | `prAuthor` configured, or a dispatch branch shape | no                 |
+
+**The two predicates are not each other's inverse, and must not be folded into one.** "Is this ours,
+so we may rename it" fails safe by saying no; "is this somebody else's, so hide it from every rule"
+has to fail safe by saying no as well — a provider that cannot name an author would otherwise take
+every watched pull request out of the dispatch world and stop the fleet with nothing red. That is why
+the absent row above answers `no` to both.
+
+`isHarnessBranch(branch)` is the unknown arm's second half: `issue/<n>`, `issue/<n>/<slug>` or
+`job/<id>`, the branch shapes only a dispatch cuts. Derived rather than stored — recording every
+opened PR number would be a second answer to a question the branch already answers.
+
+### What it gates
+
+- **The dispatch world.** `Harness.runCycle` hides a pull request somebody else opened from
+  `world.pullRequests` exactly as it hides an unwatched one, and hands both over as `ctx.hiddenPrs`
+  ([04](04-harness-cycle.md)). No rule fires on either — no CI fix, base update, review, reply or
+  merge — and the reasons are different but the requirement is one: the fleet works its own.
+- **The bookkeeping desks** — `renamablePrs`, `reapableBranches`, `prWorkItemLinks`, all through
+  `isOurPr`.
+- **The watch seeding.** `prsToSeedWatch` tags the fleet's own untagged pull requests off the branch
+  shape; a branch shape is evidence, not proof, so a pull request the provider says a colleague
+  opened is never tagged however it is named.
+
+Still fully visible in the cockpit, with its health, its threads and who opened it: the snapshot
+reads the connector directly. `prAttentionStatus` gives it `elsewhere`, and where a person **put** the
+operator on it, that assignment turns it straight back into `you`
+([#a-pull-request-a-person-put-on-you](#a-pull-request-a-person-put-on-you)) — a review a colleague
+asked for is the operator's to answer, and never the fleet's.
+
 ## Reaping a merged branch
 
 When a pull request merges, the branch behind it is deleted — the worktree and the local ref, then
@@ -381,8 +436,9 @@ A branch is reapable when all of:
 - **Its pull request merged.** `prState(pr) === 'merged'`, read from the closed-PR window. An
   **abandoned** PR's branch holds work that never landed, so deleting it destroys the only copy —
   the same line `retargetsFor` draws, and `prState` never invents `closed` from absence.
-- **The pull request is ours** — `isOurPr` (`src/prOwnership.ts`), the gate `renamablePrs` uses,
-  asked in one place because two wordings of "which pull requests are mine" would drift.
+- **The pull request is ours** — `isOurPr` ([#whose-pull-request-is-it](#whose-pull-request-is-it)),
+  the gate `renamablePrs` uses, asked in one place because two wordings of "which pull requests are
+  mine" would drift. A colleague's branch is never deleted, and that one is irreversible.
 - **Nothing still stands on the branch.** It is not `defaultBranch`, and no open pull request names
   it as `baseBranch`. **This is the load-bearing one**: deleting the base of an open PR orphans it,
   and GitHub closes it outright. `retargetsFor` moves a rung off its merged parent, but that write
@@ -462,16 +518,10 @@ it writes beside it is what actually satisfies the branch policy anyway (below).
 
 ### `renamablePrs(prs, ctx)` — and what may be renamed
 
-`userId` is the gate, because it is already the operator's answer to "which pull requests
-are mine", and both providers apply it **at fetch time**:
+`isOurPr` is the gate ([#whose-pull-request-is-it](#whose-pull-request-is-it)) — the same one the
+merged-branch reap asks, answered in one place.
 
-- **Set** — every PR in the world is theirs _by construction_; the provider never surfaced anyone
-  else's. All of them are renamable, and no attribution logic exists here at all.
-- **Unset** — the world holds everyone's PRs and the harness cannot tell them apart, so it falls back
-  to the branch shapes only a dispatch mints (`issue/<n>`, `issue/<n>/<slug>`). Derived rather than
-  stored: recording every opened PR number would be a second answer to a question the branch answers.
-
-**A colleague's pull request is renamed under neither arm.** A PR that resolves to no issue is left
+**A colleague's pull request is never renamed.** A PR that resolves to no issue is left
 alone — the convention is keyed on an issue number. A merged PR is never renamed. The render strips
 any prefix it would itself have written, so renaming twice does not stack prefixes.
 
@@ -497,6 +547,7 @@ folding them would make one of the two a lie every time they disagree.
 | ----------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `done`      | nobody — off the board        | `prState(pr) !== 'open'`.                                                                                                                                                                                                                                                                                                                                            |
 | `unwatched` | nobody — nobody opted it in   | `!isPrWatched(pr, watchLabel)`. First, because the harness filters these out of the dispatch world entirely — every arm below would describe rules that cannot fire.                                                                                                                                                                                                 |
+| `elsewhere` | somebody else's               | `isSomeoneElsesPr(pr)` ([#whose-pull-request-is-it](#whose-pull-request-is-it)) — hidden from the dispatch world beside the unwatched, so no rule below can fire either. Named `elsewhere` rather than a status of its own because the fold below turns it into `you` the moment they put the operator on it. |
 | `you`       | yours                         | A **pending proposal** whose ref names this PR; an agent on the branch **parked waiting**; a concern whose **attempt cap is spent** (rule `cooldown-escalate` did); or a failing check the **CI policy holds** (rule `pr-ci-blocked` handed it to a human) **with no other concern under it** — a held check that is one of two problems is a reason, not the court. |
 | `harness`   | the harness's                 | An agent is **running or queued** on the branch; an unstaffed **concern** (rules `pr-ci-failing`/`pr-ci-gate`/`pr-base-update`/`pr-base-update-conflict`/`pr-review-comment`) is dispatchable or on cooldown; the PR is **merge-ready** and the merge gate runs next cycle, or an accepted verdict is inside its settle window.                                      |
 | `settled`   | nobody — you already answered | Merge-ready, and a **rejection still stands** on `pr:<n>:merge`. The reason quotes the note you left.                                                                                                                                                                                                                                                                |
@@ -660,7 +711,7 @@ classified the PR first, and asking a pure function twice is one answer rather t
 ### What it reads, and what it deliberately does not
 
 - **The same lists the other predicates read**: the **unfiltered** open PR list (the dispatch world
-  plus `ctx.unwatchedPrs`), so an unwatched base still attributes, exactly as `inheritedCiFailure`
+  plus `ctx.hiddenPrs`), so an unwatched base still attributes, exactly as `inheritedCiFailure`
   requires; the tasks; the proposals in the store's newest-first order; the recent decision window;
   and the world snapshot's `takenAt` as "now".
 - **`proposalHold`, not the proposal row.** The `settled` arm asks the gate, so a rejection that

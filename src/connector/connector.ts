@@ -39,6 +39,15 @@ export type InjectableEvent =
       baseBranch?: string;
       labels?: string[];
       headSha?: string;
+      /** Who opened it, as a person is named — the fake's half of `PullRequest.author`. */
+      author?: string;
+      /**
+       * Whether the harness's own credential opened it. Absent is the fake's usual
+       * world — every pull request in a test is the fleet's unless a test says
+       * otherwise — and `false` is how a test models a colleague's pull request
+       * arriving because `ownWorkOnly` widened the fetch. → `src/prOwnership.ts`
+       */
+      viewerAuthored?: boolean;
     }
   // A push: the head moves. What a stale review pack is decided against.
   | { kind: 'pr_pushed'; prNumber: number; headSha: string }

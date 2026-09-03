@@ -57,6 +57,7 @@ import {
   needsBaseUpdate,
   prState,
 } from './prHealth.js';
+import { isSomeoneElsesPr } from './prOwnership.js';
 import { mergeProposalRef, proposalHold } from './proposals/proposals.js';
 import { DEFAULT_PR_REVIEW, type PrReviewPolicy } from './review/policy.js';
 import {
@@ -135,7 +136,7 @@ export interface PrAttention {
 export interface PrAttentionContext {
   /**
    * Every open PR the world knows about, **unfiltered** — the dispatch world plus
-   * `ctx.unwatchedPrs`. The same list `inheritedCiFailure`/`basePrOf` take, and for
+   * `ctx.hiddenPrs`. The same list `inheritedCiFailure`/`basePrOf` take, and for
    * the same reason: an unwatched base still attributes, so a stacked PR waiting on
    * an unwatched parent says so instead of reading as stalled.
    */
@@ -290,6 +291,20 @@ function court(pr: PullRequest, ctx: PrAttentionContext): PrAttention {
   // rules that cannot fire.
   if (!isPrWatched(pr, ctx.watchLabel)) {
     return { status: 'unwatched', reasons: [`not tagged "${ctx.watchLabel}" — the harness is leaving it alone`] };
+  }
+
+  // Somebody else opened it, so no rule will fire on it however it is tagged —
+  // `Harness.runCycle` hides these from the dispatch world beside the unwatched.
+  // `elsewhere` rather than a status of its own: the row is still worth showing
+  // (its CI, its threads, who asked), and where the operator was *put* on it the
+  // fold above turns this straight back into `you`, which is the whole reading a
+  // colleague's pull request should get.
+  if (isSomeoneElsesPr(pr)) {
+    const who = pr.author?.trim();
+    return {
+      status: 'elsewhere',
+      reasons: [`${who ? `${who} opened this` : 'somebody else opened this'} — the harness only works its own`],
+    };
   }
 
   // A pending proposal is the one unambiguous "your court", and this verdict

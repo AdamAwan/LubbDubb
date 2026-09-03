@@ -156,6 +156,12 @@ export class FakeGitHubIntegration
               merged: false,
               labels: event.labels ?? [],
               ...(event.headSha === undefined ? {} : { headSha: event.headSha }),
+              ...(event.author === undefined ? {} : { author: event.author }),
+              // Mirrored rather than derived: the real providers answer this by
+              // comparing the pull request's author against the credential, and a
+              // fake that guessed from the branch would let a test pass against a
+              // rule the shipped gate does not have. → `src/prOwnership.ts`
+              ...(event.viewerAuthored === undefined ? {} : { viewerAuthored: event.viewerAuthored }),
             });
           }
           break;
