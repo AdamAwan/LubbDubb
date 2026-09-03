@@ -66,6 +66,10 @@ export const TAB_LABEL: Record<ConsoleTab, string> = {
   overview: 'Overview',
   tickets: 'Tickets',
   knowledge: 'Knowledge',
+  // Labelled but not in `TABS` below: the obstacle board is reachable by URL only,
+  // deliberately, until the operator says otherwise. A label is still owed — a
+  // crumb back from a goal opened on that page has to name where it came from.
+  obstacles: 'Obstacles',
   features: 'Features',
   insights: 'Insights',
   pets: 'Pets',

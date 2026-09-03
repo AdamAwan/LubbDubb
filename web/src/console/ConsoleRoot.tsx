@@ -25,6 +25,7 @@ import { Vivarium } from './Vivarium.js';
 import { BuildPanel } from '../components/BuildPanel.js';
 import { LocalRunPanel } from '../components/LocalRunPanel.js';
 import { InsightsPage } from '../components/InsightsPage.js';
+import { ObstaclesPage } from '../components/ObstaclesPage.js';
 import { SchedulePanel } from '../components/SchedulePanel.js';
 import { InjectPanel } from '../components/InjectPanel.js';
 import { ConfirmButton } from '../components/ConfirmButton.js';
@@ -186,6 +187,16 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
           now={view.now}
         />
       );
+    case 'obstacles':
+      // Embedded exactly as Insights and the tickets tab are, and for the same
+      // reason: it reaches its own route, which `console/` may not, but rendering a
+      // component that does is not reaching. Which row is unfolded and whether the
+      // terminal tail is open ride in from `Place`, so a link to either opens on it.
+      //
+      // **Not in the nav.** `TopBar`'s `TABS` deliberately does not carry this one:
+      // it is reachable by URL only until the operator says otherwise.
+      // → docs/spec/32-obstacles.md#in-the-cockpit
+      return <ObstaclesPage open={view.viewingObstacle} ended={view.obstacleEnded} now={view.now} actions={actions} />;
     case 'knowledge':
       // A destination since the nav gained it, and drawn here rather than in a
       // panel for the reason the tickets tab is not one either: ruling on the

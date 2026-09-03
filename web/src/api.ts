@@ -31,6 +31,7 @@ import type {
   PlanHistory,
   McpChannelPayload,
   McpUsagePayload,
+  ObstacleBoardPayload,
   PoolInsightsPayload,
   PoolStatePayload,
   PromptsPayload,
@@ -339,6 +340,28 @@ const realApi = {
     authFetch(`/api/pool/insights${project === null ? '' : `?project=${encodeURIComponent(project)}`}`).then((r) =>
       json<PoolInsightsPayload>(r),
     ),
+  // The obstacle board (#32 phase 7). Fetched on its own tab rather than riding
+  // the snapshot, for `getMcpUsage`'s reason: it is every sighting's prose for
+  // every row, and the snapshot comes round every couple of seconds for every open
+  // cockpit. The four writes below are the operator's whole arm on this store —
+  // none of them is a step on any path the harness waits on, because *every state
+  // has an exit that is not you* is the invariant the subsystem is arranged around.
+  getObstacles: () => authFetch('/api/obstacles').then((r) => json<ObstacleBoardPayload>(r)),
+  // Never tell the fleet this, or tell them again. The one state whose exit is a
+  // person, and a person put it there.
+  muteObstacle: (id: string, muted: boolean) =>
+    post<{ ok: true }>(`/api/obstacles/${encodeURIComponent(id)}/mute`, { muted }),
+  // A ticket you are already using. It takes the same `UPDATE … WHERE owner_ref IS
+  // NULL` the ownership desk takes, so an operator and the pulse racing for one row
+  // is a uniqueness constraint rather than a rule either remembers.
+  ownObstacle: (id: string, ownerRef: string) =>
+    post<{ ok: true }>(`/api/obstacles/${encodeURIComponent(id)}/own`, { ownerRef }),
+  // This is over and no reading is going to say so. **Not** rejecting: the row
+  // keeps what it said, and a matching report reopens it.
+  retireObstacle: (id: string) => post<{ ok: true }>(`/api/obstacles/${encodeURIComponent(id)}/retire`, {}),
+  // Write a note into the repository now rather than when the endings desk reaches
+  // it — one at a time across the whole fleet, whichever door asks.
+  writeDownObstacle: (id: string) => post<{ ok: true }>(`/api/obstacles/${encodeURIComponent(id)}/write-up`, {}),
   // This fleet's own side of the pool, plus the mirror. Fetched on the Knowledge
   // page rather than riding the snapshot, for `getMcpUsage`'s reason: it is other
   // teams' prose, and the snapshot comes round every couple of seconds.

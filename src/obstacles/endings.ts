@@ -257,15 +257,48 @@ const MAX_WORDS_CHARS = 1_000;
 const MAX_VOICES = 6;
 
 /**
- * What is **appended** to the rendered `docs-change` prompt for a note: that this
- * came from the fleet, what the voices actually said, and what merging it does.
+ * Everything a note's documentation change is composed from: the job's title, the
+ * `docs-change` template's variables, and the passage **appended** to what that
+ * template renders.
+ *
+ * One composer rather than one per caller, because there are two — the endings
+ * desk on the pulse, and an operator's *write it down* on the cockpit's own token
+ * — and a note written up two ways is two documents claiming to be the fleet's one
+ * statement of the same thing. The rendering itself stays with each caller,
+ * because the template book is the deployment's.
  *
  * Appended and never interpolated, which is CLAUDE.md's rule under "Prompts and
  * templates": `loadPromptTemplates` rejects only *unknown* placeholders, so an
  * override written before this existed would silently drop a new `{token}` — on
  * exactly the deployments that customised most.
  */
-export function noteWriteUpNote(row: ObstacleStanding): string {
+export function noteWriteUpFields(row: ObstacleStanding): {
+  title: string;
+  vars: Record<string, string>;
+  note: string;
+} {
+  const claim = row.obstacle.what.replace(/\s+/g, ' ').trim();
+  return {
+    title: `Document: ${claim}`.slice(0, TITLE_CHARS),
+    vars: { ref: keyPhrase(row), summary: claim, originRef: row.goalRefs[0] ?? 'an untracked task' },
+    note: noteWriteUpNote(row),
+  };
+}
+
+/** A job title stays a line. The prompt carries everything worth reading. */
+const TITLE_CHARS = 80;
+
+/**
+ * What the note is *about*, said as a phrase a sentence can contain — never parsed
+ * back. Its binding keys are the harness’s own statement of that, and a note with
+ * none is about working this repository at all.
+ */
+function keyPhrase(row: ObstacleStanding): string {
+  const keys = row.keys.filter((key) => key.binds).map((key) => `\`${key.value}\``);
+  return keys.length === 0 ? 'working this repository' : keys.join(', ');
+}
+
+function noteWriteUpNote(row: ObstacleStanding): string {
   const seen = row.words
     .slice(0, MAX_VOICES)
     .map((words) => `- ${words.replace(/\s+/g, ' ').trim().slice(0, MAX_WORDS_CHARS)}`);

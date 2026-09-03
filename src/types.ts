@@ -5327,8 +5327,15 @@ export interface Obstacle {
  * owner's work shipping, an `expiry` is a clock running out on something no
  * reading ever settled, and `decay` is nothing having said it for
  * `obstacleDormantMs`. Read by nothing that decides.
+ *
+ * `retired` is the operator's own, and it is a member here rather than a second
+ * column for exactly the reason the other five are recorded: the board must never
+ * say a clock or the world ended a row a person did. **Retiring is not
+ * rejecting** — the row keeps its claim, its keys and its sightings, and a
+ * matching report reopens it at `standing` like any other terminal row, which is
+ * the whole difference from `muted`. → `docs/spec/32-obstacles.md#in-the-cockpit`
  */
-export type ObstacleEnding = 'condition' | 'landing' | 'expiry' | 'decay' | 'written-down';
+export type ObstacleEnding = 'condition' | 'landing' | 'expiry' | 'decay' | 'written-down' | 'retired';
 
 /**
  * A condition the harness can evaluate, written by the harness and **never by an

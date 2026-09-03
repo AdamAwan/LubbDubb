@@ -120,6 +120,8 @@ import type {
   LocalRunFreshness,
   LocalRunPorts,
   LocalRunTurn,
+  ObstacleSighting,
+  ObstacleStanding,
   Plan,
   PlanAmendmentAuthor,
   PlanPart,
@@ -2492,6 +2494,11 @@ export type {
   KnowledgeFact,
   KnowledgeGraduation,
   KnowledgeSimilarity,
+  Obstacle,
+  ObstacleKey,
+  ObstacleSighting,
+  ObstacleStanding,
+  ObstacleState,
   Plan,
   PlanAmendmentAuthor,
   PlanCaveat,
@@ -2859,4 +2866,103 @@ export interface PoolInsightsPayload {
   /** The projects the mirror actually holds, so the picker offers what exists. */
   projects: string[];
   fleets: PoolFleetReading[];
+}
+
+// ---------------------------------------------------------------------------
+// The obstacle board (`/api/obstacles`) → `docs/spec/32-obstacles.md#in-the-cockpit`
+
+/**
+ * One row of the board as the tab draws it: the standing the harness already
+ * assembles, plus the voices in their authors' own words.
+ *
+ * `extends ObstacleStanding` rather than a shape of its own, so the claim, the
+ * keys, the voice count and the goals it cost are the store's own reading and not
+ * a second one — the number that carries a row to `standing` and the number the
+ * page prints have to be one number.
+ *
+ * The sightings ride on the row rather than behind a second fetch, and that is a
+ * reading about size rather than a shortcut: a board is tens of rows of one
+ * sentence each, where `KnowledgeFactPayload` is fetched per row because the
+ * evidence behind one claim is thousands of characters. It also makes the fold
+ * that opens a row a *fold* — no request, no spinner, no half-open row on a
+ * dropped socket — which matters here because that fold is the only place the
+ * matcher can be seen working or getting it wrong.
+ */
+export interface ObstacleBoardRow extends ObstacleStanding {
+  /** Every voice, oldest first — each with its goal and why it landed here. */
+  sightings: ObstacleSighting[];
+}
+
+/**
+ * The four figures the page draws, and **only** figures something counted.
+ *
+ * *Turns an agent did not spend* is the figure everyone wants and nothing
+ * measures, so it is not here and must not be added: a number invented to sit
+ * beside four real ones is the one thing on the page that would be a lie, and it
+ * would be the one quoted. → `docs/spec/32-obstacles.md#in-the-cockpit`
+ */
+export interface ObstacleBoardCounts {
+  /** Every voice on every row, the harness's own included. */
+  sightings: number;
+  /** Distinct goals that have reported something, across the whole board. */
+  goals: number;
+  /**
+   * Mid-session notices actually sent, over all time — `obstacle_notices`, which
+   * is the only *telling* this subsystem keeps a record of. Dispatch-time delivery
+   * appends a paragraph to a prompt and writes nothing, so the two are never summed
+   * and the page says which one this is.
+   */
+  told: number;
+  /** How the call rate was measured. Sent so the page states its own window. */
+  window: ObstacleCallRate;
+}
+
+/**
+ * Whether agents call the intake at all — the one thing
+ * [32](docs/spec/32-obstacles.md#what-is-not-settled) leaves unsettled, as a number
+ * rather than an impression.
+ *
+ * Three counts and the span they were taken over, rather than a rate computed
+ * here: a ratio hides its own denominator, and the denominator is the interesting
+ * half. `agents` counts the agents that reached the tool channel **at all**, which
+ * is the honest denominator for *did an agent that could call it, call it* — an
+ * agent whose `mcp__lubbdubb__*` grants were dropped never could, and is a
+ * different fault the MCP tab already draws.
+ */
+export interface ObstacleCallRate {
+  /** The start of the span, ISO. */
+  since: string;
+  /** Calls to `raise` on the fleet channel inside it. */
+  calls: number;
+  /** Agents that made at least one of those calls. */
+  callers: number;
+  /** Agents that made any fleet tool call at all inside it. */
+  agents: number;
+}
+
+/**
+ * `GET /api/obstacles` — the whole board, its four counted figures, and the two
+ * facts the page needs to draw a row honestly.
+ *
+ * A route of its own rather than a field on the state snapshot, for
+ * {@link PoolStatePayload}'s reason: this is every sighting's prose for every row,
+ * and the snapshot comes round every couple of seconds for every open cockpit.
+ */
+export interface ObstacleBoardPayload {
+  /** Every row, newest-seen first — the store's own order. */
+  rows: ObstacleBoardRow[];
+  counts: ObstacleBoardCounts;
+  /**
+   * `config.obstacleDormantMs`, so the dimmed section can say **when** a row goes
+   * dormant rather than that it eventually will. Sent rather than assumed, because
+   * it is a deployment's setting and a cockpit-side constant would be a second
+   * statement of it that goes stale silently.
+   */
+  dormantMs: number;
+  /**
+   * Whether a tracker is configured. The *own it* control names a ticket the
+   * operator is already using, so it is the same gate the filing arms ask — and
+   * with no tracker there is no ref to name.
+   */
+  canFileTickets: boolean;
 }
