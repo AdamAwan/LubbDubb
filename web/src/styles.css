@@ -2719,6 +2719,11 @@ select:disabled {
 }
 .pm-body {
   overflow-y: auto;
+  /* A floor under the middle: it is a scroll container, so its automatic minimum
+     size is zero and it would otherwise shrink to nothing rather than push back on
+     whatever the decision bar below it has grown to. */
+  flex: 1 1 auto;
+  min-height: 22vh;
   padding: 12px 4px 12px 0;
   display: flex;
   flex-direction: column;
@@ -3156,6 +3161,16 @@ select:disabled {
   margin-top: 10px;
   padding-top: 10px;
   border-top: 1px solid var(--border);
+}
+/* The sheet's checklist is a precondition, not the document. A plan that raises
+   several caveats, each with the planner's own words under it, otherwise grows the
+   decision bar until the middle it is pushing against — the plan being read — is a
+   slot a few lines tall. Capped and scrolling itself, so the sheet's proportions
+   stay the plan's however many boxes there are. Scoped to the sheet: on a card the
+   checklist has no document to crowd out. */
+.plan-sheet .caveat-ack {
+  max-height: min(28vh, 240px);
+  overflow-y: auto;
 }
 .pm-row {
   display: flex;
