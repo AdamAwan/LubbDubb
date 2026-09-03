@@ -388,11 +388,18 @@ export function useCockpit(): CockpitStatus {
             ? [...current.collapsed, issueNumber]
             : current.collapsed.filter((n) => n !== issueNumber),
         })),
+      // Written to *both* lists, always: a disclosure is the operator saying which
+      // way this card goes, and the default it is overriding moves as the goal does.
+      // Recording only the open half would leave "shut" meaning "whatever the goal's
+      // progress says", which is the card springing open under them a pulse later.
       openGoalSection: (section, open) =>
         go((current) => ({
           goalOpen: open
-            ? [...current.goalOpen, section].sort((a, b) => a.localeCompare(b))
+            ? [...current.goalOpen.filter((name) => name !== section), section].sort((a, b) => a.localeCompare(b))
             : current.goalOpen.filter((name) => name !== section),
+          goalShut: open
+            ? current.goalShut.filter((name) => name !== section)
+            : [...current.goalShut.filter((name) => name !== section), section].sort((a, b) => a.localeCompare(b)),
         })),
       reorderUpNext: (origins) => then(api.reorderUpNext(origins)),
       setUpNextProfile: (origin, profile) => then(api.setUpNextProfile(origin, profile)),
@@ -551,6 +558,7 @@ export function useCockpit(): CockpitStatus {
       tab: place.tab,
       collapsed: place.collapsed,
       goalOpen: place.goalOpen,
+      goalShut: place.goalShut,
       configTab: place.configTab,
       configGroup: place.configGroup,
       ticketWatch: place.ticketWatch,

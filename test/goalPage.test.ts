@@ -11,7 +11,7 @@ import type {
   TaskSummary,
 } from '../web/src/types.js';
 import type { GoalPageView, GoalPartView, GoalTrack, PartGroup } from '../web/src/view/goalPage.js';
-import { buildGoalPage, buildGoalStrip, buildGoalTrack } from '../web/src/view/goalPage.js';
+import { buildGoalPage, buildGoalStrip, buildGoalTrack, goalSectionsOpen } from '../web/src/view/goalPage.js';
 import { buildNeedsYou } from '../web/src/view/needsYou.js';
 
 const { buildDemoState } = await import('../web/src/demo/fixtures.js');
@@ -667,4 +667,90 @@ test('the shipped stage is absent without environments, and never folds unknown 
   }).find((s) => s.at === 'environments')!;
   assert.equal(unknown.reading, 'not known', 'a probe that could not say is not work that has not shipped');
   assert.equal(unknown.done, null);
+});
+
+test('the ticket is open until the work starts, and folded once it has', () => {
+  const state = buildDemoState().state;
+  const issue = state.world.issues[0]!;
+  const ref = `issue:${issue.number}`;
+  const page = buildGoalPage(state, ref, [])!;
+
+  const fresh: GoalPageView = { ...page, plan: null, parts: [], openPullRequests: [], agents: [] };
+  assert.equal(goalSectionsOpen(fresh).ticket, true, 'on a goal nobody has planned the ticket is the page');
+  assert.equal(
+    goalSectionsOpen({ ...fresh, plan: plan(ref) }).ticket,
+    false,
+    'a planned goal has been read once already — the ticket is a screen of prose over the work',
+  );
+});
+
+test('validation and signals stay folded until the work is somewhere', () => {
+  const state = buildDemoState().state;
+  const issue = state.world.issues[0]!;
+  const nowhere: GoalPageView = {
+    ...buildGoalPage(state, `issue:${issue.number}`, [])!,
+    checks: [],
+    signals: [],
+    environments: [{ environment: 'prod', status: 'absent', landed: 0, total: 2, at: null, opens: [] }],
+  };
+
+  assert.equal(goalSectionsOpen(nowhere).validation, false);
+  assert.equal(goalSectionsOpen(nowhere).signals, false);
+  assert.equal(goalSectionsOpen(nowhere).environments, false);
+
+  const page = buildGoalPage(state, `issue:${issue.number}`, [])!;
+  const partial: GoalPageView = {
+    ...nowhere,
+    checks: page.checks,
+    signals: page.signals,
+    environments: [{ environment: 'prod', status: 'partial', landed: 1, total: 2, at: null, opens: [] }],
+  };
+  assert.equal(
+    goalSectionsOpen(partial).validation,
+    partial.checks.length > 0,
+    'half the work being out there is what the checks are most needed for',
+  );
+  assert.equal(goalSectionsOpen(partial).signals, partial.signals.length > 0);
+  assert.equal(goalSectionsOpen(partial).environments, true);
+
+  assert.equal(
+    goalSectionsOpen({ ...nowhere, environments: partial.environments }).validation,
+    false,
+    'a goal that shipped without ever declaring a check has an empty card, and says so in its heading',
+  );
+
+  const unknown: GoalPageView = {
+    ...nowhere,
+    environments: [{ environment: 'prod', status: 'unknown', landed: 0, total: 2, at: null, opens: [] }],
+  };
+  assert.equal(
+    goalSectionsOpen(unknown).validation,
+    false,
+    'a probe that could not say is not a reading that the work arrived',
+  );
+});
+
+test('a check anyone has ruled on opens validation wherever the work is', () => {
+  const state = buildDemoState().state;
+  const issue = state.world.issues.find((i) =>
+    state.validationChecks.some((c) => c.originRef === `issue:${i.number}`),
+  )!;
+  const page = buildGoalPage(state, `issue:${issue.number}`, [])!;
+  const grounded: GoalPageView = {
+    ...page,
+    environments: [{ environment: 'prod', status: 'absent', landed: 0, total: 1, at: null, opens: [] }],
+  };
+  const settled = grounded.checks.some((c) => c.state !== 'unrun');
+  assert.equal(
+    goalSectionsOpen(grounded).validation,
+    settled,
+    'a card the operator has already written verdicts into is not a card with nothing in it',
+  );
+});
+
+test('the record has no relevant moment, so it never opens itself', () => {
+  const state = buildDemoState().state;
+  const issue = state.world.issues[0]!;
+  const page = buildGoalPage(state, `issue:${issue.number}`, [])!;
+  assert.equal(goalSectionsOpen(page).record, false);
 });

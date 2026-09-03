@@ -119,11 +119,17 @@ export interface CockpitView {
    */
   collapsedFeatures: ReadonlySet<number>;
   /**
-   * The goal page's reference sections held **open**, by name. A set rather than
-   * the list the place carries, because the page asks it once per disclosure and
-   * membership is the only question it asks.
+   * The goal page's sections the operator has held **open**, by name. A set rather
+   * than the list the place carries, because the page asks it once per disclosure
+   * and membership is the only question it asks.
    */
   goalOpen: ReadonlySet<string>;
+  /**
+   * And the ones held **shut**. Both, because neither is the default any more —
+   * where a section starts is a reading of the goal's own progress, and these two
+   * are the operator's word about one, in whichever direction they went.
+   */
+  goalShut: ReadonlySet<string>;
   /**
    * What the Tickets tab is narrowed to and ordered by. Carried through the view
    * model rather than read from the place in the panel, so every surface reads one
@@ -379,8 +385,10 @@ interface ViewInputs {
    * for one — it is what the empty place carries and what a bare URL means.
    */
   collapsed?: readonly number[];
-  /** The goal page's open reference sections. Optional for `collapsed`'s reason. */
+  /** The goal page's sections the operator opened. Optional for `collapsed`'s reason. */
   goalOpen?: readonly string[];
+  /** And the ones they folded away. Optional for `collapsed`'s reason. */
+  goalShut?: readonly string[];
   /** Optional for `collapsed`'s reason: the defaults are what a bare URL means. */
   configTab?: ConfigTab;
   configGroup?: string | null;
@@ -459,6 +467,7 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     poolProject: input.poolProject ?? null,
     collapsedFeatures: new Set(input.collapsed ?? []),
     goalOpen: new Set(input.goalOpen ?? []),
+    goalShut: new Set(input.goalShut ?? []),
     configTab: input.configTab ?? 'values',
     configGroup: input.configGroup ?? null,
     ticketWatch: input.ticketWatch ?? 'any',

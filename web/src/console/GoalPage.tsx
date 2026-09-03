@@ -1,9 +1,9 @@
 import { useState, type JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
-import type { GoalPageView, GoalStage, GoalStageAt, PartGroup } from '../view/goalPage.js';
+import type { GoalPageView, GoalSection, GoalStage, GoalStageAt, PartGroup } from '../view/goalPage.js';
 import type { NeedRow } from '../view/needsYou.js';
-import { buildGoalStrip } from '../view/goalPage.js';
+import { buildGoalStrip, goalSectionsOpen, GOAL_SECTIONS } from '../view/goalPage.js';
 import type {
   Agent,
   EnvironmentGate,
@@ -55,9 +55,22 @@ const ANCHOR: Record<GoalStageAt, string> = {
   tail: 'cn-tail',
 };
 
-/** Which of the reference footer's two disclosures is which, in the address bar. */
-const TICKET_OPEN = 'ticket';
-const RECORD_OPEN = 'record';
+/**
+ * Which section each track stage jumps to, so a jump can *open* what it lands on.
+ * A stage that scrolled to a card the goal's own progress had folded away was a
+ * control that appeared to do nothing — the page moved and the reading it moved to
+ * was not drawn.
+ *
+ * Keyed on {@link GoalStageAt} for `ANCHOR`'s reason: a stage without a section is
+ * a compile error rather than a dead jump. `plan` is not foldable and says so with
+ * a null.
+ */
+const STAGE_SECTION: Record<GoalStageAt, GoalSection | null> = {
+  plan: null,
+  validation: 'validation',
+  environments: 'environments',
+  tail: 'tail',
+};
 
 /** The three statuses that mean an agent is still going, as `countLiveAgents` reads them. */
 const LIVE_AGENT = new Set<Agent['status']>(['starting', 'running', 'waiting']);
@@ -111,37 +124,97 @@ export function GoalPage({
   view: CockpitView;
   actions: CockpitActions;
 }): JSX.Element {
+  const folds = buildFolds(page, view, actions);
   return (
     <div className="cn-goal">
-      <Header page={page} view={view} actions={actions} />
+      <Header page={page} view={view} actions={actions} folds={folds} />
       <OrphanBand issue={page.issue} view={view} actions={actions} />
-      <TrackStrip page={page} />
+      <TrackStrip page={page} folds={folds} />
       {parentAskElsewhere(page).map((row) => (
         <NeedsBand key={row.id} row={row} view={view} actions={actions} />
       ))}
+      <Ticket issue={page.issue} refUrls={view.state.refUrls} fold={folds.ticket} />
       <PlanWaves page={page} view={view} actions={actions} />
       <Validation
         page={page}
         actions={actions}
         refUrls={view.state.refUrls}
         desktopFolder={view.state.config.desktopFolder}
+        fold={folds.validation}
       />
-      <Signals page={page} actions={actions} refUrls={view.state.refUrls} />
+      <Signals page={page} actions={actions} refUrls={view.state.refUrls} fold={folds.signals} />
       <div className="cn-gcols">
         <div className="cn-stack">
           <PullRequests page={page} view={view} actions={actions} />
-          <Environments page={page} actions={actions} now={view.now} />
+          <Environments page={page} actions={actions} now={view.now} fold={folds.environments} />
         </div>
         <div className="cn-stack">
           <OnThisGoal page={page} view={view} actions={actions} />
           <Instructions issue={page.issue} actions={actions} />
-          <Tail issue={page.issue} actions={actions} />
+          <Tail issue={page.issue} actions={actions} fold={folds.tail} />
           <Spend issue={page.issue} />
         </div>
       </div>
-      <Reference page={page} view={view} actions={actions} />
+      <Reference page={page} view={view} fold={folds.record} />
     </div>
   );
+}
+
+/**
+ * One foldable card's state and the control that changes it, resolved once for the
+ * whole page.
+ *
+ * A pair rather than a boolean, because every draw site needs both and the toggle
+ * is the same three lines each time. `open` is already the answer — the default and
+ * the two overrides have been folded together — so no card re-reads the place.
+ */
+interface Fold {
+  open: boolean;
+  onToggle: (open: boolean) => void;
+  /** Opens the card without closing anything, for a jump that lands on it. */
+  reveal: () => void;
+}
+
+/**
+ * Where each foldable card starts, and where the operator has since put it.
+ *
+ * Three inputs, in one order that never varies: the operator's `?open=` wins, then
+ * their `?shut=`, then {@link goalSectionsOpen}'s reading of how far the goal has
+ * actually got. The default moves as the work does — a card is folded while there
+ * is nothing in it and opens itself once there is — and the operator's word about
+ * one is permanent in both directions.
+ * → docs/spec/17-cockpit.md#folding-what-is-not-relevant-yet
+ */
+function buildFolds(page: GoalPageView, view: CockpitView, actions: CockpitActions): Record<GoalSection, Fold> {
+  const byDefault = goalSectionsOpen(page);
+  const entries = GOAL_SECTIONS.map((section): [GoalSection, Fold] => {
+    const open = view.goalOpen.has(section) ? true : view.goalShut.has(section) ? false : byDefault[section];
+    return [
+      section,
+      {
+        open,
+        onToggle: (next) => actions.openGoalSection(section, next),
+        reveal: () => {
+          if (!open) actions.openGoalSection(section, true);
+        },
+      },
+    ];
+  });
+  return Object.fromEntries(entries) as Record<GoalSection, Fold>;
+}
+
+/**
+ * Scroll to a card, having first opened it.
+ *
+ * The scroll is deferred a frame because the open is a route change: the card is
+ * still folded when this returns, and scrolling to it now lands on the heading of
+ * a card that is about to grow underneath the viewport.
+ */
+function jumpTo(anchor: string, fold: Fold | null): void {
+  fold?.reveal();
+  requestAnimationFrame(() => {
+    document.getElementById(anchor)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  });
 }
 
 /**
@@ -176,22 +249,23 @@ function parentAskElsewhere(page: GoalPageView): NeedRow[] {
  * the address bar, and the cockpit's address bar is `Place` — a hash the place
  * knows nothing about is a history entry the back button steps through to nowhere.
  */
-function TrackStrip({ page }: { page: GoalPageView }): JSX.Element {
+function TrackStrip({ page, folds }: { page: GoalPageView; folds: Record<GoalSection, Fold> }): JSX.Element {
   return (
     <div className="cn-strip">
       {buildGoalStrip(page).map((stage) => (
-        <Stage key={stage.at} stage={stage} />
+        <Stage key={stage.at} stage={stage} folds={folds} />
       ))}
     </div>
   );
 }
 
-function Stage({ stage }: { stage: GoalStage }): JSX.Element {
+function Stage({ stage, folds }: { stage: GoalStage; folds: Record<GoalSection, Fold> }): JSX.Element {
+  const section = STAGE_SECTION[stage.at];
   return (
     <button
       type="button"
       className={`cn-tk cn-t-${stage.tone}`}
-      onClick={() => document.getElementById(ANCHOR[stage.at])?.scrollIntoView({ block: 'start', behavior: 'smooth' })}
+      onClick={() => jumpTo(ANCHOR[stage.at], section === null ? null : folds[section])}
       title={`${stage.label}: ${stage.reading} — go to it`}
     >
       <span className="cn-tkk">{stage.label}</span>
@@ -207,43 +281,24 @@ function Stage({ stage }: { stage: GoalStage }): JSX.Element {
 }
 
 /**
- * What the goal is judged against and what is left of it — the two surfaces on
- * the page that ask nothing of the reader, folded away behind their own names.
+ * What is left of the goal once the snapshot has forgotten it, folded away behind
+ * its own name at the foot of the page.
  *
- * The ticket is read once, at pickup, and then never again: it was a full card in
- * the middle of the live work, between the plan and the pull requests, pushing
- * everything that is still moving a screen further down. The record is what is
- * left of the same work once the snapshot has forgotten it. Neither is owed
- * anything, so neither is drawn open.
+ * The ticket used to sit beside it here, and has gone back to the top. The two
+ * were paired as *the surfaces that ask nothing of the reader*, which was true of
+ * both and only half the story about the ticket: it is what every other card on
+ * the page is measured against, and reaching it meant scrolling past all of them.
+ * Folded, it costs a heading, which is what it was moved down here to avoid.
+ * → docs/spec/17-cockpit.md#folding-what-is-not-relevant-yet
  *
- * **Which of them is open is a `Place`**, not a `useState`. A disclosure held in
+ * **Whether it is open is a `Place`**, not a `useState`. A disclosure held in
  * component state works right up until the back button steps over it or a reload
  * drops it, and both are silent. → docs/spec/17-cockpit.md#the-address-bar
  */
-function Reference({
-  page,
-  view,
-  actions,
-}: {
-  page: GoalPageView;
-  view: CockpitView;
-  actions: CockpitActions;
-}): JSX.Element {
-  const open = view.goalOpen;
+function Reference({ page, view, fold }: { page: GoalPageView; view: CockpitView; fold: Fold }): JSX.Element {
   const ref = `issue:${page.issue.number}`;
   return (
     <div className="cn-refs-foot">
-      <section className="cn-card">
-        <h3>
-          <Disclosure
-            open={open.has(TICKET_OPEN)}
-            onToggle={(next) => actions.openGoalSection(TICKET_OPEN, next)}
-            label="The ticket"
-          />
-          <span className="cn-more">as it stood at pickup</span>
-        </h3>
-        {open.has(TICKET_OPEN) && <Ticket issue={page.issue} refUrls={view.state.refUrls} />}
-      </section>
       {/* Embedded exactly as the work tree and the launch desk are: it reaches its
           own route, which `console/` may not, but rendering a component that does
           is not reaching — the import ban is on `api.js` and still holds.
@@ -254,12 +309,7 @@ function Reference({
           away it also fetches nothing, which is what keeps "on open, never polled"
           true now that the card no longer opens with the page. */}
       <section className="cn-card">
-        <WorkRecord
-          goalRef={ref}
-          now={view.now}
-          open={open.has(RECORD_OPEN)}
-          onToggle={(next) => actions.openGoalSection(RECORD_OPEN, next)}
-        />
+        <WorkRecord goalRef={ref} now={view.now} open={fold.open} onToggle={fold.onToggle} />
       </section>
     </div>
   );
@@ -300,10 +350,12 @@ function Header({
   page,
   view,
   actions,
+  folds,
 }: {
   page: GoalPageView;
   view: CockpitView;
   actions: CockpitActions;
+  folds: Record<GoalSection, Fold>;
 }): JSX.Element {
   const { issue } = page;
   const { config } = view.state;
@@ -385,9 +437,7 @@ function Header({
           <button
             type="button"
             className={`cn-chip cn-jump ${issue.validation.state === 'clear' ? 'cn-ok' : 'cn-stall'}`}
-            onClick={() =>
-              document.getElementById(ANCHOR.validation)?.scrollIntoView({ block: 'start', behavior: 'smooth' })
-            }
+            onClick={() => jumpTo(ANCHOR.validation, folds.validation)}
             title={
               issue.validation.state === 'clear'
                 ? `All ${issue.validation.total} validation checks are settled — go to them`
@@ -640,12 +690,14 @@ function Validation({
   actions,
   refUrls,
   desktopFolder,
+  fold,
 }: {
   page: GoalPageView;
   actions: CockpitActions;
   refUrls: Record<string, string>;
   /** `config.desktopFolder` — the checkout the desktop hand-off opens Claude Code on. */
   desktopFolder: string;
+  fold: Fold;
 }): JSX.Element {
   const { issue, plan, checks } = page;
   const live = checks.filter((c) => c.supersededReason === null);
@@ -654,12 +706,13 @@ function Validation({
   return (
     <section className="cn-card" id={ANCHOR.validation}>
       <h3>
-        Validation
+        <Disclosure open={fold.open} onToggle={fold.onToggle} label="Validation" />
         {live.length > 0 && (
           <i className="cn-n">
             {settled}/{live.length} settled
           </i>
         )}
+        {live.length === 0 && <i className="cn-n">no checks</i>}
         {/* Where the checks come from, said on the card that manages them: an
             operator who wants the wording changed has to know it is the plan that
             writes it, and this is the only place that connection is drawn. */}
@@ -688,23 +741,25 @@ function Validation({
           run it locally ↗
         </DesktopLink>
       </h3>
-      <div className="cn-vin">
-        <ValidationSection
-          checks={checks}
-          issueNumber={issue.number}
-          resources={page.checkResources}
-          refUrls={refUrls}
-          desktopFolder={desktopFolder}
-          buttonClass="cn-btn"
-          onResult={(checkId, result, note) =>
-            actions.setValidation(issue.number, checkId, { kind: 'result', result, note })
-          }
-          onDefer={(checkId, reason) => actions.setValidation(issue.number, checkId, { kind: 'defer', reason })}
-          onWaive={(checkId, reason) => actions.setValidation(issue.number, checkId, { kind: 'waive', reason })}
-          onReset={(checkId) => actions.setValidation(issue.number, checkId, { kind: 'reset' })}
-          onHandover={(checkId, to) => actions.setValidation(issue.number, checkId, { kind: 'handover', to })}
-        />
-      </div>
+      {fold.open && (
+        <div className="cn-vin">
+          <ValidationSection
+            checks={checks}
+            issueNumber={issue.number}
+            resources={page.checkResources}
+            refUrls={refUrls}
+            desktopFolder={desktopFolder}
+            buttonClass="cn-btn"
+            onResult={(checkId, result, note) =>
+              actions.setValidation(issue.number, checkId, { kind: 'result', result, note })
+            }
+            onDefer={(checkId, reason) => actions.setValidation(issue.number, checkId, { kind: 'defer', reason })}
+            onWaive={(checkId, reason) => actions.setValidation(issue.number, checkId, { kind: 'waive', reason })}
+            onReset={(checkId) => actions.setValidation(issue.number, checkId, { kind: 'reset' })}
+            onHandover={(checkId, to) => actions.setValidation(issue.number, checkId, { kind: 'handover', to })}
+          />
+        </div>
+      )}
     </section>
   );
 }
@@ -730,10 +785,12 @@ function Signals({
   page,
   actions,
   refUrls,
+  fold,
 }: {
   page: GoalPageView;
   actions: CockpitActions;
   refUrls: Record<string, string>;
+  fold: Fold;
 }): JSX.Element | null {
   const { issue, signals, plan } = page;
   // No checks and no plan is a goal nobody has planned, and an add control on it
@@ -743,7 +800,7 @@ function Signals({
   return (
     <section className="cn-card" id="cn-signals">
       <h3>
-        Signals
+        <Disclosure open={fold.open} onToggle={fold.onToggle} label="Signals" />
         <i className="cn-n">
           {signals.length === 1 ? '1 check' : `${signals.length} checks`}
           {pending > 0 && ` · ${pending} awaiting you`}
@@ -757,13 +814,15 @@ function Signals({
           )}
         </span>
       </h3>
-      <SignalsSection
-        signals={signals}
-        refUrls={refUrls}
-        onSave={(check) => actions.saveWatchCheck(issue.number, check)}
-        onDelete={(checkId) => actions.deleteWatchCheck(issue.number, checkId)}
-        onRule={(checkId, accept) => actions.ruleWatchProposal(issue.number, checkId, accept)}
-      />
+      {fold.open && (
+        <SignalsSection
+          signals={signals}
+          refUrls={refUrls}
+          onSave={(check) => actions.saveWatchCheck(issue.number, check)}
+          onDelete={(checkId) => actions.deleteWatchCheck(issue.number, checkId)}
+          onRule={(checkId, accept) => actions.ruleWatchProposal(issue.number, checkId, accept)}
+        />
+      )}
     </section>
   );
 }
@@ -1047,12 +1106,34 @@ function Instructions({ issue, actions }: { issue: Issue; actions: CockpitAction
   );
 }
 
-function Ticket({ issue, refUrls }: { issue: Issue; refUrls: Record<string, string> }): JSX.Element {
+/**
+ * The goal as it was written, at the top of the page it is the top of.
+ *
+ * **Open until the work starts, folded from the moment it has.** Those are the two
+ * readings the same card is: on a goal nobody has planned it is the only thing on
+ * the page with anything in it, and the operator is here to read it; on a goal with
+ * a plan, ten pull requests and a validation sheet it has been read, and it is a
+ * screen of prose between the track and the work. It goes back to the top either
+ * way, because *what was asked for* is what everything below it is measured
+ * against, and a reader who wants it half way down a running goal should not have
+ * to scroll past the whole run to reach it.
+ *
+ * `workStarted` rather than a plan alone — see {@link goalSectionsOpen}.
+ */
+function Ticket({ issue, refUrls, fold }: { issue: Issue; refUrls: Record<string, string>; fold: Fold }): JSX.Element {
   return (
-    <div className="cn-tick">
-      {issue.body.trim() === '' ? <p className="cn-empty">The ticket has no description.</p> : null}
-      {renderRichText(issue.body, refUrls)}
-    </div>
+    <section className="cn-card" id="cn-ticket">
+      <h3>
+        <Disclosure open={fold.open} onToggle={fold.onToggle} label="The ticket" />
+        <span className="cn-more">as it stood at pickup</span>
+      </h3>
+      {fold.open && (
+        <div className="cn-tick">
+          {issue.body.trim() === '' ? <p className="cn-empty">The ticket has no description.</p> : null}
+          {renderRichText(issue.body, refUrls)}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -1163,54 +1244,68 @@ function Environments({
   page,
   actions,
   now,
+  fold,
 }: {
   page: GoalPageView;
   actions: CockpitActions;
   now: number;
+  fold: Fold;
 }): JSX.Element | null {
   const [releasing, setReleasing] = useState(false);
   if (page.environments.length === 0) return null;
   const number = page.issue.number;
+  const reached = page.environments.filter((e) => e.status === 'reached').length;
   return (
     <section className="cn-card" id={ANCHOR.environments}>
-      <h3>Environments</h3>
-      <div className="cn-rows">
-        {page.environments.map((env) => (
-          <div className="cn-env" key={env.environment}>
-            <div className="cn-row">
-              <span className="cn-grow">
-                <b className="cn-name">{env.environment}</b>
-                <span className="cn-sub">
-                  {REACH_SAID[env.status]}
-                  {/* What arriving here does, on the row that would do it. An
+      <h3>
+        <Disclosure open={fold.open} onToggle={fold.onToggle} label="Environments" />
+        {/* The count folded away is the whole reading: a card shut on "0/3
+            reached" says what the rows would have, and one shut on "2/3" is the
+            reason to open it. */}
+        <i className="cn-n">
+          {reached}/{page.environments.length} reached
+        </i>
+      </h3>
+      {fold.open && (
+        <div className="cn-rows">
+          {page.environments.map((env) => (
+            <div className="cn-env" key={env.environment}>
+              <div className="cn-row">
+                <span className="cn-grow">
+                  <b className="cn-name">{env.environment}</b>
+                  <span className="cn-sub">
+                    {REACH_SAID[env.status]}
+                    {/* What arriving here does, on the row that would do it. An
                     operator reading a held goal asks "waiting for what" exactly
                     once, and the answer is configuration they wrote weeks ago. */}
-                  {env.opens.length > 0 && ` · opens ${env.opens.map((g) => GATE_SAID[g]).join(' and ')}`}
+                    {env.opens.length > 0 && ` · opens ${env.opens.map((g) => GATE_SAID[g]).join(' and ')}`}
+                  </span>
                 </span>
-              </span>
-              {env.status !== 'reached' && (
-                <i className="cn-n">
-                  {env.landed}/{env.total}
-                </i>
-              )}
-              <i className={`cn-chip ${REACH_TONE[env.status]}`}>{env.status}</i>
-            </div>
-            {/* Inside the environment's own row and not beside it: a watch belongs
+                {env.status !== 'reached' && (
+                  <i className="cn-n">
+                    {env.landed}/{env.total}
+                  </i>
+                )}
+                <i className={`cn-chip ${REACH_TONE[env.status]}`}>{env.status}</i>
+              </div>
+              {/* Inside the environment's own row and not beside it: a watch belongs
                 to an arrival, and the two surfaces drawn as siblings would be free
                 to disagree about which environment a reading came from. */}
-            <Watch
-              watch={page.watches.find((w) => w.environment === env.environment)}
-              issueNumber={number}
-              now={now}
-              actions={actions}
-            />
-          </div>
-        ))}
-      </div>
-      {/* The hold, said out loud. Nothing is filed while a gate holds, so without
-          this line a delivered goal with an empty bench is indistinguishable from
-          a finished one — and the harness would be waiting where nobody could see
-          it. The control beside it is the escape for work that is never going to
+              <Watch
+                watch={page.watches.find((w) => w.environment === env.environment)}
+                issueNumber={number}
+                now={now}
+                actions={actions}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+      {/* The hold, said out loud. Drawn whether or not the card is folded, for the
+          reason it is drawn at all: nothing is filed while a gate holds, so a
+          delivered goal with an empty bench is indistinguishable from a finished
+          one, and a fold is not a reason to stop saying so. Nothing is filed while a gate holds, so without
+          The control beside it is the escape for work that is never going to
           reach an environment at all. */}
       {page.gateHold !== null && (
         <div className="cn-criteria">
@@ -1652,54 +1747,59 @@ function Spend({ issue }: { issue: Issue }): JSX.Element | null {
  * ticket. Each states the verdict its own author wrote, or that nothing has run —
  * "not reached yet" is a fact about the goal worth seeing, not an empty section.
  */
-function Tail({ issue, actions }: { issue: Issue; actions: CockpitActions }): JSX.Element {
+function Tail({ issue, actions, fold }: { issue: Issue; actions: CockpitActions; fold: Fold }): JSX.Element {
   const ref = `issue:${issue.number}`;
   const check = issue.delivery?.summary ?? issue.shortfall?.summary ?? null;
   return (
     <section className="cn-card" id={ANCHOR.tail}>
-      <h3>The tail</h3>
-      <div className="cn-rows">
-        <div className="cn-row">
-          <i className={`cn-lamp ${check === null ? 'cn-off' : issue.delivery ? 'cn-run' : 'cn-wait'}`} />
-          <span className="cn-grow">
-            <b className="cn-name">Goal check</b>
-            <span className="cn-sub">{check ?? 'has not run'}</span>
-          </span>
-        </div>
-        <div className="cn-row">
-          <i className={`cn-lamp ${issue.retrospective === null ? 'cn-off' : 'cn-run'}`} />
-          <span className="cn-grow">
-            <b className="cn-name">Write-up</b>
-            <span className="cn-sub">{issue.retrospective?.summary ?? 'not written'}</span>
-          </span>
-          {issue.retrospective !== null && (
-            <button type="button" className="cn-tgl" onClick={() => actions.viewRetro(ref)}>
-              Read
-            </button>
-          )}
-        </div>
-        <div className="cn-row">
-          <i className={`cn-lamp ${issue.state === 'open' ? 'cn-off' : 'cn-run'}`} />
-          <span className="cn-grow">
-            <b className="cn-name">Close the ticket</b>
-            <span className="cn-sub">{issue.state === 'open' ? 'still open' : issue.state}</span>
-          </span>
-        </div>
-        <div className="cn-row">
-          <i className={`cn-lamp ${issue.scratchpad === null ? 'cn-off' : 'cn-run'}`} />
-          <span className="cn-grow">
-            <b className="cn-name">Notes</b>
-            <span className="cn-sub">
-              {issue.scratchpad === null ? 'nothing written' : `${issue.scratchpad.entries} entries`}
+      <h3>
+        <Disclosure open={fold.open} onToggle={fold.onToggle} label="The tail" />
+        <i className="cn-n">{issue.state === 'open' ? 'ticket open' : issue.state}</i>
+      </h3>
+      {fold.open && (
+        <div className="cn-rows">
+          <div className="cn-row">
+            <i className={`cn-lamp ${check === null ? 'cn-off' : issue.delivery ? 'cn-run' : 'cn-wait'}`} />
+            <span className="cn-grow">
+              <b className="cn-name">Goal check</b>
+              <span className="cn-sub">{check ?? 'has not run'}</span>
             </span>
-          </span>
-          {issue.scratchpad !== null && (
-            <button type="button" className="cn-tgl" onClick={() => actions.viewScratchpad(ref)}>
-              Open
-            </button>
-          )}
+          </div>
+          <div className="cn-row">
+            <i className={`cn-lamp ${issue.retrospective === null ? 'cn-off' : 'cn-run'}`} />
+            <span className="cn-grow">
+              <b className="cn-name">Write-up</b>
+              <span className="cn-sub">{issue.retrospective?.summary ?? 'not written'}</span>
+            </span>
+            {issue.retrospective !== null && (
+              <button type="button" className="cn-tgl" onClick={() => actions.viewRetro(ref)}>
+                Read
+              </button>
+            )}
+          </div>
+          <div className="cn-row">
+            <i className={`cn-lamp ${issue.state === 'open' ? 'cn-off' : 'cn-run'}`} />
+            <span className="cn-grow">
+              <b className="cn-name">Close the ticket</b>
+              <span className="cn-sub">{issue.state === 'open' ? 'still open' : issue.state}</span>
+            </span>
+          </div>
+          <div className="cn-row">
+            <i className={`cn-lamp ${issue.scratchpad === null ? 'cn-off' : 'cn-run'}`} />
+            <span className="cn-grow">
+              <b className="cn-name">Notes</b>
+              <span className="cn-sub">
+                {issue.scratchpad === null ? 'nothing written' : `${issue.scratchpad.entries} entries`}
+              </span>
+            </span>
+            {issue.scratchpad !== null && (
+              <button type="button" className="cn-tgl" onClick={() => actions.viewScratchpad(ref)}>
+                Open
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </section>
   );
 }

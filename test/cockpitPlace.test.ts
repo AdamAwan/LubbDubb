@@ -10,6 +10,7 @@ import {
   widenedFor,
   type Place,
 } from '../web/src/cockpit/place.js';
+import { GOAL_SECTIONS } from '../web/src/view/goalPage.js';
 
 const at = (over: Partial<Place> = {}): Place => ({ ...NOWHERE, ...over });
 
@@ -71,6 +72,7 @@ test('every place round-trips through the query string', () => {
     at({ tab: 'insights' }),
     at({ tab: 'insights', insightsView: 'causes', insightsWindow: '24h' }),
     at({ tab: 'insights', insightsWindow: 'all' }),
+    at({ goal: 'issue:142', goalOpen: ['signals'], goalShut: ['ticket'] }),
   ];
   for (const place of places) assert.deepEqual(readPlace(placeQuery(place)), place, placeQuery(place));
 });
@@ -386,4 +388,32 @@ test('a blank entry in the hidden list is dropped rather than hiding a nameless 
   // Encoding it would be a second grammar in the address bar; dropping the empty
   // part is the same treatment every other junk value gets.
   assert.deepEqual(readPlace('?tab=tickets&hide=Closed,,%20%20,Removed').ticketColumns, ['Closed', 'Removed']);
+});
+
+/**
+ * Every foldable section of the goal page survives the query string, in both
+ * directions.
+ *
+ * Read off {@link GOAL_SECTIONS} rather than listed here, for the panel test's
+ * reason: `place.ts` validates the two lists against that union, so a section
+ * added to the page and not to it writes a parameter that is parsed straight back
+ * to nothing — the fold works until the next place change, then springs back.
+ *
+ * Both lists, because neither is the default: where a card starts is a reading of
+ * how far the goal has got, and only `?shut=` can say the operator folded one the
+ * goal's own progress would have opened.
+ */
+test('every foldable goal section round-trips, opened or folded', () => {
+  for (const section of GOAL_SECTIONS) {
+    const opened = at({ goal: 'issue:142', goalOpen: [section] });
+    assert.deepEqual(readPlace(placeQuery(opened)), opened, section);
+    const folded = at({ goal: 'issue:142', goalShut: [section] });
+    assert.deepEqual(readPlace(placeQuery(folded)), folded, section);
+  }
+});
+
+test('a hand-edited fold list drops a section that does not exist', () => {
+  const place = readPlace('?goal=issue:142&open=ticket,nonesuch&shut=signals,nonesuch');
+  assert.deepEqual(place.goalOpen, ['ticket']);
+  assert.deepEqual(place.goalShut, ['signals']);
 });

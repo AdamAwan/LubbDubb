@@ -983,40 +983,83 @@ Order on the page, top to bottom:
    goal page's private component, because the goal page is not the only place an ask is read: the ask
    panel draws the same band for a row with no goal page. One band, two placements — a second wiring
    is a second set of verdicts to keep in step.
-3. **The plan**, left to right in dispatch order. **Full width**, because the waves are a board read
+3. **The ticket as it stood at pickup**, drawn through `renderRichText` because the body is the
+   _tracker's_ prose and Azure DevOps writes it as HTML ([Tracker-authored prose](#tracker-authored-prose)).
+   **Open until the work starts, folded from the moment it has**
+   ([Folding what is not relevant yet](#folding-what-is-not-relevant-yet)).
+4. **The plan**, left to right in dispatch order. **Full width**, because the waves are a board read
    left to right and a column is what kept them stacked to 1500px.
-4. **Validation** — how anyone checks the goal was met, and what anybody concluded from running each
+5. **Validation** — how anyone checks the goal was met, and what anybody concluded from running each
    check. Full width ([Validation](#validation-on-the-goal)), and **below the plan**, which is the
    ordering the card itself has always asked for: its own subtitle says the checks are written by the
-   plan, and the plan was underneath it.
-5. **Two columns**, from 1200px. The live reading and what is still owed on the left — **pull
+   plan, and the plan was underneath it. Then **Signals** — what this goal asked production to show for
+   the work. Both are folded until the work is somewhere
+   ([Folding what is not relevant yet](#folding-what-is-not-relevant-yet)).
+6. **Two columns**, from 1200px. The live reading and what is still owed on the left — **pull
    requests for this goal**, open and closed, with the court chip and the CI ladder, then
    **environments** ([Environments](#environments)). On the right, **On this goal** (who is working
    it now, [below](#who-is-on-the-goal)), **What you've asked for**, **The tail** and **Spend**. Below 1200 the two stacks are one
    column.
-6. **The reference footer** — the two surfaces that ask nothing of the reader, each folded away
-   behind its own name: **the ticket as it stood at pickup**, drawn through `renderRichText` because
-   the body is the _tracker's_ prose and Azure DevOps writes it as HTML
-   ([Tracker-authored prose](#tracker-authored-prose)); and **the record**, this goal's own subtree
-   of the durable work graph ([The record](#the-record-on-the-goal-it-belongs-to)).
+7. **The record** — this goal's own subtree of the durable work graph, folded away at the foot of the
+   page ([The record](#the-record-on-the-goal-it-belongs-to)).
 
-### The reference footer
+### Folding what is not relevant yet
 
-The ticket and the record were full cards in the middle of the live work — the ticket between the
-plan and the pull requests, the record at the foot of the same column — and between them they put a
-screen and a half of prose in front of everything that was still moving. Neither is owed anything: the
-ticket is read once at pickup and then never again, and the record is what is left of the work once
-the snapshot has forgotten it.
+A goal page draws the whole pipeline whether or not the goal has reached any of it. That rule is what
+keeps a quiet surface distinguishable from a broken one, and it stands: **no card vanishes**. Drawn
+_open_, though, it cost three screens of "no checks", "nothing declared", "not shipped" between the
+plan and the work on every goal that had only just started.
 
-So both are drawn **shut**, below the columns, behind their own names.
+So a card with nothing in it yet is drawn **folded**, and its heading carries the reading it would have
+given — `Validation · no checks`, `Environments · 0/3 reached`, `The tail · ticket open`. Folded is the
+third answer between drawn and gone, and the one that is true of a stage the goal has not reached.
 
-**Which of them is open is a `Place`**, `?open=ticket,record`. A disclosure held in a `useState`
-compiles, renders and works right up until the back button steps over it or a reload drops it, and
-both are silent ([The address bar](#the-address-bar)). Open rather than closed is the list — the other
-way round from `collapsed` and `ticketColumns` — because here the empty list _is_ the page as it
-stands, which is the rule those two are inverted to satisfy.
+`goalSectionsOpen(page)` (`web/src/view/goalPage.ts`) is where each section starts, and the order the
+defaults unlock is the order the questions are asked in:
 
-**The record's disclosure is its own, not the footer's.** Its heading carries the node count and only
+| Section        | Open from                                                                        |
+| -------------- | -------------------------------------------------------------------------------- |
+| `ticket`       | until the work starts — a plan, a pull request or an agent folds it               |
+| `validation`   | the work reaching an environment **and** there being a check, or one anybody ruled on |
+| `signals`      | the same arrival **and** a declared check, or one awaiting the operator           |
+| `environments` | any environment reading that is not `absent`                                      |
+| `tail`         | a delivery, a shortfall, a write-up, or a shut ticket                             |
+| `record`       | never — it has no relevant moment, and folded away it fetches nothing             |
+
+**The arrival is what makes a card relevant; it is not what puts anything in it.** A goal that
+shipped without ever declaring a check reads `Validation · no checks` in its heading, and opening it to
+say so at length is the emptiness the fold exists to spare — so both of those rows want an arrival _and_
+something to draw. The second arm of each is what opens the card wherever the work is: a check somebody
+has already ruled on, or one waiting on the operator, is a card with something in it.
+
+`partial` counts as arrived and **`unknown` does not**: half the work being out there is what the
+validation card is most needed for, and a probe that could not say is not a reading that the work
+arrived ([24](24-environments.md#the-three-verdicts)).
+
+The **ticket is the mirror image** of the rest, and that is why it is back at the top. It was moved to
+the foot of the page as one of "the two surfaces that ask nothing of the reader", which was true of it
+and half the story: it is what every other card on the page is measured against, and reaching it meant
+scrolling past all of them. Open, it is a screen of prose over a running goal; folded, it is a heading.
+So it goes back above the plan and folds itself the moment there is any work to read instead.
+
+**Two `Place` lists, `?open=` and `?shut=`.** A disclosure held in a `useState` compiles, renders and
+works right up until the back button steps over it or a reload drops it, and both are silent
+([The address bar](#the-address-bar)). Two lists rather than one, because the default is no longer
+"shut": it moves as the goal does, so a single list could only say _not the default_ — and a card the
+operator folded away mid-flight would spring open the moment the goal shipped, with a card they opened
+early slamming shut for the same reason. The operator's word outranks the reading in both directions,
+and the empty pair is still the page as it stands.
+
+**A jump opens what it lands on.** The track's stages and the header's validation chip scroll to a
+card, and a card the goal's progress had folded away made both read as controls that do nothing — the
+page moved and the reading it moved to was not drawn. `jumpTo` opens the section first and scrolls a
+frame later, once the card has grown.
+
+**The environment gate's hold is drawn folded or not.** Nothing is filed while a gate holds, so a
+delivered goal with an empty bench is indistinguishable from a finished one; a fold is not a reason to
+stop saying so.
+
+**The record's disclosure is its own, not the page's.** Its heading carries the node count and only
 it knows that, so a heading drawn outside it would either carry no count or carry a stale one. That
 also keeps "fetched on open, never polled" true now the card no longer opens with the page: folded
 away it issues no request at all.
@@ -2227,7 +2270,7 @@ It is a **lens**: nothing here, and nothing in the dispatcher, decides anything 
 ### The record, on the goal it belongs to
 
 A goal's own subtree of the graph, drawn as a card on its page (`WorkRecord`), in the
-[reference footer](#the-reference-footer) and folded away. The roots of the work graph _are_
+at the foot of the page and [folded away](#folding-what-is-not-relevant-yet). The roots of the work graph _are_
 `issue:<n>` nodes, so a goal page was already sitting on top of its own record without drawing it —
 the card is `GET /api/work/:ref` and nothing else.
 
