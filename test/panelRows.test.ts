@@ -138,10 +138,14 @@ test('every row of a card sits on that card’s own grid', () => {
   const cards = html.split('class="cn-card').slice(1);
   let checked = 0;
   for (const card of cards) {
+    // Either shape's rail: a one-line card sets `grid-template-columns` outright,
+    // a stacked one hands the sheet `--cn-cols-stacked` and lets a container query
+    // pick between that and the one-line rail beside it. Both are the same value
+    // in the same place; only who applies it differs.
     const templates = card
       .split('class="cn-row cn-frow')
       .slice(1)
-      .map((chunk) => /style="grid-template-columns:([^"]+)"/.exec(chunk.slice(0, 400)));
+      .map((chunk) => /style="(?:grid-template-columns|--cn-cols-stacked):([^";]+)/.exec(chunk.slice(0, 400)));
     if (templates.length === 0) continue;
     for (const found of templates) {
       assert.ok(found, 'a facts row carries no grid template — the rail is a flex line again');
@@ -205,15 +209,26 @@ test('a fleet row wears the state it is in, and the strongest one it is in', () 
 });
 
 /**
- * The rack's state column is the server's court verdict, quoted.
+ * The rack keeps the court's **reasons** and draws none of its words.
  *
- * The card drew it twice before — a `?` holding `attention.reasons` and a chip
- * holding the same reasons in a `title`, one column apart — and a second reading
- * of one verdict is how the two come to disagree. What this pins is that there is
- * one: the word in the state column is `attention.status` itself, not a word the
- * cockpit chose for it.
+ * The state column was the card's worst: four of five rows read `unwatched`,
+ * which the struck eye and the spent dimming had each already said, so 104px and
+ * the loudest ink on the row went to restating the one thing an operator could
+ * not miss — and it drowned `you`, the one arm that is actually somebody's move,
+ * in four repetitions of a word that is not. A column whose rows agree is a
+ * caption.
+ *
+ * What is pinned here is both halves of the fix, because either alone is a
+ * regression: the word is gone from every row of the rack, and `attention.reasons`
+ * is still on the row — on the glass now, in the sub-line under the title, since
+ * the marker that replaced the word said only *there is something to know here*.
+ * Dropping the reasons with the word would take the server's account of the
+ * verdict off the cockpit altogether, and nothing else draws it.
+ *
+ * The **unwatched** row is the exception and it is deliberate: its reason is that
+ * nobody asked the harness to look, which the struck eye has already said.
  */
-test('a pull-request row wears the court the server put it in', () => {
+test('a pull-request row keeps the court’s reasons and wears none of its words', () => {
   const state = buildDemoState().state;
   const html = render(view());
   const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('World signals'));
@@ -227,18 +242,33 @@ test('a pull-request row wears the court the server put it in', () => {
     ...open.filter((pr) => pr.attention.assignedToYou === undefined),
   ];
   assert.equal(rows.length, open.length, 'every open pull request is drawn');
+  assert.ok(!rack.includes('cn-why-chip'), 'the rack drew a state word');
   for (const [i, row] of rows.entries()) {
     const pr = drawn[i];
     assert.ok(pr, 'the fixtures line up with the rows');
-    assert.ok(
-      row.includes(`>${pr.attention.status}</button>`),
-      `#${pr.number} should wear "${pr.attention.status}" in its state column`,
-    );
-    // And the switch that takes it off the harness's books is pinned left of the
-    // subject, ahead of the name: the same control in the same place on every
-    // row, which is what lets an eye skip it.
+    assert.ok(!row.includes(`>${pr.attention.status}</button>`), `#${pr.number} still wears its court as a word`);
+    // The verdict itself did not leave the row — it is the sub-line's sentence now,
+    // in the server's own words, on the glass rather than behind a marker.
+    const unwatched = pr.attention.status === 'unwatched';
+    if (pr.attention.reasons.length > 0 && !unwatched) {
+      assert.ok(row.includes('cn-said'), `#${pr.number} lost the court’s reasons with the word`);
+    }
+    // And the row the harness is leaving alone draws neither, which is the whole
+    // second line gone rather than an empty one held open.
+    if (unwatched) assert.ok(!row.includes('cn-rowsub'), `#${pr.number} is unwatched and still drew a sub-line`);
+    // And the switch that takes it off the harness's books leads the readings,
+    // after the subject rather than ahead of it: it answers the same kind of
+    // question the marks beside it do — is the harness looking at this at all —
+    // and it is the one box on every row of the group, so it is what the rest sit
+    // against. → docs/spec/17-cockpit.md#the-row-grammar
     const eye = row.indexOf('cn-eye');
-    assert.ok(eye > 0 && eye < row.indexOf('cn-grow'), `#${pr.number} draws no watch switch left of its subject`);
+    const subject = row.indexOf('cn-grow');
+    assert.ok(eye > 0, `#${pr.number} draws no watch switch`);
+    assert.ok(eye > subject, `#${pr.number} still draws its switch ahead of the subject`);
+    for (const mark of [/class="ck /, /class="ck-slot"/, /class="rv /, /class="pk /]) {
+      const found = mark.exec(row);
+      if (found !== null) assert.ok(eye < found.index, `#${pr.number} draws its switch behind the readings`);
+    }
   }
 });
 

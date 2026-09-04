@@ -93,8 +93,18 @@ test('every pull-request row is cut in two, and no other card is', () => {
  * from top to bottom — the edge between what a row *is* and what it *names*. A
  * strip running the full width crosses it on every row, and the rule stops
  * reading as a rule.
+ *
+ * **Placement is the sheet's now, and the row carries the values it places
+ * with.** The cut is a ceiling rather than a shape — a card wide enough for the
+ * whole rail draws the row on one line — and an inline `grid-template-columns` is
+ * the one declaration a container query cannot outrank. So what the markup has to
+ * carry is both rails, the strip's own, and the subject's column index, which only
+ * `slotsUsed` can count. A row missing one of them renders as an unplaced strip
+ * with no error anywhere.
  */
-test('the strip stops at the refs rule', () => {
+const RAILS = ['--cn-cols-stacked', '--cn-cols-line', '--cn-strip-cols', '--cn-subject'];
+
+test('the row carries both rails, and the strip stops at the refs rule', () => {
   const html = render(view());
   const rows = rack(html)
     .split(ROW)
@@ -102,15 +112,39 @@ test('the strip stops at the refs rule', () => {
     .filter((row) => row.includes('cn-rowreads'));
   assert.ok(rows.length > 0, 'no row drew a strip');
   for (const row of rows) {
-    const strip = /class="cn-rowreads" style="([^"]+)"/.exec(row);
-    assert.ok(strip, 'the strip carries no placement at all');
-    // Its own column — the subject's — never the whole rail. `grid-column:a/b`
-    // with `b` past the subject would put it under the refs.
-    assert.match(strip[1] ?? '', /grid-column:\s*\d+\s*\/\s*\d+/, 'the strip is not placed on a column');
-    const [from, to] = (/grid-column:\s*(\d+)\s*\/\s*(\d+)/.exec(strip[1] ?? '') ?? []).slice(1).map(Number);
-    assert.equal(to, (from ?? 0) + 1, 'the strip spans more than the subject’s column');
-    assert.match(strip[1] ?? '', /grid-row:\s*2/, 'the strip is not on the second line');
+    const rails = /style="([^"]*--cn-subject[^"]*)"/.exec(row)?.[1] ?? '';
+    for (const prop of RAILS) assert.ok(rails.includes(prop), `the row carries no ${prop}`);
+    assert.match(rails, /--cn-subject:\s*[1-9]/, 'the subject’s column was not counted');
+    // The strip is the refs' *sibling*, never their parent — on either shape. Its
+    // span has to have closed before the refs group opens, which is the one thing
+    // about the edge that is still readable out of the markup.
+    const between = row.slice(row.indexOf('cn-rowreads'), row.indexOf('class="cn-refs"'));
+    assert.ok(between.length > 0, 'the refs are drawn before the strip');
+    const opened = between.match(/<span/g)?.length ?? 0;
+    const closed = between.match(/<\/span>/g)?.length ?? 0;
+    assert.equal(opened, closed, 'the refs are drawn inside the strip');
   }
+});
+
+/**
+ * The ceiling itself, read out of the sheet.
+ *
+ * `layout="stacked"` is the card saying it is over-subscribed, which is true of
+ * the rack at a quarter of the page and false of it at 1400px — where the second
+ * line cost 105px a row to leave both lines two-thirds gutter. Only a **container**
+ * query can tell those apart: a media query measures the window, which on this
+ * page is four different card widths at once. Nothing else in the sheet asserts
+ * it, and a stacked card that lost the query looks exactly like one that never had
+ * it.
+ */
+test('the stacked cut is a ceiling, off the card’s own width', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const sheet = await readFile(new URL('../web/src/console/console.css', import.meta.url), 'utf8');
+  assert.match(sheet, /\.cn-rows\s*\{[^}]*container:\s*cn-rows\s*\/\s*inline-size/, 'the rows are not a container');
+  const query = /@container cn-rows \(min-width: \d+px\) \{([\s\S]*?)\n\}/.exec(sheet);
+  assert.ok(query, 'the sheet carries no ceiling for the stacked cut');
+  assert.match(query[1] ?? '', /--cn-cols-line/, 'the wide shape does not take the one-line rail');
+  assert.match(query[1] ?? '', /display:\s*contents/, 'the strip’s slots do not rejoin the row’s grid');
 });
 
 /**

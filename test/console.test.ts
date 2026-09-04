@@ -1908,11 +1908,22 @@ test('an unwatched PR is drawn spent, not at the same weight as the ones being w
   // The class list, not its order: a row carries the grammar's own class as well
   // as its tone, and which comes first is not what this pins.
   assert.ok(row.slice(0, row.indexOf('"')).includes('cn-spent'), 'the unwatched PR’s row carries the spent tone');
-  // The state column still names it, in the server's own word — the tone is the
-  // second reading, never a replacement for the first. It is the row grammar's
-  // chip now rather than a chip of the card's own, which is the point of there
-  // being a state column: the word is where every other card puts its state.
-  assert.ok(row.includes('>unwatched</button>'), 'the state column says which arm it is');
+  // The **switch** is what says which arm this is, and it is the only thing that
+  // does: the dimming alone is not a reading — a spent row is also what a settled
+  // pull request looks like — and its hover is the offer to tag the PR, which is
+  // only ever made to one the harness is leaving alone.
+  assert.ok(row.includes('Tag this PR'), 'the watch switch does not read as one that is off');
+  // The word is gone: a column that read `unwatched` down four of five rows
+  // restated what the switch and the tone had each already said, and drowned the
+  // one arm that is somebody's move.
+  assert.ok(!row.includes('>unwatched</button>'), 'the rack drew the court as a word again');
+  // And so is the sub-line. Both halves of it answer *why is this not moving*, and
+  // the struck eye has already given the only answer that matters: nobody asked it
+  // to. A row nothing will happen to spending a second line on what it is waiting
+  // for is the state word's mistake one line lower, drawn on the rows least worth
+  // reading. → docs/spec/17-cockpit.md#the-row-grammar
+  assert.ok(!row.includes('cn-rowsub'), 'an unwatched row spent a second line on what it is waiting for');
+  assert.ok(!row.includes('the harness is leaving it alone'), 'the row drew a reason nobody will read');
 });
 
 test('a goal row is a way into its page', () => {

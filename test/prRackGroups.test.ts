@@ -82,7 +82,7 @@ test('the rack puts the pull requests a person handed you above the fleet’s', 
   assert.ok(fleet > mine, 'the fleet’s band is drawn above yours');
   for (const pr of yours) {
     const at = card.indexOf(pr.title);
-    assert.ok(at > mine && at < fleet, `#${pr.number} is yours and is not drawn under the "Yours" band`);
+    assert.ok(at > mine && at < fleet, `#${pr.number} is not drawn under the "Assigned to review" band`);
   }
 });
 

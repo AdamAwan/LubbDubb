@@ -135,6 +135,7 @@ export type {
   PetView,
   PlanningPolicy,
   PolicyKindDescription,
+  PrComment,
   Proposal,
   PullRequest,
   QueueItem,

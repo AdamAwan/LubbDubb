@@ -24,6 +24,7 @@ import { GroupHead, PanelRows, type PanelRowModel, type RowGroup } from './Panel
 import { Who } from '../components/who.js';
 import { AgentOnIt } from '../components/AgentOnIt.js';
 import { CiMark, CiSlot } from '../components/CiMark.js';
+import { CommentsMark } from '../components/CommentsMark.js';
 import { PackMark } from '../components/PackMark.js';
 import { ReviewMark } from '../components/ReviewMark.js';
 import { orphanCount, orphanGoal } from '../view/orphanGoal.js';
@@ -1214,11 +1215,22 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
     <section className="cn-card cn-span2 cn-lamp-mark cn-read-marks">
       <h3>
         Pull requests <i className="cn-n">{open.length} open</i>
-        {merged !== null && <span className="cn-more">{merged} merged</span>}
+        {/* Quiet at zero rather than absent. "Nothing merged in the window" and
+            "no window is kept" are two different claims and the second is already
+            said by the line not being drawn at all — but a zero at the card's
+            top-right corner, at the weight of a reading, is the loudest thing on
+            a card whose whole subject is the rows underneath. */}
+        {merged !== null && <span className={merged === 0 ? 'cn-more cn-quiet' : 'cn-more'}>{merged} merged</span>}
       </h3>
       {open.length === 0 && <p className="cn-empty">No pull request is open.</p>}
       <PanelRows
         layout="stacked"
+        // The court on the glass rather than behind a `?`. Taking the state word
+        // off the rack left the marker saying only *there is something to know
+        // here*, which is the reading the word was removed for being worse than —
+        // and the court's sentence is a clause, so it fits under the title where
+        // the word did not fit beside it. → `RowWords`
+        words="subline"
         rows={ordered.map((pr) => {
           const row = prRow(pr, view, actions, watchLabel);
           if (!grouped) return row;
@@ -1260,10 +1272,18 @@ function whoAsked(pr: OpenPullRequest): string | null {
  * The two bands, with their counts. The counts are the reading the heading adds:
  * "is anything mine" is answered by the band existing, and "how much" by the
  * number, without the operator counting rows.
+ *
+ * The band says **what the operator is being asked for**, not whose the rows are.
+ * `Yours` was a claim of ownership over pull requests the fleet wrote and the
+ * fleet will land — the one thing they are not — and it read as a second word for
+ * the same thing the band under it says by being called `The fleet's`. What is
+ * actually true of every row here is `attention.assignedToYou`: somebody put the
+ * operator on the reviewer list. `Assigned to review` is that, and it is the
+ * obligation rather than the possession.
  */
 function band(mine: boolean, yours: number, theirs: number): RowGroup {
   return mine
-    ? { key: 'yours', label: 'Yours', note: `${yours}`, tone: 'ask' }
+    ? { key: 'yours', label: 'Assigned to review', note: `${yours}`, tone: 'ask' }
     : { key: 'fleet', label: 'The fleet’s', note: `${theirs}` };
 }
 
@@ -1312,15 +1332,28 @@ function prRow(pr: OpenPullRequest, view: CockpitView, actions: CockpitActions, 
     // opens it from the title, and this is that.
     open: () => actions.selectPr(pr.number),
     openTitle: `Open pull request #${pr.number} — its review threads, its checks and the work on its branch`,
-    facts: prFacts(pr, view.now),
-    // Whose court it is in, which is the one question the card is for — the
-    // server's word, with the server's own reasoning behind it. It was drawn
-    // twice before, as a `?` holding the reasons and as a chip holding the same
-    // reasons in a `title`, one column apart: two hovers, one sentence, and a
-    // state column that said nothing.
-    whyLabel: pr.attention.status,
-    whyTone: COURT_TONE[pr.attention.status] ?? 'quiet',
-    why: pr.attention.reasons.join(' '),
+    // Nothing under the title on a pull request the harness is leaving alone. Both
+    // halves of the sub-line are answers to *why is this not moving*, and the
+    // struck eye has already given the only one that matters: nobody asked it to.
+    // A row nothing will happen to spending a second line on what it is waiting for
+    // is the same mistake the state word made, one line lower — and it is drawn on
+    // the rows that are already the least worth reading.
+    facts: unwatched ? undefined : prFacts(pr, view.now),
+    // Whose court it is in, behind the marker and **without the word**.
+    //
+    // The word was the rack's own worst column. Four of five rows read
+    // `unwatched`, which the struck eye and the spent dimming had each already
+    // said — so the card spent 104px, a mono uppercase run and the loudest ink on
+    // the row restating the one thing an operator could not miss. A state column
+    // earns its width when the rows disagree; a column that says the same word
+    // down its whole length is a caption, and it drowned `you` — the one arm that
+    // is actually somebody's move — in four repetitions of a word that is not.
+    //
+    // So the court is a `?` on the rail's narrow rung with the server's own
+    // sentence behind it, and what stays *on the glass* is the state each row
+    // already carries in a mark: the eye for the watch, the checks chip for a
+    // stall, the Yours band for the pull requests somebody put on you.
+    why: unwatched ? null : pr.attention.reasons.join(' '),
     // **In the lamp slot, at the head of the row.** It stood in the reading slot,
     // third of three glyphs, which put it a different distance along the card on
     // every row depending on what the two beside it had to draw — the one mark on
@@ -1351,13 +1384,32 @@ function prRow(pr: OpenPullRequest, view: CockpitView, actions: CockpitActions, 
             are saying — it survives an agent taking the chip's place, because
             what was already read does not change when a branch moves. */}
         <ReviewMark review={pr.review} now={view.now} reserve onOpen={() => actions.selectPr(pr.number)} />
-        {/* Whether there is a pack to read, which is neither of the two verdicts
+        {/* Whether anybody is waiting on an answer, which is the fourth verdict
+            and the one the row used to say as a fact. `comments 1` sat on the
+            sub-line beside `waiting 3d` as though the two were the same kind of
+            thing: one is how long something has been true and the other is a
+            question nobody has answered.
+
+            **Beside the review and ahead of the pack**, which is the one place the
+            run departs from ordering by how often a reading exists. The three
+            before it are the conversation about this diff in the order it happens
+            — the machine read it, the fleet read it, a person asked something —
+            and a reader following that sequence finds the unanswered question
+            where the sequence puts it. The pack is not in that sequence at all. */}
+        <CommentsMark comments={pr.unresolvedComments} reserve onOpen={() => actions.selectPr(pr.number)} />
+        {/* Whether there is a pack to read, which is none of the three verdicts
             beside it: those are about the pull request, and this is about a
             document somebody wrote about it. The ask and the reading are both on
             the page this opens. */}
         <PackMark pack={pr.pack} reserve onOpen={() => actions.selectPr(pr.number)} />
       </>
     ),
+    // At the **head of the readings**, where the row's other one-glance answers
+    // are. It stood ahead of the title, between the agent lamp and the author —
+    // the row's only control marooned among its marks, with the three readings it
+    // belongs beside a column away. The question it answers is theirs: the checks
+    // say whether the branch is sound, the review whether anybody has read it, and
+    // this whether the harness is looking at all. → `PanelRowModel.toggle`
     toggle: (
       <AsyncButton
         className="cn-eye"
@@ -1382,19 +1434,6 @@ function prRow(pr: OpenPullRequest, view: CockpitView, actions: CockpitActions, 
 }
 
 /**
- * Whose court, in the tones the state column already speaks.
- *
- * `you` is the only one that is your move, so it is the only `ask`. A pull request
- * nobody's turn — stalled, or opted out — is amber for the reason the fleet's
- * parks are: nothing is going to happen to it on its own.
- */
-const COURT_TONE: Record<string, 'ask' | 'hold' | 'quiet'> = {
-  you: 'ask',
-  stalled: 'hold',
-  unwatched: 'hold',
-};
-
-/**
  * What is true of this pull request that the ladder and the court do not say.
  *
  * `branch` used to be the only one, and it is the row's least useful fact: the
@@ -1403,12 +1442,13 @@ const COURT_TONE: Record<string, 'ask' | 'hold' | 'quiet'> = {
  * request is not merged yet*, which is the question a rack of open pull requests
  * exists to answer — and each is drawn only where it is true, so a row with none
  * of them is visibly a pull request with nothing in its way.
+ *
+ * `comments` was the third and has left: an unanswered thread is not a quantity
+ * about the pull request the way an age is, it is a verdict on it, and it wears
+ * {@link CommentsMark} beside the three verdicts it belongs with.
  */
 function prFacts(pr: OpenPullRequest, now: number): PanelRowModel['facts'] {
   const facts: { label: string; value: string; alarm?: boolean }[] = [];
-  if (pr.unresolvedComments.length > 0) {
-    facts.push({ label: 'comments', value: String(pr.unresolvedComments.length), alarm: true });
-  }
   // Only the real conflict: `behind` is a base the harness updates by itself, and
   // an alarm on it would be an alarm on every pull request open while main moves.
   if (pr.mergeableState === 'dirty') facts.push({ label: 'merge', value: 'conflict', alarm: true });
@@ -1429,7 +1469,7 @@ function prFacts(pr: OpenPullRequest, now: number): PanelRowModel['facts'] {
  */
 function Eye({ open }: { open: boolean }): JSX.Element {
   return (
-    <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false">
+    <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false">
       <path
         d="M1 8s2.6-4.2 7-4.2S15 8 15 8s-2.6 4.2-7 4.2S1 8 1 8Z"
         fill="none"

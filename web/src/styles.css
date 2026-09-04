@@ -2616,10 +2616,22 @@ select:disabled {
   color: var(--text);
   border-color: var(--accent);
 }
-/* A change waiting on the operator: the one control on this rail that is asking
-   them something, on the same amber the pending block below it uses. */
-.pm-jump.history.waiting {
+/* A tab that is asking the operator for something, on the same amber as the thing
+   below it that is asking — a pending change, or caveats still to tick. The rail is
+   otherwise navigation, so the tint is the only thing on it that means "not done",
+   and it clears the moment that stops being true. */
+.pm-jump.waiting {
   color: var(--amber);
+}
+.pm-jump.waiting .k {
+  color: var(--amber);
+}
+/* A jump keeps its underline; the History control is a bordered tab, so it takes
+   the amber on the border it already has. */
+.pm-jump.waiting:not(.history) {
+  border-bottom-color: var(--amber-line);
+}
+.pm-jump.history.waiting {
   border-color: var(--amber-line);
   background: var(--amber-fill);
 }
@@ -2987,15 +2999,12 @@ select:disabled {
   padding-top: 10px;
   border-top: 1px solid var(--border);
 }
-/* The sheet's checklist is a precondition, not the document. A plan that raises
-   several caveats, each with the planner's own words under it, otherwise grows the
-   decision bar until the middle it is pushing against — the plan being read — is a
-   slot a few lines tall. Capped and scrolling itself, so the sheet's proportions
-   stay the plan's however many boxes there are. Scoped to the sheet: on a card the
-   checklist has no document to crowd out. */
+/* On the sheet the checklist is the last thing in the caveats section, inside the
+   plan's own scroll — so it grows down the document instead of eating the middle,
+   and never scrolls inside a scroll. On a card it is still the run of boxes above
+   the buttons, which is why the margin is scoped away here rather than dropped. */
 .plan-sheet .caveat-ack {
-  max-height: min(28vh, 240px);
-  overflow-y: auto;
+  margin-top: 2px;
 }
 .pm-row .spacer {
   flex: 1;
@@ -9423,11 +9432,21 @@ button.rv.rv {
    a fifth copy of it. → docs/spec/17-cockpit.md#the-tag */
 .rv-clear.rv-clear,
 .rv-findings.rv-findings,
-.rv-routed.rv-routed,
 .rv-deciding.rv-deciding {
   color: var(--tone);
   background: var(--tone-fill);
   border-color: var(--tone-line);
+}
+
+/* Not read *yet* takes no tint, alone among the arms. It was amber, which in this
+   vocabulary is the harness stopped and waiting — so a rack of pull requests
+   nobody has got to yet drew an amber box on every row, four of five of them, and
+   the two rows that had a verdict to report were the quiet ones. It is the state
+   every pull request starts in; the glyph is enough to hold the column, and the
+   badge and the tint stay for the marks that are saying something. */
+.rv-routed.rv-routed {
+  color: var(--grey);
+  border-color: transparent;
 }
 
 /* Dashed, because a decision that has not been taken yet is the one state that is
@@ -9650,55 +9669,150 @@ button.pk.pk {
   color: var(--grey);
 }
 
-/* ---------- the checks mark ----------
+/* ---------- the comments mark ----------
 
-   The pull request's CI, as a chip that says its own name: `CI 4/4`, `CI 1
-   failed`, `CI 2 running` (`web/src/components/CiMark.tsx`). It replaced a run of
-   6px squares that said all of it in hue alone — no word, no shape between
-   passing and failing, and the check names only in a native `title`.
-
-   Sized to sit beside the review mark without matching it: the mark is a 22px box
-   and this is a 22px chip, so the pair shares a baseline and a height while the
-   words keep them apart at a glance. The tint is the shared family's `t-*` triple
-   and never a hue written here. → docs/spec/17-cockpit.md#the-checks-mark */
-.ck.ck {
+   The review threads nobody has answered, as the speech bubble with how many on
+   its shoulder (`web/src/components/CommentsMark.tsx`). It was a *fact* on the
+   row's sub-line — `comments 1`, beside `waiting 3d` — and it is the one quantity
+   there that is not one: the others say how long something has been true, and this
+   says somebody asked a question and it is unanswered. That is a verdict about the
+   pull request, so it wears the same 22px box as the three verdicts beside it.
+   → docs/spec/17-cockpit.md#the-comments-mark */
+.cm.cm {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  justify-content: center;
   flex: none;
   box-sizing: border-box;
+  width: 22px;
   height: 22px;
-  padding: 0 7px;
+  padding: 0;
   border: 1px solid var(--tone-line, var(--border));
   border-radius: var(--r-sm);
   background: var(--tone-fill, var(--panel-2));
   color: var(--tone, var(--muted));
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  line-height: 1;
-  letter-spacing: 0.06em;
-  white-space: nowrap;
   cursor: help;
 }
 
-/* The key is the chip's *name*, not its reading: faint and wider-tracked, so the
-   eye takes the value first and the word only when it needs to know what the
-   value is about. */
-.ck-k {
-  color: var(--grey);
-  letter-spacing: 0.12em;
+/* The mark's slot with nothing in it, on a card where other rows have one. */
+.cm-none.cm-none {
+  border-color: transparent;
+  background: none;
 }
 
-.ck-v {
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
+.cm-open.cm-open {
+  cursor: pointer;
 }
 
-/* As a control, on a row: it opens the pull request's page, where the whole list
-   of checks is. The same span-or-button rule the review mark keeps. */
-button.ck.ck {
+/* The count, in the review mark's badge and at its size: the marks sit side by
+   side, and a number that hung differently on each would read as two different
+   kinds of number. */
+.cm-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 13px;
+  height: 13px;
+  padding: 0 2px;
+  border: 1px solid var(--panel);
+  border-radius: var(--r-pill);
+  background: var(--panel-2);
+  color: var(--muted);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 9px;
+  line-height: 11px;
+  text-align: center;
+}
+
+/* Whose question it is, and enough of it to recognise. Clamped for the review
+   mark's reason: a comment is written for somebody reading the diff, so each is a
+   paragraph, and the threads themselves are on the page the mark opens. */
+.tip .cm-list {
+  margin: 0;
+  padding-left: 16px;
+}
+
+.tip .cm-list li {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+.tip .cm-list em {
+  margin-right: 5px;
+  font-style: normal;
+  color: var(--text);
+}
+
+.cm-more {
+  color: var(--grey);
+  font-style: italic;
+}
+
+.cm-foot {
+  margin-top: 3px;
+  padding-top: 7px;
+  border-top: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--grey);
+}
+
+/* ---------- the checks mark ----------
+
+   The pull request's CI (`web/src/components/CiMark.tsx`): the flask, tinted by
+   what the checks said, with a count on its shoulder where a number is the
+   reading. It replaced a run of 6px squares that said all of it in hue alone — no
+   shape between passing and failing, the check names only in a native `title` —
+   and then a chip that said its own name in words, `CI 1 failed`, `CI 2 running`.
+
+   **The words went and the box stayed.** The chip was the one variable-width thing
+   on a rail of 22px squares, so it was given a fixed 96px to stop the two marks
+   behind it moving from row to row — 96px of rail, four times its neighbours, for
+   a reading that is one of six. As a mark it is the same box as the review and the
+   pack, in the same family's `t-*` triple, and the three read as one run. The
+   sentence is one hover away, where theirs is.
+
+   The glyph is the **flask** — the test run, not its verdict. A tick would be a
+   green mark drawn red on the rows that matter. → docs/spec/17-cockpit.md#the-checks-mark */
+.ck.ck {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--tone-line, var(--border));
+  border-radius: var(--r-sm);
+  background: var(--tone-fill, var(--panel-2));
+  color: var(--tone, var(--muted));
+  cursor: help;
+}
+
+/* How many, on the shoulder — the review mark's badge, in its position and at its
+   size, because the two sit side by side and a count that hung differently on each
+   would read as two different kinds of number. */
+.ck-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 13px;
+  height: 13px;
+  padding: 0 2px;
+  border: 1px solid var(--panel);
+  border-radius: var(--r-pill);
+  background: var(--panel-2);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 11px;
+  text-align: center;
 }
 
 .ck-open.ck-open {

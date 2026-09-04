@@ -702,19 +702,6 @@ export interface PendingPlanAmendment {
 }
 
 /**
- * What `GET /api/proposals/:id/comment-draft` ships: a comment an operator may
- * edit and post when they close a ticket from the plan approval card.
- *
- * A draft and never a default — nothing posts it, and the back-out refuses a close
- * with no words at all. It is a route of its own for {@link PlanHistory}'s reason:
- * it quotes the plan's prose, and it is read when somebody asks for it rather than
- * every poll.
- */
-export interface ProposalCommentDraft {
-  draft: string;
-}
-
-/**
  * The last cycle's ordered pickup plan (issue #69) — "what's next as of this
  * pulse". A projection recomputed every cycle, not a persisted queue; `at` is the
  * world snapshot it was planned against.
@@ -2463,6 +2450,13 @@ export type { McpChannel } from './types.js';
  * → `docs/spec/17-cockpit.md#the-checks-mark`
  */
 export type { CiCheck } from './types.js';
+/**
+ * One unanswered review thread as the provider reported it. On the wire because
+ * the cockpit's comments mark quotes whose question is outstanding — a re-export
+ * rather than a re-declaration, so the mark names exactly what the rules read.
+ * → `docs/spec/17-cockpit.md#the-comments-mark`
+ */
+export type { PrComment } from './types.js';
 // The pool's own shapes. A wire type either **is** a domain type or `extends` it,
 // so these are re-exports rather than re-declarations — the cockpit reads exactly
 // what the store holds. → `docs/spec/28-cross-fleet-pool.md`

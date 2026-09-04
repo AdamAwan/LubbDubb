@@ -2560,6 +2560,30 @@ export function buildDemoState(): DemoSeed {
           reason: 'Issue #395 was decomposed into 3 part(s) and approval is required before any is scheduled.',
           planId: 'plan-395',
           originRef: 'issue:395',
+          // What `planCaveats` would have written for this plan: the planner
+          // declared both uncertainty and risks, so approving it is gated on
+          // reading them. Without these the demo draws a plan approval that is
+          // one click, which is the shape the checklist exists to replace.
+          caveats: [
+            {
+              id: 'open-questions',
+              label: 'Open questions — approving decides them the planner’s way',
+              detail:
+                'With `AUTH_ENABLED` off there is no signing key, so the route has to serve with no capability at ' +
+                'all — and I am not certain that arm should exist rather than the route simply 404ing. I have ' +
+                'written it as "serves everything", which is what the operator running with auth off has already ' +
+                'chosen, but it is the one decision here I would want argued with.',
+            },
+            {
+              id: 'risks',
+              label: 'Risks the planner named',
+              detail:
+                '**Guard window.** Moving `/snapshots` outside the `/api` prefix means part 2 briefly serves ' +
+                'snapshots with no guard at all — the capability check has to land in the same PR, not a later ' +
+                'one. **Two modes.** With `AUTH_ENABLED` off there is no signing key, so the route serves with no ' +
+                'capability at all, and only one of those two modes is covered by the tests today.',
+            },
+          ],
         },
         note: null,
         decidedBy: null,

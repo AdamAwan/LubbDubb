@@ -1,4 +1,4 @@
-import { Fragment, useRef, useState, type JSX, type ReactNode } from 'react';
+import { Fragment, useRef, useState, type CSSProperties, type JSX, type ReactNode } from 'react';
 
 /**
  * One row of a panel, as a value rather than as markup.
@@ -90,13 +90,27 @@ export interface PanelRowModel {
   /** The state lamp, where the row has a state. */
   lamp?: ReactNode;
   /**
-   * A single-glyph control pinned to the *left* of the subject: whether the
-   * harness is to take an interest in this row at all.
+   * A single-glyph control at the **head of the readings**: whether the harness is
+   * to take an interest in this row at all.
    *
-   * Left rather than in {@link action} because it is not the row's work. It is the
-   * same switch in the same place on every row of the card, so it belongs where an
-   * eye can skip it — while {@link action} is the one thing *this* row can be told
-   * to do, which is a different question and deserves the width.
+   * Its own slot rather than {@link action}'s because it is not the row's work —
+   * `action` is the one thing *this* row can be told to do, a different question
+   * that deserves the width. And it sits with the readings rather than ahead of
+   * the subject because it answers the same kind of question they do: the checks
+   * say whether the branch is sound, the review whether anybody has read it, and
+   * this whether the harness is looking at all. Ahead of the subject it was a
+   * control marooned between two marks that mean *state* — the agent lamp and the
+   * author — with the readings it belongs to a column away.
+   *
+   * It **leads** the group, and that is the same rule the readings are ordered by
+   * rather than an exception to it: a switch is on every row of a card that has
+   * one, so it is the group's most reliable box and the eye's anchor for the rest.
+   *
+   * Drawn as the **state it is in** rather than as the word for the other one:
+   * `watch` / `unwatch` was a verb that contradicted every row it appeared on — a
+   * row said `unwatch` precisely when it *was* watched — until you worked out it
+   * was an instruction. The verb survives in the hover, where an instruction
+   * belongs.
    */
   toggle?: ReactNode;
   /** What the row is, in its own words. */
@@ -218,6 +232,20 @@ export interface PanelRowModel {
   hint?: string;
 }
 
+/**
+ * Whether this row has any words to put under its title.
+ *
+ * Per **row**, not per card, which is the one place the sub-line departs from how
+ * every other slot is decided. A slot is held open card-wide because an empty cell
+ * in a column that exists says *this row has no verdict* — but a second **line**
+ * held open says nothing at all: there is no column for an eye to read the absence
+ * against, only a row that is taller than its content. So a row with nothing to say
+ * is a one-line row, and does not take the sub-line's padding either.
+ */
+function hasWords(row: PanelRowModel): boolean {
+  return (row.why != null && row.why !== '') || (row.facts !== undefined && row.facts.length > 0);
+}
+
 /** One quantity, and what it is. */
 interface RowFact {
   /**
@@ -293,8 +321,40 @@ function slotsUsed(rows: readonly PanelRowModel[]): SlotsUsed {
  * about it rather than a preference: the rack carries seven slots beside a title
  * that is a sentence, and the spec's other two fixes for that — a wider card, one
  * slot fewer — were both refused on their own merits.
+ *
+ * **`stacked` is a ceiling, not a shape.** Over-subscription is a fact about the
+ * card's *width*, and the card cannot see its own: the rack asks to be stacked
+ * because it is over-subscribed at a quarter of the page, and on the same page at
+ * 1400px it was still paying 105px a row to leave both lines two-thirds gutter.
+ * So a stacked card carries **both** templates and `console.css` picks between
+ * them on a container query — see {@link unstackedTemplate}. `line` is the cut
+ * for a card that is never over-subscribed at any width.
  */
 type RowLayout = 'line' | 'stacked';
+
+/**
+ * Where a row's **words** go — its quantities and its one sentence.
+ *
+ * `marker` is the default and the rule the grammar was built on: the sentence
+ * lives behind a `?` and is given up on hover or focus, because on the glass it
+ * made the queue the one card whose rows were three lines tall and whose shape
+ * every other card had to be an exception to. That is still right wherever the
+ * sentence is a **paragraph** — the queue's reason is one, and it is the card's
+ * whole subject.
+ *
+ * `subline` draws them under the title instead, and the rack takes it because the
+ * marker stopped paying for itself there. The rack's word came off the glass
+ * ([the state column](../../../docs/spec/17-cockpit.md#the-row-grammar)) and what
+ * it left behind was a bare `?` on every row — a mark that says only *there is
+ * something to know here*, which is the reading the word was removed for being
+ * worse than. The court's sentence is a clause, not a paragraph, so it fits where
+ * the `?` did not: on the glass, under the title, read without a pointer.
+ *
+ * A card takes it because its sentence is short, which is a fact about what the
+ * server writes rather than a preference about layout — the same kind of fact
+ * {@link RowLayout} turns on.
+ */
+type RowWords = 'marker' | 'subline';
 
 /**
  * Every rail is a *ceiling*, not a width. Fixed, they were sized against a
@@ -309,7 +369,6 @@ const rail = (w: string): string => `minmax(0, var(${w}))`;
 function identityColumns(has: SlotsUsed): string[] {
   return [
     has.lamp ? 'var(--cn-w-lamp)' : '',
-    has.toggle ? 'var(--cn-w-eye)' : '',
     // A mark, so it is a width and not a ceiling: it is the same glyph on every
     // row, and a column that gives way would move the subject's left edge from
     // card to card for nothing.
@@ -329,6 +388,10 @@ function identityColumns(has: SlotsUsed): string[] {
  */
 function readingColumns(has: SlotsUsed): string[] {
   return [
+    // The switch leads, and it is a width rather than a ceiling: it is the same
+    // glyph on every row of the card, so it is the group's fixed left edge and
+    // everything after it sits at a known x. → `PanelRowModel.toggle`
+    has.toggle ? 'var(--cn-w-eye)' : '',
     // A column of words needs the width of a word; a column of markers does not.
     has.why ? rail(has.whyLabel ? '--cn-w-state' : '--cn-w-why') : '',
     has.reading ? rail('--cn-w-read') : '',
@@ -361,14 +424,62 @@ function gridTemplate(has: SlotsUsed, layout: RowLayout): string {
  * each true of some rows, so their absences collect at the strip's end where an
  * eye is not scanning.
  */
-function stripTemplate(has: SlotsUsed): string {
+/**
+ * The readings' slots, at a width the caller chooses.
+ *
+ * The two cuts want different things of the same columns. Under the subject the
+ * strip is the row's *last* track, so a ceiling costs nothing: a slot narrower
+ * than its rail simply ends earlier and the line ends with it. Beside the subject
+ * every one of them sits between two things that are pinned — the title's `1fr`
+ * ahead and the refs behind — and `1fr` absorbs whatever the ceilings give back,
+ * so a slot that gave any back moved **every column after it** on that row alone.
+ */
+function stripColumns(has: SlotsUsed, width: (token: string) => string, facts: string): string[] {
   return [
-    has.reading ? rail('--cn-w-read') : '',
-    has.why ? rail(has.whyLabel ? '--cn-w-state' : '--cn-w-why') : '',
-    has.chips ? rail('--cn-w-chips') : '',
-    has.action ? rail('--cn-w-act') : '',
-    has.facts ? 'minmax(0, 1fr)' : '',
-  ]
+    has.toggle ? 'var(--cn-w-eye)' : '',
+    has.reading ? width('--cn-w-read') : '',
+    has.why ? width(has.whyLabel ? '--cn-w-state' : '--cn-w-why') : '',
+    has.chips ? width('--cn-w-chips') : '',
+    has.action ? width('--cn-w-act') : '',
+    has.facts ? facts : '',
+  ];
+}
+
+function stripTemplate(has: SlotsUsed): string {
+  return stripColumns(has, rail, 'minmax(0, 1fr)')
+    .filter((part) => part !== '')
+    .join(' ');
+}
+
+/** A rail at its width, for the cut where giving any of it back moves a column. */
+const fixed = (w: string): string => `var(${w})`;
+
+/**
+ * The stacked row's *other* rail: the strip's own slots laid out **beside** the
+ * subject rather than under it, for a card wide enough to hold them on one line.
+ *
+ * The strip's order and not {@link readingColumns}', because that is the order
+ * the markup is in — the wide cut is `display: contents` on the strip, which
+ * drops its children into the row's grid where they already stand. Which keeps
+ * one promise the cut is for: a mark does not move between the two shapes, so a
+ * card that reflows past the query is the same card at a different height.
+ *
+ * **Every track here is a width, not a ceiling, and that is what makes the card a
+ * grid.** Each row is its own grid element, so a `minmax(0, X)` resolves against
+ * *that row's* content — and the subject's `1fr` takes back whatever the row gave,
+ * which pushes every column after it along. `facts` was the one that varied: a row
+ * with nothing to report sized that track to zero and drew its switch, its checks
+ * and its marks 62px right of the row above, each of them individually obeying a
+ * rail that was never the thing out of line. Pinned, the columns land at one x
+ * down the whole card and the subject alone takes the slack — which is what a rail
+ * was always for. The give a ceiling used to provide is the container query's job
+ * now: below it the row takes the stacked cut, which is the real answer to a card
+ * with no room.
+ */
+function unstackedTemplate(has: SlotsUsed): string {
+  return identityColumns(has)
+    .concat(stripColumns(has, fixed, 'var(--cn-w-facts)'))
+    .concat(has.refs ? fixed('--cn-w-refs') : '')
     .filter((part) => part !== '')
     .join(' ');
 }
@@ -390,32 +501,44 @@ export function PanelRows({
   rows,
   layout = 'line',
   rail,
+  words = 'marker',
 }: {
   rows: readonly PanelRowModel[];
   layout?: RowLayout;
   /**
    * The rows the rail is measured from, where the card draws its list in more
-   * than one call — a card with a folded band is still one card, and its columns
-   * have to line up across the fold.
+   * than one call — a card of two bands is still one card, and its columns have
+   * to line up across the join.
    *
    * The census is a fact about the *card*, so measuring it from the rows a given
-   * call happens to be drawing makes a disclosure re-cut every column above it:
-   * press the band open, and a control appearing on a queued row moves the titles
-   * of the agents twenty rows up. Handed the whole set, the rail is the same
-   * whatever is folded, which is what the grid was for.
+   * call happens to be drawing lets one band re-cut every column in the other:
+   * a control appearing on a queued row would move the titles of the agents above
+   * it. Handed the whole set, the rail is the same whatever each band holds.
    */
   rail?: readonly PanelRowModel[];
+  words?: RowWords;
 }): JSX.Element {
   const has = slotsUsed(rail ?? rows);
+  // Two readings of one census. The rails are built from the first, which is the
+  // slots that sit *on* them — so a card whose words went to the sub-line holds
+  // open no column for them, rather than a pair of empty ones down its whole
+  // length. The second is what any row actually carries, and it is what decides
+  // whether a sub-line is drawn at all.
+  const rails = words === 'subline' ? { ...has, why: false, whyLabel: false, facts: false } : has;
+  const sub = words === 'subline';
   // On each row, never on the list: `.cn-rows` is a flex column, and
   // `grid-template-columns` on a flex container is inherited by nothing and
   // applies to nothing. It renders exactly as it did before — which is how this
   // was wrong for a whole build without looking wrong.
-  const columns = gridTemplate(has, layout);
+  const columns = gridTemplate(rails, layout);
   // The strip's own rail, read once per card for the reason the row's is: which
   // reading slots exist is a fact about the card, and a strip that closed the gap
   // up on the rows that lack one would be the packed flex line again, one line down.
-  const strip = layout === 'stacked' ? stripTemplate(has) : undefined;
+  const strip = layout === 'stacked' ? stripTemplate(rails) : undefined;
+  // The same card's one-line rail, carried alongside rather than instead: which
+  // of the two is drawn is a question about the card's width, and only the sheet
+  // can see that. → `unstackedTemplate`
+  const line = layout === 'stacked' ? unstackedTemplate(rails) : undefined;
   // The band the last row was in, so a heading is drawn where it *changes* rather
   // than once per row. An ungrouped row clears it, which is what lets a card
   // group part of its list and leave the rest plain.
@@ -428,10 +551,10 @@ export function PanelRows({
         return (
           <Fragment key={row.key}>
             {opens && row.group !== undefined && <GroupHead group={row.group} />}
-            {strip === undefined ? (
-              <FactsRow row={row} has={has} columns={columns} />
+            {strip === undefined || line === undefined ? (
+              <FactsRow row={row} has={rails} columns={columns} sub={sub} />
             ) : (
-              <StackedRow row={row} has={has} columns={columns} strip={strip} />
+              <StackedRow row={row} has={rails} columns={columns} line={line} strip={strip} sub={sub} />
             )}
           </Fragment>
         );
@@ -447,10 +570,11 @@ export function PanelRows({
  * it names the rows under it and a heading that lined its word up with the
  * subject column would read as a row whose every other slot is empty.
  *
- * **Exported, because a folded band still has a heading.** Where a card draws its
- * own bands — {@link RowGroup.toggle} — the heading is not a thing `PanelRows`
- * can emit, since the rows it would have been drawn above are the rows that are
- * not there. It is the same component either way, so the two cannot drift.
+ * **Exported, because a band can have no rows and still have a heading.** Where a
+ * card draws its own bands — {@link RowGroup.foot}, a band sized by what the rows
+ * above it left over — the heading is not a thing `PanelRows` can emit, since the
+ * rows it would have been drawn above are the rows that are not there. It is the
+ * same component either way, so the two cannot drift.
  */
 export function GroupHead({ group }: { group: RowGroup }): JSX.Element {
   const cls = ['cn-group', group.tone === 'ask' ? 'cn-group-ask' : '', group.foot === true ? 'cn-group-foot' : '']
@@ -480,13 +604,27 @@ export function GroupHead({ group }: { group: RowGroup }): JSX.Element {
  * up, which is what makes the column mean something: this row has no verdict, as
  * against this row said nothing.
  */
-function FactsRow({ row, has, columns }: { row: PanelRowModel; has: SlotsUsed; columns: string }): JSX.Element {
+function FactsRow({
+  row,
+  has,
+  columns,
+  sub,
+}: {
+  row: PanelRowModel;
+  has: SlotsUsed;
+  columns: string;
+  sub: boolean;
+}): JSX.Element {
   return (
-    <div className={rowClass(row, 'cn-row cn-frow')} style={{ gridTemplateColumns: columns }} title={row.hint}>
+    <div
+      className={rowClass(row, `cn-row cn-frow${sub && hasWords(row) ? ' cn-subrow' : ''}`)}
+      style={{ gridTemplateColumns: columns }}
+      title={row.hint}
+    >
       {has.lamp && <span className="cn-slot">{row.lamp}</span>}
-      {has.toggle && <span className="cn-slot">{row.toggle}</span>}
       {has.who && <span className="cn-slot">{row.who}</span>}
-      <Subject row={row} />
+      <Subject row={row} facts={!sub} />
+      {has.toggle && <span className="cn-slot">{row.toggle}</span>}
       {has.why && (
         <span className={`cn-slot ${row.whyLabel === undefined ? 'cn-slot-why' : ''}`}>
           <Why row={row} />
@@ -496,7 +634,31 @@ function FactsRow({ row, has, columns }: { row: PanelRowModel; has: SlotsUsed; c
       {has.chips && <span className="cn-slot">{row.chips}</span>}
       {has.action && <span className="cn-slot">{row.action}</span>}
       {has.refs && <span className="cn-refs">{row.refs}</span>}
+      {sub && <SubLine row={row} />}
     </div>
+  );
+}
+
+/**
+ * The row's words, under its title: what it is carrying, and the one sentence
+ * behind it.
+ *
+ * The quantities lead and the sentence follows, on one wrapping line — the pair is
+ * `comments 1 · nobody has answered the two threads on this` rather than two
+ * lines, because the first is what the second is usually about. The sentence is
+ * the server's, verbatim: nothing here re-words it, and it wraps rather than
+ * taking the row's ellipsis, since the half that says what is holding the row is
+ * usually its tail. → {@link RowWords}
+ */
+function SubLine({ row }: { row: PanelRowModel }): JSX.Element | null {
+  const why = row.why != null && row.why !== '' ? row.why : null;
+  const facts = row.facts !== undefined && row.facts.length > 0;
+  if (!facts && why === null) return null;
+  return (
+    <span className="cn-rowsub">
+      <Facts facts={row.facts} />
+      {why !== null && <span className="cn-said">{why}</span>}
+    </span>
   );
 }
 
@@ -518,36 +680,55 @@ function FactsRow({ row, has, columns }: { row: PanelRowModel; has: SlotsUsed; c
  * then the facts, by how often each exists. Which mark leads *within* the
  * readings is the card's own business, since {@link PanelRowModel.reading} is one
  * node: the rack puts the checks first there for the same reason.
+ *
+ * **Nothing here is placed by an inline style.** Both rails, the strip's own and
+ * the subject's column index ride as custom properties, and `console.css` decides
+ * which shape the row takes — because an inline `grid-template-columns` is the
+ * one declaration a container query cannot outrank, and the query is what makes
+ * the cut a ceiling rather than a shape. Above it the strip goes `display:
+ * contents` and its children fall into the row's own grid, in the order they are
+ * already written.
  */
 function StackedRow({
   row,
   has,
   columns,
+  line,
   strip,
+  sub,
 }: {
   row: PanelRowModel;
   has: SlotsUsed;
   columns: string;
+  line: string;
   strip: string;
+  sub: boolean;
 }): JSX.Element {
   // Where the subject sits on the identity rail, which is where the strip goes
   // under it. Counted rather than written down: the three slots ahead of it are
   // each drawn only where some row of the card fills them.
-  const subject = 1 + [has.lamp, has.toggle, has.who].filter(Boolean).length;
-  const readings = has.why || has.reading || has.chips || has.action || has.facts;
+  const subject = 1 + [has.lamp, has.who].filter(Boolean).length;
+  const readings = has.toggle || has.why || has.reading || has.chips || has.action || has.facts;
+  const rails = {
+    '--cn-cols-stacked': columns,
+    '--cn-cols-line': line,
+    '--cn-strip-cols': strip,
+    '--cn-subject': String(subject),
+  } as CSSProperties;
   return (
-    <div className={rowClass(row, 'cn-row cn-frow cn-srow')} style={{ gridTemplateColumns: columns }} title={row.hint}>
+    <div
+      className={rowClass(row, `cn-row cn-frow cn-srow${sub && hasWords(row) ? ' cn-subrow' : ''}`)}
+      style={rails}
+      title={row.hint}
+    >
       {has.lamp && <span className="cn-slot">{row.lamp}</span>}
-      {has.toggle && <span className="cn-slot">{row.toggle}</span>}
       {has.who && <span className="cn-slot">{row.who}</span>}
       <Subject row={row} facts={false} />
       {/* A card where no row has anything to report draws no strip at all, and
           takes back the one-line shape it would have had. */}
       {readings && (
-        <span
-          className="cn-rowreads"
-          style={{ gridColumn: `${subject} / ${subject + 1}`, gridRow: 2, gridTemplateColumns: strip }}
-        >
+        <span className="cn-rowreads">
+          {has.toggle && <span className="cn-slot">{row.toggle}</span>}
           {has.reading && <span className="cn-slot cn-slot-read">{row.reading}</span>}
           {has.why && (
             <span className={`cn-slot ${row.whyLabel === undefined ? 'cn-slot-why' : ''}`}>
@@ -563,11 +744,8 @@ function StackedRow({
           )}
         </span>
       )}
-      {has.refs && (
-        <span className="cn-refs" style={{ gridColumn: '-2 / -1', gridRow: 1 }}>
-          {row.refs}
-        </span>
-      )}
+      {has.refs && <span className="cn-refs">{row.refs}</span>}
+      {sub && <SubLine row={row} />}
     </div>
   );
 }

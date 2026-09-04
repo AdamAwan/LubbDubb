@@ -10,7 +10,6 @@ import { buildApp } from '../src/server/app.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { resolvePlanRoute } from '../src/plans/planning.js';
-import { backOutCommentDraft } from '../src/plans/planBackOut.js';
 import {
   actOnShortfall,
   describeProposedParts,
@@ -414,28 +413,6 @@ test('rejecting schedules nothing and leaves the issue a route rather than parki
   system.store.close();
 });
 
-test('the closing draft quotes what was planned, and is a draft rather than a default', () => {
-  // The ticket's readers have not seen the plan — it lives in the cockpit — so a
-  // "not doing this" with no account of what was considered reads as nobody having
-  // looked. Nothing posts it: the route serves it and the operator edits it.
-  const draft = backOutCommentDraft(
-    {
-      diagnosis: 'The signer is cached at module load.',
-      approach: 'Resolve it per request instead.',
-      reason: 'Two seams, two reviews.',
-    },
-    12,
-  );
-  assert.match(draft, /Closing #12 without doing the work/);
-  assert.match(draft, /cached at module load/);
-  assert.match(draft, /it can be picked up again/);
-  // A planner that filled in neither still leaves a usable draft rather than a
-  // heading with nothing under it.
-  const bare = backOutCommentDraft({ diagnosis: null, approach: null, reason: null }, 12);
-  assert.match(bare, /Closing #12/);
-  assert.doesNotMatch(bare, /for the record/);
-});
-
 test('closing the ticket stops the goal for good, and says so on the ticket', async () => {
   const { system } = plannedSystem({ labelPrefix: 'lubbdubb' });
   await system.harness.runCycle('manual');
@@ -742,15 +719,6 @@ test('a close with no words is refused, and the draft is served rather than post
   assert.equal(empty.statusCode, 400);
   assert.match(empty.json().error, /note is required/);
   assert.equal(system.store.getPlanByOrigin('issue:12')!.status, 'awaiting_approval');
-
-  // The draft is there to be edited into one. Serving it posts nothing: the plan
-  // is still awaiting approval and the ticket is untouched.
-  const draft = await app.inject({ method: 'GET', url: `/api/proposals/${proposal.id}/comment-draft` });
-  assert.equal(draft.statusCode, 200);
-  assert.match(draft.json().draft, /Closing #12/);
-  assert.match(draft.json().draft, /two writers disagree/);
-  assert.equal(system.store.getPlanByOrigin('issue:12')!.status, 'awaiting_approval');
-  assert.equal(system.store.getWorldBaseline()!.issues.find((i) => i.number === 12)!.state, 'open');
 
   // A hold needs no words at all — it decides nothing about the work.
   const held = await app.inject({
