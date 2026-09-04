@@ -360,16 +360,69 @@ export function environmentsReading(readings: readonly EnvironmentHealthReading[
   const count = readings.filter((r) => healthWord(r) === word).length;
   const rank = healthRank(worst);
   const read = `read ${relTime(worst.observedAt, now)}`;
+  // The check's own sentences, verbatim — or the harness's account of why it has
+  // none, which is a different thing and never dressed as one. They were the card's
+  // `why`, and with the card gone the chip is the only place they are said at all.
+  const said = worst.reasons.length > 0 ? worst.reasons.join(' · ') : worst.detail;
   const title =
     rank === 3
-      ? `Every environment answered well — ${read}. Open the overview for the readings.`
-      : `${worst.environment} ${worst.state === 'unknown' ? 'did not answer' : 'is not well'} — ${word} since ${relTime(worst.changedAt, now).replace(' ago', '')}, ${read}. Open the overview for what the check said.`;
+      ? `Every environment answered well — ${read}.`
+      : `${worst.environment} ${worst.state === 'unknown' ? 'did not answer' : 'is not well'} — ${word} since ${relTime(worst.changedAt, now).replace(' ago', '')}, ${read}.${said === null || said === '' ? '' : ` ${said}`}`;
   return {
     value: `${count} ${word}`,
     quiet: rank === 3,
     tone: rank === 2 ? 'watch' : rank === 3 ? null : 'ill',
     title,
   };
+}
+
+/**
+ * The Environments chip — **drawn only while something out there is not well**,
+ * and beside the fleet cap rather than on the overview.
+ *
+ * It is the one reading on this bar that comes and goes, which is the opposite of
+ * the strip's own rule that a quiet reading is dimmed and never removed. The rule
+ * holds for gauges of the fleet: a fault count that vanished at zero is a count an
+ * operator has to hunt for on the day it moves. This is not one. An environment is
+ * well nearly all of its life and there is nothing to do about it when it is, so a
+ * permanent `3 well` is a chip earning its width on the days it says nothing —
+ * while an outage is the one thing on this bar that should be impossible to miss.
+ * Its absence *is* the healthy reading, in the same way the rack's absence of a red
+ * PR is.
+ *
+ * Beside the fleet cap for the same reason the countdown is: both are the state of
+ * the world the fleet is dispatching into, read left to right — what the fleet is
+ * allowed to do, when it next gets to, and whether where it ships is up.
+ *
+ * Nothing here re-decides anything. The word is the check's own tier, the count is
+ * of environments sharing it, and the reasons ride the `title` verbatim. **Which**
+ * environment, and what each check said, is one press away — the Environments panel,
+ * the same one the menu row opens, because two surfaces drawing one check's
+ * sentences are two places for them to disagree.
+ * → docs/spec/24-environments.md#in-the-cockpit
+ */
+function Environments({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element | null {
+  const readings = view.state.environmentHealth ?? [];
+  if (readings.length === 0) return null;
+  const reading = environmentsReading(readings, view.now);
+  // `unknown` counts as not-well here, on the panel's rule: a check that could not
+  // answer is not a claim that anything is right, and folding it into the healthy
+  // silence is the one way this chip could hide an outage.
+  if (reading.quiet) return null;
+  const title = `${reading.title} Open the readings.`;
+  return (
+    <button
+      type="button"
+      className={`cn-read cn-act cn-env-${reading.tone ?? 'watch'}`}
+      onClick={() => actions.openPanel('environments')}
+      title={title}
+      aria-label={title}
+    >
+      <span>Env</span>
+      <b>{reading.value}</b>
+      <i className="cn-chev">›</i>
+    </button>
+  );
 }
 
 /**
@@ -782,6 +835,10 @@ export function menuEntries(view: CockpitView, actions: CockpitActions, themeUns
       title: build.title,
       onPick: () => actions.openPanel('build'),
     },
+    // Env stays in the menu even though the bar carries a chip for it, because the
+    // two answer different questions: the chip is *is something broken*, drawn only
+    // when it is, and the row is *what did every environment say*, which is where an
+    // operator goes to confirm that nothing is. Both open the one panel.
     ...(env === null
       ? []
       : [
@@ -793,10 +850,7 @@ export function menuEntries(view: CockpitView, actions: CockpitActions, themeUns
             tone: env.tone,
             quiet: env.quiet,
             title: env.title,
-            onPick: () => {
-              actions.selectGoal(null);
-              actions.openTab('overview');
-            },
+            onPick: () => actions.openPanel('environments'),
           },
         ]),
     // What the world did, which was the overview's fourth card until it turned
@@ -973,6 +1027,9 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
         <FleetControl live={view.live.length} cap={state.control.cap} paused={state.control.paused} />
         <Scan view={view} actions={actions} />
       </div>
+
+      {/* Only when it has something to say — see {@link Environments}. */}
+      <Environments view={view} actions={actions} />
 
       <div className="cn-reads">
         <Asks view={view} actions={actions} />
