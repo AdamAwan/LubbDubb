@@ -793,6 +793,38 @@ returns early on no parts, `planIsWedged` is false because nothing is `blocked`,
 `releasePlan` **refuses a plan with no live parts** as the backstop: any future route to that shape is
 a visible no on the approval card rather than a silent park.
 
+### The four answers
+
+A plan is answered four ways, and the cockpit draws the same four wherever it is decided — the inbox
+card and the plan sheet, through one component (`web/src/components/PlanAnswers.tsx`,
+[17](17-cockpit.md#the-four-answers-to-a-plan)).
+
+| The question an operator arrives with | The answer                                    | What it reaches               |
+| ------------------------------------- | --------------------------------------------- | ----------------------------- |
+| Yes                                   | **Approve**                                   | `releasePlan`                 |
+| Not like this                         | **Change something first**                    | `refusePlan` → `issue-replan` |
+| I have a question                     | **Open in Claude Code**                       | `plan_amend`                  |
+| Not this goal at all                  | **Close the ticket** / **Just stop watching** | `ProposalDesk.backOut`        |
+
+There were **six**, in one flat row, and two of them were the same act: `Reject` sent the plan back to
+a planner and `Replan` asked a planner again, six inches apart, with nothing on screen distinguishing
+them. **Replan is not drawn beside a verdict now.** On a decidable plan it is `Change something first`
+with an empty note — the same route and the same outcome, reached by the operator who has nothing to
+say, which is exactly the replan this spec warns produces nothing. It survives on `active` and
+`complete` plans, where no verdict is on offer and it is the only way to ask a planner again.
+
+**The note is asked for by the act that consumes it, and is required.** One box used to serve all five
+verdicts under the caption `Why (optional) — recorded either way`, which is false of the two that
+matter: a refusal's note is the whole instruction the next planner gets, and a close's is posted on
+the tracker as the reason the ticket shut. Each of those two answers opens its own drawer now,
+captioned with where the words go, and **held until there are some** — the refusal especially, because
+the route would otherwise accept it and hand a planner "an operator declined this plan." against the
+plan it just wrote.
+
+**Approve carries no note at all.** `ProposalDesk.accept` stores one on the proposal row and
+`releasePlan` takes none, so a box beside Approve offered a tweak that no writer downstream could
+apply. What the accept carries is the ticked caveats, which the route does read.
+
 ### Backing out of a plan
 
 Approve and Reject are the two answers to _is this the right plan_ — and both of them agree the work

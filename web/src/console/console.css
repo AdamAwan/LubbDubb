@@ -235,22 +235,10 @@
 .cn-ident-act.cn-ident-ask {
   border-color: var(--cn-accent);
 }
-/* The question hand-off wears the same face as the compose control beside it —
-   same spot, same moment, and an operator should not have to learn two of them.
-   Its own class rather than a second `.cn-issue-btn`: that class is what
-   `console.test.ts` reads to tell the bar's two faces apart, and a deep link
-   answering to it would make the offline bar look like it could still compose. */
-/* `.cn`-prefixed, like `.cn .cn-tgl` above it and for the same reason: the
-   console's reset for its own markup is `.cn a` / `.cn button`, which counts as
-   (0,1,1) and beats a bare class — a rule that only said `.cn-ask-btn` would set
-   the accent and be overruled by `color: inherit`, which is a control that reads
-   exactly like the wordmark it sits beside. */
-.cn .cn-ask-btn {
-  color: var(--cn-accent);
-}
-.cn .cn-ask-btn:hover {
-  color: var(--cn-fg);
-}
+/* The question hand-off has no face of its own any more: it is a `DesktopLink`,
+   which draws the shared button kit's ghost so that every control opening Claude
+   Code looks the same wherever it is drawn. `.cn-ident-ask` keeps the accent edge
+   on the slot, which is what marks it out from the compose control beside it. */
 .cn-dot {
   width: 7px;
   height: 7px;

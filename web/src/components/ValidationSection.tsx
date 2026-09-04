@@ -4,7 +4,7 @@ import { checkPrompt } from '../cockpit/desktopLink.js';
 import { DesktopLink } from './DesktopLink.js';
 import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 import { renderMarkdown } from './markdown.js';
-import { Button, buttonClass } from './button.js';
+import { Button } from './button.js';
 import type { ButtonLook } from './button.js';
 import { Tag, type TagTone } from './tag.js';
 
@@ -489,13 +489,10 @@ function CheckBlock({
                       nobody can read are the same dead end — and only the machine
                       running this browser has a client to answer it. */}
                   <DesktopLink
-                    className={buttonClass(look)}
                     folder={desktopFolder}
                     prompt={promptText}
                     explain="so this check runs at the keyboard — with the browser and the logins the fleet has not — and reports the reading back here."
-                  >
-                    Run it in Claude Code
-                  </DesktopLink>
+                  />
                 </>
               ) : (
                 // One way back from every settled state, and it takes no note for a

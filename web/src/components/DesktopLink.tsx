@@ -1,68 +1,68 @@
-import type { JSX, ReactNode } from 'react';
+import type { JSX } from 'react';
 import { desktopDeepLink } from '../cockpit/desktopLink.js';
+import { buttonClass } from './button.js';
+import { Icon } from './icons.js';
 
 /**
  * Every control that opens the operator's own Claude Code, through one component.
  *
  * The URL was already written once — {@link desktopDeepLink} owns the scheme, and
- * the four prompt builders beside it own the commands — but the *control* was
- * written five times: the goal header's **Ask ↗** and **run it locally ↗**, the
- * validation card's **Run it in Claude Code**, and the plan sheet's **Discuss…**
- * twice over. Each hand-rolled its own anchor and its own title, and they had
- * already drifted: the two Discuss anchors said what the session would do and
- * never said *what command it would arrive with*, which is the one thing the deep
- * link's standing rule requires them to say.
+ * the prompt builders beside it own the commands — and the *sentence* was written
+ * here. The **label** and the **look** were still the call site's, and both had
+ * drifted: six controls said `Ask Claude Code ↗`, `run it locally ↗`, `Question?`,
+ * `Run it in Claude Code` and `Discuss…` twice, wearing `cn-tgl`, `cn-linkish`,
+ * `cn-ask-btn` and two different `buttonClass` looks. Six names for one act is a
+ * vocabulary an operator has to learn per surface, and the argument about which
+ * verb a given site deserves has no end, because every site can make a case.
  *
- * That rule is the reason this is a component rather than a convention. The link
- * fires only on the machine the browser is on, and a client that is not installed
- * answers **nothing at all** — no error, no tab, no window. So an operator reading
- * the cockpit from another desk needs the line to type, and the only place left to
- * put it is the title. A site that forgets leaves them with a control that did
- * nothing and said nothing; nothing is red, and the failure is only ever reported
- * by the person it happened to. Composing the title here means a new deep link
+ * So the component owns all four now — address, sentence, label and look — and
+ * takes no `className` and no `children`. **Every one of these says “Open in
+ * Claude Code”.** What differs between call sites is what the session *arrives
+ * with*, which is `prompt`, and what it *does*, which is `explain` — the two
+ * things that were always the caller's and still are.
+ *
+ * **The look is the shared button kit's, not a family of its own.** `buttonClass`
+ * carries `btn` twice, which is what survives `console.css`'s `.cn button` reset —
+ * so one call here is native on both grounds, the goal header and the top bar
+ * inside `.cn`, the plan sheet and the escalation card outside it. A control drawn
+ * on two grounds is exactly the case a second class would have had to keep in step
+ * by hand.
+ *
+ * The link fires only on the machine the browser is on, and a client that is not
+ * installed answers **nothing at all** — no error, no tab, no window. So an
+ * operator reading the cockpit from another desk needs the line to type, and the
+ * only place left to put it is the title. Composing it here means a new deep link
  * cannot be added without one.
  *
- * **The sentence is assembled, not passed.** `Opens your own Claude Code with
- * "<command>" <ready>, <explain>` — so every one of these controls opens with the
- * same clause in the same words, and a call site is left with only the half that
- * is actually its own: what the session will do once it is there.
- *
- * **An anchor, never a button.** A deep link is a destination. `className` is the
- * caller's, because these controls live in four different rows and wear those
- * rows' tones — the header's `cn-tgl`, the card's `btn`, the plan sheet's
- * `btn ghost`. What is shared is the address and the sentence, not the paint.
- *
- * No `target="_blank"`: `claude://` is handed to the OS handler rather than
- * navigated to, and a tab opened for it is a blank one left behind.
+ * **An anchor, never a button.** A deep link is a destination. No `target="_blank"`:
+ * `claude://` is handed to the OS handler rather than navigated to, and a tab
+ * opened for it is a blank one left behind.
  */
 export function DesktopLink({
   folder,
   prompt,
   explain,
   ready = 'ready to send',
-  className,
-  children,
 }: {
   folder: string;
   prompt: string;
   /** What the session does once it is open — the half of the title that is the call site's own. */
   explain: string;
   /**
-   * Whether the command is complete. Three of the four are, and send as they land;
-   * **Ask** deliberately is not — it fills the composer with `/lubbdubb ask 284 `
-   * and stops, because the operator has not said what they are asking yet.
+   * Whether the command is complete. Most are, and send as they land; the two
+   * that start a *conversation* deliberately are not — they fill the composer and
+   * stop, because the operator has not said what they are asking yet.
    */
   ready?: string;
-  className?: string;
-  children: ReactNode;
 }): JSX.Element {
   return (
     <a
-      className={className}
+      className={buttonClass({ ghost: true, size: 'small' })}
       href={desktopDeepLink(folder, prompt)}
       title={`Opens your own Claude Code with "${prompt.trim()}" ${ready}, ${explain}`}
     >
-      {children}
+      <Icon name="chat" />
+      Open in Claude Code ↗
     </a>
   );
 }

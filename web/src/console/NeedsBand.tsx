@@ -373,6 +373,7 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
       resumedAt={escalation.agentId ? (view.agentById.get(escalation.agentId)?.resumedAt ?? null) : null}
       now={view.now}
       refUrls={view.state.refUrls}
+      desktopFolder={view.state.config.desktopFolder}
       onAnswer={(text) => actions.answerEscalation(escalation.id, text)}
       onAnswerQuestions={(answers) => actions.answerQuestions(escalation.id, answers)}
       onDecide={(id, verdict, note, acknowledged) => actions.decideProposal(id, verdict, note, acknowledged)}

@@ -735,7 +735,7 @@ any of it would be a second copy of the procedure, drifting.
 **One section is appended rather than written into the body**: where LubbDubb's _own_ checkout is,
 when `installRoot()` resolves one (`desktopSkillDocument`, handed the root by `src/server/main.ts`).
 The session this skill is written for opens on `repoRoot` — the repository the fleet **works on** —
-and the cockpit's [Question?](17-cockpit.md#the-top-bar-and-the-panels) control collects plenty of questions
+and the cockpit's [Claude Code hand-off](17-cockpit.md#the-top-bar-and-the-panels) collects plenty of questions
 that are about the harness instead: why nothing picked a goal up, why a rule did not fire. Answered
 from the harness's output those get the shape of confident wrong answer the `ask` section already
 warns about. The note says to read the record first and the source second, and to change nothing in
@@ -758,7 +758,7 @@ to begin one. Left at that, the third runner is the only one with no trace on th
 manages the other two, and an operator reads a validation plan that offers a hand-over to the fleet
 and says nothing about the machine in front of them.
 
-So an unrun check draws **Run it in Claude Code** beside the fleet hand-over: an `<a>` carrying
+So an unrun check draws **Open in Claude Code ↗** beside the fleet hand-over: an `<a>` carrying
 `claude://code/new?q=/lubbdubb <issue>:<letter>&folder=<config.desktopFolder>`, built by
 `DesktopLink` (`web/src/components/DesktopLink.tsx`) over `checkPrompt`
 (`web/src/cockpit/desktopLink.ts`). It records nothing, claims nothing and reaches no

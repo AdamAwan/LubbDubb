@@ -324,20 +324,24 @@ test('an unsaved theme edit marks the Config row and the menu button in front of
 });
 
 /**
- * `Issue!` and `Question?` sit at the readings' end of the bar, not against the
- * wordmark — and they stay together.
+ * `Issue!` and the Claude Code hand-off sit at the readings' end of the bar, not
+ * against the wordmark — and they stay together.
  *
  * They are the same moment (something looks wrong) offered two ways, and the
  * cheaper one is only offered first while it is beside the other. They moved off
  * the ident because that is where every *control* on this strip is, and because
  * inheriting the wordmark's 600 read them as a second half of the product name.
+ *
+ * The ask control is matched on the label every deep link now carries: the bar's
+ * used to say `Question?` and five other surfaces said five other things, which is
+ * the drift `DesktopLink` owning its own label ended.
  */
 test('the two ways out ride the readings, together, online and off', () => {
   for (const connected of [true, false]) {
     const html = render(view({ connected }));
     const asks = /<div class="cn-asks">([\s\S]*?)<\/div>\s*<(?:div|i|span)/.exec(html)?.[1] ?? '';
     assert.ok(asks.includes('Issue!'), `the file control left the group (connected: ${String(connected)})`);
-    assert.ok(asks.includes('Question?'), `the ask control left the group (connected: ${String(connected)})`);
+    assert.ok(asks.includes('Open in Claude Code'), `the ask control left the group (connected: ${String(connected)})`);
     const reads = html.indexOf('cn-reads');
     assert.ok(reads > 0 && html.indexOf('cn-asks') > reads, 'the pair is drawn outside the readings group');
   }

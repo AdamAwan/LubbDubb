@@ -752,15 +752,11 @@ function Header({
               title as well as the href — the standing rule for every one of these,
               and the one this row would otherwise have to remember. */}
           <DesktopLink
-            className={CONTROL_CLASS}
             folder={config.desktopFolder}
             prompt={askPrompt(issue.number)}
             ready="ready for your question"
             explain="answered from what the harness actually recorded about this goal — the plan, the pull requests, what was escalated, what it cost, and where the work has reached."
-          >
-            <Icon name="chat" />
-            Ask Claude Code ↗
-          </DesktopLink>
+          />
           {/* Which of the three keys resolves the ticket, and the inert `<span>`
               drawn when none of them does, are `TicketLink`'s business rather than
               this page's — both are judgements about how a ref resolves. */}
@@ -990,13 +986,10 @@ function Validation({
             `local-run` prompt always has a body, so there is nothing to check
             first and no configuration state to fall out of step with. */}
         <DesktopLink
-          className="cn-linkish"
           folder={desktopFolder}
           prompt={localRunPrompt(issue.number)}
           explain="so this goal’s work is running on the machine in front of you — then it offers you the checks."
-        >
-          run it locally ↗
-        </DesktopLink>
+        />
       </h3>
       {fold.open && (
         <div className="cn-vin">
