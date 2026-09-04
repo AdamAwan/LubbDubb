@@ -31,7 +31,6 @@ import type {
   PoolInsightsPayload,
   PoolStatePayload,
   PromptsPayload,
-  ProposalCommentDraft,
   RetrospectivePayload,
   RunClearOut,
   RunningConfigPayload,
@@ -450,10 +449,6 @@ const realApi = {
   // planner for a different plan for a goal nobody wants.
   backOutProposal: (id: string, verdict: 'close' | 'hold', note?: string) =>
     post<{ ok: boolean; detail: string }>(`/api/proposals/${id}/back-out`, { verdict, note }),
-  // The placeholder comment for a close. Served, never posted — what lands on the
-  // ticket is whatever the operator sends back with the verdict.
-  proposalCommentDraft: (id: string) =>
-    authFetch(`/api/proposals/${id}/comment-draft`).then((r) => json<ProposalCommentDraft>(r)),
   respondAgent: (id: string, text: string) => post(`/api/agents/${id}/respond`, { text }),
   setControl: (patch: { cap?: number; paused?: boolean }) =>
     post<{ ok: true; cap: number; paused: boolean }>('/api/control', patch),

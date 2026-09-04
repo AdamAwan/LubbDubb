@@ -833,12 +833,12 @@ says the ticket was left open, and the goal is still concluded and un-watched �
 either way, and the card on the board stays a human's to move
 ([15](15-integrations.md#the-capabilities)).
 
-**A close requires the comment.** `POST /api/proposals/:id/back-out` refuses `close` with no note,
-and `backOutCommentDraft` exists for the operator who would rather edit one than write one from
-nothing — it quotes the plan's own `diagnosis` and `approach`, because the ticket's readers have not
-seen the plan and a "not doing this" with no account of what was considered reads as nobody having
-looked. It is **served and never posted**: nothing goes on the tracker but what the operator sends
-back with the verdict.
+**A close requires the comment.** `POST /api/proposals/:id/back-out` refuses `close` with no note:
+the words go on somebody else's tracker as the reason the item closed and outlive this harness. There
+was a `GET /api/proposals/:id/comment-draft` that composed a placeholder for the operator to edit, and
+a `Draft a comment` button on both surfaces that filled the box from it. Both are **withdrawn**: a
+harness-composed sentence is not the account of why the work was declined that the gate exists to
+require, and the one thing it reliably produced was a close whose reason nobody had written.
 
 **`hold` — this needs more thought.** Two writes: the watch tag comes off, and the plan is
 **refused** — `refusePlan`, the same settlement Reject makes, so it goes to `planning` with the

@@ -2,12 +2,10 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { isRecoveryVerdict, type RecoveryVerdict } from '../../agents/crashRecovery.js';
 import { formatAnswers } from '../../escalation/questionnaire.js';
-import { backOutCommentDraft } from '../../plans/planBackOut.js';
 import { originIssueNumber } from '../../plans/planning.js';
 import { readProposedAct } from '../../proposals/proposals.js';
 import { checked, IdParams, optionalText, requiredBoolean, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
-import type { ProposalCommentDraft } from '../../wire.js';
 
 /**
  * Everything in "Needs you": a question answered, an item cleared, a permission
@@ -242,28 +240,6 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       // moved the tracker item — the cockpit is drawing a world that is now wrong.
       hub.broadcast({ type: 'world:changed' });
       return { ok: true, ...result };
-    }),
-  );
-
-  // The placeholder comment, for an operator who would rather edit one than write
-  // one from nothing. A route of its own rather than a field on `/api/state`, for
-  // the reason `/api/plans/:id/history` is one: it is read when somebody asks for
-  // it, and it carries the plan's prose, which would otherwise ride in every poll.
-  //
-  // It is served, never posted. The draft quotes the plan's own diagnosis so the
-  // ticket's readers can see what was considered, and what actually goes on the
-  // ticket is whatever the operator sends back to the route above.
-  app.get(
-    '/api/proposals/:id/comment-draft',
-    checked({ params: IdParams }, async ({ params, reply }) => {
-      const proposal = store.getProposal(params.id);
-      if (!proposal || proposal.kind !== 'plan') return reply.code(404).send({ error: 'no plan proposal by that id' });
-      const read = readProposedAct(proposal);
-      if (!read.ok || read.act.kind !== 'plan') return reply.code(409).send({ error: 'that proposal names no plan' });
-      const plan = store.getPlan(read.act.planId);
-      const issueNumber = originIssueNumber(read.act.originRef);
-      if (!plan || issueNumber === null) return reply.code(404).send({ error: 'the plan behind it is gone' });
-      return { draft: backOutCommentDraft(plan, issueNumber) } satisfies ProposalCommentDraft;
     }),
   );
 

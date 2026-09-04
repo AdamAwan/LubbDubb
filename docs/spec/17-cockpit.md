@@ -5370,18 +5370,19 @@ no new route, nothing the server has to learn. Reading a five-part plan and disa
 them is the ordinary case, and the only way to say so used to be to remember the slug and type it into
 a box at the bottom.
 
-**Two of the four buttons are not about the plan.** Beside Approve and Reject sit **Close the ticket**
-and **Hold — stop watching**, with **Draft a comment** between them, all three drawn only on a plan
-proposal because only a plan has a ticket behind it ([08](08-planning.md#backing-out-of-a-plan)).
+**Two of the buttons are not about the plan.** Beside Approve and Reject sit **Close the ticket**
+and **Hold — stop watching**, both drawn only on a plan proposal because only a plan has a ticket
+behind it ([08](08-planning.md#backing-out-of-a-plan)).
 They are here as well as on the inbox card because this is the surface where the plan has actually
 been _read_, and reading it is what produces "this is not really an issue" — for which the only "no"
 used to be Reject, which asks a planner for a different plan for a goal nobody wants.
 
 Close is **disabled until there is a note**, the way the shortfall's overrule is and for a sharper
 reason: the note is posted on the tracker as the closing comment and outlives this harness, so an
-empty one shuts somebody's ticket for a reason nobody can read. Draft a comment puts a server-composed
-placeholder _in the box_ to be edited — it posts nothing, and what lands on the ticket is whatever is
-sent with the verdict. Hold takes a note optionally rather than requiring one — it decides nothing
+empty one shuts somebody's ticket for a reason nobody can read. A third button, **Draft a comment**,
+sat between them and filled the box from a server-composed placeholder; it is **withdrawn**, along with
+the route behind it, because a harness-written sentence is not the account the note is there to
+require. Hold takes a note optionally rather than requiring one — it decides nothing
 about the work, and its words are read by a planner rather than posted anywhere: it drops the watch
 tag and sends the plan back, so watching the ticket again produces a fresh plan instead of this one
 again.
@@ -5906,10 +5907,8 @@ below the two verdicts the way `Dismiss` is — because neither answers the ques
 Approve and Reject are both about the plan, and a rejection sends the goal back to a planner; these
 two are about the **ticket**, and they are what an operator reaches for when the plan is fine and the
 work is not wanted ([08](08-planning.md#backing-out-of-a-plan)). They post to
-[`/api/proposals/:id/back-out`](16-http-api.md#post-apiproposalsidback-out). `Draft a comment` sits
-between them and fills the note box from
-[`/api/proposals/:id/comment-draft`](16-http-api.md#get-apiproposalsidcomment-draft), which serves a
-draft and posts nothing. Close is disabled until there is text, for the overrule arm's reason and one
+[`/api/proposals/:id/back-out`](16-http-api.md#post-apiproposalsidback-out). Close is disabled until
+there is text, for the overrule arm's reason and one
 more: those words go on somebody else's tracker as the reason the item closed.
 
 A card raised by an **unannounced stop** carries a clock. The chip in its head reads `done in 4m 12s`

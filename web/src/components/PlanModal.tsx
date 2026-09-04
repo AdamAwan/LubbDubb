@@ -74,7 +74,6 @@ export function PlanModal({
   onWatchProposal,
   onDecide,
   onBackOut,
-  onCommentDraft,
   onOpenGoal,
   onAcceptance,
   onPartProfile,
@@ -126,8 +125,6 @@ export function PlanModal({
    * "this is not really an issue".
    */
   onBackOut: (id: string, verdict: 'close' | 'hold', note?: string) => Promise<unknown> | unknown;
-  /** Fetch the placeholder closing comment into the note box, to be edited. Nothing is posted by it. */
-  onCommentDraft: (id: string) => Promise<string>;
   /** Open the goal this plan hangs off — where its checks are now recorded. */
   onOpenGoal: (issueRef: string) => void;
   onAcceptance: (planId: string, slug: string, criterion: string, met: boolean) => Promise<unknown> | unknown;
@@ -581,13 +578,6 @@ export function PlanModal({
                 onClick={() => onBackOut(decidable.id, 'close', note.trim())}
               >
                 Close the ticket
-              </AsyncButton>
-              <AsyncButton
-                ghost
-                title="Put a draft closing comment in the box to edit — nothing is posted until you close the ticket"
-                onClick={async () => setNote(await onCommentDraft(decidable.id))}
-              >
-                Draft a comment
               </AsyncButton>
               <AsyncButton
                 ghost

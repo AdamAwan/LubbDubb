@@ -170,12 +170,6 @@ export interface CockpitActions {
    */
   backOutProposal(id: string, verdict: 'close' | 'hold', note?: string): Promise<void>;
   /**
-   * The placeholder comment for a close, fetched when the operator asks for one to
-   * edit. Returns the draft rather than posting it: what goes on the ticket is
-   * whatever they send with {@link backOutProposal}.
-   */
-  proposalCommentDraft(id: string): Promise<string>;
-  /**
    * The third arm of a shortfall proposal: the assessment itself is wrong, and
    * `text` is why. Two calls because they settle two different things — the
    * verdict about the goal, and the card asking what to do about it — and the

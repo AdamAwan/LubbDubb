@@ -1989,14 +1989,6 @@ transition so a wrongly-aimed call leaves the proposal decidable. Broadcasts `wo
 watch tag has moved, which is what the pickup gate reads. Returns `{ ok: true, proposal, outcome, detail }`,
 where `detail` names each write that landed and each that did not.
 
-### `GET /api/proposals/:id/comment-draft`
-
-The placeholder closing comment for the route above, quoting the plan's own diagnosis and approach.
-Its own route rather than a field on `/api/state`, for `GET /api/plans/:id/history`'s reason: it is
-read when somebody asks for it, and it carries the plan's prose. **It is served, never posted** —
-what lands on the ticket is whatever the operator sends back with the verdict. **404** for anything
-but a live plan proposal whose plan still exists. Returns `{ draft }` (`ProposalCommentDraft`).
-
 ### `POST /api/recovery/:taskId`
 
 Body `{verdict}`, one of `restore` / `requeue` / `remove` — what happens to work the previous run
