@@ -47,15 +47,17 @@ import type { ErrorRecorder } from '../errorLog.js';
  */
 export const DESKTOP_SKILL = `---
 name: lubbdubb
-description: Answer a question about a goal LubbDubb has worked or is working — what was done, how, which pull requests, what is left, whether it has reached an environment — or check on the fleet itself and steer it, run a validation check on this machine and report the reading back, get a goal's work running locally, or discuss and amend its delivery plan. Use when asked anything about a goal by number — e.g. "/lubbdubb ask 284", "what happened on 284?" — anything about the harness as a whole — "/lubbdubb fleet", "is anything stuck?", "what is LubbDubb doing?", "pause the fleet", "answer that question" — to validate: "/lubbdubb 284:C" — to start it up: "/lubbdubb run 284" — or to talk a plan through: "/lubbdubb discuss 284".
+description: Answer a question about a goal LubbDubb has worked or is working — what was done, how, which pull requests, what is left, whether it has reached an environment — or check on the fleet itself and steer it, run a validation check on this machine and report the reading back, get a goal's work running locally, discuss and amend its delivery plan, or change the order the stories under a feature are worked in. Use when asked anything about a goal by number — e.g. "/lubbdubb ask 284", "what happened on 284?" — anything about the harness as a whole — "/lubbdubb fleet", "is anything stuck?", "what is LubbDubb doing?", "pause the fleet", "answer that question" — to validate: "/lubbdubb 284:C" — to start it up: "/lubbdubb run 284" — to talk a plan through: "/lubbdubb discuss 284" — or to change what waits on what: "/lubbdubb order 500".
 ---
 
 # LubbDubb at your keyboard
 
-Five jobs, told apart by the argument. \`fleet\` — or anything about the harness
+Six jobs, told apart by the argument. \`fleet\` — or anything about the harness
 rather than about one goal — is [watching and steering it](#watch-and-steer-the-fleet).
 \`ask 284 …\` is [a question about a goal](#answer-a-question-about-a-goal),
-\`discuss 284\` is [a conversation about a plan](#discuss-a-plan), \`run 284\` is
+\`discuss 284\` is [a conversation about a plan](#discuss-a-plan), \`order 500\` —
+or anything about which of a feature’s stories goes first — is
+[the order the stories go in](#discuss-the-order-the-stories-go-in), \`run 284\` is
 [getting it up on this machine](#run-it-locally), and anything else is
 [a validation check](#run-a-validation-check).
 
@@ -301,6 +303,44 @@ session that starts implementing has answered a question nobody asked.
 
 If they decide the plan was right after all, amend nothing — say so and stop. A
 plan left alone is still approvable exactly as it was.
+
+## Discuss the order the stories go in
+
+A Feature's stories can carry an **order**: which of them cannot start until
+another has produced something. It is not priority — priority is which of two
+things somebody wants first, and this is whether starting one early would mean
+throwing the work away. An accepted order **holds work**: a story behind another
+does not start until that one has pushed a branch.
+
+There is no drag-to-reorder in the cockpit, and this is the door instead. The
+reason behind a reordering is the half worth keeping, and a drag loses it.
+
+1. **Read it first.** \`sequence_read\` takes the Feature number *or* any story
+   under it — a story resolves to its parent, because an order is a statement
+   about a Feature. It comes back with every story, the edges, the sequencer's
+   reason, and whether anybody has accepted it.
+2. **Talk it through.** Which edge do they disagree with, and why? An order is a
+   claim about what one story produces that another would otherwise invent — a
+   schema, an interface, a migration. Two stories that merely relate are not
+   ordered.
+3. **Write the whole order back.** \`sequence_amend\` replaces what stands rather
+   than patching it, so **keep every edge you are not deliberately changing**.
+   \`reason\` is what the next person to read the Feature gets.
+
+Three things to say out loud when you have written one:
+
+- It lands **accepted**, so it holds work from the next pulse. There is no
+  approval step after this — the operator you are talking to *is* the approval.
+- An **empty** order is a real answer, and the way to release one: it says the
+  stories are independent after all and frees everything the previous order held.
+- A story the operator has flagged as a priority, or dragged to the top of Up
+  next, is dispatched **through** the hold. If they want one story to go early,
+  that is the control — amending the order is for when the order itself is wrong.
+
+**Do not invent an order to be helpful.** A wrong edge is the quietest failure
+this harness has: a story held behind one that never lands simply never starts,
+and nothing goes red. If you cannot support an edge from what the items actually
+say, leave it out.
 
 ## Run it locally
 

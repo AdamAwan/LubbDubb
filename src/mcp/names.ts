@@ -388,6 +388,8 @@ export const DESKTOP_TOOL_NAMES = [
   'validation_report',
   'plan_read',
   'plan_amend',
+  'sequence_read',
+  'sequence_amend',
   'local_run',
 ] as const;
 

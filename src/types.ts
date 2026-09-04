@@ -2400,8 +2400,17 @@ export interface FeatureSequenceEdge {
   issue: number;
   /** The story it waits on. */
   dependsOn: number;
-  /** `link` — the tracker's own Predecessor. `inferred` — the sequencer read it. */
-  source: 'link' | 'inferred';
+  /**
+   * Where the edge came from. `link` — the tracker's own Predecessor, drawn by a
+   * person on their own board. `inferred` — the sequencer read it out of the items'
+   * text. `operator` — somebody amended the order by hand, through the desktop
+   * channel.
+   *
+   * Three rather than two because an operator's edge is neither of the others, and
+   * marking one `inferred` would claim an agent guessed at a judgement a person
+   * made. → `docs/spec/33-story-sequencing.md#amending-it`
+   */
+  source: 'link' | 'inferred' | 'operator';
   /** One line on why this edge. Null on a `link`, where the reason is that somebody drew it. */
   reason: string | null;
 }

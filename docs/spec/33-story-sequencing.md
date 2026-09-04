@@ -1,14 +1,5 @@
 # 33 — Story sequencing
 
-> **Partly built.** The gate, the record, the sequencer and both cockpit surfaces run. What is
-> **not** built is [amending an order by talking to Claude Code](#amending-it) — no `sequence_amend`,
-> no `sequence_read`, and no `Discuss…` link — so an accepted order is changed today only by the
-> sequencer proposing a new one, which it does when the Feature gains or loses a story. The build
-> order is in `docs/plans/story-sequencing.md`. With `issueSequencing` `off`, which is the default,
-> the harness behaves exactly as it did before any of this — every watched story under a Feature is
-> eligible the moment it carries the tag, ordered by `issuePriorityLabels` and then the issue number
-> ([06](06-issue-pickup.md#priority)).
-
 `src/sequence/`. The order the stories under a Feature are worked in, and the hold that keeps a story
 waiting for the one it needs.
 
@@ -37,10 +28,12 @@ re-litigated:
 
 ## Where the order comes from
 
-Two sources, and **which one an edge came from is recorded on the edge**. The distinction is not
-presentational: one is a statement a person made on the board and the other is a guess, and a
-surface that draws them the same way invites an operator to accept the second thinking it is the
-first.
+Two sources the harness _reads_, and **which one an edge came from is recorded on the edge**. The
+distinction is not presentational: one is a statement a person made on the board and the other is a
+guess, and a surface that draws them the same way invites an operator to accept the second thinking
+it is the first. A third value, `operator`, is written by an [amendment](#amending-it) — a judgement
+a person made here rather than on their board, and marking one of those `inferred` would claim an
+agent guessed at it.
 
 ### The tracker's own links
 
@@ -243,9 +236,16 @@ again — the thing declined was an order over a set, and the set has changed.
 There is no drag-to-reorder. An accepted sequence is changed by **talking to Claude Code**, which is
 the door a plan is already amended through ([08](08-planning.md#discussing-a-plan)): the card carries
 a `Discuss…` deep link (`web/src/components/DesktopLink.tsx`), the operator's own session opens on
-the Feature, and it writes through _sequence_amend_ on the desktop channel
-(`src/mcp/desktopTools.ts`, `DESKTOP_TOOL_NAMES` — never `buildTools`). The session dispatches
-nothing.
+the Feature, and it writes through `sequence_read` and `sequence_amend` on the desktop channel
+(`src/mcp/desktopSequence.ts`, mounted in `src/mcp/desktopTools.ts` under `DESKTOP_TOOL_NAMES` —
+never `buildTools`). The session dispatches nothing.
+
+An amendment **replaces the whole order** rather than patching it, `plan_amend`’s shape: an edge
+dropped from what is sent has to disappear, and a merge would leave it behind indistinguishable from
+one still meant. It lands `accepted`, because the person making it is the person who would have
+accepted it, and its edges are marked `operator` — never `inferred`, which would claim an agent
+guessed at a judgement a person made. An **empty** order is how the operator says the stories are
+independent after all, and it releases everything the previous one held.
 
 That is the right shape rather than the cheap one. Reordering is a judgement with a reason behind it,
 and the reason is the half worth keeping: a drag records that the order changed and loses why, which

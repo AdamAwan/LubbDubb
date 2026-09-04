@@ -23,6 +23,8 @@ import type {
   FeatureWorkingRow,
 } from '../types.js';
 import { HeadRow, Panel } from './panel.js';
+import { DesktopLink } from './DesktopLink.js';
+import { buttonClass } from './button.js';
 import { Tag, type TagTone } from './tag.js';
 
 /**
@@ -267,7 +269,8 @@ function Sequence({
         {sequence.status === 'accepted'
           ? `Order accepted — ${waves.length} wave${waves.length === 1 ? '' : 's'}`
           : 'You said run them all — the fleet will not propose an order again until this Feature gains or loses a story'}
-        {sequence.answeredBy === null ? '' : ` · ${sequence.answeredBy}`}
+        {sequence.answeredBy === null ? '' : ` · ${sequence.answeredBy}`}{' '}
+        <Discuss feature={feature.number} folder={view.state.config.desktopFolder} />
       </p>
     );
   }
@@ -326,8 +329,32 @@ function Sequence({
         >
           Run them all
         </AsyncButton>
+        <Discuss feature={feature.number} folder={view.state.config.desktopFolder} />
       </div>
     </div>
+  );
+}
+
+/**
+ * The way an order is changed: **talking to Claude Code**, and there is no other.
+ *
+ * Reordering is a judgement with a reason behind it, and the reason is the half
+ * worth keeping — a drag records that the order changed and loses why, which is
+ * exactly what the next person to read the Feature needs. Drawn as an anchor rather
+ * than a button because a deep link is a destination, which is `DesktopLink`'s
+ * whole contract. → `docs/spec/33-story-sequencing.md#amending-it`
+ */
+function Discuss({ feature, folder }: { feature: number; folder: string }): JSX.Element | null {
+  if (!folder) return null;
+  return (
+    <DesktopLink
+      className={buttonClass({ ghost: true, size: 'small' })}
+      folder={folder}
+      prompt={`Read the story order for feature #${feature} with sequence_read, then talk me through changing it.`}
+      explain="so you can argue with the order and write it back with sequence_amend"
+    >
+      Discuss…
+    </DesktopLink>
   );
 }
 
@@ -339,6 +366,14 @@ function Sequence({
  * drew the two the same way would invite an operator to accept the second thinking
  * it was the first. → `docs/spec/33-story-sequencing.md#where-the-order-comes-from`
  */
+const EDGE_SOURCE: Record<FeatureSequence['edges'][number]['source'], string> = {
+  link: 'tracker link',
+  inferred: 'inferred',
+  // Never "inferred": an operator's edge is a judgement a person made, and marking
+  // it as a guess is the confusion the column exists to prevent, one direction over.
+  operator: 'yours',
+};
+
 function Edges({ sequence }: { sequence: FeatureSequence }): JSX.Element | null {
   if (sequence.edges.length === 0) {
     return <p className="cn-psub">No story waits on another — the sequencer found these independent.</p>;
@@ -354,7 +389,7 @@ function Edges({ sequence }: { sequence: FeatureSequence }): JSX.Element | null 
           <span className="cn-refs">
             <Ref to={`issue:${edge.dependsOn}`} />
           </span>
-          <Tag>{edge.source === 'link' ? 'tracker link' : 'inferred'}</Tag>
+          <Tag>{EDGE_SOURCE[edge.source]}</Tag>
           {edge.reason !== null && <span className="cn-fb-seq-edge-why">{edge.reason}</span>}
         </li>
       ))}

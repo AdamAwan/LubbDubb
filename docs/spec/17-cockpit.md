@@ -3983,6 +3983,15 @@ A Feature with nothing worked, nothing delivered and nothing blocked draws **no 
 bar has already said so, and three empty headings would be the loudest thing on the card saying
 nothing.
 
+### The order its stories go in
+
+Between the summary and the briefing, when the Feature has one: a **proposal to answer** while nobody
+has, and one line once somebody has. It groups the children list already on the card rather than
+adding a second one, and the copy on the Goal page is folded shut. Both surfaces, and why the order
+is amended by talking to Claude Code rather than by dragging, are
+[33](33-story-sequencing.md#the-cockpit). Absent on every deployment with `issueSequencing` off,
+which is the default.
+
 ### The feature summary
 
 Above the briefing, and above everything except the bar and its counts, a card draws **the one piece

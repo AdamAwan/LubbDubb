@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import { DISPATCH_RULES } from '../src/dispatcher/rules.js';
 import { Store } from '../src/store/store.js';
+import { loadConfig } from '../src/config.js';
+import { buildDesktopTools } from '../src/mcp/desktopTools.js';
+import { DESKTOP_TOOL_NAMES, MCP_TOOL_NAMES } from '../src/mcp/names.js';
 import {
   featureSequenceKey,
   featureSequenceSubmitOrigin,
@@ -441,4 +444,106 @@ test('a cycle in a stored order does not spin the display', () => {
     { issue: 12, dependsOn: 11, source: 'inferred', reason: null },
   ];
   assert.equal(typeof waveOf(11, edges), 'number');
+});
+
+// -- the desktop channel: an order is amended by talking to Claude Code -------
+
+/**
+ * The two desktop tools, driven through `buildDesktopTools` with a world baseline
+ * written straight into the store — the one seam that lets a hierarchy be scripted
+ * without a provider that reports one.
+ */
+function desktopDeck(): {
+  call: (name: string, args: Record<string, unknown>) => Promise<Record<string, unknown>>;
+  store: Store;
+} {
+  const store = new Store(':memory:');
+  store.setWorldBaseline({
+    takenAt: NOW,
+    pullRequests: [],
+    issues: [story(11), story(12), story(13)],
+  });
+  const deps = {
+    store,
+    briefConfig: () => loadConfig({ dbPath: ':memory:', issueSequencing: 'full' }),
+  } as unknown as Parameters<typeof buildDesktopTools>[0];
+  const tools = buildDesktopTools(deps, { label: 'adam', held: null });
+  return {
+    store,
+    call: async (name, args) => {
+      const tool = tools.find((t) => t.name === name);
+      assert.ok(tool, `${name} is on the desktop channel`);
+      const result = await tool.handler(args);
+      return { isError: result.isError === true, text: result.content[0]?.text ?? '' };
+    },
+  };
+}
+
+test('both sequence tools are on the desktop channel and neither is on the fleet’s', () => {
+  for (const name of ['sequence_read', 'sequence_amend']) {
+    assert.ok(DESKTOP_TOOL_NAMES.includes(name as never), `${name} is a desktop tool`);
+    assert.ok(!MCP_TOOL_NAMES.includes(name as never), `${name} is not one the fleet can call`);
+  }
+  // The one the fleet gets, and it is the other way round.
+  assert.ok(MCP_TOOL_NAMES.includes('sequence_submit'));
+  assert.ok(!DESKTOP_TOOL_NAMES.includes('sequence_submit' as never));
+});
+
+test('a story number resolves to the Feature it hangs off', async () => {
+  const deck = desktopDeck();
+  const read = await deck.call('sequence_read', { issue: 12 });
+  const json = JSON.parse(read.text as string) as { feature: number; order: unknown };
+  assert.equal(json.feature, 500, 'an order is a statement about a Feature, not about one of its stories');
+  assert.equal(json.order, null);
+});
+
+test('an amendment lands accepted, marked as the operator’s own', async () => {
+  const deck = desktopDeck();
+  const done = await deck.call('sequence_amend', {
+    issue: 500,
+    reason: 'the schema in #11 is what #12 and #13 both read',
+    order: [
+      { issue: 12, waitsOn: [11], why: 'reads the table' },
+      { issue: 13, waitsOn: [11], why: 'reads the table' },
+    ],
+  });
+  assert.equal(done.isError, false, done.text as string);
+  const stored = deck.store.getFeatureSequence('issue:500');
+  assert.equal(stored?.status, 'accepted', 'the person making it is the person who would have accepted it');
+  assert.equal(stored?.answeredBy, 'adam');
+  assert.deepEqual(
+    stored?.edges.map((e) => e.source),
+    ['operator', 'operator'],
+    'never `inferred` — no agent guessed these',
+  );
+});
+
+test('an empty amendment releases the order rather than being refused', async () => {
+  const deck = desktopDeck();
+  await deck.call('sequence_amend', {
+    issue: 500,
+    reason: 'first pass',
+    order: [{ issue: 12, waitsOn: [11], why: 'reads the table' }],
+  });
+  const done = await deck.call('sequence_amend', { issue: 500, reason: 'they are independent after all', order: [] });
+  assert.equal(done.isError, false, done.text as string);
+  assert.deepEqual(deck.store.getFeatureSequence('issue:500')?.edges, []);
+});
+
+test('an amendment naming a story the Feature does not have is refused', async () => {
+  const deck = desktopDeck();
+  const done = await deck.call('sequence_amend', {
+    issue: 500,
+    reason: 'r',
+    order: [{ issue: 12, waitsOn: [999], why: 'a' }],
+  });
+  assert.equal(done.isError, true);
+  assert.match(done.text as string, /#999/);
+});
+
+test('a Feature the harness can see no stories under is refused, and says why', async () => {
+  const deck = desktopDeck();
+  const done = await deck.call('sequence_read', { issue: 4242 });
+  assert.equal(done.isError, true);
+  assert.match(done.text as string, /no stories under it/);
 });

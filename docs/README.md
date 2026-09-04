@@ -47,7 +47,7 @@ document that owns the behaviour; the rest is in the git history.
 A **build plan** — the staged order a spec still marked unbuilt gets built in — lives under `plans/`
 while it is being worked and is **deleted by the change that finishes the last stage**, for the same
 reason: once the code has landed it is a second document describing the application, and a reader
-cannot tell by looking which of the two is true. One is open: `docs/plans/story-sequencing.md`, for [33 — Story sequencing](spec/33-story-sequencing.md).
+cannot tell by looking which of the two is true. There is none open at present.
 
 ## `CLAUDE.md` and `spec/` — the division of labour
 

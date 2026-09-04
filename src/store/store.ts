@@ -1725,6 +1725,9 @@ export class Store {
   answerFeatureSequence(...args: Parameters<SequenceStore['answerFeatureSequence']>): FeatureSequence | null {
     return this.sequences.answerFeatureSequence(...args);
   }
+  getFeatureSequence(originRef: string): FeatureSequence | null {
+    return this.sequences.getFeatureSequence(originRef);
+  }
   listFeatureSequences(): FeatureSequence[] {
     return this.sequences.listFeatureSequences();
   }
