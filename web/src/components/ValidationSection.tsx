@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ValidationCheck, ValidationCheckState, ValidationResourceView } from '../types.js';
 import { checkPrompt } from '../cockpit/desktopLink.js';
 import { DesktopLink } from './DesktopLink.js';
@@ -7,6 +7,7 @@ import { renderMarkdown } from './markdown.js';
 import { Button } from './button.js';
 import type { ButtonLook } from './button.js';
 import { Tag, type TagTone } from './tag.js';
+import { logUsage } from '../cockpit/usage.js';
 
 /**
  * Whether a resource's absence is worth drawing.
@@ -77,6 +78,13 @@ export function ValidationSection({
   onReset: (checkId: string) => Promise<unknown> | unknown;
   onHandover: (checkId: string, to: 'fleet' | 'human') => Promise<unknown> | unknown;
 }) {
+  // The goal's checks were reached. Emitted on mount rather than from whatever
+  // navigation drew the goal page, for `placeReach`'s reason one rung in: this
+  // section is drawn from a goal page and from a plan sheet, and a `view` written
+  // at either would count only the half that went through it.
+  useEffect(() => {
+    logUsage('validation.view');
+  }, []);
   const live = checks.filter((c) => c.supersededReason === null);
   const withdrawn = checks.filter((c) => c.supersededReason !== null);
   const settled = live.filter((c) => c.state === 'passed' || c.state === 'waived').length;
@@ -347,7 +355,14 @@ function CheckBlock({
           amendment, so it is what a person writes down. */}
       <span className="pm-vletter">{check.letter}</span>
       <div>
-        <button className="pm-vhead" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <button
+          className="pm-vhead"
+          aria-expanded={open}
+          onClick={() => {
+            if (!open) logUsage('validation.expand');
+            setOpen(!open);
+          }}
+        >
           <span className="pm-vtitle">{check.title}</span>
           <Tag lower>{check.id}</Tag>
           <Tag tone={stateTone(check.state)}>{check.state}</Tag>
@@ -498,7 +513,17 @@ function CheckBlock({
                 // One way back from every settled state, and it takes no note for a
                 // dismissal's reason: it says nothing about the work, only that what
                 // was recorded no longer holds.
-                <AsyncButton {...look} title="Withdraw what was recorded and put it back to unrun" onClick={onReset}>
+                <AsyncButton
+                  {...look}
+                  title="Withdraw what was recorded and put it back to unrun"
+                  onClick={() => {
+                    // A withdrawn reading leaves the check `unrun`, which is
+                    // indistinguishable from one nobody ever ran — so no table
+                    // holds this act and the click is the only witness.
+                    logUsage('validation.undo');
+                    return onReset();
+                  }}
+                >
                   Back to unrun
                 </AsyncButton>
               )}

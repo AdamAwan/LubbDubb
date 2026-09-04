@@ -6,6 +6,8 @@
  * bounded action plan the dispatcher emits.
  */
 
+import type { PlaceKey, UsageArrival, UsageSubject, UsageVerb } from './usage/events.js';
+
 // ---------------------------------------------------------------------------
 // World snapshot (produced by a Connector)
 // ---------------------------------------------------------------------------
@@ -4716,6 +4718,32 @@ export interface McpCallInput {
   args: Record<string, unknown>;
 }
 
+/**
+ * One row of surface reach: something a person did in the cockpit that no table
+ * would otherwise hold.
+ *
+ * **Five fields and no more**, and the shape is the privacy position rather than
+ * a summary of it. The subject and the verb are the registry's
+ * (`src/usage/events.ts`); the place is a key from a closed vocabulary; `at` is an
+ * instant; `arrival` is how the place was reached. There is no ref, no title, no
+ * note, no free text — and **no identity column**, which is refused rather than
+ * omitted: a fleet is an engineer, so the fleet id already carries whose
+ * behaviour a row describes, and a second identifier would buy nothing while
+ * turning every row into something the digest would have to withhold.
+ *
+ * → `docs/spec/34-usage-metrics.md#the-one-new-table`
+ */
+export interface SurfaceReach {
+  subject: UsageSubject;
+  verb: UsageVerb;
+  place: PlaceKey;
+  at: string;
+  arrival: UsageArrival;
+}
+
+/** What a caller states; `at` is the store's, stamped as the batch lands. */
+export type SurfaceReachInput = Omit<SurfaceReach, 'at'>;
+
 // ---------------------------------------------------------------------------
 // The cross-fleet pool (docs/spec/28-cross-fleet-pool.md)
 //
@@ -4815,6 +4843,22 @@ export interface PoolDigestDocument extends PoolEnvelope {
   unaccounted: PoolDigestRow[];
   /** Runs that reported no usage at all. Without it a PTY fleet is drawn as a cheap fleet. */
   unmeasured: PoolDigestRow[];
+  /**
+   * What a person did, keyed by `<UsageSubject>.<UsageVerb>` — the registry's two
+   * axes and nothing else (`src/usage/events.ts`).
+   *
+   * Both halves of the key are closed vocabularies the harness owns, so two fleets
+   * on two providers produce comparable rows by construction. **The cockpit's place
+   * key is deliberately not here**: it is the console's own layout, which a redesign
+   * moves, and a cross-fleet series keyed on it would break at a release rather than
+   * at a change of behaviour.
+   *
+   * `costUsd` is null on every row: what a person did has no dollar figure anywhere
+   * in the harness, and deriving one here would be a new measurement invented for
+   * the pool.
+   * → `docs/spec/34-usage-metrics.md#the-digest-section`
+   */
+  byUsage: PoolDigestRow[];
   /**
    * Faults this fleet recorded, keyed by `ErrorLogEntry['source']` — a closed
    * vocabulary of five, and the same word the Faults panel draws.

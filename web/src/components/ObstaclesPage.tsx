@@ -15,6 +15,7 @@ import { Ref } from './refs.js';
 import { absDate, relTime, untilTime } from './util.js';
 import { HeadRow } from './panel.js';
 import { Tag, type TagTone } from './tag.js';
+import { logUsage } from '../cockpit/usage.js';
 
 /**
  * The obstacle board — *what is blocking the fleet, and what owns each one*.
@@ -296,7 +297,10 @@ function Row({
           type="button"
           className="ob-claim"
           aria-expanded={open}
-          onClick={() => actions.setObstacleQuery({ obstacle: open ? null : obstacle.id })}
+          onClick={() => {
+            if (!open) logUsage('obstacle.expand');
+            actions.setObstacleQuery({ obstacle: open ? null : obstacle.id });
+          }}
         >
           {obstacle.what}
         </button>

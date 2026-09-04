@@ -159,6 +159,10 @@ function readDigest(raw: Record<string, unknown>): PoolParse {
     byCheck: readRows(raw.byCheck),
     unaccounted: readRows(raw.unaccounted),
     unmeasured: readRows(raw.unmeasured),
+    // A document from a build that predates the section answers `[]`, which is what
+    // keeps adding one a backward-compatible change: a fleet on the older build is a
+    // fleet with no operator rows, never a fleet this build refuses to read.
+    byUsage: readRows(raw.byUsage),
     // Read like every other section even though nothing consumes it: a document
     // from a build that predates the section answers `[]` here, which is what keeps
     // adding one a backward-compatible change rather than a version bump.

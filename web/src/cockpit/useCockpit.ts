@@ -6,7 +6,8 @@ import type { AppliedFix } from '../view/needsYou.js';
 import { useNow } from '../hooks.js';
 import { buildViewModel, type CockpitView } from '../view/viewModel.js';
 import { useNavigation } from './useNavigation.js';
-import { homeTab } from './place.js';
+import { homeTab, type Place } from './place.js';
+import { logUsage, notePlace, placeReach } from './usage.js';
 import type { CockpitActions } from './actions.js';
 import { fireNotifications, loadNotifyPrefs, notifiableChanges, notifySnapshot } from './notify.js';
 import { goalPrNumbers } from '../view/goalPage.js';
@@ -30,6 +31,33 @@ type CockpitStatus =
  * since it is the half that must behave identically whatever the cockpit looks
  * like.
  */
+/**
+ * The surface-reach writer: one `view` per place the operator lands on, and the
+ * place every other `logUsage` call in the cockpit is attributed to.
+ *
+ * **Keyed on the reach, not on the place.** A place carries far more than a
+ * surface — a collapsed card, a ticket filter, an open goal section — and an
+ * effect keyed on the whole thing would log a fresh `view` every time an operator
+ * folded a row on the page they were already on. The key is the surface plus how
+ * it was arrived at, so a re-view is a genuine move.
+ *
+ * Fire-and-forget in full: {@link logUsage} cannot throw, and a lost flush costs
+ * a row and nothing else.
+ *
+ * → `docs/spec/34-usage-metrics.md#surface-reach`
+ */
+function useSurfaceReach(place: Place, arrival: 'linked' | 'direct'): void {
+  const reach = placeReach(place);
+  const key = `${reach.key}:${arrival}`;
+  useEffect(() => {
+    notePlace(reach.key, arrival);
+    if (reach.view !== null) logUsage(reach.view);
+    // `key` is the whole dependency on purpose — see the note above. `reach` is
+    // recomputed each render and would re-fire on every snapshot if it were one.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+}
+
 export function useCockpit(): CockpitStatus {
   const [state, setState] = useState<AppState | null>(null);
   const [denied, setDenied] = useState<UnauthorizedError | null>(null);
@@ -47,7 +75,8 @@ export function useCockpit(): CockpitStatus {
   const undoable = useRef(new Map<string, { set?: Record<string, unknown>; clear?: string[] }>());
   // Where the operator is, held in the address bar rather than in a state each —
   // see `useNavigation`. Everything below reads off it; nothing else moves it.
-  const { place, go } = useNavigation();
+  const { place, go, arrival } = useNavigation();
+  useSurfaceReach(place, arrival);
   const selected = place.agent;
   // Live per-agent output accumulated from WS deltas (only for subscribed agents).
   const liveOutput = useRef<Map<string, string>>(new Map());
@@ -376,7 +405,14 @@ export function useCockpit(): CockpitStatus {
       openTab: (next) => go({ tab: next }),
       // One `go` for however many of the three moved: they are one place, and two
       // calls would push two history entries for a single change of question.
-      setTicketQuery: (next) => go(next),
+      setTicketQuery: (next) => {
+        // The one seam every filter, ordering and layout control on the tab funnels
+        // to, which is where this belongs for `collectActions`' reason: a `filter`
+        // logged at each of the nine controls counts only the ones somebody
+        // remembered, and silently stops counting the day a tenth arrives.
+        logUsage('ticket.filter');
+        go(next);
+      },
       collapseFeature: (issueNumber, collapsed) =>
         go((current) => ({
           collapsed: collapsed

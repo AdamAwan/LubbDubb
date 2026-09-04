@@ -2,6 +2,7 @@ import { CAUSE_COPY, GUARD_COPY } from '../remedies/remedies.js';
 import { PHASE_ORDER, phaseLabel, type SpendPhase } from '../spendInsights.js';
 import type { PoolDigestMirrorRow } from '../store/pool.js';
 import type { RemedyCause, RemedyGuard, RemedyKind } from '../types.js';
+import { USAGE_COPY, type UsageEvent } from '../usage/events.js';
 
 /**
  * The shared insights page's fold: everybody's digest rows, summed across fleets.
@@ -42,7 +43,15 @@ export interface PoolRollupRow {
 export interface PoolRollup {
   /** The project this is narrowed to, or null for every project. */
   project: string | null;
-  /** The fleets that contributed a digest row inside the window. */
+  /**
+   * The fleets that contributed a digest row inside the window.
+   *
+   * **This is the denominator of every "how many people" reading on the page.** A
+   * fleet is an engineer, so `PoolRollupRow.fleets` against this length is _how many
+   * of the people publishing did that thing_ — which is why no per-operator field is
+   * needed anywhere below, and why refusing one costs nothing.
+   * → `docs/spec/34-usage-metrics.md#the-digest-section`
+   */
   fleets: string[];
   /** The UTC days the rows span, oldest first. Empty when nothing has been published. */
   days: string[];
@@ -63,6 +72,20 @@ export interface PoolRollup {
   unaccounted: PoolRollupRow;
   /** Runs that reported no usage at all. */
   unmeasured: PoolRollupRow;
+  /**
+   * What people did, keyed by the usage registry's `subject.verb`.
+   *
+   * **The event count and the fleet count are both here and are never summed
+   * together.** `count` is how many times the thing happened across the pool;
+   * `fleets` is how many fleets — how many people — did it at all. One operator
+   * amending forty plans and forty operators amending one each are the same `count`
+   * and opposite findings, which is the whole reason both ship.
+   *
+   * No cost: `costUsd` and `dailyMeanCostUsd` are null on every row by construction,
+   * because what a person did has no dollar figure anywhere in the harness.
+   * → `docs/spec/34-usage-metrics.md#the-digest-section`
+   */
+  byUsage: PoolRollupRow[];
 }
 
 /**
@@ -88,6 +111,10 @@ export function foldPoolDigest(
     byCheck: options.project === null ? null : rollup(inWindow, 'check', (key) => key),
     unaccounted: single(inWindow, 'unaccounted', 'Unaccounted returns'),
     unmeasured: single(inWindow, 'unmeasured', 'Unmeasured runs'),
+    // Keyed on two closed vocabularies the harness owns, so it sums across projects
+    // like every section but `byCheck` — there is no provider name in either half,
+    // and so no project argument to take.
+    byUsage: rollup(inWindow, 'usage', poolUsageLabel).sort((a, b) => b.count - a.count),
   };
 }
 
@@ -165,6 +192,19 @@ export function poolCauseLabel(key: string): string {
   const causeLabel = CAUSE_COPY[cause]?.label ?? cause;
   const guardLabel = GUARD_COPY[guard]?.label ?? guard;
   return `${kind === 'ci' ? 'CI' : 'Review'} · ${causeLabel} · ${guardLabel}`;
+}
+
+/**
+ * `plan.edit` in the words the local panels already use.
+ *
+ * The copy comes from `src/usage/events.ts` rather than being restated —
+ * {@link poolCauseLabel}'s discipline, one vocabulary over — and the markdown
+ * companion names the same keys, which is why this is exported rather than inlined.
+ * A key this build has no copy for is drawn as the key, which is what a fleet ahead
+ * of you looks like on the glass.
+ */
+export function poolUsageLabel(key: string): string {
+  return USAGE_COPY[key as UsageEvent]?.label ?? key;
 }
 
 function roundUsd(value: number): number {

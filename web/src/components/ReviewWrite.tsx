@@ -4,6 +4,7 @@ import type { ConfigChange, RunningConfigPayload } from '../types.js';
 import type { Staged } from './ConfigValues.js';
 import { Panel } from './panel.js';
 import { Button } from './button.js';
+import { logUsage } from '../cockpit/usage.js';
 
 /**
  * What the write will do to the file, before it does it.
@@ -46,6 +47,10 @@ export function ReviewWrite({
     setBusy(true);
     setRefusal(null);
     try {
+      // `lubbdubb.config.json` is rewritten in place and no row is written
+      // behind it, so the call site is the only witness that a person changed
+      // what the harness reads.
+      logUsage('config.edit');
       const result = await api.saveConfig({ set: staged.set, clear: staged.clear, baseline: payload.revision });
       onWrote(result.changes);
     } catch (err) {

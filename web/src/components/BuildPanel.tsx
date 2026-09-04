@@ -2,6 +2,7 @@ import type { BuildReading, UpgradeAction } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
 import { relTime } from './util.js';
 import { HeadRow } from './panel.js';
+import { logUsage } from '../cockpit/usage.js';
 
 /**
  * What the running build is, what is waiting for it, and how to take it.
@@ -132,7 +133,16 @@ function Controls({
             Don&apos;t wait — interrupt {live} and upgrade
           </AsyncButton>
         )}
-        <AsyncButton ghost onClick={() => onUpgrade('cancel')}>
+        <AsyncButton
+          ghost
+          onClick={() => {
+            // Declining puts the intent back to idle, which is the state it was
+            // in before — so nothing durable distinguishes a declined upgrade
+            // from one nobody was ever offered.
+            logUsage('upgrade.reject');
+            return onUpgrade('cancel');
+          }}
+        >
           Cancel
         </AsyncButton>
         <p className="build-note">

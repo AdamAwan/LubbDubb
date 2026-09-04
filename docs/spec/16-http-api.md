@@ -38,6 +38,7 @@ is about.
 | `routes/reviewPacks.ts`     | `/api/prs/:number/review-pack` — asking for a review pack, reading the one a pull request has, sharing it into the pool and taking it back out, the reviewer's three marks on an idea, and `/api/review-calibration` ([31](31-review-packs.md)) |
 | `routes/reliability.ts`     | `/api/reliability` — run outcomes, CI health, and why the fleet came back                                                                                                                                                                       |
 | `routes/mcpUsage.ts`        | `/api/mcp/usage` — which MCP tools the fleet reached for, and which it never did                                                                                                                                                                |
+| `routes/usage.ts`           | `/api/usage` — the operator ledger and surface reach, and `POST /api/usage/events`, the cockpit's own batch of what a person did ([34](34-usage-metrics.md))                                                                                    |
 | `routes/pool.ts`            | `/api/pool`, `/api/pool/insights` and the pool's one write — the cross-fleet pool ([28](28-cross-fleet-pool.md))                                                                                                                                |
 | `routes/work.ts`            | The work graph and its ignore / file verdicts                                                                                                                                                                                                   |
 | `routes/tickets.ts`         | Every item the tracker has returned since the harness first swept, and the filters over it                                                                                                                                                      |
@@ -1359,6 +1360,50 @@ Two things on the payload are deliberately **not** windowed:
 - **`allowedToolsOverridden`**, a live read of `config.claudeArgs`. It is the commonest cause of a run
   that calls nothing, and the point is to report the flag before it costs a run rather than to explain
   one afterwards.
+
+### `GET /api/usage`
+
+The operator ledger, behind the Insights Usage tab ([34](34-usage-metrics.md#the-operator-ledger)).
+Returns `{ insights }` — two lists of rows, the **asks** the harness put to a person and the **acts**
+a person started unprompted, each with what was offered, settled, declined and left outstanding past
+the window, a median time to answer, and what the waiting cost the fleet.
+
+A route of its own rather than a field on `/api/spend`, for `/api/mcp/usage`'s reason: it sweeps
+every settled-record table the harness keeps about a person, and nothing on it is needed to draw
+anything on the top bar.
+
+**Takes the same `?window=`**, resolved once and passed down. That matters here for a reason of its
+own: the parked cost is a wait multiplied by the fleet's burn rate, so two `since`s would put a wait
+measured over a fortnight against a rate measured over a day and ship the product as a dollar figure.
+
+A column the record behind a row cannot answer ships `null` rather than `0` — the doctrine
+`/api/mcp/usage` states, one actor over.
+
+It also returns `reach`: a verdict per subject over the same window
+([34](34-usage-metrics.md#surface-reach)) — `never-linked`, `linked-never-visited`,
+`visited-never-operated`, `operated` or `console-dark` — with the evidence behind it. The two halves
+ride one payload rather than two routes because the pairing they exist for is _an ask answered,
+against whether the surface it is about was ever reached_, and two separately-resolved windows would
+put an answer rate over a fortnight beside a reach verdict over a day.
+
+### `POST /api/usage/events`
+
+The cockpit's batch of `ui` events, and the only writer of `surface_reach`
+([34](34-usage-metrics.md#surface-reach)). Body is `{ events: [{ subject, verb, place, arrival }] }`,
+at most 500 rows; the response is `{ ok: true }` and nothing else, because a body carrying counts
+would be a reading the cockpit could act on and nothing about telemetry may change what a control
+does.
+
+**The schema is the privacy boundary, restated where the bytes arrive.** There is nowhere in it to
+put a ref, an id, a title or a note, and both keys are closed vocabularies checked against the
+registry — as a _pair_, since `plan.defer` is two independently valid halves and a combination that
+means nothing. `at` is not on the wire: the store stamps the batch as it lands.
+
+**A malformed row refuses the whole batch** with the ordinary 400 rather than being dropped. A server
+that silently recorded nothing for a cockpit sending a subject the registry does not have is the
+permanent silent zero this whole reading exists to make impossible. The client is fire-and-forget and
+never reads the refusal, which is the correct arrangement and not an oversight: a lost row is the cost
+this design accepts, and a navigation must never break over a metric.
 
 ### `GET /api/scratchpads/:ref`
 

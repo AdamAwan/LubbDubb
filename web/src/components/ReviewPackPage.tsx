@@ -16,6 +16,7 @@ import { AsyncButton } from './AsyncButton.js';
 import { renderMarkdown } from './markdown.js';
 import { Ref } from './refs.js';
 import { Tag, type TagTone } from './tag.js';
+import { logUsage } from '../cockpit/usage.js';
 import {
   ALL_IDEAS,
   falseClaims,
@@ -166,7 +167,10 @@ export function ReviewPackPage(props: ReviewPackPageProps): JSX.Element {
             marks={laid.get(entry.idea.id) ?? { read: false, attention: null, seen: false }}
             entries={props.entries}
             open={ideaOpen(props.openIdea, entry.idea.id)}
-            onOpen={(open) => props.onOpenIdea(open ? entry.idea.id : null)}
+            onOpen={(open) => {
+              if (open) logUsage('review-pack.expand');
+              props.onOpenIdea(open ? entry.idea.id : null);
+            }}
             onRead={(read) => props.onRead(entry.idea.id, read)}
             onAttention={(attention) => props.onAttention(entry.idea.id, attention)}
             wrong={wrong}

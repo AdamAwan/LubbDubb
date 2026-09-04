@@ -32,6 +32,7 @@ import { Modal } from './Modal.js';
 import { Ref } from './refs.js';
 import { HeadRow } from './panel.js';
 import { Tag, type TagTone } from './tag.js';
+import { logUsage } from '../cockpit/usage.js';
 
 /**
  * The plan sheet — the whole plan, in one scroll, as the record of what was agreed.
@@ -289,7 +290,10 @@ export function PlanModal({
         {history !== null && (history.revisions.length > 1 || history.pending !== null) && (
           <button
             className={`pm-jump history${view === 'history' ? ' on' : ''}${history.pending ? ' waiting' : ''}`}
-            onClick={() => setView(view === 'history' ? 'plan' : 'history')}
+            onClick={() => {
+              if (view !== 'history') logUsage('plan.expand');
+              setView(view === 'history' ? 'plan' : 'history');
+            }}
           >
             {/* A change waiting on the operator outranks the history it would
                   become: it is the one thing on this sheet that is asking them
@@ -580,7 +584,15 @@ export function PlanModal({
             <AsyncButton
               ghost
               title="Ask the planner again from the plan's current state. Nothing is torn down."
-              onClick={() => onReplan(plan.id)}
+              onClick={() => {
+                // The replan route flips the plan's status and settles what hung
+                // off it; no row anywhere records that a *person* sent it back, so
+                // this call site is the only witness there will ever be. The other
+                // arm needs none: "Change something first" settles a proposal, and
+                // that writes a decision row under `human:<proposal id>`.
+                logUsage('plan.reject');
+                return onReplan(plan.id);
+              }}
             >
               Replan
             </AsyncButton>
@@ -807,7 +819,14 @@ function Caveat({
 }) {
   return (
     <details className={`pm-flag ${kind}`} open={open}>
-      <summary className="pm-flag-head">
+      {/* On the summary rather than on the `details` toggle event, so only an
+       *opening* is a reading: a fold shut is not somebody reading a caveat. */}
+      <summary
+        className="pm-flag-head"
+        onClick={(e) => {
+          if (e.currentTarget.parentElement?.matches('[open]') !== true) logUsage('plan.expand');
+        }}
+      >
         <span className="pm-section-label">{label}</span>
         <span className="pm-flag-teaser">{teaser(body)}</span>
       </summary>

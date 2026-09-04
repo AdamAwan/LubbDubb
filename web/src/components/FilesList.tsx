@@ -1,5 +1,6 @@
 import type { JSX } from 'react';
 import type { AgentFile } from '../types.js';
+import { logUsage } from '../cockpit/usage.js';
 
 /**
  * The full set of files an agent wrote, captured by the file-events hook and
@@ -10,7 +11,7 @@ import type { AgentFile } from '../types.js';
 export function FilesList({ files }: { files: AgentFile[] | undefined }): JSX.Element | null {
   if (!files || files.length === 0) return null;
   return (
-    <details className="drawer-files">
+    <details className="drawer-files" onToggle={(e) => e.currentTarget.open && logUsage('agent.expand')}>
       <summary className="drawer-files-summary">
         {files.length} file{files.length === 1 ? '' : 's'} changed
       </summary>
