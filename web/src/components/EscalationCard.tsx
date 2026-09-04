@@ -20,7 +20,6 @@ export function EscalationCard({
   onAnswerQuestions,
   onDecide,
   onBackOut,
-  onCommentDraft,
   onOverrule,
   onPermission,
   onDismiss,
@@ -71,12 +70,6 @@ export function EscalationCard({
    * which is the wrong answer to both.
    */
   onBackOut?: (id: string, verdict: 'close' | 'hold', note?: string) => Promise<unknown> | unknown;
-  /**
-   * Fetch the placeholder comment for a close, to be edited before it is sent.
-   * The draft is *put in the box*, never posted from here — what lands on the
-   * ticket is whatever the operator sends with the verdict.
-   */
-  onCommentDraft?: (id: string) => Promise<string>;
   /**
    * A shortfall proposal's third arm: the assessment is wrong, and the note says
    * why. Separate from {@link onDecide} because it is not a verdict on the act
@@ -417,15 +410,6 @@ export function EscalationCard({
               >
                 Close the ticket
               </AsyncButton>
-              {onCommentDraft && (
-                <AsyncButton
-                  ghost
-                  title="Put a draft comment in the box to edit — nothing is posted until you close the ticket"
-                  onClick={async () => setText(await onCommentDraft(backOutable.id))}
-                >
-                  Draft a comment
-                </AsyncButton>
-              )}
               <AsyncButton
                 ghost
                 title="Stops watching the ticket and sends this plan back. Nothing is scheduled for it — watch it again and a fresh plan is written."

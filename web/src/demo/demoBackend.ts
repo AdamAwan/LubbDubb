@@ -1513,18 +1513,6 @@ class DemoServer {
     return { ok: true, detail };
   }
 
-  /** The placeholder comment a close may be edited from — the demo's own draft, never posted. */
-  async proposalCommentDraft(id: string): Promise<{ draft: string }> {
-    const proposal = (this.state.proposals ?? []).find((p) => p.id === id);
-    const originRef = String(proposal?.action.originRef ?? '');
-    const issueNumber = originRef.split(':')[1] ?? '?';
-    return {
-      draft:
-        `Closing #${issueNumber} without doing the work — it does not look like something we should build as it stands.` +
-        `\n\nIf that is wrong, say so on this ticket and it can be picked up again.`,
-    };
-  }
-
   /** The verdict itself: one-way, and it answers the inbox item it hangs off. */
   private settle(proposal: Proposal, status: 'accepted' | 'rejected', note?: string): void {
     proposal.status = status;
@@ -4757,7 +4745,6 @@ export const demoApi = {
   rejectProposal: (id: string, note?: string) => getServer().rejectProposal(id, note),
   backOutProposal: (id: string, verdict: 'close' | 'hold', note?: string) =>
     getServer().backOutProposal(id, verdict, note),
-  proposalCommentDraft: (id: string) => getServer().proposalCommentDraft(id),
   // The demo has no previous run to have crashed, so there is never anything to
   // decide — the panel is absent and this exists only to keep the two API shapes
   // interchangeable.

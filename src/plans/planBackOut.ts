@@ -2,11 +2,10 @@ import type { Config } from '../config.js';
 import type { ErrorLog } from '../errorLog.js';
 import type { ActionSink } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
-import type { Plan } from '../types.js';
 import { issueConclusionOrigin } from '../issueConclusion.js';
 import { applyIssueWatch } from '../issueWatch.js';
 import { originIssueNumber } from './planning.js';
-import { declinePlan, planApprovalDetail, refusePlan } from './planApproval.js';
+import { declinePlan, refusePlan } from './planApproval.js';
 
 /**
  * The two ways out of a plan verdict that are not a verdict *on the plan*.
@@ -121,32 +120,6 @@ export async function backOutOfPlan(
   }
 
   return { ok: true, detail: done.join('; ') };
-}
-
-/**
- * The placeholder comment, offered to an operator who would rather edit one than
- * write one from nothing.
- *
- * It is a **draft and never a default**: the route that serves it does not post it,
- * and the back-out refuses a close with no words at all. A comment the harness
- * posted because nobody typed anything is exactly the "closed for reasons nobody
- * can read" the whole feature exists to stop — and on somebody else's tracker,
- * where it outlives the harness that wrote it.
- *
- * It quotes the plan's own diagnosis, because that is the thing being declined and
- * the reader of the ticket has not seen it: the plan lives in the cockpit, and a
- * "not doing this" with no account of what was considered reads as nobody having
- * looked.
- */
-export function backOutCommentDraft(
-  plan: Pick<Plan, 'diagnosis' | 'approach' | 'reason'>,
-  issueNumber: number,
-): string {
-  const considered = planApprovalDetail(plan);
-  const opening = `Closing #${issueNumber} without doing the work — it does not look like something we should build as it stands.`;
-  const body = considered === null ? null : `Here is what was planned for it, for the record:\n\n${considered}`;
-  const closing = 'If that is wrong, say so on this ticket and it can be picked up again.';
-  return [opening, body, closing].filter((block) => block !== null).join('\n\n');
 }
 
 /**

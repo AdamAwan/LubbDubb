@@ -317,7 +317,6 @@ export function useCockpit(): CockpitStatus {
       backOutProposal: (id, verdict, note) => then(api.backOutProposal(id, verdict, note)),
       // No refetch: nothing on the glass changes until the operator sends the
       // verdict, and the draft is the modal's own state until they do.
-      proposalCommentDraft: (id) => api.proposalCommentDraft(id).then((r) => r.draft),
       overruleShortfall: (issueNumber, proposalId, text) =>
         then(api.overruleShortfall(issueNumber, text).then(() => api.rejectProposal(proposalId, text))),
       releaseEnvironmentGate: (issueNumber, released, note) =>

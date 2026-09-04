@@ -104,7 +104,6 @@ export function App() {
       onWatchProposal={(issueNumber, checkId, accept) => status.actions.ruleWatchProposal(issueNumber, checkId, accept)}
       onDecide={(id, verdict, note, acknowledged) => status.actions.decideProposal(id, verdict, note, acknowledged)}
       onBackOut={(id, verdict, note) => status.actions.backOutProposal(id, verdict, note)}
-      onCommentDraft={(id) => status.actions.proposalCommentDraft(id)}
       onOpenGoal={(ref) => status.actions.selectGoal(ref)}
       onAcceptance={(id, slug, criterion, met) => status.actions.setAcceptance(id, slug, criterion, met)}
       onPartProfile={(id, slug, profile) => status.actions.setPartProfile(id, slug, profile)}

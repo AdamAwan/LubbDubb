@@ -74,7 +74,6 @@ export function PlanModal({
   onWatchProposal,
   onDecide,
   onBackOut,
-  onCommentDraft,
   onOpenGoal,
   onAcceptance,
   onPartProfile,
@@ -126,8 +125,6 @@ export function PlanModal({
    * "this is not really an issue".
    */
   onBackOut: (id: string, verdict: 'close' | 'hold', note?: string) => Promise<unknown> | unknown;
-  /** Fetch the placeholder closing comment into the note box, to be edited. Nothing is posted by it. */
-  onCommentDraft: (id: string) => Promise<string>;
   /** Open the goal this plan hangs off — where its checks are now recorded. */
   onOpenGoal: (issueRef: string) => void;
   onAcceptance: (planId: string, slug: string, criterion: string, met: boolean) => Promise<unknown> | unknown;
@@ -269,8 +266,19 @@ export function PlanModal({
         <button className="pm-jump" onClick={() => jump('validation')}>
           Validation <i className="k">{liveChecks.length > 0 ? `${settledChecks}/${liveChecks.length}` : 'none'}</i>
         </button>
-        <button className="pm-jump" onClick={() => jump('caveats')}>
+        {/* The one tab that can be asking for something. The checklist lives in the
+            section below now, so an operator who reaches for a held Approve without
+            having scrolled that far has nothing on the sheet telling them where the
+            boxes are — the rail is where they are already looking, and the count is
+            the way back. Amber while any box is outstanding, plain the moment the
+            last one is ticked. */}
+        <button className={`pm-jump${held ? ' waiting' : ''}`} onClick={() => jump('caveats')}>
           Caveats
+          {decidable && caveats.length > 0 && (
+            <i className="k">
+              {caveats.length - ack.outstanding.length}/{caveats.length}
+            </i>
+          )}
         </button>
         <button className="pm-jump" onClick={() => jump('writeup')}>
           Write-up
@@ -486,6 +494,15 @@ export function PlanModal({
               {!plan.alternatives && !plan.openQuestions && !plan.risks && !plan.outOfScope && (
                 <p className="empty">This planner recorded no caveats — no alternatives, risks or exclusions.</p>
               )}
+              {/* The boxes sit with the caveats they are about, inside the scroll,
+                  rather than above the buttons. In the decision bar the list was a
+                  second scroll container competing with the plan for the sheet's
+                  height, and the operator read the plan through a slot; here it is
+                  the last thing in the section the rail's Caveats jump lands on,
+                  and the plan gets the whole middle back. */}
+              {decidable && (
+                <CaveatChecklist caveats={caveats} ticked={ack.ticked} onToggle={ack.toggle} refUrls={refUrls} />
+              )}
             </section>
 
             <section
@@ -520,7 +537,6 @@ export function PlanModal({
             issueNumber={issueNumber}
           />
         )}
-        {decidable && <CaveatChecklist caveats={caveats} ticked={ack.ticked} onToggle={ack.toggle} refUrls={refUrls} />}
         <PinList pins={pins} parts={live} onClear={(slug) => setPins(without(pins, slug))} />
         <HeadRow className="pm-row">
           {decidable && (
@@ -562,13 +578,6 @@ export function PlanModal({
                 onClick={() => onBackOut(decidable.id, 'close', note.trim())}
               >
                 Close the ticket
-              </AsyncButton>
-              <AsyncButton
-                ghost
-                title="Put a draft closing comment in the box to edit — nothing is posted until you close the ticket"
-                onClick={async () => setNote(await onCommentDraft(decidable.id))}
-              >
-                Draft a comment
               </AsyncButton>
               <AsyncButton
                 ghost
