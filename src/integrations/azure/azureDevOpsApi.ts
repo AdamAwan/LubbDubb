@@ -336,6 +336,16 @@ export interface AzThread {
    */
   filePath?: string | null;
   line?: number | null;
+  /**
+   * Azure's `properties` bag on the thread, flattened from its `{$type, $value}`
+   * envelopes to plain strings. Absent where the thread carries none, and on a
+   * fixture written before this existed.
+   *
+   * It is how a thread opened by the operator's own review tooling names itself:
+   * a stamped key survives every re-read, where the harness's `pr_replies_sent`
+   * record covers only what the harness itself posted.
+   */
+  properties?: Record<string, string> | null;
   comments: AzComment[];
 }
 

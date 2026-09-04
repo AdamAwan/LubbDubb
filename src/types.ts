@@ -406,6 +406,24 @@ export interface PrReviewThread {
    * two read identically to the dispatcher and mean different things to a person.
    */
   reopenedAt?: string;
+  /**
+   * The provider's own key/value bag on the thread, flattened to strings, where
+   * the provider has one — Azure DevOps does, GitHub does not, and a provider that
+   * does not leaves this unset.
+   *
+   * It is how a thread the *harness's own toolchain* opened is recognised without
+   * a record: a poster that stamps a declared key on every thread it opens leaves
+   * a mark the next world read can see, on threads the harness never wrote a
+   * `pr_replies_sent` row for. `review.publishedThreadProperty` is the key that
+   * turns it into the second arm of {@link PrReviewState.addressed}; with no key
+   * declared nothing reads this and it is carried for the cockpit alone.
+   *
+   * **Absent, never empty, on a thread carrying none** — "this provider does not
+   * say" and "this thread was stamped with nothing" are the same answer to every
+   * reader, and neither is a mark to match against.
+   * → `docs/spec/07-pull-requests.md#a-thread-the-harness-stamped`
+   */
+  properties?: Readonly<Record<string, string>>;
 }
 
 /**

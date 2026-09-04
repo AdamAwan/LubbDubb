@@ -92,6 +92,41 @@ export interface PrReviewPolicy {
    */
   publish: 'none' | 'comment';
   /**
+   * The key a **thread the harness's own review tooling opened** stamps itself
+   * with, on a provider that carries a property bag (Azure DevOps does; GitHub
+   * does not). Null — the default — asks nothing and leaves the second arm of
+   * `PrReviewState.addressed` switched off entirely.
+   *
+   * The gap it closes: `addressed` was true only of `PrReview.publishedThread`,
+   * the record of a thread the harness itself posted through `reply_to_review`.
+   * With `publish: 'none'` the harness posts nothing, so there is no record, so
+   * nothing can ever read as addressed — and on a deployment whose findings are
+   * published by a *skill* rather than by the reviewer agent, the threads are
+   * right there on the pull request, resolved, with the mark still red. This is
+   * how those threads name themselves without a record: the poster stamps the
+   * key, and every later world read can see it.
+   *
+   * **A stamp is not an identity test.** Anyone may write a property, in
+   * principle — but a key an operator declares in their own config, written by
+   * their own tooling, is a statement about a thread rather than an inference
+   * from who happens to hold the credential, which is the failure
+   * `pr_replies_sent` exists to end. It gates a mark's tint and nothing else.
+   * → `docs/spec/07-pull-requests.md#a-thread-the-harness-stamped`
+   */
+  publishedThreadProperty: string | null;
+  /**
+   * Which stamped threads count, where the poster distinguishes them: the value
+   * required on the companion key `"<publishedThreadProperty>.role"`. Null takes
+   * **every** stamped thread.
+   *
+   * A poster that opens one summary thread and one per finding wants the summary
+   * out of it — a summary nobody resolves would hold `addressed` false forever,
+   * which is the arm failing exactly where it is needed. The companion key is
+   * derived rather than configured separately so the two cannot come to name
+   * different bags.
+   */
+  publishedThreadRole: string | null;
+  /**
    * The ways this project reviews, keyed by the name its routing charter uses.
    *
    * **Empty or one mode means no routing at all** — a decision with one option is
@@ -192,6 +227,8 @@ export const DEFAULT_PR_REVIEW: PrReviewPolicy = {
   enabled: false,
   blocking: true,
   publish: 'none',
+  publishedThreadProperty: null,
+  publishedThreadRole: null,
   modes: {},
   allowSkip: false,
   reviewedElsewhere: null,

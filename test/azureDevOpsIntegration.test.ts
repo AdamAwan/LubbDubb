@@ -585,6 +585,33 @@ test('buildUnresolvedComments: an unanswered thread the operator opened is not h
   assert.equal(buildUnresolvedComments(threads, new Set())[0]!.handled, false);
 });
 
+test('buildReviewThreads carries Azure’s property bag, and is absent rather than empty without one', () => {
+  const stamp = { 'pr-agent-review': '1', 'pr-agent-review.role': 'finding' };
+  const threads: AzThread[] = [
+    {
+      id: 300,
+      status: 'fixed',
+      properties: stamp,
+      comments: [
+        { id: 1, authorUniqueName: 'bot@acme.com', content: 'nit', parentCommentId: null, commentType: 'text' },
+      ],
+    },
+    {
+      id: 301,
+      status: 'active',
+      comments: [
+        { id: 1, authorUniqueName: 'bob@acme.com', content: 'why?', parentCommentId: null, commentType: 'text' },
+      ],
+    },
+  ];
+  const built = buildReviewThreads(threads, new Set());
+  // The mark `review.publishedThreadProperty` matches against: dropped here, the
+  // whole second arm of `addressed` has nothing to read and the mark stays red
+  // over resolved threads, with nothing red anywhere to say why.
+  assert.deepEqual(built[0]!.properties, stamp);
+  assert.equal(built[1]!.properties, undefined, '"carries none" and "this provider does not say" are one answer');
+});
+
 test('buildUnresolvedComments: handled when Azure marks the thread resolved', () => {
   const threads: AzThread[] = [
     {

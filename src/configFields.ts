@@ -533,6 +533,18 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'Whether the reviewer posts what it found on the pull request, or keeps it to the harness.',
   },
   {
+    path: 'review.publishedThreadProperty',
+    type: 'string',
+    access: 'plain',
+    why: 'The thread property your review tooling stamps its own threads with. Set it, and findings read as dealt with once every stamped thread is resolved — the way a deployment that publishes findings itself, rather than through the reviewer agent, gets its mark back to green. Azure DevOps only; GitHub carries no thread properties.',
+  },
+  {
+    path: 'review.publishedThreadRole',
+    type: 'string',
+    access: 'plain',
+    why: 'Which stamped threads count — the value required on “<property>.role”. Empty takes every stamped thread, which on a poster that also opens an unresolvable summary thread never reads as dealt with.',
+  },
+  {
     path: 'review.modes',
     type: 'json',
     access: 'plain',

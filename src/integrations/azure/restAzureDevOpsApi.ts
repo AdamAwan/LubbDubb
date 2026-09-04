@@ -165,6 +165,8 @@ interface RawThread {
   status?: string | null;
   /** Where the thread hangs in the diff. Absent on a thread attached to no file. */
   threadContext?: { filePath?: string; rightFileStart?: { line?: number }; leftFileStart?: { line?: number } } | null;
+  /** Azure wraps every property value in a `{$type, $value}` envelope. */
+  properties?: Record<string, { $value?: unknown }> | null;
   comments?: Array<{
     id: number;
     author?: { uniqueName?: string };
@@ -207,6 +209,29 @@ function areaNodePath(node: RawClassificationNode): string | null {
   const parts = raw.split('\\').filter((p) => p !== '');
   if (parts.length === 0) return null;
   return [parts[0], ...parts.slice(1).filter((p) => p !== 'Area')].join('\\');
+}
+
+/**
+ * Flatten Azure's thread `properties` bag to plain strings.
+ *
+ * Every value arrives wrapped as `{"$type": "System.String", "$value": "1"}`, and
+ * the envelope is Azure's serialiser rather than anything a caller means — a
+ * reader matching against a declared key wants the value it was stamped with.
+ * Non-string `$value`s (Azure will serialise a number or a bool) are stringified
+ * so a match is one comparison, not two.
+ *
+ * **Undefined rather than `{}` on a thread with no properties**, so "carries
+ * none" reaches {@link PrReviewThread.properties} as the absence it is.
+ */
+function flattenThreadProperties(raw: Record<string, { $value?: unknown }> | null | undefined) {
+  if (raw === null || raw === undefined) return undefined;
+  const out: Record<string, string> = {};
+  for (const [key, wrapper] of Object.entries(raw)) {
+    const value = wrapper?.$value;
+    if (value === null || value === undefined) continue;
+    out[key] = String(value);
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 interface RawWorkItemUpdate {
@@ -567,6 +592,7 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
       // a deleted line has only the left, and one on no file has neither.
       filePath: t.threadContext?.filePath ?? null,
       line: t.threadContext?.rightFileStart?.line ?? t.threadContext?.leftFileStart?.line ?? null,
+      properties: flattenThreadProperties(t.properties),
       comments: (t.comments ?? []).map((c) => ({
         id: c.id,
         authorUniqueName: c.author?.uniqueName ?? '',
