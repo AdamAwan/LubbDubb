@@ -75,11 +75,12 @@ import { loadPromptTemplates, type PromptTemplates } from './dispatcher/promptTe
 import { loadReviewCharters } from './review/charter.js';
 import { reviewModeNames } from './review/prReview.js';
 import type { Dispatcher } from './dispatcher/dispatcher.js';
-import { openPrForIssue, type IssuePickupPolicy } from './dispatcher/issuePickup.js';
+import { issueWatchGateReason, openPrForIssue, type IssuePickupPolicy } from './dispatcher/issuePickup.js';
 import { watchLabelFor } from './watchLabels.js';
 import { featureBoardOn } from './features/featureBoard.js';
 import { featureRecords } from './summaries/featureRecord.js';
 import { resolveModelTag } from './modelLabels.js';
+import { sequenceableFeatures } from './sequence/sequence.js';
 import { orderedProfiles } from './agents/modelPolicy.js';
 import { Harness } from './harness.js';
 import { CycleTrigger } from './cycleTrigger.js';
@@ -794,6 +795,17 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // route refuses on and the cockpit draws its tab off, asked once here so the
   // rule, the dossier and the key an agent's submission is stamped with cannot
   // come to three different answers about whether the feature exists at all.
+  // The watch half of the pickup gate on its own, needed above where the policy
+  // proper is assembled: the sequence key digests the *watched* children, so the
+  // stamp and the rule have to apply one predicate. Priority plays no part in it,
+  // hence the two inert fields.
+  const sequenceWatchPolicy: IssuePickupPolicy = {
+    watchLabel: watchLabelFor(config.labelPrefix),
+    requireOwnLabel: config.ownWorkOnly && config.userId !== undefined,
+    priorityLabels: {},
+    defaultPriority: 0,
+  };
+
   const featureBoard = featureBoardOn(config, connector)
     ? {
         containerTypes: config.issueContainerTypes,
@@ -831,6 +843,18 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
       ? (featureOrigin: string): string | null =>
           featureRecords(store, featureBoard).find((f) => `issue:${f.number}` === featureOrigin)?.key ?? null
       : undefined,
+    // Which stories are under a Feature at the moment an order lands. Off the world
+    // baseline rather than the ticket mirror — the Predecessor links the key folds in
+    // are a hydration field and the mirror does not carry them — and through the same
+    // `sequenceableFeatures` the dispatcher walks, so the key an order is stamped with
+    // and the key the rule compares it against cannot come to two answers.
+    featureSequenceStanding: (featureOrigin: string): string | null =>
+      sequenceableFeatures(
+        store.getWorldBaseline()?.issues ?? [],
+        config.issueContainerTypes,
+        (issue) => issueWatchGateReason(issue, sequenceWatchPolicy) === null,
+        config.issueSequenceMaxChildren,
+      ).find((f) => `issue:${f.feature.number}` === featureOrigin)?.key ?? null,
     createSession: agentSetup.factory,
     initialInput: agentSetup.initialInput,
     resumeInput: agentSetup.resumeInput,
@@ -978,6 +1002,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     containerTypes: config.issueContainerTypes,
     parentedTypes: config.issueParentedTypes,
     sequencing: config.issueSequencing,
+    sequenceMaxChildren: config.issueSequenceMaxChildren,
   };
   const rules = new RuleDispatcher(
     issuePickup,

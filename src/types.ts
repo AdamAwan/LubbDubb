@@ -2387,6 +2387,65 @@ export interface FeatureSummary {
 }
 
 /**
+ * One "this story waits on that one", with **where the edge came from recorded on
+ * it**. → `docs/spec/33-story-sequencing.md#where-the-order-comes-from`
+ *
+ * The provenance is not presentational. `link` is a statement a person made on
+ * their own board; `inferred` is an agent's guess from the items' own text. A
+ * surface that drew the two the same way would invite an operator to accept the
+ * second thinking it was the first.
+ */
+export interface FeatureSequenceEdge {
+  /** The story that waits. */
+  issue: number;
+  /** The story it waits on. */
+  dependsOn: number;
+  /** `link` — the tracker's own Predecessor. `inferred` — the sequencer read it. */
+  source: 'link' | 'inferred';
+  /** One line on why this edge. Null on a `link`, where the reason is that somebody drew it. */
+  reason: string | null;
+}
+
+/**
+ * The order the stories under one Feature are worked in.
+ *
+ * Only `accepted` holds anything. A `proposed` order is an agent's suggestion
+ * nobody has answered and a `declined` one is an operator saying "run them all" —
+ * both leave the fleet behaving exactly as it does with no row at all, which is
+ * what makes every failure of this mechanism a failure to *order* rather than a
+ * failure to work. → `docs/spec/33-story-sequencing.md#the-record`
+ */
+export interface FeatureSequence {
+  /** The Feature, as `issue:<n>` — `FeatureSummary`'s key, and every verdict's. */
+  originRef: string;
+  status: 'proposed' | 'accepted' | 'declined';
+  /** Why this order, in the sequencer's own voice. Empty on one built only from links. */
+  reason: string;
+  /**
+   * The edge it would most like argued with, and what would change its mind.
+   * `openQuestions`' job on the plan document: an order with no stated doubt is one
+   * nobody can disagree with usefully. Null where every edge was drawn by a person.
+   */
+  unsure: string | null;
+  /**
+   * The digest of *which* stories were under the Feature when this was written
+   * (`featureSequenceKey`) — membership, never movement. A story merging does not
+   * invalidate an order; a story being added does.
+   */
+  standingKey: string;
+  /** The order itself. Rewritten as a set, never merged. */
+  edges: FeatureSequenceEdge[];
+  /** Who accepted or declined it, and when. Null while it is still a proposal. */
+  answeredBy: string | null;
+  answeredAt: string | null;
+  /** The writing agent and its task, or null for a sequence built only from links. */
+  agentId: string | null;
+  taskId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
  * Which of the three failures an assessor's "not delivered" actually is (issue
  * #159).
  *

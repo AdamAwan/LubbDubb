@@ -6,6 +6,7 @@ import { buildSpendGoals } from '../../spendInsights.js';
 import { ticketOutcomes } from '../../tickets/outcomes.js';
 import { watchLabelFor } from '../../watchLabels.js';
 import { checked } from '../validation.js';
+import { NumberParams, SequenceAnswerBody } from '../../sequence/answer.js';
 import type { RouteContext } from './context.js';
 
 /**
@@ -133,6 +134,35 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
         backfilling: system.tickets.backfilling,
         refUrls,
       } satisfies FeatureBoardPayload;
+    }),
+  );
+
+  // The operator answering a proposed order. Three statuses, two answers: an
+  // `accepted` order is the only one the dispatch gate reads, and `declined` is a
+  // real answer rather than a dismissal — "run them all" is what somebody says
+  // about a Feature whose stories genuinely are independent, and it is stored so
+  // the fleet does not argue with them once a Feature until they give in.
+  //
+  // Scoped to the standing it answered, by the row it lands on: a Feature that
+  // gains three stories gets a fresh proposal with a new key, because the thing
+  // declined was an order over a set and the set has changed.
+  app.post(
+    '/api/features/:number/sequence',
+    FEATURES_RATE_LIMIT,
+    checked({ params: NumberParams, body: SequenceAnswerBody }, async ({ params, body, reply }) => {
+      if (!featureBoardOn(config, connector)) {
+        return reply.code(404).send({ error: 'no feature board on this deployment' });
+      }
+      // A refusal rather than a row conjured to receive the answer: the pulse may
+      // have withdrawn the proposal under the click, and writing one back would
+      // record an acceptance of edges nobody has.
+      const answered = store.answerFeatureSequence(`issue:${params.number}`, body.answer, body.by);
+      if (!answered) {
+        return reply
+          .code(404)
+          .send({ error: `feature #${params.number} has no order to answer — it may have been re-proposed` });
+      }
+      return answered;
     }),
   );
 }

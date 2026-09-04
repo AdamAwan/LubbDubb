@@ -13,6 +13,7 @@ import type {
   PartOutcomeKind,
   PlanPart,
   Remedy,
+  FeatureSequenceEdge,
   ScratchEntry,
   ShortfallCause,
   DecisionOutcome,
@@ -131,6 +132,15 @@ export interface AgentToolTarget {
     agentId: string,
     input: FeatureSummaryInput,
   ): { ok: true; featureOrigin: string } | { ok: false; error: string };
+  /**
+   * The order the stories under the credential's own Feature go in. Always written
+   * as a proposal: an order holds work, and nothing the fleet says about its own
+   * output may hold work.
+   */
+  recordFeatureSequence(
+    agentId: string,
+    input: { reason: string; unsure: string | null; edges: FeatureSequenceEdge[] },
+  ): { ok: true; featureOrigin: string; edges: number } | { ok: false; error: string };
   recordRetrospective(
     agentId: string,
     summary: string,

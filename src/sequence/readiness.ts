@@ -21,7 +21,7 @@ import { openPrForIssue } from '../dispatcher/issuePickup.js';
 export type IssueSequencing = 'off' | 'links' | 'full';
 
 /** One "this waits on that", as the gate reads it. */
-interface SequenceEdge {
+export interface SequenceEdge {
   /** The issue that waits. */
   issue: number;
   /** The issue it waits on. */

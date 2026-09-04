@@ -2,6 +2,7 @@ import type {
   Agent,
   Decision,
   Escalation,
+  FeatureSequence,
   GoalPriority,
   IssueConclusion,
   IssueAppraisal,
@@ -281,6 +282,17 @@ export interface DispatchContext {
    * been written, which holds nothing and summarises every Feature once.
    */
   featureSummaryKeys?: { originRef: string; standingKey: string }[];
+  /**
+   * Every story order on file (`Store.listFeatureSequences`) — the key rule
+   * `feature-sequence` compares against, and the edges the `accepted` ones hold
+   * work with. One list rather than two reads, so the rule that proposes an order
+   * and the gate that enforces one cannot disagree about what is on file.
+   *
+   * Absent/empty means no Feature has an order, which holds nothing and is the
+   * state every deployment is in until one is accepted.
+   * → `docs/spec/33-story-sequencing.md`
+   */
+  featureSequences?: FeatureSequence[];
   /**
    * The obstacle board — every row with its keys, its voice count and the goals
    * that reported it (`Store.obstacleBoard`).

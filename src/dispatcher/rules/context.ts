@@ -9,7 +9,9 @@ import type { PrReviewPolicy } from '../../review/policy.js';
 import type { PrReviewCharters } from '../../review/prReview.js';
 import type { PlanningPolicy } from '../../plans/planning.js';
 import type { LocalValidationPolicy } from '../../localValidation/policy.js';
+import type { SequenceableFeature } from '../../sequence/sequence.js';
 import type {
+  FeatureSequence,
   Issue,
   IssueAppraisal,
   IssueConclusion,
@@ -198,6 +200,24 @@ export interface StageContext {
    * → `docs/spec/33-story-sequencing.md`
    */
   sequenceWaits: ReadonlyMap<number, number[]>;
+  /**
+   * The Features rule `feature-sequence` could ask about, with the key an order
+   * over each would be written against. Empty on every level but `full`, and empty
+   * for a Feature with one story or with more than `issueSequenceMaxChildren`.
+   *
+   * Derived from the world's issues and nothing else — no lens is read here, for
+   * `feature-summary`'s reason: a rule that reached `src/features/` would be a
+   * second opinion about a Feature formed from a view built for a card.
+   */
+  sequenceableFeatures: readonly SequenceableFeature[];
+  /**
+   * Every order on file, keyed on the Feature's own `issue:<n>`. Read by
+   * `feature-sequence` for the key it compares, and folded into
+   * {@link StageContext.sequenceWaits} for the `accepted` ones — one map, so the
+   * rule that proposes an order and the gate that enforces one cannot disagree
+   * about what is on file.
+   */
+  sequences: ReadonlyMap<string, FeatureSequence>;
   /**
    * Every goal's validation checks, keyed by the goal's origin ref — read by
    * `validate-check` and nothing else.

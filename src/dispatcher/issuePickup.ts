@@ -112,6 +112,11 @@ export interface IssuePickupPolicy {
    * would drag the world into a predicate the cockpit's chip also asks.
    */
   sequencing?: IssueSequencing;
+  /**
+   * `issueSequenceMaxChildren` — above this a Feature is not sequenced at all.
+   * Unset falls back to {@link DEFAULT_SEQUENCE_MAX_CHILDREN}.
+   */
+  sequenceMaxChildren?: number;
 }
 
 /**

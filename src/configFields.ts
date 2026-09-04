@@ -421,6 +421,12 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'Whether a story waits for the one it depends on. `links` honours the tracker’s own Predecessor links and infers nothing; `off` holds nothing.',
   },
   {
+    path: 'issueSequenceMaxChildren',
+    type: 'number',
+    access: 'plain',
+    why: 'Above this many stories a Feature is not sequenced — the prompt would not fit and the order would not be read.',
+  },
+  {
     path: 'issueStateColours',
     type: 'colourMap',
     access: 'plain',

@@ -174,6 +174,7 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
       'issueBoardStates',
       'issueDefaultPriority',
       'issueSequencing',
+      'issueSequenceMaxChildren',
       'issuePickupStates',
       'issueInReviewState',
       'issueInProgressState',

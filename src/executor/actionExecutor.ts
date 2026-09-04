@@ -40,6 +40,7 @@ import { retroDossier, retroPad } from '../retro/dossier.js';
 import { goalRecord } from '../retro/record.js';
 import { featureSummarySubmitOrigin } from '../summaries/featureSummary.js';
 import { featureRecords, featureReach, renderFeatureDossier } from '../summaries/featureRecord.js';
+import { sequenceBriefing } from '../sequence/dossier.js';
 import { neighbourSeedPaths, priorWorkBriefing } from '../briefing/priorWork.js';
 import { ciEvidenceNote, type CiEvidenceReader, type CiEvidenceTarget } from '../ci/ciEvidence.js';
 import { goalOriginFor, WITNESS_INSTRUCTION } from '../scratch/pad.js';
@@ -1224,6 +1225,11 @@ export class ActionExecutor {
     // summary on file rides in this block so a re-write revises rather than
     // restarts. → `docs/spec/17-cockpit.md#the-feature-summary`
     const feature = featureBriefing(action.originRef, store, this.deps.featureBoard);
+    // And the same again for a sequencer: the Feature’s goal and every story under
+    // it, with the order the board already states marked as the board’s own. Off the
+    // world baseline rather than the ticket mirror, because the Predecessor links
+    // are a hydration field and the mirror does not carry them.
+    const sequence = sequenceBriefing(action.originRef, store.getWorldBaseline()?.issues ?? []);
     // The images the operator attached to this goal (issue #249). Appended for the
     // reason the four notes above are, and scoped to the *goal* rather than the
     // exact origin — see `attachmentsFor`.
@@ -1268,6 +1274,7 @@ export class ActionExecutor {
       prior,
       briefing,
       feature,
+      sequence,
       attachments,
       witness,
     ]

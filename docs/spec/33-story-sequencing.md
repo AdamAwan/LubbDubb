@@ -1,9 +1,9 @@
 # 33 — Story sequencing
 
-> **Partly built.** What runs today is the gate on **the tracker's own links**: `issueSequencing` at
-> `links`, `Issue.dependsOn`, `sequenceReadiness`, the `sequenced` hold and the override that clears
-> it. The **sequencer** — the record, the agent, the proposal, the two cockpit surfaces — is not:
-> every path still in italics is one the change that creates it makes real, and the build order is
+> **Partly built.** The gate, the record and the sequencer all run. What is **not** built is the
+> cockpit: the wave rail on the Feature card, the proposal card and the folded copy on the Goal page
+> are still italic, and until they exist an order is answered through `POST /api/features/:number/sequence`
+> and nowhere else. Amending one by talking to Claude Code is not built either. The build order is
 > in `docs/plans/story-sequencing.md`. With `issueSequencing` `off`, which is the default, the
 > harness behaves exactly as it did before any of this — every watched story under a Feature is
 > eligible the moment it carries the tag, ordered by `issuePriorityLabels` and then the issue number
@@ -63,8 +63,23 @@ contradicted one would be the harness overruling the board it is supposed to be 
 ### The sequencer
 
 Most boards have no dependency links at all, which is the case this feature exists for. One desk
-agent per Feature — rule `feature-sequence`, origin `issue:<n>:sequence` — reads the Feature's
-description and its watched children and proposes the rest of the order.
+agent per Feature — rule `feature-sequence` (`src/dispatcher/rules/featureSequence.ts`), origin
+`issue:<n>:sequence` — reads the Feature's description and its watched children and proposes the
+rest of the order. It runs only at `issueSequencing: full`; at `links` there is nothing for it to
+propose, because every edge was drawn by a person.
+
+Two Features are never asked about: one with a **single story**, where an order is a question with
+one arm, and one above `issueSequenceMaxChildren`, where the prompt would not fit and the order
+would not be read. Both are refusals to spend rather than gates on correctness — the Feature keeps
+the ordering it has, which is none.
+
+What the agent is shown — the Feature's goal, each story's own text, and the Predecessor links the
+board already states, **marked as the board's own** — is _appended_ to the rendered prompt
+(`src/sequence/dossier.ts`), never interpolated. An override that never learned a `{stories}` token
+would drop it in silence, on exactly the deployments that customised most, and leave an agent asked
+to order a list it was never given ([09](09-execution.md)). The links are marked because an agent
+that could not tell them from its own guesses would restate them as inferences, and the provenance
+would be lost a layer before an operator ever saw the card.
 
 It is **`feature-summary`'s shape throughout** (`src/dispatcher/rules/featureSummary.ts`,
 `src/summaries/featureSummary.ts`), deliberately, because that rule already solved this rule's hard
@@ -72,11 +87,15 @@ parts: a desk agent with no branch and no worktree, triggered by a standing-key 
 than an event, ranked at the bottom of the pipeline, failing open and silent. What differs is the
 key and what the agent may write.
 
-**The trigger is membership, not movement.** `featureSequenceKey` digests the set of watched,
-unsettled children and the edges the provider reports — not their states. A story merging does not
-invalidate an order; a story being _added_ does. That is the whole difference from the summary's
-key, which digests standings precisely because a summary is about movement: re-proposing an order
-every time a child lands would ask an operator to re-accept the same sequence eight times.
+**The trigger is membership, not movement.** `featureSequenceKey` (`src/sequence/sequence.ts`)
+digests **which** stories are under the Feature — settled ones counted alongside the rest — and what
+the provider says about them, never how any of them is going. A story merging does not invalidate an
+order; a story being _added_ does, and so does the board gaining a Predecessor link, because what was
+accepted was an order over a set of statements and the statements have changed.
+
+That is the whole difference from the summary's key, which digests standings precisely because a
+summary is about movement: re-proposing an order every time a child landed would ask an operator to
+re-accept the same sequence eight times.
 
 **It may decline to order.** An agent that cannot support an order from the items' own text says so
 and proposes them all parallel. This is `isOrphanIssue`'s discipline one tier up
@@ -86,10 +105,16 @@ work — a story that simply never starts, with nothing red.
 
 ## The record
 
-_src/store/sequences.ts_, two tables.
+`src/store/sequences.ts`, two tables.
 
-`feature_sequences` — one row per Feature: the feature number, `status`, the sequencer's stated
-reason, the standing key it was written against, and who accepted it and when.
+`feature_sequences` — one row per Feature: the Feature's own `issue:<n>`, `status`, the sequencer's
+stated reason, what it was unsure about, the standing key it was written against, and who answered
+it and when.
+
+A rewrite keeps `createdAt` and **drops the answer**. When a Feature was first sequenced is a
+different fact from when its current order was written, and the card shows both; the acceptance is
+not carried forward, because an approval given for one set of edges must never end up holding work
+under another.
 
 | Status     | Meaning                                                                                                                               |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------- |
@@ -97,9 +122,12 @@ reason, the standing key it was written against, and who accepted it and when.
 | `accepted` | A person accepted it. This is the only status the gate reads.                                                                         |
 | `declined` | A person said to run them all. Holds nothing, and is remembered so the same standing is not proposed again. → [declining](#declining) |
 
-`feature_sequence_edges` — one row per edge: the feature, the dependent issue, the issue it depends
+`feature_sequence_edges` — one row per edge: the Feature, the dependent issue, the issue it depends
 on, `source` (`link` | `inferred`), and the sequencer's one-line reason for that edge. A story with
 no row depends on nothing and is in the first wave.
+
+The sequencer's own submissions are **always `inferred`**, whatever it says: an agent that could
+mark its own guess as a person's statement would defeat the distinction the column exists to keep.
 
 ### Waves are derived, never stored
 
@@ -168,7 +196,8 @@ Every one of these leaves **every story eligible, in exactly the order it has to
 - a sequence `proposed` but not accepted, or `declined`;
 - a sequencer that crashed, was killed, or spent its attempt cap;
 - an edge naming an issue the world does not hold;
-- a cycle (refused at ingestion, so there is nothing to read);
+- a cycle, a self-edge, or an edge naming a story the Feature does not have — all refused at
+  ingestion with nothing stored;
 - `issueSequencing` off, which is the default.
 
 This is `resolvePlanRoute`'s discipline ([08](08-planning.md#the-four-arms)): a planner that fails
@@ -194,7 +223,11 @@ and carries four things, and the last two are the ones that make it answerable:
 - **what accepting costs** — how many stories would start now and will not if this is accepted.
   Without it the operator is agreeing to a hold whose size is not on the card.
 
-Three answers, because nothing else ends it: **accept**, **discuss**, **decline**.
+Three answers, because nothing else ends it: **accept**, **discuss**, **decline**. Until the card
+exists, accept and decline arrive at `POST /api/features/:number/sequence` (`src/sequence/answer.ts`),
+which takes those two and not `proposed` — an agent writes that status and nothing else may, and a
+route that accepted it would let the cockpit put a Feature back to unanswered, which is not a thing
+a person means.
 
 ### Declining
 
@@ -219,10 +252,11 @@ and the reason is the half worth keeping: a drag records that the order changed 
 is exactly what the next person to read the Feature needs. It also removes a surface — no reorder
 route, no per-wave editing state on `Place`, nothing in the cockpit that writes an order.
 
-The fleet's own channel gets _sequence_submit_ (_src/mcp/tools/sequenceSubmit.ts_), named in
+The fleet's own channel gets `sequence_submit` (`src/mcp/tools/sequenceSubmit.ts`), named in
 `buildTools` **and** in `MCP_TOOL_NAMES` (`src/mcp/names.ts`), authorised structurally against the
 origin the caller was dispatched on — `validation_report`'s identity rule
-([11](11-mcp-tools.md#identity)).
+([11](11-mcp-tools.md#identity)). It always writes `proposed`. There is no arm that accepts: an order
+holds work, and nothing the fleet says about its own output may hold work.
 
 ## Precedence
 
@@ -310,16 +344,18 @@ is not a story that has gone.
 
 ## Tests
 
-`test/storySequencing.test.ts`, at the `RuleDispatcher` seam — where the queue's other held reasons
-are asserted (`test/dispatchPipeline.test.ts`), because a hold is a statement about the queue and
-nothing about it needs a store, a worktree or an agent:
+`test/storySequencing.test.ts` and `test/featureSequence.test.ts`, at the `RuleDispatcher` seam —
+where the queue's other held reasons are asserted (`test/dispatchPipeline.test.ts`), because a hold
+is a statement about the queue and nothing about it needs a worktree or an agent:
 
 - a held story is queued as `held: 'sequenced'` and is **not** dispatched;
 - the same story dispatches once its predecessor pushes a branch, before any merge;
 - every fail-open arm above dispatches everything;
 - a flagged or dragged origin dispatches through a hold, and a drag clears **only** that hold;
 - the planner is held by the order too, and says so rather than blaming a cooldown;
-- a cycle is refused and holds nothing (with the sequencer, which submits them);
+- a cycle, a self-edge and a story the Feature does not have are each refused, and nothing is stored;
+- an order is rewritten as a set, and a rewrite drops the answer while keeping `createdAt`;
+- a Feature with one story, and one above the cap, are not sequenced at all;
 - `linkEdges`, `sequenceReadiness`, `sequenceHoldReason` and `featureSequenceKey` as pure unit
   tests, with no world.
 

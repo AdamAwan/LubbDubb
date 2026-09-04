@@ -19,6 +19,7 @@ import type { PetPolicy } from './pets/keeper.js';
 import { validateEnvironments, type EnvironmentConfig } from './environments/policy.js';
 import { DEFAULT_READ_LANES } from './world/readPlan.js';
 import type { IssueSequencing } from './sequence/readiness.js';
+import { DEFAULT_SEQUENCE_MAX_CHILDREN } from './sequence/sequence.js';
 
 /**
  * Central configuration. Everything the operator can tune lives here.
@@ -261,6 +262,12 @@ export interface Config {
    * → `docs/spec/33-story-sequencing.md`
    */
   issueSequencing: IssueSequencing;
+  /**
+   * Above this many watched, open stories a Feature is not sequenced at all: the
+   * prompt would not fit and the order would not be read. Fails open like
+   * everything else here — the Feature keeps the ordering it has, which is none.
+   */
+  issueSequenceMaxChildren: number;
   /**
    * Tracker state → `#rrggbb`, for the state chip the cockpit draws on a ticket.
    * Display only — nothing in the harness reads a colour to decide anything. A
@@ -1072,6 +1079,7 @@ const DEFAULTS: Config = {
   // the gate is the one mechanism here that can *withhold* work, and a default
   // that held anything would be a feature nobody asked for parking a Feature.
   issueSequencing: 'off',
+  issueSequenceMaxChildren: DEFAULT_SEQUENCE_MAX_CHILDREN,
   // Empty on purpose: every state keeps the reading it had before there were
   // colours until an operator names one.
   issueStateColours: {},

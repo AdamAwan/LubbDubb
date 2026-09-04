@@ -62,29 +62,53 @@ Spec sections this makes true: [the tracker's own links](../spec/33-story-sequen
 > against carry dependency links at all. If they largely do, stage 1 is optional and the sequencer
 > may not be worth its spend. Look at the answer before building it.
 
-## Stage 1 — the record and the sequencer
+## Stage 1 — the record and the sequencer — **landed**
 
-1. **_src/store/sequences.ts_** — `feature_sequences` and `feature_sequence_edges`. Both new, so
+1. **`src/store/sequences.ts`** — `feature_sequences` and `feature_sequence_edges`. Both new, so
    `CREATE TABLE IF NOT EXISTS` is sufficient; no `ColumnMigrations` entry is owed. Threaded through
    `src/system.ts`.
-2. **`featureSequenceKey`** in _src/sequence/sequence.ts_ — digests the set of watched, unsettled
+2. **`featureSequenceKey`** in `src/sequence/sequence.ts` — digests the set of watched, unsettled
    children plus the provider's edges. Pure, unit-tested, and deliberately **not** the summary's key.
-3. **Rule `feature-sequence`** — _src/dispatcher/rules/featureSequence.ts_, registered in `STAGES`
+3. **Rule `feature-sequence`** — `src/dispatcher/rules/featureSequence.ts`, registered in `STAGES`
    and given a `DISPATCH_PIPELINE` entry beside `feature-summary` at the bottom. Origin
    `issue:<n>:sequence`, classified in `src/issueOrigins.ts`. Desk agent, no branch, no worktree,
    fails open and silent.
-4. **The prompt** — a new `PromptId` (`feature-sequence`) in `src/dispatcher/promptTemplates.ts`, and
-   a copy in `docs/prompt-templates/`. The children, their types and the Feature's description are
-   **appended** to the rendered prompt, never interpolated.
-5. **`sequence_submit`** — _src/mcp/tools/sequenceSubmit.ts_, named in `buildTools` **and**
+4. **The prompt** — a new `PromptId` (`feature-sequence`) in `src/dispatcher/promptTemplates.ts`. The
+   children, their types and the Feature's description are **appended** to the rendered prompt
+   (`src/sequence/dossier.ts`), never interpolated. **No `docs/prompt-templates/` copy**: that
+   directory holds thirteen of the thirty-odd prompts and `feature-summary` — the rule this one is a
+   copy of — is not among them, so adding one here would be a sample of one new prompt in a folder
+   whose README already overstates its coverage. Worth fixing; not worth fixing in this change.
+5. **`sequence_submit`** — `src/mcp/tools/sequenceSubmit.ts`, named in `buildTools` **and**
    `MCP_TOOL_NAMES` (`src/mcp/names.ts`), authorised structurally against the caller's origin.
    Rejects a cycle, naming it, and stores nothing.
 6. **Edges written as a set**, never merged, and `issueSequencing: full` switched on.
 
-Tests: the key changes when a child is added and not when one merges; a cycle is refused and holds
-nothing; a `proposed` sequence holds nothing; an `accepted` one holds.
+Tests: `test/featureSequence.test.ts` — the key changes when a child is added, when a Predecessor
+link appears, and **not** when a child merges; a cycle, a self-edge and a story the Feature does not
+have are each refused with nothing stored; a `proposed` and a `declined` sequence hold nothing and an
+`accepted` one holds; a declined order holds the sequencer off until the Feature gains a story; an
+order is rewritten as a set and a rewrite drops the answer.
+
+Four things landed differently from the list above:
+
+1. **The key digests every watched child, settled ones included.** Digesting the open ones would
+   re-propose on every merge, which is the summary's behaviour and the one this key exists not to
+   have. `FeatureGroup.members` is that set; `children` is the open ones the prompt is about.
+2. **Two Features are never asked about**: one with a single story (an order is a question with one
+   arm) and one above the cap. Neither was in the plan and both are pure spend.
+3. **The answer route came forward from stage 2.** A stage has to leave the harness working, and an
+   order nobody can accept is a mechanism that cannot do the thing it was built for.
+   `POST /api/features/:number/sequence`, schema in `src/sequence/answer.ts` beside the rule that
+   owns it. It takes `accepted` and `declined` and refuses `proposed`.
+4. **`waveOf` was not written.** Waves are a cockpit vocabulary and the cockpit is stage 2; a helper
+   nothing calls is a helper nothing checks.
 
 ## Stage 2 — the cockpit
+
+Stage 1 brought the answer **route** forward; what is left here is everything a person looks at.
+`waveOf` — depth in the edge graph, longest path, `partDepth`'s rule — is written here, where its
+first reader is.
 
 1. **Wire** — the sequence on the feature board payload and on the goal page payload (`src/wire.ts`),
    waves derived on read.

@@ -57,6 +57,7 @@ import {
   type TicketLabelPatch,
   type TrackerSweepMark,
 } from './tickets.js';
+import { SequenceStore } from './sequences.js';
 import type {
   AccountRateLimits,
   Agent,
@@ -120,6 +121,7 @@ import type {
   PullRequest,
   PlanAmendment,
   PlanRevision,
+  FeatureSequence,
   FeatureSummary,
   Retrospective,
   ScratchEntry,
@@ -238,6 +240,7 @@ export class Store {
   private readonly bugFilings: BugFilingStore;
   private readonly floor: FloorStore;
   private readonly tickets: TicketStore;
+  private readonly sequences: SequenceStore;
   private readonly upgrades: UpgradeStore;
   private readonly pets: PetStore;
   private readonly pool: PoolStore;
@@ -383,6 +386,7 @@ export class Store {
     this.bugFilings = new BugFilingStore(ctx);
     this.floor = new FloorStore(ctx);
     this.tickets = new TicketStore(ctx);
+    this.sequences = new SequenceStore(ctx);
     this.upgrades = new UpgradeStore(ctx);
     this.pets = new PetStore(ctx);
   }
@@ -1711,6 +1715,18 @@ export class Store {
   }
   listFeatureSummaries(): FeatureSummary[] {
     return this.tickets.listFeatureSummaries();
+  }
+
+  // -- Sequences ------------------------------------------------------------
+
+  recordFeatureSequence(input: Parameters<SequenceStore['recordFeatureSequence']>[0]): FeatureSequence {
+    return this.sequences.recordFeatureSequence(input);
+  }
+  answerFeatureSequence(...args: Parameters<SequenceStore['answerFeatureSequence']>): FeatureSequence | null {
+    return this.sequences.answerFeatureSequence(...args);
+  }
+  listFeatureSequences(): FeatureSequence[] {
+    return this.sequences.listFeatureSequences();
   }
   // -- Pets -----------------------------------------------------------------
 
