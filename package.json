@@ -29,8 +29,8 @@
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\" \"web/**/*.{ts,tsx}\" \"scripts/*.ts\" \"*.{json,md}\"",
     "format:check": "prettier --cache --check \"src/**/*.ts\" \"test/**/*.ts\" \"web/**/*.{ts,tsx}\" \"scripts/*.ts\" \"*.{json,md}\"",
     "knip": "knip --cache",
-    "audit": "npm audit --omit=dev --audit-level=high",
-    "audit:all": "npm audit --audit-level=high",
+    "audit": "node --import tsx scripts/audit.ts",
+    "audit:all": "node --import tsx scripts/audit.ts --all",
     "check": "node --import tsx scripts/check.ts"
   },
   "dependencies": {
