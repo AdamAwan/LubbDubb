@@ -218,9 +218,9 @@ export class AzureDevOpsWorkItemsIntegration
   }
 
   /**
-   * Resolve the hierarchy around the snapshot's work items — the parent Feature,
-   * the children, and the siblings under the same parent — into the relation
-   * fields of {@link Issue}.
+   * Resolve the relations around the snapshot's work items — the parent Feature,
+   * the children, the siblings under the same parent, and the Predecessors each
+   * item waits on — into the relation fields of {@link Issue}.
    *
    * Two batched reads at most, whatever the size of the board. The first fetches
    * every id the snapshot's own items point at (parents and children); the second
@@ -247,6 +247,10 @@ export class AzureDevOpsWorkItemsIntegration
       for (const w of raw) {
         if (w.parentId !== null) wanted.add(w.parentId);
         for (const id of w.childIds) wanted.add(id);
+        // Predecessors ride in the same batch rather than a pass of their own: a
+        // dependency is almost always a sibling under the same Feature, so the ids
+        // are usually already listed and the round costs no extra request.
+        for (const id of w.dependsOnIds) wanted.add(id);
       }
       for (const w of await this.fetch([...wanted], known)) known.set(w.id, w);
 
@@ -264,10 +268,17 @@ export class AzureDevOpsWorkItemsIntegration
         // An unreadable parent is *unknown*, not absent: reporting `null` here
         // would tell the orphan check this item belongs to no feature, which is a
         // different — and wrong — thing to say about a link we simply couldn't read.
-        if (w.parentId !== null && parent === null) return { children: relatives(w.childIds, known) };
+        if (w.parentId !== null && parent === null) {
+          return { children: relatives(w.childIds, known), dependsOn: relatives(w.dependsOnIds, known) };
+        }
         return {
           parent: parent === null ? null : relative(parent, { withBody: true }),
           children: relatives(w.childIds, known),
+          // Always present on this provider, empty included: an empty list is
+          // "this board tracks dependencies and this item waits on nothing",
+          // which is a different statement from the `undefined` a flat tracker
+          // leaves — and the sequence gate reads the difference.
+          dependsOn: relatives(w.dependsOnIds, known),
           ...(parent === null
             ? {}
             : {

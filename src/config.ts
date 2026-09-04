@@ -18,6 +18,8 @@ import { DEFAULT_MCP_ARGS_RETENTION_DAYS } from './store/mcpCalls.js';
 import type { PetPolicy } from './pets/keeper.js';
 import { validateEnvironments, type EnvironmentConfig } from './environments/policy.js';
 import { DEFAULT_READ_LANES } from './world/readPlan.js';
+import type { IssueSequencing } from './sequence/readiness.js';
+import { DEFAULT_SEQUENCE_MAX_CHILDREN } from './sequence/sequence.js';
 
 /**
  * Central configuration. Everything the operator can tune lives here.
@@ -242,6 +244,30 @@ export interface Config {
   issuePriorityLabels: Record<string, number>;
   /** Weight for an issue carrying no matching priority label. */
   issueDefaultPriority: number;
+  /**
+   * How much of the story-sequencing gate is on. Defaults to `off`, which holds
+   * nothing: every watched story under a Feature stays eligible the moment it
+   * carries the tag, exactly as before this existed.
+   *
+   * - `off` — no order is read and nothing is held.
+   * - `links` — honour the **tracker's own** dependency links (Azure DevOps
+   *   Predecessor/Successor). No inference, no agent spend, nothing to accept: a
+   *   person drew every edge, so the gate is deterministic.
+   * - `full` — links plus the sequencer, which proposes an order for a Feature
+   *   whose board carries no links. Not built yet; reads as `links` until it is.
+   *
+   * Ordering never *withholds* work on a tracker that reports no dependencies at
+   * all, whatever this says — GitHub and the fake leave `Issue.dependsOn` unset,
+   * which every reader treats as "no order stated".
+   * → `docs/spec/33-story-sequencing.md`
+   */
+  issueSequencing: IssueSequencing;
+  /**
+   * Above this many watched, open stories a Feature is not sequenced at all: the
+   * prompt would not fit and the order would not be read. Fails open like
+   * everything else here — the Feature keeps the ordering it has, which is none.
+   */
+  issueSequenceMaxChildren: number;
   /**
    * Tracker state → `#rrggbb`, for the state chip the cockpit draws on a ticket.
    * Display only — nothing in the harness reads a colour to decide anything. A
@@ -1049,6 +1075,11 @@ const DEFAULTS: Config = {
   labelPrefix: 'lubbdubb',
   issuePriorityLabels: { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 },
   issueDefaultPriority: 2,
+  // Off, so a deployment that takes the build gets exactly the ordering it had:
+  // the gate is the one mechanism here that can *withhold* work, and a default
+  // that held anything would be a feature nobody asked for parking a Feature.
+  issueSequencing: 'off',
+  issueSequenceMaxChildren: DEFAULT_SEQUENCE_MAX_CHILDREN,
   // Empty on purpose: every state keeps the reading it had before there were
   // colours until an operator names one.
   issueStateColours: {},

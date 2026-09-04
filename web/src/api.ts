@@ -51,6 +51,7 @@ import type {
   WorkRootsPayload,
   TicketsPayload,
   FeatureBoardPayload,
+  FeatureSequence,
   WorkSubtreePayload,
 } from '../../src/wire.js';
 import { demoApi, connectDemoWs } from './demo/demoBackend.js';
@@ -245,6 +246,12 @@ const realApi = {
   // of what the tracker's hierarchy holds, and the narrowing an operator wants is
   // the Tickets tab one click down.
   getFeatures: () => authFetch('/api/features').then((r) => json<FeatureBoardPayload>(r)),
+  // The operator answering a proposed story order. Two answers, and `declined` is
+  // one of them: 'run them all' is a real thing to say about a Feature whose
+  // stories are independent, and it is stored so the fleet stops asking. The
+  // answered row comes back whole, so the card can redraw without a refetch.
+  answerFeatureSequence: (number: number, answer: 'accepted' | 'declined', by: string) =>
+    post<FeatureSequence>(`/api/features/${number}/sequence`, { answer, by }),
   // A goal's retrospective, fetched when the Manifest station is opened. The
   // snapshot carries only the summary, for the reason the work graph is not
   // polled: a document per issue on every poll pays for the feature in bandwidth.

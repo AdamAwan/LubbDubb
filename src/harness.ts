@@ -1153,6 +1153,11 @@ export class Harness extends EventEmitter {
         // `retrospectiveOrigins`' reason one line up.
         featureStandings,
         featureSummaryKeys,
+        // One read for both halves of sequencing: the key rule `feature-sequence`
+        // compares against, and the edges an accepted order holds work with. Cheap
+        // and unconditional — two small tables, and gating it on the config here
+        // would be a second opinion about whether the feature is on.
+        featureSequences: store.listFeatureSequences(),
         recentDecisions,
         proposals,
         rejectionSignals,

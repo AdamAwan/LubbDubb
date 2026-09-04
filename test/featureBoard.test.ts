@@ -33,6 +33,7 @@ function build(over: Partial<Parameters<typeof buildFeatureBoard>[0]> = {}) {
     outcomes: new Map(),
     costs: new Map(),
     featureSlots: new Map(),
+    sequences: new Map(),
     running: new Map(),
     deliveries: [],
     shortfalls: [],

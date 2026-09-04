@@ -63,6 +63,11 @@ stories under it. `POST /api/issues/:n/watch` therefore writes the tag on every 
 un-watching walks the same tree — a dropped feature that left its children tagged would go on being
 worked after the operator said to stop.
 
+One watch write therefore makes every story under a Feature eligible in the same pulse, which is
+right when they are independent and wrong when they are not. **Which of them goes first** — and the
+`sequenced` hold that keeps one waiting for another — is [33](33-story-sequencing.md), off by
+default and unable to withhold anything until a person accepts an order.
+
 The walk descends through a child **only when the world snapshot holds it as an issue of its own**,
 so an Epic reaches its features' stories while an id the provider never returned is written as a leaf
 rather than silently skipped. A `seen` set makes a cycle in the tracker's hierarchy terminate rather

@@ -40,6 +40,7 @@ export const MCP_TOOL_NAMES = [
   'scratch_read',
   'retro_submit',
   'feature_summary',
+  'sequence_submit',
   'open_pr',
   'reply_to_review',
   'validation_amend',
@@ -131,6 +132,9 @@ export const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use'> = {
   appraise_issue: 'point-of-use',
   retro_submit: 'point-of-use',
   feature_summary: 'point-of-use',
+  // Named by the `feature-sequence` prompt, which is the only dispatch that can
+  // call it: the origin is the fence, so no other agent reaches it.
+  sequence_submit: 'point-of-use',
   scratch_append: 'point-of-use',
   scratch_read: 'point-of-use',
   validation_report: 'point-of-use',
@@ -384,6 +388,8 @@ export const DESKTOP_TOOL_NAMES = [
   'validation_report',
   'plan_read',
   'plan_amend',
+  'sequence_read',
+  'sequence_amend',
   'local_run',
 ] as const;
 

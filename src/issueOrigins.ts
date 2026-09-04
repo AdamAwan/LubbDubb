@@ -38,7 +38,7 @@ type IssueOriginRole = 'work' | 'evidence' | 'deliberation' | 'unrecognised';
  * A task on one of these says the issue has been thought about, never that anything
  * was built.
  */
-const DELIBERATION_SUFFIXES = ['plan', 'appraisal'];
+const DELIBERATION_SUFFIXES = ['plan', 'appraisal', 'sequence'];
 
 /**
  * The origins that are the work itself, as suffix prefixes under `issue:<n>:`.

@@ -20,6 +20,7 @@ import { dispatchVerdict, type CooldownPolicy } from './dispatchCooldown.js';
 import { issueOrigin, planOrigin, plannerVerdict, resolvePlanRoute } from '../plans/planning.js';
 import { liveParts, planProgress } from '../plans/parts.js';
 import { isActiveTask } from '../tasks.js';
+import type { IssueSequencing } from '../sequence/readiness.js';
 
 /**
  * How the dispatcher gates and orders issue pickup, derived from operator config.
@@ -94,6 +95,28 @@ export interface IssuePickupPolicy {
    * `DEFAULT_PARENTED_TYPES`; an explicit `[]` turns the orphan report off.
    */
   parentedTypes?: string[];
+  /**
+   * How much of the sequencing gate is switched on — `off` (the default) holds
+   * nothing and is byte-for-byte the behaviour before it existed, `links` honours
+   * the tracker's own dependency links, `full` adds the sequencer.
+   * → `docs/spec/33-story-sequencing.md`
+   *
+   * On the policy rather than on the dispatcher's constructor because it is a
+   * pickup gate like every other field here, and because the one thing it must
+   * never become is a second opinion: `issue-plan` and `issue-pickup` read it
+   * through the one context the dispatcher derives once.
+   *
+   * {@link isIssuePickupEligible} deliberately does **not** read it. That function
+   * is pure over the issue plus the policy, and readiness is a question about the
+   * world — a predecessor's state — so answering it there would either be wrong or
+   * would drag the world into a predicate the cockpit's chip also asks.
+   */
+  sequencing?: IssueSequencing;
+  /**
+   * `issueSequenceMaxChildren` — above this a Feature is not sequenced at all.
+   * Unset falls back to {@link DEFAULT_SEQUENCE_MAX_CHILDREN}.
+   */
+  sequenceMaxChildren?: number;
 }
 
 /**

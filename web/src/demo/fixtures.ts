@@ -1292,6 +1292,9 @@ export function buildDemoState(): DemoSeed {
     // point of drawing every check rather than one word — the retry the fix added
     // is quiet, and the queue depth could not be read at all because the job has
     // not run in staging yet. An `unknown` is never drawn in a clean one's words.
+    // No Feature in the demo carries an order: `issueSequencing` is off by default,
+    // and a fixture that shipped one would draw a surface no ordinary deployment has.
+    featureSequences: [],
     goalWatchWindows: [
       {
         goalRef: 'issue:390',

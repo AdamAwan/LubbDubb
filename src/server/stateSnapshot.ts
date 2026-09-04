@@ -887,6 +887,7 @@ export function buildStateSections(
     | 'retainedRuns'
     | 'stacks'
     | 'environmentReach'
+    | 'featureSequences'
     | 'environmentHealth'
     | 'goalWatchWindows'
     | 'environmentArrivals'
@@ -957,6 +958,10 @@ export function buildStateSections(
     // environment configured, which the cockpit draws as no row rather than as a
     // row of unknowns.
     environmentReach: buildEnvironmentReach(store, config.environments),
+    // Two small tables, read whole. The Goal page needs an order to draw the story
+    // it holds beside its neighbours, and that page is assembled from this snapshot
+    // rather than fetched.
+    featureSequences: store.listFeatureSequences(),
     // Whether each environment is well, beside where the work has got to. Read
     // from the store and filtered by today's configuration, so an environment
     // whose `health` command was removed stops being drawn rather than showing

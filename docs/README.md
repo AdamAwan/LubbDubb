@@ -36,6 +36,7 @@ it on does.
 | `operating.html`      | The same guide as a page to skim — open it in a browser. Kept in step with `operating.md`.     |
 | `feature-timeline.md` | What landed when, from the walking skeleton onwards — features, not commits.                   |
 | `prompt-templates/`   | Ready-to-copy samples of the rule dispatcher's built-in prompt bodies, one file per prompt id. |
+| `plans/`              | Build plans for specs still marked unbuilt. Each is deleted by the change that finishes it.    |
 
 `spec/` holds the specification and nothing else. Dated design documents — the proposals that
 preceded a feature, recording the options weighed at the time — are **not** kept here: they age out
@@ -114,6 +115,7 @@ deliberately left unchecked, and why, is in
 | [30](spec/30-ingress.md)             | Event-driven ingress       | The inbound webhook endpoint: what it verifies, what one delivery invalidates, and what it does not trust               |
 | [31](spec/31-review-packs.md)        | Review packs               | How a change is restated for a human: the witness log, the ideas, the claims, and the check                             |
 | [32](spec/32-local-validation.md)    | Local validation           | The fleet driving that environment: the plan, the browser, the reading, and the fix it schedules                        |
+| [33](spec/33-story-sequencing.md)    | Story sequencing           | The order the stories under a Feature are worked in, where it comes from, and the hold it puts on a story               |
 
 ## Conventions used throughout
 
