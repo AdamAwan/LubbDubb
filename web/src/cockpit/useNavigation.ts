@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { NOWHERE, placeQuery, readPlace, type Place } from './place.js';
+import type { UsageArrival } from '../types.js';
 
 /**
  * The cockpit's place, kept in the address bar so the browser's own back button
@@ -50,12 +51,27 @@ type PlacePatch<P> = (P & Record<Exclude<keyof P, keyof Place>, never>) | ((plac
  */
 type Go = <P extends Partial<Place>>(patch: PlacePatch<P>) => void;
 
-export function useNavigation(): { place: Place; go: Go } {
+export function useNavigation(): { place: Place; go: Go; arrival: UsageArrival } {
   // `location` is simply undefined under node, which is how the cockpit's
   // modules are imported by the tests — the same reason `readToken` guards.
   const [place, setPlace] = useState<Place>(() =>
     typeof location === 'undefined' ? NOWHERE : readPlace(location.search),
   );
+  /**
+   * How the *current* place was arrived at, which is the fifth column of a
+   * surface-reach row and the whole of what tells `never-linked` from
+   * `linked-never-visited` (`docs/spec/33-usage-metrics.md#surface-reach`).
+   *
+   * `direct` to begin with, because the first place of a session is whatever the
+   * address bar said — a typed URL, a reload, a bookmark, a link somebody was
+   * sent — and none of those is the cockpit having carried anybody anywhere. A
+   * `go` is `linked` by construction: every one of them comes off a control the
+   * product drew. A `popstate` is `direct` for the boot's reason exactly: the
+   * back button is the browser's navigation and not the cockpit's, so counting it
+   * as a link would report that the product routes to a surface it in fact only
+   * ever routes *away* from.
+   */
+  const [arrival, setArrival] = useState<UsageArrival>('direct');
   // What the address bar is about to say. `place` lags it by a render, and the
   // second `go` of a tick must not patch the first one's input.
   const pending = useRef(place);
@@ -66,6 +82,7 @@ export function useNavigation(): { place: Place; go: Go } {
       const next = readPlace(location.search);
       pending.current = next;
       setPlace(next);
+      setArrival('direct');
     };
     window.addEventListener('popstate', onPop);
     // Normalise the entry we booted on — a hand-typed `?tab=bogus` reads as the
@@ -80,6 +97,7 @@ export function useNavigation(): { place: Place; go: Go } {
     const next = { ...pending.current, ...(typeof patch === 'function' ? patch(pending.current) : patch) };
     pending.current = next;
     setPlace(next);
+    setArrival('linked');
     if (scheduled.current) return;
     scheduled.current = true;
     queueMicrotask(() => {
@@ -90,5 +108,5 @@ export function useNavigation(): { place: Place; go: Go } {
     });
   }, []);
 
-  return { place, go };
+  return { place, go, arrival };
 }

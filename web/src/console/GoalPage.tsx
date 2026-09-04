@@ -62,6 +62,7 @@ import {
   type LocalValidationTone,
 } from '../view/localValidation.js';
 import { Button } from '../components/button.js';
+import { logUsage } from '../cockpit/usage.js';
 
 /**
  * Where each of the track's stages jumps to. Anchors, not refs — one element on
@@ -234,7 +235,12 @@ function buildFolds(page: GoalPageView, view: CockpitView, actions: CockpitActio
       section,
       {
         open,
-        onToggle: (next) => actions.openGoalSection(section, next),
+        onToggle: (next) => {
+          // Only an opening. Folding a section shut is not somebody reading one,
+          // and counting both would make a fidget read as engagement.
+          if (next) logUsage('goal.expand');
+          actions.openGoalSection(section, next);
+        },
         reveal: () => {
           if (!open) actions.openGoalSection(section, true);
         },

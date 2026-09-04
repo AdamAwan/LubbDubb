@@ -69,6 +69,8 @@ import type { RemedyInsights } from './remedyInsights.js';
 import type { AllowanceInsights } from './allowanceInsights.js';
 import type { SpendInsights } from './spendInsights.js';
 import type { McpInsights } from './mcpInsights.js';
+import type { OperatorInsights } from './operatorInsights.js';
+import type { SurfaceReachInsights } from './surfaceReachInsights.js';
 import type { SpendTrend } from './spendTrend.js';
 import type { Stack } from './stacks/stack.js';
 import type { LocalRunOption } from './localRun/ref.js';
@@ -2192,6 +2194,30 @@ export interface McpUsagePayload {
 }
 
 /**
+ * `/api/usage` — the operator ledger: what the harness asked of a person, what
+ * they did about it, and what the waiting cost.
+ *
+ * A route of its own rather than a field on {@link SpendPayload}, for
+ * {@link McpUsagePayload}'s reason: it sweeps eleven settled-record tables that
+ * nothing on the top bar needs, and an operator who opened Insights to read the
+ * phase table should not pay for it.
+ */
+export interface UsagePayload {
+  insights: OperatorInsights;
+  /**
+   * The reach half, over the **same** window — resolved once by the route and
+   * passed to both folds.
+   *
+   * On the one payload rather than a second route because the two are one
+   * reading: the pairing this tier exists for is *an ask answered, against
+   * whether the surface it is about was ever reached*, and two fetches over two
+   * separately-resolved windows would put an answer rate over a fortnight beside
+   * a reach verdict over a day.
+   */
+  reach: SurfaceReachInsights;
+}
+
+/**
  * `/api/reliability` — what the spending bought: run outcomes all-time, and CI
  * health over the last fortnight. Fetched on open for `SpendPayload`'s reason.
  */
@@ -2410,6 +2436,12 @@ export type {
   WorldEvent,
   WorldEventKind,
 } from './types.js';
+export type { OperatorInsights, OperatorRow, OperatorRowKind } from './operatorInsights.js';
+export type { SurfaceReachInsights, SurfaceRow, SurfaceVerdict } from './surfaceReachInsights.js';
+// The call-site vocabulary. `UiUsageEvent` is the `ui`-sourced subset, so the
+// cockpit passing a `record` event is a compile error rather than a double count
+// two readings would then disagree about quietly.
+export type { PlaceKey, UiUsageEvent, UsageArrival, UsageSubject, UsageVerb } from './usage/events.js';
 export type { RecoveryVerdict, OrphanedWork } from './agents/crashRecovery.js';
 export type { BuildReading, UpgradeAction } from './selfUpdate/upgradePlan.js';
 export type { BuildStanding } from './selfUpdate/buildStanding.js';

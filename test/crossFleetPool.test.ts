@@ -55,6 +55,7 @@ function envelopeDoc(over: Partial<PoolDigestDocument> = {}): PoolDigestDocument
     byFault: [],
     unaccounted: [],
     unmeasured: [],
+    byUsage: [],
     ...over,
   };
 }
@@ -113,7 +114,7 @@ test('the digest buckets by UTC day and marks the current one partial', () => {
     Object.keys(document)
       .filter((k) => Array.isArray((document as unknown as Record<string, unknown>)[k]))
       .sort(),
-    ['byCause', 'byCheck', 'byFault', 'byPhase', 'unaccounted', 'unmeasured'],
+    ['byCause', 'byCheck', 'byFault', 'byPhase', 'byUsage', 'unaccounted', 'unmeasured'],
   );
   assert.equal(utcDay(NOW), '2026-08-24');
   assert.equal(POOL_RETENTION_DAYS, 90, 'a stated constant, never a config key');
@@ -132,6 +133,7 @@ test('the aggregator takes shares from summed counts and keeps a partial day out
     byCheck: [{ day: '2026-08-23', key: 'test (windows)', count: 3, costUsd: 9, partial: false }],
     unaccounted: [],
     unmeasured: [],
+    byUsage: [],
     byFault: [{ day: '2026-08-23', key: 'provider', count: 5, costUsd: null, partial: false }],
   });
   const s = store();
@@ -218,6 +220,7 @@ test('a fleet’s faults are never mirrored, whatever its document carries', () 
     byCheck: [],
     unaccounted: [],
     unmeasured: [],
+    byUsage: [],
     byFault: [{ day: '2026-08-23', key: 'provider', count: 40, costUsd: null, partial: false }],
   });
 

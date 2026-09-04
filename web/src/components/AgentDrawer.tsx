@@ -11,6 +11,7 @@ import { FilesList } from './FilesList.js';
 import { TranscriptPane } from './TranscriptPane.js';
 import { Button } from './button.js';
 import { Tag } from './tag.js';
+import { logUsage } from '../cockpit/usage.js';
 
 /**
  * How often the drawer re-reads the persisted transcript while the run is live.
@@ -274,6 +275,10 @@ export function AgentDrawer({
             e.preventDefault();
             const value = text.trim();
             if (!value) return;
+            // Steering a live agent leaves no row of its own: the text goes
+            // onto the session's stdin, and the transcript that results is the
+            // agent's rather than a record that a person typed.
+            logUsage('agent.send');
             void send.run(async () => {
               await onRespond(value);
               setText('');

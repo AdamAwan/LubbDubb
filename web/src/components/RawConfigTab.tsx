@@ -4,6 +4,7 @@ import type { RunningConfigPayload } from '../types.js';
 import { Panel } from './panel.js';
 import { Button } from './button.js';
 import { Tag } from './tag.js';
+import { logUsage } from '../cockpit/usage.js';
 
 /**
  * The file, edited as a file.
@@ -61,6 +62,7 @@ export function RawConfigTab({
   const write = async (): Promise<void> => {
     setBusy(true);
     try {
+      logUsage('config.edit');
       await api.saveRawConfig({ text, baseline });
       onWrote();
     } catch (err) {

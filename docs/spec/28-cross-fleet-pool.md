@@ -359,7 +359,18 @@ Every dimension is a closed vocabulary that already exists, and none of them is 
 | `byCheck`     | the check's own name                         | accounts, costUsd                       |
 | `unaccounted` | —                                            | return dispatches that filed no account |
 | `unmeasured`  | —                                            | runs that reported no usage at all      |
+| `byUsage`     | `UsageSubject` × `UsageVerb`                 | times a person did it (no cost)         |
 | `byFault`     | `ErrorLogEntry['source']`                    | faults recorded (no cost)               |
+
+`byUsage` is what a person did, specified at [33](33-usage-metrics.md#the-digest-section) and held to
+every rule stated here. Both halves of its key are closed vocabularies the harness owns
+(`src/usage/events.ts`), so it sums across projects like everything but `byCheck` and takes no
+project argument — the comparability `byCheck` has to be narrowed into is a property of this
+section's data. Like `byFault` it carries no cost, for the same reason: what a person did has no
+dollar figure anywhere in the harness, and deriving one for the pool would be a new measurement
+rather than a move of what exists. **Unlike `byFault` it is mirrored**, because it is the one reading
+the pool exists for that a single fleet cannot produce: how many _people_ used a control is a count
+of fleets, and one fleet is a sample of one.
 
 `RemedyCause` and `RemedyGuard` are resolved from the dispatch origin rather than claimed, with the
 copy for every value in one place (`src/remedies/remedies.ts`). Two fleets on two providers produce
@@ -438,13 +449,14 @@ promise that rested on one substrate would be one the interface could not keep.
 
 ### The faults section
 
-Four of the five sections above measure the **work**, and every one of them sums across fleets into the
+Five of the six sections above measure the **work** or the person doing it, and every one of them sums
+across fleets into the
 shared insights page. `byFault` measures the **harness**: what the fleet's own error log
 ([18](18-observability.md)) recorded, keyed by `ErrorLogEntry['source']` — `cycle`, `provider`, `agent`,
 `server`, `boot` — and counted per UTC day like everything else here.
 
 **It goes into the file and no further.** Nothing mirrors it, nothing aggregates it, and nothing at any
-far end reads it back: `digestSections` in `src/store/pool.ts` names the five sections the mirror stores
+far end reads it back: `digestSections` in `src/store/pool.ts` names the six sections the mirror stores
 and this is deliberately not among them. A fault is this harness failing on this operator's machine —
 comparable to nothing on anybody else's, and answering no question a company page asks. What it is for
 is a person opening the fleet's own `digest.md` in the pool repository and seeing what has been going

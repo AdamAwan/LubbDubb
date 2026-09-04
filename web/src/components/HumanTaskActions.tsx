@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { HumanTask } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
 import { Button, withShape } from './button.js';
 import type { ButtonLook } from './button.js';
+import { logUsage } from '../cockpit/usage.js';
 
 /** What the one confirm button says, per verb — three arms, one box. */
 const CONFIRM_LABEL: Record<'done' | 'declined' | 'close', string> = {
@@ -81,6 +82,13 @@ export function HumanTaskActions({
    */
   onCloseTicket?: ((id: string, note?: string) => Promise<unknown> | unknown) | null;
 }) {
+  // The ask was reached. These actions are drawn wherever a bench row is put to a
+  // person — the rail, the goal page, the panel fallback — and this is the one
+  // component all three go through, so it is the only place the `view` counts
+  // whichever surface the row was shown on.
+  useEffect(() => {
+    logUsage('human-task.view');
+  }, []);
   const [note, setNote] = useState('');
   /** Which verb has the note box open, or none. One box: they ask for one thing. */
   const [saying, setSaying] = useState<'done' | 'declined' | 'close' | null>(null);

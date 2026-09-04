@@ -12,6 +12,7 @@ import { PriorityStore } from './priority.js';
 import { ProfileOverrideStore } from './profileOverrides.js';
 import { RemedyStore } from './remedies.js';
 import { McpCallStore } from './mcpCalls.js';
+import { SurfaceReachStore } from './surfaceReach.js';
 import { HumanTaskStore, HUMAN_TASK_COLUMNS } from './humanTasks.js';
 import { absorbSinglePlanStatus, backfillWholePlanParts, PlanStore, PLAN_COLUMNS } from './plans.js';
 import { ValidationStore, VALIDATION_COLUMNS, VALIDATION_REBUILDS } from './validation.js';
@@ -103,6 +104,8 @@ import type {
   RemedyKind,
   McpCall,
   McpCallInput,
+  SurfaceReach,
+  SurfaceReachInput,
   CostDelta,
   LocalRun,
   LocalValidation,
@@ -204,6 +207,7 @@ export class Store {
   private readonly profileOverrides: ProfileOverrideStore;
   private readonly remedies: RemedyStore;
   private readonly mcpCalls: McpCallStore;
+  private readonly surfaceReach: SurfaceReachStore;
   private readonly humanTasks: HumanTaskStore;
   private readonly plans: PlanStore;
   private readonly validation: ValidationStore;
@@ -349,6 +353,7 @@ export class Store {
     this.pool = new PoolStore(ctx);
     this.remedies = new RemedyStore(ctx);
     this.mcpCalls = new McpCallStore(ctx);
+    this.surfaceReach = new SurfaceReachStore(ctx);
     this.humanTasks = new HumanTaskStore(ctx);
     this.plans = new PlanStore(ctx);
     this.validation = new ValidationStore(ctx);
@@ -587,6 +592,21 @@ export class Store {
   }
   lastMcpCallByTool(): Map<string, string> {
     return this.mcpCalls.lastMcpCallByTool();
+  }
+
+  // -- Surface reach (what an operator looked at, and what they did there) ----
+
+  recordSurfaceReach(rows: readonly SurfaceReachInput[]): number {
+    return this.surfaceReach.recordSurfaceReach(rows);
+  }
+  listSurfaceReachSince(since: string): SurfaceReach[] {
+    return this.surfaceReach.listSurfaceReachSince(since);
+  }
+  linkedSubjectsEverReached(): Set<string> {
+    return this.surfaceReach.linkedSubjectsEverReached();
+  }
+  pruneSurfaceReach(force = false): number {
+    return this.surfaceReach.pruneSurfaceReach(force);
   }
 
   // -- Human tasks (work only a person can do) -------------------------------

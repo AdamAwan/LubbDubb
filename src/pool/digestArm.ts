@@ -2,7 +2,16 @@ import { CAUSES_BY_KIND, GUARD_ORDER } from '../remedies/remedies.js';
 import { isReturnOrigin } from '../remedyInsights.js';
 import { PHASE_ORDER, phaseOf, type SpendPhase } from '../spendInsights.js';
 import type { Store } from '../store/store.js';
-import type { Agent, ErrorLogEntry, PoolDigestDocument, PoolDigestRow, Remedy, UsageEvent } from '../types.js';
+import type {
+  Agent,
+  ErrorLogEntry,
+  PoolDigestDocument,
+  PoolDigestRow,
+  Remedy,
+  SurfaceReach,
+  UsageEvent,
+} from '../types.js';
+import { VERBS_BY_SUBJECT } from '../usage/events.js';
 import { POOL_SCHEMA_VERSION } from './document.js';
 
 /**
@@ -11,8 +20,9 @@ import { POOL_SCHEMA_VERSION } from './document.js';
  *
  * **Nothing here measures anything new.** `src/spendInsights.ts` already partitions
  * spend by phase, `src/remedyInsights.ts` already folds why the fleet came back and
- * what it cost, and `src/remedies/remedies.ts` already holds the closed vocabularies
- * both are keyed by. This re-cuts what exists into UTC days and hands it to the
+ * what it cost, `src/remedies/remedies.ts` already holds the closed vocabularies
+ * both are keyed by, and `src/usage/events.ts` already holds the one the operator
+ * section is keyed by. This re-cuts what exists into UTC days and hands it to the
  * transport.
  *
  * Every dimension is a closed vocabulary that already exists, and none of them is a
@@ -82,6 +92,7 @@ export function buildDigestDocument(
     byCheck: byCheck(remedies, usage, today),
     unaccounted: unaccounted(tasks, remedies, since, today),
     unmeasured: unmeasured(agents, since, today),
+    byUsage: byUsage(store.listSurfaceReachSince(since), today),
     byFault: byFault(store.listErrorsSince(since), today),
   };
 }
@@ -212,6 +223,48 @@ function unmeasured(agents: readonly Agent[], since: string, today: string): Poo
     const at = agent.endedAt ?? agent.startedAt;
     if (at < since) continue;
     rows.add(utcDay(at), '', { count: 1 });
+  }
+  return rows.rows(today);
+}
+
+/**
+ * What a person did, per `subject.verb` per day.
+ *
+ * **Keyed on the registry's two axes and on nothing else.** Both are closed
+ * vocabularies `src/usage/events.ts` owns, so two fleets on two providers produce
+ * comparable rows by construction and nobody had to agree on anything — the
+ * standing rule for every section here, cleared without an exception. The row's
+ * third column, the cockpit's **place key, stays local**: it is the console's own
+ * layout, which a redesign moves, and a cross-fleet series keyed on it would break
+ * at a release rather than at a change of behaviour. There is nothing else on a
+ * `surface_reach` row, which is what makes this section publishable at all.
+ *
+ * **It carries the `ui` half of the registry, and that is a property of the
+ * registry rather than a choice made here.** `surface_reach` is the only table that
+ * stamps one act at a time; a `record` event is swept from the table that already
+ * holds it, by a ledger that windows rather than buckets and whose rows do not map
+ * onto `subject.verb` one-to-one — the validation *bench* and one validation
+ * *check* are both `validation` settled by a person. So a `record` event is absent
+ * here **by declaration**, with `EVENT_SOURCE` saying which and why, rather than by
+ * an omission that would read as a fleet where nobody ever approved a plan.
+ * → `docs/spec/33-usage-metrics.md#the-digest-section`
+ *
+ * `costUsd` stays null on every row: what a person did has no dollar figure
+ * anywhere in the harness, and inventing one for the pool is the move the whole
+ * digest arm refuses. The companion therefore draws no cost column, `byFault`'s
+ * reason exactly.
+ *
+ * A pair the matrix does not have is dropped, `byCause`'s guard for its reason: a
+ * cell withdrawn from `VERBS_BY_SUBJECT` leaves rows behind in a table that keeps
+ * ninety days, and publishing them would put a key no other fleet's build has into
+ * a cross-fleet series.
+ */
+function byUsage(reach: readonly SurfaceReach[], today: string): PoolDigestRow[] {
+  const rows = new Bucket();
+  for (const row of reach) {
+    const verbs: readonly string[] = VERBS_BY_SUBJECT[row.subject] ?? [];
+    if (!verbs.includes(row.verb)) continue;
+    rows.add(utcDay(row.at), `${row.subject}.${row.verb}`, { count: 1 });
   }
   return rows.rows(today);
 }
