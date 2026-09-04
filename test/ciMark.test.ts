@@ -16,12 +16,18 @@ const { CiMark } = await import('../web/src/components/CiMark.js');
 /**
  * The checks mark's fold, which is the whole of it.
  *
- * The chip says what the harness decided, and every arm below is a rendering of
+ * The mark says what the harness decided, and every arm below is a rendering of
  * `ciVerdict` and `ciChecks` — the server's own classification off the same
- * `config.ci` rules the dispatcher reads. What is asserted here is that the chip
+ * `config.ci` rules the dispatcher reads. What is asserted here is that the mark
  * **quotes** it: a red check the policy muted must not read as work waiting on
- * anybody, and a pull request whose provider reported nothing must not grow a chip
+ * anybody, and a pull request whose provider reported nothing must not grow a mark
  * claiming it reported something.
+ *
+ * **The reading is a tone, a count and a sentence**, since the mark stopped being
+ * a chip of words. So each arm is pinned on all three where it has them: the `t-*`
+ * tone, the badge where a number is the reading, and the `aria-label` — which is
+ * the accessible name *and* the tooltip's heading, and is now the only place the
+ * distinction between two arms of one hue is written down.
  * → `docs/spec/17-cockpit.md#the-checks-mark`
  */
 
@@ -47,11 +53,13 @@ function verdict(over: Partial<NonNullable<PullRequest['ciVerdict']>> = {}): Pul
 
 const draw = (subject: PullRequest): string => renderToStaticMarkup(createElement(CiMark, { pr: subject }));
 
-test('the chip names itself and counts the checks that passed', () => {
+test('a green pull request is green, and wears no count', () => {
   const html = draw(pr({ ciChecks: [check('build / test', 'passing'), check('build / lint', 'passing')] }));
   assert.match(html, /class="ck t-green"/, 'a green pull request is not drawn green');
-  assert.match(html, />CI</, 'the chip does not say what reading it is');
-  assert.match(html, />2\/2</, 'the chip does not say how many checks it folded');
+  // No badge: the count on the shoulder is *how much trouble*, so a number on a
+  // green mark would be a figure an eye stops at for nothing. The tone is the
+  // whole reading, and how many passed is in the name.
+  assert.doesNotMatch(html, /ck-badge/, 'a clean pull request wears a count');
   assert.match(html, /aria-label="Checks: All 2 checks passed"/);
 });
 
@@ -64,18 +72,18 @@ test('a failing check the fleet will fix reads red, and says how many', () => {
     }),
   );
   assert.match(html, /class="ck t-red"/);
-  assert.match(html, />1 failed</);
+  assert.match(html, /class="ck-badge">1</);
   assert.match(html, /aria-label="Checks: 1 of 2 checks failed"/);
 });
 
 /**
  * The two arms that must not read as the fleet's work. `escalate` is the policy
  * saying the harness must **not** touch this one, and `ignored` is the operator
- * saying nobody should — drawn in words rather than in hue alone, because a reader
- * who cannot separate red from amber would otherwise get "1 failed" for both and
- * two different obligations.
+ * saying nobody should. Neither is red, and the sentence says which it is: the
+ * mark's words went when it became a mark, so the `aria-label` is what a reader
+ * who cannot separate the hues has, and it is not optional.
  */
-test('a check the policy hands to the operator says so in words', () => {
+test('a check the policy hands to the operator is not the fleet’s red', () => {
   const html = draw(
     pr({
       ciStatus: 'failing',
@@ -84,7 +92,8 @@ test('a check the policy hands to the operator says so in words', () => {
     }),
   );
   assert.match(html, /class="ck t-amber"/);
-  assert.match(html, />1 for you</);
+  assert.match(html, /class="ck-badge">1</);
+  assert.match(html, /aria-label="Checks: 1 of 1 check failed, for you to fix"/);
 });
 
 test('a failure the operator muted is drawn as no verdict at all', () => {
@@ -96,7 +105,8 @@ test('a failure the operator muted is drawn as no verdict at all', () => {
     }),
   );
   assert.match(html, /class="ck t-grey"/, 'a muted failure is drawn as somebody’s move');
-  assert.match(html, />1 muted</);
+  assert.match(html, /class="ck-badge">1</);
+  assert.match(html, /aria-label="Checks: 1 of 1 check failed, and muted by the CI policy"/);
 });
 
 test('checks still running are counted, and a stalled one is told apart from them', () => {
@@ -104,14 +114,43 @@ test('checks still running are counted, and a stalled one is told apart from the
     pr({ ciStatus: 'pending', ciChecks: [check('build / test', 'pending'), check('build / lint', 'passing')] }),
   );
   assert.match(running, /class="ck t-blue"/);
-  assert.match(running, />1 running</);
+  // Blue is the whole reading: a count of what is *in flight* is not trouble, and
+  // a number on it would read as one.
+  assert.doesNotMatch(running, /ck-badge/, 'a running mark wears a count');
+  assert.match(running, /aria-label="Checks: 1 of 2 checks still running"/);
 
   // Pending with nothing in flight: the run is stale against the branch and
   // resolves only when somebody queues another — a different thing to wait for,
   // and the reading the dots could never carry.
   const stalled = draw(pr({ ciStatus: 'pending', ciChecks: [check('policy / build', 'pending', { expired: true })] }));
   assert.match(stalled, /class="ck t-amber"/);
-  assert.match(stalled, />1 stalled</);
+  assert.match(stalled, /class="ck-badge">1</);
+  assert.match(stalled, /aria-label="Checks: 1 check waiting on a run nobody has started"/);
+});
+
+/**
+ * The one distinction the mark spends, pinned where it now lives.
+ *
+ * `1 for you` and `1 stalled` were two words and are one shape: amber, with a `1`
+ * on the shoulder. Both are the same call — nothing will happen to this on its own
+ * — so the hue is not lying, but *which* of the two it is exists only in the
+ * accessible name and the tooltip it heads. That makes the name load-bearing in a
+ * way it was not while the mark carried words, and a change that drops or blurs it
+ * takes the distinction off the product altogether.
+ */
+test('amber’s two arms are told apart in the name, since the mark no longer says it', () => {
+  const yours = draw(
+    pr({
+      ciStatus: 'failing',
+      ciChecks: [check('deploy / staging', 'failing')],
+      ciVerdict: verdict({ escalate: [{ name: 'deploy / staging', rule: null }] }),
+    }),
+  );
+  const stalled = draw(pr({ ciStatus: 'pending', ciChecks: [check('policy / build', 'pending', { expired: true })] }));
+  const name = (html: string): string => /aria-label="([^"]+)"/.exec(html)?.[1] ?? '';
+  assert.match(yours, /class="ck t-amber"/);
+  assert.match(stalled, /class="ck t-amber"/);
+  assert.notEqual(name(yours), name(stalled), 'the two amber arms read identically to a screen reader');
 });
 
 /**
@@ -120,12 +159,16 @@ test('checks still running are counted, and a stalled one is told apart from the
  * right that a chip could easily lose.
  */
 test('the aggregate speaks where the provider named no check', () => {
-  assert.match(draw(pr({ ciStatus: 'failing' })), />red</);
-  assert.match(draw(pr({ ciStatus: 'passing' })), />green</);
+  const red = draw(pr({ ciStatus: 'failing' }));
+  assert.match(red, /class="ck t-red"/);
+  assert.match(red, /aria-label="Checks: A check failed, and the provider named none of them"/);
+  const green = draw(pr({ ciStatus: 'passing' }));
+  assert.match(green, /class="ck t-green"/);
+  assert.match(green, /aria-label="Checks: The checks passed"/);
 });
 
 test('a pull request nobody reported a check for draws nothing', () => {
-  assert.equal(draw(pr({ ciStatus: 'unknown' })), '', 'an unreported pull request grew a chip');
+  assert.equal(draw(pr({ ciStatus: 'unknown' })), '', 'an unreported pull request grew a mark');
 });
 
 /**
@@ -137,7 +180,11 @@ test('an advisory check is in no count', () => {
   const html = draw(
     pr({ ciChecks: [check('build / test', 'passing'), check('comments', 'pending', { advisory: true })] }),
   );
-  assert.match(html, />1\/1</);
+  // `All 1 checks passed`, not `All 2`: the total the name quotes is the counted
+  // list, and the advisory one is not on it. Read off the name because that is
+  // where the mark's numbers live now — a count on the glass only appears where
+  // something is wrong.
+  assert.match(html, /aria-label="Checks: All 1 checks passed"/);
 });
 
 /**

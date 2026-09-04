@@ -2463,6 +2463,13 @@ export type { McpChannel } from './types.js';
  * → `docs/spec/17-cockpit.md#the-checks-mark`
  */
 export type { CiCheck } from './types.js';
+/**
+ * One unanswered review thread as the provider reported it. On the wire because
+ * the cockpit's comments mark quotes whose question is outstanding — a re-export
+ * rather than a re-declaration, so the mark names exactly what the rules read.
+ * → `docs/spec/17-cockpit.md#the-comments-mark`
+ */
+export type { PrComment } from './types.js';
 // The pool's own shapes. A wire type either **is** a domain type or `extends` it,
 // so these are re-exports rather than re-declarations — the cockpit reads exactly
 // what the store holds. → `docs/spec/28-cross-fleet-pool.md`

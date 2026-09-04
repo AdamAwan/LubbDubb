@@ -1,5 +1,6 @@
 import type { JSX } from 'react';
 import type { CiCheck, PullRequest } from '../types.js';
+import { Icon } from './icons.js';
 import { Tip, useTip } from './tip.js';
 
 /**
@@ -28,8 +29,22 @@ type CiTone = 't-green' | 't-red' | 't-amber' | 't-blue' | 't-grey';
 
 interface CiReading {
   tone: CiTone;
-  /** What the chip prints beside its `CI` key — short enough for the rail's column. */
-  value: string;
+  /**
+   * The badge on the glyph's shoulder: **how many**, where a number is the reading,
+   * and null where the tint alone is the whole of it.
+   *
+   * It was the chip's word — `1 muted`, `3 stalled`, `4 running` — and the words
+   * cost the mark 96px on a rail where every other verdict is a 22px box. What the
+   * badge keeps is the half a glance uses: the hue says which kind of trouble, the
+   * number says how much of it, and the sentence is one hover away as it is on the
+   * two marks beside it.
+   *
+   * **One distinction is spent on this**, and it is worth naming: amber is both
+   * `for you` and `stalled`, which the words told apart and the badge does not.
+   * Both are the same call to the operator — nothing will happen to this on its
+   * own — and `said` separates them in the tooltip and in the accessible name.
+   */
+  badge: string | null;
   /** The same reading as a sentence: the tooltip's heading and the accessible name. */
   said: string;
 }
@@ -58,12 +73,12 @@ function reading(pr: PullRequest): CiReading | null {
   const total = checks.length;
 
   if (dispatch > 0) {
-    return { tone: 't-red', value: `${dispatch} failed`, said: said(dispatch, total, 'failed') };
+    return { tone: 't-red', badge: String(dispatch), said: said(dispatch, total, 'failed') };
   }
   // Amber and worded, not red: the policy says this one is **not** the harness's
   // to touch, and a reader who cannot separate the hues still gets the difference.
   if (escalate > 0) {
-    return { tone: 't-amber', value: `${escalate} for you`, said: said(escalate, total, 'failed, for you to fix') };
+    return { tone: 't-amber', badge: String(escalate), said: said(escalate, total, 'failed, for you to fix') };
   }
   // Failing, and every failure is one the operator told the harness to leave
   // alone. Grey is the absence of a verdict, which is exactly what a muted check
@@ -71,7 +86,7 @@ function reading(pr: PullRequest): CiReading | null {
   if (ignored > 0 && pr.ciStatus === 'failing') {
     return {
       tone: 't-grey',
-      value: `${ignored} muted`,
+      badge: String(ignored),
       said: said(ignored, total, 'failed, and muted by the CI policy'),
     };
   }
@@ -80,14 +95,14 @@ function reading(pr: PullRequest): CiReading | null {
     case 'passing':
       return {
         tone: 't-green',
-        value: total > 0 ? `${total}/${total}` : 'green',
+        badge: null,
         said: total > 0 ? `All ${total} checks passed` : 'The checks passed',
       };
     case 'failing':
       // No per-check detail, or none the policy claimed — the aggregate speaks
       // under its own name rather than drawing nothing, because missing detail is
       // not a clean bill of health.
-      return { tone: 't-red', value: 'red', said: 'A check failed, and the provider named none of them' };
+      return { tone: 't-red', badge: null, said: 'A check failed, and the provider named none of them' };
     case 'pending': {
       const waiting = checks.filter((check) => check.status === 'pending');
       // Pending with nothing in flight: the run is stale against the branch and
@@ -96,13 +111,13 @@ function reading(pr: PullRequest): CiReading | null {
       if (waiting.length > 0 && waiting.every((check) => check.expired === true)) {
         return {
           tone: 't-amber',
-          value: `${waiting.length} stalled`,
+          badge: String(waiting.length),
           said: `${waiting.length} check${waiting.length === 1 ? '' : 's'} waiting on a run nobody has started`,
         };
       }
       return {
         tone: 't-blue',
-        value: waiting.length > 0 ? `${waiting.length} running` : 'running',
+        badge: null,
         said:
           waiting.length > 0 ? `${waiting.length} of ${total} checks still running` : 'The checks are still running',
       };
@@ -211,10 +226,8 @@ export function CiMark({
       onMouseLeave={tip.close}
       onBlur={tip.close}
     >
-      <span className="ck-k" aria-hidden="true">
-        CI
-      </span>
-      <span className="ck-v">{read.value}</span>
+      <Icon name="flask" size={14} />
+      {read.badge !== null && <span className="ck-badge">{read.badge}</span>}
       {tip.at !== null && (
         <Tip at={tip.at}>
           <b>{read.said}</b>

@@ -2051,8 +2051,9 @@ clean bill of health.
 
 `CiMark` is `web/src/components/CiMark.tsx` and every surface draws that one component, since two
 readings of one verdict side by side is how the same PR comes to wear two tones nobody chose.
-`CourtChip` stays in `GoalPage.tsx`: the rack draws the same verdict as the word in its state column,
-which is where every card on the overview puts its state, and this page has no such column.
+`CourtChip` stays in `GoalPage.tsx`: the rack draws the same verdict behind its row marker — the card
+wears no state word ([the state column](#the-row-grammar)) — and this page has no marker to put it
+behind.
 `waitedFor` is shared for the chip's reason — the rack draws the same age as a fact.
 
 **And the row itself carries it.** `PanelRowModel.live` puts a green edge down the row and a slow
@@ -2108,7 +2109,7 @@ nobody re-checks. The moment the agent ends, the checks come back. → `test/pan
 _deliberately not a verdict_ — on the reasoning that a red check the harness is already dispatching on
 is not your move. But at 6px that is the empty track, so the most actionable reading on the row was
 drawn as the least, and the row said nothing where it should have said the loudest thing it knows.
-Whose move it is is the state column's answer now, which frees the checks to answer only _is this
+Whose move it is is the row marker's answer now, which frees the checks to answer only _is this
 broken_. → [the checks mark](#the-checks-mark)
 
 **The court chip carries how long a review has been waiting.** A PR carrying
@@ -2368,6 +2369,20 @@ Three of them carry the rules that kept being forgotten:
   `button`, so it answers to the keyboard; a reason only a pointer can reach is a reason half the
   operators do not have.
 
+  **Where the sentence is a clause, it goes on the glass under the title** — `words="subline"` on
+  `PanelRows`, which the rack takes and nothing else does yet. The marker's case is the queue's: a
+  reason that is a _paragraph_ is the card's whole subject and cannot be on every row without making
+  the card three lines tall. The rack's is the opposite, and taking the state word off it is what
+  exposed the difference — what the marker left behind there was a bare `?` on every row, a mark that
+  says only _there is something to know here_, which is the reading the word was removed for being
+  worse than. The court's sentence is a clause. So the quantities and the sentence are drawn together
+  as a **sub-line** under the title, in the faint ink a caption takes, wrapping rather than clipped
+  since the half that says what is holding the row is usually its tail. A card takes the sub-line
+  because its sentence is short, which is a fact about what the server writes rather than a preference
+  about layout — the same kind of fact `layout` turns on. The row's own line gaps and padding tighten
+  when it has one (`cn-subrow`): the two lines have to read as one row, and a gap the size of the gap
+  between rows makes a card of eight rows look like a card of sixteen.
+
   **The bubble is positioned against the row, not against the marker**, and it stays that way past
   its own measure cap. Anchored to a 16px button it leaves the card on every row whose marker sits
   near an edge, and a tooltip clipped by its own panel is a reason nobody can read — so it is pinned
@@ -2396,13 +2411,22 @@ Three of them carry the rules that kept being forgotten:
   other row. A [readying row](#work-that-is-not-an-agent-yet) wears its step there, in its own tint,
   for the same reason.
 
-  **The Pull requests card's word is the court itself** — `you`, `harness`, `elsewhere`, `stalled`,
-  `settled`, `unwatched`, `prAttentionStatus`'s own arms, quoted rather than re-read. The card drew
-  that verdict twice before: a `?` holding `attention.reasons` and a `CourtChip` holding the same
-  reasons in a `title`, one column apart — two hovers over one sentence, and a state column that said
-  nothing. `you` is the only `ask`; `stalled` and `unwatched` are `hold`, because nothing is going to
-  happen to either on its own. The chip is gone from the overview and stays on the goal page, where
-  there is no state column to put it in. → `test/panelRows.test.ts`
+  **The Pull requests card wears no word at all**, and it is the one card that does not. The court
+  stayed on the row — `attention.reasons`, behind the marker, in the server's own words — and
+  `prAttentionStatus`'s arms came off the glass.
+
+  A state column earns its 104px when its rows _disagree_. The rack's did not: four of five rows read
+  `unwatched`, which the struck eye and the spent dimming had each already said, so the loudest ink on
+  the row went to restating the one thing an operator could not miss — and four repetitions of a word
+  that is nobody's move drowned `you`, the one arm that is. A column whose rows agree is a caption.
+  What stays on the glass is the state each row already carries in a mark: **the eye** for the watch,
+  **the checks mark** for a stall, **the `Assigned to review` band** for the ones somebody put on you.
+  The chip is gone from the overview and stays on the goal page, where the row has no marker either.
+  → `test/panelRows.test.ts`
+
+  This is the general rule and the rack is only where it bit first: **a state a row already says in a
+  control or a mark is not a state word.** The other cards keep theirs because theirs differ row to
+  row — an agent's `question` against its `limit` against its `stalled` is the column doing its job.
 
   **The Goals in flight card's word is `pickup.status`, in the operator's words.** Same shape as the
   rack's, one card up: the verdict was a `pickup` fact with a bare `?` beside it holding
@@ -2439,20 +2463,28 @@ Three of them carry the rules that kept being forgotten:
   narrow it was the one card off the grid, a quarter wide under a page of half-width ones, which reads
   as a card that failed to lay out rather than as one with little to say.
 
-- **`toggle` is the row's switch, and it is pinned left of the subject.** Whether the harness takes an
+- **`toggle` is the row's switch, and it leads the readings.** Whether the harness takes an
   interest in this row at all — the rack's watch tag — is not the row's _work_, which is what `action`
-  is for and why `action` has the width. It is the same control in the same place on every row of the
-  card, so it goes where an eye can skip it. It is drawn as the **state it is in** rather than as the
-  word for the other one: `watch` / `unwatch` was a verb that contradicted every row it appeared on
+  is for and why `action` has the width. It sits with the readings because it answers the same kind of
+  question they do: the checks say whether the branch is sound, the review whether anybody has read
+  it, and this whether the harness is looking at all. Ahead of the subject — where it was — it was the
+  row's only control marooned between two marks that mean _state_, the agent lamp and the author, with
+  the readings it belongs to a column away. That it **leads** the group is the readings' own ordering
+  rule and not an exception to it: a switch is on every row of a card that has one, so it is the
+  group's most reliable box and the anchor everything after it sits against. It is sized as one of
+  them — the same 22px box `.rv` and `.pk` keep — so the run starts on a square edge. It is drawn as
+  the **state it is in** rather than as the word for the other one: `watch` / `unwatch` was a verb that contradicted every row it appeared on
   (a row said `unwatch` precisely when it _was_ watched) until you worked out it was an instruction.
   An open eye is the harness looking; a struck one is not. The verb survives in the hover, where an
   instruction belongs.
 
-  What a pull-request row states in `facts` are the three _reasons it is not merged yet_ — unresolved
-  `comments`, a `merge` conflict, how long it has been `waiting` on a reviewer — each drawn only where
-  it is true, so a row with none of them is visibly a pull request with nothing in its way. `branch`
-  used to be the only one and was the row's least useful fact: the title says what the work is and the
-  refs say where it is.
+  What a pull-request row states in `facts` are the _reasons it is not merged yet_ — a `merge`
+  conflict, how long it has been `waiting` on a reviewer — each drawn only where it is true, so a row
+  with none of them is visibly a pull request with nothing in its way. `branch` used to be among them
+  and was the row's least useful fact: the title says what the work is and the refs say where it is.
+  Unresolved `comments` was one too, and left for the opposite reason — it is not a quantity about the
+  pull request the way an age is, it is a verdict on it, and it wears
+  [its own mark](#the-comments-mark) beside the three it belongs with.
 
 The card draws its rows as **one line each on a fixed rail**: lamp, switch, subject, why, reading,
 chips, action, refs — or, where the card is over-subscribed, [cut in two](#the-strip) with the same
@@ -2473,11 +2505,41 @@ the agent mark, the watch switch, who asked, a title that is a sentence, the cou
 two references, and at a half page every one of them is right and the line is unreadable.
 
 So the rack — and only the rack — takes the **stacked cut**: `layout="stacked"` on `PanelRows`, which
-keeps what the row *is* on the first line and drops how it *stands* onto a strip under the subject.
+keeps what the row _is_ on the first line and drops how it _stands_ onto a strip under the subject.
+
+**The cut is a ceiling, not a shape.** Over-subscription is a fact about the card's _width_, and the
+card cannot see its own — `cn-span2` is a quarter of the page at 2000px and the whole of it at 1250,
+and the rack is over-subscribed only in the first. Stacked at full width it cost 105px a row to leave
+the identity line 640px of gutter and the strip 810px: a card that took 610px to draw five pull
+requests, and read as five cards rather than one. So a stacked row carries **both rails** —
+`--cn-cols-stacked` and `--cn-cols-line`, built by `unstackedTemplate` — and `console.css` picks
+between them on a **container query** against `.cn-rows`. Past it the strip goes `display: contents`
+and its children fall into the row's own grid, on a rail built in the order they are already written:
+nothing is dropped, no mark changes column, the row simply stops wrapping.
+
+**Beside the subject every rail is a width, not a ceiling** — which is what makes the card read as a
+grid rather than as eight rows that each obey the same rule. Each row is its own grid element, so
+`minmax(0, X)` resolves against _that row's_ content, and the subject's `1fr` takes back whatever the
+row gives: a slot that gave any back moved **every column after it**, on that row alone. `facts` was
+the one that varied — a pull request with nothing in its way sized that track to zero and drew its
+switch, its checks and both its marks 62px right of the row above it, each of them individually
+obeying a rail that was never the thing out of line. So the one-line rail is fixed widths throughout,
+`--cn-w-facts` included, and the subject alone takes the slack. Under the subject the strip is the
+row's last track, nothing sits after it, and the ceilings stay. The give a ceiling used to provide is
+the query's job now: below it the row takes the stacked cut, which is the real answer to a card with
+no room.
+
+Two things this forces, both load-bearing. **Nothing on a stacked row is placed by an inline style** —
+an inline `grid-template-columns` is the one declaration a container query cannot outrank, so the two
+rails, the strip's own and the subject's column index all ride as custom properties and the sheet
+applies them. And the query is a **container** query, never a media query: a media query measures the
+window, which on this page is four different card widths at once. `test/rackStrip.test.ts` reads both
+the rails off the markup and the query out of the sheet, because a stacked card that lost the ceiling
+looks exactly like one that never had it.
 
 It is not the table that lost. Nothing about the model changes, no card names a heading, and the slots,
 their order and their widths are the same values `slotsUsed` and the `--cn-w-*` tokens already state —
-the rail simply wraps. What a card chooses is not how its rows are *read* but whether they fit on a
+the rail simply wraps. What a card chooses is not how its rows are _read_ but whether they fit on a
 line, which is a measurable fact about the card rather than a preference, and `test/rackStrip.test.ts`
 holds it to the one card that has it.
 
@@ -2486,7 +2548,7 @@ Three things are load-bearing:
 - **The strip stops at the refs rule.** It is placed on the subject's column — `StackedRow` counts
   which column that is, since the three slots ahead of the subject are each drawn only where some row
   fills them — and never spans the whole rail. The card keeps one unbroken vertical edge between what
-  a row *is* and what it *names*; a strip running under the refs crosses it on every row, and the rule
+  a row _is_ and what it _names_; a strip running under the refs crosses it on every row, and the rule
   stops reading as a rule.
 - **The strip is drawn before the refs in the markup and after them on the glass.** Both are placed by
   hand, so the eye reads title → readings → refs while a screen reader and the keyboard get the row's
@@ -2499,15 +2561,23 @@ Three things are load-bearing:
   a provider reports checks on nearly every pull request, the fleet has read most and a pack exists for
   a handful.
 
-  That order costs the marks their fixed x unless two things follow it, and both do. The checks chip is
-  the one variable-width thing in the slot (`passing` against `2 failing`), so on the rack it is given
-  `--cn-w-ci` rather than left to its text. And the review and pack marks now `reserve` on **every**
+  The run is **checks, review, comments, pack**, and the comments are where that rule gives way to a
+  better one. The first three are the conversation about this diff **in the order it happens** — the
+  machine read it, the fleet read it, then a person asked something — so a reader following the
+  sequence finds the unanswered question where the sequence puts it, rather than after a mark about a
+  document. The pack is not in that sequence at all, which is why it is the one that moves.
+
+  That order costs the marks their fixed x unless two things follow it, and both do. The checks were
+  the one variable-width thing in the slot while they were a chip of words (`passing` against
+  `2 failing`), so they were given `--cn-w-ci` rather than left to their text; they are
+  [a mark](#the-checks-mark) now and the token is that box's width, kept because `CiSlot` has to match
+  it exactly. And the review and pack marks now `reserve` on **every**
   row of the card rather than only where some row fills the column: `reserve` asked whether the reading
   exists anywhere on this card, which made a rack of unread pull requests a different shape from a rack
   of read ones — each fine to look at alone, which is how that kind of drift survives. Where the row is
-  *withholding* the checks rather than lacking them — an agent is on the branch, so they describe a
-  commit being replaced — `CiSlot` keeps the gap. It is deliberately not the chip's own class: it is a
-  gap the width of a chip, not a chip with nothing in it, and the rule that a live agent's row draws no
+  _withholding_ the checks rather than lacking them — an agent is on the branch, so they describe a
+  commit being replaced — `CiSlot` keeps the gap. It is deliberately not the mark's own class: it is a
+  gap the width of a mark, not a mark with nothing in it, and the rule that a live agent's row draws no
   checks is read out of the markup by `test/panelRows.test.ts`.
 
 **A new class name in this sheet is grepped for first.** `cn-strip` is the goal page's pipeline track
@@ -2603,8 +2673,8 @@ card is the drift `PanelRowModel` exists to end, one level up.
   The track's four colours carry their key in the **hover**: a legend would cost more room than the
   bar, and four tones with nothing to read them against is a reading only somebody who has read the
   source can take.
-- **Pull requests** — every open PR with its court in the state column, its checks mark, and the watch
-  eye pinned left of the title. The **row's name opens
+- **Pull requests** — every open PR with its court behind the row's marker, its checks mark, and the
+  watch eye at the head of them. The **row's name opens
   [its page](#the-pull-request-page)**, and the ref beside it carries **both destinations on one
   token** ([both doors](#a-reference-carries-both-its-doors)): the number opens the cockpit's page,
   the arm opens the provider's. The row raises two questions and each answers one — what the harness
@@ -2615,9 +2685,35 @@ card is the drift `PanelRowModel` exists to end, one level up.
   closed PR and an unwatched goal take, off `attention.status === 'unwatched'` rather than a
   second reading of the labels. The chip alone left the one row nothing will happen on sitting at the
   same weight as the ones being worked, which is the whole thing the absent tag is meant to say.
+  **The fade is deep** — a third, not the two thirds it began at. The rack is eight rows of one shape
+  and most of them are unwatched, and the reading it exists to give is _which of these is the fleet
+  actually working_: at a fraction that still reads as a legible row, a scan finds eight rows of
+  slightly different grey instead of two rows and a background. The marks fade with the row, since a
+  verdict about a pull request nobody is working is exactly what should not catch an eye. The
+  **switch** is the one thing held at full strength, because it is how the row comes back for good.
+
+  **And it is drawn out of focus**, which is the part opacity cannot do. A faint row is still a row an
+  eye tries to read — the words are sharp, so it costs a fixation to find out they were not worth one,
+  and eight of those is the scan the card exists to save. Blurred, the row stops offering itself as
+  text and becomes texture: the card's shape, the column of marks and the row's position all survive,
+  and only the reading is withheld until it is asked for. Sub-pixel (0.7px) on purpose — past about a
+  pixel the marks turn to smudges and the row stops being locatable, which is the one thing it still
+  has to be. Hover or focus takes both the blur and the fade off, so reading one is a gesture rather
+  than a squint, and the keyboard gets the same escape the pointer does. Nothing a mark opens is caught
+  in the filter: `.tip` is portalled to the body, which is what the portal was already there for —
+  a filter is a containing block for fixed descendants, exactly as `opacity` is a stacking context.
+
+  **A spent row draws no sub-line.** Both halves of it answer _why is this not moving_, and the struck
+  eye has already given the only answer that matters: nobody asked it to. A row nothing will happen to
+  spending a second line on what it is waiting for is the state word's mistake one line lower, drawn on
+  the rows least worth reading. `prRow` withholds `why` and `facts` on that arm rather than the sheet
+  hiding them, so the row is a one-line row in the markup as well as on the glass — and `cn-subrow` is
+  applied per **row**, not per card, since a second line held open says nothing the way an empty cell
+  in a column does: there is no column to read the absence against, only a row taller than its
+  content.
   Most pull requests here are tagged by the harness itself ([07](07-pull-requests.md#watching)), so
   the button is normally an **un-watch**: the way to stop a runaway agent's pull request.
-  **Yours are a band, above the fleet's** — see [below](#yours-then-the-fleets).
+  **The ones assigned to you are a band, above the fleet's** — see [below](#yours-then-the-fleets).
   A PR is joined to its goal through **`goalOfPr`** — the server's own three-way match (a part's
   `prNumber`, the tracker's `linkedPrNumber`, the branch convention), read backwards — and the goal is
   drawn as a way onto its page, behind the word **`delivers`** — two bare refs state that the row names
@@ -2628,6 +2724,9 @@ card is the drift `PanelRowModel` exists to end, one level up.
   being off is a fact about the deployment worth seeing, and a control that comes and goes with a
   config key reads as a bug in the page. The merged count is drawn only where the snapshot carries a
   closed list at all — absent means the retention window is off, which is not the claim "none merged".
+  **At zero it is drawn quiet** (`cn-quiet`) rather than dropped, for that same distinction: the two
+  claims stay apart, and a zero stops being the loudest thing in the card's top-right corner.
+
 - **Up next** — the last pulse's ranked queue, each row carrying `QueueItem.reason` verbatim. The
   reason is the whole point of the card, being the direct answer to "are we working on the right
   thing", so it wraps rather than being clipped and nothing here re-words it. A held item is toned off
@@ -2674,15 +2773,20 @@ card is the drift `PanelRowModel` exists to end, one level up.
 ### Yours, then the fleet's
 
 The rack's question is _is anything waiting on me_, and it was answered one row at a time:
-a pull request a colleague handed you wore `you` in the state column, which is a reading an operator
+a pull request a colleague handed you wore `you` in a state column, which is a reading an operator
 has to take down the whole card before they know the answer is no. Worse, it is the **same word** a
 pending merge proposal and a conflict put on a row — so "yours" and "your court" were one red chip,
 and the two are different obligations.
 
 So the rack **orders and bands** instead. The pull requests somebody handed you are drawn first, under
-a `Yours` heading in the `ask` red the state column already speaks, and the rest under `The fleet's`;
-each heading carries its own count, so how much is yours is read without counting rows. The predicate
-is **`attention.assignedToYou`**, never `attention.status === 'you'`: that field is set on exactly the
+an `Assigned to review` heading in the `ask` red the row grammar already speaks, and the rest under
+`The fleet's`; each heading carries its own count, so how much is yours is read without counting rows.
+
+**The heading names the obligation, not the possession.** It read `Yours` first, which is a claim of
+ownership over pull requests the fleet wrote and the fleet will land — the one thing they are not —
+and it was a second word for what the band beneath it already says by being called `The fleet's`. What
+is true of every row in the band is that somebody put the operator on the reviewer list, so that is
+what it says. The predicate is **`attention.assignedToYou`**, never `attention.status === 'you'`: that field is set on exactly the
 arm where an assignment _is_ the court ([07](07-pull-requests.md#a-pull-request-a-person-put-on-you)),
 and it is what the queue rail keys on — one field, so the two surfaces cannot come to disagree about
 whose a pull request is.
@@ -5666,11 +5770,17 @@ the wrong thing on exactly the deployments busy enough to have both.
 **A pair of references is joined by its order, not by a word between them.** On the rack and the fleet
 row a row's two refs are a pull request and the goal it delivers, always in that order, and the row
 once said so with a muted `delivers` between them. It cost more than it said: the word was the widest
-thing in the refs slot, and the group packs to the right, so on a half-width card the pair overflowed
+thing in the refs slot, and the group packed to the right, so on a half-width card the pair overflowed
 its column to the _left_ and painted the pull request's own token over the reading slot beside it —
 `agent on it` read as `ag`. The word is gone, `--cn-w-refs` is wide enough for the two tokens, and the
 group is `overflow: hidden` so it can never again spill onto its neighbour. The relation stays in the
 goal ref's hover, which is where a sentence belongs.
+
+**And on the grid the group packs from the rule, not from the card's edge.** The order being fixed is
+what makes a position mean something, and packing right threw that away: the _first_ reference sat at
+a different x on every row depending on whether there was a second, so a column of one kind of thing
+drew as a scatter. From the left each reference sits where its own kind always sits; the raggedness
+moves to the end of the row, which the card's own border already closes.
 
 ## Agent-authored prose
 
@@ -5839,9 +5949,15 @@ structurally in `test/workGraph.test.ts`, `test/stacks.test.ts` and `test/prAtte
 
 The fourth per-item verdict, and the only one drawn as a **glyph alone**: the review mark
 (`web/src/components/ReviewMark.tsx`), one pair of spectacles on a pull request's row and in its
-masthead, tinted by what the reviewer said — green `clear`, red `findings`, amber `routed`, dashed
-blue `deciding`, faint `skipped` and `elsewhere`. It sits left of [the checks mark](#the-checks-mark),
-so the two verdicts read in the order the harness produces them.
+masthead, tinted by what the reviewer said — green `clear`, red `findings`, dashed blue `deciding`,
+faint `skipped` and `elsewhere`. It sits left of [the checks mark](#the-checks-mark), so the two
+verdicts read in the order the harness produces them.
+
+**`routed` takes no tint, alone among the arms.** It was amber, which in this vocabulary is the
+harness stopped and waiting — so a rack of pull requests nobody has got to yet drew an amber box on
+every row, and the two rows that had a verdict to report were the quiet ones. Not read _yet_ is the
+state every pull request starts in: the glyph is enough to hold the column, and the tint stays for the
+marks that are saying something.
 
 **One badge slot on the glyph's shoulder, four meanings** — how many findings, a tick where they have
 been dealt with, a dash for a review that will not happen, an arrow for one that happened somewhere
@@ -5878,10 +5994,28 @@ already means _watching_ — reading a diff and watching an item are different c
 
 Absent where the deployment has no fleet review. → [07](07-pull-requests.md#where-the-operator-sees-it)
 
+### The comments mark
+
+The review threads nobody has answered, drawn as the **speech bubble** with how many on its shoulder
+(`web/src/components/CommentsMark.tsx`). Amber, for the reason the cockpit's other ambers are: nothing
+is going to happen to this on its own. A thread the harness has already handled is not counted, so a
+row wearing this mark is a row with an answer outstanding — `PrComment.handled`, which is
+[a record and never an identity](07-pull-requests.md#attribution-is-a-record-never-an-identity).
+
+**It was a `fact` and it was in the wrong grammar.** `comments 1` sat on the row's sub-line beside
+`waiting 3d` as though the two were the same kind of thing. They are not: `waiting` says how long
+something has been true, and this says somebody asked a question and it is unanswered — a verdict
+about the pull request, which is what the three marks beside it are. On the sub-line it also read at a
+caption's weight, which is the wrong weight for the one reading on the row that is a person waiting.
+
+**The tooltip quotes whose question it is**, three threads at most, each clamped to two lines. A review
+comment is written for somebody reading the diff, so each one is a paragraph; what the mark owes a
+reader on a dense rack is _who is waiting_, and the threads themselves are on the page it opens.
+
 ### The checks mark
 
-A pull request's CI, drawn as a chip that **says its own name and what it found** — `CI 4/4`,
-`CI 1 failed`, `CI 2 running`, `CI 1 muted` (`web/src/components/CiMark.tsx`). One component on all
+A pull request's CI, drawn as the **flask**, tinted by what the checks said, with a count on its
+shoulder where a number is the reading (`web/src/components/CiMark.tsx`). One component on all
 four surfaces that draw checks: the overview's rack, the goal page's pull-request card, a plan part
 carrying an open PR, and the pull-request page's masthead.
 
@@ -5898,15 +6032,28 @@ classifies the **failing** checks and is the only thing that knows which failure
 and which the operator has muted (`ignored`, grey — the absence of a verdict, which is what a muted
 check is). Only where it says nothing does `ciStatus` speak, as `n/n`, `running`, `green` or `red`.
 
-**Where words carry a distinction, hue does not carry it alone.** `1 failed`, `1 for you` and
-`1 muted` are three different obligations and three different words; a reader who cannot tell amber
-from red still gets all three. That is the accessibility bargain the ladder could not make, and the
-reason the mark is a chip where [the review's](#the-fleet-reviews-mark) is a glyph — the review is one
-recurring subject read at a glance, and this is the one an operator has to act on.
+**It was a chip of words before it was a mark**, and the words are the second thing this reading has
+spent. `CI 1 failed`, `CI 2 running`, `CI 1 muted` said the obligation outright, which is the bargain
+the ladder could not make. What it cost was the rail: a chip of words is the one variable-width thing
+on a row of 22px boxes, so it had to be pinned at `--cn-w-ci: 96px` to stop the two marks behind it
+moving from row to row — four times its neighbours' width, on the densest card in the cockpit, for one
+of the three verdicts a row carries. As a mark it is the same box as
+[the review's](#the-fleet-reviews-mark) and [the pack's](31-review-packs.md#on-the-row), and the three
+read as one run rather than as a chip with two marks after it.
 
-**A pending check with nothing in flight reads `stalled`, not `running`.** `CiCheck.expired` is the
+**What the badge keeps and what it spends.** The hue says which kind of trouble and the number says
+how much of it, which is the half a glance uses; the sentence is one hover away, where the two marks
+beside it keep theirs. The distinction it does spend is worth naming: **amber is both `for you` and
+`stalled`**, which the words told apart and a count does not. Both are the same call — nothing will
+happen to this on its own — and `said` separates them in the tooltip and in the accessible name, which
+is where the mark's whole reading lives now.
+
+**The glyph is the flask — the test run, not its verdict.** A tick would be a green mark drawn red on
+exactly the rows that matter.
+
+**A pending check with nothing in flight is amber, not blue.** `CiCheck.expired` is the
 provider saying the last run is stale against the branch and resolves only when somebody queues
-another ([07](07-pull-requests.md)); a chip that called that "running" would be the row promising an
+another ([07](07-pull-requests.md)); a mark that read as running would be the row promising an
 answer that is never coming. Amber, because it is waiting on a person.
 
 **Advisory checks are in no count**, the same silence `ciNeedsAttention` keeps: they are reported for

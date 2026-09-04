@@ -33,7 +33,9 @@ import { relTime } from './util.js';
 const TONE: Record<PrReviewStatus, string> = {
   clear: 'rv-clear t-green',
   findings: 'rv-findings t-red',
-  routed: 'rv-routed t-amber',
+  // No tone alias: `routed` is the state every pull request *starts* in, and the
+  // tinted arms are the ones that have a verdict. → `.rv-routed` in `styles.css`
+  routed: 'rv-routed',
   deciding: 'rv-deciding t-blue',
   skipped: 'rv-skipped',
   elsewhere: 'rv-elsewhere',
