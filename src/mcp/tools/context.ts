@@ -140,7 +140,7 @@ export interface AgentToolTarget {
   recordFeatureSequence(
     agentId: string,
     input: { reason: string; unsure: string | null; edges: FeatureSequenceEdge[] },
-  ): { ok: true; featureOrigin: string; edges: number } | { ok: false; error: string };
+  ): { ok: true; featureOrigin: string; edges: number; carried: boolean } | { ok: false; error: string };
   recordRetrospective(
     agentId: string,
     summary: string,

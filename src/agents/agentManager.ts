@@ -48,7 +48,7 @@ import { goalFingerprint } from '../intake/appraisal.js';
 import { padWriteTarget } from '../scratch/pad.js';
 import { retroSubmitOrigin } from '../retro/retro.js';
 import { featureSummarySubmitOrigin, type FeatureSummaryInput } from '../summaries/featureSummary.js';
-import { featureSequenceSubmitOrigin } from '../sequence/sequence.js';
+import { featureSequenceSubmitOrigin, resequenceVerdict } from '../sequence/sequence.js';
 import type { FeatureSequenceEdge } from '../types.js';
 import { remedyOrigin, type RemedySubmission } from '../remedies/remedies.js';
 import { partConclusionOrigin } from '../mcp/partOutcome.js';
@@ -149,7 +149,7 @@ interface AgentManagerOptions {
    * Feature is proposed again. Absent leaves the key empty, which never matches a
    * live standing and so re-proposes rather than parking the Feature for good.
    */
-  featureSequenceStanding?: (featureOrigin: string) => string | null;
+  featureSequenceStanding?: (featureOrigin: string) => { key: string; members: number[] } | null;
   whitelistedApprovals: WhitelistRule[];
   /** Builds the underlying runtime (PTY or stream-JSON) for a launch spec. */
   createSession: SessionFactory;
@@ -1220,22 +1220,43 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
   recordFeatureSequence(
     agentId: string,
     input: { reason: string; unsure: string | null; edges: FeatureSequenceEdge[] },
-  ): { ok: true; featureOrigin: string; edges: number } | { ok: false; error: string } {
+  ): { ok: true; featureOrigin: string; edges: number; carried: boolean } | { ok: false; error: string } {
     return this.withCaller(agentId, (caller) => {
       const { task } = caller;
       const origin = featureSequenceSubmitOrigin(task.originRef);
       if (!origin.ok) return { ok: false, error: origin.error };
+      const standing = this.opts.featureSequenceStanding?.(origin.featureOrigin) ?? null;
+      const members = standing?.members ?? [];
+      // Whether the operator has already answered *this* order. It carries only
+      // when the new one is provably the old one extended — see
+      // `resequenceVerdict`. Everything else, and every uncertainty, asks again.
+      const previous = this.store.getFeatureSequence(origin.featureOrigin);
+      const verdict = resequenceVerdict(previous, input.edges, members);
       this.store.recordFeatureSequence({
         originRef: origin.featureOrigin,
-        status: 'proposed',
+        status: verdict.carry ? 'accepted' : 'proposed',
         reason: input.reason,
         unsure: input.unsure,
-        standingKey: this.opts.featureSequenceStanding?.(origin.featureOrigin) ?? '',
+        standingKey: standing?.key ?? '',
         edges: input.edges,
+        members,
         agentId,
         taskId: task.id,
       });
-      return { ok: true, featureOrigin: origin.featureOrigin, edges: input.edges.length };
+      // The acceptance is carried by re-stating it, never by the write above:
+      // `recordFeatureSequence` always clears the answer, because an order over a
+      // different set of edges is a new question. Saying it again here is what
+      // makes "this is the same order, extended" an explicit claim rather than an
+      // omission.
+      if (verdict.carry && previous?.answeredBy) {
+        this.store.answerFeatureSequence(origin.featureOrigin, 'accepted', previous.answeredBy);
+      }
+      return {
+        ok: true,
+        featureOrigin: origin.featureOrigin,
+        edges: input.edges.length,
+        carried: verdict.carry,
+      };
     });
   }
 

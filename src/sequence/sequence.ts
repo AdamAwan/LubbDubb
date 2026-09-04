@@ -318,3 +318,59 @@ function text(raw: unknown): string | null {
   const value = raw.trim();
   return value ? value : null;
 }
+
+/**
+ * What a re-proposed order does to the acceptance that stood: carry it, or ask
+ * again. → `docs/spec/33-story-sequencing.md#a-story-is-added`
+ *
+ * The whole question is whether the operator has already answered *this* order. A
+ * Feature that gains a story every few days would otherwise put the same question
+ * to them once a week until they stopped reading it — the failure `declined` exists
+ * to prevent, one door over — and re-asking about an order nobody changed is not a
+ * question, it is a chore.
+ *
+ * So the acceptance carries **only** when the new order can be shown to be the old
+ * one **extended**, which is a mechanical property and not a judgement:
+ *
+ * - every edge the operator accepted, between two stories the Feature still has, is
+ *   still there — a dropped edge un-holds work they chose to hold;
+ * - every edge that is new **touches a story that is new** — an edge added between
+ *   two stories they already ruled on is a change of opinion about work they
+ *   answered, whatever else it leaves alone.
+ *
+ * Anything else is a new question, and so is every uncertainty: a previous order
+ * that was not accepted, and one written before the harness recorded which stories
+ * it covered (`members` null), both fall through to `proposed`. That is the same
+ * direction everything else here errs in — the cost of asking is a click, and the
+ * cost of not asking is work held in an order nobody chose.
+ */
+export function resequenceVerdict(
+  previous: {
+    status: 'proposed' | 'accepted' | 'declined';
+    edges: readonly { issue: number; dependsOn: number }[];
+    members: readonly number[] | null;
+  } | null,
+  proposed: readonly { issue: number; dependsOn: number }[],
+  members: readonly number[],
+): { carry: false } | { carry: true; added: number[] } {
+  if (previous === null || previous.status !== 'accepted' || previous.members === null) return { carry: false };
+  const before = new Set(previous.members);
+  const added = members.filter((n) => !before.has(n));
+  const now = new Set(members);
+  const key = (e: { issue: number; dependsOn: number }): string => `${e.issue}>${e.dependsOn}`;
+  const kept = new Set(proposed.map(key));
+  // Restricted to stories the Feature still has: an edge whose endpoint was
+  // re-parented away is gone whatever the new order says, and holding that against
+  // the proposal would ask the operator about a change they did not make.
+  for (const edge of previous.edges) {
+    if (!now.has(edge.issue) || !now.has(edge.dependsOn)) continue;
+    if (!kept.has(key(edge))) return { carry: false };
+  }
+  const was = new Set(previous.edges.map(key));
+  const isNew = new Set(added);
+  for (const edge of proposed) {
+    if (was.has(key(edge))) continue;
+    if (!isNew.has(edge.issue) && !isNew.has(edge.dependsOn)) return { carry: false };
+  }
+  return { carry: true, added };
+}

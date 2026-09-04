@@ -57,7 +57,7 @@ import {
   type TicketLabelPatch,
   type TrackerSweepMark,
 } from './tickets.js';
-import { SequenceStore } from './sequences.js';
+import { SequenceStore, SEQUENCE_COLUMNS } from './sequences.js';
 import type {
   AccountRateLimits,
   Agent,
@@ -289,6 +289,7 @@ export class Store {
       SCRATCH_COLUMNS,
       REVIEW_PACK_COLUMNS,
       OBSTACLE_COLUMNS,
+      SEQUENCE_COLUMNS,
     ]) {
       addedColumns.push(...ensureColumns(this.db, columns));
     }

@@ -47,7 +47,15 @@ export function featureSequence(s: StageContext): void {
     const verdict = dispatchVerdict(origin, s.now, ctx.recentDecisions, s.cooldown);
     if (verdict.kind === 'escalate' || verdict.kind === 'hold') continue;
 
-    const title = `Sequence feature #${feature.feature.number}`;
+    // Two arms, and the distinction is `issue-replan`'s: whether there is an
+    // existing order to work *from*. Primed with one, the agent is asked where the
+    // new stories go; cold, it is asked for an order. Without the split it would
+    // re-derive the whole thing every time a story was added and put a decision
+    // somebody already took back in front of them.
+    const resequence = stored !== undefined && stored.status === 'accepted';
+    const title = resequence
+      ? `Re-sequence feature #${feature.feature.number}`
+      : `Sequence feature #${feature.feature.number}`;
     const reason = stored
       ? `Feature #${feature.feature.number} has gained or lost stories since its order was written.`
       : `Feature #${feature.feature.number} has ${feature.children.length} stories and no order.`;
@@ -64,7 +72,7 @@ export function featureSequence(s: StageContext): void {
       action: {
         type: 'dispatch_desk_agent',
         title,
-        prompt: s.templates.render('feature-sequence', {
+        prompt: s.templates.render(resequence ? 'feature-resequence' : 'feature-sequence', {
           number: feature.feature.number,
           title: feature.feature.title,
         }),

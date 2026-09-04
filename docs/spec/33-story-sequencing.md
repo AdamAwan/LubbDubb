@@ -84,7 +84,8 @@ key and what the agent may write.
 digests **which** stories are under the Feature — settled ones counted alongside the rest — and what
 the provider says about them, never how any of them is going. A story merging does not invalidate an
 order; a story being _added_ does, and so does the board gaining a Predecessor link, because what was
-accepted was an order over a set of statements and the statements have changed.
+accepted was an order over a set of statements and the statements have changed. What the rule does with
+that firing — the primed arm, and when the acceptance carries — is [a story is added](#a-story-is-added).
 
 That is the whole difference from the summary's key, which digests standings precisely because a
 summary is about movement: re-proposing an order every time a child landed would ask an operator to
@@ -288,6 +289,66 @@ sequence is not amended by that — one story going early is not a new order.
 - **No comment on the ticket.** An order is a harness-side scheduling decision; the board is not
   where it belongs.
 
+## A story is added
+
+The trigger is already there — `featureSequenceKey` digests membership, so a story being added
+changes the key and the rule fires. What this section is about is the two things that would
+otherwise make that firing worse than useless.
+
+### The sequencer is primed, never asked cold
+
+A Feature that already has an accepted order takes the **`feature-resequence`** arm of the rule.
+The distinction is `issue-replan`’s ([08](08-planning.md)) — whether there is an existing answer to
+work _from_ — and so is the failure it avoids: a planner asked cold re-derives a decomposition and
+gives the parts new slugs, stranding the ones in flight; a sequencer asked cold re-derives an order
+and gives the same decisions different answers, putting a judgement somebody already made back in
+front of them.
+
+The order that stands is **appended** to the prompt with the stories (`src/sequence/dossier.ts`),
+every edge with the reason it was written under, and the stories the order has never seen are
+marked `**new**`. The prompt then asks the narrow question — where do the new ones go — rather than
+the broad one.
+
+A `declined` order is deliberately not shown. It is not an order the operator holds; it is them
+saying to run the stories in parallel, and quoting it as something to preserve would invite exactly
+the edges they refused.
+
+### An extension keeps the acceptance
+
+`resequenceVerdict` decides whether a re-proposed order goes back to a person or holds work
+immediately, and it is a **mechanical property, not a judgement**. The acceptance carries only when
+the new order is provably the old one extended:
+
+- every edge the operator accepted, between two stories the Feature still has, is still there — a
+  dropped edge un-holds work they chose to hold;
+- every edge that is new **touches a story that is new** — an edge added between two stories they
+  already ruled on is a change of opinion about work they answered, whatever else it leaves alone.
+
+Anything else is a fresh proposal, and so is every uncertainty: a previous order nobody accepted,
+and one written before the harness recorded which stories it covered.
+
+The reason this arm exists at all is the failure `declined` exists to prevent, one door over. A
+Feature that gains a story every few days would otherwise put the same question to an operator once
+a week until they stopped reading it, and an approval nobody reads is worse than no approval — it
+is the hold standing on a click rather than on a decision. Re-asking about an order nobody changed
+is not a question, it is a chore.
+
+The direction of the risk is stated rather than assumed. Carrying wrongly holds work the operator
+did not agree to; asking unnecessarily costs a click. So every arm that cannot prove the extension
+asks — which is what every row did before this existed.
+
+### What the record needed for it
+
+`feature_sequences.members` — the stories an order was written over, settled ones included. The
+edges alone cannot answer it: a story in the first wave has no row, so an order built only from
+edges cannot tell a story it deliberately left unordered from one it has never seen.
+
+It is an additive `ALTER TABLE` on an existing table, declared in `SEQUENCE_COLUMNS`
+(`src/store/sequences.ts`) — the standing warning that a table being new _once_ does not keep it
+exempt, arriving. **Nullable, and owed no backfill**: null is exactly what every row written before
+it meant, which is that the order does not say which stories it covered, and the one reader treats
+that as "cannot say" and asks. → [14](14-persistence.md#when-a-null-means-something)
+
 ## The cockpit
 
 ### The Feature page
@@ -375,8 +436,12 @@ is a statement about the queue and nothing about it needs a worktree or an agent
 - a cycle, a self-edge and a story the Feature does not have are each refused, and nothing is stored;
 - an order is rewritten as a set, and a rewrite drops the answer while keeping `createdAt`;
 - a Feature with one story, and one above the cap, are not sequenced at all;
-- `linkEdges`, `sequenceReadiness`, `sequenceHoldReason` and `featureSequenceKey` as pure unit
-  tests, with no world.
+- an order extended to cover a new story keeps the acceptance; a dropped edge, an edge added between
+  two stories already ruled on, an unaccepted previous order and a null `members` each ask again;
+- the dossier hands the sequencer the order that stands and marks the new stories, and does not quote
+  a declined one back;
+- `linkEdges`, `sequenceReadiness`, `sequenceHoldReason`, `featureSequenceKey` and `resequenceVerdict`
+  as pure unit tests, with no world.
 
 The readiness function and the key are pure, so the two things most likely to be wrong — which
 stories are ready, and when a Feature is re-proposed — are testable without a harness.

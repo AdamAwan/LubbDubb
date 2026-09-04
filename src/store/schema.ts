@@ -1220,6 +1220,12 @@ CREATE TABLE IF NOT EXISTS feature_sequences (
   reason       TEXT NOT NULL,         -- why this order, in the sequencer's voice
   unsure       TEXT,                  -- the edge it would most like argued with
   standing_key TEXT NOT NULL,
+  -- The stories the order was written over, as a JSON array. Nullable, and the
+  -- null is load-bearing rather than incidental: a row from before this column
+  -- cannot say which stories are new, so a re-sequence over it asks the operator
+  -- again — exactly what every row did before. No backfill is owed for that
+  -- reason. See SEQUENCE_COLUMNS.
+  members      TEXT,
   answered_by  TEXT,                  -- who accepted or declined it
   answered_at  TEXT,
   agent_id     TEXT,                  -- null on a sequence built only from links

@@ -848,13 +848,15 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     // are a hydration field and the mirror does not carry them — and through the same
     // `sequenceableFeatures` the dispatcher walks, so the key an order is stamped with
     // and the key the rule compares it against cannot come to two answers.
-    featureSequenceStanding: (featureOrigin: string): string | null =>
-      sequenceableFeatures(
+    featureSequenceStanding: (featureOrigin: string): { key: string; members: number[] } | null => {
+      const found = sequenceableFeatures(
         store.getWorldBaseline()?.issues ?? [],
         config.issueContainerTypes,
         (issue) => issueWatchGateReason(issue, sequenceWatchPolicy) === null,
         config.issueSequenceMaxChildren,
-      ).find((f) => `issue:${f.feature.number}` === featureOrigin)?.key ?? null,
+      ).find((f) => `issue:${f.feature.number}` === featureOrigin);
+      return found ? { key: found.key, members: found.members } : null;
+    },
     createSession: agentSetup.factory,
     initialInput: agentSetup.initialInput,
     resumeInput: agentSetup.resumeInput,

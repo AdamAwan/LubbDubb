@@ -9,6 +9,7 @@ import { DESKTOP_TOOL_NAMES, MCP_TOOL_NAMES } from '../src/mcp/names.js';
 import {
   featureSequenceKey,
   featureSequenceSubmitOrigin,
+  resequenceVerdict,
   findCycle,
   sequenceableFeatures,
   validateSequenceSubmission,
@@ -85,6 +86,7 @@ function sequence(over: Partial<FeatureSequence> = {}): FeatureSequence {
     unsure: null,
     standingKey: 'k',
     edges: [{ issue: 12, dependsOn: 11, source: 'inferred', reason: 'reads the table #11 writes' }],
+    members: [11, 12],
     answeredBy: 'adam',
     answeredAt: NOW,
     agentId: 'a1',
@@ -323,6 +325,7 @@ test('an order is written as a set, never merged', () => {
     reason: 'first',
     unsure: null,
     standingKey: 'k1',
+    members: [11, 12, 13],
     edges: [
       { issue: 12, dependsOn: 11, source: 'inferred', reason: 'a' },
       { issue: 13, dependsOn: 12, source: 'inferred', reason: 'b' },
@@ -341,6 +344,7 @@ test('an order is written as a set, never merged', () => {
     reason: 'second',
     unsure: 'the 13 → 12 edge',
     standingKey: 'k2',
+    members: [11, 12],
     edges: [{ issue: 12, dependsOn: 11, source: 'inferred', reason: 'a' }],
     agentId: 'a2',
     taskId: 't2',
@@ -546,4 +550,102 @@ test('a Feature the harness can see no stories under is refused, and says why', 
   const done = await deck.call('sequence_read', { issue: 4242 });
   assert.equal(done.isError, true);
   assert.match(done.text as string, /no stories under it/);
+});
+
+// -- a story is added: keep the order, and keep the acceptance ---------------
+
+const E = (issue: number, dependsOn: number) => ({ issue, dependsOn });
+
+function accepted(edges: { issue: number; dependsOn: number }[], members: number[] | null) {
+  return { status: 'accepted' as const, edges, members };
+}
+
+test('an order extended to cover a new story keeps the acceptance', () => {
+  // The whole point: a Feature that gains a story every few days would otherwise
+  // put the same question to the operator once a week until they stopped reading.
+  const verdict = resequenceVerdict(accepted([E(12, 11)], [11, 12]), [E(12, 11), E(14, 11)], [11, 12, 14]);
+  assert.equal(verdict.carry, true);
+  assert.deepEqual(verdict.carry ? verdict.added : null, [14]);
+});
+
+test('a dropped edge asks again — it un-holds work the operator chose to hold', () => {
+  const verdict = resequenceVerdict(accepted([E(12, 11)], [11, 12]), [E(14, 11)], [11, 12, 14]);
+  assert.equal(verdict.carry, false);
+});
+
+test('a new edge between two stories they already ruled on asks again', () => {
+  // A change of opinion about work they answered, whatever else it leaves alone.
+  // #14 is the new story; #13 was already covered, so an edge added between #13
+  // and #12 is a fresh opinion about work the operator already answered.
+  const verdict = resequenceVerdict(
+    accepted([E(12, 11)], [11, 12, 13]),
+    [E(12, 11), E(13, 12), E(14, 11)],
+    [11, 12, 13, 14],
+  );
+  assert.equal(verdict.carry, false);
+});
+
+test('an edge lost because its story left the Feature is not held against the proposal', () => {
+  // #12 was re-parented away. The edge is gone whatever the new order says.
+  const verdict = resequenceVerdict(accepted([E(12, 11), E(13, 11)], [11, 12, 13]), [E(13, 11)], [11, 13]);
+  assert.equal(verdict.carry, true);
+});
+
+test('an order nobody accepted is not one to carry', () => {
+  const verdict = resequenceVerdict(
+    { status: 'proposed', edges: [E(12, 11)], members: [11, 12] },
+    [E(12, 11), E(14, 11)],
+    [11, 12, 14],
+  );
+  assert.equal(verdict.carry, false);
+});
+
+test('a row from before the membership column asks again rather than guessing', () => {
+  // Null means "we cannot say which stories are new", and the cost of asking is a
+  // click while the cost of not asking is work held in an order nobody chose.
+  const verdict = resequenceVerdict(accepted([E(12, 11)], null), [E(12, 11), E(14, 11)], [11, 12, 14]);
+  assert.equal(verdict.carry, false);
+});
+
+test('a first order — nothing on file — is a proposal', () => {
+  assert.equal(resequenceVerdict(null, [E(12, 11)], [11, 12]).carry, false);
+});
+
+test('the re-sequence arm is only taken for an order that stands', async () => {
+  const issues = [story(11), story(12)];
+  const key = features(issues)[0]!.key;
+  // Accepted, but the Feature has since gained #13 — so the key differs and the
+  // rule fires with the standing order to work from.
+  const withNew = [...issues, story(13)];
+  const { upcoming } = await full().decide(ctx(withNew, { featureSequences: [sequence({ standingKey: key })] }));
+  assert.equal(queued(upcoming, 'issue:500:sequence')?.title, 'Re-sequence feature #500');
+
+  const cold = await full().decide(ctx(withNew));
+  assert.equal(queued(cold.upcoming, 'issue:500:sequence')?.title, 'Sequence feature #500');
+});
+
+test('the dossier hands the sequencer the order that stands, and marks what is new', () => {
+  const brief = sequenceBriefing(
+    'issue:500:sequence',
+    [story(11), story(12), story(13)],
+    sequence({ members: [11, 12] }),
+  );
+  assert.ok(brief);
+  assert.match(brief, /#13 — Story 13 — \*\*new\*\*/);
+  assert.ok(!/#11 — Story 11 — \*\*new\*\*/.test(brief), 'a story the order already covered is not new');
+  assert.match(brief, /The order that stands — accepted/);
+  assert.match(brief, /#12 waits on #11/);
+});
+
+test('a declined order is not quoted back as something to preserve', () => {
+  // It is not an order they hold, it is them saying to run the stories in
+  // parallel — quoting it would invite exactly the edges they refused.
+  const brief = sequenceBriefing(
+    'issue:500:sequence',
+    [story(11), story(12)],
+    sequence({ status: 'declined', members: [11, 12] }),
+  );
+  assert.ok(brief);
+  assert.ok(!brief.includes('The order that stands'));
+  assert.ok(!brief.includes('The order proposed last time'));
 });

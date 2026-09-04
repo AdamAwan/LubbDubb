@@ -1,5 +1,24 @@
 import type { FeatureSequence, FeatureSequenceEdge } from '../types.js';
+import type { ColumnMigrations } from './migrate.js';
 import type { StoreContext } from './context.js';
+
+/**
+ * `members` arrived after the table did, so it needs its `ALTER TABLE` — declared
+ * here rather than centrally, so "did this column get an entry?" is answerable
+ * without leaving the file that reads it. The standing comment below said a table
+ * being new *once* does not keep it exempt; this is that.
+ *
+ * **Nullable, and it needs no backfill.** Null is not a third state waiting to be
+ * resolved — it is what every row written before this meant, which is that the
+ * order does not record which stories it was written over. The one reader treats
+ * that as "cannot say", and asks the operator, which is what those rows already
+ * did. → [14](docs/spec/14-persistence.md#when-a-null-means-something)
+ */
+export const SEQUENCE_COLUMNS: ColumnMigrations = {
+  feature_sequences: {
+    members: 'TEXT',
+  },
+};
 
 /**
  * The `feature_sequences` and `feature_sequence_edges` tables: the order the
@@ -38,6 +57,7 @@ export class SequenceStore {
     unsure: string | null;
     standingKey: string;
     edges: readonly FeatureSequenceEdge[];
+    members: readonly number[];
     agentId: string | null;
     taskId: string | null;
   }): FeatureSequence {
@@ -46,6 +66,7 @@ export class SequenceStore {
     const row: FeatureSequence = {
       ...input,
       edges: [...input.edges],
+      members: [...input.members],
       answeredBy: null,
       answeredAt: null,
       createdAt: previous?.createdAt ?? ts,
@@ -55,14 +76,15 @@ export class SequenceStore {
       this.ctx.db
         .prepare(
           `INSERT INTO feature_sequences
-             (origin_ref, status, reason, unsure, standing_key, answered_by, answered_at,
+             (origin_ref, status, reason, unsure, standing_key, members, answered_by, answered_at,
               agent_id, task_id, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?)
+           VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?)
            ON CONFLICT(origin_ref) DO UPDATE SET
              status = excluded.status,
              reason = excluded.reason,
              unsure = excluded.unsure,
              standing_key = excluded.standing_key,
+             members = excluded.members,
              answered_by = NULL,
              answered_at = NULL,
              agent_id = excluded.agent_id,
@@ -75,6 +97,7 @@ export class SequenceStore {
           row.reason,
           row.unsure,
           row.standingKey,
+          JSON.stringify(row.members),
           row.agentId,
           row.taskId,
           row.createdAt,
@@ -155,6 +178,7 @@ export class SequenceStore {
       unsure: row.unsure,
       standingKey: row.standing_key,
       edges,
+      members: parseMembers(row.members),
       answeredBy: row.answered_by,
       answeredAt: row.answered_at,
       agentId: row.agent_id,
@@ -162,6 +186,22 @@ export class SequenceStore {
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
+  }
+}
+
+/**
+ * The stored member list, or null where the row predates the column — or where it
+ * holds something that is not a list of numbers, which reads the same way: we
+ * cannot say which stories are new, so the operator is asked.
+ */
+function parseMembers(raw: string | null): number[] | null {
+  if (raw === null) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed) || !parsed.every((n) => typeof n === 'number')) return null;
+    return parsed as number[];
+  } catch {
+    return null;
   }
 }
 
@@ -180,6 +220,7 @@ interface Row {
   reason: string;
   unsure: string | null;
   standing_key: string;
+  members: string | null;
   answered_by: string | null;
   answered_at: string | null;
   agent_id: string | null;

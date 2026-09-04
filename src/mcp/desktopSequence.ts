@@ -114,13 +114,15 @@ const sequenceAmend: DesktopToolFactory = (deps, session) => ({
     // always clears the answer, because an order over a different set of edges is
     // a new question — so the acceptance is stated separately, by the person
     // making it. Marked `operator` rather than `inferred`: no agent guessed these.
+    const standing = standingFor(deps, found.number);
     const stored = deps.store.recordFeatureSequence({
       originRef: found.originRef,
       status: 'accepted',
       reason: String(args.reason ?? '').trim(),
       unsure: null,
-      standingKey: standingKeyFor(deps, found.number),
+      standingKey: standing.key,
       edges: parsed.submission.edges.map((e) => ({ ...e, source: 'operator' as const })),
+      members: standing.members,
       agentId: null,
       taskId: null,
     });
@@ -170,7 +172,7 @@ function featureFor(
  * key matches no live standing, so the worst case is one proposal, never a Feature
  * parked on an order nothing will revisit.
  */
-function standingKeyFor(deps: DesktopToolDeps, feature: number): string {
+function standingFor(deps: DesktopToolDeps, feature: number): { key: string; members: number[] } {
   const config = deps.briefConfig();
   const policy = {
     watchLabel: watchLabelFor(config.labelPrefix),
@@ -178,14 +180,25 @@ function standingKeyFor(deps: DesktopToolDeps, feature: number): string {
     priorityLabels: {},
     defaultPriority: 0,
   };
-  return (
-    sequenceableFeatures(
-      deps.store.getWorldBaseline()?.issues ?? [],
-      config.issueContainerTypes,
-      (issue) => issueWatchGateReason(issue, policy) === null,
-      config.issueSequenceMaxChildren,
-    ).find((f) => f.feature.number === feature)?.key ?? ''
-  );
+  const found = sequenceableFeatures(
+    deps.store.getWorldBaseline()?.issues ?? [],
+    config.issueContainerTypes,
+    (issue) => issueWatchGateReason(issue, policy) === null,
+    config.issueSequenceMaxChildren,
+  ).find((f) => f.feature.number === feature);
+  // The stories the Feature actually has, even where it is one the sequencer
+  // would not be asked about: an operator may order a two-story Feature by hand,
+  // and recording no membership for it would make the next re-sequence ask again
+  // for no reason.
+  return {
+    key: found?.key ?? '',
+    members:
+      found?.members ??
+      (deps.store.getWorldBaseline()?.issues ?? [])
+        .filter((i) => i.parent?.number === feature)
+        .map((i) => i.number)
+        .sort((a, b) => a - b),
+  };
 }
 
 /** What the registry in `desktopTools.ts` mounts. */

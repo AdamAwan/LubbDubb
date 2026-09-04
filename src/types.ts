@@ -2444,6 +2444,16 @@ export interface FeatureSequence {
   standingKey: string;
   /** The order itself. Rewritten as a set, never merged. */
   edges: FeatureSequenceEdge[];
+  /**
+   * The stories this order was written over, ascending — every watched child the
+   * Feature had, settled ones included.
+   *
+   * **Null on a row written before the column existed**, and null means *we cannot
+   * say which stories are new*. That is the fail-open reading: a re-sequence that
+   * cannot prove it only extended the order asks the operator again, which is what
+   * every row did before this. → `docs/spec/33-story-sequencing.md#a-story-is-added`
+   */
+  members: number[] | null;
   /** Who accepted or declined it, and when. Null while it is still a proposal. */
   answeredBy: string | null;
   answeredAt: string | null;

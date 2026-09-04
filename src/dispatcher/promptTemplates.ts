@@ -35,6 +35,7 @@ type PromptId =
   | 'issue-appraisal'
   | 'issue-retro'
   | 'feature-sequence'
+  | 'feature-resequence'
   | 'feature-summary'
   | 'validation-check'
   | 'validation-failed'
@@ -478,6 +479,16 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       '3. **unsure** \u2014 the edge you would most like argued with, and what would change your mind. An order with no stated doubt is one nobody can disagree with usefully, and somebody is about to be asked to accept this.\n\n' +
       'It is a **proposal**. Nothing is held until a person accepts it, nothing is written to the tracker, no state is moved and no story is closed. Write the order you would defend rather than the one that is safest to submit.',
     doc: 'Sent to a desk agent when a Feature has gained or lost stories since anybody wrote an order for them, or has never had one (rule `feature-sequence`, which runs only at `issueSequencing: full`). The Feature\u2019s description and every story under it are *appended* to the rendered prompt rather than interpolated, so an override that never learned about them cannot silently drop the half the agent cannot work without. Placeholders: {number} {title}.',
+  },
+  'feature-resequence': {
+    placeholders: ['number', 'title'],
+    template:
+      'Feature #{number} ("{title}") has gained or lost stories since its order was written. Fit the change into the order that stands.\n\n' +
+      '**Keep the order you are given.** It is appended below, and somebody has already read and accepted it — every edge in it is a decision that was made, and re-deriving the whole thing from scratch would put that decision back in front of them for no reason. Change an edge only where the new stories make the old answer wrong, and say in `reason` which edge you changed and why.\n\n' +
+      'What is actually being asked is narrow: where do the **new** stories go? They are marked in the list below. Most of the time the answer is that they wait on nothing and start immediately, or that they wait on exactly one story that produces the thing they read.\n\n' +
+      'It matters whether you keep the order because of what happens next. If your order keeps every accepted edge and only adds edges touching the new stories, it is taken as the same order extended and **holds work immediately** — nobody is asked again. If it changes anything else, it goes back to a person as a fresh proposal and holds nothing until they answer. Neither is wrong; the second is simply a question, so only ask it when you have something to ask.\n\n' +
+      'Submit with sequence_submit, as the **whole** order rather than the change to it — what you send replaces what stands, so carry every edge you are not deliberately changing. An empty order says these stories are independent after all, and releases everything the previous one held.',
+    doc: 'Sent to a desk agent when a Feature that already has an order gains or loses stories (rule `feature-sequence`). The `feature-sequence` prompt\u2019s sibling, and the distinction is `issue-replan`\u2019s: whether there is an existing answer to work *from*. The stories, the Feature\u2019s description, the standing order and which stories are new are all *appended* to the rendered prompt rather than interpolated, so an override that never learned about them cannot silently drop the half the agent cannot work without. Placeholders: {number} {title}.',
   },
   'feature-summary': {
     placeholders: ['number', 'title'],
