@@ -2616,10 +2616,22 @@ select:disabled {
   color: var(--text);
   border-color: var(--accent);
 }
-/* A change waiting on the operator: the one control on this rail that is asking
-   them something, on the same amber the pending block below it uses. */
-.pm-jump.history.waiting {
+/* A tab that is asking the operator for something, on the same amber as the thing
+   below it that is asking — a pending change, or caveats still to tick. The rail is
+   otherwise navigation, so the tint is the only thing on it that means "not done",
+   and it clears the moment that stops being true. */
+.pm-jump.waiting {
   color: var(--amber);
+}
+.pm-jump.waiting .k {
+  color: var(--amber);
+}
+/* A jump keeps its underline; the History control is a bordered tab, so it takes
+   the amber on the border it already has. */
+.pm-jump.waiting:not(.history) {
+  border-bottom-color: var(--amber-line);
+}
+.pm-jump.history.waiting {
   border-color: var(--amber-line);
   background: var(--amber-fill);
 }
@@ -2987,15 +2999,12 @@ select:disabled {
   padding-top: 10px;
   border-top: 1px solid var(--border);
 }
-/* The sheet's checklist is a precondition, not the document. A plan that raises
-   several caveats, each with the planner's own words under it, otherwise grows the
-   decision bar until the middle it is pushing against — the plan being read — is a
-   slot a few lines tall. Capped and scrolling itself, so the sheet's proportions
-   stay the plan's however many boxes there are. Scoped to the sheet: on a card the
-   checklist has no document to crowd out. */
+/* On the sheet the checklist is the last thing in the caveats section, inside the
+   plan's own scroll — so it grows down the document instead of eating the middle,
+   and never scrolls inside a scroll. On a card it is still the run of boxes above
+   the buttons, which is why the margin is scoped away here rather than dropped. */
 .plan-sheet .caveat-ack {
-  max-height: min(28vh, 240px);
-  overflow-y: auto;
+  margin-top: 2px;
 }
 .pm-row .spacer {
   flex: 1;

@@ -5217,6 +5217,13 @@ scrolling reaches all of them anyway. The head, the rail and the decision bar ar
 scrolls between them, because a plan is read _while_ deciding and the verdict buttons must not scroll
 away from the part being read.
 
+**A rail tab goes amber while its section is asking for something.** Two do: `Caveats`, which carries
+a ticked/total count and stays amber until the last box is ticked, and the `History` control on the
+right when a change is waiting on the operator. The rail is otherwise navigation, so the tint is the
+only thing on it that means "not done", and it is what a held Approve points back to — the checklist
+sits in the scroll, and an operator who has not scrolled that far would otherwise have a disabled
+button and nowhere on the sheet saying where the boxes are.
+
 ### The verdict band
 
 `diagnosis` and `approach` **side by side**, not stacked: a long "what's wrong" used to push "what
@@ -5864,13 +5871,16 @@ other.
   not a fault. The button is **disabled with a hint naming how many are outstanding** rather than left
   to 400 — the route refuses it either way ([08](08-planning.md#what-the-plan-raises-is-acknowledged-not-merely-rendered)),
   and this is that answer where the operator is already looking. Reject, Hold and Close stay live: only
-  releasing the work is gated. The same checklist is drawn on the plan sheet, above its own Approve,
-  because that is the other surface the plan can be released from — and the surface where it has
-  actually been read. There it is **capped at ~28vh and scrolls itself**, and `.pm-body` keeps a
-  floor of its own: the sheet is one column whose middle scrolls between a fixed head and a fixed
-  decision bar, so every line the checklist grows by comes straight out of the plan being read —
-  a plan raising several caveats, each with the planner's words under it, otherwise leaves a slot a
-  few lines tall to read it in.
+  releasing the work is gated. The same checklist is drawn on the plan sheet, because that is the
+  other surface the plan can be released from — and the surface where it has actually been read.
+  There it sits **inside the scroll, as the last thing in the caveats section**, not in the decision
+  bar: the sheet is one column whose middle scrolls between a fixed head and a fixed decision bar, so
+  every line the checklist grew by in the bar came straight out of the plan being read — a plan
+  raising several caveats, each with the planner's words under it, left a slot a few lines tall to
+  read it in, and capping the checklist only traded that for a scroll inside a scroll. In the
+  document it grows downward and costs the plan nothing, and it lands where the rail's `Caveats`
+  jump already goes, beside the prose it is asking about. The held Approve stays in the bar with its
+  hint naming how many are outstanding, which is what points back up to the boxes.
 
 A **shortfall proposal carries a third arm**, `Overrule the assessment`, beside Approve and Reject.
 The other two settle what to _do_ about the assessor's finding; this one settles the finding itself.
