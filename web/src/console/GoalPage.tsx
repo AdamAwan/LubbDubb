@@ -28,6 +28,7 @@ import { issueTypeTone } from '../issueGroups.js';
 import { Tag, type TagTone } from '../components/tag.js';
 import { fmtUsd, relTime } from '../components/util.js';
 import { Ref, TicketLink } from '../components/refs.js';
+import { waitingOnThis, waitsOn, waveOf, wavesOf } from '../view/sequence.js';
 import { askPrompt, localRunPrompt } from '../cockpit/desktopLink.js';
 import { DesktopLink } from '../components/DesktopLink.js';
 import { Icon } from '../components/icons.js';
@@ -184,6 +185,7 @@ export function GoalPage({
       />
       <LocalValidation page={page} view={view} actions={actions} fold={folds.localValidation} />
       <Signals page={page} actions={actions} refUrls={view.state.refUrls} fold={folds.signals} />
+      <Sequence page={page} fold={folds.sequence} />
       <div className="cn-gcols">
         <div className="cn-stack">
           <PullRequests page={page} view={view} actions={actions} />
@@ -1491,6 +1493,81 @@ function ThreadChip({ pr }: { pr: PullRequest }): JSX.Element | null {
     <Tag tone="amber" fill title="Review threads the fleet has not answered">
       {waiting} on us
     </Tag>
+  );
+}
+
+/**
+ * Where this story sits in the order its Feature was given — folded shut.
+ *
+ * Shut by default because a story's own page is read for the story, and its
+ * neighbours are what the Feature page is for. **The folded reading is the whole
+ * point of folding it**: `wave 2 of 4 · 2 waiting on this` says what the rows
+ * would, and a goal nothing is waiting on says so without being opened — the
+ * `0/3 reached` case. `2 waiting on this` is the reason to open it, and the
+ * Feature’s ref sits on the shut header so the way up does not require expanding.
+ *
+ * A copy, never a second record: the order is the Feature’s, and it is answered,
+ * amended and argued with there.
+ * → `docs/spec/33-story-sequencing.md#the-goal-page`
+ */
+function Sequence({ page, fold }: { page: GoalPageView; fold: Fold }): JSX.Element | null {
+  const sequence = page.sequence;
+  const parent = page.issue.parent?.number;
+  if (sequence === null || parent === undefined) return null;
+  const me = page.issue.number;
+  const waves = wavesOf([...new Set([me, ...sequence.edges.flatMap((e) => [e.issue, e.dependsOn])])], sequence.edges);
+  const mine = waveOf(me, sequence.edges);
+  const behind = waitsOn(me, sequence.edges);
+  const ahead = waitingOnThis(me, sequence.edges);
+  return (
+    <section className="cn-card">
+      <h3>
+        <Disclosure open={fold.open} onToggle={fold.onToggle} label="Sequence" />
+        <i className="cn-n">
+          wave {mine + 1} of {waves.length}
+          {ahead.length === 0 ? '' : ` · ${ahead.length} waiting on this`}
+        </i>
+        <span className="cn-refs">
+          <Ref to={`issue:${parent}`} />
+        </span>
+      </h3>
+      {fold.open && (
+        <div className="cn-rows">
+          {/* Either side of this goal, and nothing else: the whole order belongs
+              on the Feature, and repeating it here would be a second list of the
+              same stories with no way to act on it. */}
+          <SequenceSide label="This waits on" issues={behind} empty="nothing — it is in the first wave" />
+          <SequenceSide label="Waiting on this" issues={ahead} empty="nothing" />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SequenceSide({
+  label,
+  issues,
+  empty,
+}: {
+  label: string;
+  issues: readonly number[];
+  empty: string;
+}): JSX.Element {
+  return (
+    <div className="cn-row">
+      <span className="cn-grow">
+        <b className="cn-name">{label}</b>
+        {issues.length === 0 ? (
+          <span className="cn-sub">{empty}</span>
+        ) : (
+          <span className="cn-refs">
+            {issues.map((n) => (
+              <Ref key={n} to={`issue:${n}`} />
+            ))}
+          </span>
+        )}
+      </span>
+    </div>
   );
 }
 

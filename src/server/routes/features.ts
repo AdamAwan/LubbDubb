@@ -85,6 +85,9 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
         // What rule `feature-summary`'s agents have written. Quoted whole; the
         // route reads no field of it.
         summaries: new Map(store.listFeatureSummaries().map((f) => [f.originRef, f])),
+        // And the orders, on the same key. Quoted whole for the same reason: the
+        // route forms no opinion about an order, not even which wave a story is in.
+        sequences: new Map(store.listFeatureSequences().map((s) => [s.originRef, s])),
         // Every escalation; the briefing keeps the open ones that name a goal. The
         // filtering is the lens's, not the route's, for the reason every other
         // reading here is quoted rather than prepared.

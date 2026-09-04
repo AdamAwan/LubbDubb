@@ -10,6 +10,7 @@ import type {
   PlanPart,
   PullRequest,
   EnvironmentGateRelease,
+  FeatureSequence,
   GoalEnvironmentReach,
   GoalWatch,
   GoalWatchView,
@@ -155,6 +156,12 @@ export interface GoalPageView {
    * shows none.
    */
   signals: GoalWatch[];
+  /**
+   * The accepted order holding this story, from the Feature it hangs off — null
+   * for a story with no parent, a Feature nobody sequenced, and an order nobody
+   * accepted. All three draw nothing, which is the same card being absent.
+   */
+  sequence: FeatureSequence | null;
 }
 
 /**
@@ -440,7 +447,26 @@ export function buildGoalPage(
     // the live checks with the ruling on it, which is the only place an operator
     // who never opens the plan sheet would see one.
     signals: (state.goalWatches ?? []).filter((w) => w.originRef === ref),
+    // The **accepted** order for the Feature this story hangs off, or null. A
+    // proposal nobody has answered holds nothing, so drawing it here would show a
+    // story waiting behind a decision that has not been taken — and the place to
+    // answer one is the Feature it belongs to, not one of its stories.
+    sequence: goalSequence(state, issue),
   };
+}
+
+/**
+ * The order holding this story, from the Feature it hangs off.
+ *
+ * Null for a story with no parent, a Feature nobody has sequenced, and an order
+ * nobody has accepted — three absences that all mean the same thing to this page,
+ * which is that it draws no Sequence card at all.
+ */
+function goalSequence(state: AppState, issue: Issue): FeatureSequence | null {
+  const parent = issue.parent?.number;
+  if (parent === undefined) return null;
+  const row = (state.featureSequences ?? []).find((s) => s.originRef === `issue:${parent}`);
+  return row?.status === 'accepted' ? row : null;
 }
 
 /**
@@ -663,6 +689,7 @@ export const GOAL_SECTIONS = [
   'validation',
   'localValidation',
   'signals',
+  'sequence',
   'environments',
   'tail',
   'record',
@@ -710,6 +737,11 @@ export function goalSectionsOpen(page: GoalPageView): Record<GoalSection, boolea
     localValidation: page.issue.localValidation !== null,
     signals: (shipped(page) && page.signals.length > 0) || page.signals.some((s) => !s.live || s.proposal !== null),
     environments: page.environments.some((e) => e.status !== 'absent'),
+    // Shut, always. A story's own page is read for the story, and its neighbours
+    // are what the Feature page is for — the folded heading carries the whole
+    // point ("wave 2 of 4 · 2 waiting on this"), so a goal nothing is waiting on
+    // says so without being opened.
+    sequence: false,
     tail: tailBegun(page),
     // The work record is what is *left* of the goal once the snapshot has
     // forgotten it, and it fetches its own route on open. Nothing about the goal's

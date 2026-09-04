@@ -1,11 +1,11 @@
 # 33 — Story sequencing
 
-> **Partly built.** The gate, the record and the sequencer all run. What is **not** built is the
-> cockpit: the wave rail on the Feature card, the proposal card and the folded copy on the Goal page
-> are still italic, and until they exist an order is answered through `POST /api/features/:number/sequence`
-> and nowhere else. Amending one by talking to Claude Code is not built either. The build order is
-> in `docs/plans/story-sequencing.md`. With `issueSequencing` `off`, which is the default, the
-> harness behaves exactly as it did before any of this — every watched story under a Feature is
+> **Partly built.** The gate, the record, the sequencer and both cockpit surfaces run. What is
+> **not** built is [amending an order by talking to Claude Code](#amending-it) — no `sequence_amend`,
+> no `sequence_read`, and no `Discuss…` link — so an accepted order is changed today only by the
+> sequencer proposing a new one, which it does when the Feature gains or loses a story. The build
+> order is in `docs/plans/story-sequencing.md`. With `issueSequencing` `off`, which is the default,
+> the harness behaves exactly as it did before any of this — every watched story under a Feature is
 > eligible the moment it carries the tag, ordered by `issuePriorityLabels` and then the issue number
 > ([06](06-issue-pickup.md#priority)).
 
@@ -293,14 +293,24 @@ sequence is not amended by that — one story going early is not a new order.
 ### The Feature page
 
 The sequence **groups the children list that is already on the card** — it does not add a second
-list of the same stories (`web/src/components/FeatureBoard.tsx`). The existing columns are unchanged;
-what is new is a wave rail down the left, a wave header naming what the wave waits on, and a cell on
-a held row saying what it waits behind.
+list of the same stories (`web/src/components/FeatureBoard.tsx`). Two lists of the same stories in
+different orders are two answers to "what is under this Feature", and a reader would have to work
+out which to believe. The existing columns are unchanged; what is new is a wave header row above
+each group and, under a held story, a row saying what it waits behind. Within a wave the board's own
+ordering stands: a sequence says which stories go together and has no opinion about which of two
+that can both start is the more interesting to look at.
 
-Above the waves: the sequencer's reason, and `Discuss…` / `Re-sequence`, which is the pair the plan
-modal already draws as `Discuss…` / `Replan`.
+Only an **accepted** order groups the list. A proposal holds nothing, so drawing the rows under one
+as though it did would show an operator the shape of a decision they have not taken.
 
-A Feature with no accepted sequence draws none of this — the flat children list, exactly as today.
+Above it sits the proposal itself while one is open — the order as waves, the sequencer's reason,
+what it was unsure about, every edge marked `tracker link` or `inferred`, what accepting costs, and
+**Accept** / **Run them all**. Answered, it collapses to one line saying which, because the answer's
+whole consequence is the wave rail below it or its absence.
+
+A Feature with no sequence at all draws none of this — the flat children list, exactly as today.
+Neither does the orphan bucket, which is not a Feature: an order is a statement about the stories
+under one.
 
 ### The Goal page
 
@@ -313,8 +323,17 @@ nothing is waiting on says so without being opened, which is the `0/3 reached` c
 this` is the reason to open it. The Feature's ref sits on the shut header, so the way up does not
 require expanding.
 
-Opened, it draws the waves either side of this goal: what it waits on, with standings, and what
-waits on it.
+Opened, it draws the two sides of this goal and nothing else: what it waits on, and what waits on
+it. Both are **direct**, never transitive — "2 waiting on this" has to be a number the card in front
+of the operator adds up to, and a transitive count is one nothing on the page shows. The whole order
+belongs on the Feature, and repeating it here would be a second list with no way to act on it.
+
+The sequence reaches this page on the **state snapshot** (`featureSequences`) rather than through
+`/api/features`, because the Goal page is assembled client-side from that snapshot: an order
+reachable only through the feature board's own fetch could not be drawn beside the story it holds.
+
+Waves are derived where they are drawn (`web/src/view/sequence.ts`), from the edges the wire ships —
+`layoutFloor`'s arrangement, and for its reason.
 
 ## Configuration
 

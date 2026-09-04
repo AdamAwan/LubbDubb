@@ -11,10 +11,11 @@ import {
   validateSequenceSubmission,
 } from '../src/sequence/sequence.js';
 import { linkEdges } from '../src/sequence/readiness.js';
+import { heldByAccepting, waitingOnThis, waitsOn, waveOf, wavesOf } from '../web/src/view/sequence.js';
 import { pastTheFunnel } from './support/plans.js';
 import { sequenceBriefing } from '../src/sequence/dossier.js';
 import type { DispatchContext, QueueItem } from '../src/dispatcher/dispatcher.js';
-import type { FeatureSequence, Issue, IssueRelative } from '../src/types.js';
+import type { FeatureSequence, FeatureSequenceEdge, Issue, IssueRelative } from '../src/types.js';
 
 // Stage 1 of story sequencing: the record, the sequencer and the hold an accepted
 // order puts on work. → `docs/spec/33-story-sequencing.md`
@@ -386,4 +387,58 @@ test('the tracker’s own links need no sequence row', () => {
   assert.deepEqual(linkEdges([story(11), story(12, { dependsOn: [{ ...FEATURE, number: 11 }] })]), [
     { issue: 12, dependsOn: 11 },
   ]);
+});
+
+// -- the cockpit's own derivation --------------------------------------------
+
+test('a wave is longest path, so a story never draws above what it waits on', () => {
+  // The rejoin: #14 waits on #12 and #13, and #12 waits on #11. Taking the first
+  // prerequisite listed would put #14 in wave 2 — above #12, which it waits on.
+  const edges: FeatureSequenceEdge[] = [
+    { issue: 12, dependsOn: 11, source: 'inferred', reason: null },
+    { issue: 14, dependsOn: 13, source: 'inferred', reason: null },
+    { issue: 14, dependsOn: 12, source: 'inferred', reason: null },
+  ];
+  assert.equal(waveOf(11, edges), 0);
+  assert.equal(waveOf(13, edges), 0);
+  assert.equal(waveOf(12, edges), 1);
+  assert.equal(waveOf(14, edges), 2);
+});
+
+test('every story lands in exactly one wave, whether or not the order mentions it', () => {
+  const edges: FeatureSequenceEdge[] = [{ issue: 12, dependsOn: 11, source: 'inferred', reason: null }];
+  const waves = wavesOf([11, 12, 99], edges);
+  assert.deepEqual(
+    waves.map((w) => w.issues),
+    [[11, 99], [12]],
+    'a story with no edge waits on nothing and is in the first wave',
+  );
+});
+
+test('the two sides of a story are direct, never transitive', () => {
+  // "2 waiting on this" has to be a number the card in front of the operator adds
+  // up to; a transitive count is one nothing on the page shows.
+  const edges: FeatureSequenceEdge[] = [
+    { issue: 12, dependsOn: 11, source: 'inferred', reason: null },
+    { issue: 13, dependsOn: 12, source: 'inferred', reason: null },
+  ];
+  assert.deepEqual(waitingOnThis(11, edges), [12]);
+  assert.deepEqual(waitsOn(12, edges), [11]);
+  assert.deepEqual(waitsOn(11, edges), []);
+});
+
+test('what accepting costs counts only stories still open', () => {
+  const edges: FeatureSequenceEdge[] = [{ issue: 12, dependsOn: 11, source: 'inferred', reason: null }];
+  assert.equal(heldByAccepting([11, 12], edges), 1);
+  // #11 has merged and is no longer in the list: accepting now holds nothing.
+  assert.equal(heldByAccepting([12], edges), 0);
+});
+
+test('a cycle in a stored order does not spin the display', () => {
+  // Ingestion refuses cycles, but this runs against whatever the payload carries.
+  const edges: FeatureSequenceEdge[] = [
+    { issue: 11, dependsOn: 12, source: 'inferred', reason: null },
+    { issue: 12, dependsOn: 11, source: 'inferred', reason: null },
+  ];
+  assert.equal(typeof waveOf(11, edges), 'number');
 });

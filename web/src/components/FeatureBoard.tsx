@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import type { JSX, ReactNode } from 'react';
 import { api } from '../api.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { CockpitView } from '../view/viewModel.js';
 import { Ref } from './refs.js';
+import { AsyncButton } from './AsyncButton.js';
+import { heldByAccepting, waitsOn, wavesOf } from '../view/sequence.js';
 import { fmtUsd, relAge } from './util.js';
 import type {
   FeatureBlockKind,
@@ -16,10 +18,11 @@ import type {
   FeatureReach,
   FeatureReportRow,
   FeatureRollup,
+  FeatureSequence,
   FeatureSummary,
   FeatureWorkingRow,
 } from '../types.js';
-import { Panel } from './panel.js';
+import { HeadRow, Panel } from './panel.js';
 import { Tag, type TagTone } from './tag.js';
 
 /**
@@ -97,7 +100,13 @@ export function FeatureBoard({ view, actions }: { view: CockpitView; actions: Co
       <Legend />
 
       {features.map((feature) => (
-        <FeatureCard key={feature.number} feature={feature} view={view} actions={actions} />
+        <FeatureCard
+          key={feature.number}
+          feature={feature}
+          view={view}
+          actions={actions}
+          onAnswered={() => void read()}
+        />
       ))}
 
       {orphans !== null && (
@@ -112,7 +121,9 @@ export function FeatureBoard({ view, actions }: { view: CockpitView; actions: Co
             {money(orphans.costUsd)} spent under no Feature — so every roll-up above understates its own.
           </p>
           <Briefing briefing={orphans.briefing} now={view.now} actions={actions} />
-          <Children rows={orphans.children} total={orphans.counts.total} actions={actions} />
+          {/* No order: the orphan bucket is not a Feature, and an order is a
+              statement about the stories under one. */}
+          <Children rows={orphans.children} total={orphans.counts.total} actions={actions} sequence={null} />
         </Panel>
       )}
 
@@ -134,10 +145,12 @@ function FeatureCard({
   feature,
   view,
   actions,
+  onAnswered,
 }: {
   feature: FeatureRollup;
   view: CockpitView;
   actions: CockpitActions;
+  onAnswered: () => void;
 }): JSX.Element {
   const now = view.now;
   const attention = wantsYou(feature, view);
@@ -165,6 +178,8 @@ function FeatureCard({
 
       <Summary summary={feature.summary} now={now} />
 
+      <Sequence feature={feature} view={view} onAnswered={onAnswered} />
+
       <Briefing briefing={feature.briefing} now={now} actions={actions} />
 
       <div className="cn-fb-side">
@@ -178,7 +193,7 @@ function FeatureCard({
         </span>
       </div>
 
-      <Children rows={feature.children} total={feature.counts.total} actions={actions} />
+      <Children rows={feature.children} total={feature.counts.total} actions={actions} sequence={held(feature)} />
     </Panel>
   );
 }
@@ -204,6 +219,149 @@ function FeatureCard({
  * board beneath is unchanged by its absence — nothing here gates anything.
  * → docs/spec/17-cockpit.md#the-feature-summary
  */
+/**
+ * The order that is actually holding work, or null.
+ *
+ * Only `accepted` groups the children into waves. A proposal nobody has answered
+ * holds nothing, so drawing the list under it as though it did would show an
+ * operator the shape of a decision they have not taken — and a declined order is
+ * one they have taken the other way.
+ */
+function held(feature: FeatureRollup): FeatureSequence | null {
+  return feature.sequence?.status === 'accepted' ? feature.sequence : null;
+}
+
+/**
+ * The order the stories under this Feature go in — the proposal while nobody has
+ * answered it, and the one line that says so once somebody has.
+ *
+ * The **waves themselves are not drawn here**. They group the children list that
+ * is already on the card ({@link Children}), because a second list of the same
+ * stories in a different order is two answers to "what is under this Feature" and
+ * a reader would have to work out which one to believe.
+ *
+ * A Feature with no order draws none of this, which is every Feature until
+ * `issueSequencing` is switched on. → `docs/spec/33-story-sequencing.md#the-cockpit`
+ */
+function Sequence({
+  feature,
+  view,
+  onAnswered,
+}: {
+  feature: FeatureRollup;
+  view: CockpitView;
+  onAnswered: () => void;
+}): JSX.Element | null {
+  const sequence = feature.sequence;
+  if (sequence === null) return null;
+  const open = feature.children.map((c) => c.number);
+  const waves = wavesOf(open, sequence.edges);
+
+  if (sequence.status !== 'proposed') {
+    // Answered, either way: one line, because the answer's whole consequence is
+    // already visible — an accepted order is the wave rail below, and a declined
+    // one is its absence. Said rather than left silent so an operator can see the
+    // fleet is not going to ask again.
+    return (
+      <p className="cn-psub cn-fb-seq-said">
+        {sequence.status === 'accepted'
+          ? `Order accepted — ${waves.length} wave${waves.length === 1 ? '' : 's'}`
+          : 'You said run them all — the fleet will not propose an order again until this Feature gains or loses a story'}
+        {sequence.answeredBy === null ? '' : ` · ${sequence.answeredBy}`}
+      </p>
+    );
+  }
+
+  const wouldHold = heldByAccepting(open, sequence.edges);
+  return (
+    <div className="cn-fb-seq">
+      <h4>Proposed order</h4>
+      <p className="cn-fb-seq-why">{sequence.reason}</p>
+      {sequence.unsure !== null && (
+        // The edge it would most like argued with. `openQuestions`' job on the plan
+        // document: an order with no stated doubt is one nobody can disagree with
+        // usefully, and somebody is being asked to accept this one.
+        <p className="cn-fb-seq-unsure">
+          <b>Least sure about</b> {sequence.unsure}
+        </p>
+      )}
+      <div className="cn-fb-seq-waves">
+        {waves.map((wave) => (
+          <HeadRow key={wave.depth} align="baseline">
+            <b>Wave {wave.depth + 1}</b>
+            <span className="cn-refs">
+              {wave.issues.map((n) => (
+                <Ref key={n} to={`issue:${n}`} />
+              ))}
+            </span>
+          </HeadRow>
+        ))}
+      </div>
+      <Edges sequence={sequence} />
+      {/* What accepting costs. Without it the operator is agreeing to a hold whose
+          size is not on the card. */}
+      <p className="cn-psub">
+        {wouldHold === 0
+          ? 'Accepting holds nothing right now — everything this order puts later is already settled or in flight.'
+          : `Accepting holds ${wouldHold} of these ${open.length} stories until what they wait on has a branch.`}
+      </p>
+      <div className="cn-fb-seq-ctrls">
+        <AsyncButton
+          tone="primary"
+          size="small"
+          onClick={async () => {
+            await api.answerFeatureSequence(feature.number, 'accepted', view.state.config.desktopFolder || 'you');
+            onAnswered();
+          }}
+        >
+          Accept
+        </AsyncButton>
+        <AsyncButton
+          ghost
+          size="small"
+          onClick={async () => {
+            await api.answerFeatureSequence(feature.number, 'declined', view.state.config.desktopFolder || 'you');
+            onAnswered();
+          }}
+        >
+          Run them all
+        </AsyncButton>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Every edge, with **where it came from marked**.
+ *
+ * The mark is not decoration. `link` is a statement somebody made on their own
+ * board and `inferred` is one agent's reading of the items' text, and a card that
+ * drew the two the same way would invite an operator to accept the second thinking
+ * it was the first. → `docs/spec/33-story-sequencing.md#where-the-order-comes-from`
+ */
+function Edges({ sequence }: { sequence: FeatureSequence }): JSX.Element | null {
+  if (sequence.edges.length === 0) {
+    return <p className="cn-psub">No story waits on another — the sequencer found these independent.</p>;
+  }
+  return (
+    <ul className="cn-fb-seq-edges">
+      {sequence.edges.map((edge) => (
+        <li key={`${edge.issue}>${edge.dependsOn}`}>
+          <span className="cn-refs">
+            <Ref to={`issue:${edge.issue}`} />
+          </span>{' '}
+          waits on{' '}
+          <span className="cn-refs">
+            <Ref to={`issue:${edge.dependsOn}`} />
+          </span>
+          <Tag>{edge.source === 'link' ? 'tracker link' : 'inferred'}</Tag>
+          {edge.reason !== null && <span className="cn-fb-seq-edge-why">{edge.reason}</span>}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function Summary({ summary, now }: { summary: FeatureSummary | null; now: number }): JSX.Element | null {
   if (summary === null) return null;
   return (
@@ -606,47 +764,54 @@ function Reach({ reach }: { reach: readonly FeatureReach[] }): JSX.Element {
   );
 }
 
+/**
+ * The children list, grouped into waves when an order holds.
+ *
+ * **It groups the list that is already here; it never adds a second one.** Two
+ * lists of the same stories in different orders are two answers to "what is under
+ * this Feature", and a reader would have to work out which to believe. The
+ * board's own ordering (`orderChildren`) is kept *within* a wave, because a
+ * sequence says which stories go together and has no opinion about which of two
+ * that can both start is the more interesting to look at.
+ */
 function Children({
   rows,
   total,
   actions,
+  sequence,
 }: {
   rows: readonly FeatureChildRow[];
   total: number;
   actions: CockpitActions;
+  /** The **accepted** order, or null. A proposal nobody has answered groups nothing. */
+  sequence: FeatureSequence | null;
 }): JSX.Element | null {
   if (rows.length === 0) return null;
+  const groups =
+    sequence === null
+      ? [{ depth: -1, rows }]
+      : wavesOf(
+          rows.map((r) => r.number),
+          sequence.edges,
+        ).map((wave) => ({ depth: wave.depth, rows: rows.filter((r) => wave.issues.includes(r.number)) }));
   return (
     <div className="cn-fb-kids">
       <table>
         <tbody>
-          {rows.map((row) => (
-            <tr key={row.number}>
-              <td className="cn-fb-kind">{row.issueType ?? '—'}</td>
-              <td className="cn-refs">
-                <Ref to={`issue:${row.number}`} />
-              </td>
-              {/* The title is the control and the ref sits beside it: one click
-                  cannot have two destinations. → docs/spec/17-cockpit.md#links */}
-              <td className="cn-fb-title">
-                <button type="button" onClick={() => actions.selectGoal(`issue:${row.number}`)}>
-                  {row.title}
-                </button>
-              </td>
-              <td>
-                <Tag tone={STANDING_TONE[row.standing]} fill={STANDING_TONE[row.standing] !== undefined}>
-                  {STANDING_WORD[row.standing]}
-                </Tag>
-              </td>
-              {/* The harness's own outcome word, beside the standing rather than
-                  instead of it: a re-picked goal is in flight and still carries
-                  `fell short`. Blank where it never reached a verdict, which is
-                  most rows. */}
-              <td className="cn-psub">
-                {row.outcome === null || row.outcome === STANDING_WORD[row.standing] ? '' : row.outcome}
-              </td>
-              <td className="cn-fb-num">{money(row.costUsd)}</td>
-            </tr>
+          {groups.map((group) => (
+            <Fragment key={group.depth}>
+              {group.depth >= 0 && (
+                <tr className="cn-fb-wave">
+                  <td colSpan={6}>
+                    Wave {group.depth + 1}
+                    {group.depth === 0 ? ' — waits on nothing' : ''}
+                  </td>
+                </tr>
+              )}
+              {group.rows.map((row) => (
+                <ChildRow key={row.number} row={row} actions={actions} sequence={sequence} />
+              ))}
+            </Fragment>
           ))}
         </tbody>
       </table>
@@ -658,6 +823,64 @@ function Children({
         </p>
       )}
     </div>
+  );
+}
+
+/** One story, and — under it, when an order holds — what it waits behind. */
+function ChildRow({
+  row,
+  actions,
+  sequence,
+}: {
+  row: FeatureChildRow;
+  actions: CockpitActions;
+  sequence: FeatureSequence | null;
+}): JSX.Element {
+  const waiting = sequence === null ? [] : waitsOn(row.number, sequence.edges);
+  return (
+    <Fragment>
+      <tr>
+        <td className="cn-fb-kind">{row.issueType ?? '—'}</td>
+        <td className="cn-refs">
+          <Ref to={`issue:${row.number}`} />
+        </td>
+        {/* The title is the control and the ref sits beside it: one click
+            cannot have two destinations. → docs/spec/17-cockpit.md#links */}
+        <td className="cn-fb-title">
+          <button type="button" onClick={() => actions.selectGoal(`issue:${row.number}`)}>
+            {row.title}
+          </button>
+        </td>
+        <td>
+          <Tag tone={STANDING_TONE[row.standing]} fill={STANDING_TONE[row.standing] !== undefined}>
+            {STANDING_WORD[row.standing]}
+          </Tag>
+        </td>
+        {/* The harness's own outcome word, beside the standing rather than
+            instead of it: a re-picked goal is in flight and still carries
+            `fell short`. Blank where it never reached a verdict, which is
+            most rows. */}
+        <td className="cn-psub">
+          {row.outcome === null || row.outcome === STANDING_WORD[row.standing] ? '' : row.outcome}
+        </td>
+        <td className="cn-fb-num">{money(row.costUsd)}</td>
+      </tr>
+      {/* What it waits behind, on its own row under it: the columns beside a
+          story are about the story, and a prerequisite is about the order. */}
+      {waiting.length > 0 && (
+        <tr className="cn-fb-waits">
+          <td />
+          <td colSpan={5}>
+            waits on{' '}
+            <span className="cn-refs">
+              {waiting.map((n) => (
+                <Ref key={n} to={`issue:${n}`} />
+              ))}
+            </span>
+          </td>
+        </tr>
+      )}
+    </Fragment>
   );
 }
 

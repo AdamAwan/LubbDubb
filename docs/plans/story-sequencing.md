@@ -104,7 +104,7 @@ Four things landed differently from the list above:
 4. **`waveOf` was not written.** Waves are a cockpit vocabulary and the cockpit is stage 2; a helper
    nothing calls is a helper nothing checks.
 
-## Stage 2 — the cockpit
+## Stage 2 — the cockpit — **landed**
 
 Stage 1 brought the answer **route** forward; what is left here is everything a person looks at.
 `waveOf` — depth in the edge graph, longest path, `partDepth`'s rule — is written here, where its
@@ -120,6 +120,18 @@ first reader is.
    carries the whole point: the wave, and how many goals wait on this one.
 5. **Tokens** — any new tint on `:root` and in `web/src/cockpit/tokens.ts`; no colour literal at a
    use site.
+
+Landed with three departures:
+
+1. **No new token.** The proposal card wears the amber family already on `:root` — this cockpit’s
+   "awaiting you", the same tone the watch digest and the signals card use for a declaration nobody
+   has ruled on. A new tint would have been a sixth family for one card.
+2. **The wave list is `HeadRow`s, not an `ol`.** `test/cockpitTheme.test.ts` refuses a twelfth
+   hand-written head row, and the wave row is one; using the component is the fix rather than
+   restyling around the assertion.
+3. **The Goal page reads the snapshot, not `/api/features`.** That page is assembled client-side
+   from `AppState`, so the order rides on the state snapshot as `featureSequences`. The Feature
+   board keeps its own fetched copy.
 
 The mockup the surfaces were designed against is a design canvas published from this session; it is
 not in the tree and is not a reference — the spec's [cockpit
