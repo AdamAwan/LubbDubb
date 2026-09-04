@@ -26,9 +26,9 @@
  * **Whether something was *read* is not observable here**, and no column is added
  * to pretend otherwise. Dwell says a surface was open, not that anybody looked;
  * scroll depth is refused outright as the session recording
- * `docs/spec/33-usage-metrics.md#what-this-is-not` will not become.
+ * `docs/spec/34-usage-metrics.md#what-this-is-not` will not become.
  *
- * → `docs/spec/33-usage-metrics.md#surface-reach`
+ * → `docs/spec/34-usage-metrics.md#surface-reach`
  */
 
 import type { SurfaceReach } from './types.js';

@@ -30,7 +30,7 @@ import type { RouteContext } from './context.js';
  * silently stop counting for the deployments that had done the most.
  *
  * → [16](../../../docs/spec/16-http-api.md),
- *   [33](../../../docs/spec/33-usage-metrics.md#the-operator-ledger)
+ *   [34](../../../docs/spec/34-usage-metrics.md#the-operator-ledger)
  */
 export function register(app: FastifyInstance, { system }: RouteContext): void {
   const { store } = system;

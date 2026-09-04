@@ -21,7 +21,7 @@ import type { StoreContext } from './context.js';
  *    digest's, dropped from the back. An unbounded table on a deployment that has
  *    been running for two years is a slow reading nobody sees coming.
  *
- * → `docs/spec/33-usage-metrics.md#the-one-new-table`
+ * → `docs/spec/34-usage-metrics.md#the-one-new-table`
  */
 export class SurfaceReachStore {
   /**

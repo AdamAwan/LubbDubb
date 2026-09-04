@@ -38,7 +38,7 @@ is about.
 | `routes/reviewPacks.ts`     | `/api/prs/:number/review-pack` — asking for a review pack, reading the one a pull request has, sharing it into the pool and taking it back out, the reviewer's three marks on an idea, and `/api/review-calibration` ([31](31-review-packs.md)) |
 | `routes/reliability.ts`     | `/api/reliability` — run outcomes, CI health, and why the fleet came back                                                                                                                                                                       |
 | `routes/mcpUsage.ts`        | `/api/mcp/usage` — which MCP tools the fleet reached for, and which it never did                                                                                                                                                                |
-| `routes/usage.ts`           | `/api/usage` — the operator ledger and surface reach, and `POST /api/usage/events`, the cockpit's own batch of what a person did ([33](33-usage-metrics.md))                                                                                    |
+| `routes/usage.ts`           | `/api/usage` — the operator ledger and surface reach, and `POST /api/usage/events`, the cockpit's own batch of what a person did ([34](34-usage-metrics.md))                                                                                    |
 | `routes/pool.ts`            | `/api/pool`, `/api/pool/insights` and the pool's one write — the cross-fleet pool ([28](28-cross-fleet-pool.md))                                                                                                                                |
 | `routes/work.ts`            | The work graph and its ignore / file verdicts                                                                                                                                                                                                   |
 | `routes/tickets.ts`         | Every item the tracker has returned since the harness first swept, and the filters over it                                                                                                                                                      |
@@ -1363,7 +1363,7 @@ Two things on the payload are deliberately **not** windowed:
 
 ### `GET /api/usage`
 
-The operator ledger, behind the Insights Usage tab ([33](33-usage-metrics.md#the-operator-ledger)).
+The operator ledger, behind the Insights Usage tab ([34](34-usage-metrics.md#the-operator-ledger)).
 Returns `{ insights }` — two lists of rows, the **asks** the harness put to a person and the **acts**
 a person started unprompted, each with what was offered, settled, declined and left outstanding past
 the window, a median time to answer, and what the waiting cost the fleet.
@@ -1380,7 +1380,7 @@ A column the record behind a row cannot answer ships `null` rather than `0` — 
 `/api/mcp/usage` states, one actor over.
 
 It also returns `reach`: a verdict per subject over the same window
-([33](33-usage-metrics.md#surface-reach)) — `never-linked`, `linked-never-visited`,
+([34](34-usage-metrics.md#surface-reach)) — `never-linked`, `linked-never-visited`,
 `visited-never-operated`, `operated` or `console-dark` — with the evidence behind it. The two halves
 ride one payload rather than two routes because the pairing they exist for is _an ask answered,
 against whether the surface it is about was ever reached_, and two separately-resolved windows would
@@ -1389,7 +1389,7 @@ put an answer rate over a fortnight beside a reach verdict over a day.
 ### `POST /api/usage/events`
 
 The cockpit's batch of `ui` events, and the only writer of `surface_reach`
-([33](33-usage-metrics.md#surface-reach)). Body is `{ events: [{ subject, verb, place, arrival }] }`,
+([34](34-usage-metrics.md#surface-reach)). Body is `{ events: [{ subject, verb, place, arrival }] }`,
 at most 500 rows; the response is `{ ok: true }` and nothing else, because a body carrying counts
 would be a reading the cockpit could act on and nothing about telemetry may change what a control
 does.

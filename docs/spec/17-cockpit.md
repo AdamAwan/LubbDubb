@@ -2965,6 +2965,27 @@ between the queue's rows and the summary of that same queue.
 Ended shifts are not counted against the budget. They are history, and an explicit expansion the
 operator asked for, so they scroll the card rather than pushing the queue out of it.
 
+#### The queue is joined against the fleet before it is drawn
+
+`state.upcoming` is the **last pulse's** projection, and the pulse that dispatches a candidate writes
+it into that list as `dispatching` in the same breath — see
+[the rule book](05-dispatcher.md#the-rule-book). The dispatcher's own de-duplication is
+`activeOrigins`, derived from active tasks, and the task an action creates does not exist yet at the
+moment of the push. So for the length of one interval the queue claims work that is already out, and
+the card drew the same issue twice: once as an agent, once as up next.
+
+`CockpitView.upNext` is that list with the staffed rows taken out — every origin a live agent's task
+names, and every origin a [readying](#work-that-is-not-an-agent-yet) action names. Both surfaces that
+draw the queue read it, so the band and the `upnext` panel cannot disagree about the queue's size,
+and the row budget above is spent against the honest length.
+
+**Live only.** An ended agent staffs nothing: an origin the fleet finished with and the harness
+queued again is a genuine queue row, and a filter that read history would hide it forever.
+
+The join is here rather than in the dispatcher because it is a reading, not a decision — the
+`dispatching` row is load-bearing for `Harness.busy` and for the priority-override reconcile set, and
+a queue that stopped reporting its own dispatches would take both with it.
+
 #### Three shapes that did not work
 
 Each of these read correctly in the diff, and each failed on the glass:
@@ -4156,6 +4177,15 @@ A Feature with nothing worked, nothing delivered and nothing blocked draws **no 
 bar has already said so, and three empty headings would be the loudest thing on the card saying
 nothing.
 
+### The order its stories go in
+
+Between the summary and the briefing, when the Feature has one: a **proposal to answer** while nobody
+has, and one line once somebody has. It groups the children list already on the card rather than
+adding a second one, and the copy on the Goal page is folded shut. Both surfaces, and why the order
+is amended by talking to Claude Code rather than by dragging, are
+[33](33-story-sequencing.md#the-cockpit). Absent on every deployment with `issueSequencing` off,
+which is the default.
+
 ### The feature summary
 
 Above the briefing, and above everything except the bar and its counts, a card draws **the one piece
@@ -5166,13 +5196,13 @@ query in the harness that reads `tasks.prompt` in bulk.
 did; this is the one about the person beside it — what the harness asked of them, what they did about
 it, and what the waiting cost. It is here rather than anywhere else because that question is decided
 against the same window as the spend it competes with for the next month of work.
-→ [33](33-usage-metrics.md)
+→ [34](34-usage-metrics.md)
 
 **Two tables and a list, and the split is the reading.** An _ask_ is the harness stopping and waiting
 for a person; an _act_ is a person reaching in when nothing asked them to. They want opposite
 readings — an ask by whether it was answered and what waiting for it cost, an act by whether it
 happened at all — so folding them into one "activity" figure is the measure that document refuses to
-be. The list beneath is [surface reach](33-usage-metrics.md#surface-reach): a verdict per surface,
+be. The list beneath is [surface reach](34-usage-metrics.md#surface-reach): a verdict per surface,
 worst first, with the evidence it was reached on.
 
 **A `null` is never drawn as a zero.** A dash means the record behind that row cannot answer the
@@ -5185,7 +5215,7 @@ half has no ref, no title and no id in it by construction, and a `<Ref/>` here w
 from a table that must never hold one. That is the [links rule](#links) satisfied by the payload's
 shape rather than waived.
 
-**The verdicts are the server's words** ([33](33-usage-metrics.md#a-quiet-surface-is-four-different-facts)),
+**The verdicts are the server's words** ([34](34-usage-metrics.md#a-quiet-surface-is-four-different-facts)),
 on the MCP tab's argument exactly, and the verdict stripe borrows the alarm vocabulary rather than
 introducing a palette: `never-linked` is red because it is the harness's own navigation at fault.
 

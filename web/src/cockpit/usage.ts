@@ -37,7 +37,7 @@ import { api } from '../api.js';
  * and on unload; a lost flush costs a row and nothing else, which is the only
  * reason coalescing is safe.
  *
- * → `docs/spec/33-usage-metrics.md#the-helper`
+ * → `docs/spec/34-usage-metrics.md#the-helper`
  */
 export function logUsage(event: UiUsageEvent, at?: PlaceKey): void {
   try {

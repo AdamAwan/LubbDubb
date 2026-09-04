@@ -44,7 +44,7 @@ type CockpitStatus =
  * Fire-and-forget in full: {@link logUsage} cannot throw, and a lost flush costs
  * a row and nothing else.
  *
- * → `docs/spec/33-usage-metrics.md#surface-reach`
+ * → `docs/spec/34-usage-metrics.md#surface-reach`
  */
 function useSurfaceReach(place: Place, arrival: 'linked' | 'direct'): void {
   const reach = placeReach(place);

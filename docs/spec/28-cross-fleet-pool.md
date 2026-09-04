@@ -362,7 +362,7 @@ Every dimension is a closed vocabulary that already exists, and none of them is 
 | `byUsage`     | `UsageSubject` × `UsageVerb`                 | times a person did it (no cost)         |
 | `byFault`     | `ErrorLogEntry['source']`                    | faults recorded (no cost)               |
 
-`byUsage` is what a person did, specified at [33](33-usage-metrics.md#the-digest-section) and held to
+`byUsage` is what a person did, specified at [34](34-usage-metrics.md#the-digest-section) and held to
 every rule stated here. Both halves of its key are closed vocabularies the harness owns
 (`src/usage/events.ts`), so it sums across projects like everything but `byCheck` and takes no
 project argument — the comparability `byCheck` has to be narrowed into is a property of this

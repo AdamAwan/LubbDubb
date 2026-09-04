@@ -50,7 +50,7 @@ export interface PoolRollup {
    * fleet is an engineer, so `PoolRollupRow.fleets` against this length is _how many
    * of the people publishing did that thing_ — which is why no per-operator field is
    * needed anywhere below, and why refusing one costs nothing.
-   * → `docs/spec/33-usage-metrics.md#the-digest-section`
+   * → `docs/spec/34-usage-metrics.md#the-digest-section`
    */
   fleets: string[];
   /** The UTC days the rows span, oldest first. Empty when nothing has been published. */
@@ -83,7 +83,7 @@ export interface PoolRollup {
    *
    * No cost: `costUsd` and `dailyMeanCostUsd` are null on every row by construction,
    * because what a person did has no dollar figure anywhere in the harness.
-   * → `docs/spec/33-usage-metrics.md#the-digest-section`
+   * → `docs/spec/34-usage-metrics.md#the-digest-section`
    */
   byUsage: PoolRollupRow[];
 }

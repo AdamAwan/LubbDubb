@@ -48,6 +48,8 @@ import { goalFingerprint } from '../intake/appraisal.js';
 import { padWriteTarget } from '../scratch/pad.js';
 import { retroSubmitOrigin } from '../retro/retro.js';
 import { featureSummarySubmitOrigin, type FeatureSummaryInput } from '../summaries/featureSummary.js';
+import { featureSequenceSubmitOrigin, resequenceVerdict } from '../sequence/sequence.js';
+import type { FeatureSequenceEdge } from '../types.js';
 import { remedyOrigin, type RemedySubmission } from '../remedies/remedies.js';
 import { partConclusionOrigin } from '../mcp/partOutcome.js';
 import type { AgentToolTarget } from '../mcp/tools/context.js';
@@ -135,6 +137,19 @@ interface AgentManagerOptions {
    * the row is only ever reachable there by a caller that hand-built the origin.
    */
   featureStanding?: (featureOrigin: string) => string | null;
+  /**
+   * Which stories are under a Feature right now, as `featureSequenceKey` digests
+   * it — membership, never movement.
+   *
+   * Stamped at submission like {@link featureStanding}, but the direction of the
+   * risk is the other way round and worth stating: this key can only cause an
+   * *extra* proposal, never a missed one. A story added while the sequencer ran is
+   * folded in here, so the order is written against what it will be read against;
+   * a story added a moment later gives the next pulse a key that differs, and the
+   * Feature is proposed again. Absent leaves the key empty, which never matches a
+   * live standing and so re-proposes rather than parking the Feature for good.
+   */
+  featureSequenceStanding?: (featureOrigin: string) => { key: string; members: number[] } | null;
   whitelistedApprovals: WhitelistRule[];
   /** Builds the underlying runtime (PTY or stream-JSON) for a launch spec. */
   createSession: SessionFactory;
@@ -1185,6 +1200,63 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         taskId: task.id,
       });
       return { ok: true, featureOrigin: origin.featureOrigin };
+    });
+  }
+
+  /**
+   * Record the story order this agent was dispatched to propose (the
+   * `sequence_submit` tool).
+   *
+   * {@link featureSequenceSubmitOrigin} resolves the Feature from the credential
+   * and refuses every other caller by name, for {@link recordFeatureSummary}'s
+   * reason: an agent working one story has an opinion about its own work and no
+   * view of the rest, which is exactly the reading an order must not be.
+   *
+   * It always writes `proposed`. There is no arm here that accepts: an order holds
+   * work, and nothing the fleet says about its own output may hold work — the
+   * acceptance is a person's, and it arrives through the store's own
+   * `answerFeatureSequence`.
+   */
+  recordFeatureSequence(
+    agentId: string,
+    input: { reason: string; unsure: string | null; edges: FeatureSequenceEdge[] },
+  ): { ok: true; featureOrigin: string; edges: number; carried: boolean } | { ok: false; error: string } {
+    return this.withCaller(agentId, (caller) => {
+      const { task } = caller;
+      const origin = featureSequenceSubmitOrigin(task.originRef);
+      if (!origin.ok) return { ok: false, error: origin.error };
+      const standing = this.opts.featureSequenceStanding?.(origin.featureOrigin) ?? null;
+      const members = standing?.members ?? [];
+      // Whether the operator has already answered *this* order. It carries only
+      // when the new one is provably the old one extended — see
+      // `resequenceVerdict`. Everything else, and every uncertainty, asks again.
+      const previous = this.store.getFeatureSequence(origin.featureOrigin);
+      const verdict = resequenceVerdict(previous, input.edges, members);
+      this.store.recordFeatureSequence({
+        originRef: origin.featureOrigin,
+        status: verdict.carry ? 'accepted' : 'proposed',
+        reason: input.reason,
+        unsure: input.unsure,
+        standingKey: standing?.key ?? '',
+        edges: input.edges,
+        members,
+        agentId,
+        taskId: task.id,
+      });
+      // The acceptance is carried by re-stating it, never by the write above:
+      // `recordFeatureSequence` always clears the answer, because an order over a
+      // different set of edges is a new question. Saying it again here is what
+      // makes "this is the same order, extended" an explicit claim rather than an
+      // omission.
+      if (verdict.carry && previous?.answeredBy) {
+        this.store.answerFeatureSequence(origin.featureOrigin, 'accepted', previous.answeredBy);
+      }
+      return {
+        ok: true,
+        featureOrigin: origin.featureOrigin,
+        edges: input.edges.length,
+        carried: verdict.carry,
+      };
     });
   }
 

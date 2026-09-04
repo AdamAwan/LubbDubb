@@ -581,6 +581,18 @@ export interface Issue {
    * to see the scope either side of the item it was handed.
    */
   siblings?: IssueRelative[];
+  /**
+   * The items this one **waits on** — Azure DevOps `System.LinkTypes.Dependency-Reverse`,
+   * a Predecessor. The order somebody already drew on their own board, which the
+   * harness reads and never writes (→ `docs/spec/33-story-sequencing.md`).
+   *
+   * `undefined` means the provider tracks no dependencies at all (GitHub, the
+   * fake), which every reader treats as "no order stated"; an empty list means the
+   * provider tracks them and this item waits on nothing. The distinction matters
+   * for the same reason {@link parent}'s three states do: a flat tracker must not
+   * read as a board on which every story is in the first wave *by statement*.
+   */
+  dependsOn?: IssueRelative[];
   /** The PR opened to resolve this issue, once one exists. Null until linked. */
   linkedPrNumber: number | null;
   url?: string;
@@ -2372,6 +2384,84 @@ export interface FeatureSummary {
   agentId: string;
   taskId: string;
   /** When the Feature was *first* summarised; preserved across a revision. */
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One "this story waits on that one", with **where the edge came from recorded on
+ * it**. → `docs/spec/33-story-sequencing.md#where-the-order-comes-from`
+ *
+ * The provenance is not presentational. `link` is a statement a person made on
+ * their own board; `inferred` is an agent's guess from the items' own text. A
+ * surface that drew the two the same way would invite an operator to accept the
+ * second thinking it was the first.
+ */
+export interface FeatureSequenceEdge {
+  /** The story that waits. */
+  issue: number;
+  /** The story it waits on. */
+  dependsOn: number;
+  /**
+   * Where the edge came from. `link` — the tracker's own Predecessor, drawn by a
+   * person on their own board. `inferred` — the sequencer read it out of the items'
+   * text. `operator` — somebody amended the order by hand, through the desktop
+   * channel.
+   *
+   * Three rather than two because an operator's edge is neither of the others, and
+   * marking one `inferred` would claim an agent guessed at a judgement a person
+   * made. → `docs/spec/33-story-sequencing.md#amending-it`
+   */
+  source: 'link' | 'inferred' | 'operator';
+  /** One line on why this edge. Null on a `link`, where the reason is that somebody drew it. */
+  reason: string | null;
+}
+
+/**
+ * The order the stories under one Feature are worked in.
+ *
+ * Only `accepted` holds anything. A `proposed` order is an agent's suggestion
+ * nobody has answered and a `declined` one is an operator saying "run them all" —
+ * both leave the fleet behaving exactly as it does with no row at all, which is
+ * what makes every failure of this mechanism a failure to *order* rather than a
+ * failure to work. → `docs/spec/33-story-sequencing.md#the-record`
+ */
+export interface FeatureSequence {
+  /** The Feature, as `issue:<n>` — `FeatureSummary`'s key, and every verdict's. */
+  originRef: string;
+  status: 'proposed' | 'accepted' | 'declined';
+  /** Why this order, in the sequencer's own voice. Empty on one built only from links. */
+  reason: string;
+  /**
+   * The edge it would most like argued with, and what would change its mind.
+   * `openQuestions`' job on the plan document: an order with no stated doubt is one
+   * nobody can disagree with usefully. Null where every edge was drawn by a person.
+   */
+  unsure: string | null;
+  /**
+   * The digest of *which* stories were under the Feature when this was written
+   * (`featureSequenceKey`) — membership, never movement. A story merging does not
+   * invalidate an order; a story being added does.
+   */
+  standingKey: string;
+  /** The order itself. Rewritten as a set, never merged. */
+  edges: FeatureSequenceEdge[];
+  /**
+   * The stories this order was written over, ascending — every watched child the
+   * Feature had, settled ones included.
+   *
+   * **Null on a row written before the column existed**, and null means *we cannot
+   * say which stories are new*. That is the fail-open reading: a re-sequence that
+   * cannot prove it only extended the order asks the operator again, which is what
+   * every row did before this. → `docs/spec/33-story-sequencing.md#a-story-is-added`
+   */
+  members: number[] | null;
+  /** Who accepted or declined it, and when. Null while it is still a proposal. */
+  answeredBy: string | null;
+  answeredAt: string | null;
+  /** The writing agent and its task, or null for a sequence built only from links. */
+  agentId: string | null;
+  taskId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -4641,7 +4731,7 @@ export interface McpCallInput {
  * behaviour a row describes, and a second identifier would buy nothing while
  * turning every row into something the digest would have to withhold.
  *
- * → `docs/spec/33-usage-metrics.md#the-one-new-table`
+ * → `docs/spec/34-usage-metrics.md#the-one-new-table`
  */
 export interface SurfaceReach {
   subject: UsageSubject;
@@ -4766,7 +4856,7 @@ export interface PoolDigestDocument extends PoolEnvelope {
    * `costUsd` is null on every row: what a person did has no dollar figure anywhere
    * in the harness, and deriving one here would be a new measurement invented for
    * the pool.
-   * → `docs/spec/33-usage-metrics.md#the-digest-section`
+   * → `docs/spec/34-usage-metrics.md#the-digest-section`
    */
   byUsage: PoolDigestRow[];
   /**

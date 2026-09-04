@@ -247,7 +247,7 @@ function unmeasured(agents: readonly Agent[], since: string, today: string): Poo
  * *check* are both `validation` settled by a person. So a `record` event is absent
  * here **by declaration**, with `EVENT_SOURCE` saying which and why, rather than by
  * an omission that would read as a fleet where nobody ever approved a plan.
- * → `docs/spec/33-usage-metrics.md#the-digest-section`
+ * → `docs/spec/34-usage-metrics.md#the-digest-section`
  *
  * `costUsd` stays null on every row: what a person did has no dollar figure
  * anywhere in the harness, and inventing one for the pool is the move the whole

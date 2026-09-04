@@ -4629,6 +4629,12 @@ export const demoApi = {
       backfilling: false,
       refUrls: {},
     }),
+  // Unreachable for the same reason: no Feature in the demo carries an order, so
+  // there is no proposal to answer. Present so the two API shapes stay
+  // interchangeable, and it refuses rather than pretending — a demo that answered
+  // would be a demo that lied about a write.
+  answerFeatureSequence: (): Promise<never> =>
+    Promise.reject(new Error('the demo has no feature board, so there is no order to answer')),
   // The ticket mirror, authored for `getSpend`'s reason: the demo's world is built
   // fresh in the browser each load, so there is no swept history to page through
   // and a fixture is the only way the tab shows what it is for. The filtering,

@@ -123,6 +123,7 @@ import type {
   Plan,
   PlanAmendmentAuthor,
   PlanPart,
+  FeatureSequence,
   FeatureSummary,
   PlanRevision,
   Proposal,
@@ -1150,6 +1151,17 @@ export interface CockpitState {
    */
   goalWatchWindows: GoalWatchView[];
   /**
+   * Every story order on file, keyed on its Feature's own `issue:<n>`.
+   *
+   * On the snapshot rather than only on `/api/features` because the **Goal** page
+   * needs it: that page is assembled client-side from the snapshot, so an order
+   * reachable only through the feature board's own fetch could not be drawn beside
+   * the story it holds. Empty until a Feature is sequenced, which is every
+   * deployment with `issueSequencing` off — and then neither surface draws
+   * anything. → `docs/spec/33-story-sequencing.md#the-cockpit`
+   */
+  featureSequences: FeatureSequence[];
+  /**
    * The goals whose whole work has arrived somewhere, newest first — the
    * environments half of the Activity feed, capped like every other feed on this
    * surface.
@@ -1959,6 +1971,17 @@ export interface FeatureRollup {
    */
   summary: FeatureSummary | null;
   /**
+   * The order its stories are worked in, or null for a Feature nobody has
+   * sequenced — which is every Feature until `issueSequencing` is switched on.
+   *
+   * The **edges**, not waves. A wave is depth in the edge graph and the cockpit
+   * derives it on read, exactly as `layoutFloor` derives a column's depth rather
+   * than reading `partDepth`'s: shipping a wave number would be a second answer to
+   * a question the edges already settle, and the two would part company the first
+   * time an edge was amended. → `docs/spec/33-story-sequencing.md#waves-are-derived-never-stored`
+   */
+  sequence: FeatureSequence | null;
+  /**
    * When any of this Feature's goals last landed a commit, or null for one that
    * has landed nothing. A **stamp, never a verdict**: how old is too old is a
    * policy no config file states, so the board draws the age and says nothing
@@ -1992,7 +2015,7 @@ export interface FeatureBoardPayload {
    */
   orphans: Omit<
     FeatureRollup,
-    'number' | 'title' | 'slot' | 'workItemState' | 'issueType' | 'reach' | 'summary'
+    'number' | 'title' | 'slot' | 'workItemState' | 'issueType' | 'reach' | 'summary' | 'sequence'
   > | null;
   /**
    * Items whose parent link was **never resolved** — no hierarchy, or a read that
@@ -2397,6 +2420,8 @@ export type {
   PetSpecies,
   PetStage,
   PetWallet,
+  FeatureSequence,
+  FeatureSequenceEdge,
   FeatureSummary,
   Proposal,
   ReadyingAction,

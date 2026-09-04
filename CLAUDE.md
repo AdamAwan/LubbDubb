@@ -140,6 +140,17 @@ EXISTS` never alters an existing table, so a column without an `ensureColumns` e
   silent: a ticket without the watch label is created, linked, shown complete, and **never dispatched
   for**. → [13](docs/spec/13-jobs-and-tickets.md#filing-a-ticket), [15](docs/spec/15-integrations.md)
 
+### Story sequencing
+
+- **A sequence hold must fail open, on every arm.** `sequenceReadiness` is the one mechanism in the
+  book that _withholds_ work, and its failure is the quietest there is: a story held behind one that
+  never lands simply never starts, with nothing red. No order, an unaccepted one, a declined one, an
+  edge naming an issue the world does not hold, a cycle, `issueSequencing` off — every one leaves
+  every story eligible in exactly the order it has today. → [33](docs/spec/33-story-sequencing.md#fail-open)
+- **The sequence key digests membership, never movement.** Filtering the settled children out of it
+  re-proposes an order on every merge and asks an operator to re-accept the same sequence eight
+  times. → [33](docs/spec/33-story-sequencing.md#the-record)
+
 ### Dispatch
 
 - **A new `issue:<n>:…` dispatch origin is classified in `src/issueOrigins.ts`.** Left out, it reads

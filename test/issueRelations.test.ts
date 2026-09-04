@@ -310,6 +310,7 @@ function workItem(over: Partial<AzWorkItem> = {}): AzWorkItem {
     relationUrls: [],
     parentId: null,
     childIds: [],
+    dependsOnIds: [],
     createdAt: '2026-01-01T00:00:00Z',
     changedAt: '2026-01-01T00:00:00Z',
     url: 'https://dev.azure.com/o/p/_workitems/edit/101',

@@ -40,7 +40,7 @@
  * it without recording that a person did. Each becomes a row on the day a record
  * exists, and until then the registry carries their copy and marks them `ui`.
  *
- * → `docs/spec/33-usage-metrics.md#the-operator-ledger`
+ * → `docs/spec/34-usage-metrics.md#the-operator-ledger`
  */
 
 import type {

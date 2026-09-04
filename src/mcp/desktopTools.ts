@@ -1,4 +1,5 @@
 import { allGoalReach } from '../environments/reach.js';
+import { DESKTOP_SEQUENCE_TOOLS } from './desktopSequence.js';
 import { validatePlanDocument } from '../plans/planDocument.js';
 import { ingestPlanDocument } from '../plans/planIngest.js';
 import { proposePlanAmendment } from '../plans/planAmendment.js';
@@ -829,6 +830,7 @@ const DESKTOP_TOOLS: Record<DesktopToolName, DesktopToolFactory> = {
   validation_report: validationReport,
   plan_read: planRead,
   plan_amend: planAmend,
+  ...DESKTOP_SEQUENCE_TOOLS,
   local_run: localRun,
 };
 

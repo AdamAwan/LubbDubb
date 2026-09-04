@@ -3,7 +3,7 @@
 Four durable records answer four different questions, plus one live tail and one debug channel.
 
 Every one of them is about the **fleet**. What the harness asked of a _person_ and what they did
-about it is [33](33-usage-metrics.md), which folds these records rather than adding to them — plus
+about it is [34](34-usage-metrics.md), which folds these records rather than adding to them — plus
 one table of its own, `surface_reach`, for the one signal none of these hold: what an operator
 actually looked at.
 

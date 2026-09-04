@@ -3,6 +3,7 @@ import { isContainerType } from '../issueRelations.js';
 import type { MirroredTicket } from '../store/tickets.js';
 import type {
   Escalation,
+  FeatureSequence,
   FeatureSummary,
   GoalEnvironmentReach,
   GoalLanding,
@@ -56,6 +57,13 @@ interface BuildInput {
    * the verdicts below it are — a Feature with none simply ships null.
    */
   summaries: ReadonlyMap<string, FeatureSummary>;
+  /**
+   * The order each Feature's stories are worked in, on the same key and quoted the
+   * same way: whole, never re-derived, and null for a Feature with none. The lens
+   * forms no opinion about it — not even which wave a story is in, which is the
+   * cockpit's to derive from the edges.
+   */
+  sequences: ReadonlyMap<string, FeatureSequence>;
   /** The standing delivery verdicts — quoted for the briefing, never re-derived. */
   deliveries: readonly IssueDelivery[];
   /** The standing shortfall verdicts, likewise. */
@@ -151,6 +159,7 @@ export function buildFeatureBoard(input: BuildInput): Omit<FeatureBoardPayload, 
       counts: countStandings(group.rows),
       briefing: briefingFor(group.rows, brief),
       summary: input.summaries.get(`issue:${number}`) ?? null,
+      sequence: input.sequences.get(`issue:${number}`) ?? null,
       children: orderChildren(group.rows).slice(0, FEATURE_CHILDREN),
       costUsd: totalCost(group.rows),
       reach: foldReach(group.rows, reachByGoal, input.environments),

@@ -204,6 +204,8 @@ export type {
   FeatureReach,
   FeatureReportRow,
   FeatureRollup,
+  FeatureSequence,
+  FeatureSequenceEdge,
   FeatureSummary,
   FeatureWorkingRow,
   TicketFeatureFacet,

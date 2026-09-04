@@ -30,7 +30,7 @@ import { fmtDuration } from './insightsFormat.js';
  * stamp for the moment it started asking, a landing records the click and never
  * the offer — and a dash is the only honest mark for it.
  *
- * → docs/spec/17-cockpit.md#insights, docs/spec/33-usage-metrics.md
+ * → docs/spec/17-cockpit.md#insights, docs/spec/34-usage-metrics.md
  */
 export function UsageTab({ payload }: { payload: UsagePayload }): JSX.Element {
   const { insights, reach } = payload;

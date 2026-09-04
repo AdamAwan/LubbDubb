@@ -27,7 +27,7 @@
  * {@link UsageEvent} is narrowed by {@link VERBS_BY_SUBJECT}, so `plan.defer` — a
  * cell that table leaves empty — does not typecheck.
  *
- * → `docs/spec/33-usage-metrics.md#the-event-registry`
+ * → `docs/spec/34-usage-metrics.md#the-event-registry`
  */
 
 /**
@@ -323,7 +323,7 @@ export const USAGE_COPY: Record<UsageEvent, { label: string; blurb: string }> = 
  * series keyed on it would break at a release rather than at a change of
  * behaviour.
  *
- * → `docs/spec/33-usage-metrics.md#surface-reach`
+ * → `docs/spec/34-usage-metrics.md#surface-reach`
  */
 export const PLACE_KEYS = [
   'overview',

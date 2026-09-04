@@ -1,4 +1,4 @@
-# 33 — Usage metrics
+# 34 — Usage metrics
 
 Every reading the harness keeps is about the **fleet**: what it spent, whether it worked, what it
 came back for. Nothing is about the **operator**. So the question that decides where the next month

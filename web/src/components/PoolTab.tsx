@@ -177,7 +177,7 @@ function Section({ title, note, rows }: { title: string; note: string; rows: Poo
  * **No cost column.** What a person did has no dollar figure anywhere in the
  * harness, and a column of dashes is worse than no column.
  *
- * → `docs/spec/33-usage-metrics.md#the-digest-section`
+ * → `docs/spec/34-usage-metrics.md#the-digest-section`
  */
 function Usage({ rows, publishing }: { rows: PoolRollupRow[]; publishing: number }): JSX.Element {
   return (

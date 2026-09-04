@@ -9,7 +9,7 @@ import { USAGE_COPY } from '../src/usage/events.js';
 import type { PoolDigestDocument } from '../src/types.js';
 
 /**
- * The `usage` digest section — stage 3 of `docs/spec/33-usage-metrics.md`, riding
+ * The `usage` digest section — stage 3 of `docs/spec/34-usage-metrics.md`, riding
  * the arm `docs/spec/28-cross-fleet-pool.md#the-digest-arm` already states the rules
  * for.
  *

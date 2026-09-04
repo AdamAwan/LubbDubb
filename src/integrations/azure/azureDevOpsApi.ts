@@ -486,6 +486,12 @@ export interface AzWorkItem {
   parentId: number | null;
   /** The ids hanging off this item (`…Hierarchy-Forward`) — a Feature's stories. */
   childIds: number[];
+  /**
+   * The ids this item **waits on**, from its `System.LinkTypes.Dependency-Reverse`
+   * relations — its Predecessors. A list, not a single id: Azure permits any
+   * number, unlike a parent. Empty when the item waits on nothing.
+   */
+  dependsOnIds: number[];
   /** Web URL to the work item. */
   url: string;
   /** System.CreatedDate — the ticket mirror's `added` reading. */

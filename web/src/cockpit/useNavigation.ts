@@ -60,7 +60,7 @@ export function useNavigation(): { place: Place; go: Go; arrival: UsageArrival }
   /**
    * How the *current* place was arrived at, which is the fifth column of a
    * surface-reach row and the whole of what tells `never-linked` from
-   * `linked-never-visited` (`docs/spec/33-usage-metrics.md#surface-reach`).
+   * `linked-never-visited` (`docs/spec/34-usage-metrics.md#surface-reach`).
    *
    * `direct` to begin with, because the first place of a session is whatever the
    * address bar said — a typed URL, a reload, a bookmark, a link somebody was

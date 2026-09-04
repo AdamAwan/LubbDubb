@@ -9,7 +9,9 @@ import type { PrReviewPolicy } from '../../review/policy.js';
 import type { PrReviewCharters } from '../../review/prReview.js';
 import type { PlanningPolicy } from '../../plans/planning.js';
 import type { LocalValidationPolicy } from '../../localValidation/policy.js';
+import type { SequenceableFeature } from '../../sequence/sequence.js';
 import type {
+  FeatureSequence,
   Issue,
   IssueAppraisal,
   IssueConclusion,
@@ -187,6 +189,35 @@ export interface StageContext {
    * disagree. With planning disabled every issue routes to `single`.
    */
   routes: Map<number, PlanRouteVerdict>;
+  /**
+   * The stories an accepted order is holding, and what each waits behind — keyed
+   * by issue number, absent for a story nothing holds.
+   *
+   * Derived **once**, here, for `routes`' reason exactly: `issue-plan` and
+   * `issue-pickup` both consult it and must never disagree about whether a story is
+   * ready, any more than they may disagree about which plan arm it is on. Empty
+   * with `issueSequencing` off, which is the default and every fail-open arm.
+   * → `docs/spec/33-story-sequencing.md`
+   */
+  sequenceWaits: ReadonlyMap<number, number[]>;
+  /**
+   * The Features rule `feature-sequence` could ask about, with the key an order
+   * over each would be written against. Empty on every level but `full`, and empty
+   * for a Feature with one story or with more than `issueSequenceMaxChildren`.
+   *
+   * Derived from the world's issues and nothing else — no lens is read here, for
+   * `feature-summary`'s reason: a rule that reached `src/features/` would be a
+   * second opinion about a Feature formed from a view built for a card.
+   */
+  sequenceableFeatures: readonly SequenceableFeature[];
+  /**
+   * Every order on file, keyed on the Feature's own `issue:<n>`. Read by
+   * `feature-sequence` for the key it compares, and folded into
+   * {@link StageContext.sequenceWaits} for the `accepted` ones — one map, so the
+   * rule that proposes an order and the gate that enforces one cannot disagree
+   * about what is on file.
+   */
+  sequences: ReadonlyMap<string, FeatureSequence>;
   /**
    * Every goal's validation checks, keyed by the goal's origin ref — read by
    * `validate-check` and nothing else.

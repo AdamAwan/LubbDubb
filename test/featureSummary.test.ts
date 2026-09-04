@@ -228,6 +228,7 @@ test('the board quotes the summary whole and composes nothing', () => {
     containerTypes: ['Feature'],
     watchLabel: 'lubbdubb-watch',
     summaries: new Map([['issue:29857', summary]]),
+    sequences: new Map(),
   });
   assert.deepEqual(board.features[0]?.summary, summary, 'quoted, never re-worded or re-derived');
   // A Feature with none ships null rather than a sentence assembled from the
@@ -248,6 +249,7 @@ test('the board quotes the summary whole and composes nothing', () => {
     containerTypes: ['Feature'],
     watchLabel: 'lubbdubb-watch',
     summaries: new Map(),
+    sequences: new Map(),
   });
   assert.equal(bare.features[0]?.summary, null);
 });

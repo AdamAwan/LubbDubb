@@ -40,6 +40,8 @@ import { retroDossier, retroPad } from '../retro/dossier.js';
 import { goalRecord } from '../retro/record.js';
 import { featureSummarySubmitOrigin } from '../summaries/featureSummary.js';
 import { featureRecords, featureReach, renderFeatureDossier } from '../summaries/featureRecord.js';
+import { sequenceBriefing } from '../sequence/dossier.js';
+import { featureSequenceSubmitOrigin } from '../sequence/sequence.js';
 import { neighbourSeedPaths, priorWorkBriefing } from '../briefing/priorWork.js';
 import { ciEvidenceNote, type CiEvidenceReader, type CiEvidenceTarget } from '../ci/ciEvidence.js';
 import { goalOriginFor, WITNESS_INSTRUCTION } from '../scratch/pad.js';
@@ -48,7 +50,16 @@ import { corroborationGoal } from '../knowledge/knowledge.js';
 import { obstaclesForDispatch, renderObstacleNote } from '../obstacles/delivery.js';
 import { retryNote, retryResumeFor, type RetryResume } from './retryResume.js';
 import { isActiveTask } from '../tasks.js';
-import type { Action, DecisionOutcome, PlanAmendment, Proposal, ProposalKind, Task, WorldEvent } from '../types.js';
+import type {
+  Action,
+  DecisionOutcome,
+  FeatureSequence,
+  PlanAmendment,
+  Proposal,
+  ProposalKind,
+  Task,
+  WorldEvent,
+} from '../types.js';
 import type { FeatureBoardFacts } from '../summaries/featureRecord.js';
 
 interface ExecutorDeps {
@@ -1224,6 +1235,17 @@ export class ActionExecutor {
     // summary on file rides in this block so a re-write revises rather than
     // restarts. → `docs/spec/17-cockpit.md#the-feature-summary`
     const feature = featureBriefing(action.originRef, store, this.deps.featureBoard);
+    // And the same again for a sequencer: the Feature’s goal and every story under
+    // it, with the order the board already states marked as the board’s own. Off the
+    // world baseline rather than the ticket mirror, because the Predecessor links
+    // are a hydration field and the mirror does not carry them.
+    const sequence = sequenceBriefing(
+      action.originRef,
+      store.getWorldBaseline()?.issues ?? [],
+      // The order on file rides in this block too, so a re-sequence revises rather
+      // than restarts — `currentPlanSummary`'s job on a replan, and for its reason.
+      sequenceFeatureOrigin(action.originRef, store),
+    );
     // The images the operator attached to this goal (issue #249). Appended for the
     // reason the four notes above are, and scoped to the *goal* rather than the
     // exact origin — see `attachmentsFor`.
@@ -1268,6 +1290,7 @@ export class ActionExecutor {
       prior,
       briefing,
       feature,
+      sequence,
       attachments,
       witness,
     ]
@@ -1659,4 +1682,15 @@ function readyingTitle(action: ValidatedAction): string {
     default:
       return action.type.replace(/_/g, ' ');
   }
+}
+
+/**
+ * The order on file for the Feature this dispatch is sequencing, or null.
+ *
+ * Beside `featureBriefing` and on its terms: the origin decides whether there is
+ * anything to look up at all, so a dispatch that is not a sequencer costs no read.
+ */
+function sequenceFeatureOrigin(originRef: string | null | undefined, store: Store): FeatureSequence | null {
+  const target = originRef ? featureSequenceSubmitOrigin(originRef) : { ok: false as const, error: '' };
+  return target.ok ? store.getFeatureSequence(target.featureOrigin) : null;
 }

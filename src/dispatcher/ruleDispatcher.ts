@@ -6,6 +6,7 @@ import type { Decision, Issue, ValidationCheck } from '../types.js';
 import {
   effectivePickupStates,
   isIssuePickupEligible,
+  issueWatchGateReason,
   issuePriority,
   openPrForIssue,
   type IssuePickupPolicy,
@@ -37,6 +38,8 @@ import {
   type PlanRouteVerdict,
 } from '../plans/planning.js';
 import { liveParts } from '../plans/parts.js';
+import { linkEdges, sequenceReadiness } from '../sequence/readiness.js';
+import { sequenceableFeatures as sequenceable, DEFAULT_SEQUENCE_MAX_CHILDREN } from '../sequence/sequence.js';
 import { isActive, type Candidate, type RawAction, type StageContext } from './rules/context.js';
 import { manualJob } from './rules/manualJob.js';
 import { obstacleRepair } from './rules/obstacleRepair.js';
@@ -60,6 +63,7 @@ import { localValidationFix } from './rules/localValidationFix.js';
 import { validateCheck } from './rules/validateCheck.js';
 import { DEFAULT_LOCAL_VALIDATION, type LocalValidationPolicy } from '../localValidation/policy.js';
 import { featureSummary } from './rules/featureSummary.js';
+import { featureSequence } from './rules/featureSequence.js';
 import { validationFailed } from './rules/validationFailed.js';
 
 /**
@@ -103,6 +107,7 @@ const STAGES: Partial<Record<StageRuleId, (s: StageContext) => void>> = {
   'validate-check': validateCheck,
   'validation-failed': validationFailed,
   'feature-summary': featureSummary,
+  'feature-sequence': featureSequence,
 };
 
 /**
@@ -267,6 +272,9 @@ export class RuleDispatcher implements Dispatcher {
       // decides what the pipeline *advertises* while the concern's own gate is
       // what holds it. One field underneath both, so they cannot disagree.
       review: this.review.enabled,
+      // `full` alone: at `links` every edge was drawn by a person, so there is
+      // nothing for an agent to propose and nothing for anyone to accept.
+      sequencer: this.pickup.sequencing === 'full',
     };
     for (const rule of DISPATCH_PIPELINE) {
       if (rule.enabled && !rule.enabled(conditions)) continue;
@@ -294,7 +302,20 @@ export class RuleDispatcher implements Dispatcher {
       obstacles: ctx.obstacles ?? [],
       obstacleBlocks: ctx.obstacleBlocks ?? [],
     });
-    const ranked = rankByPriorityOverride(s.candidates, overrideRank, expedited);
+    // The one hold either statement *clears* rather than merely outranks.
+    //
+    // A flag or a drag on a held story is the operator saying "go now", and an
+    // override that only re-ordered it would put the row at the top of the queue
+    // and still refuse to dispatch it — honoured visibly and disobeyed in the one
+    // way that matters. Every other held reason survives: a cooldown, a cap, an
+    // unapproved plan and a superseded claim are all statements about something
+    // other than the order, and `rankByPriorityOverride` still clears none of them.
+    // The sequence itself is **not amended** by this — one story going early is
+    // not a new order. → `docs/spec/33-story-sequencing.md#precedence`
+    const cleared = s.candidates.map((c) =>
+      c.held === 'sequenced' && (expedited(c.origin) || overrideRank.has(c.origin)) ? { ...c, held: undefined } : c,
+    );
+    const ranked = rankByPriorityOverride(cleared, overrideRank, expedited);
 
     // The headroom cut: dispatch the above-cut prefix (each claiming a slot),
     // keep everything ranked as the visible queue. A cooling-down candidate is
@@ -500,6 +521,40 @@ export class RuleDispatcher implements Dispatcher {
       );
     }
 
+    // Which stories an accepted order is holding, and what each waits behind.
+    // Derived here beside `routes` and for its reason — two rules read it and must
+    // not form separate opinions — and empty on every fail-open arm: the gate off,
+    // a provider that reports no dependencies, an edge naming an issue the world
+    // does not hold. → `docs/spec/33-story-sequencing.md`
+    const sequencing = this.pickup.sequencing ?? 'off';
+    const sequences = new Map((ctx.featureSequences ?? []).map((s) => [s.originRef, s]));
+    // Two sources, one gate. The provider's links are authoritative and re-read
+    // every hydration; an `accepted` order's edges are added to them. A `proposed`
+    // or `declined` one contributes nothing, which is the whole of what those two
+    // statuses mean.
+    const edges =
+      sequencing === 'off'
+        ? []
+        : [
+            ...linkEdges(ctx.world.issues),
+            ...[...sequences.values()]
+              .filter((s) => s.status === 'accepted')
+              .flatMap((s) => s.edges.map((e) => ({ issue: e.issue, dependsOn: e.dependsOn }))),
+          ];
+    const sequenceWaits = sequenceReadiness(edges, { issues: ctx.world.issues, openPrs });
+    // The Features an order could be written for. Only `full` runs an agent, so
+    // every other level leaves this empty and rule `feature-sequence` walks nothing
+    // -- which is also what its registry condition says, from the same one field.
+    const sequenceableFeatures =
+      sequencing === 'full'
+        ? sequenceable(
+            ctx.world.issues,
+            this.pickup.containerTypes,
+            (issue) => issueWatchGateReason(issue, this.pickup) === null,
+            this.pickup.sequenceMaxChildren ?? DEFAULT_SEQUENCE_MAX_CHILDREN,
+          )
+        : [];
+
     // The validation plans, grouped by the goal they belong to.
     const validationChecks = new Map<string, ValidationCheck[]>();
     for (const check of ctx.validationChecks ?? []) {
@@ -601,6 +656,9 @@ export class RuleDispatcher implements Dispatcher {
       // and most are visible only as some other item's parent.
       parentCandidates: candidateParents(ctx.world.issues, this.pickup.containerTypes),
       routes,
+      sequenceWaits,
+      sequenceableFeatures,
+      sequences,
       validationChecks,
       // Written by `issue-appraisal` / `issue-assess`, read by the stages the pipeline
       // runs after them. See {@link StageContext} — the ordering is load-bearing.

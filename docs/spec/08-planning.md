@@ -10,6 +10,12 @@ test, and the off arm — `issue-pickup` un-narrowed, no plan row anywhere — i
 anything else in the harness is written for any more. A config file still setting `planning.enabled`
 is warned about and ignored ([02](02-configuration.md#retired-keys)).
 
+**A plan is not a sequence.** A plan decomposes _one_ issue into parts and cuts a branch per part;
+an order over the stories under a Feature creates nothing and cuts no branch, and lives in
+[33](33-story-sequencing.md). The two meet in one place only: an accepted order holds `issue-plan`
+as well as `issue-pickup`, because a decomposition written before the story it depends on has a
+branch is a decomposition of a schema that does not exist yet.
+
 ## A plan is a list of parts
 
 **Every plan has at least one part, and a plan with one part is not a different kind of thing from a

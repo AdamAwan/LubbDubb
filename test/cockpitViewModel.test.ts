@@ -228,3 +228,51 @@ test('a claimed check becomes a keyboard entry, and never a live agent', () => {
     'the fleet is the dispatched agents alone — this is what the cap counts',
   );
 });
+
+/**
+ * The pulse that dispatches a candidate writes it into `upcoming` as `dispatching`
+ * and creates the task that staffs it, in that order — so for one interval the
+ * queue names work that is already out. Both bands of the Fleet card read the
+ * joined list, so the same issue cannot be drawn as an agent and as up next.
+ */
+test('up next drops the rows the fleet is already out on', () => {
+  const state = stateWith({
+    agents: [AGENT({ id: 'a1', taskId: 't1' }), AGENT({ id: 'a2', taskId: 't2', status: 'done' })],
+    tasks: [
+      { id: 't1', originRef: 'issue:36273' },
+      { id: 't2', originRef: 'issue:36279' },
+    ] as never,
+    readying: [{ id: 'r1', originRef: 'issue:36274', step: 'worktree' }] as never,
+    upcoming: {
+      cycleId: 'c1',
+      at: '2026-01-01T00:00:00.000Z',
+      items: [
+        { origin: 'issue:36273', rule: 'issue-appraisal', status: 'dispatching' },
+        { origin: 'issue:36274', rule: 'issue-appraisal', status: 'dispatching' },
+        { origin: 'issue:36275', rule: 'issue-appraisal', status: 'dispatching' },
+        { origin: 'issue:36279', rule: 'issue-appraisal', status: 'waiting' },
+      ],
+    },
+  } as never);
+  const view = build(state);
+  assert.deepEqual(
+    view.upNext.map((i) => i.origin),
+    ['issue:36275', 'issue:36279'],
+    'a live agent and a readying action each staff their origin; an ended agent staffs nothing',
+  );
+  assert.equal(view.state.upcoming?.items.length, 4, 'the snapshot itself is untouched');
+});
+
+test('up next is the whole queue when nothing is staffed', () => {
+  const state = stateWith({
+    upcoming: {
+      cycleId: 'c1',
+      at: '2026-01-01T00:00:00.000Z',
+      items: [{ origin: 'issue:1', rule: 'issue-appraisal', status: 'waiting' }],
+    },
+  } as never);
+  assert.deepEqual(
+    build(state).upNext.map((i) => i.origin),
+    ['issue:1'],
+  );
+});
