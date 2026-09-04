@@ -400,6 +400,7 @@ const PANEL_NAMES: Record<Exclude<ConsolePanel, null | { ask: string }>, true> =
   faults: true,
   launch: true,
   build: true,
+  upnext: true,
   pets: true,
   localRun: true,
   setup: true,

@@ -1830,11 +1830,17 @@ test('a goal with no measured spend draws no spend row rather than $0.00', () =>
   assert.ok(!unmeasured.includes('$0.00'), 'null is "never measured", not zero');
 });
 
-test('with no goal selected the overview draws its six cards', () => {
+test('with no goal selected the overview draws its five cards, and the queue is not one of them', () => {
   const html = render(view());
-  for (const title of ['Fleet', 'Goals in flight', 'Pull requests', 'Up next', 'World signals', 'Environments']) {
+  for (const title of ['Fleet', 'Goals in flight', 'Pull requests', 'World signals', 'Environments']) {
     assert.ok(html.includes(title), `the overview is missing ${title}`);
   }
+  // Up next is a band on the Fleet card now, collapsed, so its heading is not on
+  // the page at all — what is, is the way in, carrying the count a card header
+  // used to. Both halves matter: the card being gone is only an improvement if
+  // the reading it carried came with it.
+  assert.ok(!html.includes('<h3>Up next'), 'the queue is still drawing as a card of its own');
+  assert.match(html, /\d+ queued/, 'the fleet card does not say how much is queued behind it');
 });
 
 /**
@@ -1855,16 +1861,21 @@ test('the environments card draws its readings, and nothing at all without them'
   assert.ok(!none.includes('Environments'), 'nothing configured, nothing drawn');
 });
 
-test('a queued item states why it is held, in the queue’s own words', () => {
+/**
+ * What a folded band could cost, and the one thing the way in has to say out loud.
+ *
+ * The queue's sentences are behind the disclosure now and `test/panelRows.test.ts`
+ * pins them there, against the model. What cannot go behind it is a row that is
+ * the operator's move: `unapproved` waits on a person, and a person who cannot see
+ * it is a person who never answers. So the count is on the disclosure's label.
+ */
+test('the queue’s asks are counted on the glass, not folded away with the rows', () => {
   const v = view();
-  const held = v.state.upcoming?.items.filter((i) => i.reason !== '');
-  if (!held?.length) return;
-  // Decoded: a queue reason quotes a part slug, and React escapes the quotes in
-  // the text node — the assertion is about the sentence, not its encoding. Tags
-  // stripped too: a `#341` in the reason is drawn as a link, so the sentence is
-  // several text nodes on the page and one string only once the markup is gone.
+  const items = v.state.upcoming?.items ?? [];
+  const asking = items.filter((i) => i.status === 'unapproved').length;
   const text = decode(render(v).replace(/<[^>]*>/g, ''));
-  for (const item of held) assert.ok(text.includes(item.reason), `the queue dropped: ${item.reason}`);
+  assert.ok(text.includes(`${items.length} queued`), 'the fleet card does not state the size of its queue');
+  if (asking > 0) assert.ok(text.includes(`${asking} on you`), 'a queued ask is folded away with nothing saying so');
 });
 
 test('an empty rack still draws — a surface that vanishes reads as one that broke', () => {

@@ -436,7 +436,7 @@ pushed directly, because they claim no headroom.
 
 ### Operator re-ordering (issue #128)
 
-The operator can change what the harness picks up first by re-ordering the cockpit's Up next panel.
+The operator can change what the harness picks up first by re-ordering the cockpit's Up next band.
 Because the queue is a per-pulse projection, what persists is not the array but a **priority
 override keyed on the candidate's origin** — the same stable identity every rule and gate already
 uses. Overrides live in the `priority_overrides` store table and reach the dispatcher as

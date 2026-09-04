@@ -202,7 +202,7 @@ test('no reference is drawn inside a button', () => {
 test('the pull request rack is a way to the goal each PR delivers', () => {
   const v = view();
   const html = render(v);
-  const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('Up next'));
+  const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('World signals'));
 
   const pr = v.state.world.pullRequests[0];
   assert.ok(pr, 'the demo fixtures must carry an open pull request');
@@ -219,7 +219,7 @@ test('the pull request rack is a way to the goal each PR delivers', () => {
 test('the pull request rack is a way onto each pull request’s own page', () => {
   const v = view();
   const html = render(v);
-  const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('Up next'));
+  const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('World signals'));
 
   const pr = v.state.world.pullRequests[0];
   assert.ok(pr, 'the demo fixtures must carry an open pull request');
@@ -251,7 +251,8 @@ test('a queued dispatch is a way to what it is queued against', () => {
   const queued = items.find((i) => i.origin.startsWith('issue:'));
   if (!queued) return; // nothing goal-scoped in the queue this snapshot
   const html = render(v);
-  const upNext = html.slice(html.indexOf('Up next'), html.indexOf('World signals'));
+  // The band on the Fleet card, which ends where the next card's heading begins.
+  const upNext = html.slice(html.indexOf('Up next'), html.indexOf('Goals in flight'));
   assert.ok(upNext.includes(`>${refLabel(queued.origin)}<`), 'the origin is a ref, so it is drawn as one');
 });
 

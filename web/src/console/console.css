@@ -2371,6 +2371,28 @@ a.cn-tgl {
   display: grid;
   gap: 12px;
   grid-template-columns: 1fr;
+  /* Every row of the grid is one height, and a card scrolls inside it.
+
+     A card's height was its own content's, which made the overview a different
+     page on every pulse: a card grew as the fleet picked work up and shrank as it
+     put it down, and everything below it moved — so what an operator was reading
+     had moved by the time they looked back. Grid's own stretch made it worse
+     rather than better, because then a card's height was its *neighbour's*
+     content, and a quiet card beside a busy one grew a field of empty panel under
+     its last row. One height for the track settles both: the page is the same page
+     from one reading to the next, and how much a card has to say is answered by
+     its scrollbar rather than by where the card after it starts.
+
+     `grid-auto-rows`, because every row here is implicit — the cards are a list,
+     not a template. → `.cn-grid > .cn-card` */
+  grid-auto-rows: var(--cn-card-h);
+  /* A card's height: its header, nine or so rows, and the foot of whatever it
+     keeps down there. Here rather than on `:root` for the reason the rail's widths
+     are on `.cn-rows`: every token on `:root` is a *theme* token, owed a value by
+     each preset and a row in the registry `web/src/cockpit/tokens.ts`, and this is
+     a layout metric rather than a colour anybody would want to change. Declared on
+     the grid it also scopes itself, so a `.cn-card` anywhere else is untouched. */
+  --cn-card-h: 496px;
 }
 @media (min-width: 1200px) {
   .cn-grid {
@@ -2398,6 +2420,45 @@ a.cn-tgl {
   min-width: 0;
   display: flex;
   flex-direction: column;
+}
+
+/* The overview's cards, and only those: the scroll belongs to the track's fixed
+   height, and a `.cn-card` on a goal page has no track and no height to fill.
+
+   **The card is the scroller, and its head and foot are stuck to it.** The
+   alternative is a scroll region inside every card, which is a wrapper element in
+   seven components and a rule none of them can be made to keep — where sticky is
+   one rule here and cannot be forgotten by the eighth card. What it costs is that
+   the head needs a ground of its own: rows pass *under* it now, and a transparent
+   header would have them showing through it. */
+.cn-grid > .cn-card {
+  height: 100%;
+  overflow-y: auto;
+}
+.cn-grid > .cn-card > h3 {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--cn-panel);
+}
+/* The runway band is the fleet card's foot and stays one: a summary that scrolled
+   out of the card would be a reading you have to go looking for, which is the
+   whole reason it is a band along the bottom rather than a row in the list.
+
+   Its own `margin-top: auto` is dropped here. On a card of a fixed height the
+   slack belongs to *one* item, and it is the band above this one — two auto
+   margins split the free space between them, which would open a gap between the
+   queue's rows and the summary of the same queue. */
+.cn-grid > .cn-card > .cn-runway {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin-top: 0;
+}
+/* A band whose size is what the rows above it left over, held at the foot of the
+   card rather than floating up against them. → `RowGroup.foot`, `FLEET_ROWS` */
+.cn-grid > .cn-card > .cn-group-foot {
+  margin-top: auto;
 }
 .cn-card > h3 {
   margin: 0;
@@ -2903,6 +2964,17 @@ button.cn-grow {
   background: transparent;
   border: 1.5px solid var(--cn-readying);
 }
+/* A queued dispatch: the readying tint, dotted. The *tint* is shared on purpose —
+   both rows are the harness's own work rather than a person's, which is the
+   distinction the violet carries — and the stroke is what separates them: dashed
+   is a dispatch already under way, dotted is one that has not started. No token of
+   its own, because a fourth colour here would claim a fourth kind of thing where
+   there are three. The band heading above these rows is what names them; the
+   stroke is only what keeps a row recognisable once it is scrolled past. */
+.cn-lamp.cn-queued-lamp {
+  background: transparent;
+  border: 1.5px dotted var(--cn-readying);
+}
 /* Dashed for the desk row's reason — no dispatch cut this — and `default` because
    there is nothing to click: no transcript, no kill, no inject. */
 .cn-row.cn-readying {
@@ -2916,6 +2988,15 @@ button.cn-grow {
 .cn-row.cn-desk {
   cursor: default;
   border-left: 2px dashed var(--cn-violet);
+  padding-left: 11px;
+}
+/* Dotted for the lamp's reason: nothing has been dispatched for this row, and
+   nothing is being dispatched for it yet either. `default` because there is
+   nothing to click — no transcript, no kill, no inject, and no process to have
+   any of them. */
+.cn-row.cn-queued {
+  cursor: default;
+  border-left: 2px dotted var(--cn-readying);
   padding-left: 11px;
 }
 
@@ -3783,6 +3864,15 @@ button.cn-grow {
 .cn-why:focus-within .cn-why-tip {
   display: block;
 }
+/* The same bubble, opening upward, where the card's own scroll would have cut it
+   off below the row. Only `top` and `bottom` change: the two edges, the measure
+   cap and the auto margins that keep it between them are the row's whichever way
+   it opens, so a flipped bubble is the same box in the same column.
+   → `noRoomBelow` */
+.cn-why-above .cn-why-tip {
+  top: auto;
+  bottom: calc(100% - 4px);
+}
 
 /* The watch switch. A glyph in the row's own ink, dimmed until it is wanted, so a
    column of them reads as one repeated control rather than as a column of state.
@@ -3921,6 +4011,35 @@ button.cn-grow {
   margin-left: auto;
   font-weight: 400;
   font-variant-numeric: tabular-nums;
+}
+/* Where the band's count carries something that is your move. The amber is the
+   `hold`/ask vocabulary the state column already speaks — a queued row that is
+   waiting on a person is the one thing folding the band away could hide, so the
+   bar says how many rather than leaving it to be found. */
+.cn-group-n .cn-alarm {
+  color: var(--cn-amber-ink-hi);
+}
+/* The band's one control: the way to the rest of a band the card is showing the
+   head of. Quiet, because it is not the reading — the rows beside it are — and it
+   sits after the count so the two read as one sentence: *14 queued, all 14*.
+   Beside the count rather than in the card's header for the reason the count is
+   here at all: it is about this band, and a card can carry more than one. */
+.cn-group-more {
+  margin-left: 10px;
+  padding: 2px 7px;
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r-sm);
+  background: var(--cn-panel);
+  color: var(--cn-fg-faint);
+  font: 400 11px/1 var(--cn-mono);
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.cn-group-more:hover {
+  border-color: var(--cn-line-hi);
+  color: var(--cn-fg-dim);
 }
 
 /* Who asked, as a mark. A person is a filled disc carrying their initials; the

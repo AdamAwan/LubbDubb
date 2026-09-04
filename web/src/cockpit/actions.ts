@@ -52,6 +52,12 @@ export type ConsolePanel =
   | 'setup'
   /** The durable work graph, which was the console's second nav destination. */
   | 'record'
+  /**
+   * The whole Up next queue. The Fleet card carries the head of it and this is
+   * the rest — a panel rather than a disclosure on the card, because the queue is
+   * unbounded and the card's own rows are capped by the fleet.
+   */
+  | 'upnext'
   | { ask: string }
   | null;
 

@@ -8,7 +8,8 @@ import { KIND_LABEL, KIND_SYMBOL, QueueRail, subjectLabel } from './QueueRail.js
 import { needBody } from './NeedsBand.js';
 import { GoalPage } from './GoalPage.js';
 import { PrPage } from './PrPage.js';
-import { Overview } from './Overview.js';
+import { Overview, queueRow } from './Overview.js';
+import { PanelRows } from './PanelRow.js';
 import { RecoveryPanel } from '../components/RecoveryPanel.js';
 import { TicketsPanel } from '../components/TicketsPanel.js';
 import { FeatureBoard } from '../components/FeatureBoard.js';
@@ -441,6 +442,7 @@ const PANEL_TITLE: Record<Exclude<ConsolePanel, null | { ask: string }>, string>
   localRun: 'Running locally',
   setup: 'Setup',
   record: 'The record',
+  upnext: 'Up next',
 };
 
 /**
@@ -575,6 +577,14 @@ function panelBody(
       );
     case 'faults':
       return <FaultLog view={view} actions={actions} />;
+    // The whole queue, in the same rows the Fleet card draws the head of — one
+    // builder, so the three rows on the card and the thirty in here cannot come
+    // to say different things about the same candidate.
+    case 'upnext': {
+      const items = state.upcoming?.items ?? [];
+      if (items.length === 0) return <p className="cn-empty">Nothing is queued.</p>;
+      return <PanelRows rows={items.map((item) => queueRow(item, view, actions))} />;
+    }
     case 'localRun':
       return (
         <LocalRunPanel
