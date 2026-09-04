@@ -78,6 +78,16 @@ function declaredProperties(): Map<string, string> {
       if (!all.has(match[1]!)) all.set(match[1]!, match[2]!.trim());
     }
   }
+  // And the ones a component declares on an element it renders — the row
+  // grammar's rails, which the sheet reads and only `PanelRow` can compute. The
+  // sweep is after typos, and a property is declared wherever it is declared; a
+  // side that only read one of the two would report every one of them missing and
+  // teach the next author to add an exception list.
+  for (const path of tsxSources()) {
+    for (const match of readFileSync(path, 'utf8').matchAll(/'(--[a-z0-9-]+)'\s*:/g)) {
+      if (!all.has(match[1]!)) all.set(match[1]!, `declared in ${path}`);
+    }
+  }
   return all;
 }
 

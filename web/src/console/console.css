@@ -2439,14 +2439,21 @@ a.cn-tgl {
 .cn-rows {
   display: flex;
   flex-direction: column;
+  /* What the stacked cut's query measures. The card's width is the fact that
+     decides whether a row is over-subscribed, and no card can see its own — a
+     media query would be measuring the *window*, which on this page is four
+     different card widths at once. → `.cn-srow`, `unstackedTemplate` */
+  container: cn-rows / inline-size;
   /* The rail's widths, stated once for every card. Which of these columns a card
      actually has is `slotsUsed`'s answer and arrives as an inline
      `grid-template-columns`; how wide each one is when it exists is here, so the
      rail is one edit rather than five. Wide enough for the widest thing each slot
      holds: two chips, a five-segment track, a profile picker, two refs. */
   --cn-w-lamp: 8px;
-  /* The watch switch: a glyph and the room to press it, and no more — it is the
-     one slot that is the same on every row, so its whole job is to be skippable. */
+  /* The watch switch, at the head of the readings and sized as one of them: the
+     same 22px box the review and pack marks keep, so the group starts on a square
+     edge rather than on a glyph of its own size. It is the one slot that is the
+     same on every row, which is what makes it the group's anchor. */
   --cn-w-eye: 22px;
   /* The mark for who asked: a 20px disc and the gap that keeps it off the title.
      A width rather than a ceiling — it is the same glyph on every row, so a rail
@@ -2471,6 +2478,16 @@ a.cn-tgl {
      `agent on it` chip read as `ag`. A ceiling, so a narrow card still takes it
      back. */
   --cn-w-refs: 152px;
+  /* The row's quantities, where they sit beside the subject rather than under it.
+     A width, because on that cut the track is between two pinned things and the
+     subject's `1fr` takes back anything it gives — so a row with nothing to report
+     sized this to zero and drew every column after it 62px out of line with the row
+     above. Sized for the two facts a row usually has together (`comments 12` and
+     `waiting 14d`); the rare third wraps, which makes the row with three things
+     wrong with it the tall one, and that is the honest failure. Under the subject
+     the strip's last track is `1fr` and this is not read at all.
+     → `unstackedTemplate` */
+  --cn-w-facts: 156px;
   /* The subject's floor, and the only one of these that is a minimum rather than a
      ceiling. Every rail above gives way to it, because a title clipped to one word
      is the row saying nothing at all while the slots beside it keep room they do
@@ -2535,14 +2552,18 @@ a.cn-tgl {
    because no other card draws all three and a global widening would open a gutter
    on every rack for a slot only this one fills. → `prRow` */
 .cn-read-marks .cn-rows {
-  /* Three marks and the gaps between them: the checks chip at its own fixed
-     width, then the two 22px boxes, and the review mark's 5px badge overhang. */
-  --cn-w-read: 168px;
-  /* The checks chip is the one *variable-width* thing in the slot, and it now
-     leads it — so it is given a width rather than left to its own text. Without
-     one, `passing` and `2 failing` put the two marks behind it at different x on
-     adjacent rows, which is the raggedness the strip exists to end. */
-  --cn-w-ci: 96px;
+  /* Four marks and the gaps between them: 4 × 22px, three 10px gaps, and the badge
+     overhang each of them can carry. It was 168px while the checks were a chip of
+     words; as marks they are all one box, and the fourth — the comments — fits in
+     less room than the words alone used to take. */
+  --cn-w-read: 122px;
+  /* The checks used to be the one *variable-width* thing in the slot — `passing`
+     against `2 failing` put the two marks behind it at different x on adjacent
+     rows — so it was given a width rather than left to its own text. It is a box
+     now and the width is that box; the token stays because `CiSlot` is the gap
+     where a row is withholding its checks, and that gap has to be exactly the
+     mark's size. */
+  --cn-w-ci: 22px;
 }
 .cn-read-marks .cn-slot-read .ck {
   min-width: var(--cn-w-ci);
@@ -2579,7 +2600,43 @@ a.cn-tgl {
    gap along a row — the pair has to read as one row with a second line rather
    than as two rows, and 10px in both directions reads as two. → `StackedRow` */
 .cn-srow {
+  grid-template-columns: var(--cn-cols-stacked);
   row-gap: 6px;
+}
+/* Placed here rather than inline, so the query below can outrank it: the strip
+   sits on the subject's column — which only the census can count, so it arrives
+   as `--cn-subject` — and the refs stay up on the first line. */
+.cn-srow > .cn-rowreads {
+  grid-column: var(--cn-subject) / span 1;
+  grid-row: 2;
+  grid-template-columns: var(--cn-strip-cols);
+}
+.cn-srow > .cn-refs {
+  grid-column: -2 / -1;
+  grid-row: 1;
+}
+/* The ceiling. Past it the card has room for the whole rail, and the second line
+   is 105px a row spent to leave both lines two-thirds gutter — so the strip goes
+   `display: contents` and its children fall into the row's own grid, in the order
+   they are already written, on the rail `unstackedTemplate` built for exactly
+   that order. Nothing is dropped and no mark changes column; the row stops
+   wrapping.
+
+   900px is where the one-line rail stops squeezing the subject: the rack's slots
+   come to ~620px of rails and gaps, and below that the title is down to a few
+   words — which is the shortfall the stacked cut exists to avoid. */
+@container cn-rows (min-width: 900px) {
+  .cn-srow {
+    grid-template-columns: var(--cn-cols-line);
+    row-gap: 0;
+  }
+  .cn-srow > .cn-rowreads {
+    display: contents;
+  }
+  .cn-srow > .cn-refs {
+    grid-column: auto;
+    grid-row: auto;
+  }
 }
 /* The strip of readings under the subject.
 
@@ -2600,6 +2657,59 @@ a.cn-tgl {
   gap: 10px;
   min-width: 0;
 }
+/* The row's words, under its title. Placed on the subject's column like the strip
+   is, and on the line *after* whatever the row's last one is: the readings sit
+   beside the subject on a wide card and under it on a narrow one, so the sub-line
+   is the row's second line in the first case and its third in the second.
+
+   `align-items: center` on the row would centre a wrapped sentence against a
+   22px mark and leave the title floating; `cn-subrow` puts the row's own items
+   back on their line's top edge and lets the sub-line take whatever height it
+   needs. */
+.cn-subrow {
+  align-items: start;
+  /* Tight, because the two lines are one row. The gap between them has to read as
+     less than the gap between rows or the sub-line detaches and the card looks
+     like sixteen rows of alternating weight; the row's own padding comes in for
+     the same reason — a row carrying a second line is taller by that line and
+     should not also be taller by its padding. */
+  row-gap: 1px;
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+.cn-subrow > .cn-slot,
+.cn-subrow > .cn-refs {
+  min-height: 22px;
+}
+.cn-rowsub {
+  grid-column: var(--cn-subject, 1) / span 1;
+  grid-row: 2;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  min-width: 0;
+}
+/* Under the subject on the stacked cut too — one line further down, since the
+   readings have the second. */
+.cn-srow.cn-subrow > .cn-rowsub {
+  grid-row: 3;
+}
+@container cn-rows (min-width: 900px) {
+  .cn-srow.cn-subrow > .cn-rowsub {
+    grid-row: 2;
+  }
+}
+/* The server's own sentence, on the glass. Faint and wrapping: it is the row's
+   least urgent reading and its longest, so it takes the weight of a caption and
+   the room of a paragraph rather than the row's ellipsis — the half that says what
+   is holding the row is usually its tail. */
+.cn-said {
+  min-width: 0;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--cn-fg-faint);
+}
 .cn-row:last-child {
   border-bottom: 0;
 }
@@ -2612,9 +2722,52 @@ button.cn-row {
   width: 100%;
   text-align: left;
 }
-/* Work that has already ended: present, and plainly behind the live rows. */
+/* Work that has already ended, or a pull request the harness will not touch:
+   present, and plainly behind the live rows.
+
+   0.55 was not far enough back to do the job. The rack is eight rows of the same
+   shape and most of them are unwatched, so the reading an operator takes off the
+   card is *which of these is the fleet actually working* — and at a fraction that
+   still reads as a legible row, a scan finds eight rows of slightly different grey
+   rather than two rows and a background. The row is still readable when read; it
+   is no longer competing to be read.
+
+   The marks on a spent row fade with it and are not lifted back: a verdict about a
+   pull request nobody is working is exactly the thing that should not be catching
+   an eye. The **switch** is the one exception, at full strength, because it is how
+   the row comes back. */
 .cn-row.cn-spent {
-  opacity: 0.55;
+  opacity: 0.34;
+  /* And out of focus, which is the part opacity cannot do. A faint row is still a
+     row an eye tries to read — the words are sharp, so it costs a fixation to find
+     out they were not worth one — and eight of those is the scan the card exists to
+     save. Blurred, the row stops offering itself as text and becomes texture: the
+     shape of the card, the column of marks and the position of the row all survive,
+     and only the reading is withheld until it is asked for.
+
+     Sub-pixel on purpose. Past about a pixel the marks turn to smudges and the row
+     stops being locatable, which is the one thing it still has to be. The tooltips
+     are portalled to the body (`.tip`), so nothing a mark opens is caught in this —
+     a filter is a containing block for fixed descendants, and that is exactly the
+     bug the portal was already there to prevent. */
+  filter: blur(0.7px);
+  transition:
+    opacity 0.12s ease,
+    filter 0.12s ease;
+}
+/* And it comes back sharp under the pointer — the row is faint because nothing is
+   happening to it, not because it is unimportant, so reading one is a hover rather
+   than a squint. `focus-within` for the same reason on the keyboard: a row nobody
+   can tab into and read is a row half the operators do not have. */
+.cn-row.cn-spent:hover,
+.cn-row.cn-spent:focus-within {
+  opacity: 0.8;
+  filter: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cn-row.cn-spent {
+    transition: none;
+  }
 }
 .cn-row .cn-grow {
   min-width: 0;
@@ -2690,10 +2843,18 @@ button.cn-grow {
    it keeps its rule even when this row's is empty, because the rule is the
    card's edge between what a row *is* and what it *names*, not this row's.
 
-   Clipped, because the group packs to the right: content wider than its column
-   overflows to the *left*, over the slot beside it, and a reference painted on
-   top of a chip is worse than one cut off at the rule. */
+   **Packed from the rule, not from the card's edge.** The group is always drawn in
+   one order — the pull request, then what it delivers — so packing it right put the
+   *first* reference at a different x on every row depending on whether there was a
+   second: a column of one thing, drawn as a scatter. From the left each reference
+   sits where its own kind always sits, and what is ragged is the end of the row,
+   which the card's border already closes.
+
+   Clipped either way: content wider than its column overflows past the card rather
+   than wrapping, and a reference cut off at the edge is better than one painted on
+   top of the mark beside it. */
 .cn-frow .cn-refs {
+  justify-content: flex-start;
   min-width: 0;
   overflow: hidden;
   border-left-color: var(--cn-line);
@@ -3524,7 +3685,7 @@ button.cn-grow {
 }
 .cn-fact-k {
   font-family: var(--cn-mono);
-  line-height: 1.6;
+  line-height: 1.35;
   color: var(--cn-fg-faint);
   flex: none;
 }
@@ -3624,26 +3785,48 @@ button.cn-grow {
 }
 
 /* The watch switch. A glyph in the row's own ink, dimmed until it is wanted, so a
-   column of them reads as one repeated control rather than as a column of state —
-   which is what the state column beside it is for. */
-.cn-eye {
+   column of them reads as one repeated control rather than as a column of state.
+
+   **Doubled, because `.btn.btn` is.** `AsyncButton` renders `btn btn cn-eye`, and
+   the button family is deliberately (0,2,0) so one rule dresses a button wherever
+   it sits — which at (0,1,0) this rule silently lost every property they share.
+   The switch had been wearing the button's panel fill, its border and its
+   `6px 12px` all along; on a panel-coloured row that is a box you have to look for,
+   and it only became a bug you can see when the glyph inside it was cut to 13px and
+   the side padding squeezed it to nothing. Doubling here is the sheet's own
+   convention, not an escalation: `console.css` loads after `styles.css`, so equal
+   specificity is decided by source order and this wins.
+
+   Box-sized to the marks it now leads — `.rv` and `.pk` are both 22px squares —
+   rather than left at the size of its own glyph. The group is a run of boxes and
+   the switch is the one box on every row of it; at glyph size it was the run's
+   ragged end sitting at its start. The glyph inside stays smaller than the box, as
+   the marks' do. */
+.cn-eye.cn-eye {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: none;
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
   padding: 0;
   border: 0;
+  border-radius: var(--cn-r-sm);
   background: none;
   color: var(--cn-fg-dim);
   cursor: pointer;
   opacity: 0.6;
 }
-.cn-eye:hover,
-.cn-eye:focus-visible {
+.cn-eye.cn-eye:hover,
+.cn-eye.cn-eye:focus-visible {
   color: var(--cn-fg);
   opacity: 1;
 }
 /* An unwatched row is drawn spent, and its own eye is the one thing on it that
-   must stay legible: it is how the row comes back. */
+   must stay legible: it is how the row comes back. Full strength against the row's
+   own fade rather than merely more than it — the row is faint enough now that a
+   relative lift would leave the one control on it hard to aim at. */
 .cn-spent .cn-eye {
   opacity: 1;
 }
