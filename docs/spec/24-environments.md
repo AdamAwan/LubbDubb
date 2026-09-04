@@ -241,32 +241,43 @@ breaking one.
 
 ### Health in the cockpit
 
-An **Environments** card on the overview, one row per environment that declares a check: the word, how
-long it has been that word, when it was last read, and the check's own reasons behind the row's
-marker. On the overview and not on a goal page, because health is a fact about the environment and not
-about any goal — drawn per goal it would be the same sentence repeated on every card, and the one
-place it is actually read, "is anything broken out there", has no goal selected.
+**One chip on the top bar, beside the fleet cap, drawn only while something out there is not well** —
+the worst reading as a count and a word, `1 red`, `2 not well`, `1 no answer`, tinted red or amber. It
+opens the **Environments panel**: one row per environment that declares a check, with the word, how long
+it has been that word, when it was last read, and the check's own reasons behind the row's marker. The
+`Env` row in [the bar's menu](17-cockpit.md#the-bars-menu) opens the same panel, and is where an
+operator goes to confirm that nothing is broken — the chip answers _is something_, the row answers _what
+did each of them say_. One panel for both, because two surfaces drawing one check's sentences are two
+places for them to disagree. There is no Environments card on the overview.
 
-It is the one card there that draws **nothing** when it is empty, which is the deliberate exception to
-that page's rule that an empty card still draws: an environment surface on a deployment that
-configured none is a row of question marks announcing a feature as broken. An environment that _is_
-configured and has not answered yet draws its row and says so.
+**The chip's absence is the healthy reading.** That is the deliberate exception to the cockpit's rule
+that a quiet reading is dimmed rather than removed, and the rule is right for gauges of the fleet — a
+fault count that vanished at zero is a count an operator has to hunt for on the day it moves. This is
+not one. An environment is well nearly all of its life and there is nothing to do about it when it is,
+so a standing `3 well` on the strip is width spent on the days it says nothing — and the reading is not
+lost, it is the menu row, which mutes at zero like every other. What the chip is for is the half that
+was ever glanced at: an outage, in the row of the shell that never scrolls.
 
-The tones are ones the cockpit already defines, so a theme switch needs no new token. `unknown` takes
-the same amber as `orange` and is told apart by the word beside it, which is the honest pairing: a
-check that could not answer is a thing to look at, and drawing it green or red would be claiming an
-answer it did not give.
+**The menu row is absent, not zeroed, where no environment declares a check** — the old card's
+exception, for its reason: a row reading `0 well` on a deployment that configured none announces a
+feature as broken. The panel is still reachable by URL there, and says so in words rather than drawing
+an empty box.
+
+Beside the fleet cap because that gauge and this one are the same subject read left to right — what the
+fleet is allowed to do, when it next gets to decide, and whether where it ships is up. The ranking, the
+wording and the tones are [17](17-cockpit.md#the-environments-gauge).
+
+Nothing here re-decides anything: the word is the check's own tier, and `unknown` draws as its own
+reading rather than folded into either of the two that mean something. The tones are ones the cockpit
+already defines, so a theme switch needs no new token — `unknown` takes the same amber as `orange` and
+is told apart by the word beside it, which is the honest pairing: a check that could not answer is a
+thing to look at, and drawing it green or red would be claiming an answer it did not give.
 
 ### Being told
 
-The card is where the detail is read; it is not a way to be told. Two surfaces carry the reading further,
-and both are **volume rather than meaning** — nothing below opens a gate, files a bench row or reaches a
-prompt, which is still the whole of what health does.
-
-**The `Env` gauge on the top bar** — the worst reading as a count and a word, muted while everything is
-well, tinted when it is not, opening the overview where the card is. It is drawn only where some
-environment declares a check, the card's own exception for the card's own reason. The ranking, the
-wording and the tones are [17](17-cockpit.md#the-environments-gauge).
+The chip is where the reading is read; it is not a way to be told. It and the notification below are
+both **volume rather than meaning** — nothing here opens a gate, files a bench row or reaches a prompt,
+which is still the whole of what health does.
 
 **An `environments` notification category**, beside Needs you, Errors and Agent finished
 ([17](17-cockpit.md#notifications)). It fires on a change of **state or tier** between two readings the
@@ -296,7 +307,7 @@ The decision is pure and lives with the other three categories in `web/src/cockp
 - **Whether the environment being ill is anything to do with the harness's work.** A red testUk and a
   goal that has just arrived in it are two readings on one page, and nothing here relates them. That
   question is [29](29-post-deploy-watch.md), which asks a goal's own declared checks.
-- **A history.** The row is the current reading and `changed_at` is as far back as it goes; there is
+- **A history.** The chip is the current reading and `changed_at` is as far back as it goes; there is
   no chart of last week's outages, and the reason is the one above — this is a status.
 - **An environment's health while nothing else is configured.** `environments` is still the off
   switch for the whole subsystem: `health` alone on an entry with no `at` is not a configuration the

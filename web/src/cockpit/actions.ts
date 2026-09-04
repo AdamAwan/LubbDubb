@@ -68,6 +68,13 @@ export type ConsolePanel =
    * queued" and "why is nothing" are one click apart from the queue itself.
    */
   | 'signals'
+  /**
+   * Every environment's health, in the rows that were the overview's Environments
+   * card. It is the surface behind the bar's `Env` chip and the menu row beside
+   * it — one panel for both, because two surfaces drawing one check's sentences
+   * are two places for them to disagree.
+   */
+  | 'environments'
   | { ask: string }
   | null;
 

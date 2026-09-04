@@ -944,7 +944,7 @@ stopped returning still has a page to be dismissed from.
 
 **A retained run is marked stale, never removed.** The overview's goals-in-flight list draws a retained
 run beside the live goals _while it still has work in flight_, and the rest behind that card's `kept`
-disclosure ([the six cards](#the-six-cards)); the page header and the row both carry `StaleChip`: the tracker
+disclosure ([the overview](#the-overview)); the page header and the row both carry `StaleChip`: the tracker
 stopped returning this item, and — where the ticket mirror has a row — what the tracker now calls it
 (`tracker: Resolved · seen 3h ago`). The chip's title says exactly what the marking covers: the title,
 description, labels and state are the harness's copy from the last pulse the item was live, and the
@@ -2309,12 +2309,17 @@ this page's job is to say when it has not done it well enough.
 
 ## The overview
 
-What the situation area shows when no goal is selected: six cards, rows rather than pictures, in
-reading order — **Fleet**, **Goals in flight**, **Pull requests**, **Environments**, **Build**,
-**Project**. The
+What the situation area shows when no goal is selected: five cards, rows rather than pictures, in
+reading order — **Fleet**, **Goals in flight**, **Pull requests**, **Build**, **Project**. The
 fleet's **runway** is a band along the foot of the first of them rather than a card of its own, because "who
 is out" and "what is behind them" are one thought — and for the same reason, so is
 [**Up next**](#the-queue-rides-the-fleet-card), which used to be the fourth card here.
+
+**Environments used to be the fourth card, and is [a chip on the bar](#the-environments-gauge) and a
+panel now.** Health is a fact about the world the work ships into rather than about anything on this
+page, and the answer is _well_ nearly all of the time — a sixth of the overview spent saying so, on the
+page that answers _what is happening_. What was glanced at is the chip beside the fleet cap, drawn only
+while something is not well; the card's rows are the panel behind it.
 
 **World signals used to be the fourth card too, and is [a panel](#world-signals) now.** It is the one
 surface here that was not about what is happening but about what happened to bring it about — read
@@ -3630,7 +3635,8 @@ lands somewhere else entirely, so Back returns to the filter and the list re-rea
 
 ## The top bar and the panels
 
-The strip carries the ident, the nav, the fleet gauge, the two ways off it to a tracker, **two
+The strip carries the ident, the nav, the fleet gauge, the two ways off it to a tracker, the [**Env**](#the-environments-gauge)
+chip where there is an outage to report, **two
 gauges** — [Usage](#the-usage-chip) and **Local**, in one pill — and a **menu** holding the seven
 ways-in that are not gauges: **Faults**, **Launch**, [**Build**](#the-build-gauge),
 [**Env**](#the-environments-gauge), [**Signals**](#world-signals), [**Record**](#the-record-panel)
@@ -3676,6 +3682,11 @@ One button (`BarMenu`, `TopBar.tsx`; `.cn-menu-wrap`, `.cn-menu`, `.cn-menu-row`
 ways-in behind it, in reading order: Faults, Launch, Build, Env, Signals, Record, Config. Every row
 is a glyph, a word and — where it has one — a value, drawn at the right-hand edge so seven rows of
 different word lengths still read as one column of numbers.
+
+**Env is in here _and_ on the strip**, which is the one reading that is both, and the two are not the
+same question: the chip is _is something broken_ and is drawn only when it is, and the row is _what did
+every environment say_, which is where an operator goes to confirm that nothing is. Both open the one
+panel. → [the Environments gauge](#the-environments-gauge)
 
 **Every row names itself in words, and that is the difference between here and a rack.** A glyph in a
 fixed slot on a row somebody is already reading can go wordless — the agent mark is the icon
@@ -3917,16 +3928,24 @@ nothing, so borrowing it would say something untrue — and after the second tim
 
 ### The Environments gauge
 
-The only reading in [the bar's menu](#the-bars-menu) about the world the work ships into rather than
-about the fleet or this build: whether any environment's health check says something out there is
-broken
-([24](24-environments.md#is-the-environment-well)). The Build gauge's argument applied to the subject
-that needed it more — health was drawn on one card on one tab, so an outage reached exactly the people
-already looking at it.
+The only reading on the bar about the world the work ships into rather than about the fleet or this
+build: whether any environment's health check says something out there is broken
+([24](24-environments.md#is-the-environment-well)). It sits **beside the fleet cap**, which is the same
+gauge one step out — what the fleet is allowed to do, when it next gets to decide, and whether where it
+ships is up.
+
+**It draws only while something is not well, and that absence is the healthy reading.** The one
+departure from this bar's rule that a quiet reading is dimmed rather than removed ([the readings
+strip](#the-readings)), and it earns the exception the way nothing else here would: an environment is
+well nearly all of its life and there is nothing to do about it when it is. There is no Environments
+card behind it any more — it was a sixth of the overview spent saying _well_, on the page that answers
+_what is happening_, and what an operator actually wanted from it was the outage. `unknown` counts as
+not-well and draws: it is not a claim that anything is right, and folding it into the healthy silence
+is the one way this chip could hide an outage.
 
 **The value is a count and a word, never a bare number**: `1 red`, `2 not well`, `1 no answer`,
-`4 well`. `Env 1` would leave an operator opening the card to find out which of three quite different
-things it meant, which is the only thing they wanted to know. The count is of the environments sharing
+`4 well`. `Env 1` would leave an operator hunting for which of three quite different things it meant,
+which is the only thing they wanted to know. The count is of the environments sharing
 the _worst_ word rather than of every environment that is not well, so `2 red` and `1 orange` never add
 up into one figure describing neither.
 
@@ -3938,13 +3957,17 @@ anything is wrong — and above `healthy`, since it is not a claim that anything
 untiered unhealthy take `.cn-env-ill`; an orange and an `unknown` take `.cn-env-watch`, told apart by
 the word beside them rather than by a third colour claiming an answer the check did not give.
 
-**Absent, not zeroed, where no environment declares a check** — the Environments card's own exception,
-for its reason: a row reading `0 well` on a deployment that configured none announces a feature as
-broken. It is the one entry `menuEntries` omits rather than mutes, and `test/console.test.ts` asserts
-that on the fold rather than on the bar's markup, since a closed menu draws no rows at all. It opens the
-**overview**, where the card is, rather than a panel of its own: the reasons, the ages and the
-per-environment rows are the card's, and a second surface drawing them is a second place for them to
-disagree.
+**Absent, not zeroed, where no environment declares a check** — the old card's exception, for its
+reason: a reading of `0 well` on a deployment that configured none announces a feature as broken. That
+holds for the menu row as well as the chip, and `test/console.test.ts` asserts the row on the fold and
+the chip on the rendered bar, in all three of the chip's arms: no check declared, every check well, and
+an outage.
+
+**Both open the Environments panel** (`EnvironmentsPanel`, `web/src/console/EnvironmentsPanel.tsx`) —
+one row per environment, the word it is in, how long it has been that word, when it was last read, and
+the check's own sentences behind the row's marker, drawn verbatim. One panel for the two ways in,
+because two surfaces drawing one check's sentences are two places for them to disagree. Its rows are the
+card's exactly; what changed is that they are opened rather than occupying the overview.
 
 Four panels open from the bar, the ask panel opens from a queue row ([the rail](#the-queue-rail--needs-you)), and Settings is a shell-owned modal beside them:
 
@@ -6504,7 +6527,7 @@ muting rather than removing the rail, a group with no rows drawing no heading, a
 button and the recovery hold not, the ask drawn above the plan, a goal with no ask drawing no band, the
 goal page answering through the shared card, a held part quoting the reconciler, a retired plan drawing
 what it proposed rather than only saying it has no live parts, an HTML ticket drawn as HTML, a goal with
-no measured spend drawing no `$0.00`, the overview's six cards and the environments card's absence when nothing declares a check, an empty rack still drawing, the
+no measured spend drawing no `$0.00`, the overview's five cards, the environments chip drawing only where something is not well, an empty rack still drawing, the
 the intake hold arriving on the rail rather than on the tickets tab, that tab's rows being ways into
 their goals and its container cascade, the fault
 log keeping its clear at zero, a panel's two ways out, the demo gate on injection, the precedence

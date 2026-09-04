@@ -1832,7 +1832,7 @@ test('a goal with no measured spend draws no spend row rather than $0.00', () =>
 
 test('with no goal selected the overview draws its cards, and neither feed is one of them', () => {
   const html = render(view());
-  for (const title of ['Fleet', 'Goals in flight', 'Pull requests', 'Environments']) {
+  for (const title of ['Fleet', 'Goals in flight', 'Pull requests']) {
     assert.ok(html.includes(title), `the overview is missing ${title}`);
   }
   // World signals went the queue's way and for the queue's reason: it is read
@@ -1852,21 +1852,35 @@ test('with no goal selected the overview draws its cards, and neither feed is on
 });
 
 /**
- * The one card on this page that draws nothing when it is empty.
+ * Environments left the overview for the bar, and the move is only an improvement
+ * if what the card carried came with it: the chip has to be on the bar with the
+ * check's own words behind it, and the card has to be gone from the page.
  *
- * The deliberate exception to the rule the rack pins below: an environment surface
- * on a deployment that configured no health check is a row of question marks
- * announcing a feature as broken. Pinned in both directions, because either half
- * alone is a card that looks right on the fixtures and wrong on a real deployment.
+ * Pinned on the *rendered* console rather than on the fold below, because the whole
+ * of this change is where the reading is drawn.
  */
-test('the environments card draws its readings, and nothing at all without them', () => {
+test('an unwell environment reads on the bar, and no card draws it', () => {
   const v = view();
   const html = render(v);
+  assert.ok(html.includes('cn-env-ill'), 'the bar does not carry the unwell environment');
+  assert.ok(!html.includes('<h3>Environments'), 'the overview is still drawing the card');
+});
+
+/**
+ * What the card carried has to still be reachable, or the move is a deletion: the
+ * chip and the menu row are two ways to one panel, and the panel is where the
+ * check's own sentences are drawn verbatim.
+ */
+test('the environments panel draws every reading, in the check’s own words', () => {
+  const v = view();
+  const html = decode(render({ ...v, consolePanel: 'environments' }));
   assert.ok(html.includes('Pipeline failing'), 'the check’s own words, drawn verbatim');
   assert.ok(html.includes('not well'), 'and what they add up to, in the operator’s words');
 
-  const none = render({ ...v, state: { ...v.state, environmentHealth: [] } });
-  assert.ok(!none.includes('Environments'), 'nothing configured, nothing drawn');
+  // Reachable by URL where nothing declares a check, which is the one arm no click
+  // can reach — so it says so rather than drawing an empty box.
+  const none = decode(render({ ...v, consolePanel: 'environments', state: { ...v.state, environmentHealth: [] } }));
+  assert.ok(none.includes('No environment declares a health check'), 'an empty panel that explains nothing');
 });
 
 /**
@@ -2427,13 +2441,13 @@ test('a well fleet mutes the chip rather than moving it', () => {
   assert.equal(reading.tone, null);
 });
 
-test('the row is absent, not zeroed, where no environment declares a check', () => {
-  // The card's own exception: a reading on a deployment that configured none
-  // announces a feature as broken. Read off `menuEntries`, since the row lives in
-  // the bar's menu and a closed menu draws none of them.
+test('the environments row is absent, not zeroed, where no environment declares a check', () => {
+  // The old card's exception, kept: a row reading `0 well` on a deployment that
+  // configured none announces a feature as broken. Read off `menuEntries`, since
+  // the row lives in the bar's menu and a closed menu draws none of them.
   const v = view();
   const none = menuEntries({ ...v, state: { ...v.state, environmentHealth: [] } }, actions);
-  assert.ok(!none.some((entry) => entry.key === 'env'), 'no environment health, no gauge');
+  assert.ok(!none.some((entry) => entry.key === 'env'), 'no environment health, no row');
 
   const withOne = menuEntries(
     {
@@ -2445,6 +2459,29 @@ test('the row is absent, not zeroed, where no environment declares a check', () 
   const env = withOne.find((entry) => entry.key === 'env');
   assert.ok(env !== undefined, 'and it is drawn as soon as one environment answers');
   assert.equal(env.tone, 'ill', 'wearing the tint its worst reading earns');
+});
+
+test('the chip is absent while every environment is well, and while none declares a check', () => {
+  // The chip's one departure from the strip's rule that a quiet reading is dimmed
+  // rather than removed: an environment is well nearly all of its life, and its
+  // absence *is* that reading. Pinned in all three arms — a healthy fleet, a
+  // deployment that configured no check, and the outage that must never be missed.
+  const v = view();
+  const envs = (readings: EnvironmentHealthReading[]): string =>
+    render({ ...v, state: { ...v.state, environmentHealth: readings } });
+
+  assert.ok(!envs([]).includes('cn-env-'), 'no environment health, no chip');
+  assert.ok(!envs([envRead({ environment: 'liveUk' })]).includes('cn-env-'), 'a well environment says nothing');
+  // `unknown` is not a claim that anything is right, so it is never folded into
+  // the healthy silence — it draws, in the amber a mild outage takes.
+  assert.ok(
+    envs([envRead({ environment: 'liveEu', state: 'unknown', detail: 'exit 127' })]).includes('cn-env-watch'),
+    'a check that could not answer went quiet',
+  );
+  assert.ok(
+    envs([envRead({ environment: 'testUk', state: 'unhealthy', tier: 'red' })]).includes('cn-env-ill'),
+    'an outage must be impossible to miss',
+  );
 });
 
 /**
