@@ -150,14 +150,47 @@ function checkWord(check: CiCheck, words: Map<string, string>): string {
 }
 
 /**
+ * The chip's box with nothing in it, at the width the chip would have had.
+ *
+ * Exported because the rack needs one for a reading it is *withholding* rather
+ * than lacking: while an agent is on the branch the checks describe a commit that
+ * is being replaced, so the row does not draw them — and if the box went with
+ * them, the two marks beside it would slide left on exactly the rows that are
+ * moving.
+ *
+ * Deliberately **not** the chip's own class: this is a gap the width of a chip,
+ * not a chip with nothing in it. `test/panelRows.test.ts` reads the rack's markup
+ * for a checks chip beside a live agent, and a placeholder wearing `ck` would
+ * answer that question wrongly — which is the same confusion one layer down.
+ * → docs/spec/17-cockpit.md#the-strip
+ */
+export function CiSlot(): JSX.Element {
+  return <span className="ck-slot" aria-hidden="true" />;
+}
+
+/**
  * The chip. Null where nothing has reported — the same silence `CiLadder` kept,
  * for the same reason: a deployment whose provider reports no checks must not
  * grow a column of grey chips claiming it has some.
  */
-export function CiMark({ pr, onOpen }: { pr: PullRequest; onOpen?: () => void }): JSX.Element | null {
+export function CiMark({
+  pr,
+  reserve,
+  onOpen,
+}: {
+  pr: PullRequest;
+  /**
+   * Keep the chip's box where this pull request has no reading but its neighbours
+   * do — the marks beside it are what an eye runs down, and a row that closes the
+   * slot moves every one of them. Off by default, so a surface whose pull requests
+   * never report checks pays no gutter for them.
+   */
+  reserve?: boolean;
+  onOpen?: () => void;
+}): JSX.Element | null {
   const tip = useTip();
   const read = reading(pr);
-  if (read === null) return null;
+  if (read === null) return reserve === true ? <CiSlot /> : null;
 
   const checks = counted(pr);
   const words = verdictWords(pr);

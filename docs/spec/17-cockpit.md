@@ -2436,13 +2436,66 @@ Three of them carry the rules that kept being forgotten:
   refs say where it is.
 
 The card draws its rows as **one line each on a fixed rail**: lamp, switch, subject, why, reading,
-chips, action, refs. A slot is held open on every row of a card where _any_ row fills it — the census is
+chips, action, refs — or, where the card is over-subscribed, [cut in two](#the-strip) with the same
+slots at the same widths. A slot is held open on every row of a card where _any_ row fills it — the census is
 one function, `slotsUsed`, read once per card — which is what makes a slot a fixed **position** and not
 merely an order. Packed as a flex line, the fleet card's verdict sat where the rack's control did and
 every row shifted when the row above it grew a chip, which is why "always look here" had only ever been
 true of the refs group. An empty cell in a column that exists says _this row has no verdict_; a
 closed-up gap says nothing and moves everything after it. The census becomes a `grid-template-columns`
 the card sets once, off the `--cn-w-*` widths stated once for every card.
+
+### The strip
+
+The rack is **over-subscribed**, and the row grammar's own paragraph above names the two honest fixes
+for that — a wider card, or one slot fewer. It had already spent both: the card is `cn-span2`, and
+each of the seven slots is a different question the card exists to answer. A pull-request row carries
+the agent mark, the watch switch, who asked, a title that is a sentence, the court, three readings and
+two references, and at a half page every one of them is right and the line is unreadable.
+
+So the rack — and only the rack — takes the **stacked cut**: `layout="stacked"` on `PanelRows`, which
+keeps what the row *is* on the first line and drops how it *stands* onto a strip under the subject.
+
+It is not the table that lost. Nothing about the model changes, no card names a heading, and the slots,
+their order and their widths are the same values `slotsUsed` and the `--cn-w-*` tokens already state —
+the rail simply wraps. What a card chooses is not how its rows are *read* but whether they fit on a
+line, which is a measurable fact about the card rather than a preference, and `test/rackStrip.test.ts`
+holds it to the one card that has it.
+
+Three things are load-bearing:
+
+- **The strip stops at the refs rule.** It is placed on the subject's column — `StackedRow` counts
+  which column that is, since the three slots ahead of the subject are each drawn only where some row
+  fills them — and never spans the whole rail. The card keeps one unbroken vertical edge between what
+  a row *is* and what it *names*; a strip running under the refs crosses it on every row, and the rule
+  stops reading as a rule.
+- **The strip is drawn before the refs in the markup and after them on the glass.** Both are placed by
+  hand, so the eye reads title → readings → refs while a screen reader and the keyboard get the row's
+  state before its destinations — which is the order somebody asking "what is going on with this"
+  wants.
+- **The readings run by how often they exist**, which is the one place the strip departs from the
+  line's slot order: the `reading` slot leads, then the court, then the facts. A strip is a short run
+  of boxes with a ragged end, and where the gaps fall is the whole of whether a card reads as a column
+  or as a scatter. Inside the reading slot the rack applies the same rule — **the checks first**, since
+  a provider reports checks on nearly every pull request, the fleet has read most and a pack exists for
+  a handful.
+
+  That order costs the marks their fixed x unless two things follow it, and both do. The checks chip is
+  the one variable-width thing in the slot (`passing` against `2 failing`), so on the rack it is given
+  `--cn-w-ci` rather than left to its text. And the review and pack marks now `reserve` on **every**
+  row of the card rather than only where some row fills the column: `reserve` asked whether the reading
+  exists anywhere on this card, which made a rack of unread pull requests a different shape from a rack
+  of read ones — each fine to look at alone, which is how that kind of drift survives. Where the row is
+  *withholding* the checks rather than lacking them — an agent is on the branch, so they describe a
+  commit being replaced — `CiSlot` keeps the gap. It is deliberately not the chip's own class: it is a
+  gap the width of a chip, not a chip with nothing in it, and the rule that a live agent's row draws no
+  checks is read out of the markup by `test/panelRows.test.ts`.
+
+**A new class name in this sheet is grepped for first.** `cn-strip` is the goal page's pipeline track
+and drew the strip as a bordered filled panel; `cn-reads` is the top bar's readings group, whose
+`margin-left: auto` slid it to the right-hand end of the title's column. Both are a thousand lines from
+the rack, both matched silently, and neither is a thing `npm run check` can see — the sheet is valid
+and the page renders, wrong. The strip is `cn-rowreads`.
 
 **There was a second rendering, and it lost.** `columns` drew the card as a table whose headings were
 the union of the `facts` labels its rows carried, with each card naming its own subject and refs

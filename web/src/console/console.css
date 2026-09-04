@@ -2534,7 +2534,26 @@ a.cn-tgl {
    because no other card draws all three and a global widening would open a gutter
    on every rack for a slot only this one fills. → `prRow` */
 .cn-read-marks .cn-rows {
-  --cn-w-read: 158px;
+  /* Three marks and the gaps between them: the checks chip at its own fixed
+     width, then the two 22px boxes, and the review mark's 5px badge overhang. */
+  --cn-w-read: 168px;
+  /* The checks chip is the one *variable-width* thing in the slot, and it now
+     leads it — so it is given a width rather than left to its own text. Without
+     one, `passing` and `2 failing` put the two marks behind it at different x on
+     adjacent rows, which is the raggedness the strip exists to end. */
+  --cn-w-ci: 96px;
+}
+.cn-read-marks .cn-slot-read .ck {
+  min-width: var(--cn-w-ci);
+}
+/* A gap the width of a chip, where the row has no checks to report or is
+   withholding the ones it has. Not a chip: it draws nothing at all, and only the
+   two marks after it can tell it is there. → `CiSlot` */
+.cn-read-marks .cn-slot-read .ck-slot {
+  display: inline-block;
+  flex: none;
+  width: var(--cn-w-ci);
+  height: 22px;
 }
 /* A track in a slot of its own is one bar, not a wrapping list. The goal row's
    own rule lets it wrap to keep it off the title beside it; on the rail the
@@ -2552,6 +2571,32 @@ a.cn-tgl {
   gap: 10px;
   padding: 9px 13px;
   border-bottom: 1px solid var(--cn-line-soft);
+  min-width: 0;
+}
+/* The row cut in two: identity on the first line, the readings on a strip under
+   the subject. The gap between the two lines is its own, and smaller than the
+   gap along a row — the pair has to read as one row with a second line rather
+   than as two rows, and 10px in both directions reads as two. → `StackedRow` */
+.cn-srow {
+  row-gap: 6px;
+}
+/* The strip of readings under the subject.
+
+   `cn-rowreads`, at the third attempt, and the two names it is not are the whole
+   reason this comment exists: `cn-strip` is the goal page's pipeline track, which
+   drew the rack's second line as a bordered filled panel, and `cn-reads` is the
+   top bar's readings group, whose `margin-left:auto` slid it to the right-hand
+   end of the title's column. Both are a thousand lines from here, both matched
+   silently, and neither is a thing `npm run check` can see — a new class name in
+   this sheet is grepped for first.
+
+   The strip is placed on the subject's column by `StackedRow` — the card cannot
+   know which column that is, only the census can — and carries its own rail
+   inline for the same reason. What is here is what does not vary. */
+.cn-rowreads {
+  display: grid;
+  align-items: center;
+  gap: 10px;
   min-width: 0;
 }
 .cn-row:last-child {
