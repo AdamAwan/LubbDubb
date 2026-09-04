@@ -70,6 +70,25 @@ function report(
   ).obstacle.id;
 }
 
+/**
+ * Wait for the wall clock to leave the millisecond it is in.
+ *
+ * `obstacleInbox` is a **comparison and never a clock**: a row is back in the
+ * inbox exactly when its `lastSeenAt` differs from the `read_at` the desk
+ * recorded. Both are stamped from an ISO string, which is millisecond-resolution
+ * — so two sightings inside one millisecond carry the *same* stamp, the second
+ * one changes nothing the desk compares against, and the row does not come back.
+ *
+ * That is an edge in the store, not this test's subject. What the test is about is
+ * that a further voice puts a read row back in the inbox, so it takes the clock
+ * out of the question rather than failing one run in five on it. Bounded by a
+ * millisecond, and it yields rather than spinning.
+ */
+async function nextMillisecond(): Promise<void> {
+  const at = new Date().toISOString();
+  while (new Date().toISOString() === at) await new Promise((resolve) => setImmediate(resolve));
+}
+
 /** A reader that answers with one canned reading and records what it was asked. */
 function scripted(answer: unknown): { reader: ObstacleReader; seen: ObstacleReadingRequest[] } {
   const seen: ObstacleReadingRequest[] = [];
@@ -273,7 +292,10 @@ test('a board nobody has said anything new about calls no model at all', async (
   assert.equal(first.seen.length, 1);
 
   // A further voice landing words on the row puts it back in the inbox: the words
-  // that arrived are the only thing there is anything new to read.
+  // that arrived are the only thing there is anything new to read. In a later
+  // millisecond than the reading above, because that is what the inbox compares —
+  // see `nextMillisecond`.
+  await nextMillisecond();
   report(system, { what: 'something is red', goalRef: 'issue:2', keys: key });
   assert.equal(
     system.store.obstacleInbox().some(({ obstacle }) => obstacle.id === row),
