@@ -183,7 +183,7 @@ export class PoolStore {
 }
 
 /** The sections a digest carries, in the order the mirror stores them. */
-type PoolDigestSection = 'phase' | 'cause' | 'check' | 'unaccounted' | 'unmeasured';
+type PoolDigestSection = 'phase' | 'cause' | 'check' | 'unaccounted' | 'unmeasured' | 'usage';
 
 /** One mirrored digest row, flattened across every fleet — what the aggregator sums. */
 export interface PoolDigestMirrorRow {
@@ -245,5 +245,6 @@ function digestSections(document: PoolDigestDocument): [PoolDigestSection, reado
     ['check', document.byCheck],
     ['unaccounted', document.unaccounted],
     ['unmeasured', document.unmeasured],
+    ['usage', document.byUsage],
   ];
 }

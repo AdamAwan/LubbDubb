@@ -5,6 +5,7 @@ import type {
   InsightsWindowView,
   McpInsights,
   PoolInsightsPayload,
+  UsagePayload,
   ReliabilityInsights,
   RemedyInsights,
   ReviewCalibration,
@@ -13,7 +14,7 @@ import type {
 } from '../types.js';
 import type { CockpitActions, InsightsView } from '../cockpit/actions.js';
 import { api } from '../api.js';
-import { Downloads } from './Downloads.js';
+import { Downloads, toCsv } from './Downloads.js';
 import { AllowanceTab } from './AllowanceTab.js';
 import { EconomicsTab, spendCsv } from './EconomicsTab.js';
 import { ReliabilityTab, reliabilityCsv } from './ReliabilityTab.js';
@@ -21,9 +22,11 @@ import { CausesTab } from './CausesTab.js';
 import { SpendTrendTab } from './SpendTrendTab.js';
 import { WorkMixTab } from './WorkMixTab.js';
 import { McpUsageTab, mcpCsv } from './McpUsageTab.js';
+import { UsageTab, usageCsv } from './UsageTab.js';
 import { PoolTab } from './PoolTab.js';
 import { ReviewCalibrationTab } from './ReviewCalibrationTab.js';
 import { Label } from './label.js';
+import { logUsage } from '../cockpit/usage.js';
 
 /**
  * Insights — one destination, one window, five readings of it.
@@ -69,6 +72,11 @@ const TABS: readonly { id: InsightsView; label: string; note: string }[] = [
   { id: 'mix', label: 'Work mix', note: 'why this kind of work costs what it does' },
   { id: 'mcp', label: 'MCP', note: 'which tools the fleet reaches for, and which it never does' },
   { id: 'review', label: 'Review', note: 'what the review packs say about the agents that write them' },
+  {
+    id: 'usage',
+    label: 'Usage',
+    note: 'what the harness asked of you, what it cost to wait, and what you never opened',
+  },
   { id: 'pool', label: 'Pool', note: 'what the whole pool spent, across fleets' },
 ];
 
@@ -146,6 +154,11 @@ export function InsightsPage({
   // needs and nobody who came here to read the phase table should pay for.
   const [calibration, setCalibration] = useState<Fetched<ReviewCalibration>>(PENDING);
   const calibrationFetchedFor = useRef<InsightsWindow | null>(null);
+  // The Usage tab's own, on the trend's terms and keyed the same way: it sweeps
+  // every settled-record table the harness keeps about a person plus the whole
+  // reach table, which nothing on the top bar needs.
+  const [usage, setUsage] = useState<Fetched<UsagePayload>>(PENDING);
+  const usageFetchedFor = useRef<InsightsWindow | null>(null);
   const [pool, setPool] = useState<Fetched<PoolInsightsPayload>>(PENDING);
   const poolFetchedFor = useRef<string | null | undefined>(undefined);
   // Both refetch on a window change, and both are re-read from scratch rather
@@ -163,6 +176,8 @@ export function InsightsPage({
     setAllowance(PENDING);
     calibrationFetchedFor.current = null;
     setCalibration(PENDING);
+    usageFetchedFor.current = null;
+    setUsage(PENDING);
     api
       .getSpend(chosen)
       .then((res) => live && setSpend({ state: 'ready', data: res.insights }))
@@ -248,6 +263,22 @@ export function InsightsPage({
     };
   }, [view, chosen]);
 
+  // The Usage tab's own, on the same terms and hanging off the *place* for the
+  // trend's reason — a shared `?view=usage` link is a first visit too.
+  useEffect(() => {
+    if (view !== 'usage' || usageFetchedFor.current === chosen) return;
+    usageFetchedFor.current = chosen;
+    let live = true;
+    setUsage(PENDING);
+    api
+      .getUsage(chosen)
+      .then((res) => live && setUsage({ state: 'ready', data: res }))
+      .catch(() => live && setUsage({ state: 'failed', data: null }));
+    return () => {
+      live = false;
+    };
+  }, [view, chosen]);
+
   // On the *place* rather than off the click, for the trend's reason: arriving on a
   // shared `?view=pool&project=acme-api` link is a first visit too.
   useEffect(() => {
@@ -263,6 +294,13 @@ export function InsightsPage({
       live = false;
     };
   }, [view, poolProject]);
+
+  // The pool is a *tab* on this page rather than a place of its own, so the
+  // place-keyed `view` above says `insights` and nothing would ever say the
+  // cross-fleet digest was reached. Its own subject, emitted where the tab is.
+  useEffect(() => {
+    if (view === 'pool') logUsage('pool.view');
+  }, [view]);
 
   const note = TABS.find((t) => t.id === view)?.note ?? '';
   // The window as the *server* resolved it, never as this page asked: the caption
@@ -283,6 +321,7 @@ export function InsightsPage({
           remedies={remedies}
           trend={trend.data}
           mcp={mcp.data}
+          usage={usage.data}
           page={page}
         />
       </div>
@@ -296,7 +335,12 @@ export function InsightsPage({
               type="button"
               aria-pressed={w.key === chosen}
               className={w.key === chosen ? 'on' : ''}
-              onClick={() => actions.openInsights({ insightsWindow: w.key })}
+              onClick={() => {
+                // The window and the tab are both a re-cut of this reading, and
+                // both are `ui`: nothing durable records that anybody changed one.
+                logUsage('insights.filter');
+                actions.openInsights({ insightsWindow: w.key });
+              }}
             >
               {windowButtonLabel(w, chosen, resolved)}
             </button>
@@ -319,7 +363,10 @@ export function InsightsPage({
             aria-selected={t.id === view}
             tabIndex={t.id === view ? 0 : -1}
             className={t.id === view ? 'on' : ''}
-            onClick={() => actions.openInsights({ insightsView: t.id })}
+            onClick={() => {
+              logUsage('insights.filter');
+              actions.openInsights({ insightsView: t.id });
+            }}
           >
             {t.label}
           </button>
@@ -336,6 +383,7 @@ export function InsightsPage({
           mcp={mcp}
           allowance={allowance}
           calibration={calibration}
+          usage={usage}
           pool={pool}
           poolProject={poolProject}
           actions={actions}
@@ -467,6 +515,7 @@ function Body({
   mcp,
   allowance,
   calibration,
+  usage,
   pool,
   poolProject,
   actions,
@@ -480,6 +529,7 @@ function Body({
   mcp: Fetched<McpInsights>;
   allowance: Fetched<AllowancePayload>;
   calibration: Fetched<ReviewCalibration>;
+  usage: Fetched<UsagePayload>;
   pool: Fetched<PoolInsightsPayload>;
   poolProject: string | null;
   actions: CockpitActions;
@@ -525,6 +575,16 @@ function Body({
     return <ReviewCalibrationTab calibration={calibration.data} />;
   }
 
+  if (view === 'usage') {
+    if (usage.state === 'loading') return <p className="empty">Reading what was asked of you…</p>;
+    // A failed fetch is its own answer and never an empty one: an empty tab here
+    // would say the harness never asked you for anything and you never opened a
+    // thing, which is the *console-dark* verdict — a real reading, and one this
+    // page must not manufacture out of a failed request.
+    if (usage.data === null) return <p className="empty">Could not read the operator ledger.</p>;
+    return <UsageTab payload={usage.data} />;
+  }
+
   if (view === 'pool') {
     if (pool.state === 'loading') return <p className="empty">Reading the pool…</p>;
     // A failed fetch is its own answer and never an empty one: an empty pool page
@@ -555,6 +615,7 @@ function Exports({
   remedies,
   trend,
   mcp,
+  usage,
   page,
 }: {
   view: InsightsView;
@@ -563,6 +624,7 @@ function Exports({
   remedies: RemedyInsights | null;
   trend: SpendTrend | null;
   mcp: McpInsights | null;
+  usage: UsagePayload | null;
   page: RefObject<HTMLDivElement | null>;
 }): JSX.Element | null {
   const label = TABS.find((t) => t.id === view)?.label ?? 'Insights';
@@ -571,6 +633,27 @@ function Exports({
     title: 'This tab as it stands, through the browser\u2019s own print — choose “Save as PDF”',
     node: () => page.current,
   };
+  if (view === 'usage') {
+    if (usage === null) return null;
+    return (
+      <Downloads
+        name="lubbdubb-usage"
+        files={[
+          {
+            format: 'csv',
+            title: 'Every table on this tab, in the order it is drawn, headed by the window it was taken over',
+            build: () => toCsv(usageCsv(usage)),
+          },
+          {
+            format: 'json',
+            title: 'The exact payload this tab drew, unrounded',
+            build: () => JSON.stringify(usage, null, 2),
+          },
+        ]}
+        sheet={sheet}
+      />
+    );
+  }
   if (view === 'mcp') {
     if (mcp === null) return null;
     return (

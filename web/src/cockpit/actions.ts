@@ -125,6 +125,7 @@ export type InsightsView =
   | 'mix'
   | 'mcp'
   | 'review'
+  | 'usage'
   | 'pool';
 
 /**

@@ -59,6 +59,11 @@ import type {
   SpendTrend,
   SpendTrendPeriod,
   InsightsWindowView,
+  OperatorRow,
+  SurfaceRow,
+  SurfaceVerdict,
+  UsagePayload,
+  UsageSubject,
   SpendTrendBucket,
   SpendRun,
   TaskSummary,
@@ -3387,6 +3392,211 @@ function buildDemoAllowance(): AllowanceInsights {
   };
 }
 
+/**
+ * The operator ledger and the reach beside it, authored for `buildDemoMcp`'s
+ * reason and one sharper: the demo's world is built fresh in the browser each
+ * load, so nobody has ever answered an escalation in it and nobody has ever
+ * opened a page -- a folded payload would draw a **console-dark** verdict, which
+ * is a real reading, and would teach a reader to read a working fleet as an
+ * absent operator.
+ */
+function buildDemoUsage(): UsagePayload {
+  const now = Date.now();
+  const ask = (
+    id: OperatorRow['id'],
+    subject: UsageSubject,
+    label: string,
+    blurb: string,
+    figures: Pick<
+      OperatorRow,
+      'offered' | 'settled' | 'declined' | 'openPastWindow' | 'medianAnswerMs' | 'parkedCostUsd'
+    >,
+  ): OperatorRow => ({ id, kind: 'ask', subject, label, blurb, ...figures });
+  // Nothing records how many landings were *offered*, and nothing parks while an
+  // act goes unperformed -- both are null rather than zero, which is the whole of
+  // what the demo has to teach about this table.
+  const act = (
+    id: OperatorRow['id'],
+    subject: UsageSubject,
+    label: string,
+    blurb: string,
+    settled: number,
+  ): OperatorRow => ({
+    id,
+    kind: 'act',
+    subject,
+    label,
+    blurb,
+    offered: null,
+    settled,
+    declined: null,
+    openPastWindow: 0,
+    medianAnswerMs: null,
+    parkedCostUsd: null,
+  });
+  const reach = (
+    subject: UsageSubject,
+    verdict: SurfaceVerdict,
+    views: number,
+    linkedViews: number,
+    operations: number,
+  ): SurfaceRow => ({
+    subject,
+    label: DEMO_SUBJECT_LABEL[subject],
+    verdict,
+    verdictLabel: DEMO_VERDICT[verdict].label,
+    verdictBlurb: DEMO_VERDICT[verdict].blurb,
+    views,
+    operations,
+    linkedViews,
+    byVerb: operations === 0 ? [] : [{ verb: 'expand', label: 'Opened something inside', count: operations }],
+  });
+  const rows = [
+    reach('plan', 'operated', 41, 39, 22),
+    reach('goal', 'operated', 88, 84, 31),
+    reach('pr', 'operated', 63, 60, 12),
+    reach('validation', 'visited-never-operated', 9, 9, 0),
+    reach('review-pack', 'visited-never-operated', 4, 4, 0),
+    reach('escalation', 'operated', 17, 17, 9),
+    reach('human-task', 'operated', 12, 12, 5),
+    reach('ticket', 'operated', 55, 50, 18),
+    reach('feature', 'linked-never-visited', 0, 0, 0),
+    reach('agent', 'operated', 74, 71, 26),
+    reach('obstacle', 'linked-never-visited', 0, 0, 0),
+    reach('local-run', 'visited-never-operated', 2, 2, 0),
+    reach('job', 'operated', 8, 8, 3),
+    reach('retro', 'never-linked', 0, 0, 0),
+    reach('scratchpad', 'never-linked', 0, 0, 0),
+    reach('insights', 'operated', 23, 23, 14),
+    reach('pool', 'visited-never-operated', 3, 3, 0),
+    reach('config', 'operated', 6, 6, 2),
+    reach('upgrade', 'visited-never-operated', 2, 2, 0),
+    reach('pet', 'operated', 5, 5, 1),
+  ];
+  return {
+    insights: {
+      window: demoWindow(now, 7),
+      asks: [
+        ask('escalation', 'escalation', 'Escalation', 'An agent stopped and asked', {
+          offered: 21,
+          settled: 17,
+          declined: 3,
+          openPastWindow: 1,
+          medianAnswerMs: 47 * 60_000,
+          parkedCostUsd: 18.4,
+        }),
+        ask('human-task', 'human-task', 'Human task', 'Work only a person could do', {
+          offered: 14,
+          settled: 12,
+          declined: 1,
+          openPastWindow: 1,
+          medianAnswerMs: 3 * 60 * 60_000,
+          parkedCostUsd: 9.2,
+        }),
+        ask('plan-approval', 'plan', 'Plan approval', 'A decomposition waiting to be released', {
+          offered: 19,
+          settled: 16,
+          declined: 3,
+          openPastWindow: 0,
+          medianAnswerMs: 26 * 60_000,
+          parkedCostUsd: 27.6,
+        }),
+        // The obstacle row's own table has no stamp for the moment it started
+        // asking, so two columns are null and the demo says so rather than
+        // drawing a wait nobody measured.
+        ask('obstacle-ownership', 'obstacle', 'Obstacle ownership', 'Something in the way, unowned', {
+          offered: 4,
+          settled: 1,
+          declined: null,
+          openPastWindow: 2,
+          medianAnswerMs: null,
+          parkedCostUsd: null,
+        }),
+        ask('validation-bench', 'validation', 'Validation bench', 'The close-out obligation on a delivered goal', {
+          offered: 11,
+          settled: 7,
+          declined: 0,
+          openPastWindow: 3,
+          medianAnswerMs: 9 * 60 * 60_000,
+          parkedCostUsd: 64.1,
+        }),
+        ask('upgrade', 'upgrade', 'Upgrade', 'A build the harness could rebuild itself onto', {
+          offered: 1,
+          settled: 0,
+          declined: null,
+          openPastWindow: 1,
+          medianAnswerMs: null,
+          parkedCostUsd: null,
+        }),
+      ],
+      acts: [
+        act('stack-landing', 'pr', 'Authorising a landing', 'A merge, or a whole stack, cleared to land', 12),
+        act('plan-amendment', 'plan', 'Amending a plan', 'A correction to a plan already running', 5),
+        act('plan-abandoned', 'plan', 'Abandoning a plan', 'The plan was dropped and nothing replaced it', 1),
+        act(
+          'validation-check',
+          'validation',
+          'Settling a check',
+          'A person ran the procedure and said what it did',
+          23,
+        ),
+        act('goal-retired', 'goal', 'Concluding a goal', 'The operator declared the work finished', 6),
+        act('agent-stopped', 'agent', 'Stopping an agent', 'A running agent was halted by a person', 4),
+      ],
+      fleetRateUsdPerHour: 2.34,
+    },
+    reach: { rows, total: rows.reduce((n, r) => n + r.views + r.operations, 0), places: 14 },
+  };
+}
+
+/**
+ * The two copy registries the payload carries, restated here because the demo
+ * *is* the server for this build -- it has to ship what the route would ship, and
+ * `src/wire.ts` carries no runtime for it to borrow.
+ */
+const DEMO_SUBJECT_LABEL: Record<UsageSubject, string> = {
+  plan: 'Plans',
+  goal: 'Goals',
+  pr: 'Pull requests',
+  validation: 'Validation',
+  'review-pack': 'Review packs',
+  escalation: 'Escalations',
+  'human-task': 'The bench',
+  ticket: 'Tickets',
+  feature: 'The feature board',
+  agent: 'Agents',
+  obstacle: 'Obstacles',
+  'local-run': 'The local run',
+  job: 'Jobs',
+  retro: 'Retros',
+  scratchpad: 'The scratchpad',
+  insights: 'Insights',
+  pool: 'The pool',
+  config: 'Configuration',
+  upgrade: 'The build',
+  pet: 'The vivarium',
+};
+
+const DEMO_VERDICT: Record<SurfaceVerdict, { label: string; blurb: string }> = {
+  'console-dark': {
+    label: 'Console dark',
+    blurb: 'Nothing was reached at all in this window, so no reading of this surface in it means anything',
+  },
+  'never-linked': {
+    label: 'Never linked',
+    blurb: 'Nothing in the cockpit has ever carried anybody here — it is reachable only by address',
+  },
+  'linked-never-visited': {
+    label: 'Linked, never visited',
+    blurb: 'A link to it exists and has been taken before; in this window nobody went',
+  },
+  'visited-never-operated': {
+    label: 'Visited, never operated',
+    blurb: 'Reached, and nothing was done there — the one case where the silence is the surface’s own',
+  },
+  operated: { label: 'Operated', blurb: 'Somebody did something here' },
+};
+
 function buildDemoMcp(): McpInsights {
   const now = Date.now();
   const ago = (mins: number): string => new Date(now - mins * 60_000).toISOString();
@@ -4480,6 +4690,11 @@ export const demoApi = {
   // dropped, so a demo folding the browser's empty store would teach a reader to
   // read a working channel as a broken one.
   getMcpUsage: () => Promise.resolve({ insights: buildDemoMcp() }),
+  getUsage: () => Promise.resolve(buildDemoUsage()),
+  // The demo records nothing about itself: there is no harness behind it to write
+  // a row to, and a telemetry call that resolves anyway is the honest shape --
+  // logUsage is fire-and-forget by contract, so nothing downstream can tell.
+  logUsageEvents: () => Promise.resolve(),
   // The allowance, authored for the same reason as the rest and one sharper still:
   // the demo has no account behind it, so a folded payload would draw the exact
   // empty state a deployment on API-key auth sees.
@@ -4548,6 +4763,7 @@ export const demoApi = {
           dailyMeanCostUsd: null,
         },
         unmeasured: { key: '', label: 'Unmeasured runs', count: 0, costUsd: null, fleets: 0, dailyMeanCostUsd: null },
+        byUsage: [],
       },
       projects: [],
       fleets: [],

@@ -1,6 +1,6 @@
 import { PHASE_ORDER, type SpendPhase } from '../spendInsights.js';
 import type { PoolClockDocument, PoolClockKind, PoolDigestDocument, PoolDigestRow } from '../types.js';
-import { poolCauseLabel, poolPhaseLabel } from './aggregate.js';
+import { poolCauseLabel, poolPhaseLabel, poolUsageLabel } from './aggregate.js';
 import { POOL_RETENTION_DAYS, utcDay } from './digestArm.js';
 
 /**
@@ -15,7 +15,7 @@ import { POOL_RETENTION_DAYS, utcDay } from './digestArm.js';
  * JSON is serialised from and holds no state of its own, so the two cannot drift.
  *
  * **The digest companion summarises rather than transcribes.** Ninety days across
- * six sections is some thousands of rows, and a table of them is a file nobody
+ * seven sections is some thousands of rows, and a table of them is a file nobody
  * reads — which would defeat the one thing it is for. The trailing windows are the
  * read; `digest.json` remains the record, and the page says so.
  *
@@ -113,6 +113,21 @@ const SECTIONS: readonly DigestSection[] = [
     label: () => '',
     counts: 'Runs',
     costed: false,
+  },
+  {
+    rows: (d) => d.byUsage,
+    title: 'What a person did',
+    column: 'Subject · verb',
+    label: (key) => poolUsageLabel(key),
+    counts: 'Times',
+    // What a person did has no dollar figure anywhere in the harness, and a column
+    // of dashes is worse than no column.
+    costed: false,
+    caveat:
+      '_Counted from what the cockpit witnessed on the click. Acts a table already records — approving a plan, ' +
+      'waiving a check — are swept by the operator ledger in this fleet’s own console and are deliberately not ' +
+      'here: `src/usage/events.ts` says which are which. A quiet row is a control nobody reached, never a fleet ' +
+      'nobody worked._',
   },
   {
     rows: (d) => d.byFault,

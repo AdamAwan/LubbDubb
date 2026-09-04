@@ -10087,3 +10087,134 @@ button.pk.pk {
 .rv-none {
   border-color: transparent;
 }
+
+/* --- Insights · Usage: the operator ledger, and what was reached ----------- */
+
+/* The ledger. A table because these *are* figures read down a column — six spans
+   of one question per row — which is the one shape the reach list below is not. */
+.ug-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+.ug-tbl th,
+.ug-tbl td {
+  padding: 7px 8px 7px 0;
+  border-bottom: 1px solid var(--border-lo);
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text);
+}
+.ug-tbl thead th {
+  text-align: right;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--grey);
+  border-bottom: 1px solid var(--border);
+}
+.ug-tbl th[scope='row'],
+.ug-tbl thead th:first-child {
+  text-align: left;
+  font-family: inherit;
+  display: table-cell;
+}
+.ug-tbl th[scope='row'] {
+  font-weight: 400;
+}
+.ug-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+.ug-blurb {
+  display: block;
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+  max-width: 96ch;
+}
+/* Outstanding for longer than the whole window — the one figure in the table that
+   is a *finding* rather than a count, so it is the one that carries a colour. */
+.ug-late {
+  color: var(--amber);
+}
+.ug-rate {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  max-width: 96ch;
+}
+.ug-rate b {
+  color: var(--text);
+}
+
+/* The reach verdicts. `.mc-quiet`'s shape and its argument: each row is a verdict
+   with its evidence, and the reader wants one surface's whole case at a time. */
+.ug-reach {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0;
+  border-top: 1px solid var(--border);
+}
+.ug-reach li {
+  display: grid;
+  gap: 3px;
+  padding: 9px 0 10px 11px;
+  border-bottom: 1px solid var(--border-lo);
+  /* The severity stripe, one property set per verdict below, so the row's urgency
+     reads before any of its words do. */
+  border-left: 2px solid var(--verdict, var(--grey));
+}
+.ug-reach li:last-of-type {
+  border-bottom: 0;
+}
+/* Ordered by what wants doing about it. A surface nothing links to is the
+   harness's own navigation at fault; a linked one nobody visited is an entry
+   point that is not landing; a visited one nobody operated is the surface's own.
+   `operated` and `console-dark` are readings rather than faults. */
+.ug-v-never-linked {
+  --verdict: var(--red);
+}
+.ug-v-linked-never-visited {
+  --verdict: var(--amber);
+}
+.ug-v-visited-never-operated {
+  --verdict: var(--blue);
+}
+.ug-v-operated {
+  --verdict: var(--green);
+}
+.ug-v-console-dark {
+  --verdict: var(--grey);
+}
+.ug-r-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+}
+.ug-r-verdict {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--verdict, var(--text));
+}
+.ug-reach p {
+  margin: 0;
+}
+/* The evidence the verdict was reached on, in the figures' own typeface so it
+   reads as a reading rather than as more prose. */
+.ug-ev {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--grey);
+}
+.ug-ev b {
+  color: var(--muted);
+}

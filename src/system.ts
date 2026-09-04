@@ -473,6 +473,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // `force`, because the write path's hourly rate limit is about a hot loop and
   // this runs once.
   store.compactMcpCallArgs(config.mcpArgsRetentionDays, true);
+  // Surface-reach rows past their ninety days, on the same terms and for the same
+  // reason: an operator who stops using the cockpit stops triggering the write
+  // path, and a retention promise kept only while somebody is clicking is not one.
+  store.pruneSurfaceReach(true);
   // The world is assembled from the integrations config selects (default: the
   // fake provider for every capability), composed behind the Connector/ActionSink
   // seams the harness and executor depend on. Swapping a provider is a config

@@ -116,6 +116,7 @@ deliberately left unchecked, and why, is in
 | [31](spec/31-review-packs.md)        | Review packs               | How a change is restated for a human: the witness log, the ideas, the claims, and the check                             |
 | [32](spec/32-local-validation.md)    | Local validation           | The fleet driving that environment: the plan, the browser, the reading, and the fix it schedules                        |
 | [33](spec/33-story-sequencing.md)    | Story sequencing           | The order the stories under a Feature are worked in, where it comes from, and the hold it puts on a story               |
+| [34](spec/34-usage-metrics.md)       | Usage metrics              | What the harness asks of a person and what they do about it: the ledger, surface reach, the digest section              |
 
 ## Conventions used throughout
 

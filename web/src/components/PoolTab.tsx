@@ -4,6 +4,7 @@ import type { CockpitActions } from '../cockpit/actions.js';
 import { fmtUsd, relTime } from './util.js';
 import { HeadRow } from './panel.js';
 import { Label } from './label.js';
+import { logUsage } from '../cockpit/usage.js';
 
 /**
  * The shared insights page: what the whole pool spent, across fleets.
@@ -46,7 +47,12 @@ export function PoolTab({
             type="button"
             aria-pressed={project === null}
             className={project === null ? 'on' : ''}
-            onClick={() => actions.openInsights({ insightsView: 'pool', poolProject: null })}
+            onClick={() => {
+              // Narrowing the pool to a project is a re-cut of the reading, and
+              // nothing durable records that anybody did it.
+              logUsage('pool.filter');
+              actions.openInsights({ insightsView: 'pool', poolProject: null });
+            }}
           >
             All
           </button>
@@ -56,7 +62,10 @@ export function PoolTab({
               type="button"
               aria-pressed={name === project}
               className={name === project ? 'on' : ''}
-              onClick={() => actions.openInsights({ insightsView: 'pool', poolProject: name })}
+              onClick={() => {
+                logUsage('pool.filter');
+                actions.openInsights({ insightsView: 'pool', poolProject: name });
+              }}
             >
               {name}
             </button>
@@ -96,6 +105,7 @@ export function PoolTab({
           ) : (
             <Section title="By check" note="comparable here because it is one pipeline" rows={rollup.byCheck} />
           )}
+          <Usage rows={rollup.byUsage} publishing={rollup.fleets.length} />
           <div className="pool-caveats">
             <Caveat
               label="Returns that filed no account"
@@ -142,6 +152,63 @@ function Section({ title, note, rows }: { title: string; note: string; rows: Poo
                 <td className="num">{row.costUsd === null ? '—' : fmtUsd(row.costUsd)}</td>
                 <td className="num">{row.dailyMeanCostUsd === null ? '—' : fmtUsd(row.dailyMeanCostUsd)}</td>
                 <td className="num">{row.fleets}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
+
+/**
+ * What people did, across the pool.
+ *
+ * A table of its own rather than a {@link Section}, and the two columns are why.
+ *
+ * **The event count and the fleet count are drawn side by side and never summed.**
+ * One operator amending forty plans and forty operators amending one each are the
+ * same `Times` and opposite findings; a page that showed only the first would report
+ * the two identically. The fleet count is drawn against the fleets publishing at
+ * all, because a fleet is an engineer and that ratio is the whole of "how many
+ * people" — no per-operator field exists anywhere behind this, which is what makes
+ * the reading safe to draw.
+ *
+ * **No cost column.** What a person did has no dollar figure anywhere in the
+ * harness, and a column of dashes is worse than no column.
+ *
+ * → `docs/spec/34-usage-metrics.md#the-digest-section`
+ */
+function Usage({ rows, publishing }: { rows: PoolRollupRow[]; publishing: number }): JSX.Element {
+  return (
+    <section className="pool-section">
+      <h3>What a person did</h3>
+      <p className="pool-note">
+        subject and verb, in vocabularies the harness owns — so these rows compare across providers. Times is how often
+        it happened; Fleets is how many people did it at all.
+      </p>
+      {rows.length === 0 ? (
+        <p className="empty">
+          Nothing in this section yet. Only acts the cockpit witnesses on the click are here — an act a table already
+          records is swept by this fleet’s own operator ledger instead.
+        </p>
+      ) : (
+        <table className="pool-table">
+          <thead>
+            <tr>
+              <th>What</th>
+              <th className="num">Times</th>
+              <th className="num">Fleets</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.key}>
+                <td>{row.label}</td>
+                <td className="num">{row.count}</td>
+                <td className="num">
+                  {row.fleets} of {publishing}
+                </td>
               </tr>
             ))}
           </tbody>

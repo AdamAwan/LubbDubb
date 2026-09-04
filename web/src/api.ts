@@ -27,6 +27,7 @@ import type {
   PlanHistory,
   McpChannelPayload,
   McpUsagePayload,
+  UsagePayload,
   ObstacleBoardPayload,
   PoolInsightsPayload,
   PoolStatePayload,
@@ -334,6 +335,31 @@ const realApi = {
   // that is the one read in the harness that touches `tasks.prompt` in bulk.
   getMcpUsage: (window: InsightsWindow) =>
     authFetch(`/api/mcp/usage?window=${window}`).then((r) => json<McpUsagePayload>(r)),
+  // The operator ledger and the reach beside it, on one payload over one window —
+  // the pairing the two halves exist for is only a pairing if both describe the
+  // same stretch. Fetched on the Usage tab's first visit for `getMcpUsage`'s
+  // reason: it sweeps every settled-record table the harness keeps about a person.
+  getUsage: (window: InsightsWindow) => authFetch(`/api/usage?window=${window}`).then((r) => json<UsagePayload>(r)),
+  /**
+   * The cockpit's batch of `ui` events — the one request in this file whose
+   * response is never read and whose failure is of no consequence.
+   *
+   * It answers a promise so the caller may `void` it explicitly rather than by
+   * omission, and it does **not** go through {@link json}: a refusal here has
+   * nobody to show it to, and letting `UnauthorizedError` out of a telemetry write
+   * would put the cockpit's session-expiry banner up over a lost metric.
+   * `keepalive` is what lets the unload flush outlive its document.
+   */
+  logUsageEvents: (events: unknown[]): Promise<void> =>
+    authFetch('/api/usage/events', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ events }),
+      keepalive: true,
+    }).then(
+      () => undefined,
+      () => undefined,
+    ),
   // The cross-fleet pool. It takes **no window**: the digest's bucket is a UTC day
   // and its retention is ninety of them, so the question a reader asks of it is a
   // number of days rather than one of the page's five spans — and it takes a

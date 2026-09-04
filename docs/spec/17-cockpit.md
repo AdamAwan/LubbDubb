@@ -5190,6 +5190,40 @@ because a fleet that cannot reach its tools is the alarm vocabulary.
 of the reason: its naming evidence is a scan of every dispatch prompt in the window, which is the one
 query in the harness that reads `tasks.prompt` in bulk.
 
+### Usage
+
+`web/src/components/UsageTab.tsx`. Every other tab on this page is a reading about work the **fleet**
+did; this is the one about the person beside it — what the harness asked of them, what they did about
+it, and what the waiting cost. It is here rather than anywhere else because that question is decided
+against the same window as the spend it competes with for the next month of work.
+→ [34](34-usage-metrics.md)
+
+**Two tables and a list, and the split is the reading.** An _ask_ is the harness stopping and waiting
+for a person; an _act_ is a person reaching in when nothing asked them to. They want opposite
+readings — an ask by whether it was answered and what waiting for it cost, an act by whether it
+happened at all — so folding them into one "activity" figure is the measure that document refuses to
+be. The list beneath is [surface reach](34-usage-metrics.md#surface-reach): a verdict per surface,
+worst first, with the evidence it was reached on.
+
+**A `null` is never drawn as a zero.** A dash means the record behind that row cannot answer the
+column — an obstacle carries no stamp for the moment it started asking, a landing records the click
+and never the offer — and a zero there would manufacture a finding out of a missing column, which is
+the one way this reading could talk somebody into removing a control that works.
+
+**It draws no reference.** There is nothing on this payload to link to: the store behind the reach
+half has no ref, no title and no id in it by construction, and a `<Ref/>` here would be one drawn
+from a table that must never hold one. That is the [links rule](#links) satisfied by the payload's
+shape rather than waived.
+
+**The verdicts are the server's words** ([34](34-usage-metrics.md#a-quiet-surface-is-four-different-facts)),
+on the MCP tab's argument exactly, and the verdict stripe borrows the alarm vocabulary rather than
+introducing a palette: `never-linked` is red because it is the harness's own navigation at fault.
+
+**It fetches on its own first visit**, keyed by window, as Trend and MCP do: it sweeps every
+settled-record table the harness keeps about a person plus the whole reach table, and an operator who
+came here to read the phase table should not pay for it. The two halves ride one payload over one
+window, because the pairing they exist for is only a pairing if both describe the same stretch.
+
 ## Exporting a reading
 
 `web/src/components/Downloads.tsx`. [Insights](#insights) is the surface that

@@ -21,6 +21,7 @@ import { TicketsBoard } from './TicketsBoard.js';
 import { absDate, fmtUsd, relAge } from './util.js';
 import { Panel } from './panel.js';
 import { Tag } from './tag.js';
+import { logUsage } from '../cockpit/usage.js';
 
 /** What the tab is narrowed to, grouped and ordered by — every field of it a `Place` field. */
 interface TicketQueryPlace {
@@ -640,7 +641,10 @@ function FeatureBlockView({
           type="button"
           className="tickets-fold"
           aria-expanded={!collapsed}
-          onClick={() => actions.collapseFeature(feature.number, !collapsed)}
+          onClick={() => {
+            if (collapsed) logUsage('feature.expand');
+            actions.collapseFeature(feature.number, !collapsed);
+          }}
           title={collapsed ? 'Show the work under this feature' : 'Fold this feature away'}
         >
           {collapsed ? '▸' : '▾'}
