@@ -414,6 +414,13 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'Label → weight, for ordering pickup when headroom is short.',
   },
   {
+    path: 'issueSequencing',
+    type: 'enum',
+    options: ['off', 'links', 'full'],
+    access: 'plain',
+    why: 'Whether a story waits for the one it depends on. `links` honours the tracker’s own Predecessor links and infers nothing; `off` holds nothing.',
+  },
+  {
     path: 'issueStateColours',
     type: 'colourMap',
     access: 'plain',

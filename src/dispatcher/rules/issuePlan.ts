@@ -3,6 +3,7 @@ import { PLAN_FILE } from '../../plans/planDocument.js';
 import { issueOrigin, planBranch, planOrigin } from '../../plans/planning.js';
 import { currentPlanSummary } from '../../plans/parts.js';
 import { relatedWorkNote } from '../../issueRelations.js';
+import { sequenceHoldReason } from '../../sequence/readiness.js';
 import type { RawAction, StageContext } from './context.js';
 
 /**
@@ -47,17 +48,30 @@ export function issuePlan(s: StageContext): void {
     const reason = replan
       ? `Issue #${issue.number} was sent back for replanning; plan it again from its current state.`
       : `Open issue #${issue.number} has no plan yet; plan it before dispatching work.`;
+    // An accepted order holding this story holds its *planner* too: a decomposition
+    // written before the story it depends on has a branch is a decomposition of a
+    // schema that does not exist yet, which is the whole failure the order exists to
+    // prevent. Read off the one map the dispatcher derives, so this rule and
+    // `issue-pickup` cannot disagree about whether the story is ready.
+    // → `docs/spec/33-story-sequencing.md#readiness-and-the-hold`
+    const waits = s.sequenceWaits.get(issue.number);
     s.candidates.push({
       origin,
       rule: 'issue-plan',
       title,
       kind: 'code',
       branch,
-      reason: supersededBy ? supersededReason(supersededBy, reason) : reason,
+      reason: supersededBy
+        ? supersededReason(supersededBy, reason)
+        : waits
+          ? `${reason} ${sequenceHoldReason(waits)}`
+          : reason,
       // Superseded outranks the throttle as an explanation: this planner is not
-      // going out this cycle whatever the cooldown says. Otherwise throttled
-      // like any other origin — kept visible in the queue, not dispatched.
-      held: supersededBy ? 'superseded' : route.planner === 'cooldown' ? 'cooldown' : undefined,
+      // going out this cycle whatever the cooldown says. The sequence hold
+      // outranks it for the same reason — the story is not ready, and blaming a
+      // cooldown for that would send the operator to the wrong knob. Otherwise
+      // throttled like any other origin — kept visible in the queue, not dispatched.
+      held: supersededBy ? 'superseded' : waits ? 'sequenced' : route.planner === 'cooldown' ? 'cooldown' : undefined,
       action: {
         type: 'dispatch_code_agent',
         branch,

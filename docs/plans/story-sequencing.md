@@ -9,7 +9,7 @@ Each stage lands on its own, passes `npm run check`, and leaves the harness work
 the top of the spec stays until the last one; the sections each stage makes true have their paths
 moved from italic to backticked as they land, which `test/docsReferences.test.ts` then holds.
 
-## Stage 0 — read the order somebody already drew
+## Stage 0 — read the order somebody already drew — **landed**
 
 The whole gate, on human-authored edges only. No agent, no proposal, no approval — and therefore no
 inference to be wrong about. This is the stage that is worth having even if nothing after it is
@@ -34,9 +34,25 @@ built.
 6. **The override**: a flagged or dragged origin clears the hold
    (`src/dispatcher/priorityOverride.ts`, `src/dispatcher/goalPriority.ts`).
 
-Tests: a held story is queued and not dispatched; it dispatches once the predecessor pushes a branch;
-every fail-open arm dispatches everything; a flag and a drag each clear the hold; `sequenceReadiness`
-as a pure unit test.
+Tests: `test/storySequencing.test.ts`, at the `RuleDispatcher` seam beside the queue's other held
+reasons — a held story is queued and not dispatched; it dispatches once the predecessor pushes a
+branch; every fail-open arm dispatches everything; a flag and a drag each clear the hold and only
+that hold; `linkEdges` / `sequenceReadiness` / `sequenceHoldReason` as pure unit tests.
+
+Three things landed differently from what is written above, each on purpose:
+
+1. **The dependency read rides in the hierarchy pass's batch**, not a third round of its own — a
+   dependency is nearly always a sibling already being fetched, so it costs no request.
+2. **`issueSequencing` sits on `IssuePickupPolicy`**, not on `RuleDispatcher`'s constructor. It is a
+   pickup gate like every other field there, and the constructor already takes fourteen positional
+   arguments.
+3. **The `FakeIssuesIntegration` scripting was not built.** The tests drive `RuleDispatcher`
+   directly, which is where the other held reasons are asserted and needs no fake; adding a provider
+   API nothing exercises would be a seam with no reader. Stage 1's sequencer, which does need a
+   whole system, is where it earns its place.
+
+The override clears the hold in `decide`, after `expeditedOrigins` and the drag ranks are resolved
+and before `rankByPriorityOverride` — that function still clears no hold, which is its own contract.
 
 Spec sections this makes true: [the tracker's own links](../spec/33-story-sequencing.md#the-trackers-own-links),
 [readiness and the hold](../spec/33-story-sequencing.md#readiness-and-the-hold), most of

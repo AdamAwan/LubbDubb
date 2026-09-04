@@ -37,6 +37,7 @@ import {
   type PlanRouteVerdict,
 } from '../plans/planning.js';
 import { liveParts } from '../plans/parts.js';
+import { linkEdges, sequenceReadiness } from '../sequence/readiness.js';
 import { isActive, type Candidate, type RawAction, type StageContext } from './rules/context.js';
 import { manualJob } from './rules/manualJob.js';
 import { obstacleRepair } from './rules/obstacleRepair.js';
@@ -294,7 +295,20 @@ export class RuleDispatcher implements Dispatcher {
       obstacles: ctx.obstacles ?? [],
       obstacleBlocks: ctx.obstacleBlocks ?? [],
     });
-    const ranked = rankByPriorityOverride(s.candidates, overrideRank, expedited);
+    // The one hold either statement *clears* rather than merely outranks.
+    //
+    // A flag or a drag on a held story is the operator saying "go now", and an
+    // override that only re-ordered it would put the row at the top of the queue
+    // and still refuse to dispatch it — honoured visibly and disobeyed in the one
+    // way that matters. Every other held reason survives: a cooldown, a cap, an
+    // unapproved plan and a superseded claim are all statements about something
+    // other than the order, and `rankByPriorityOverride` still clears none of them.
+    // The sequence itself is **not amended** by this — one story going early is
+    // not a new order. → `docs/spec/33-story-sequencing.md#precedence`
+    const cleared = s.candidates.map((c) =>
+      c.held === 'sequenced' && (expedited(c.origin) || overrideRank.has(c.origin)) ? { ...c, held: undefined } : c,
+    );
+    const ranked = rankByPriorityOverride(cleared, overrideRank, expedited);
 
     // The headroom cut: dispatch the above-cut prefix (each claiming a slot),
     // keep everything ranked as the visible queue. A cooling-down candidate is
@@ -500,6 +514,16 @@ export class RuleDispatcher implements Dispatcher {
       );
     }
 
+    // Which stories an accepted order is holding, and what each waits behind.
+    // Derived here beside `routes` and for its reason — two rules read it and must
+    // not form separate opinions — and empty on every fail-open arm: the gate off,
+    // a provider that reports no dependencies, an edge naming an issue the world
+    // does not hold. → `docs/spec/33-story-sequencing.md`
+    const sequenceWaits =
+      (this.pickup.sequencing ?? 'off') === 'off'
+        ? new Map<number, number[]>()
+        : sequenceReadiness(linkEdges(ctx.world.issues), { issues: ctx.world.issues, openPrs });
+
     // The validation plans, grouped by the goal they belong to.
     const validationChecks = new Map<string, ValidationCheck[]>();
     for (const check of ctx.validationChecks ?? []) {
@@ -601,6 +625,7 @@ export class RuleDispatcher implements Dispatcher {
       // and most are visible only as some other item's parent.
       parentCandidates: candidateParents(ctx.world.issues, this.pickup.containerTypes),
       routes,
+      sequenceWaits,
       validationChecks,
       // Written by `issue-appraisal` / `issue-assess`, read by the stages the pipeline
       // runs after them. See {@link StageContext} — the ordering is load-bearing.

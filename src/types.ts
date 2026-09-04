@@ -579,6 +579,18 @@ export interface Issue {
    * to see the scope either side of the item it was handed.
    */
   siblings?: IssueRelative[];
+  /**
+   * The items this one **waits on** — Azure DevOps `System.LinkTypes.Dependency-Reverse`,
+   * a Predecessor. The order somebody already drew on their own board, which the
+   * harness reads and never writes (→ `docs/spec/33-story-sequencing.md`).
+   *
+   * `undefined` means the provider tracks no dependencies at all (GitHub, the
+   * fake), which every reader treats as "no order stated"; an empty list means the
+   * provider tracks them and this item waits on nothing. The distinction matters
+   * for the same reason {@link parent}'s three states do: a flat tracker must not
+   * read as a board on which every story is in the first wave *by statement*.
+   */
+  dependsOn?: IssueRelative[];
   /** The PR opened to resolve this issue, once one exists. Null until linked. */
   linkedPrNumber: number | null;
   url?: string;

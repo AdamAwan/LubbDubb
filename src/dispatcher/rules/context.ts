@@ -188,6 +188,17 @@ export interface StageContext {
    */
   routes: Map<number, PlanRouteVerdict>;
   /**
+   * The stories an accepted order is holding, and what each waits behind — keyed
+   * by issue number, absent for a story nothing holds.
+   *
+   * Derived **once**, here, for `routes`' reason exactly: `issue-plan` and
+   * `issue-pickup` both consult it and must never disagree about whether a story is
+   * ready, any more than they may disagree about which plan arm it is on. Empty
+   * with `issueSequencing` off, which is the default and every fail-open arm.
+   * → `docs/spec/33-story-sequencing.md`
+   */
+  sequenceWaits: ReadonlyMap<number, number[]>;
+  /**
    * Every goal's validation checks, keyed by the goal's origin ref — read by
    * `validate-check` and nothing else.
    */

@@ -47,6 +47,11 @@ type HeldReason =
   | 'unapproved'
   /** An earlier rule in the pipeline claimed this issue for a different question. */
   | 'superseded'
+  /**
+   * An accepted order for this story's Feature puts something else first, and that
+   * something has not pushed a branch yet. → `docs/spec/33-story-sequencing.md`
+   */
+  | 'sequenced'
   /** No fleet headroom — the only reason decided by the cut rather than by a rule. */
   | 'waiting';
 

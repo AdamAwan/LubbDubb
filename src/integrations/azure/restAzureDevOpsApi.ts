@@ -769,6 +769,11 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
         .map((r) => r.url as string),
       parentId: hierarchyIds(w.relations, 'System.LinkTypes.Hierarchy-Reverse')[0] ?? null,
       childIds: hierarchyIds(w.relations, 'System.LinkTypes.Hierarchy-Forward'),
+      // Reverse, not Forward: Azure names the link from the *other* end, so
+      // `Dependency-Forward` is this item's Successors — what waits on it — and
+      // `-Reverse` its Predecessors, what it waits on. The pair reads the same way
+      // round as Hierarchy, where `-Reverse` is the parent.
+      dependsOnIds: hierarchyIds(w.relations, 'System.LinkTypes.Dependency-Reverse'),
       url: `${this.projectUrl}/_workitems/edit/${w.id}`,
     };
   }

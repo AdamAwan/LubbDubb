@@ -1,6 +1,7 @@
 import { supersededReason } from '../admission.js';
 import { issueBranch } from '../issuePickup.js';
 import { relatedWorkNote } from '../../issueRelations.js';
+import { sequenceHoldReason } from '../../sequence/readiness.js';
 import type { Candidate, RawAction, StageContext } from './context.js';
 
 /**
@@ -67,6 +68,17 @@ export function issuePickup(s: StageContext): void {
     // suppressed dispatch would blame the pickup for the appraisal's turn.
     if (supersededBy) {
       s.candidates.push({ ...candidate, held: 'superseded', reason: supersededReason(supersededBy, reason) });
+      continue;
+    }
+    // The sequence hold, on the same terms and for the same two reasons: queued
+    // rather than skipped, because a dispatch that silently never appears leaves
+    // an operator with an idle fleet and a full board and nothing to read; and
+    // outside `consider`, because the cooldown has no bearing on a pickup that is
+    // not going out this cycle for a different reason entirely.
+    // → `docs/spec/33-story-sequencing.md#a-held-story-is-queued-not-skipped`
+    const waits = s.sequenceWaits.get(issue.number);
+    if (waits) {
+      s.candidates.push({ ...candidate, held: 'sequenced', reason: `${reason} ${sequenceHoldReason(waits)}` });
       continue;
     }
     s.consider(candidate, (attempts) => ({

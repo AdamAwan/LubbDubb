@@ -173,6 +173,7 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
       'issueStateColours',
       'issueBoardStates',
       'issueDefaultPriority',
+      'issueSequencing',
       'issuePickupStates',
       'issueInReviewState',
       'issueInProgressState',

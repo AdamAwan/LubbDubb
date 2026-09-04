@@ -1,12 +1,15 @@
 # 33 — Story sequencing
 
-> **Not yet built.** Nothing in this document describes running code. Every path is written in
-> italics until the change that creates it, and the build order is in `docs/plans/story-sequencing.md`.
-> The behaviour the harness has **today** is the one this replaces: every watched story under a
-> Feature is eligible the moment it carries the tag, and the only thing that orders them is
-> `issuePriorityLabels` and then the issue number ([06](06-issue-pickup.md#priority)).
+> **Partly built.** What runs today is the gate on **the tracker's own links**: `issueSequencing` at
+> `links`, `Issue.dependsOn`, `sequenceReadiness`, the `sequenced` hold and the override that clears
+> it. The **sequencer** — the record, the agent, the proposal, the two cockpit surfaces — is not:
+> every path still in italics is one the change that creates it makes real, and the build order is
+> in `docs/plans/story-sequencing.md`. With `issueSequencing` `off`, which is the default, the
+> harness behaves exactly as it did before any of this — every watched story under a Feature is
+> eligible the moment it carries the tag, ordered by `issuePriorityLabels` and then the issue number
+> ([06](06-issue-pickup.md#priority)).
 
-_src/sequence/_. The order the stories under a Feature are worked in, and the hold that keeps a story
+`src/sequence/`. The order the stories under a Feature are worked in, and the hold that keeps a story
 waiting for the one it needs.
 
 A Feature is never dispatched at — its children are the work ([06](06-issue-pickup.md#hierarchy)) —
@@ -41,14 +44,17 @@ first.
 
 ### The tracker's own links
 
-Azure DevOps work items carry `System.LinkTypes.Dependency-Forward` / `-Reverse` — Predecessor and
-Successor. `src/integrations/azure/workItems.ts` hydrates `Hierarchy` today and nothing else, so an
-order a team has already drawn on their own board is invisible to the harness.
+Azure DevOps work items carry `System.LinkTypes.Dependency-Forward` / `-Reverse` — Successor and
+Predecessor. Azure names the link from the _other_ end, so what an item **waits on** is `-Reverse`,
+the same way round as `Hierarchy`, whose `-Reverse` is the parent.
 
-A third hydration pass resolves those links into `Issue.dependsOn`, a list of `IssueRelative` beside
-the existing `parent` / `children` / `siblings`. Providers that track no dependencies (GitHub, the
-fake) leave it `undefined`, which every reader treats as "no order stated" — the flat-tracker path
-is byte-for-byte what it was.
+`src/integrations/azure/workItems.ts` resolves them into `Issue.dependsOn`, a list of
+`IssueRelative` beside the existing `parent` / `children` / `siblings`. It rides in the hierarchy
+pass's own batch rather than a round of its own: a dependency is almost always a sibling under the
+same Feature, so the ids are usually already being fetched and the whole thing costs no extra
+request. Providers that track no dependencies (GitHub, the fake) leave it `undefined`, which every
+reader treats as "no order stated" — the flat-tracker path is byte-for-byte what it was, and is
+distinct from the `[]` a board that tracks dependencies reports for an item that waits on nothing.
 
 These edges are **authoritative and re-read every hydration**. They are not stored as part of the
 sequence and they are not the sequencer's to change: a person drew them, and a proposal that
@@ -115,15 +121,23 @@ sequence that silently linearised a cycle would hold work in an order no one cho
 
 ## Readiness and the hold
 
-`sequenceReadiness(feature, edges, issues)` in _src/sequence/readiness.ts_ is pure over the edges
-plus the world: for each child, the unsatisfied edges pointing at it.
+`sequenceReadiness(edges, world)` in `src/sequence/readiness.ts` is pure over the edges plus the
+world: for each story, the predecessors it is still waiting on. `linkEdges` beside it is where the
+provider's own `Issue.dependsOn` becomes those edges — a self-edge dropped, since it would hold its
+own story for good and there is nothing an operator could do about it from here.
 
 **A predecessor is satisfied when it is settled, or when it is in flight and has pushed a branch** —
 `dependencySatisfied`'s rule exactly (`src/plans/parts.ts`). Waiting for a merge would serialise a
 feature into a queue of one; waiting for a branch lets the successor stack on work already underway,
 which is what makes a four-wave sequence finish in less than four times one story.
 
-The verdict rides on `StageContext` for later stages to read, and it is computed **once**, in the
+For a **story**, "has pushed a branch" is read as `openPrForIssue` — an open pull request. That is
+the whole of what the dispatcher can see: it reads no git, and a goal's branch announces itself to
+it as a pull request. It errs towards satisfied, which is the direction every uncertainty here errs
+in.
+
+The verdict rides on `StageContext.sequenceWaits` for later stages to read, and it is computed
+**once**, in the
 dispatcher's context assembly, beside `routes` and `eligibleIssues`. It is not a second opinion
 formed inside a rule: `issue-plan` and `issue-pickup` both consult it and must never disagree about
 whether a story is ready, exactly as they must never disagree about which plan arm it is on
@@ -132,7 +146,9 @@ whether a story is ready, exactly as they must never disagree about which plan a
 ### A held story is queued, not skipped
 
 `issue-pickup` and `issue-plan` push their candidate with `held: 'sequenced'` and a reason naming
-what it waits behind — `Held: #597 waits on #593, which has not pushed a branch yet.` It is a new
+what it waits behind — `Held: waits on #593, which has not pushed a branch yet.`, appended to the
+rule's own reason so the row still says what the work _is_ before it says why it is not going out
+(`sequenceHoldReason`). It is a new
 member of `RuleHeld` (`src/dispatcher/admission.ts`), beside `superseded` and `unapproved`.
 
 Queued rather than skipped, for `capped`'s reason: a dispatch that silently never appears is
@@ -294,15 +310,18 @@ is not a story that has gone.
 
 ## Tests
 
-At the `buildSystem` seam, with `FakeIssuesIntegration` scripted to report dependency links, and the
-sequencer driven in `raw` agent mode like every other rule:
+`test/storySequencing.test.ts`, at the `RuleDispatcher` seam — where the queue's other held reasons
+are asserted (`test/dispatchPipeline.test.ts`), because a hold is a statement about the queue and
+nothing about it needs a store, a worktree or an agent:
 
 - a held story is queued as `held: 'sequenced'` and is **not** dispatched;
 - the same story dispatches once its predecessor pushes a branch, before any merge;
 - every fail-open arm above dispatches everything;
-- a flagged or dragged origin dispatches through a hold;
-- a cycle is refused and holds nothing;
-- `sequenceReadiness` and `featureSequenceKey` as pure unit tests, with no world.
+- a flagged or dragged origin dispatches through a hold, and a drag clears **only** that hold;
+- the planner is held by the order too, and says so rather than blaming a cooldown;
+- a cycle is refused and holds nothing (with the sequencer, which submits them);
+- `linkEdges`, `sequenceReadiness`, `sequenceHoldReason` and `featureSequenceKey` as pure unit
+  tests, with no world.
 
 The readiness function and the key are pure, so the two things most likely to be wrong — which
 stories are ready, and when a Feature is re-proposed — are testable without a harness.

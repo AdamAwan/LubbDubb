@@ -977,6 +977,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     inProgressState: config.issueInProgressState,
     containerTypes: config.issueContainerTypes,
     parentedTypes: config.issueParentedTypes,
+    sequencing: config.issueSequencing,
   };
   const rules = new RuleDispatcher(
     issuePickup,

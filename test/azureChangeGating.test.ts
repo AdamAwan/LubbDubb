@@ -73,6 +73,7 @@ function workItem(over: Partial<AzWorkItem> = {}): AzWorkItem {
     relationUrls: [],
     parentId: null,
     childIds: [],
+    dependsOnIds: [],
     url: 'https://dev.azure.com/o/p/_workitems/edit/42',
     createdAt: '2026-01-01T00:00:00Z',
     changedAt: '2026-01-02T00:00:00Z',
