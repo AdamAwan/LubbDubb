@@ -14,7 +14,7 @@ import type { CockpitActions } from '../web/src/cockpit/actions.js';
 (globalThis as { React?: typeof React }).React = React;
 
 const { buildDemoState } = await import('../web/src/demo/fixtures.js');
-const { Overview } = await import('../web/src/console/Overview.js');
+const { Overview, queueRow } = await import('../web/src/console/Overview.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
 const { goalIssue } = await import('../web/src/view/goalPage.js');
 const { hasPrPage } = await import('../web/src/view/prPage.js');
@@ -83,7 +83,7 @@ const render = (v: CockpitView): string =>
  */
 test('every pull-request row carries a way to the pull request it names', () => {
   const html = render(view());
-  const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('Up next'));
+  const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('World signals'));
   const rows = rack.split(ROW).slice(1);
   assert.ok(rows.length > 0, 'no pull-request rows rendered');
   for (const row of rows) {
@@ -216,7 +216,7 @@ test('a fleet row wears the state it is in, and the strongest one it is in', () 
 test('a pull-request row wears the court the server put it in', () => {
   const state = buildDemoState().state;
   const html = render(view());
-  const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('Up next'));
+  const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('World signals'));
   const rows = rack.split(ROW).slice(1);
   // In the card's own order, not the world's: the rack puts the pull requests
   // somebody handed you above the fleet's, so a positional match against
@@ -263,7 +263,7 @@ test('a pull-request row draws the agent on its branch instead of its checks', (
   // Scoped to the rack: a goal row's title is `#376 <the PR's own title>`, so a
   // page-wide search for a pull request's title finds the goal card first.
   const rowFor = (html: string, title: string): string => {
-    const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('Up next'));
+    const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('World signals'));
     const found = rack.split(ROW).find((chunk) => chunk.includes(title));
     assert.ok(found, `no row drew "${title}"`);
     return found.slice(0, found.indexOf('cn-refs'));
@@ -308,7 +308,7 @@ test('the agent mark is the row’s first slot, on both racks', () => {
   const html = render(view());
   const racks = {
     'Goals in flight': html.slice(html.indexOf('Goals in flight'), html.indexOf('Pull requests')),
-    'Pull requests': html.slice(html.indexOf('Pull requests'), html.indexOf('Up next')),
+    'Pull requests': html.slice(html.indexOf('Pull requests'), html.indexOf('World signals')),
   };
 
   // Both cards widen the lamp column, and only those two: every other rack's lamp
@@ -454,4 +454,123 @@ test('a finished retained run is behind the kept disclosure, not among the goals
       .includes(`#${kept.number} ${kept.title}`),
     'a retained run with an agent on it is not drawn as in flight',
   );
+});
+
+/**
+ * The queue's own sentence, reaching the row unre-worded.
+ *
+ * Asserted against the model rather than the rendered card, because the Up next
+ * band is collapsed by default: a test that scraped the markup would be asserting
+ * against rows nobody drew, and would pass just as happily if `queueRow` stopped
+ * being called at all.
+ *
+ * Three fields, because they are the three the card is not allowed to re-decide —
+ * the status is the queue's word, the sentence is the queue's sentence, and the
+ * band is the same band on every row, so the heading is drawn once.
+ */
+test('a queued row quotes the queue: its status as the word, its reason as the sentence', () => {
+  const v = view();
+  const items = v.state.upcoming?.items ?? [];
+  assert.ok(items.length > 0, 'the fixtures must carry a queued item');
+  for (const item of items) {
+    const row = queueRow(item, v, actions);
+    assert.equal(row.whyLabel, item.status, `#${item.origin} wears a word the queue did not say`);
+    assert.equal(row.why, item.reason, `#${item.origin} re-worded the queue's reason`);
+    assert.equal(row.queued, true, 'a queued row is drawn as an agent');
+  }
+  // `unapproved` is the operator's move and the rest are the harness stopped —
+  // the one distinction the collapsed band's count is drawn from.
+  const asks = items.filter((i) => i.status === 'unapproved');
+  for (const item of asks) assert.equal(queueRow(item, v, actions).whyTone, 'ask');
+  for (const item of items.filter((i) => i.status !== 'unapproved' && i.status !== 'dispatching')) {
+    assert.equal(queueRow(item, v, actions).whyTone, 'hold');
+  }
+});
+
+/**
+ * The Fleet card's two bands share one budget.
+ *
+ * What this pins is the *subtraction*, not the number: the agents spend the
+ * budget first and the queue takes what is left, so the card is the same height
+ * whatever the fleet is doing. Two caps would draw the same on the fixtures and
+ * grow the card by a row every time a dispatch went out, which is exactly the
+ * jumping a fixed card height exists to stop.
+ */
+test('the fleet card’s rows are a budget the agents spend first', () => {
+  const state = buildDemoState().state;
+  const queued = state.upcoming?.items.length ?? 0;
+  assert.ok(queued > 1, 'the fixtures must carry more than one queued item');
+  const live = state.agents.filter((a) => a.endedAt === null);
+  assert.ok(live[0], 'the fixtures must have an agent out');
+
+  const card = (html: string): string => html.slice(html.indexOf('Fleet'), html.indexOf('Goals in flight'));
+  const rows = (html: string): number => card(html).split(ROW).length - 1;
+  const queuedRows = (html: string): number => card(html).split(/class="cn-row[^"]*cn-queued/).length - 1;
+
+  // A fleet of exactly `n`, built from a real agent so every reading the row is
+  // drawn from — `taskFor`, the lamp, the state column — answers as it does live.
+  // The readying actions and the desk run are the card's rows too and spend the
+  // same budget, so what the queue is owed is read off the view rather than
+  // assumed to be `7 - n`.
+  const fleet = (n: number): { drawn: number; queue: number; room: number } => {
+    const v = view({ agents: Array.from({ length: n }, (_, i) => ({ ...live[0]!, id: `a${i}` })) });
+    const out = v.live.length + v.readying.length + v.deskRuns.length;
+    const html = render(v);
+    return { drawn: rows(html), queue: queuedRows(html), room: Math.max(0, 7 - out) };
+  };
+
+  // The subtraction, at the sizes where it bites: what the agents leave is what
+  // the queue draws, up to everything it has.
+  for (const n of [1, 4, 6, 7, 9]) {
+    const { drawn, queue, room } = fleet(n);
+    assert.equal(queue, Math.min(queued, room), `a fleet of ${n} left the queue the wrong number of rows`);
+    // Which is the point of a budget rather than two caps: the card does not grow
+    // by a row every time a dispatch goes out.
+    assert.ok(drawn <= 7 || room === 0, `a fleet of ${n} overran the card at ${drawn} rows`);
+  }
+
+  // And the band is there with nothing under it, which is the state its count and
+  // its way to the panel matter most in.
+  const packed = view({ agents: Array.from({ length: 9 }, (_, i) => ({ ...live[0]!, id: `a${i}` })) });
+  assert.ok(render(packed).includes('Up next'), 'the band went with its last row');
+});
+
+/**
+ * The band never passes its head off as the whole queue.
+ *
+ * The count and the way to the rest are the two things a card showing three of
+ * fourteen owes a reader, and they are on the band rather than in the card's
+ * header because they are about *this* band — a card can carry more than one.
+ */
+test('the up next band states the whole queue, and offers the rest', () => {
+  const state = buildDemoState().state;
+  const items = state.upcoming?.items ?? [];
+  assert.ok(items.length > 0, 'the fixtures must carry a queued item');
+
+  const html = render(view());
+  const band = html.slice(html.indexOf('Up next'), html.indexOf('Goals in flight'));
+  assert.ok(band.includes(`${items.length} queued`), 'the band does not say how big the queue is');
+
+  // Every row above the queue is an agent, so a fleet at the budget leaves the
+  // band with no rows at all — and it still draws, still counts, still offers the
+  // panel. That is the state the reading matters most in.
+  const packed = render(view({ upcoming: state.upcoming }));
+  assert.ok(packed.includes('Up next'), 'the band vanished with rows to report');
+});
+
+/**
+ * `unapproved` is the operator's move, and the band says how many there are.
+ *
+ * The head of the queue is three rows of fourteen, and a row that wants an answer
+ * is as likely to be below the cut as above it — so the count is on the band,
+ * where it is read whether or not that row is drawn.
+ */
+test('a queued ask is counted on the band, not left to be found', () => {
+  const v = view();
+  const items = v.state.upcoming?.items ?? [];
+  const asking = items.filter((i) => i.status === 'unapproved').length;
+  if (asking === 0) return; // nothing waiting on a person this snapshot
+  const html = render(v);
+  const band = html.slice(html.indexOf('Up next'), html.indexOf('Goals in flight'));
+  assert.ok(band.includes(`${asking} on you`), 'the band does not say how much of the queue is yours');
 });

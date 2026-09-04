@@ -20,7 +20,7 @@ import { elapsed, fmtUsd, relTime } from '../components/util.js';
 import { Ref, RefText, refLabel } from '../components/refs.js';
 import { StaleChip, waitedFor } from './GoalPage.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
-import { PanelRows, type PanelRowModel, type RowGroup } from './PanelRow.js';
+import { GroupHead, PanelRows, type PanelRowModel, type RowGroup } from './PanelRow.js';
 import { Who } from '../components/who.js';
 import { AgentOnIt } from '../components/AgentOnIt.js';
 import { CiMark, CiSlot } from '../components/CiMark.js';
@@ -30,19 +30,22 @@ import { orphanCount, orphanGoal } from '../view/orphanGoal.js';
 import { Tag, type TagTone } from '../components/tag.js';
 
 /**
- * What is shown when no goal is selected: eight cards, rows rather than pictures.
+ * What is shown when no goal is selected: seven cards, rows rather than pictures.
  *
- * Document order is reading order — Fleet, Goals in flight, Pull requests, Up
- * next, World signals, Environments, Build, Project — and no card carries a CSS
- * `order`, so the DOM and the page agree at every width. The arrangement across
- * tracks is `.cn-grid`'s business alone.
+ * Document order is reading order — Fleet, Goals in flight, Pull requests, World
+ * signals, Environments, Build, Project — and no card carries a CSS `order`, so
+ * the DOM and the page agree at every width. The arrangement across tracks is
+ * `.cn-grid`'s business alone.
+ *
+ * **Up next is not among them any more**: the queue is a band on the Fleet card,
+ * because it is the same list one stage further back. → {@link Fleet}
  *
  * The last two are a pair and are last because neither is about the fleet's
  * work: everything above them is what the fleet did, Build is the process the
  * fleet runs inside, and Project is the repository it is pointed at — two
  * different checkouts, read on one timer.
  *
- * Two rules run through all eight. **Nothing here re-decides what the server
+ * Two rules run through all seven. **Nothing here re-decides what the server
  * decided**: a PR's court is `attention.status`, its checks are `ciVerdict`, a
  * queued item's hold is the queue's own sentence, and a goal's state is its
  * `pickup.status` — every one quoted, none parsed. And **an empty card still
@@ -55,7 +58,6 @@ export function Overview({ view, actions }: { view: CockpitView; actions: Cockpi
       <Fleet view={view} actions={actions} />
       <GoalsInFlight view={view} actions={actions} />
       <Rack view={view} actions={actions} />
-      <UpNext view={view} actions={actions} />
       <WorldSignals view={view} />
       <Environments view={view} />
       <Build view={view} actions={actions} />
@@ -371,16 +373,74 @@ type BuildStandingReading = CockpitView['state']['build']['standing'];
  * Ended shifts are behind a disclosure rather than a second card. They are the
  * same rows read for a different question — what happened — and the count stays
  * in the header at zero, muted, so the way in does not move.
+ *
+ * **The queue is a band on this card**, on the same argument the readying rows
+ * are here: the list is ordered by *dispatch stage*, and Up next is one stage
+ * further back than an action the executor already has in hand. As its own card
+ * it was fourth in reading order, three cards below the one an operator looks at
+ * to find out what is happening — so the reading "what is out, and what is behind
+ * it" was one every operator assembled themselves, from two surfaces that never
+ * agreed on what counted as work.
+ *
+ * **Nothing folds.** The card's rows are a budget the two bands share
+ * ({@link FLEET_ROWS}), so the queue shows what the agents left of it and the
+ * rest is on the `upnext` panel behind the band's own control. A fold would have
+ * been the cheaper build and it costs the reading: what the harness would do next
+ * is half of "what is happening", and a card that hides it until pressed is a
+ * card that answers the other half.
+ *
+ * → docs/spec/17-cockpit.md#the-queue-rides-the-fleet-card
  */
+/**
+ * How many rows the Fleet card draws, across both of its bands.
+ *
+ * A **budget**, not a pair of caps, because the two lists answer one question
+ * between them: what the fleet is doing, and what it would do next. The agents
+ * spend it first — they are the card's subject and there are never more of them
+ * than the cap allows — and the queue takes what is left, so a card gains a
+ * queued row exactly when an agent finishes and loses one when a dispatch goes
+ * out. The card is therefore the same height whatever the fleet is doing, which
+ * is the whole reason the number is one number: two caps would make the card two
+ * lists that happen to sit together, and it would grow and shrink again on every
+ * pulse.
+ *
+ * At a full fleet the queue draws no rows at all and keeps its band, its count
+ * and its way to the panel — which is the honest reading. Nothing is queued
+ * *next* when nothing is free.
+ */
+const FLEET_ROWS = 7;
+
 function Fleet({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const [showEnded, setShowEnded] = useState(false);
   const ended = view.past;
   const desk = view.deskRuns;
   const readying = view.readying;
+  const queued = view.state.upcoming?.items ?? [];
+  // Counted on the glass rather than left behind the disclosure: `unapproved` is
+  // the one queue status that is the operator's move rather than the harness
+  // stopped, and a row nobody can see is a row nobody answers.
+  const asking = queued.filter((item) => item.status === 'unapproved').length;
   // The count is the fleet's own, not the list's: the snapshot carries a bounded
   // tail of ended agents, so a number read off `ended` would settle at the cap and
   // report it forever on a deployment that had run twenty thousand shifts.
   const endedTotal = view.state.endedAgents;
+
+  // What is out, in the order the harness answers "what is happening" in: what it
+  // sent, what it is sending, and what nobody sent at all.
+  const out = [
+    ...view.live.map((agent) => agentRow(agent, view, actions)),
+    ...readying.map((action) => readyingRow(action, view)),
+    ...desk.map((run) => deskRow(run, view)),
+    ...(showEnded ? ended.map((agent) => agentRow(agent, view, actions)) : []),
+  ];
+  // What the agents left of the budget. Ended shifts are not counted against it:
+  // they are history and an explicit expansion the operator asked for, so they
+  // scroll the card rather than pushing the queue out of it.
+  const room = Math.max(0, FLEET_ROWS - (view.live.length + readying.length + desk.length));
+  const queueRows = queued.slice(0, room).map((item) => queueRow(item, view, actions));
+  // One rail for the card, measured from every row on it — the two calls are one
+  // card, and its columns have to line up across the band. → `PanelRows`
+  const rail = [...out, ...queueRows];
 
   return (
     <section className="cn-card cn-span2">
@@ -402,6 +462,7 @@ function Fleet({ view, actions }: { view: CockpitView; actions: CockpitActions }
           className={`cn-more ${endedTotal === 0 ? 'cn-quiet' : ''}`}
           onClick={() => setShowEnded(!showEnded)}
           title="Shifts that have ended — the agents no longer running"
+          aria-expanded={showEnded}
         >
           {endedTotal} shift{endedTotal === 1 ? '' : 's'} ended {showEnded ? '⌄' : '›'}
         </button>
@@ -419,18 +480,42 @@ function Fleet({ view, actions }: { view: CockpitView; actions: CockpitActions }
           The {ended.length} most recent, of {endedTotal}. Older runs are on the goal they were dispatched for.
         </p>
       )}
-      <PanelRows
-        rows={[
-          ...view.live.map((agent) => agentRow(agent, view, actions)),
-          // Then what it is about to send. Between the two lists rather than at
-          // the foot, because that is the order the harness answers "what is
-          // happening" in — what it sent out, what it is sending, and then what it
-          // did not send at all.
-          ...readying.map((action) => readyingRow(action, view)),
-          ...desk.map((run) => deskRow(run, view)),
-          ...(showEnded ? ended.map((agent) => agentRow(agent, view, actions)) : []),
-        ]}
+      <PanelRows rows={out} rail={rail} />
+      {/* The head of the queue, under a band of its own, in the same list as the
+          agents: nothing is folded, so there is no way in to find and nothing
+          moves when it is used. The band always draws — a queue that is empty is a
+          line saying so, on the rule the whole page keeps. */}
+      <GroupHead
+        group={{
+          key: 'upnext',
+          label: 'Up next',
+          // Pinned to the card's foot, because its size is what the rows above it
+          // left over: floated up against them, a quiet fleet draws the queue
+          // halfway up the card with a field of empty panel underneath.
+          foot: true,
+          // The whole size of the queue, beside three of its rows, so the band
+          // never passes off its head as all of it — and how much of that is
+          // waiting on a *person*: `unapproved` is the one `QueueStatus` that is
+          // the operator's move rather than the harness stopped, and the rows
+          // carrying it are as likely to be below the cut as above it.
+          note: (
+            <>
+              {queued.length === 0 ? 'nothing queued' : `${queued.length} queued`}
+              {asking > 0 && <span className="cn-alarm"> · {asking} on you</span>}
+            </>
+          ),
+          control:
+            queued.length > queueRows.length ? (
+              <button type="button" className="cn-group-more" onClick={() => actions.openPanel('upnext')}>
+                All {queued.length} →
+              </button>
+            ) : undefined,
+        }}
       />
+      {queueRows.length > 0 && <PanelRows rows={queueRows} rail={rail} />}
+      {queued.length === 0 && <p className="cn-empty">Nothing is queued.</p>}
+      {/* The card's foot, under everything it is about — who is out, and then what
+          is behind them. */}
       <RunwayBand view={view} />
     </section>
   );
@@ -1358,43 +1443,30 @@ function Eye({ open }: { open: boolean }): JSX.Element {
 }
 
 /**
- * What the last pulse ranked, each row carrying the queue's own reason verbatim.
- *
- * The reason is the whole point of the card — it is the direct answer to "are we
- * working on the right thing" — so it wraps rather than being clipped to one
- * line, and nothing here re-words it. A held item is toned amber off `status`,
- * which is a fact the same sentence already states in words.
- *
- * **A wide card, because its rows are wide rows.** A queue row carries a state
- * word, a control and a refs group beside a title that is a sentence — that is a
- * full-width row's worth of slots, and at a quarter of the page it left the title
- * 80px and clipped three of four. Rails that give way ({@link PanelRows}) share the
- * shortfall out; they cannot conjure room a card does not have.
- */
-function UpNext({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
-  const items = view.state.upcoming?.items ?? [];
-  return (
-    <section className="cn-card cn-span2">
-      <h3>
-        Up next <i className="cn-n">{items.length} queued</i>
-      </h3>
-      {items.length === 0 && <p className="cn-empty">Nothing is queued.</p>}
-      <PanelRows rows={items.map((item) => queueRow(item, view, actions))} />
-    </section>
-  );
-}
-
-/**
  * A queued dispatch, as a way to what it is queued against — the origin is a goal
  * ref as often as a pull request, so it goes through `Ref` rather than out to the
  * provider unconditionally, and the reason it quotes carries `#n` mentions of its
  * own.
+ *
+ * **Drawn as further back than a readying row, not as an agent.** It takes the
+ * readying tint — this is the harness's own work, not somebody at a keyboard —
+ * but dotted where that row is dashed, because it is one stage behind it: nothing
+ * has been handed to the executor yet. It is not a button for the reason those
+ * rows are not either. What it does *not* borrow is the tint on its state word:
+ * `unapproved` is a real ask and `capped` a real hold, so the chip keeps the tone
+ * the verdict earns rather than the row's own colour.
+ *
+ * Exported for `test/panelRows.test.ts`, which asserts the queue's sentence
+ * reaches the model verbatim — the band is collapsed by default, so a test that
+ * scraped the rendered card would be asserting against markup nobody rendered.
  */
-function queueRow(item: QueueItem, view: CockpitView, actions: CockpitActions): PanelRowModel {
+export function queueRow(item: QueueItem, view: CockpitView, actions: CockpitActions): PanelRowModel {
   const config = view.state.config;
   const held = item.status !== 'dispatching';
   return {
     key: `${item.origin}|${item.rule}`,
+    lamp: <i className="cn-lamp cn-queued-lamp" />,
+    queued: true,
     title: item.title,
     refs: <Ref to={item.origin} />,
     facts: [{ label: 'rule', value: item.rule }],

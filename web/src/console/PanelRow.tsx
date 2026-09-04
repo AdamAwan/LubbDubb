@@ -1,4 +1,4 @@
-import { Fragment, type JSX, type ReactNode } from 'react';
+import { Fragment, useRef, useState, type JSX, type ReactNode } from 'react';
 
 /**
  * One row of a panel, as a value rather than as markup.
@@ -47,9 +47,26 @@ export interface RowGroup {
   /** The heading's word. */
   label: string;
   /** What is true of the whole band — a count, at the heading's right. */
-  note?: string;
+  note?: ReactNode;
   /** `ask` where the band is your move; `quiet` is the plain heading. */
   tone?: 'ask' | 'quiet';
+  /**
+   * The band's one control, at the heading's right — the way to the rest of a
+   * band the card is only showing the head of.
+   *
+   * On the heading rather than in the card's own header, because it is about
+   * *this* band and a card can carry more than one. A band that is showing three
+   * of thirty has to say so where the three are.
+   */
+  control?: ReactNode;
+  /**
+   * The band sits at the **foot** of its card, whatever is above it.
+   *
+   * For a band whose size is what is left of a budget the rows above it spend
+   * first: without this it floats up against them, and a card of one agent draws
+   * the queue halfway up with a field of empty panel under it. → `Fleet`
+   */
+  foot?: boolean;
 }
 
 export interface PanelRowModel {
@@ -167,6 +184,17 @@ export interface PanelRowModel {
    * left one of them wearing the other's colour.
    */
   readying?: boolean;
+  /**
+   * Work the harness has ranked and not yet handed to the executor — one stage
+   * behind {@link readying}, and drawn as it: the same tint, dotted rather than
+   * dashed.
+   *
+   * Its own flag rather than {@link readying} at a second weight, because the two
+   * differ in the thing an operator reads them for — a readying row is a dispatch
+   * already in progress and will be an agent in seconds, and this one may never be
+   * dispatched at all.
+   */
+  queued?: boolean;
   /**
    * Work is happening on this row **right now** — an agent on the branch, not a
    * verdict about it.
@@ -361,11 +389,24 @@ function stripTemplate(has: SlotsUsed): string {
 export function PanelRows({
   rows,
   layout = 'line',
+  rail,
 }: {
   rows: readonly PanelRowModel[];
   layout?: RowLayout;
+  /**
+   * The rows the rail is measured from, where the card draws its list in more
+   * than one call — a card with a folded band is still one card, and its columns
+   * have to line up across the fold.
+   *
+   * The census is a fact about the *card*, so measuring it from the rows a given
+   * call happens to be drawing makes a disclosure re-cut every column above it:
+   * press the band open, and a control appearing on a queued row moves the titles
+   * of the agents twenty rows up. Handed the whole set, the rail is the same
+   * whatever is folded, which is what the grid was for.
+   */
+  rail?: readonly PanelRowModel[];
 }): JSX.Element {
-  const has = slotsUsed(rows);
+  const has = slotsUsed(rail ?? rows);
   // On each row, never on the list: `.cn-rows` is a flex column, and
   // `grid-template-columns` on a flex container is inherited by nothing and
   // applies to nothing. It renders exactly as it did before — which is how this
@@ -405,12 +446,21 @@ export function PanelRows({
  * Not a row. It fills the card's width rather than sitting on the rail, because
  * it names the rows under it and a heading that lined its word up with the
  * subject column would read as a row whose every other slot is empty.
+ *
+ * **Exported, because a folded band still has a heading.** Where a card draws its
+ * own bands — {@link RowGroup.toggle} — the heading is not a thing `PanelRows`
+ * can emit, since the rows it would have been drawn above are the rows that are
+ * not there. It is the same component either way, so the two cannot drift.
  */
-function GroupHead({ group }: { group: RowGroup }): JSX.Element {
+export function GroupHead({ group }: { group: RowGroup }): JSX.Element {
+  const cls = ['cn-group', group.tone === 'ask' ? 'cn-group-ask' : '', group.foot === true ? 'cn-group-foot' : '']
+    .filter((part) => part !== '')
+    .join(' ');
   return (
-    <div className={group.tone === 'ask' ? 'cn-group cn-group-ask' : 'cn-group'}>
+    <div className={cls}>
       {group.label}
       {group.note !== undefined && <span className="cn-group-n">{group.note}</span>}
+      {group.control}
     </div>
   );
 }
@@ -584,12 +634,18 @@ const WHY_TONE: Record<string, string> = { ask: ' t-red tag-fill', hold: ' t-amb
  * as part of the control's own name.
  */
 function Why({ row }: { row: PanelRowModel }): JSX.Element | null {
+  // Which side of the row the bubble opens on. Held per marker rather than worked
+  // out in CSS because the answer is not a fact about the row — it is where the
+  // row happens to be sitting in its card's scroll at the moment you point at it.
+  const [above, setAbove] = useState(false);
+  const at = useRef<HTMLSpanElement>(null);
   const why = row.why != null && row.why !== '' ? row.why : null;
   const label = row.whyLabel;
   if (why === null && label === undefined) return null;
   const tone = label === undefined ? '' : ` cn-why-chip tag${WHY_TONE[row.whyTone ?? 'quiet']}`;
+  const place = (): void => setAbove(noRoomBelow(at.current));
   return (
-    <span className="cn-why">
+    <span className={above ? 'cn-why cn-why-above' : 'cn-why'} ref={at} onMouseEnter={place} onFocus={place}>
       <button
         type="button"
         className={`cn-why-mark${tone}`}
@@ -609,12 +665,58 @@ function Why({ row }: { row: PanelRowModel }): JSX.Element | null {
   );
 }
 
+/**
+ * Roughly what the bubble needs under the row, in pixels.
+ *
+ * An estimate, and it has to be: the bubble is `display: none` until it is
+ * wanted, so there is no height to measure before deciding where to put it. Sized
+ * against the long end of what it holds — a queue reason is a short paragraph at
+ * the cap's 420px measure — so the answer errs towards flipping, which fails to a
+ * bubble with room to spare rather than to one cut off at the card's edge.
+ */
+const TIP_ROOM = 140;
+
+/**
+ * Whether the marker's bubble would be clipped where it normally opens.
+ *
+ * The overview's cards are a fixed height and scroll inside it
+ * (`.cn-grid > .cn-card`), so a row two thirds of the way down a card has its
+ * reason cut off by the card's own edge — and the reason is the one thing the
+ * marker exists to give. There is no CSS for "is there room": the row's position
+ * in the scroll changes as the operator scrolls, so `:nth-last-child` and friends
+ * answer a different question.
+ *
+ * Measured against the nearest scroller rather than the viewport, because the
+ * clip is the scroller's. With none — the goal page's lists, a static render —
+ * the viewport is the boundary and the answer is the one this has always given.
+ */
+function noRoomBelow(at: HTMLElement | null): boolean {
+  if (at === null || typeof window === 'undefined') return false;
+  const mark = at.getBoundingClientRect();
+  const clip = scroller(at);
+  const bottom = clip === null ? window.innerHeight : clip.getBoundingClientRect().bottom;
+  const top = clip === null ? 0 : clip.getBoundingClientRect().top;
+  // Only flip where flipping actually helps: a row in a box too short for the
+  // bubble either way keeps the side it has always opened on.
+  return mark.bottom + TIP_ROOM > bottom && mark.top - TIP_ROOM >= top;
+}
+
+/** The nearest ancestor that clips its overflow, or null for the viewport. */
+function scroller(from: HTMLElement): HTMLElement | null {
+  for (let at = from.parentElement; at !== null; at = at.parentElement) {
+    const overflow = getComputedStyle(at).overflowY;
+    if (overflow === 'auto' || overflow === 'scroll' || overflow === 'hidden') return at;
+  }
+  return null;
+}
+
 function rowClass(row: PanelRowModel, base: string): string {
   return [
     base,
     row.spent === true ? 'cn-spent' : '',
     row.desk === true ? 'cn-desk' : '',
     row.readying === true ? 'cn-readying' : '',
+    row.queued === true ? 'cn-queued' : '',
     row.live === true ? 'cn-live' : '',
     row.className ?? '',
   ]

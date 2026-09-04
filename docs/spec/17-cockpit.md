@@ -2308,11 +2308,12 @@ this page's job is to say when it has not done it well enough.
 
 ## The overview
 
-What the situation area shows when no goal is selected: eight cards, rows rather than pictures, in
-reading order — **Fleet**, **Goals in flight**, **Pull requests**, **Up next**, **World signals**,
+What the situation area shows when no goal is selected: seven cards, rows rather than pictures, in
+reading order — **Fleet**, **Goals in flight**, **Pull requests**, **World signals**,
 **Environments**, **Build**, **Project**. The
 fleet's **runway** is a band along the foot of the first of them rather than a card of its own, because "who
-is out" and "what is behind them" are one thought.
+is out" and "what is behind them" are one thought — and for the same reason, so is
+[**Up next**](#the-queue-rides-the-fleet-card), which used to be the fourth card here.
 
 **Build and Project are last, and they are the two cards not about the fleet's work** — Build is the
 process the fleet runs inside and Project is the repository it is pointed at, two different checkouts
@@ -2327,19 +2328,19 @@ continuously, for weeks if nobody looks, and answerable only by upgrading. The r
 settle when they are answered, and a row that cannot be discharged is the furniture that teaches an
 operator to skim the whole queue. → [21](21-self-update.md#where-it-lands-in-the-cockpit)
 
-Two rules run through all five. **Nothing here re-decides what the server decided**: a PR's court is
+Two rules run through all of them. **Nothing here re-decides what the server decided**: a PR's court is
 `attention.status`, its checks are `ciVerdict`, a queued item's hold is the queue's own sentence, and a
 goal's state is its `pickup.status`. And **an empty card still draws**, muted, because a surface that
 vanishes when quiet is indistinguishable from one that broke.
 
-A third now runs through all five as well: **no card writes a row.** Each builds a `PanelRowModel` and
+A third now runs through all of them as well: **no card writes a row.** Each builds a `PanelRowModel` and
 hands it to `PanelRow` — see [the row grammar](#the-row-grammar) below.
 
 ### The row grammar
 
 `<Ref>` settled how a reference is _drawn_. What it did not settle is where a row puts one, and the
-five cards answered that five ways: the refs group on Fleet and World signals, a prefix inside
-`cn-name` on Pull requests and Up next. The rest of the row had drifted the same way — a
+the cards answered that several ways: the refs group on Fleet and World signals, a prefix inside
+`cn-name` on Pull requests and on the queue's rows. The rest of the row had drifted the same way — a
 dot-separated sub-line whose parts differed per card, and one `cn-num` slot carrying a cost on a fleet
 row and a `×3` on a signal row. Each card read correctly alone, which is why none of it was ever a
 bug anybody filed; the overview is only ever read two cards at a time.
@@ -2417,7 +2418,7 @@ Three of them carry the rules that kept being forgotten:
   something. The tone is about whether the row wants anything, never about how far along it is.
   → `test/panelRows.test.ts`
 
-  **The Up next card's word is `QueueStatus`** — `dispatching`, or the named reason it is not:
+  **The Up next band's word is `QueueStatus`** — `dispatching`, or the named reason it is not:
   `cooldown`, `capped`, `unapproved`, `superseded`, `waiting`. Third card with the same fix: the
   status was a fact and the sentence expanding it was a bare `?` one column over, so the slot with the
   width said nothing until hovered. `unapproved` is the only `ask` — a decomposition nobody has
@@ -2429,15 +2430,16 @@ Three of them carry the rules that kept being forgotten:
 - **Every rail is a ceiling, and the subject has a floor.** The widths are `minmax(0, var(--cn-w-*))`
   and the subject is `minmax(var(--cn-w-title), 1fr)`. Fixed, the rails were sized against a
   full-width card and simply overran a half-width one — `1fr` takes what is _left_, so with nothing
-  below it the title was the only track that could give: the Up next card's titles had 80px of 534 and
+  below it the title was the only track that could give: the queue's titles had 80px of 534 and
   clipped to a word, while World signals — same width, fewer slots — kept 277. The floor is what makes
   the ceilings bite. It does not make an over-subscribed card fit: a card carrying a state word, a
   control and a refs group at half width is short on room whatever gives way, and the honest fix for
-  that one is the card's width or one slot fewer. **Up next takes the width**: its rows carry a state
+  that one is the card's width or one slot fewer. **The queue needs the width**: its rows carry a state
   word, a profile picker and a refs group beside a title that is a sentence, which is a full-width
-  row's worth of slots. World signals widens with it — not for its own two slots, but because left
-  narrow it was the one card off the grid, a quarter wide under a page of half-width ones, which reads
-  as a card that failed to lay out rather than as one with little to say.
+  row's worth of slots — and it has it, because the Fleet card it now rides is `cn-span2` too. World
+  signals is full width as well — not for its own two slots, but because left narrow it was the one
+  card off the grid, a quarter wide under a page of half-width ones, which reads as a card that failed
+  to lay out rather than as one with little to say.
 
 - **`toggle` is the row's switch, and it is pinned left of the subject.** Whether the harness takes an
   interest in this row at all — the rack's watch tag — is not the row's _work_, which is what `action`
@@ -2754,7 +2756,8 @@ run, so the header's `N out` and the cap readout are untouched; the count is sta
 executor picked the action up and again when the agent appeared.
 
 Its place in the list is the sentence the card reads as: the agents that are out, then what is being
-sent, then what nobody sent at all.
+sent, then what nobody sent at all — and then, under a band of its own,
+[what has not been sent yet](#the-queue-rides-the-fleet-card).
 
 ### The keyboard entry
 
@@ -2788,6 +2791,144 @@ since stopped honouring it.
 
 The demo backend holds its own clock and reports the claim two beats after load, so the ending — the
 entry leaving with nobody having pressed anything — is visible in the Pages build.
+
+### The queue rides the Fleet card
+
+**Up next is not a card. It is a band on the Fleet card**, because it is the same list one stage
+further back. That card is already ordered by _dispatch stage_ — the agents that are out, then what
+the executor is [readying](#work-that-is-not-an-agent-yet), then the
+[desk run nobody dispatched](#the-keyboard-entry) — and a queued candidate is one step behind the
+readying row: ranked by the last pulse, not yet handed to `ActionExecutor`.
+
+As a card it was **fourth in reading order**, three cards below the one an operator opens the
+overview to read. So "who is out, and what is behind them" was a reading every operator assembled
+themselves, out of two surfaces that never agreed on what counted as work — the same argument that
+put the runway band on this card's foot rather than in a card of its own, one stage further out.
+
+Folding it in costs no new mechanism. Both cards were already `cn-span2`, so no rail narrows; both
+already build `PanelRowModel`s, so the slots, their order and their widths are the ones
+[the row grammar](#the-row-grammar) states; and the heading is `RowGroup`, the same value the rack
+uses for [Yours and the fleet's](#yours-then-the-fleets).
+
+#### The card has a row budget, not two lists
+
+`FLEET_ROWS` is **7**, across both bands. The agents spend it first — they are the card's subject,
+and the cap already bounds how many there can be — and the queue takes what is left. A card gains a
+queued row exactly when an agent finishes, and loses one when a dispatch goes out.
+
+A budget rather than a cap each, because the two lists answer one question between them: what the
+fleet is doing, and what it would do next. Two caps would make the card two lists that happen to sit
+together, and it would grow and shrink again on every pulse — which is the thing
+[one height per card](#every-card-is-one-height-and-scrolls-inside-it) exists to stop, arrived at
+from the other direction.
+
+At a full fleet the queue draws no rows at all and keeps its band, its count and its way to the
+panel. That is the honest reading: nothing is queued _next_ when nothing is free.
+
+**The band is pinned to the card's foot** (`RowGroup.foot`), because its size is what the rows above
+it left over. Floated up against them, a quiet fleet drew the queue halfway up the card with a field
+of empty panel underneath. The runway band gives up its own `margin-top: auto` for this: on a card of
+a fixed height the slack belongs to one item, and two auto margins split it — which would open a gap
+between the queue's rows and the summary of that same queue.
+
+Ended shifts are not counted against the budget. They are history, and an explicit expansion the
+operator asked for, so they scroll the card rather than pushing the queue out of it.
+
+#### Three shapes that did not work
+
+Each of these read correctly in the diff, and each failed on the glass:
+
+- **A disclosure in the card's header**, beside the ended shifts. The count sat three slots from the
+  rows it governed, which is a message about a list rather than the list's own heading — and what it
+  governed was invisible until pressed, so the card said nothing about the queue at a glance.
+- **The band's heading as the disclosure, at the foot, opening upward.** The bar stayed put and the
+  rows came up out of it, which sounds right and reads backwards: every other heading in the cockpit
+  names what _follows_ it. Worse, it put the runway band — a filled, tinted strip — between the
+  agents and the queue, cutting the card into two row blocks with a summary wedged in the middle.
+- **The same bar as a heading, still at the foot, rows below it.** Better, and still two muted
+  full-width strips stacked at the bottom of the card, which is the shape an eye learns to skip.
+
+What is left is a band in the list where a band belongs, no fold at all, and the rest of the queue
+behind a control.
+
+#### What the band says, and where the rest of it is
+
+**It always draws, and it states the whole count beside its rows** — `14 queued`, and where any of
+them is the operator's own move, `· 2 on you` in the amber the state column already speaks. The
+predicate is `status === 'unapproved'`, the one `QueueStatus` that waits on a person rather than on
+the harness; every other hold is the harness stopped, which is what the rest of the card is about.
+Without it the head of the queue would pass for all of it, and the row that wants an answer is as
+likely to be below the cut as above it.
+
+**The rest is a panel, not a disclosure.** `ConsolePanel` gained `upnext`, so `All 14 →` on the
+band's right opens the whole queue on the console's own overlay. That means the address bar carries
+it as `?panel=upnext`, the back button steps out of it, and Escape and the backdrop close it — none
+of which a fold gets. Both surfaces build their rows through the same `queueRow`, so three on the
+card and thirty in the panel cannot come to say different things about one candidate.
+→ [the address bar](#the-address-bar)
+
+**A queued row is drawn as further back than a readying row, not as an agent.** It takes the
+`--cn-readying` tint — this is the harness's own work, and the violet is reserved for a person at
+their keyboard — but its lamp and left edge are **dotted** where the readying row's are dashed. No
+fourth colour: a new tint would claim a fourth kind of thing where there are three, and the band
+heading above the rows is what names them. What the row does _not_ borrow is that tint on its state
+word: `unapproved` is a real ask and `capped` a real hold, so the chip keeps the tone the verdict
+earns. That is the one place a queued row departs from the two rows above it, and it departs
+deliberately — a readying row's step is a progress report, and a queued row's status is a verdict.
+
+**The card draws in two `PanelRows` calls and one rail runs through both.** `slotsUsed` is the union
+of the rows it is handed, so a card measured per call re-cuts its columns whenever a band's contents
+change — one dispatch, and the titles of the agents above would move. `PanelRows` takes a `rail` for
+that: the rows the census is measured from, where they are not the rows being drawn. The card hands
+both calls its whole set. → `Fleet`, `test/panelRows.test.ts`
+
+### Every card is one height, and scrolls inside it
+
+`.cn-grid` sets `grid-auto-rows: var(--cn-card-h)`, and a card fills its track rather than sizing to
+what it holds.
+
+Two failures, and the second is the one nobody would predict. A card sized by its content made the
+overview **a different page on every pulse**: it grew as the fleet picked work up and shrank as it
+put it down, and everything below it moved, so what an operator was reading was somewhere else by the
+time they looked back. And grid's own stretch made a card's height its **neighbour's** content, which
+is worse than either — a quiet card beside a busy one grew a field of empty panel under its last row,
+so "this card has little to say" and "this card is padded out" drew the same.
+
+One height for the track settles both. How much a card has to say is answered by its scrollbar, which
+is a reading that moves nothing else on the page. The scrollbars themselves need no work: they are
+[furniture on `:root`](#scrollbars) and every new pane takes them.
+
+**The card is the scroller, and its head and foot are stuck to it** — `position: sticky` on the `h3`
+and on the runway band. The alternative is a scroll region inside the card, which is a wrapper
+element in seven components and a rule none of them can be made to keep, where this is one rule the
+eighth card cannot forget. What it costs is that the header needs a ground of its own, since rows now
+pass under it. Both rules are scoped `.cn-grid > .cn-card`: the goal page's cards have no track and
+no height to fill.
+
+`--cn-card-h` is declared on `.cn-grid` rather than `:root` for the reason the rail's widths are on
+`.cn-rows` — every token on `:root` is a [theme token](#tokens), owed a value by each preset and a
+row in the registry, and this is a layout metric rather than a colour anybody would want to change.
+On the grid it also scopes itself: a `.cn-card` anywhere else resolves it to nothing, the declaration
+is dropped, and the height is the overview's alone.
+
+#### The reason bubble flips rather than clips
+
+A card that clips is a card that would have cut off [the row's own sentence](#the-row-grammar) — the
+`why` bubble hangs _below_ its row, so every marker within a bubble's height of a card's bottom edge
+lost the one reading the marker exists to give.
+
+So the bubble opens upward where there is no room below it. `Why` measures the marker against the
+nearest scrolling ancestor on hover or focus and adds `cn-why-above`, which changes `top` and
+`bottom` and nothing else: the two edges, the measure cap and the `margin-inline: auto` that keeps it
+between them are the row's whichever way it opens.
+
+**It cannot be CSS**, which is the whole reason there is script here at all. Whether a row has room
+below it is not a fact about the row but about where it is sitting in its card's scroll at the moment
+you point at it, so `:nth-last-child` and its relatives answer a different question. The room needed
+is an estimate — the bubble is `display: none` until it is wanted, so there is no height to measure
+before deciding where to put it — and it is sized against the long end of what it holds, so the
+answer errs towards flipping. That fails to a bubble with room to spare rather than to one cut off at
+the card's edge.
 
 ## The record panel
 
