@@ -231,8 +231,38 @@ it to understand why a decision was made, and check the code before relying on a
 | `npm run web:dev`        | Vite dev server for the cockpit.                                                |
 | `npm run web:build`      | Production bundle into `web/dist`.                                              |
 | `npm run web:build:demo` | The demo bundle for GitHub Pages — the only demo build there is.                |
-| `npm run audit`          | `npm audit --audit-level=high`.                                                 |
+| `npm run audit`          | The advisory gate over runtime dependencies (see below).                        |
+| `npm run audit:all`      | The same scan over the whole tree, dev toolchain included.                      |
 | `npm run check`          | The one gate: the six stages above, concurrently, via `scripts/check.ts`.       |
+
+### The advisory gate
+
+`npm run audit` and `npm run audit:all` are `scripts/audit.ts`, which asks
+[OSV](https://osv.dev) about every package in `package-lock.json` and exits non-zero on anything at
+**high** or above. `.github/workflows/security.yml` runs the first as a hard gate and the second for
+the log.
+
+**It reads the lockfile, not `node_modules`.** `npm ci` installs exactly what the lockfile says, so
+auditing the file audits the artefact — and it is the lockfile's `dev: true` that separates a
+package an attacker can reach in a deployed harness from one that ships to nobody. `devOptional` is
+reachable from both and counts as runtime. Only entries under a `node_modules/` path are queried:
+the root project and any workspace package are local code OSV has never heard of, and a local path
+sent as a package name matches nothing and comes back clean.
+
+**A check that could not run fails.** A network error, an advisory whose severity we cannot read,
+an OSV response we cannot parse — every one of them exits non-zero rather than reporting zero. This
+is the whole reason the file exists: `npm audit` posted the tree to the registry's
+`/-/npm/v1/security/audits/quick` endpoint, which npm's own output says is being retired, and which
+answered GitHub's runners `400 Invalid package tree` for a lockfile that `npm install
+--package-lock-only` reproduces byte for byte. The message named `package-lock.json` and was wrong
+about it — those were the registry's words, relayed. Nothing local reproduced it. A gate that
+depends on a remote we do not control, cannot reproduce, and that is being decommissioned is a gate
+that fails for reasons unrelated to the tree; the durable fix was to stop asking.
+
+**The full-tree scan stays advisory on purpose.** The dev toolchain ships to nobody, so a
+transitive advisory nobody can upgrade past — the shape eslint's bundled `minimatch@3` had — is
+worth reading rather than worth blocking every PR on. Promote it to a gate when that stops being
+true.
 
 **`npm run serve` rebuilds the cockpit on every upgrade it applies**, for the reason the next
 paragraph gives: an upgrade that relaunched on the previous bundle would be silent, and the change
