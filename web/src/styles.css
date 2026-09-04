@@ -7043,14 +7043,38 @@ select:disabled {
 }
 .th-presets {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 8px;
+}
+/* A row per ground — the label in a fixed gutter, the tiles wrapping beside it —
+   so seventeen presets stay two or three tile-rows tall at any width, and the
+   token editor below them stays on the screen. */
+.th-preset-group {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  align-items: start;
+  gap: 8px;
+}
+.th-preset-groupn {
+  padding-top: 8px;
+  font-size: var(--label-size);
+  font-weight: var(--label-weight);
+  letter-spacing: var(--label-track);
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+}
+/* Equal columns rather than a wrapping row: tiles the width of their own name
+   ragged the picker, and the eye reads a picker as a table. */
+.th-preset-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+  gap: 6px;
 }
 .th-preset.th-preset {
   display: grid;
-  gap: 5px;
+  gap: 4px;
+  min-width: 0;
   text-align: left;
-  padding: 9px 10px;
+  padding: 6px 8px;
   background: var(--cn-panel);
   border: 1px solid var(--cn-line);
   border-radius: var(--cn-r-sm);
@@ -7073,15 +7097,21 @@ select:disabled {
 /* The swatch takes its colour from the `[data-theme-swatch]` block on its parent,
    so it cannot disagree with the preset it advertises. */
 .th-sw {
-  width: 22px;
-  height: 12px;
+  width: 18px;
+  height: 10px;
   border: 1px solid var(--cn-line);
   border-radius: 2px;
 }
 .th-presetn {
-  font-size: 12px;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+/* One caption for the preset that is on, not one per tile. */
 .th-presetb {
+  margin: -6px 0 0 52px;
+  min-height: 1.4em;
   font-size: 11px;
   color: var(--cn-fg-faint);
 }

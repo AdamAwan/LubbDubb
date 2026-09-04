@@ -6,6 +6,7 @@ import {
   applyTheme,
   applyToken,
   isTokenValue,
+  PRESET_GROUPS,
   PRESETS,
   readThemePrefs,
   setThemeUnsaved,
@@ -289,6 +290,23 @@ test('every preset answers every literal colour token', () => {
   for (const [preset, declared] of blocks) {
     const missing = required.filter((name) => !declared.has(name));
     assert.deepEqual(missing, [], `${preset} leaves these on the Dark value: ${missing.join(', ')}`);
+  }
+});
+
+/**
+ * The picker draws a row per ground and a tile only under its row, so a preset
+ * whose `ground` names no row is a preset nobody can choose, and a row with no
+ * presets is an empty label. Neither is a type error.
+ */
+test('every preset sits in a picker row, and no row is empty', () => {
+  const grounds = new Set(PRESET_GROUPS.map((g) => g.ground));
+  assert.equal(grounds.size, PRESET_GROUPS.length, 'no duplicate rows');
+  for (const p of PRESETS) assert.ok(grounds.has(p.ground), `${p.id} names a row the picker draws`);
+  for (const g of PRESET_GROUPS) {
+    assert.ok(
+      PRESETS.some((p) => p.ground === g.ground),
+      `the ${g.label} row has at least one preset`,
+    );
   }
 });
 

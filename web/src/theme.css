@@ -5,8 +5,8 @@
  * default with nothing to keep in step — a second copy of the default palette
  * would be a second thing to edit and a first thing to drift.
  *
- * The presets are CSS rather than TypeScript on purpose. Four of them at sixty-odd
- * tokens each is 252 values; in a module they would ship in the JS bundle, and
+ * The presets are CSS rather than TypeScript on purpose. Sixteen of them at sixty-odd
+ * tokens each is a thousand values; in a module they would ship in the JS bundle, and
  * nobody could review them against the sheet that declares what they override.
  * Here they are the same grammar as the tokens themselves and read as a diff.
  *
@@ -682,4 +682,588 @@ html[data-theme='amber'],
   --cn-blue-ink: #fdbe4a;
   --cn-on-accent: #17120a;
   --cn-on-red: #17120a;
+}
+
+/* ---------- Nord ----------
+   Arctic Ice Studio's Nord. Polar Night for the grounds, Snow Storm for the lettering, Frost for the cool hues and Aurora for the warm ones. */
+html[data-theme='nord'],
+[data-theme-swatch='nord'] {
+  --bg: #2e3440;
+  --well: #272c36;
+  --panel: #3b4252;
+  --panel-2: #353c4a;
+  --border: #4c566a;
+  --text: #eceff4;
+  --muted: #b4bccb;
+  --border-lo: #20242c;
+  --accent: #d08770;
+  --blue: #81a1c1;
+  --green: #a3be8c;
+  --amber: #ebcb8b;
+  --red: #bf616a;
+  --grey: #616e88;
+  --violet: #b48ead;
+
+  --amber-line: #676157;
+  --amber-fill: #3d4046;
+  --red-line: #5a424d;
+  --red-fill: #3a3843;
+  --green-line: #515d57;
+  --green-fill: #373f46;
+  --accent-fill: #3b3b44;
+  --link-ink: #9cb5ce;
+  --on-light: #2e3440;
+  --on-warm: #2e3440;
+  --veil: #ffffff0f;
+
+  --term-fg: #d8dee9;
+  --term-fg-dim: #a5aebf;
+  --ansi-cyan: #88c0d0;
+  --ansi-gray: #8891a3;
+  --ansi-red: #d3a1a8;
+  --ansi-green: #c4d4bb;
+
+  --feat-0: #79a9d8;
+  --feat-1: #d8d879;
+  --feat-2: #a979d8;
+  --feat-3: #79d879;
+  --feat-4: #d879a9;
+  --feat-5: #79d8d8;
+  --feat-6: #d8a979;
+  --feat-7: #7979d8;
+  --feat-8: #a9d879;
+  --feat-9: #d879d8;
+  --feat-10: #79d8a9;
+  --feat-11: #d87979;
+
+  --cn-bg: #272c36;
+  --cn-panel: #2e3440;
+  --cn-panel-2: #353c4a;
+  --cn-line: #4c566a;
+  --cn-line-soft: #3f475a;
+  --cn-fg: #eceff4;
+  --cn-fg-dim: #c2c9d6;
+  --cn-fg-faint: #8f99ad;
+  --cn-accent: #88c0d0;
+  --cn-red: #bf616a;
+  --cn-amber: #ebcb8b;
+  --cn-green: #a3be8c;
+  --cn-violet: #b48ead;
+  --cn-red-ink-hi: #d3a1a8;
+  --cn-amber-ink: #ece1ca;
+  --cn-amber-ink-hi: #ebd6ab;
+  --cn-blue-ink: #97c7d5;
+  --cn-on-accent: #2e3440;
+  --cn-on-red: #2e3440;
+}
+
+/* ---------- Gruvbox Dark ----------
+   morhetz's Gruvbox, the medium-contrast dark variant. Warm retro browns for the grounds and the bright accent set for the hues. */
+html[data-theme='gruvbox-dark'],
+[data-theme-swatch='gruvbox-dark'] {
+  --bg: #282828;
+  --well: #1d2021;
+  --panel: #3c3836;
+  --panel-2: #32302f;
+  --border: #504945;
+  --text: #ebdbb2;
+  --muted: #bdae93;
+  --border-lo: #141617;
+  --accent: #fe8019;
+  --blue: #83a598;
+  --green: #b8bb26;
+  --amber: #fabd2f;
+  --red: #fb4934;
+  --grey: #7c6f64;
+  --violet: #d3869b;
+
+  --amber-line: #67552a;
+  --amber-fill: #393429;
+  --red-line: #67322c;
+  --red-fill: #392b29;
+  --green-line: #535427;
+  --green-fill: #343428;
+  --accent-fill: #392f27;
+  --link-ink: #9db39f;
+  --on-light: #282828;
+  --on-warm: #282828;
+  --veil: #ffffff0f;
+
+  --term-fg: #d5c4a1;
+  --term-fg-dim: #a89984;
+  --ansi-cyan: #8ec07c;
+  --ansi-gray: #928374;
+  --ansi-red: #f48b6d;
+  --ansi-green: #cfc965;
+
+  --feat-0: #79a9d8;
+  --feat-1: #d8d879;
+  --feat-2: #a979d8;
+  --feat-3: #79d879;
+  --feat-4: #d879a9;
+  --feat-5: #79d8d8;
+  --feat-6: #d8a979;
+  --feat-7: #7979d8;
+  --feat-8: #a9d879;
+  --feat-9: #d879d8;
+  --feat-10: #79d8a9;
+  --feat-11: #d87979;
+
+  --cn-bg: #1d2021;
+  --cn-panel: #282828;
+  --cn-panel-2: #32302f;
+  --cn-line: #504945;
+  --cn-line-soft: #3c3836;
+  --cn-fg: #ebdbb2;
+  --cn-fg-dim: #c8b98f;
+  --cn-fg-faint: #998a73;
+  --cn-accent: #83a598;
+  --cn-red: #fb4934;
+  --cn-amber: #fabd2f;
+  --cn-green: #b8bb26;
+  --cn-violet: #d3869b;
+  --cn-red-ink-hi: #f48b6d;
+  --cn-amber-ink: #f1cf7e;
+  --cn-amber-ink-hi: #f6c656;
+  --cn-blue-ink: #93ad9c;
+  --cn-on-accent: #1d2021;
+  --cn-on-red: #1d2021;
+}
+
+/* ---------- Catppuccin Mocha ----------
+   Catppuccin, the Mocha flavour. Crust, Mantle and Base for the grounds, Text and Subtext for the lettering, the pastels for the hues. */
+html[data-theme='catppuccin-mocha'],
+[data-theme-swatch='catppuccin-mocha'] {
+  --bg: #1e1e2e;
+  --well: #181825;
+  --panel: #313244;
+  --panel-2: #282839;
+  --border: #45475a;
+  --text: #cdd6f4;
+  --muted: #a6adc8;
+  --border-lo: #11111b;
+  --accent: #fab387;
+  --blue: #89b4fa;
+  --green: #a6e3a1;
+  --amber: #f9e2af;
+  --red: #f38ba8;
+  --grey: #6c7086;
+  --violet: #cba6f7;
+
+  --amber-line: #605955;
+  --amber-fill: #302e38;
+  --red-line: #5e3f53;
+  --red-fill: #2f2738;
+  --green-line: #475951;
+  --green-fill: #292e37;
+  --accent-fill: #302a35;
+  --link-ink: #9abdf9;
+  --on-light: #1e1e2e;
+  --on-warm: #1e1e2e;
+  --veil: #ffffff0f;
+
+  --term-fg: #bac2de;
+  --term-fg-dim: #9399b2;
+  --ansi-cyan: #94e2d5;
+  --ansi-gray: #7f849c;
+  --ansi-red: #e2adca;
+  --ansi-green: #b8ddc6;
+
+  --feat-0: #79a9d8;
+  --feat-1: #d8d879;
+  --feat-2: #a979d8;
+  --feat-3: #79d879;
+  --feat-4: #d879a9;
+  --feat-5: #79d8d8;
+  --feat-6: #d8a979;
+  --feat-7: #7979d8;
+  --feat-8: #a9d879;
+  --feat-9: #d879d8;
+  --feat-10: #79d8a9;
+  --feat-11: #d87979;
+
+  --cn-bg: #181825;
+  --cn-panel: #1e1e2e;
+  --cn-panel-2: #262637;
+  --cn-line: #45475a;
+  --cn-line-soft: #313244;
+  --cn-fg: #cdd6f4;
+  --cn-fg-dim: #a6adc8;
+  --cn-fg-faint: #8087a2;
+  --cn-accent: #89b4fa;
+  --cn-red: #f38ba8;
+  --cn-amber: #f9e2af;
+  --cn-green: #a6e3a1;
+  --cn-violet: #cba6f7;
+  --cn-red-ink-hi: #e2adca;
+  --cn-amber-ink: #dfdbd8;
+  --cn-amber-ink-hi: #ecdec4;
+  --cn-blue-ink: #93b9f9;
+  --cn-on-accent: #1e1e2e;
+  --cn-on-red: #1e1e2e;
+}
+
+/* ---------- Tokyo Night ----------
+   enkia's Tokyo Night. Deep indigo grounds, a periwinkle text, and the neon-leaning hue set. The comment grey sits at 2.5 against the panel and is lifted for secondary text. */
+html[data-theme='tokyo-night'],
+[data-theme-swatch='tokyo-night'] {
+  --bg: #1a1b26;
+  --well: #16161e;
+  --panel: #24283b;
+  --panel-2: #1f2335;
+  --border: #3b4261;
+  --text: #c0caf5;
+  --muted: #9aa5ce;
+  --border-lo: #0f0f16;
+  --accent: #ff9e64;
+  --blue: #7aa2f7;
+  --green: #9ece6a;
+  --amber: #e0af68;
+  --red: #f7768e;
+  --grey: #565f89;
+  --violet: #bb9af7;
+
+  --amber-line: #55473a;
+  --amber-fill: #2a272b;
+  --red-line: #5c3645;
+  --red-fill: #2c222e;
+  --green-line: #42513a;
+  --green-fill: #25292b;
+  --accent-fill: #2c252b;
+  --link-ink: #8cacf7;
+  --on-light: #1a1b26;
+  --on-warm: #1a1b26;
+  --veil: #ffffff0f;
+
+  --term-fg: #a9b1d6;
+  --term-fg-dim: #8089b3;
+  --ansi-cyan: #7dcfff;
+  --ansi-gray: #737aa2;
+  --ansi-red: #de9cbc;
+  --ansi-green: #adcca9;
+
+  --feat-0: #79a9d8;
+  --feat-1: #d8d879;
+  --feat-2: #a979d8;
+  --feat-3: #79d879;
+  --feat-4: #d879a9;
+  --feat-5: #79d8d8;
+  --feat-6: #d8a979;
+  --feat-7: #7979d8;
+  --feat-8: #a9d879;
+  --feat-9: #d879d8;
+  --feat-10: #79d8a9;
+  --feat-11: #d87979;
+
+  --cn-bg: #16161e;
+  --cn-panel: #1a1b26;
+  --cn-panel-2: #1f2335;
+  --cn-line: #3b4261;
+  --cn-line-soft: #292e42;
+  --cn-fg: #c0caf5;
+  --cn-fg-dim: #a9b1d6;
+  --cn-fg-faint: #7f89b8;
+  --cn-accent: #7aa2f7;
+  --cn-red: #f7768e;
+  --cn-amber: #e0af68;
+  --cn-green: #9ece6a;
+  --cn-violet: #bb9af7;
+  --cn-red-ink-hi: #de9cbc;
+  --cn-amber-ink: #cdbfbd;
+  --cn-amber-ink-hi: #d6b792;
+  --cn-blue-ink: #85a8f7;
+  --cn-on-accent: #1a1b26;
+  --cn-on-red: #1a1b26;
+}
+
+/* ---------- Night Owl ----------
+   Sarah Drasner's Night Owl. A near-black navy ground, its lettering a cool off-white; the muted grey-teal is lifted from the source's 2.9 to clear 3:1. */
+html[data-theme='night-owl'],
+[data-theme-swatch='night-owl'] {
+  --bg: #011627;
+  --well: #01111d;
+  --panel: #0b2942;
+  --panel-2: #061f36;
+  --border: #1d3b53;
+  --text: #d6deeb;
+  --muted: #8fa3b5;
+  --border-lo: #000a14;
+  --accent: #f78c6c;
+  --blue: #82aaff;
+  --green: #addb67;
+  --amber: #ecc48d;
+  --red: #ef5350;
+  --grey: #5f7e97;
+  --violet: #c792ea;
+
+  --amber-line: #484a46;
+  --amber-fill: #14242f;
+  --red-line: #482833;
+  --red-fill: #141b2a;
+  --green-line: #35513a;
+  --green-fill: #0f262c;
+  --accent-fill: #151f2d;
+  --link-ink: #97b7fa;
+  --on-light: #011627;
+  --on-warm: #011627;
+  --veil: #ffffff0f;
+
+  --term-fg: #d6deeb;
+  --term-fg-dim: #9fb0c2;
+  --ansi-cyan: #7fdbca;
+  --ansi-gray: #7e97ac;
+  --ansi-red: #e49296;
+  --ansi-green: #bfdca2;
+
+  --feat-0: #79a9d8;
+  --feat-1: #d8d879;
+  --feat-2: #a979d8;
+  --feat-3: #79d879;
+  --feat-4: #d879a9;
+  --feat-5: #79d8d8;
+  --feat-6: #d8a979;
+  --feat-7: #7979d8;
+  --feat-8: #a9d879;
+  --feat-9: #d879d8;
+  --feat-10: #79d8a9;
+  --feat-11: #d87979;
+
+  --cn-bg: #01111d;
+  --cn-panel: #011627;
+  --cn-panel-2: #061f36;
+  --cn-line: #1d3b53;
+  --cn-line-soft: #122d45;
+  --cn-fg: #d6deeb;
+  --cn-fg-dim: #a8b8c8;
+  --cn-fg-faint: #7d93a8;
+  --cn-accent: #82aaff;
+  --cn-red: #ef5350;
+  --cn-amber: #ecc48d;
+  --cn-green: #addb67;
+  --cn-violet: #c792ea;
+  --cn-red-ink-hi: #e49296;
+  --cn-amber-ink: #dfd4c5;
+  --cn-amber-ink-hi: #e5cca9;
+  --cn-blue-ink: #8fb2fc;
+  --cn-on-accent: #011627;
+  --cn-on-red: #011627;
+}
+
+/* ---------- GitHub Dark ----------
+   GitHub's default dark UI. Canvas, canvas-subtle and the border greys for the grounds; the fg and fg-muted pair for lettering; the six accent hues as published. */
+html[data-theme='github-dark'],
+[data-theme-swatch='github-dark'] {
+  --bg: #0d1117;
+  --well: #010409;
+  --panel: #161b22;
+  --panel-2: #11161d;
+  --border: #30363d;
+  --text: #e6edf3;
+  --muted: #9198a1;
+  --border-lo: #010409;
+  --accent: #db6d28;
+  --blue: #58a6ff;
+  --green: #3fb950;
+  --amber: #d29922;
+  --red: #f85149;
+  --grey: #6e7681;
+  --violet: #a371f7;
+
+  --amber-line: #483a1a;
+  --amber-fill: #1d1c18;
+  --red-line: #532426;
+  --red-fill: #20161b;
+  --green-line: #1c4328;
+  --green-fill: #111e1c;
+  --accent-fill: #1d1818;
+  --link-ink: #7cb8fc;
+  --on-light: #0d1117;
+  --on-warm: #0d1117;
+  --veil: #ffffff0f;
+
+  --term-fg: #c9d1d9;
+  --term-fg-dim: #8b949e;
+  --ansi-cyan: #39c5cf;
+  --ansi-gray: #8b949e;
+  --ansi-red: #f09796;
+  --ansi-green: #8ad099;
+
+  --feat-0: #79a9d8;
+  --feat-1: #d8d879;
+  --feat-2: #a979d8;
+  --feat-3: #79d879;
+  --feat-4: #d879a9;
+  --feat-5: #79d8d8;
+  --feat-6: #d8a979;
+  --feat-7: #7979d8;
+  --feat-8: #a9d879;
+  --feat-9: #d879d8;
+  --feat-10: #79d8a9;
+  --feat-11: #d87979;
+
+  --cn-bg: #010409;
+  --cn-panel: #0d1117;
+  --cn-panel-2: #161b22;
+  --cn-line: #30363d;
+  --cn-line-soft: #21262d;
+  --cn-fg: #e6edf3;
+  --cn-fg-dim: #a3acb6;
+  --cn-fg-faint: #7d8590;
+  --cn-accent: #58a6ff;
+  --cn-red: #f85149;
+  --cn-amber: #d29922;
+  --cn-green: #3fb950;
+  --cn-violet: #a371f7;
+  --cn-red-ink-hi: #f09796;
+  --cn-amber-ink: #decb9f;
+  --cn-amber-ink-hi: #d8b261;
+  --cn-blue-ink: #6db1fd;
+  --cn-on-accent: #0d1117;
+  --cn-on-red: #ffffff;
+}
+
+/* ---------- Solarized Light ----------
+   Schoonover's light half: base3 and base2 for the grounds, base00 and base01 for lettering, the same eight hues Solarized Dark carries. */
+html[data-theme='solarized-light'],
+[data-theme-swatch='solarized-light'] {
+  --bg: #fdf6e3;
+  --well: #eee8d5;
+  --panel: #fffbf0;
+  --panel-2: #f7f0dd;
+  --border: #d3cbb7;
+  --text: #073642;
+  --muted: #586e75;
+  --border-lo: #b9b19d;
+  --accent: #cb4b16;
+  --blue: #268bd2;
+  --green: #859900;
+  --amber: #b58900;
+  --red: #dc322f;
+  --grey: #93a1a1;
+  --violet: #6c71c4;
+
+  --amber-line: #ddc57d;
+  --amber-fill: #f2e6c1;
+  --red-line: #ee9e92;
+  --red-fill: #f8d9c8;
+  --green-line: #c7cc7d;
+  --green-fill: #ebe8c1;
+  --accent-fill: #f5dcc4;
+  --link-ink: #207ab5;
+  --on-light: #073642;
+  --on-warm: #073642;
+  --veil: #0000000d;
+
+  --term-fg: #586e75;
+  --term-fg-dim: #7a8d92;
+  --ansi-cyan: #2aa198;
+  --ansi-gray: #839496;
+  --ansi-red: #913336;
+  --ansi-green: #597617;
+
+  --feat-0: #2e669e;
+  --feat-1: #9e9e2e;
+  --feat-2: #662e9e;
+  --feat-3: #2e9e2e;
+  --feat-4: #9e2e66;
+  --feat-5: #2e9e9e;
+  --feat-6: #9e662e;
+  --feat-7: #2e2e9e;
+  --feat-8: #669e2e;
+  --feat-9: #9e2e9e;
+  --feat-10: #2e9e66;
+  --feat-11: #9e2e2e;
+
+  --cn-bg: #eee8d5;
+  --cn-panel: #fdf6e3;
+  --cn-panel-2: #f7f0dd;
+  --cn-line: #d3cbb7;
+  --cn-line-soft: #e4dcc7;
+  --cn-fg: #073642;
+  --cn-fg-dim: #586e75;
+  --cn-fg-faint: #7e8e93;
+  --cn-accent: #268bd2;
+  --cn-red: #dc322f;
+  --cn-amber: #b58900;
+  --cn-green: #859900;
+  --cn-violet: #6c71c4;
+  --cn-red-ink-hi: #873437;
+  --cn-amber-ink: #555b24;
+  --cn-amber-ink-hi: #817014;
+  --cn-blue-ink: #2383c4;
+  --cn-on-accent: #fdf6e3;
+  --cn-on-red: #fdf6e3;
+}
+
+/* ---------- GitHub Light ----------
+   GitHub's default light UI. White canvas, the subtle grey for the well, fg-default and fg-muted for lettering, the six accent hues as published. */
+html[data-theme='github-light'],
+[data-theme-swatch='github-light'] {
+  --bg: #ffffff;
+  --well: #f6f8fa;
+  --panel: #ffffff;
+  --panel-2: #f6f8fa;
+  --border: #d0d7de;
+  --text: #1f2328;
+  --muted: #656d76;
+  --border-lo: #afb8c1;
+  --accent: #bc4c00;
+  --blue: #0969da;
+  --green: #1a7f37;
+  --amber: #9a6700;
+  --red: #cf222e;
+  --grey: #8c959f;
+  --violet: #8250df;
+
+  --amber-line: #d2bb8c;
+  --amber-fill: #f0e8d9;
+  --red-line: #e99ca1;
+  --red-fill: #f8dee0;
+  --green-line: #98c5a5;
+  --green-fill: #ddece1;
+  --accent-fill: #f5e4d9;
+  --link-ink: #0d5bb6;
+  --on-light: #1f2328;
+  --on-warm: #1f2328;
+  --veil: #0000000d;
+
+  --term-fg: #24292f;
+  --term-fg-dim: #57606a;
+  --ansi-cyan: #1b7c83;
+  --ansi-gray: #6e7781;
+  --ansi-red: #91222c;
+  --ansi-green: #1c5f32;
+
+  --feat-0: #2e669e;
+  --feat-1: #9e9e2e;
+  --feat-2: #662e9e;
+  --feat-3: #2e9e2e;
+  --feat-4: #9e2e66;
+  --feat-5: #2e9e9e;
+  --feat-6: #9e662e;
+  --feat-7: #2e2e9e;
+  --feat-8: #669e2e;
+  --feat-9: #9e2e9e;
+  --feat-10: #2e9e66;
+  --feat-11: #9e2e2e;
+
+  --cn-bg: #f6f8fa;
+  --cn-panel: #ffffff;
+  --cn-panel-2: #f6f8fa;
+  --cn-line: #d0d7de;
+  --cn-line-soft: #e4e8ec;
+  --cn-fg: #1f2328;
+  --cn-fg-dim: #57606a;
+  --cn-fg-faint: #6e7781;
+  --cn-accent: #0969da;
+  --cn-red: #cf222e;
+  --cn-amber: #9a6700;
+  --cn-green: #1a7f37;
+  --cn-violet: #8250df;
+  --cn-red-ink-hi: #89222c;
+  --cn-amber-ink: #564216;
+  --cn-amber-ink-hi: #75530c;
+  --cn-blue-ink: #0b62c8;
+  --cn-on-accent: #ffffff;
+  --cn-on-red: #ffffff;
 }
