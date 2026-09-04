@@ -9,7 +9,7 @@ import { ReviewPackModal } from './components/ReviewPackModal.js';
 import { PlanModal } from './components/PlanModal.js';
 import { RefLinks } from './components/refs.js';
 import { hasPrPage } from './view/prPage.js';
-import { goalIssue } from './view/goalPage.js';
+import { goalIssue, standsFor } from './view/goalPage.js';
 
 /**
  * What the cockpit shows when the harness refuses its credential. Worth a screen
@@ -137,6 +137,7 @@ export function App() {
         <AgentDrawer
           agent={openAgent}
           task={status.view.taskFor(openAgent)}
+          originStandsFor={standsFor(state, status.view.taskFor(openAgent)?.originRef ?? null)}
           refUrls={state.refUrls}
           live={status.view.selectedOutput}
           flags={status.view.flagsByAgent.get(openAgent.id)}

@@ -11,7 +11,7 @@ import type {
   OpenPullRequest,
   ViewerAssignment,
 } from '../types.js';
-import { goalIssue, goalOfPr } from './goalPage.js';
+import { goalIssue, goalOfPr, standsFor } from './goalPage.js';
 import { watchBucket } from '../worldBuckets.js';
 
 /**
@@ -319,13 +319,19 @@ export function partHolding(planId: string, slug: string, parts: readonly PlanPa
  * with no context around it while the goal that PR belongs to sat one lookup away.
  * Null survives for a pull request no ticket owns — the harness works those too,
  * and there is no goal to invent for them.
+ *
+ * A **`job:<n>`** origin is read through {@link standsFor} first, so an ask raised
+ * by a requeued run reaches the same panel the original's would have: the job id
+ * matches neither shape, and left as it is every question a crash recovery's
+ * requeue asks lands with no goal beside it.
  */
 function goalOf(ref: string | null | undefined, state: AppState): string | null {
-  const m = /^(issue:\d+)/.exec(ref ?? '');
+  const origin = standsFor(state, ref ?? null);
+  const m = /^(issue:\d+)/.exec(origin ?? '');
   // noUncheckedIndexedAccess makes a capture group read as possibly undefined
   // even once `m` is non-null; the regex guarantees it's set when `m` matches.
   if (m?.[1]) return m[1];
-  const pr = /^pr:(\d+)/.exec(ref ?? '');
+  const pr = /^pr:(\d+)/.exec(origin ?? '');
   return pr?.[1] ? goalOfPr(state, Number(pr[1])) : null;
 }
 

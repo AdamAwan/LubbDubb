@@ -5914,6 +5914,32 @@ two call sites had already written `` `PR ${refLabel(ref)}` `` by hand, which is
 fourth-surface bug one step along — the rows that said `PR` were the rows somebody remembered to make
 say it. Both now pass a bare `<Ref>`.
 
+### A `job:` origin stands in for other work
+
+A crash recovery's **requeue** is dispatched at `job:<id>` and carries the origin it is redoing —
+`issue:41:retro`, `pr:42:ci` — on `Job.originRef` ([13](13-jobs-and-tickets.md#standing-in-for-another-origin)). The task, the agent
+row and the queue item all see the job ref and nothing else, so a surface that reads `task.originRef`
+literally draws an opaque `job:job_F9Iy9o2rZQ`, which resolves against nothing and renders as plain
+text: the fleet's most conspicuous row is the one row with no way anywhere.
+
+The silent half is worse. `goalOfOrigin` matched `issue:` and `pr:` only, so a requeued run answered
+null — it staffed no goal, so the goal whose work was out on the fleet read as **unstaffed**, and an
+escalation it raised routed to no goal page.
+
+So the origin is read through **`standsFor(state, ref)`** (`web/src/view/goalPage.ts`) first: a
+`job:<id>` becomes the origin that job stands in for, and every other ref comes back unchanged. A job
+that stands in for nothing, and one the snapshot's 100-row job list has dropped, come back **as
+themselves** — the job ref is a true statement about the dispatch, and null would trade an opaque
+reference for none at all. The walk follows a chain (a requeue of a requeue) to a small bound, so a
+cycle ends rather than spins. It is the cockpit's side of the same edge the work graph draws on the
+server, off the same field ([16](16-http-api.md) — the work graph's arm C).
+
+Three readers: `goalOfOrigin` (so `agentOnGoal` and the goal page see the requeue), `goalOf` in
+`needsYou` (so its asks reach the right page), and the fleet row's `OnWhat`, which draws **both** refs
+— the job it was dispatched at, and what that job is redoing — on the pair-position rule the PR-and-goal
+pair already follows. The agent drawer draws both too, resolved at the shell since it is handed one
+agent rather than the snapshot.
+
 ### How a reference is drawn
 
 **One vocabulary of three marks**, in `web/src/styles.css`:

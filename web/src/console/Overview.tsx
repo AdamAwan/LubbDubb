@@ -2,7 +2,14 @@ import { useState, type JSX } from 'react';
 import type { CockpitView, DeskRun } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { Agent, Issue, OpenPullRequest, QueueItem, ReadyingAction, ReadyingStep, SupplyState } from '../types.js';
-import { buildGoalPage, buildGoalTrack, furthestEnvironment, goalOfPr, type GoalTrack } from '../view/goalPage.js';
+import {
+  buildGoalPage,
+  buildGoalTrack,
+  furthestEnvironment,
+  goalOfPr,
+  standsFor,
+  type GoalTrack,
+} from '../view/goalPage.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { Icon } from '../components/icons.js';
 import { elapsed, fmtUsd, relTime } from '../components/util.js';
@@ -797,8 +804,9 @@ const ENDED_BADLY: Partial<Record<Agent['status'], string>> = {
 };
 
 /**
- * What a dispatch was aimed at, as ways there: the origin itself, and the goal
- * behind it when the origin is a pull request some ticket owns.
+ * What a dispatch was aimed at, as ways there: the origin itself, what that
+ * origin stands in for when it is a job redoing somebody else's work, and the
+ * goal behind whichever of those is a pull request some ticket owns.
  *
  * Shared by the fleet rows and nothing else so far, and a component rather than
  * two lines inline because "which refs does this row carry" is the decision that
@@ -809,7 +817,11 @@ const ENDED_BADLY: Partial<Record<Agent['status'], string>> = {
  * in it leaves the list ragged rather than columned.
  */
 function OnWhat({ origin, view }: { origin: string | null; view: CockpitView }): JSX.Element {
-  const pr = origin === null ? null : /^pr:(\d+)/.exec(origin);
+  // A `job:<id>` origin is opaque on its own, so what the job stands in for is
+  // drawn beside it — see {@link standsFor}. Every other origin is its own answer
+  // and comes back unchanged, so there is no second ref and nothing to skip.
+  const stood = standsFor(view.state, origin);
+  const pr = stood === null ? null : /^pr:(\d+)/.exec(stood);
   const goal = pr ? goalOfPr(view.state, Number(pr[1])) : null;
   return (
     <>
@@ -818,7 +830,12 @@ function OnWhat({ origin, view }: { origin: string | null; view: CockpitView }):
           this narrow the word cost more room than the two refs it joined, and the
           refs group overran the reading slot beside it. Each ref keeps its own
           hover, which is where the relation is said. */}
-      {goal !== null && <Ref to={goal} title={`Open the goal this pull request is delivering — ${refLabel(goal)}`} />}
+      {stood !== null && stood !== origin && (
+        <Ref to={stood} title={`Open the work this job is standing in for — ${refLabel(stood)}`} />
+      )}
+      {goal !== null && goal !== stood && (
+        <Ref to={goal} title={`Open the goal this pull request is delivering — ${refLabel(goal)}`} />
+      )}
     </>
   );
 }
