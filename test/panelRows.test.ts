@@ -173,29 +173,35 @@ test('a fleet row wears the state it is in, and the strongest one it is in', () 
   const chips = (over: Partial<CockpitView['state']>): string[] => {
     const html = render(view(over));
     const fleet = html.slice(html.indexOf('Fleet'), html.indexOf('Goals in flight'));
-    return [...fleet.matchAll(/cn-why-chip cn-t-(\w+)"[^>]*>([^<]+)</g)].map((m) => `${m[2]}:${m[1]}`);
+    // The reading is the row's *word*; the tone is how loud it is. Since the badge
+    // families folded into the one tag, that tone is a hue rather than a name —
+    // `ask` is the red one and both holds are amber, which is the distinction this
+    // test was always making. → docs/spec/17-cockpit.md#the-tag
+    return [...fleet.matchAll(/cn-why-chip tag(?: t-(\w+))?[^"]*"[^>]*>([^<]+)</g)].map(
+      (m) => `${m[2]}:${m[1] ?? 'quiet'}`,
+    );
   };
 
   // The world as it ships: every live agent has an open escalation, which is the
   // top of the ranking and is your move whatever else is true of the row.
-  assert.ok(chips({}).includes('question:ask'), 'an agent with an open escalation asks you something');
+  assert.ok(chips({}).includes('question:red'), 'an agent with an open escalation asks you something');
 
   const noAsks = { escalations: [] };
-  assert.ok(chips({ ...noAsks, parkedOnLimit: [live[0].id] }).includes('limit:hold'), 'a limit park says so');
+  assert.ok(chips({ ...noAsks, parkedOnLimit: [live[0].id] }).includes('limit:amber'), 'a limit park says so');
   assert.ok(
     chips({
       ...noAsks,
       stallParks: [{ agentId: live[0].id, expiresAt: new Date(Date.now() + 9e5).toISOString() }],
-    }).includes('stalled:hold'),
+    }).includes('stalled:amber'),
     'a stall park says so',
   );
-  assert.ok(chips(noAsks).includes('blocked:hold'), 'a plain wait says so');
+  assert.ok(chips(noAsks).includes('blocked:amber'), 'a plain wait says so');
 
   // The ranking itself: the waiting agent is *also* parked on the limit, and the
   // row wears the park. Both are true; only one is what to do about it.
   const ranked = chips({ ...noAsks, parkedOnLimit: [waiting.id] });
-  assert.ok(ranked.includes('limit:hold'), `the park outranks the wait — got ${ranked.join(', ')}`);
-  assert.ok(!ranked.includes('blocked:hold'), 'and the row wears one word, not both');
+  assert.ok(ranked.includes('limit:amber'), `the park outranks the wait — got ${ranked.join(', ')}`);
+  assert.ok(!ranked.includes('blocked:amber'), 'and the row wears one word, not both');
 });
 
 /**

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import type { CiPolicyDescription, CiRuleDescription, PolicyKindDescription } from '../types.js';
+import { Tag, type TagTone } from './tag.js';
 
 /**
  * What the harness does about a red pull request, check by check.
@@ -107,9 +108,9 @@ function CiRuleRow({ index, rule }: { index: number; rule: CiRuleDescription }) 
       </td>
       <td className="settings-value">
         {rule.states.map((state) => (
-          <span key={state} className={`chip small ${state === 'pending' ? 'warn' : ''}`}>
+          <Tag key={state} tone={state === 'pending' ? 'amber' : undefined}>
             {state}
-          </span>
+          </Tag>
         ))}
         {/* The same reason `inherited` is shipped: a rule that names no states
             watches failing alone, and one that names `pending` has *stopped*
@@ -128,7 +129,7 @@ function CiRuleRow({ index, rule }: { index: number; rule: CiRuleDescription }) 
             file sees no `onFailure` and has no way to know the omission means
             "leave it alone" rather than "fall through to the default dispatch". */}
         {rule.inherited && <span className="muted"> — inherited; the rule sets no onFailure</span>}
-        {rule.urgent && <span className="chip warn ci-urgent">urgent</span>}
+        {rule.urgent && <span className="tag t-amber ci-urgent">urgent</span>}
         {rule.guidance !== null && <p className="muted ci-guidance">{rule.guidance}</p>}
       </td>
     </tr>
@@ -149,6 +150,6 @@ function PolicyKindRow({ kind }: { kind: PolicyKindDescription }) {
 
 /** One of the three routings, coloured by how much of a hold it puts on the PR. */
 function ActionChip({ action }: { action: CiRuleDescription['onFailure'] }) {
-  const tone = action === 'dispatch' ? 'ok' : action === 'escalate' ? 'warn' : '';
-  return <span className={`chip small ${tone}`}>{action}</span>;
+  const tone: TagTone | undefined = action === 'dispatch' ? 'green' : action === 'escalate' ? 'amber' : undefined;
+  return <Tag tone={tone}>{action}</Tag>;
 }

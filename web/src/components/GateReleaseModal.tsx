@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { AsyncButton } from './AsyncButton.js';
 import { Modal } from './Modal.js';
 import { Button } from './button.js';
+import { Tag } from './tag.js';
 
 /**
  * Where the operator says this goal is never going to reach an environment.
@@ -54,7 +55,7 @@ export function GateReleaseModal({
     <Modal
       face="modal"
       title="Not waiting on an environment"
-      lead={<span className="chip small">#{issueNumber}</span>}
+      lead={<Tag>#{issueNumber}</Tag>}
       onClose={onClose}
       foot={
         <>

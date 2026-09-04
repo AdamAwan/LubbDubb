@@ -164,8 +164,8 @@ test('the registry and the :root blocks name the same tokens', () => {
 /**
  * The tone aliases are aliases, and nothing else.
  *
- * `.t-*` and `.cn-t-*` are the two tint vocabularies — the shared family's and the
- * console's — and both work only because a tone block *renames* `:root` tokens
+ * `.t-*` is the tag's tint vocabulary and `.cn-t-*` the queue rail's, and both work
+ * only because a tone block *renames* `:root` tokens
  * rather than holding values. A declaration on `.t-red` shadows an inherited one
  * unconditionally, so a literal, a `color-mix`, or even a second `var()` fallback
  * written there is a colour the Theme section cannot reach *inside* a tone: every
@@ -670,8 +670,8 @@ test('the unsaved-theme flag notifies on a change and only on a change', () => {
  * forty-first pair cannot be written: **uppercase text that is not in a box takes
  * its size and its tracking from `var(--label-*)` and from nowhere else.** A badge
  * is the deliberate exception and it is one the sweep can see — a border, a padding
- * or a ground is what makes `.tag`, `.cn-chip`, `.cfg-badge` and the rest shapes of
- * their own, where the type is part of the shape rather than a caption over
+ * or a ground is what makes `.tag` — the one shape every chip is now drawn in — a
+ * shape of its own, where the type is part of the shape rather than a caption over
  * something. → docs/spec/17-cockpit.md#the-eyebrow
  */
 test('uppercase text outside a badge takes its size from the label ramp', () => {
@@ -697,5 +697,11 @@ test('uppercase text outside a badge takes its size from the label ramp', () => 
     }
   }
   assert.deepEqual(offenders, [], `a label size nobody chose:\n${offenders.join('\n')}`);
-  assert.ok(labels > 10, `only ${labels} uppercase rules found — the sweep is not reaching them`);
+  // A canary on the sweep itself, not a floor on the sheets: it fails if `ruleBlocks`
+  // stops parsing or the `text-transform` lookup stops matching, which would make the
+  // assertion above vacuously true. The number is deliberately well under the count —
+  // it was twenty-odd while every badge family declared its own uppercase, and folding
+  // them into the one tag is exactly the kind of change that should not have to move a
+  // threshold. → docs/spec/17-cockpit.md#the-tag
+  assert.ok(labels > 5, `only ${labels} uppercase rules found — the sweep is not reaching them`);
 });

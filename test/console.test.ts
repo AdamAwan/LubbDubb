@@ -1037,7 +1037,10 @@ test('a thread is drawn with its state, its conversation and where it hangs', ()
   // alone cannot say the fleet has already answered — which is the fact a reader
   // needs before reopening anything.
   assert.ok(html.includes('the cut alone would drop the tail it needs'), 'a reply is part of the thread');
-  assert.ok(html.includes('cn-thmark'), 'and a reply the fleet wrote says so');
+  // The violet tag, which is what `cn-thmark` became when the badge families folded
+  // into one: the hue is the mark, and violet is what the console says "a person or
+  // the fleet, not a court" in. → docs/spec/17-cockpit.md#the-tag
+  assert.match(html, /class="tag t-violet[^"]*"[^>]*>fleet</, 'and a reply the fleet wrote says so');
   assert.ok(html.includes('src/context/rank.ts'), 'a thread names the place it hangs');
 });
 

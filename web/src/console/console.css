@@ -217,10 +217,10 @@
    punctuation. That is deliberate — the cheaper reading of "something looks wrong"
    is the one that should catch the eye first.
 
-   `.cn-ident-act` and not `.cn-chip`: that class is taken, by the console's own
-   chip — mono, uppercase, square — and borrowing it dressed these two as readings
-   and, because a `<button>` does not take the inherited `text-transform` a
-   `<a>` does, drew one of the pair in sentence case beside the other in capitals. */
+   `.cn-ident-act` and not `.tag`: the tag is a reading, and borrowing it dressed
+   these two as verdicts — and, because a `<button>` does not take the inherited
+   `text-transform` an `<a>` does, drew one of the pair in sentence case beside the
+   other in capitals. */
 .cn-ident-act {
   display: inline-flex;
   align-items: center;
@@ -763,7 +763,16 @@
    aliases. A declaration on `.cn-t-red` shadows an inherited value unconditionally,
    so while the tints were written here a theme setting them on the root could
    never reach inside a tone at all. */
+/* Each block carries the tone trio twice: `--cn-tone*` for the rail's own chrome —
+   a row's lamp, its stripe, its edge — and `--tone*` for any tag drawn inside it.
+   A rail row states its hue once, on the row, and the tag in it inherits rather
+   than repeating the decision at the call site; that inheritance is the only way a
+   tag takes a tone it was not passed, and it is what the parked row's fill reads.
+   → docs/spec/17-cockpit.md#the-tag */
 .cn-t-red {
+  --tone: var(--cn-red);
+  --tone-line: var(--cn-red-line);
+  --tone-fill: var(--cn-red-fill);
   --cn-tone: var(--cn-red);
   --cn-tone-fill: var(--cn-red-fill);
   --cn-tone-line: var(--cn-red-line);
@@ -771,6 +780,9 @@
   --cn-tone-bg: var(--cn-red-bg);
 }
 .cn-t-amber {
+  --tone: var(--cn-amber);
+  --tone-line: var(--cn-amber-line);
+  --tone-fill: var(--cn-amber-fill);
   --cn-tone: var(--cn-amber);
   --cn-tone-fill: var(--cn-amber-fill);
   --cn-tone-line: var(--cn-amber-line);
@@ -778,6 +790,9 @@
   --cn-tone-bg: var(--cn-amber-bg);
 }
 .cn-t-blue {
+  --tone: var(--cn-blue-ink);
+  --tone-line: var(--cn-blue-line);
+  --tone-fill: var(--cn-blue-fill);
   --cn-tone: var(--cn-accent);
   --cn-tone-fill: var(--cn-blue-fill);
   --cn-tone-line: var(--cn-blue-line);
@@ -785,6 +800,9 @@
   --cn-tone-bg: var(--cn-blue-bg);
 }
 .cn-t-green {
+  --tone: var(--cn-green);
+  --tone-line: var(--cn-green-line);
+  --tone-fill: var(--cn-green-fill);
   --cn-tone: var(--cn-green);
   --cn-tone-fill: var(--cn-green-fill);
   --cn-tone-line: var(--cn-green-line);
@@ -795,6 +813,9 @@
    one. `--cn-inert` and the faint ink are the neutrals already one step off the
    core, so a theme moves this with everything else and no new token is owed. */
 .cn-t-grey {
+  --tone: var(--cn-fg-dim);
+  --tone-line: var(--cn-line);
+  --tone-fill: var(--cn-panel-2);
   --cn-tone: var(--cn-fg-faint);
   --cn-tone-fill: var(--cn-panel-2);
   --cn-tone-line: var(--cn-inert);
@@ -861,21 +882,9 @@
   gap: 7px;
   margin-bottom: 5px;
 }
-/* The border is always drawn — transparent on the filled variant — so the two
-   weights are the same box and a rail of mixed rows keeps one baseline. */
-.cn-tag {
-  font: 600 10px/1 var(--cn-mono);
-  letter-spacing: 0.6px;
-  text-transform: uppercase;
-  padding: 2px 5px;
-  border: 1px solid var(--cn-tone-line);
-  border-radius: 4px;
-  background: none;
-  color: var(--cn-tone);
-}
-.cn-parked .cn-tag {
+.cn-parked .tag {
   border-color: transparent;
-  background: var(--cn-tone-fill);
+  background: var(--tone-fill);
 }
 .cn-qage {
   margin-left: auto;
@@ -2344,14 +2353,6 @@ a.cn-tgl {
   color: var(--cn-amber-ink-hi);
   background: var(--cn-amber-bg);
 }
-.cn-lbl {
-  font: 11px var(--cn-mono);
-  color: var(--cn-fg-faint);
-  border: 1px solid var(--cn-line);
-  border-radius: 4px;
-  padding: 2px 6px;
-  white-space: nowrap;
-}
 .cn-pill {
   padding: 4px 10px;
   border: 1px solid var(--cn-line);
@@ -2710,115 +2711,6 @@ button.cn-grow {
   cursor: default;
   border-left: 2px dashed var(--cn-violet);
   padding-left: 11px;
-}
-.cn-chip.cn-desk-chip {
-  background: var(--cn-violet-fill);
-  border-color: var(--cn-violet-line);
-  color: var(--cn-violet);
-}
-
-.cn-chip {
-  font: 600 10.5px/1 var(--cn-mono);
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
-  padding: 3px 6px;
-  border-radius: 4px;
-  border: 1px solid var(--cn-line);
-  color: var(--cn-fg-dim);
-  white-space: nowrap;
-}
-.cn-chip.cn-you {
-  background: var(--cn-red-fill);
-  border-color: var(--cn-red-line);
-  color: var(--cn-red);
-}
-.cn-chip.cn-harness {
-  background: var(--cn-blue-fill);
-  border-color: var(--cn-blue-line);
-  color: var(--cn-blue-ink);
-}
-.cn-chip.cn-orphan-chip {
-  background: var(--cn-amber-fill);
-  border-color: var(--cn-amber-line-hi);
-  color: var(--cn-amber-ink-hi);
-}
-.cn-chip.cn-stall {
-  background: var(--cn-amber-fill);
-  border-color: var(--cn-amber-line);
-  color: var(--cn-amber);
-}
-.cn-chip.cn-ok {
-  background: var(--cn-green-fill);
-  border-color: var(--cn-green-line);
-  color: var(--cn-green);
-}
-/* The three unnamed tones, for chips whose subject is not a court or a run: a
-   thread waiting on us, one waiting on the reviewer, a check the harness will fix
-   and one it has been told to leave alone. They take the same four token families
-   the named chips above take — there is one amber and one blue on this console —
-   and exist only so a surface that is not about courts does not have to borrow a
-   court's word for its colour. */
-.cn-chip.cn-warn {
-  background: var(--cn-amber-fill);
-  border-color: var(--cn-amber-line);
-  color: var(--cn-amber-ink);
-}
-.cn-chip.cn-info {
-  background: var(--cn-blue-fill);
-  border-color: var(--cn-blue-line);
-  color: var(--cn-blue-ink);
-}
-.cn-chip.cn-bad {
-  background: var(--cn-red-fill);
-  border-color: var(--cn-red-line);
-  color: var(--cn-red-ink);
-}
-/* An id, drawn as the author typed it: these are lowercase kebab-case and are
-   typed back into a form, so the chip's own uppercase would be a lie about the
-   one string on the card that has to be copied exactly. */
-.cn-chip.cn-lower {
-  text-transform: none;
-  letter-spacing: 0;
-}
-.cn-chip.cn-mute {
-  color: var(--cn-fg-faint);
-}
-
-/* A retained run's marking: the tracker's copy of this goal is stale. Dashed and
-   in the dim ink rather than a warning colour — it is a fact about a source, not a
-   fault, and the amber families are spoken for by things that want an answer. */
-.cn-chip.cn-stale {
-  border-style: dashed;
-  color: var(--cn-fg-dim);
-}
-
-/* The goal header's type chip, tinted by the same families the tickets list uses —
-   one vocabulary of colour across the two surfaces, so a Bug is the same red on
-   the row it was opened from. An unrecognised type keeps the plain chip. */
-.cn-chip.cn-type.bug {
-  background: var(--cn-red-fill);
-  border-color: var(--cn-red-line);
-  color: var(--cn-red);
-}
-.cn-chip.cn-type.story {
-  background: var(--cn-green-fill);
-  border-color: var(--cn-green-line);
-  color: var(--cn-green);
-}
-.cn-chip.cn-type.debt {
-  background: var(--cn-amber-fill);
-  border-color: var(--cn-amber-line);
-  color: var(--cn-amber);
-}
-.cn-chip.cn-type.container {
-  background: var(--cn-violet-fill);
-  border-color: var(--cn-violet-line);
-  color: var(--cn-violet);
-}
-.cn-chip.cn-type.task {
-  background: var(--cn-blue-fill);
-  border-color: var(--cn-blue-line);
-  color: var(--cn-blue-ink);
 }
 
 /* A goal in flight that hangs off no Feature. The chip beside it is the word; this
@@ -3629,55 +3521,27 @@ button.cn-grow {
   color: var(--cn-accent);
   outline: none;
 }
-/* The marker wearing a word. Shaped as the cockpit's own chip rather than as a
-   third thing — it is a verdict about the row, which is what a chip is — and it
-   keeps the marker's hover, so the sentence is one reach away from the word. */
-.cn-why-chip {
-  width: auto;
-  height: auto;
-  padding: 3px 6px;
-  border-radius: 4px;
-  font: 600 10.5px/1 var(--cn-mono);
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
-}
-.cn-why-chip.cn-t-ask {
-  background: var(--cn-red-fill);
-  border-color: var(--cn-red-line);
-  color: var(--cn-red-ink);
-}
-.cn-why-chip.cn-t-hold {
-  background: var(--cn-amber-fill);
-  border-color: var(--cn-amber-line);
-  color: var(--cn-amber-ink);
-}
-.cn-why-chip.cn-t-quiet {
-  border-color: var(--cn-line);
-  color: var(--cn-fg-dim);
-}
 /* A readying row keeps its tint the same way and for the same reason: the hollow
    lamp, the dashed edge and the word are one signal, and the neutral grey would be
    the part of it that stopped saying so. */
 .cn-readying .cn-why-chip {
-  background: var(--cn-readying-fill);
-  border-color: var(--cn-readying-line);
-  color: var(--cn-readying);
+  --tone: var(--cn-readying);
+  --tone-line: var(--cn-readying-line);
+  --tone-fill: var(--cn-readying-fill);
+  background: var(--tone-fill);
 }
 /* A desk run keeps its violet wherever it is drawn: the hollow lamp, the dashed
    edge and this word are one signal — nothing dispatched this row — and a state
    chip in the neutral grey would be the only part of it that stopped saying so. */
 .cn-desk .cn-why-chip {
-  background: var(--cn-violet-fill);
-  border-color: var(--cn-violet-line);
-  color: var(--cn-violet);
+  --tone: var(--cn-violet);
+  --tone-line: var(--cn-violet-line);
+  --tone-fill: var(--cn-violet-fill);
+  background: var(--tone-fill);
 }
 /* Hover states are the tone's own, so a word does not turn accent-orange mid-read
    and read as a fifth state. */
 .cn-why-chip:hover,
-.cn-why-chip:focus-visible {
-  border-color: var(--cn-line-hi);
-  color: var(--cn-fg);
-}
 /* Two edges rather than a width: the bubble is the width of the row it explains,
    so it cannot leave the card whatever the marker's position in the row.
 
@@ -4070,16 +3934,6 @@ button.cn-grow {
   font-weight: 600;
   color: var(--cn-fg-dim);
 }
-.cn-thmark {
-  font: 600 9.5px/1 var(--cn-mono);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--cn-violet);
-  border: 1px solid var(--cn-violet-line);
-  background: var(--cn-violet-fill);
-  padding: 2px 4px;
-  border-radius: 3px;
-}
 .cn-thtext {
   font-size: 12.5px;
   line-height: 1.55;
@@ -4225,29 +4079,6 @@ button.cn-grow {
 }
 .ob-claim:hover {
   color: var(--cn-accent);
-}
-.ob-state {
-  font: 600 9.5px/1 var(--cn-mono);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  padding: 2px 4px;
-  border: 1px solid var(--cn-line-hi);
-  color: var(--cn-fg-dim);
-}
-.ob-state.s-standing {
-  border-color: var(--cn-amber-line);
-  background: var(--cn-amber-fill);
-  color: var(--cn-amber);
-}
-.ob-state.s-owned {
-  border-color: var(--cn-blue-line);
-  background: var(--cn-blue-fill);
-  color: var(--cn-blue-ink-hi);
-}
-.ob-state.s-resolved {
-  border-color: var(--cn-green-line);
-  background: var(--cn-green-fill);
-  color: var(--cn-green-ink);
 }
 .ob-kind {
   font: 600 9.5px/1 var(--cn-mono);

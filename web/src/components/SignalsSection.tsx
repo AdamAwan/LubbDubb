@@ -6,6 +6,7 @@ import { expectation, WatchReadingLine } from './WatchDigest.js';
 import { renderMarkdown } from './markdown.js';
 import { HeadRow } from './panel.js';
 import { Button } from './button.js';
+import { Tag } from './tag.js';
 
 /**
  * The goal's declared checks, on the goal's own page, with the controls that
@@ -118,19 +119,17 @@ function SignalRow({
       <div className="cn-sig-body">
         <HeadRow className="cn-sig-head">
           <b className="cn-name">{check.title}</b>
-          <i className="cn-chip">{check.kind}</i>
-          <i className="cn-chip cn-lower" title="The author’s own id, and the merge key every writer folds on">
+          <Tag>{check.kind}</Tag>
+          <Tag lower title="The author’s own id, and the merge key every writer folds on">
             {check.id}
-          </i>
+          </Tag>
           {check.authored === 'operator' && (
-            <i className="cn-chip cn-mute" title="Yours. A replan neither removes this nor writes over it.">
-              yours
-            </i>
+            <Tag title="Yours. A replan neither removes this nor writes over it.">yours</Tag>
           )}
           {!check.live && (
-            <i className="cn-chip cn-warn" title="Declared by the agent that did the work, and not yet run">
+            <Tag tone="amber" fill title="Declared by the agent that did the work, and not yet run">
               awaiting you
-            </i>
+            </Tag>
           )}
         </HeadRow>
         <p className="cn-sig-expect">{expectation(check)}</p>

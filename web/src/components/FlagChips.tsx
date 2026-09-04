@@ -20,7 +20,7 @@ export function FlagChips({
       {flags.map((f) => (
         <a
           key={f.id}
-          className="chip small flag-chip"
+          className="tag t-blue flag-chip"
           href={artifactHref(f, artifactUrls)}
           target="_blank"
           rel="noopener noreferrer"

@@ -25,6 +25,7 @@ import { GateReleaseModal } from '../components/GateReleaseModal.js';
 import { EndRunModal } from '../components/EndRunModal.js';
 import { renderRichText } from '../components/richText.js';
 import { issueTypeTone } from '../issueGroups.js';
+import { Tag, type TagTone } from '../components/tag.js';
 import { fmtUsd, relTime } from '../components/util.js';
 import { Ref, TicketLink } from '../components/refs.js';
 import { askPrompt, localRunPrompt } from '../cockpit/desktopLink.js';
@@ -81,9 +82,9 @@ const LOCAL_VALIDATION_ANCHOR = 'cn-local-validation';
 
 /** The chip classes each tone wears, in the goal header's own vocabulary. */
 const CHIP_TONE: Record<LocalValidationTone, string> = {
-  up: 'cn-ok',
-  busy: 'cn-warn',
-  bad: 'cn-bad',
+  up: 't-green',
+  busy: 't-amber',
+  bad: 't-red',
   off: '',
 };
 
@@ -476,7 +477,9 @@ function Header({
             Neither is a verdict anybody passed on the work, which is why they sit
             up here rather than in the row below. */}
         {issue.issueType !== undefined && (
-          <i className={`cn-chip cn-type ${issueTypeTone(issue.issueType)}`}>{issue.issueType}</i>
+          <Tag tone={issueTypeTone(issue.issueType)} fill={issueTypeTone(issue.issueType) !== undefined}>
+            {issue.issueType}
+          </Tag>
         )}
         <StateChip state={issue.workItemState ?? issue.state} colours={config.stateColours} />
         {/* Beside the state chip, which on a retained run is the harness's copy and
@@ -491,13 +494,10 @@ function Header({
           the reading nothing else on the page states in one place. */}
       <div className="cn-ghmeta">
         {issue.appraisal !== null && (
-          <i
-            className={`cn-chip cn-ghverdict ${issue.appraisal.verdict === 'workable' ? 'cn-ok' : 'cn-stall'}`}
-            title={issue.appraisal.summary}
-          >
+          <Tag tone={issue.appraisal.verdict === 'workable' ? 'green' : 'amber'} fill title={issue.appraisal.summary}>
             <Icon name="scale" size={12} />
             Appraisal · {issue.appraisal.verdict}
-          </i>
+          </Tag>
         )}
         {/* Prefixed with *whose* verdict it is, because the two words this chip
             most often reads — "more work" — were also the name of a control an
@@ -508,11 +508,11 @@ function Header({
             harness's would be the header telling somebody their own decision was
             somebody else's. */}
         {issue.conclusion.verdict !== 'undeclared' && (
-          <i className="cn-chip cn-ghverdict" title={issue.conclusion.note}>
+          <Tag title={issue.conclusion.note}>
             <Icon name="robot" size={12} />
             {issue.conclusion.by === 'operator' ? 'Your verdict' : 'Harness verdict'} ·{' '}
             {issue.conclusion.verdict.replace(/_/g, ' ')}
-          </i>
+          </Tag>
         )}
         {/* Whether the goal's validation plan is settled, beside the other
               verdicts and inside none of them. Absent when there are no checks —
@@ -524,7 +524,7 @@ function Header({
         {issue.validation !== null && (
           <button
             type="button"
-            className={`cn-chip cn-ghverdict cn-jump ${issue.validation.state === 'clear' ? 'cn-ok' : 'cn-stall'}`}
+            className={`tag tag-fill tag-button ${issue.validation.state === 'clear' ? 't-green' : 't-amber'}`}
             onClick={() => jumpTo(ANCHOR.validation, folds.validation)}
             title={
               issue.validation.state === 'clear'
@@ -544,7 +544,7 @@ function Header({
         {issue.localValidation !== null && (
           <button
             type="button"
-            className={`cn-chip cn-ghverdict cn-jump ${CHIP_TONE[localValidationTone(issue.localValidation.status)]}`}
+            className={`tag tag-fill tag-button cn-ghverdict cn-jump ${CHIP_TONE[localValidationTone(issue.localValidation.status)]}`}
             onClick={() => jumpTo(LOCAL_VALIDATION_ANCHOR, folds.localValidation)}
             title={issue.localValidation.summary ?? 'Go to what the local validation found'}
           >
@@ -866,9 +866,9 @@ function outstanding(verdict: ValidationVerdict): string {
 function StateChip({ state, colours }: { state: string; colours: Readonly<Record<string, string>> }): JSX.Element {
   const colour = stateColour(colours, state);
   return (
-    <i className="cn-chip" style={colour === null ? undefined : { color: colour, borderColor: colour }}>
+    <span className="tag" style={colour === null ? undefined : { color: colour, borderColor: colour }}>
       {state}
-    </i>
+    </span>
   );
 }
 
@@ -1270,7 +1270,9 @@ function Part({
               <CourtChip pr={pr.pr} now={now} />
             </>
           ) : (
-            <i className={`cn-chip ${pr.pr.merged ? 'cn-ok' : ''}`}>{pr.pr.merged ? 'merged' : 'closed'}</i>
+            <Tag tone={pr.pr.merged ? 'green' : undefined} fill={pr.pr.merged}>
+              {pr.pr.merged ? 'merged' : 'closed'}
+            </Tag>
           )}
         </span>
       )}
@@ -1459,7 +1461,9 @@ function PullRequests({
             {/* The one verdict a dead pull request keeps: what was read is a
                 record, where the other three are about what happens next. */}
             <ReviewMark review={pr.review} now={view.now} onOpen={() => actions.selectPr(pr.number)} />
-            <i className={`cn-chip ${pr.merged ? 'cn-ok' : ''}`}>{pr.merged ? 'merged' : 'closed'}</i>
+            <Tag tone={pr.merged ? 'green' : undefined} fill={pr.merged}>
+              {pr.merged ? 'merged' : 'closed'}
+            </Tag>
             <span className="cn-refs">
               <Ref to={`pr:${pr.number}`} />
             </span>
@@ -1484,9 +1488,9 @@ function ThreadChip({ pr }: { pr: PullRequest }): JSX.Element | null {
   const waiting = (pr.reviewThreads ?? []).filter((t) => t.state === 'open' || t.state === 'reopened').length;
   if (waiting === 0) return null;
   return (
-    <i className="cn-chip cn-warn" title="Review threads the fleet has not answered">
+    <Tag tone="amber" fill title="Review threads the fleet has not answered">
       {waiting} on us
-    </i>
+    </Tag>
   );
 }
 
@@ -1548,7 +1552,9 @@ function Environments({
                     {env.landed}/{env.total}
                   </i>
                 )}
-                <i className={`cn-chip ${REACH_TONE[env.status]}`}>{env.status}</i>
+                <Tag tone={REACH_TONE[env.status]} fill={REACH_TONE[env.status] !== undefined}>
+                  {env.status}
+                </Tag>
               </div>
               {/* Inside the environment's own row and not beside it: a watch belongs
                 to an arrival, and the two surfaces drawn as siblings would be free
@@ -1667,9 +1673,12 @@ function Watch({
                 only a reading that came back can say anything about the work. */}
             <span className="cn-sub">{watchSaid(check)}</span>
           </span>
-          <i className={`cn-chip ${WATCH_TONE[check.reading?.verdict ?? 'unread']}`}>
+          <Tag
+            tone={WATCH_TONE[check.reading?.verdict ?? 'unread']}
+            fill={WATCH_TONE[check.reading?.verdict ?? 'unread'] !== undefined}
+          >
             {check.reading?.verdict ?? 'not read'}
-          </i>
+          </Tag>
         </div>
       ))}
     </div>
@@ -1717,11 +1726,11 @@ function measureSaid(check: GoalWatchCheckView, value: number | null): string {
  * environment nobody could read is work, not an all-clear, and it is the reading
  * that most looks like success.
  */
-const WATCH_TONE: Record<WatchCheckVerdict | 'unread', string> = {
-  clean: 'cn-ok',
-  regressed: 'cn-you',
-  unknown: 'cn-stall',
-  unread: '',
+const WATCH_TONE: Record<WatchCheckVerdict | 'unread', TagTone | undefined> = {
+  clean: 'green',
+  regressed: 'red',
+  unknown: 'amber',
+  unread: undefined,
 };
 
 /** What each gate holds, in the words the card's own rows use for it. */
@@ -1738,11 +1747,11 @@ const GATE_SAID: Record<EnvironmentGate, string> = {
  * a feature in production is the state on this panel most likely to want somebody,
  * and drawing it green is the mistake the whole tri-state exists to avoid.
  */
-const REACH_TONE: Record<GoalReachStatus, string> = {
-  reached: 'cn-ok',
-  partial: 'cn-you',
-  unknown: 'cn-stall',
-  absent: '',
+const REACH_TONE: Record<GoalReachStatus, TagTone | undefined> = {
+  reached: 'green',
+  partial: 'red',
+  unknown: 'amber',
+  absent: undefined,
 };
 
 /**
@@ -1760,15 +1769,15 @@ const REACH_SAID: Record<GoalReachStatus, string> = {
   unknown: 'nothing here could be confirmed — check the probe, not the deploy',
 };
 
-const COURT_TONE: Record<string, string> = {
-  you: 'cn-you',
-  harness: 'cn-harness',
-  stalled: 'cn-stall',
-  done: 'cn-ok',
+const COURT_TONE: Record<string, TagTone> = {
+  you: 'red',
+  harness: 'blue',
+  stalled: 'amber',
+  done: 'green',
 };
 
-function courtTone(pr: OpenPullRequest): string {
-  return COURT_TONE[pr.attention.status] ?? '';
+function courtTone(pr: OpenPullRequest): TagTone | undefined {
+  return COURT_TONE[pr.attention.status];
 }
 
 /**
@@ -1798,21 +1807,21 @@ export function StaleChip({ stale, now }: { stale: NonNullable<Issue['stale']>; 
   const kept = "Its plan, pull requests, agents, spend and notes are the harness's own record and are current.";
   if (stale.tracker === null)
     return (
-      <i
-        className="cn-chip cn-stale"
+      <Tag
+        dashed
         title={`The tracker no longer returns this item — closed, resolved, or its watch tag removed. The title, description, labels and state shown are the harness's copy from ${seen}. ${kept}`}
       >
         left tracker · seen {seen}
-      </i>
+      </Tag>
     );
   const word = stale.tracker.workItemState ?? stale.tracker.state;
   return (
-    <i
-      className="cn-chip cn-stale"
+    <Tag
+      dashed
       title={`The tracker stopped returning this item and now says ${word} (changed ${relTime(stale.tracker.changedAt, now)}). The title, description and labels shown are the harness's copy from ${seen}. ${kept}`}
     >
       tracker: {word} · seen {seen}
-    </i>
+    </Tag>
   );
 }
 
@@ -1852,8 +1861,9 @@ export function CourtChip({ pr, now }: { pr: OpenPullRequest; now: number }): JS
   const since = pr.attention.reviewWaitingSince;
   const waited = since !== undefined ? waitedFor(since, now) : null;
   return (
-    <i
-      className={`cn-chip ${courtTone(pr)}`}
+    <Tag
+      tone={courtTone(pr)}
+      fill={courtTone(pr) !== undefined}
       title={
         waited
           ? [...pr.attention.reasons, `waiting since ${new Date(since!).toLocaleString()}`].join(' · ')
@@ -1862,7 +1872,7 @@ export function CourtChip({ pr, now }: { pr: OpenPullRequest; now: number }): JS
     >
       {pr.attention.status}
       {waited && <span className="cn-chip-age"> · {waited}</span>}
-    </i>
+    </Tag>
   );
 }
 

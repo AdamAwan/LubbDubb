@@ -1,6 +1,7 @@
 import type { GoalWatch, GoalWatchInput, WatchReadingVerdict } from '../types.js';
 import { renderMarkdown } from './markdown.js';
 import { Button } from './button.js';
+import { Tag } from './tag.js';
 
 /**
  * The post-deploy watch, as the plan sheet draws it: each declared check with its
@@ -44,14 +45,14 @@ export function WatchDigest({
           <div>
             <div className="pm-vhead">
               <span className="pm-vtitle">{check.title}</span>
-              <span className="chip small">{check.kind}</span>
-              <span className="chip small mono" title="The author's own id, and the merge key on a replan">
+              <Tag>{check.kind}</Tag>
+              <Tag lower title="The author's own id, and the merge key on a replan">
                 {check.id}
-              </span>
+              </Tag>
               {!check.live && (
-                <span className="chip small warn" title="Declared by the agent that did the work, and not yet run">
+                <Tag tone="amber" title="Declared by the agent that did the work, and not yet run">
                   awaiting you
-                </span>
+                </Tag>
               )}
             </div>
             <div className="pm-wbody">

@@ -5,6 +5,7 @@ import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 import { ConfirmButton } from './ConfirmButton.js';
 import { relTime } from './util.js';
 import { Button } from './button.js';
+import { Tag } from './tag.js';
 
 /**
  * A clock face, drawn inline beside the brief sheet for the same reason that
@@ -93,9 +94,9 @@ export function SchedulePanel({ schedules, onChanged }: { schedules: JobSchedule
           {open ? '× New schedule' : '+ New schedule'}
         </Button>
         {schedules.length > 0 && (
-          <span className="chip small" title="Recurrences that queue a brief on a clock">
+          <Tag title="Recurrences that queue a brief on a clock">
             {schedules.filter((s) => s.enabled).length} running
-          </span>
+          </Tag>
         )}
       </div>
 
@@ -172,7 +173,7 @@ export function SchedulePanel({ schedules, onChanged }: { schedules: JobSchedule
               <span className="launch-title" title={schedule.prompt}>
                 {schedule.title}
               </span>
-              <span className="chip small">{schedule.kind}</span>
+              <Tag>{schedule.kind}</Tag>
               {/* The two things a standing intention is judged on. A disabled one
                   says so instead of showing a next run it does not have. */}
               <span className="muted launch-age" title={schedule.nextRunAt ?? 'not scheduled'}>

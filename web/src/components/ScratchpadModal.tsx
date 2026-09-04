@@ -3,6 +3,7 @@ import type { ScratchEntryView } from '../types.js';
 import { api } from '../api.js';
 import { relTime } from './util.js';
 import { Modal } from './Modal.js';
+import { Tag } from './tag.js';
 
 /**
  * A goal's shared scratchpad — what the agents working it left each other, in the
@@ -60,13 +61,13 @@ export function ScratchpadModal({ issueRef, onClose }: { issueRef: string; onClo
     <Modal
       face="modal"
       title="Notepad"
-      lead={issueNumber && <span className="chip small">#{issueNumber}</span>}
+      lead={issueNumber && <Tag>#{issueNumber}</Tag>}
       chips={
         state === 'ready' &&
         entries.length > 0 && (
-          <span className="chip small">
+          <Tag>
             {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
-          </span>
+          </Tag>
         )
       }
       onClose={onClose}
@@ -85,9 +86,9 @@ export function ScratchpadModal({ issueRef, onClose }: { issueRef: string; onClo
                 {/* The author's origin, not its agent id: which *part* of the
                       goal wrote this is what a reader is placing the note by, and
                       an agent id is gone the moment the fleet turns over. */}
-                <span className="chip small">{entry.authorOriginRef}</span>
-                {entry.decision && <span className="chip small pad-fork-chip">fork</span>}
-                {entry.topic && <span className="chip small">{entry.topic}</span>}
+                <Tag>{entry.authorOriginRef}</Tag>
+                {entry.decision && <Tag tone="blue">fork</Tag>}
+                {entry.topic && <Tag>{entry.topic}</Tag>}
                 <span className="muted" title={entry.createdAt}>
                   {relTime(entry.createdAt)}
                 </span>

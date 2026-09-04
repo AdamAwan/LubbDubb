@@ -1279,17 +1279,31 @@ that no longer exists. Neither is red in `npm run check` any other way.
 
 ### The tag
 
-**One tinted badge** — `Tag` in `web/src/components/tag.tsx`, dressed by the `.tag` and `.t-*` blocks
-in `styles.css`. It is the control kit's argument one layer down, in the sheet rather than in the
-markup.
+**The** small tinted box — `Tag` in `web/src/components/tag.tsx`, dressed by the `.tag` and `.t-*`
+blocks in `styles.css`. There is one, on every surface, and this is it.
 
-A tinted badge is **three values that have to move together**: the hue, the border that reads as the
-hue without competing with the word, and the ground the filled weight sits on. That triple was written
-out by hand at twenty class names — `rp-att-read`, `rp-v-false`, `rp-tag-disputed`, `rv-routed`,
-`pm-dtag.added` and the rest — and the copies had already drifted. `rp-att-read` bordered in
-`--red-line` and `rp-v-false` in `--red`, so two tags a hand's width apart on the review pack were the
-same statement in two weights, with nothing saying which was meant. Nothing catches that: the sheet is
-valid, both tags render, and the drift is visible only to somebody holding the two up together.
+The cockpit had **twenty-one**. Two vocabularies of shape — a pill in the UI face and sentence case, a
+square one in mono and uppercase — and inside each, a family per surface: `.chip`, `.badge`,
+`.cn-chip`, `.cn-tag`, `.pm-dtag`, `.rm-tag`, `.cfg-badge`, `.rp-gate-tag`, `.lrun-tag`,
+`.tickets-state`, `.tickets-type`, `.ob-state`, `.cn-thmark`, `.cn-lbl` and the rest. That is not a
+tidiness problem; nothing about it was visible from any one call site, and the copies had drifted:
+
+- `.badge.interrupted` was **declared twice**, 1,025 lines apart — red in the block that grouped it
+  with `failed`, grey in a later one. The later won everywhere, so the red was a statement nothing on
+  screen made.
+- `.badge.crashed` took its ground from `--cn-red` and its ink from `--red`. The two are different
+  reds, so the tint and the word disagreed by construction.
+- Three ambers — `cn-warn`, `cn-stall`, `cn-orphan-chip` — said "somebody has to look at this" in
+  three weights, with nothing saying which was meant. Two reds, `cn-you` and `cn-bad`, the same.
+- `SetupPanel` asked for `cn-good`, which no sheet declares, so "now" and "at restart" drew alike; the
+  feature board's standing column wore `cn-fb-c-*`, which tints a `b` and not the chip, so every
+  standing was one grey.
+
+**One shape.** Square, uppercase, mono — 10.5px/600 at 0.4px tracking, `--cn-r-sm`, a 1px border
+always drawn. There is no size prop and no second face: the shape is not a decision a call site gets
+to make, which is what stops a twenty-second family. What it costs is that the pill is gone as a way
+of telling two axes apart — the tickets table used to draw the type square and the state as a pill,
+and now tells them apart by column and hue.
 
 **Tone is a prop, never a class string**, the same rule the [control kit](#the-control-kit) keeps:
 
@@ -1299,39 +1313,45 @@ valid, both tags render, and the drift is visible only to somebody holding the t
 | `amber`  | a gate — a call somebody has to make                     |
 | `green`  | something landed, or held                                |
 | `blue`   | something to read                                        |
+| `violet` | a person, a desk run, a container                        |
 | `accent` | the one thing on this surface worth going to first       |
 | `grey`   | a label rather than a verdict — and the default, omitted |
 
+**One palette, and it is the console's.** The tones name `--cn-*` and nothing else, everywhere. The
+two hue families still exist for everything that is not a tag — a lamp, a band header, a rail's edge,
+a stripe — but a red tag is one red wherever it is drawn, and `accent` is the console's blue rather
+than the page's orange. This is a **reversal**: the tag drew the shared family only, on the argument
+that `--accent` is orange and `--cn-accent` is blue and so the two mirrors had to stay two. That
+argument holds for chrome and not for a tag. A tag that changed hue when it moved from the config page
+to the console _was_ the drift the component exists to end, one layer further down; a rebind per
+surface (`.cn .t-red`) is still two families wearing one class.
+
 **Weight is `fill`, not a second hue.** The outlined and the filled tag are the same box in the same
 colour and the ground is what ranks them, which is the bargain [the rail](#hue-is-the-kind-weight-is-the-group)
-already makes with `cn-parked`: opacity within one hue rather than a colour per weight, so the two
-readings cannot drift apart. **`dashed` is the box that is not the plain case** — a region outside the
-diff being walked, a label a person overrode the checker on.
+already makes with `cn-parked`. **`dashed` is the box that is not the plain case** — a region outside
+the diff being walked, a tracker's copy gone stale, a label a person overrode the checker on.
+**`lower` is an id that gets typed back**: those are lowercase kebab-case, and the tag's own uppercase
+would be a lie about the one string on the surface that has to be copied exactly.
 
-The tint itself is six alias blocks — `.t-red`, `.t-amber`, `.t-green`, `.t-blue`, `.t-accent`,
-`.t-grey` — each setting `--tone`, `--tone-line` and `--tone-fill` from `:root` and from nowhere else,
-for exactly the reason [`.cn-t-*` is an alias](#tokens): a declaration on a tone class shadows an
-inherited value unconditionally, so a tint written there is a tint no theme can reach _inside_ a tone.
-`--accent-line` was owed by this and is new — the one tag drawn in the accent bordered in `--accent`
-itself, at full strength, and out-shouted the red one beside it.
+The tint is seven alias blocks — `.t-red`, `.t-amber`, `.t-green`, `.t-blue`, `.t-violet`,
+`.t-accent`, `.t-grey` — each setting `--tone`, `--tone-line` and `--tone-fill` from `:root` and from
+nowhere else, for exactly the reason [`.cn-t-*` is an alias](#tokens): a declaration on a tone class
+shadows an inherited value unconditionally, so a tint written there is a tint no theme can reach
+_inside_ a tone.
 
-**The two families stay two.** `--accent` is orange and `--cn-accent` is blue, so `.t-*` is the shared
-family's mirror of the console's `.cn-t-*` and not a merge with it: a console-family tag stays
-`cn-tag` under a `cn-t-*` row, and `Tag` draws the shared family only.
+**A rail row's tone is inherited, not passed.** `.cn-t-*` aliases `--tone*` beside its own
+`--cn-tone*`, so a tag inside a toned queue-rail row takes the row's hue without the call site
+repeating the row's decision — and `.cn-parked .tag` reads the same triple for its fill. That is the
+only way a tag takes a tone nobody handed it.
 
-**The alias is reusable without the component**, and two surfaces take it that way. The [review
-mark](#the-fleet-reviews-mark) and the plan sheet's diff rows each carry their own arm class _beside_ a
-`t-*` alias — `rv-clear t-green`, `pm-dtag dropped t-red` — because those elements have descendants
-tinted by the arm (the mark's count badge) or a shape of their own; what they give up is the copy of
-the triple, which is the thing that drifts. Four `.rv-*` rules and three `.pm-dtag` rules collapse to
-one apiece.
+**The alias is reusable without the component**, and a few surfaces take it that way: `.flag-chip` is
+a link, `.ci-urgent` and `.esc-expiry` add a margin and a numeric variant, and two chips carry a
+colour the operator chose in `stateColours`. Each wears `tag` and a `t-*` beside its own class and
+adds only what it owes. What they give up is the copy of the triple, which is the thing that drifts.
 
-**What deliberately keeps its own class.** `.chip` is the cockpit's other badge and is not this: its
-tinted arms set a colour and a border and never a ground, so there is no triple to unify, and it is
-drawn at a hundred call sites. The console's `.cn-tag` already has the mechanism. The rest of the
-named badges — `.cfg-badge`, `.flag-chip`, `.lrun-tag`, `.rm-tag`, `.tickets-fchip`, `.pet-stage` and
-the others — are shapes of their own that happen to be small, and renaming them would be a diff about
-names rather than about the tint.
+**What is not a tag.** `.rv-badge` is a count bubble — a number in a circle on the corner of a mark,
+not a verdict about a row — and `.tickets-fchip` is a filter _control_. Folding either in would be
+renaming a different thing after this one.
 
 `test/cockpitTheme.test.ts` holds the aliases pure: a `.t-*` or `.cn-t-*` block may declare tone
 properties and their values must every one be a bare `var(--token)`. It is the only test in
@@ -1481,11 +1501,10 @@ already renders, and the class is what reaches them. Thirty-odd such names — `
 and the rest — join the ramp's rule rather than being renamed: renaming forty classes is a diff about
 names, and this one is about the type. What they each keep is their own layout, family and colour.
 
-**What deliberately keeps its own size: a badge.** `.tag`, `.badge`, `.cn-tag`, `.cn-chip`,
-`.cfg-badge`, `.pm-dtag`, `.cls`, `.pet-rarity`, `.rp-gate-tag`, `.ob-state` and the others are boxes
-— a border, a padding, a ground — where the type is part of a shape rather than a caption over one,
-and [the tag](#the-tag) already said those are shapes of their own. Thirteen pairs remain and every
-one of them is inside a box.
+**What deliberately keeps its own size: a badge.** `.tag`, `.cls`, `.pet-rarity` and the others are
+boxes — a border, a padding, a ground — where the type is part of a shape rather than a caption over
+one, and [the tag](#the-tag) already said those are shapes of their own. Every pair that remains is
+inside a box, and most of what used to be listed here is now the one tag.
 
 That is what makes the guard a shape rather than a list. `test/cockpitTheme.test.ts` asserts that
 **uppercase text that is not in a box takes its size and its tracking from `var(--label-*)` and from
@@ -3379,8 +3398,8 @@ the whole failure for a control whose value is being noticed at the moment somet
 punctuation carries the difference between them, because that is the difference: one files, one asks.
 The chrome is on the **wrapper** and not the control, since the offline face is `ExtLink` and takes no
 class of its own — and a rule naming `.ext-ref` is the one thing this stylesheet is tested not to do.
-`.cn-ident-act` rather than the console's own `.cn-chip`: that one is mono, uppercase and square, and
-borrowing it dressed the pair as readings — and, because a `<button>` does not take the inherited
+`.cn-ident-act` rather than [the tag](#the-tag): the tag is a reading, and borrowing it dressed the
+pair as verdicts — and, because a `<button>` does not take the inherited
 `text-transform` an `<a>` does, drew one of them in sentence case beside the other in capitals. The
 question's ink is set as `.cn .cn-ask-btn`, since the console's `.cn a` reset counts as (0,1,1) and
 beats a bare class.

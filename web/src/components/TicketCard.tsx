@@ -7,6 +7,7 @@ import type { CockpitView } from '../view/viewModel.js';
 import { AsyncButton } from './AsyncButton.js';
 import { Ref } from './refs.js';
 import { fmtUsd, relAge } from './util.js';
+import { Tag } from './tag.js';
 
 /**
  * One card on the board: what it is, what the harness makes of it, and the two things
@@ -80,7 +81,7 @@ export function TicketCard({
       <i className={`tb-stripe f${row.featureSlot ?? 0}`} />
       <div className="tb-top">
         <span className="tb-id">#{row.number}</span>
-        {row.issueType !== null && <i className={`tickets-type ${issueTypeTone(row.issueType)}`}>{row.issueType}</i>}
+        {row.issueType !== null && <Tag tone={issueTypeTone(row.issueType)}>{row.issueType}</Tag>}
         {reason.tone === 'held' && <i className="tickets-lamp" />}
         <AsyncButton
           className={`tb-dot${watched ? ' on' : ''}`}

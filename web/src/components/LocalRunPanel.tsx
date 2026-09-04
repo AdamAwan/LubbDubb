@@ -17,6 +17,7 @@ import { ValidateLocallyModal } from './ValidateLocallyModal.js';
 import { TranscriptPane } from './TranscriptPane.js';
 import { elapsed, fmtUsd, relTime } from './util.js';
 import { Label } from './label.js';
+import { Tag } from './tag.js';
 
 /** How often the tail is refetched while the run is live. */
 const POLL_MS = 2000;
@@ -437,7 +438,7 @@ export function LocalRunPanel({
                     <RefSummary facts={target.target} now={now} />
                   </button>
                   <span className="lrun-refs">
-                    {running && <span className="lrun-tag">running</span>}
+                    {running && <Tag tone="green">running</Tag>}
                     <Ref to={target.originRef} />
                     {target.target.pr !== null && <Ref to={`pr:${String(target.target.pr.number)}`} />}
                   </span>

@@ -4,6 +4,7 @@ import { fmtUsd, relTime } from './util.js';
 import { fmtShare, share } from './insightsFormat.js';
 import { Ref } from './refs.js';
 import { HeadRow } from './panel.js';
+import { Tag } from './tag.js';
 
 /**
  * Causes: what keeps sending the fleet back.
@@ -261,8 +262,8 @@ function Lately({ remedies }: { remedies: RemedyInsights }): JSX.Element {
             {/* The pull request as a ref, never as text — a row that names one and
                 offers no way there is the cockpit's most repeated dead end. */}
             <Ref to={r.ref} />
-            <span className="rm-tag">{r.causeLabel.toLowerCase()}</span>
-            <span className="rm-tag guard" style={{ color: `var(--rm-${r.guard})` }}>
+            <Tag>{r.causeLabel.toLowerCase()}</Tag>
+            <span className="tag rm-guard" style={{ color: `var(--rm-${r.guard})` }}>
               {r.guardLabel.toLowerCase()}
             </span>
             {r.checks.length > 0 && <span className="bl mono">{r.checks.join(', ')}</span>}

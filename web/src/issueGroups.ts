@@ -1,5 +1,6 @@
 import type { Issue, TicketRow } from './types.js';
 import { watchBucket } from './worldBuckets.js';
+import type { TagTone } from './components/tag.js';
 
 /**
  * The tickets tab's second axis, beside the watch buckets: **what a thing is**,
@@ -155,27 +156,27 @@ export function watchReading(
  * never a verdict: a customised process template's own container name draws
  * untinted here, where reading it as workable would have been the lie.
  */
-export function issueTypeTone(issueType: string | null | undefined): string {
-  if (issueType === null || issueType === undefined) return '';
+export function issueTypeTone(issueType: string | null | undefined): TagTone | undefined {
+  if (issueType === null || issueType === undefined) return undefined;
   switch (issueType.trim().toLowerCase()) {
     case 'bug':
     case 'defect':
-      return 'bug';
+      return 'red';
     case 'feature':
     case 'epic':
-      return 'container';
+      return 'violet';
     case 'user story':
     case 'story':
     case 'product backlog item':
     case 'requirement':
-      return 'story';
+      return 'green';
     case 'tech debt':
     case 'technical debt':
     case 'debt':
-      return 'debt';
+      return 'amber';
     case 'task':
-      return 'task';
+      return 'blue';
     default:
-      return '';
+      return undefined;
   }
 }

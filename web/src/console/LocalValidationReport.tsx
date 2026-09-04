@@ -2,6 +2,7 @@ import { AgentOnIt } from '../components/AgentOnIt.js';
 import { ConfirmButton } from '../components/ConfirmButton.js';
 import { CONTROL_CLASS } from '../components/controls.js';
 import { renderMarkdown } from '../components/markdown.js';
+import { Tag, type TagTone } from '../components/tag.js';
 import { ExtLink, relTime } from '../components/util.js';
 import {
   inFlight,
@@ -26,10 +27,10 @@ const LAMP: Record<LocalValidationTone, string> = {
  * already uses. A `nit` draws no tone at all — it is worth saying and not worth
  * colouring, which is the whole of what the word means.
  */
-const SEVERITY: Record<LocalValidationFinding['severity'], string> = {
-  blocker: 'cn-bad',
-  defect: 'cn-warn',
-  nit: '',
+const SEVERITY: Record<LocalValidationFinding['severity'], TagTone | undefined> = {
+  blocker: 'red',
+  defect: 'amber',
+  nit: undefined,
 };
 
 /**
@@ -132,7 +133,9 @@ export function LocalValidationReport({
         <div className="cn-rows">
           {validation.findings.map((finding, index) => (
             <div className="cn-row" key={`${finding.title}-${String(index)}`}>
-              <i className={`cn-chip ${SEVERITY[finding.severity]}`}>{finding.severity}</i>
+              <Tag tone={SEVERITY[finding.severity]} fill>
+                {finding.severity}
+              </Tag>
               <span className="cn-grow">
                 <b className="cn-name">{finding.title}</b>
                 <span className="cn-sub cn-wrap">{finding.detail}</span>

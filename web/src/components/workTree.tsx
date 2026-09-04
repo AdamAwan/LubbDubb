@@ -2,6 +2,7 @@ import type { JSX } from 'react';
 import type { WorkNodeView } from '../types.js';
 import { Ref } from './refs.js';
 import { relTime } from './util.js';
+import { Tag } from './tag.js';
 
 /**
  * One node of the durable work graph, and the walk that indents it.
@@ -24,18 +25,18 @@ export function WorkRow({ node, nodes, now }: { node: WorkNodeView; nodes: WorkN
     <div className={`work-node ${node.kind}`} style={{ marginLeft: `${depth(node, nodes) * 14}px` }}>
       <span className="work-mark">{MARK[node.kind] ?? '·'}</span>
       <span className="work-title">{node.title}</span>
-      <span className={`chip small${node.terminal ? ' ok' : ''}`}>{node.status}</span>
+      <Tag tone={node.terminal ? 'green' : undefined}>{node.status}</Tag>
       {/* Absence-means-merged is a deliberate fallback everywhere in the harness,
           but a durable record has no business forgetting it *was* one. */}
       {node.provenance === 'inferred' && (
-        <span className="chip small warn" title="No merge was ever observed — this PR simply left the world">
+        <Tag tone="amber" title="No merge was ever observed — this PR simply left the world">
           inferred
-        </span>
+        </Tag>
       )}
       {node.baseRef !== null && (
-        <span className="chip small" title="Stacked on this PR — a cross-link, not what caused the work">
+        <Tag title="Stacked on this PR — a cross-link, not what caused the work">
           on <Ref to={node.baseRef} />
-        </span>
+        </Tag>
       )}
       <span className="cn-refs">{NAMES_ITSELF.test(node.ref) && <Ref to={node.ref} />}</span>
       <span className="muted work-seen" title={`First seen ${node.firstSeenAt}`}>

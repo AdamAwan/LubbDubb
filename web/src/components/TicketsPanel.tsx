@@ -20,6 +20,7 @@ import { Ref, RefLinksExtended } from './refs.js';
 import { TicketsBoard } from './TicketsBoard.js';
 import { absDate, fmtUsd, relAge } from './util.js';
 import { Panel } from './panel.js';
+import { Tag } from './tag.js';
 
 /** What the tab is narrowed to, grouped and ordered by — every field of it a `Place` field. */
 interface TicketQueryPlace {
@@ -724,10 +725,12 @@ function TicketRowView({
           >
             <b className="tickets-name">{row.title}</b>
             <span className="tickets-sub">
-              {row.outcome !== null && <i className="chip small tickets-verdict">{row.outcome}</i>}
-              {row.issueType !== null && (
-                <i className={`tickets-type ${issueTypeTone(row.issueType)}`}>{row.issueType}</i>
+              {row.outcome !== null && (
+                <Tag tone="amber" fill>
+                  {row.outcome}
+                </Tag>
               )}
+              {row.issueType !== null && <Tag tone={issueTypeTone(row.issueType)}>{row.issueType}</Tag>}
               {frozen && <span>frozen{row.changedAt ? ` · last change ${relAge(row.changedAt, now)}` : ''}</span>}
               {reasons[0] !== undefined && <span className="tickets-reason">{reasons[0]}</span>}
             </span>
@@ -828,7 +831,7 @@ function StateChip({ row, colours }: { row: TicketRow; colours: Readonly<Record<
   const colour = stateColour(colours, label);
   return (
     <i
-      className={`tickets-state ${tone}`}
+      className={tone === 'frozen' ? 'tag tag-dashed' : 'tag'}
       style={colour === null ? undefined : { color: colour, borderColor: colour }}
       title={`${label} · ${row.tracking} in the harness's reading`}
     >

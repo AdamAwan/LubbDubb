@@ -8,6 +8,7 @@ import { CaveatChecklist, heldTitle, useAcknowledgements } from './CaveatCheckli
 import { planCaveatsOf } from '../planCaveats.js';
 import { Panel } from './panel.js';
 import { Button } from './button.js';
+import { Tag } from './tag.js';
 
 export function EscalationCard({
   escalation,
@@ -183,39 +184,41 @@ export function EscalationCard({
   return (
     <Panel density="padded" className="card escalation">
       <div className="card-head">
-        <span className="badge escalate">{escalation.type.replace(/_/g, ' ')}</span>
+        <Tag tone="accent" fill>
+          {escalation.type.replace(/_/g, ' ')}
+        </Tag>
         {questions && (
-          <span className="chip small info" title="Answered together, in one reply">
+          <Tag tone="blue" title="Answered together, in one reply">
             {questions.length} questions
-          </span>
+          </Tag>
         )}
         {decidable && (
-          <span className="chip small warn" title="Accepting performs this act; nothing happens until you do">
+          <Tag tone="amber" title="Accepting performs this act; nothing happens until you do">
             needs your decision
-          </span>
+          </Tag>
         )}
         {permission && (
-          <span className="chip small warn" title="An agent is blocked on this command until you allow or deny it">
+          <Tag tone="amber" title="An agent is blocked on this command until you allow or deny it">
             wants permission
-          </span>
+          </Tag>
         )}
         {resumed && (
-          <span
-            className="chip small ok"
+          <Tag
+            tone="green"
             title={`The agent has made tool calls since asking (last ${relTime(resumedAt!, now)}), so it carried on rather than waiting. Probably safe to dismiss.`}
           >
             agent resumed
-          </span>
+          </Tag>
         )}
         {expiring && (
           <span
-            className="chip small warn esc-expiry"
+            className="tag t-amber esc-expiry"
             title="This agent stopped without saying whether it had finished, and did not answer when asked. Unless you say otherwise, the harness records it done when this runs out — its branch, commits and pull request are kept, and its worktree slot goes back to the fleet."
           >
             done in {untilTime(expiring, now)}
           </span>
         )}
-        {signal && <span className="chip small">{linkify(signal, refUrls)}</span>}
+        {signal && <Tag>{linkify(signal, refUrls)}</Tag>}
         <span className="muted small esc-time">{relTime(escalation.createdAt, now)}</span>
       </div>
       <div className="escalation-prompt">{linkify(headline, refUrls)}</div>
