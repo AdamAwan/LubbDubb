@@ -1,0 +1,319 @@
+# 33 — Story sequencing
+
+> **Not yet built.** Nothing in this document describes running code. Every path is written in
+> italics until the change that creates it, and the build order is in `docs/plans/story-sequencing.md`.
+> The behaviour the harness has **today** is the one this replaces: every watched story under a
+> Feature is eligible the moment it carries the tag, and the only thing that orders them is
+> `issuePriorityLabels` and then the issue number ([06](06-issue-pickup.md#priority)).
+
+_src/sequence/_. The order the stories under a Feature are worked in, and the hold that keeps a story
+waiting for the one it needs.
+
+A Feature is never dispatched at — its children are the work ([06](06-issue-pickup.md#hierarchy)) —
+and watching one tags every descendant beneath it at once. So the click that says "work this feature"
+currently makes eight stories eligible in the same pulse, and the fleet starts whichever the priority
+labels happen to rank first. That is right when the stories are independent and wrong when they are
+not: the story that reads a table starts beside the story that writes it, and the first agent
+invents the schema the second was going to design.
+
+This is the record that says which of those two goes first, and the gate that makes it so.
+
+## What it is not
+
+Stated first, because each boundary is a thing the harness already does and would otherwise be
+re-litigated:
+
+| Not                       | Because                                                                                                                                                                                                                               |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A plan                    | A plan decomposes **one** issue into parts and cuts a branch per part ([08](08-planning.md)). A sequence orders issues somebody else already wrote, creates nothing, and cuts no branch.                                              |
+| A priority                | `issuePriorityLabels` says which of two eligible items claims scarce headroom first. This says one of them is not eligible yet. Ranking never withholds work; a sequence does. → [precedence](#precedence)                            |
+| A workflow state          | `pickupStates` is the operator's statement about their board. The harness never writes a state on the strength of a sequence — the hold is harness-side and invisible to the tracker. → [what it never writes](#what-it-never-writes) |
+| A verdict about a Feature | The feature board composes no sentence of its own ([17](17-cockpit.md#the-feature-summary)) and neither does this. A sequence is an ordering with a stated reason, not a reading of how the Feature is going.                         |
+| A dependency graph        | Nothing here is transitive reasoning over the repo. The edges are what the tracker's links say plus what one agent read in the items' own text, and both are recorded as such. → [two sources](#where-the-order-comes-from)           |
+| Automatic                 | An order holds work only once a person has accepted it. Until then the fleet behaves exactly as it does today. → [fail open](#fail-open)                                                                                              |
+
+## Where the order comes from
+
+Two sources, and **which one an edge came from is recorded on the edge**. The distinction is not
+presentational: one is a statement a person made on the board and the other is a guess, and a
+surface that draws them the same way invites an operator to accept the second thinking it is the
+first.
+
+### The tracker's own links
+
+Azure DevOps work items carry `System.LinkTypes.Dependency-Forward` / `-Reverse` — Predecessor and
+Successor. `src/integrations/azure/workItems.ts` hydrates `Hierarchy` today and nothing else, so an
+order a team has already drawn on their own board is invisible to the harness.
+
+A third hydration pass resolves those links into `Issue.dependsOn`, a list of `IssueRelative` beside
+the existing `parent` / `children` / `siblings`. Providers that track no dependencies (GitHub, the
+fake) leave it `undefined`, which every reader treats as "no order stated" — the flat-tracker path
+is byte-for-byte what it was.
+
+These edges are **authoritative and re-read every hydration**. They are not stored as part of the
+sequence and they are not the sequencer's to change: a person drew them, and a proposal that
+contradicted one would be the harness overruling the board it is supposed to be reading.
+
+### The sequencer
+
+Most boards have no dependency links at all, which is the case this feature exists for. One desk
+agent per Feature — rule `feature-sequence`, origin `issue:<n>:sequence` — reads the Feature's
+description and its watched children and proposes the rest of the order.
+
+It is **`feature-summary`'s shape throughout** (`src/dispatcher/rules/featureSummary.ts`,
+`src/summaries/featureSummary.ts`), deliberately, because that rule already solved this rule's hard
+parts: a desk agent with no branch and no worktree, triggered by a standing-key comparison rather
+than an event, ranked at the bottom of the pipeline, failing open and silent. What differs is the
+key and what the agent may write.
+
+**The trigger is membership, not movement.** `featureSequenceKey` digests the set of watched,
+unsettled children and the edges the provider reports — not their states. A story merging does not
+invalidate an order; a story being _added_ does. That is the whole difference from the summary's
+key, which digests standings precisely because a summary is about movement: re-proposing an order
+every time a child lands would ask an operator to re-accept the same sequence eight times.
+
+**It may decline to order.** An agent that cannot support an order from the items' own text says so
+and proposes them all parallel. This is `isOrphanIssue`'s discipline one tier up
+([06](06-issue-pickup.md#hierarchy)): the harness reports what it can see and does not invent the
+structure, because a fabricated edge is the one mistake that would be invisible in the resulting
+work — a story that simply never starts, with nothing red.
+
+## The record
+
+_src/store/sequences.ts_, two tables.
+
+`feature_sequences` — one row per Feature: the feature number, `status`, the sequencer's stated
+reason, the standing key it was written against, and who accepted it and when.
+
+| Status     | Meaning                                                                                                                               |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `proposed` | An agent has written an order and nobody has answered. **Holds nothing.**                                                             |
+| `accepted` | A person accepted it. This is the only status the gate reads.                                                                         |
+| `declined` | A person said to run them all. Holds nothing, and is remembered so the same standing is not proposed again. → [declining](#declining) |
+
+`feature_sequence_edges` — one row per edge: the feature, the dependent issue, the issue it depends
+on, `source` (`link` | `inferred`), and the sequencer's one-line reason for that edge. A story with
+no row depends on nothing and is in the first wave.
+
+### Waves are derived, never stored
+
+The cockpit's "wave 2 of 4" is **depth in the edge graph**, computed on read the way `partDepth`
+computes a part's depth from its `dependsOn` slugs (`src/plans/parts.ts`). Storing a wave number
+would be a second answer to a question the edges already settle, and the two would part company the
+first time an edge was amended.
+
+Waves are the right vocabulary for the surface because they are honest about parallelism: everything
+at one depth runs together. A numbered list would read as a chain and would quietly claim an order
+between two stories nobody ordered.
+
+### A cycle is refused at ingestion
+
+Edges that form a cycle are rejected when the sequencer submits them, with the cycle named back to
+the agent, and **nothing is stored**. `partDepth` is cycle-safe and returns a depth anyway, which is
+correct for a plan whose parts are already in flight; here there is nothing in flight yet and a
+sequence that silently linearised a cycle would hold work in an order no one chose.
+
+## Readiness and the hold
+
+`sequenceReadiness(feature, edges, issues)` in _src/sequence/readiness.ts_ is pure over the edges
+plus the world: for each child, the unsatisfied edges pointing at it.
+
+**A predecessor is satisfied when it is settled, or when it is in flight and has pushed a branch** —
+`dependencySatisfied`'s rule exactly (`src/plans/parts.ts`). Waiting for a merge would serialise a
+feature into a queue of one; waiting for a branch lets the successor stack on work already underway,
+which is what makes a four-wave sequence finish in less than four times one story.
+
+The verdict rides on `StageContext` for later stages to read, and it is computed **once**, in the
+dispatcher's context assembly, beside `routes` and `eligibleIssues`. It is not a second opinion
+formed inside a rule: `issue-plan` and `issue-pickup` both consult it and must never disagree about
+whether a story is ready, exactly as they must never disagree about which plan arm it is on
+([05](05-dispatcher.md#the-rule-book)).
+
+### A held story is queued, not skipped
+
+`issue-pickup` and `issue-plan` push their candidate with `held: 'sequenced'` and a reason naming
+what it waits behind — `Held: #597 waits on #593, which has not pushed a branch yet.` It is a new
+member of `RuleHeld` (`src/dispatcher/admission.ts`), beside `superseded` and `unapproved`.
+
+Queued rather than skipped, for `capped`'s reason: a dispatch that silently never appears is
+invisible, and an operator looking at an idle fleet and a full board has nothing to read. A held
+candidate stays in Up next with its reason attached.
+
+**It is not routed through `consider`.** The cooldown has no bearing on a pickup that is not going
+out this cycle for a different reason entirely, and spending an attempt cap on a suppressed dispatch
+would blame the pickup for the sequence's hold — the same argument `issue-pickup` already makes for
+`superseded`.
+
+## Fail open
+
+Every one of these leaves **every story eligible, in exactly the order it has today**:
+
+- no sequence row for the Feature;
+- a sequence `proposed` but not accepted, or `declined`;
+- a sequencer that crashed, was killed, or spent its attempt cap;
+- an edge naming an issue the world does not hold;
+- a cycle (refused at ingestion, so there is nothing to read);
+- `issueSequencing` off, which is the default.
+
+This is `resolvePlanRoute`'s discipline ([08](08-planning.md#the-four-arms)): a planner that fails
+falls through to `single` rather than parking the issue. A mechanism that adds ordering must never be
+able to park a Feature, because the failure it would cause — a feature nobody works, with nothing
+red — is worse than the disorder it exists to fix.
+
+Fails **silent**, `feature-summary`'s rule: no escalation is raised for a sequence that did not
+happen. There is nothing a person can do about it that they cannot do by reading the board, and an
+inbox item per unsequenced Feature would be a queue of chores generated by a feature nobody asked
+for.
+
+## Proposing it
+
+A sequence reaches a person before it holds anything. The proposal is drawn on the Feature's card
+and carries four things, and the last two are the ones that make it answerable:
+
+- **the order**, as waves, each edge marked `from a tracker link` or `inferred`;
+- **why this order** — the sequencer's reason, in its own voice;
+- **what it was unsure about** — the edge it would most like argued with, and what would change its
+  mind. `openQuestions`' job on the plan document ([08](08-planning.md#the-seven-narrative-fields)):
+  an order with no stated doubt is one nobody can disagree with usefully;
+- **what accepting costs** — how many stories would start now and will not if this is accepted.
+  Without it the operator is agreeing to a hold whose size is not on the card.
+
+Three answers, because nothing else ends it: **accept**, **discuss**, **decline**.
+
+### Declining
+
+`declined` is a real answer, not a dismissal, and it is stored. "Run them all" is what an operator
+says about a feature whose stories genuinely are independent, and a proposal that came back on the
+next pulse would make the fleet argue with them once a Feature until they gave in.
+
+It is scoped to the standing key it declined, so a Feature that gains three new stories is proposed
+again — the thing declined was an order over a set, and the set has changed.
+
+## Amending it
+
+There is no drag-to-reorder. An accepted sequence is changed by **talking to Claude Code**, which is
+the door a plan is already amended through ([08](08-planning.md#discussing-a-plan)): the card carries
+a `Discuss…` deep link (`web/src/components/DesktopLink.tsx`), the operator's own session opens on
+the Feature, and it writes through _sequence_amend_ on the desktop channel
+(`src/mcp/desktopTools.ts`, `DESKTOP_TOOL_NAMES` — never `buildTools`). The session dispatches
+nothing.
+
+That is the right shape rather than the cheap one. Reordering is a judgement with a reason behind it,
+and the reason is the half worth keeping: a drag records that the order changed and loses why, which
+is exactly what the next person to read the Feature needs. It also removes a surface — no reorder
+route, no per-wave editing state on `Place`, nothing in the cockpit that writes an order.
+
+The fleet's own channel gets _sequence_submit_ (_src/mcp/tools/sequenceSubmit.ts_), named in
+`buildTools` **and** in `MCP_TOOL_NAMES` (`src/mcp/names.ts`), authorised structurally against the
+origin the caller was dispatched on — `validation_report`'s identity rule
+([11](11-mcp-tools.md#identity)).
+
+## Precedence
+
+Four things now have an opinion about which story is worked next. In force order, strongest first:
+
+| Rank | Statement                     | Beats a sequence because                                                                                           |
+| ---- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| 1    | A goal's priority flag        | An operator naming one goal the priority is a standing instruction about that goal.                                |
+| 2    | The operator's drag           | Dragging a **held** story to the top is the operator saying "go now" — an explicit override of the harness's hold. |
+| 3    | The accepted sequence         | The hold.                                                                                                          |
+| 4    | `issuePriorityLabels`, number | Ranking among what is already eligible. It never withheld anything and does not start now.                         |
+
+Rows 1 and 2 already rank ahead of the natural order (`src/dispatcher/priorityOverride.ts`,
+`src/dispatcher/goalPriority.ts`). What is new is that they also **clear the hold**: an origin the
+operator has flagged or dragged is dispatched even when the sequence would have held it, and the
+sequence is not amended by that — one story going early is not a new order.
+
+## What it never writes
+
+- **No work-item state.** The obvious shortcut is to promote the next story to `Ready`. It is
+  refused: `pickupStates` is the operator's statement about their board, and moving items on someone
+  else's project on the strength of an inferred edge is a loud, outward-facing failure. An operator
+  who wants that behaviour states it with `pickupStates` themselves, which already sequences a board
+  perfectly well by hand ([06](06-issue-pickup.md#issuepickuppolicy)).
+- **No Predecessor links.** The harness reads the tracker's hierarchy and dependencies and never
+  writes them. Writing an inferred edge back would make the harness's guess indistinguishable from
+  the team's intent on the next hydration — its own output folded back in as evidence, which is
+  `PoolDesk`'s failure ([28](28-cross-fleet-pool.md)) in a place with no reading to catch it.
+- **No comment on the ticket.** An order is a harness-side scheduling decision; the board is not
+  where it belongs.
+
+## The cockpit
+
+### The Feature page
+
+The sequence **groups the children list that is already on the card** — it does not add a second
+list of the same stories (`web/src/components/FeatureBoard.tsx`). The existing columns are unchanged;
+what is new is a wave rail down the left, a wave header naming what the wave waits on, and a cell on
+a held row saying what it waits behind.
+
+Above the waves: the sequencer's reason, and `Discuss…` / `Re-sequence`, which is the pair the plan
+modal already draws as `Discuss…` / `Replan`.
+
+A Feature with no accepted sequence draws none of this — the flat children list, exactly as today.
+
+### The Goal page
+
+A copy of the same sequence, with this goal highlighted, **folded shut by default** — `Environments`'
+treatment ([17](17-cockpit.md)) — because a story's own page is read for the story, not for its
+neighbours.
+
+The folded reading is the whole point of folding it: `wave 2 of 4 · 2 waiting on this`. A goal
+nothing is waiting on says so without being opened, which is the `0/3 reached` case; `2 waiting on
+this` is the reason to open it. The Feature's ref sits on the shut header, so the way up does not
+require expanding.
+
+Opened, it draws the waves either side of this goal: what it waits on, with standings, and what
+waits on it.
+
+## Configuration
+
+| Key                        | Default | What it does                                                                                                           |
+| -------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `issueSequencing`          | `off`   | `off` — no sequencer, no hold. `links` — honour the tracker's dependency links only. `full` — links and the sequencer. |
+| `issueSequenceMaxChildren` | `40`    | Above this a Feature is not sequenced: the prompt would not fit and the order would not be read.                       |
+
+`links` exists as its own level because it is the setting with no inference in it at all. A team
+that already draws Predecessor links gets the whole gate, deterministically, with no agent spend and
+nothing to accept — and a sequence built only from links is `accepted` on arrival, since a person
+drew every edge in it.
+
+## Persistence
+
+Both tables are new, so `CREATE TABLE IF NOT EXISTS` is sufficient and no `ColumnMigrations` entry
+is owed — but `Issue.dependsOn` is a hydration field and not a column, so nothing on `tracker_items`
+changes either. → [14](14-persistence.md#migrations)
+
+`feature_sequence_edges` rows are deleted and rewritten as a set when a sequence is submitted or
+amended, never merged: an edge dropped from an amended order must disappear, and a merge on
+(dependent, dependsOn) would leave it behind indistinguishable from one still meant.
+
+A child that is re-parented out of the Feature drops its edges with it. An edge whose endpoint the
+world no longer holds is ignored on read rather than deleted, because a story invisible for a pulse
+is not a story that has gone.
+
+## Tests
+
+At the `buildSystem` seam, with `FakeIssuesIntegration` scripted to report dependency links, and the
+sequencer driven in `raw` agent mode like every other rule:
+
+- a held story is queued as `held: 'sequenced'` and is **not** dispatched;
+- the same story dispatches once its predecessor pushes a branch, before any merge;
+- every fail-open arm above dispatches everything;
+- a flagged or dragged origin dispatches through a hold;
+- a cycle is refused and holds nothing;
+- `sequenceReadiness` and `featureSequenceKey` as pure unit tests, with no world.
+
+The readiness function and the key are pure, so the two things most likely to be wrong — which
+stories are ready, and when a Feature is re-proposed — are testable without a harness.
+
+## What is deliberately not built
+
+- **Ordering across Features.** An epic's features are not sequenced against each other. The unit an
+  operator accepts an order for is the thing they opened, and a cross-feature order is one nobody
+  would be able to read.
+- **Inferring edges from the code.** The sequencer reads the tracker, not the repo. An order derived
+  from imports would be an argument about the code made in a place with no code review.
+- **Enforcing an order the fleet has already broken.** If two stories in different waves are both in
+  flight — a drag, a flag, a sequence accepted late — nothing is killed or rolled back. The hold is
+  about what starts, never about what is already running.
