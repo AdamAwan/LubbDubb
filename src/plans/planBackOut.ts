@@ -2,7 +2,6 @@ import type { Config } from '../config.js';
 import type { ErrorLog } from '../errorLog.js';
 import type { ActionSink } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
-import type { Plan } from '../types.js';
 import { issueConclusionOrigin } from '../issueConclusion.js';
 import { applyIssueWatch } from '../issueWatch.js';
 import { originIssueNumber } from './planning.js';

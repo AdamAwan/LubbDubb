@@ -2,8 +2,6 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { isRecoveryVerdict, type RecoveryVerdict } from '../../agents/crashRecovery.js';
 import { formatAnswers } from '../../escalation/questionnaire.js';
-import { originIssueNumber } from '../../plans/planning.js';
-import { readProposedAct } from '../../proposals/proposals.js';
 import { checked, IdParams, optionalText, requiredBoolean, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
 
