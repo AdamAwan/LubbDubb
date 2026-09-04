@@ -4,6 +4,7 @@ import {
   applyToken,
   isTokenValue,
   loadThemePrefs,
+  PRESET_GROUPS,
   PRESETS,
   saveThemePrefs,
   setThemeUnsaved,
@@ -136,31 +137,41 @@ export function ThemeSettings() {
 
   return (
     <div className="th">
+      {/* Tiles carry the swatches and a name only, in a Dark row and a Light row;
+          the blurb is drawn once, beneath, for the preset that is on. Seventeen
+          blurbs is a page, and the question the picker answers is "which one". */}
       <div className="th-presets" role="radiogroup" aria-label="Theme">
-        {PRESETS.map((p) => (
-          <button
-            key={p.id}
-            role="radio"
-            aria-checked={preset === p.id}
-            className={`th-preset${preset === p.id ? ' on' : ''}`}
-            onClick={() => choosePreset(p.id)}
-            title={p.blurb}
-          >
-            {/* The swatches read their colours through the same declaration block
-                as the theme itself — `theme.css` gives every preset a
-                `[data-theme-swatch]` selector beside its `html[data-theme]` one —
-                so a card cannot show a palette its preset does not have. */}
-            <span className="th-sws" data-theme-swatch={p.id}>
-              <i className="th-sw" style={{ background: 'var(--bg)' }} />
-              <i className="th-sw" style={{ background: 'var(--panel)' }} />
-              <i className="th-sw" style={{ background: 'var(--text)' }} />
-              <i className="th-sw" style={{ background: 'var(--accent)' }} />
-            </span>
-            <b className="th-presetn">{p.label}</b>
-            <span className="th-presetb">{p.blurb}</span>
-          </button>
+        {PRESET_GROUPS.map((g) => (
+          <div className="th-preset-group" key={g.ground}>
+            <span className="th-preset-groupn">{g.label}</span>
+            <div className="th-preset-tiles">
+              {PRESETS.filter((p) => p.ground === g.ground).map((p) => (
+                <button
+                  key={p.id}
+                  role="radio"
+                  aria-checked={preset === p.id}
+                  className={`th-preset${preset === p.id ? ' on' : ''}`}
+                  onClick={() => choosePreset(p.id)}
+                  title={p.blurb}
+                >
+                  {/* The swatches read their colours through the same declaration block
+                      as the theme itself — `theme.css` gives every preset a
+                      `[data-theme-swatch]` selector beside its `html[data-theme]` one —
+                      so a card cannot show a palette its preset does not have. */}
+                  <span className="th-sws" data-theme-swatch={p.id}>
+                    <i className="th-sw" style={{ background: 'var(--bg)' }} />
+                    <i className="th-sw" style={{ background: 'var(--panel)' }} />
+                    <i className="th-sw" style={{ background: 'var(--text)' }} />
+                    <i className="th-sw" style={{ background: 'var(--accent)' }} />
+                  </span>
+                  <b className="th-presetn">{p.label}</b>
+                </button>
+              ))}
+            </div>
+          </div>
         ))}
       </div>
+      <p className="th-presetb">{PRESETS.find((p) => p.id === preset)?.blurb}</p>
 
       <div className="th-tools">
         <input

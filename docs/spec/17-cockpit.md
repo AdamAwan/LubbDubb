@@ -4575,19 +4575,25 @@ colour input cannot express it in any other form.
 
 #### The presets
 
-Nine, and **Dark has no block**: Dark _is_ `:root`, which is what makes it the default with no second
-copy of the palette to drift. The other eight live in `web/src/theme.css` as `html[data-theme='x']`.
-Five are ports — Solarized Dark, Monokai, Dracula, Atom One Dark, Moonlight — one is Light, one is High
-contrast, and **Amber is not a port of anything**: a warm low-blue palette for a room with the lights
-off. Amber is deliberately _not_ monochrome, which is the obvious reading of an amber phosphor screen and
-the wrong one here, because this cockpit carries verdicts in colour and a green that is amber makes a
-passing pipeline look like a failing one.
+Seventeen, and **Dark has no block**: Dark _is_ `:root`, which is what makes it the default with no
+second copy of the palette to drift. The other sixteen live in `web/src/theme.css` as
+`html[data-theme='x']`. Thirteen are ports — Solarized Dark and Light, Monokai, Dracula, Atom One Dark,
+Moonlight, Nord, Gruvbox Dark, Catppuccin Mocha, Tokyo Night, Night Owl, GitHub Dark and Light — one is
+Light, one is High contrast, and **Amber is not a port of anything**: a warm low-blue palette for a room
+with the lights off. Amber is deliberately _not_ monochrome, which is the obvious reading of an amber
+phosphor screen and the wrong one here, because this cockpit carries verdicts in colour and a green that
+is amber makes a passing pipeline look like a failing one.
 
-They are CSS rather than a TypeScript table because eight at sixty-three tokens each is 504 values: in a
-module they would ship in the JS bundle and nobody could review them against the sheet they override.
-`html[data-theme='x']` counts (0,2,0) against `:root`'s (0,1,0), so a preset wins on **specificity, not
-order** — which matters because Vite injects styles through JS in dev and extracts a stylesheet in
-production.
+Each preset declares a **ground**, `dark` or `light`, on its `PRESETS` entry in `theme.ts`. It is the
+one fact about a palette the picker needs before the sheet is consulted — which row to draw the tile
+in — and it is declared rather than read off `--bg` because the list is drawn where the sheet is not
+loaded. Fourteen are dark; Light, Solarized Light and GitHub Light are the light row.
+
+They are CSS rather than a TypeScript table because sixteen at sixty-three tokens each is over a thousand
+values: in a module they would ship in the JS bundle and nobody could review them against the sheet they
+override. `html[data-theme='x']` counts (0,2,0) against `:root`'s (0,1,0), so a preset wins on
+**specificity, not order** — which matters because Vite injects styles through JS in dev and extracts a
+stylesheet in production.
 
 A block declares only the tokens whose `:root` value is a **literal**; the `color-mix` ones follow from
 the core on their own. That rule is not written down anywhere but the CSS itself — the test derives the
@@ -4597,9 +4603,10 @@ ratios differ between a dark theme and a light one on purpose: 31% of a hue over
 border you can see, and the same 31% over near-white is a tint you cannot. What stays constant is the
 contrast against the ground, not the proportion.
 
-Two of the ports needed a value changed to be usable rather than faithful. Dracula's comment grey and
-Monokai's sit at 2.4 and 2.2 against their own panels — fine for a comment, too quiet for the secondary
-text this UI puts there — so both are lifted. Every text pair in every preset clears 3:1.
+Four of the ports needed a value changed to be usable rather than faithful. Dracula's comment grey and
+Monokai's sit at 2.4 and 2.2 against their own panels, Tokyo Night's at 2.5 and Night Owl's at 2.9 —
+fine for a comment, too quiet for the secondary text this UI puts there — so all four are lifted. Every
+text pair in every preset clears 3:1.
 
 #### How it reaches the DOM
 
@@ -4686,6 +4693,12 @@ Three things about the drawing that are decisions rather than details:
 - **The dirty sentence never counts zero.** A preset change sets `dirty` but moves no token, so
   "**0** tokens changed · unsaved" read as "nothing pending" and got left unsaved (issue #680). With no
   token moved the bar names the preset instead: `Preset ‹label›, unsaved — a reload drops it`.
+- **The picker is two rows of tiles and one caption.** A tile carries the four swatches and the name
+  only, and the tiles sit in a Dark row and a Light row by the preset's `ground`. Nine cards with a
+  blurb each fitted above the token editor; seventeen did not, and a picker that pushes the editor off
+  the screen has made the page about choosing rather than tuning. The blurb is drawn once, beneath the
+  rows, for the preset that is on — and stays on every tile as its `title` — because the question the
+  picker answers is "which one", and the blurb is the answer to "what is it" about the one you chose.
 - **A preview card cannot lie about its preset.** Each preset block in `theme.css` carries a second
   selector, `[data-theme-swatch='x']`, and a card is a `<span>` with that attribute whose swatches read
   `var(--bg)` and friends — so a card's colours arrive through the same declaration block as the theme.

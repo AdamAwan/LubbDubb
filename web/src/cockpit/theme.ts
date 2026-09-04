@@ -49,7 +49,23 @@ export type PresetId =
   | 'dracula'
   | 'one-dark'
   | 'moonlight'
-  | 'amber';
+  | 'amber'
+  | 'nord'
+  | 'gruvbox-dark'
+  | 'catppuccin-mocha'
+  | 'tokyo-night'
+  | 'night-owl'
+  | 'github-dark'
+  | 'solarized-light'
+  | 'github-light';
+
+/**
+ * Which way up a preset is. The picker groups by it, because seventeen tiles in
+ * one run is a search and "dark or light" is the first question anyone asks of a
+ * theme; the answer is declared here rather than read off `--bg`, since the sheet
+ * is not loaded where the list is drawn.
+ */
+type PresetGround = 'dark' | 'light';
 
 /**
  * The presets, in the order the section draws them.
@@ -57,16 +73,45 @@ export type PresetId =
  * Dark is first and is the default because it is `:root` itself — `theme.css` has
  * no block for it, so there is no second copy of the default palette to drift.
  */
-export const PRESETS: readonly { id: PresetId; label: string; blurb: string }[] = [
-  { id: 'dark', label: 'Dark', blurb: 'The default — cool slate, one warm accent' },
-  { id: 'light', label: 'Light', blurb: 'Paper ground, hues darkened to hold against it' },
-  { id: 'contrast', label: 'High contrast', blurb: 'Black ground, white lettering, loud hues' },
-  { id: 'solarized-dark', label: 'Solarized Dark', blurb: "Schoonover's palette, mapped role for role" },
-  { id: 'monokai', label: 'Monokai', blurb: 'The classic editor palette' },
-  { id: 'dracula', label: 'Dracula', blurb: 'Violet ground, six bright accents' },
-  { id: 'one-dark', label: 'Atom One Dark', blurb: "Atom's, and already half here — the ANSI cyan is its" },
-  { id: 'moonlight', label: 'Moonlight', blurb: 'The one cool-violet ground' },
-  { id: 'amber', label: 'Amber', blurb: 'Warm and low-blue, for a room with the lights off' },
+export const PRESETS: readonly { id: PresetId; label: string; blurb: string; ground: PresetGround }[] = [
+  { id: 'dark', label: 'Dark', blurb: 'The default — cool slate, one warm accent', ground: 'dark' },
+  { id: 'light', label: 'Light', blurb: 'Paper ground, hues darkened to hold against it', ground: 'light' },
+  { id: 'contrast', label: 'High contrast', blurb: 'Black ground, white lettering, loud hues', ground: 'dark' },
+  {
+    id: 'solarized-dark',
+    label: 'Solarized Dark',
+    blurb: "Schoonover's palette, mapped role for role",
+    ground: 'dark',
+  },
+  {
+    id: 'solarized-light',
+    label: 'Solarized Light',
+    blurb: "Schoonover's cream paper, the same eight hues",
+    ground: 'light',
+  },
+  { id: 'monokai', label: 'Monokai', blurb: 'The classic editor palette', ground: 'dark' },
+  { id: 'dracula', label: 'Dracula', blurb: 'Violet ground, six bright accents', ground: 'dark' },
+  {
+    id: 'one-dark',
+    label: 'Atom One Dark',
+    blurb: "Atom's, and already half here — the ANSI cyan is its",
+    ground: 'dark',
+  },
+  { id: 'moonlight', label: 'Moonlight', blurb: 'The one cool-violet ground', ground: 'dark' },
+  { id: 'nord', label: 'Nord', blurb: 'Arctic blue-grey, frost and aurora accents', ground: 'dark' },
+  { id: 'gruvbox-dark', label: 'Gruvbox Dark', blurb: 'Warm retro browns, earthy hues', ground: 'dark' },
+  { id: 'catppuccin-mocha', label: 'Catppuccin Mocha', blurb: 'Soft pastels on a deep mauve ground', ground: 'dark' },
+  { id: 'tokyo-night', label: 'Tokyo Night', blurb: 'Deep indigo, neon blues and violets', ground: 'dark' },
+  { id: 'night-owl', label: 'Night Owl', blurb: "Drasner's navy, tuned for a dark room", ground: 'dark' },
+  { id: 'github-dark', label: 'GitHub Dark', blurb: "GitHub's own dark UI", ground: 'dark' },
+  { id: 'github-light', label: 'GitHub Light', blurb: "GitHub's own light UI", ground: 'light' },
+  { id: 'amber', label: 'Amber', blurb: 'Warm and low-blue, for a room with the lights off', ground: 'dark' },
+];
+
+/** The rows the picker draws, in order. Every preset's `ground` names one of these. */
+export const PRESET_GROUPS: readonly { ground: PresetGround; label: string }[] = [
+  { ground: 'dark', label: 'Dark' },
+  { ground: 'light', label: 'Light' },
 ];
 
 const DEFAULT_PRESET: PresetId = 'dark';
