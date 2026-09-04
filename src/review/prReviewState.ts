@@ -52,17 +52,17 @@ export interface PrReviewState {
   /** What it found, one entry each. Empty on every arm but `findings`. */
   findings: readonly string[];
   /**
-   * Somebody has dealt with what it found: the thread the findings were published
-   * into reads **resolved** on the provider. False on every other arm, and on a
-   * `findings` review that was never published, whose thread the current reading
-   * does not carry, or whose thread is still open.
+   * Somebody has dealt with what it found: the thread(s) the findings were
+   * published into read **resolved** on the provider. False on every other arm,
+   * and on a `findings` review whose threads the current reading does not carry,
+   * or any of which is still open.
    *
-   * It is the resolution of the fleet's *own* published thread and nothing else —
-   * read off `PrReview.publishedThread`, which is a record of what the harness
-   * sent. Any wider rule (every thread on the pull request, a thread whose author
-   * matches the credential) would let somebody else's tidy-up report the fleet's
-   * findings as answered, which is the one thing this bit must never say wrongly:
-   * it is what turns the mark from red to green.
+   * Two arms, and both are about the fleet's *own* threads rather than about the
+   * pull request's. Any wider rule — every thread on the pull request, a thread
+   * whose author matches the credential — would let somebody else's tidy-up report
+   * the fleet's findings as answered, which is the one thing this bit must never
+   * say wrongly: it is what turns the mark from red to green.
+   * → {@link reviewAddressed}
    */
   addressed: boolean;
   /** When the reviewer reported, for the tooltip's foot. Null until it has. */
@@ -75,6 +75,54 @@ export interface PrReviewState {
   routeAgentId: string | null;
   /** The commit the reviewer read, where the provider reported one. Display only. */
   headSha: string | null;
+}
+
+/**
+ * Whether the fleet's own findings have been dealt with — the whole of
+ * {@link PrReviewState.addressed}, as two independent arms either of which is
+ * enough.
+ *
+ * **The record arm.** `PrReview.publishedThread` names the thread the harness
+ * itself posted into through `reply_to_review`, and that thread reads `resolved`
+ * in the reading in hand. Only where this reading still carries it: a thread the
+ * provider no longer reports is a thread nothing can say was resolved, and
+ * "cannot say" is not "dealt with".
+ *
+ * **The stamp arm**, which exists because the record arm covers only what the
+ * *reviewer agent* posted. On a deployment running `review.publish: 'none'` the
+ * harness posts nothing, so `publishedThread` is null on every review, so the
+ * record arm can never fire — and a deployment whose findings are published by
+ * the operator's own review tooling has its threads sitting resolved on the pull
+ * request with the mark still red, forever, with nothing anywhere saying why. So
+ * a thread may name itself instead: `review.publishedThreadProperty` is the key
+ * that poster stamps, and (where it distinguishes them) `publishedThreadRole` is
+ * the value required on the companion `"<key>.role"`.
+ *
+ * **At least one, and every one of them.** "Every stamped thread is resolved" is
+ * vacuously true of a pull request with no stamped threads at all, which would
+ * read every unpublished review as dealt with — so a match is required first.
+ * And *every* rather than *any*, because a later round's new finding opens a new
+ * stamped thread: with `any`, one resolved thread from the first round would keep
+ * the mark green over an open finding nobody has looked at.
+ *
+ * **Off by default, on both arms.** With no property declared the stamp arm is
+ * not consulted at all, which is every deployment before this existed.
+ */
+function reviewAddressed(
+  publishedThread: string | null,
+  threads: readonly PrReviewThread[],
+  policy: PrReviewPolicy,
+): boolean {
+  if (publishedThread !== null && threads.some((t) => t.id === publishedThread && t.state === 'resolved')) return true;
+  const key = policy.publishedThreadProperty;
+  if (key === null || key === '') return false;
+  const role = policy.publishedThreadRole;
+  const stamped = threads.filter((t) => {
+    const props = t.properties;
+    if (props === undefined || props[key] === undefined) return false;
+    return role === null || role === '' || props[`${key}.role`] === role;
+  });
+  return stamped.length > 0 && stamped.every((t) => t.state === 'resolved');
 }
 
 /**
@@ -122,12 +170,7 @@ export function prReviewState(
       mode: resolvedReviewMode(route, policy),
       summary: review.summary,
       findings: review.findings,
-      // Only the thread the harness recorded publishing into, and only where this
-      // reading still carries it: a thread the provider no longer reports is a
-      // thread nothing can say was resolved, and "cannot say" is not "dealt with".
-      addressed:
-        review.publishedThread !== null &&
-        (threads ?? []).some((t) => t.id === review.publishedThread && t.state === 'resolved'),
+      addressed: reviewAddressed(review.publishedThread, threads ?? [], policy),
       reviewedAt: review.reviewedAt,
       agentId: review.agentId,
       headSha: review.headSha,

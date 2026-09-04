@@ -1113,9 +1113,11 @@ found nothing.
 **Findings somebody dealt with read as `addressed`.** The verdict does not change — the reviewer found
 what it found, and the list stays on the row — but the mark is a call to look, and one that keeps
 shouting after the thread was resolved is one an operator learns to stop reading. It is true only of
-the thread the fleet itself published into ([the record](#what-the-publication-is-recorded-as)) and only while the current
-reading still carries it as resolved: a thread the provider no longer reports is a thread nothing can
-say was resolved, and "cannot say" is not "dealt with".
+the fleet's **own** threads, on two independent arms either of which is enough: the thread the fleet
+itself published into ([the record](#what-the-publication-is-recorded-as)), or every thread carrying
+the stamp the project declared ([the stamp](#a-thread-the-harness-stamped)). Both only while the
+current reading carries those threads as resolved: a thread the provider no longer reports is a thread
+nothing can say was resolved, and "cannot say" is not "dealt with".
 
 **A lens, never a gate.** It reads the same four rows `reviewSatisfied` reads and decides nothing:
 every arm the gate stands down on is an arm the mark names in its own words, so the two cannot
@@ -1205,6 +1207,8 @@ key ([02](02-configuration.md#the-project-layer)), so all of it is committed onc
 | `review.allowSkip`          | `false`  | Whether the triage may answer that a pull request needs no review at all. It also turns the triage on by itself.                                                                                                |
 | `review.reviewedElsewhere`  | `null`   | A command asking whether a pull request has already been reviewed outside the harness — and the way a team adopts this without reviewing their backlog. Exit 0 = yes; anything else leaves the fleet reviewing. |
 | `review.publish`            | `'none'` | Whether the reviewer is told to post its findings on the pull request, through `reply_to_review` and only that.                                                                                                 |
+| `review.publishedThreadProperty` | `null` | The thread property your own review tooling stamps its threads with, so findings it published read as addressed once every stamped thread is resolved. Azure DevOps only. → [A thread the harness stamped](#a-thread-the-harness-stamped) |
+| `review.publishedThreadRole` | `null`  | Which stamped threads count — the value required on `"<property>.role"`. Null takes every stamped thread, summary threads included.                                                                             |
 | `review.modes`              | `{}`     | The ways this project reviews: `charterFile` and `profile` each. Two or more switches the triage on.                                                                                                            |
 | `review.defaultMode`        | `null`   | The mode a review falls back to when nothing routed it. Null takes the first declared.                                                                                                                          |
 | `review.routingCharterFile` | `null`   | The prose that decides between the modes, read by the triage.                                                                                                                                                   |
@@ -1268,6 +1272,44 @@ statement that they were, and it is what turns the review mark from red to green
 ([17](17-cockpit.md#the-fleet-reviews-mark)). Nothing wider is allowed to say it: not every thread on
 the pull request, not a thread whose author matches the credential — either would let somebody else's
 tidy-up report the fleet's findings as answered.
+
+#### A thread the harness stamped
+
+The record above is the whole of what the harness itself posted, and there is a deployment it cannot
+reach at all. With `review.publish: 'none'` — the default — the reviewer posts nothing, so
+`published_thread` is null on every review, so **no review can ever read as addressed**. On a project
+whose findings are published by the operator's own review tooling rather than by the reviewer agent,
+the threads are sitting on the pull request, resolved, and the mark stays red over them forever with
+nothing anywhere saying why. `addressed` is dead code there, and nothing is red.
+
+So a thread may **name itself** instead. `review.publishedThreadProperty` names a key in the
+provider's own per-thread property bag (Azure DevOps has one; GitHub does not, and there the arm is
+simply unavailable). A poster that stamps that key on every thread it opens leaves a mark every later
+world read can see, on threads the harness wrote no row for. `review.publishedThreadRole` narrows it
+further where the poster distinguishes its threads: the value required on the companion key
+`"<property>.role"`, derived from the property name rather than configured separately so the two
+cannot come to name different bags.
+
+The arm reads **at least one stamped thread, and every one of them resolved**:
+
+- _At least one_, because "every stamped thread is resolved" is vacuously true of a pull request with
+  no stamped threads at all — which would read every unpublished review as dealt with.
+- _Every_ rather than _any_, because a later round's new finding opens a new stamped thread: with
+  _any_, one resolved thread from the first round would keep the mark green over an open finding
+  nobody has looked at.
+- A thread carrying no stamp neither addresses the findings nor holds them open. A reviewer's own
+  question is not the fleet's finding to answer, and the arm is about the fleet's threads only.
+
+`PrReviewThread.properties` is where that bag arrives — carried by the Azure provider, flattened out
+of Azure's `{$type, $value}` envelopes, and **absent rather than empty** on a thread with none, so
+"carries no stamp" and "this provider does not say" are one answer.
+
+It is a **read-side derivation and nothing more**: no recording step, no ordering against the pulse,
+nothing a re-review wipes. Both arms are independent and either is enough, and with no property
+declared the stamp arm is not consulted at all — which is every deployment from before it existed. A
+stamp is a statement an operator's own tooling wrote under a key they declared, which is a different
+thing from the identity inference `pr_replies_sent` exists to end; and it gates a mark's tint and
+nothing else — never `reviewSatisfied`, never a merge.
 
 ### The charters
 

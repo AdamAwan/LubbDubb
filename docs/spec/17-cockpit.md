@@ -6177,10 +6177,12 @@ else. A mark drawn _through_ the lenses is mud at 15px; a badge beside them hold
 uses.
 
 **Findings somebody dealt with take the clear arm's green**, tick and all: `addressed` on the reading,
-which is the thread the fleet published its findings into reading resolved on the provider
-([07](07-pull-requests.md#what-the-publication-is-recorded-as)). The verdict is unchanged and the
-findings are still listed — what changes is how loudly the row asks to be looked at, and a mark that
-keeps shouting after the thread was resolved is one an operator learns to stop reading.
+which is the fleet's own findings threads reading resolved on the provider — the thread it published
+into ([07](07-pull-requests.md#what-the-publication-is-recorded-as)), or every thread carrying the
+project's declared stamp ([07](07-pull-requests.md#a-thread-the-harness-stamped)), the arm that reaches
+a deployment publishing its findings itself rather than through the reviewer agent. The verdict is
+unchanged and the findings are still listed — what changes is how loudly the row asks to be looked at,
+and a mark that keeps shouting after the thread was resolved is one an operator learns to stop reading.
 
 **The tooltip is a summary; the page is the record.** The heading the `aria-label` carries, what the
 reviewer understood the diff to do, its first two findings and when it read — then `and N more` and a

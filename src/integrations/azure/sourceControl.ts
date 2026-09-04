@@ -891,6 +891,12 @@ export function buildReviewThreads(threads: AzThread[], ourReplies: ReadonlySet<
     // request rather than on the diff carries neither, and is drawn as such.
     if (thread.filePath !== undefined && thread.filePath !== null) built.path = thread.filePath.replace(/^\//, '');
     if (thread.line !== undefined && thread.line !== null) built.line = thread.line;
+    // Azure's own property bag, carried rather than dropped: it is the only mark
+    // that survives on a thread the harness did not itself post into, and it is
+    // what `review.publishedThreadProperty` matches against.
+    if (thread.properties !== undefined && thread.properties !== null && Object.keys(thread.properties).length > 0) {
+      built.properties = thread.properties;
+    }
     out.push(built);
   }
   return out;

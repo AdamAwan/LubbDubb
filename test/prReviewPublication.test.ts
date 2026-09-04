@@ -249,16 +249,16 @@ function reviewRow(over: Partial<PrReview> = {}): PrReview {
   };
 }
 
-function policy(): PrReviewPolicy {
-  return { ...DEFAULT_PR_REVIEW, enabled: true, modes: { deep: {} } };
+function policy(over: Partial<PrReviewPolicy> = {}): PrReviewPolicy {
+  return { ...DEFAULT_PR_REVIEW, enabled: true, modes: { deep: {} }, ...over };
 }
 
 function threads(state: PrReviewThread['state']): PrReviewThread[] {
   return [{ id: 'thread-9', author: 'the-operator', body: 'Two findings: …', state, replies: [] }];
 }
 
-function mark(review: PrReview, carried: PrReviewThread[] | undefined) {
-  return prReviewState(42, { review, route: null, elsewhere: new Set() }, policy(), carried);
+function mark(review: PrReview, carried: PrReviewThread[] | undefined, over: Partial<PrReviewPolicy> = {}) {
+  return prReviewState(42, { review, route: null, elsewhere: new Set() }, policy(over), carried);
 }
 
 test('findings read as addressed once the thread they were published into is resolved', () => {
@@ -279,4 +279,78 @@ test('nothing else can address them', () => {
     'and a caller with no threads in hand cannot say — which is not "dealt with"',
   );
   assert.equal(mark(reviewRow(), [])?.addressed, false, 'nor can a reading that no longer carries the thread');
+});
+
+// -- the second arm: a thread that names itself -------------------------------
+
+/**
+ * `review.publish: 'none'` is a whole deployment the record arm cannot reach: the
+ * harness posts nothing, so `publishedThread` is null on every review, so the mark
+ * stays red over threads that were published and resolved by the operator's own
+ * review tooling. The stamp is how those threads say who opened them.
+ * → `docs/spec/07-pull-requests.md#a-thread-the-harness-stamped`
+ */
+const STAMP = { publishedThreadProperty: 'pr-agent-review', publishedThreadRole: 'finding' };
+
+function stamped(
+  id: string,
+  state: PrReviewThread['state'],
+  props: Record<string, string> = { 'pr-agent-review': '1', 'pr-agent-review.role': 'finding' },
+): PrReviewThread {
+  return { id, author: 'the-operator', body: 'A finding.', state, replies: [], properties: props };
+}
+
+const UNSTAMPED: PrReviewThread = {
+  id: 'human-1',
+  author: 'a-reviewer',
+  body: 'Why this way?',
+  state: 'open',
+  replies: [],
+};
+
+test('a review that published nothing still reads as addressed once every stamped thread is resolved', () => {
+  const unpublished = reviewRow({ publishedThread: null });
+  assert.equal(mark(unpublished, [stamped('t1', 'resolved'), stamped('t2', 'resolved')], STAMP)?.addressed, true);
+  assert.equal(
+    mark(unpublished, [stamped('t1', 'resolved'), stamped('t2', 'open')], STAMP)?.addressed,
+    false,
+    'one open stamped thread is a finding nobody has looked at — every one of them, not any',
+  );
+});
+
+test('an unstamped thread neither addresses the findings nor holds them open', () => {
+  const unpublished = reviewRow({ publishedThread: null });
+  assert.equal(
+    mark(unpublished, [UNSTAMPED], STAMP)?.addressed,
+    false,
+    'a pull request with no stamped thread at all has nothing saying the findings were dealt with',
+  );
+  assert.equal(
+    mark(unpublished, [stamped('t1', 'resolved'), UNSTAMPED], STAMP)?.addressed,
+    true,
+    'and a reviewer’s own open question is not the fleet’s finding to answer',
+  );
+});
+
+test('the role narrows which stamped threads count', () => {
+  const unpublished = reviewRow({ publishedThread: null });
+  const summary = stamped('t0', 'open', { 'pr-agent-review': '1', 'pr-agent-review.role': 'summary' });
+  assert.equal(
+    mark(unpublished, [summary, stamped('t1', 'resolved')], STAMP)?.addressed,
+    true,
+    'a summary thread nobody resolves would otherwise hold the mark red forever',
+  );
+  assert.equal(
+    mark(unpublished, [summary, stamped('t1', 'resolved')], { ...STAMP, publishedThreadRole: null })?.addressed,
+    false,
+    'with no role declared every stamped thread counts, the summary included',
+  );
+});
+
+test('with no property declared the stamp arm is not consulted at all', () => {
+  assert.equal(
+    mark(reviewRow({ publishedThread: null }), [stamped('t1', 'resolved')])?.addressed,
+    false,
+    'which is every deployment from before this existed',
+  );
 });
