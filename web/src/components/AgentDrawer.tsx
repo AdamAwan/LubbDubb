@@ -45,6 +45,7 @@ const TRANSCRIPT_POLL_MS = 5_000;
 export function AgentDrawer({
   agent,
   task,
+  originStandsFor,
   refUrls,
   live,
   flags,
@@ -59,6 +60,13 @@ export function AgentDrawer({
 }: {
   agent: Agent;
   task: TaskSummary | null;
+  /**
+   * What the task's origin stands in for, when that is not the origin itself — a
+   * requeued job's `job:<id>` read through to the `issue:41:retro` it is redoing.
+   * Resolved by the shell (`standsFor`) rather than here, because it is a reading
+   * of the whole snapshot and the drawer is handed one agent.
+   */
+  originStandsFor: string | null;
   refUrls: Record<string, string>;
   live: string | undefined;
   flags?: AgentFlag[];
@@ -207,6 +215,13 @@ export function AgentDrawer({
               {task.originRef && (
                 <Tag>
                   <Ref to={task.originRef} />
+                </Tag>
+              )}
+              {/* A job id says nothing about the work, so a requeue also names
+                    what it stands in for. */}
+              {originStandsFor !== null && originStandsFor !== task.originRef && (
+                <Tag>
+                  <Ref to={originStandsFor} />
                 </Tag>
               )}
               <span>{task.originTitle}</span>

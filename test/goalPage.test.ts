@@ -11,7 +11,13 @@ import type {
   TaskSummary,
 } from '../web/src/types.js';
 import type { GoalPageView, GoalPartView, GoalTrack, PartGroup } from '../web/src/view/goalPage.js';
-import { buildGoalPage, buildGoalStrip, buildGoalTrack, goalSectionsOpen } from '../web/src/view/goalPage.js';
+import {
+  buildGoalPage,
+  buildGoalStrip,
+  buildGoalTrack,
+  goalSectionsOpen,
+  standsFor,
+} from '../web/src/view/goalPage.js';
 import { buildNeedsYou } from '../web/src/view/needsYou.js';
 
 const { buildDemoState } = await import('../web/src/demo/fixtures.js');
@@ -775,4 +781,31 @@ test('the local validation card opens exactly when there is something in it', ()
     issue: { ...page.issue, localValidation: { status: 'failed' } as never },
   };
   assert.equal(goalSectionsOpen(asked).localValidation, true);
+});
+
+/**
+ * `standsFor` is what keeps a crash recovery's requeue readable: the dispatch is
+ * keyed on an opaque `job:<id>` and the work it is redoing is only on the job row.
+ */
+test('standsFor reads a job origin through to the work it is redoing', () => {
+  const state = buildDemoState().state;
+  const jobs = [
+    { id: 'j1', originRef: 'issue:41:retro' },
+    { id: 'j2', originRef: 'job:j1' },
+    { id: 'j3', originRef: null },
+    // A cycle no harness writes, but a walk must still end on.
+    { id: 'c1', originRef: 'job:c2' },
+    { id: 'c2', originRef: 'job:c1' },
+  ] as never;
+  const withJobs = { ...state, jobs };
+
+  assert.equal(standsFor(withJobs, 'job:j1'), 'issue:41:retro', 'the origin the job stands in for');
+  assert.equal(standsFor(withJobs, 'job:j2'), 'issue:41:retro', 'a requeue of a requeue walks the chain');
+  assert.equal(standsFor(withJobs, 'job:j3'), 'job:j3', 'an ordinary operator job stands in for nothing');
+  assert.equal(standsFor(withJobs, 'job:gone'), 'job:gone', 'a job the snapshot has dropped stays itself');
+  assert.equal(standsFor(withJobs, 'issue:41'), 'issue:41', 'every other origin is its own answer');
+  assert.equal(standsFor(withJobs, null), null);
+  // Which link of a cycle the walk stops on is the bound's parity and not worth
+  // pinning; that it stops, and hands back a ref, is.
+  assert.match(standsFor(withJobs, 'job:c1') ?? '', /^job:c[12]$/, 'a cycle ends at the bound rather than spinning');
 });

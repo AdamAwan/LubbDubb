@@ -276,3 +276,27 @@ test('up next is the whole queue when nothing is staffed', () => {
     ['issue:1'],
   );
 });
+
+/**
+ * A crash recovery's requeue is dispatched at `job:<id>` and carries the origin it
+ * is redoing on the job row, so a cockpit that reads only the task's origin loses
+ * the goal entirely: the fleet row draws an opaque id, and — silently — the goal
+ * whose work is out on the fleet reads as unstaffed.
+ */
+test('a requeued job stands in for its origin, so the goal it redoes still reads as staffed', () => {
+  const state = stateWith({
+    agents: [AGENT({ id: 'a1', taskId: 't1', endedAt: null })],
+    tasks: [{ id: 't1', originRef: 'job:job_F9Iy9o2rZQ' }] as never,
+    jobs: [{ id: 'job_F9Iy9o2rZQ', originRef: 'issue:36275:part:solr', status: 'dispatched' }] as never,
+  } as never);
+  assert.equal(build(state).agentOnGoal.get('issue:36275')?.id, 'a1');
+});
+
+test('a job that stands in for nothing staffs no goal', () => {
+  const state = stateWith({
+    agents: [AGENT({ id: 'a1', taskId: 't1', endedAt: null })],
+    tasks: [{ id: 't1', originRef: 'job:job_plain' }] as never,
+    jobs: [{ id: 'job_plain', originRef: null, status: 'dispatched' }] as never,
+  } as never);
+  assert.equal(build(state).agentOnGoal.size, 0);
+});

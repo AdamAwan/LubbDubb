@@ -304,11 +304,58 @@ export function goalOfPr(state: AppState, prNumber: number): string | null {
  * @public shared with buildViewModel's agentOnGoal
  */
 export function goalOfOrigin(state: AppState, originRef: string | null): string | null {
-  if (originRef === null) return null;
-  const issue = /^issue:(\d+)/.exec(originRef);
+  const ref = standsFor(state, originRef);
+  if (ref === null) return null;
+  const issue = /^issue:(\d+)/.exec(ref);
   if (issue) return `issue:${issue[1]}`;
-  const pr = /^pr:(\d+)$/.exec(originRef);
+  const pr = /^pr:(\d+)$/.exec(ref);
   return pr ? goalOfPr(state, Number(pr[1])) : null;
+}
+
+/**
+ * How deep a chain of jobs standing in for jobs {@link standsFor} will walk.
+ *
+ * A chain longer than a couple of links is not a shape the harness makes — a
+ * requeue of a requeue is two — so the bound is only there because the walk reads
+ * rows the cockpit did not write. A cycle (`job:a` standing in for `job:b`
+ * standing in for `job:a`, which a hand-edited database could hold) must end as a
+ * plain unresolved origin rather than as a spinning tab.
+ */
+const STANDS_FOR_DEPTH = 4;
+
+/**
+ * What a dispatch origin **stands in for** — a `job:<id>` origin read through to
+ * the work the job is redoing, and every other origin unchanged.
+ *
+ * A crash recovery's requeue is dispatched at `job:<id>` and carries the origin it
+ * replaces on `Job.originRef` (`issue:41:retro`, `pr:42:ci`), which is the only
+ * thing that still says what the work *is*: the task, the fleet row and the goal
+ * lookup all see the opaque job id and nothing else. So a requeued agent drew as
+ * `job:job_F9Iy9o2rZQ` with no way anywhere, and — worse, because it is silent —
+ * `goalOfOrigin` answered null for it, so `agentOnGoal` had no entry and the goal
+ * whose work was actually out on the fleet read as unstaffed.
+ *
+ * The server already draws this same edge on its side, in the work graph's arm C
+ * (`src/graph/workGraph.ts`), for the same reason and off the same field. This is
+ * that reading on the cockpit's side of the wire.
+ *
+ * Null in, null out; an origin whose job the snapshot no longer carries, or one
+ * that stands in for nothing, comes back **as itself** rather than as null — the
+ * job ref is a true statement about the dispatch, and losing it would trade a
+ * reference that is merely opaque for none at all.
+ *
+ * @public shared with the console's fleet row, which draws both refs
+ */
+export function standsFor(state: AppState, originRef: string | null): string | null {
+  let ref = originRef;
+  for (let hop = 0; ref !== null && hop < STANDS_FOR_DEPTH; hop++) {
+    const id = /^job:(.+)$/.exec(ref)?.[1];
+    if (id === undefined) return ref;
+    const job = state.jobs.find((j) => j.id === id);
+    if (!job || job.originRef === null) return ref;
+    ref = job.originRef;
+  }
+  return ref;
 }
 
 const GROUP_OF: Record<PlanPart['status'], PartGroup | null> = {

@@ -137,6 +137,10 @@ still going on). That predicate is stated once, in `src/store/jobs.ts`, and aske
 The origin is claimable again the moment the requeued job's task ends — the requeue holds the work,
 it does not retire it.
 
+The cockpit reads the field for a second reason: a `job:<id>` origin names the work in no way an
+operator can follow, so every surface that draws or routes on a dispatch origin resolves it through
+`standsFor` first — see [17](17-cockpit.md#a-job-origin-stands-in-for-other-work).
+
 #### Why a requeue never stands in for a _queued_ job
 
 The gate is transitive, and that is what makes it dangerous in one specific shape. A job's dispatch
