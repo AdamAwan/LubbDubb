@@ -11,6 +11,7 @@ import { DesktopLink } from '../components/DesktopLink.js';
 import { questionPrompt } from '../cockpit/desktopLink.js';
 import { untriagedCount } from '../worldBuckets.js';
 import { useThemeUnsaved } from '../hooks.js';
+import { signalRows } from './WorldSignals.js';
 
 /**
  * The nav's destinations, in reading order — the order the tabs are drawn in.
@@ -706,7 +707,7 @@ interface MenuReading {
 /** One row of the bar's menu — a glyph, a word, and what that word currently reads. */
 interface MenuEntry extends MenuReading {
   key: string;
-  icon: 'alert' | 'rocket' | 'download' | 'globe' | 'book' | 'gear';
+  icon: 'alert' | 'rocket' | 'download' | 'globe' | 'bolt' | 'book' | 'gear';
   label: string;
   /**
    * Something is waiting on this row that its value cannot say — an unsaved theme
@@ -719,7 +720,7 @@ interface MenuEntry extends MenuReading {
 }
 
 /**
- * The six ways-in the bar keeps folded away, in reading order.
+ * The seven ways-in the bar keeps folded away, in reading order.
  *
  * They are together because none of them is a gauge an operator glances at on
  * every pulse: faults and briefs are counts that are usually zero, the build is
@@ -749,6 +750,7 @@ export function menuEntries(view: CockpitView, actions: CockpitActions, themeUns
   const health = view.state.environmentHealth ?? [];
   const env = health.length === 0 ? null : environmentsReading(health, view.now);
   const build = buildReading(view);
+  const signals = signalRows(view).length;
   return [
     {
       key: 'faults',
@@ -797,6 +799,21 @@ export function menuEntries(view: CockpitView, actions: CockpitActions, themeUns
             },
           },
         ]),
+    // What the world did, which was the overview's fourth card until it turned
+    // out to be read rather than watched — the same reason everything else in
+    // this menu is in it. The count is the whole feed, so the row says whether
+    // there is anything in there before it is opened; the Up next band carries
+    // the other way in, beside the queue these signals decide.
+    {
+      key: 'signals',
+      icon: 'bolt',
+      label: 'Signals',
+      value: `${signals}`,
+      tone: null,
+      quiet: signals === 0,
+      title: 'What the world did — the feed the queue is decided off',
+      onPick: () => actions.openPanel('signals'),
+    },
     {
       key: 'record',
       icon: 'book',
@@ -824,7 +841,7 @@ export function menuEntries(view: CockpitView, actions: CockpitActions, themeUns
 }
 
 /**
- * The bar's menu: one button, and the six ways-in behind it.
+ * The bar's menu: one button, and the seven ways-in behind it.
  *
  * Closed on `Escape` and on focus leaving the group, which is the pair a keyboard
  * and a pointer each need — a document-level listener would be a third thing to
@@ -843,7 +860,9 @@ function BarMenu({ view, actions }: { view: CockpitView; actions: CockpitActions
   // once the menu is open is the same invisibility one fold further in.
   const entries = menuEntries(view, actions, useThemeUnsaved());
   const flagged = entries.some((entry) => entry.tone !== null || entry.pending === true);
-  const title = flagged ? 'More — something in here wants a look' : 'More — faults, launch, build, record and config';
+  const title = flagged
+    ? 'More — something in here wants a look'
+    : 'More — faults, launch, build, signals, record and config';
   return (
     <div
       className="cn-menu-wrap"

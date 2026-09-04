@@ -9,6 +9,7 @@ import { needBody } from './NeedsBand.js';
 import { GoalPage } from './GoalPage.js';
 import { PrPage } from './PrPage.js';
 import { Overview, queueRow } from './Overview.js';
+import { WorldSignals } from './WorldSignals.js';
 import { PanelRows } from './PanelRow.js';
 import { RecoveryPanel } from '../components/RecoveryPanel.js';
 import { TicketsPanel } from '../components/TicketsPanel.js';
@@ -443,6 +444,7 @@ const PANEL_TITLE: Record<Exclude<ConsolePanel, null | { ask: string }>, string>
   setup: 'Setup',
   record: 'The record',
   upnext: 'Up next',
+  signals: 'World signals',
 };
 
 /**
@@ -585,6 +587,11 @@ function panelBody(
       if (items.length === 0) return <p className="cn-empty">Nothing is queued.</p>;
       return <PanelRows rows={items.map((item) => queueRow(item, view, actions))} />;
     }
+    // The whole feed, not the ten rows the overview card drew: the cap was a
+    // card borrowing a page's room, and this is the surface the rest was always
+    // going to need.
+    case 'signals':
+      return <WorldSignals view={view} />;
     case 'localRun':
       return (
         <LocalRunPanel

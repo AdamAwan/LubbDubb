@@ -2309,12 +2309,17 @@ this page's job is to say when it has not done it well enough.
 
 ## The overview
 
-What the situation area shows when no goal is selected: seven cards, rows rather than pictures, in
-reading order — **Fleet**, **Goals in flight**, **Pull requests**, **World signals**,
-**Environments**, **Build**, **Project**. The
+What the situation area shows when no goal is selected: six cards, rows rather than pictures, in
+reading order — **Fleet**, **Goals in flight**, **Pull requests**, **Environments**, **Build**,
+**Project**. The
 fleet's **runway** is a band along the foot of the first of them rather than a card of its own, because "who
 is out" and "what is behind them" are one thought — and for the same reason, so is
 [**Up next**](#the-queue-rides-the-fleet-card), which used to be the fourth card here.
+
+**World signals used to be the fourth card too, and is [a panel](#world-signals) now.** It is the one
+surface here that was not about what is happening but about what happened to bring it about — read
+when a queued row, or an empty queue, wants explaining, and not glanced at on every pulse. As a card
+it spent a full-width slot on ten rows of a feed nobody had come to the page for.
 
 **Build and Project are last, and they are the two cards not about the fleet's work** — Build is the
 process the fleet runs inside and Project is the repository it is pointed at, two different checkouts
@@ -2461,9 +2466,9 @@ Three of them carry the rules that kept being forgotten:
   that one is the card's width or one slot fewer. **The queue needs the width**: its rows carry a state
   word, a profile picker and a refs group beside a title that is a sentence, which is a full-width
   row's worth of slots — and it has it, because the Fleet card it now rides is `cn-span2` too. World
-  signals is full width as well — not for its own two slots, but because left narrow it was the one
-  card off the grid, a quarter wide under a page of half-width ones, which reads as a card that failed
-  to lay out rather than as one with little to say.
+  signals was full width for a different reason — not its own two slots, but that left narrow it was
+  the one card off the grid, a quarter wide under a page of half-width ones. It is a panel now, which
+  is the room its rows always wanted.
 
 - **`toggle` is the row's switch, and it leads the readings.** Whether the harness takes an
   interest in this row at all — the rack's watch tag — is not the row's _work_, which is what `action`
@@ -2748,19 +2753,6 @@ card is the drift `PanelRowModel` exists to end, one level up.
   itself and naming it as the fallback would promise that clearing the control changes nothing. The
   control draws nothing at all on a deployment with no `agentModels` — `ProfilePicker`'s own rule,
   not a second one here.
-- **World signals** — `worldEvents` grouped by `(kind, ref)` with a count, ten rows, **plus the
-  environment arrivals** of the last week. Three review comments on one pull request are one signal,
-  not three unrelated rows; two environments reaching one goal are two things that happened, so
-  arrivals are one row each. The row draws **the goal behind the signal** beside the sentence and
-  never the pull request: the summary's own `#412` already links out, so repeating it would be one ref
-  twice, and what a signal never offers is the way onto a goal's page.
-
-  The arrivals are merged **here**, at render time, rather than carried in `worldEvents`. A world
-  event is derived by diffing consecutive snapshots, and a standing delivery verdict is expired by any
-  world event on its issue ref — so an arrival written as one would lift the delivery park on the goal
-  it announced and hand the work straight back to the fleet.
-  → [24](24-environments.md#in-the-cockpit)
-
 - **Environments** — one row per environment that declares a `health` command: the word its own check
   answered, how long it has been that word, when it was last read, and the check's own reasons behind
   the row's marker. Here rather than on a goal page because health is a fact about the environment and
@@ -2771,6 +2763,41 @@ card is the drift `PanelRowModel` exists to end, one level up.
   amber as an `orange` tier and is told apart by the word beside it, because a check that could not
   answer is a thing to look at and drawing it green or red would claim an answer it did not give.
   → [24](24-environments.md#is-the-environment-well)
+
+### World signals
+
+`worldEvents` grouped by `(kind, ref)` with a count, **plus the environment arrivals** of the last
+week (`WorldSignals`, `web/src/console/WorldSignals.tsx`). Three review comments on one pull request
+are one signal, not three unrelated rows; two environments reaching one goal are two things that
+happened, so arrivals are one row each. The row draws **the goal behind the signal** beside the
+sentence and never the pull request: the summary's own `#412` already links out, so repeating it
+would be one ref twice, and what a signal never offers is the way onto a goal's page.
+
+The arrivals are merged **here**, at render time, rather than carried in `worldEvents`. A world event
+is derived by diffing consecutive snapshots, and a standing delivery verdict is expired by any world
+event on its issue ref — so an arrival written as one would lift the delivery park on the goal it
+announced and hand the work straight back to the fleet. → [24](24-environments.md#in-the-cockpit)
+
+**A panel, and it has two ways in.** `ConsolePanel` gained `signals`, so the address bar carries it
+as `?panel=signals`, the back button steps out of it, and Escape and the backdrop close it. It is
+named in [the bar's menu](#the-bars-menu) alongside Faults and Record — the other things read rather
+than watched — and it is reached from the **Up next band on the Fleet card**, which is the reading it
+actually serves: what the harness would do next is decided off what the world just did, so _why is
+that queued_ and _why is nothing_ are both answered here. The band's way in draws at every size of
+queue, including an empty one, because an empty queue is exactly when an operator wants to know
+whether the world moved at all.
+
+**That control is a sentence — `Up next is determined by world signals →` — and it is the one control
+on a band that carries no count.** It read `Signals 5 →` first, which put the feed beside the queue
+and left the relation between them to be guessed; on the one band where that relation is the whole
+reason the control exists, saying it is worth the width. The number comes off for the same reason: a
+figure on the end of that sentence reads as _how much of the queue_, which is the one thing it does
+not count. How big the feed is belongs on the menu row, where the value column means what it says.
+
+**The panel is uncapped where the card drew ten.** The cap was a card borrowing a page's room; the
+list is bounded anyway — the server caps `worldEvents` at 100 rows and arrivals age out after a week
+(`SIGNAL_WINDOW_MS`). The menu row's count is `signalRows`, the same function the panel draws from,
+so the row cannot report a number the panel it opens then contradicts.
 
 ### Yours, then the fleet's
 
@@ -3583,18 +3610,19 @@ lands somewhere else entirely, so Back returns to the filter and the list re-rea
 ## The top bar and the panels
 
 The strip carries the ident, the nav, the fleet gauge, the two ways off it to a tracker, **two
-gauges** — [Usage](#the-usage-chip) and **Local**, in one pill — and a **menu** holding the six
+gauges** — [Usage](#the-usage-chip) and **Local**, in one pill — and a **menu** holding the seven
 ways-in that are not gauges: **Faults**, **Launch**, [**Build**](#the-build-gauge),
-[**Env**](#the-environments-gauge), [**Record**](#the-record-panel) and **Config**. Findings and
+[**Env**](#the-environments-gauge), [**Signals**](#world-signals), [**Record**](#the-record-panel)
+and **Config**. Findings and
 Lessons were readings here too until the claim stores merged, and the merged store has since gone with
 the count that stood for all of it. Each is one subject stated once. None reaches `api.js`: every one
 is a method on `CockpitActions`, and the fleet cap is the shared `FleetControl`, which is already on
 that seam.
 
 **The cut between the strip and the menu is what a reading is _for_, not what it costs to draw.** Usage
-and Local are numbers that move on their own and are glanced at on every pulse. The six behind the
+and Local are numbers that move on their own and are glanced at on every pulse. The seven behind the
 button are counts that are usually zero (Faults, Launch), a state that is `current` nearly all its life
-(Build, Env) and two surfaces that are aimed at rather than read (Record, Config) — and spread across
+(Build, Env) and three surfaces that are aimed at rather than read (Signals, Record, Config) — and spread across
 the strip they were what wrapped the bar to two rows at laptop widths. Folded, each keeps its count and
 its sentence; what the fold could have cost — noticing a fault or a waiting upgrade without opening
 anything — is bought back by the **dot on the button**, which appears whenever a row inside has a tint.
@@ -3623,10 +3651,10 @@ because `.cn button` resets `font` to `inherit` at (0,1,1) and would otherwise h
 
 ### The bar's menu
 
-One button (`BarMenu`, `TopBar.tsx`; `.cn-menu-wrap`, `.cn-menu`, `.cn-menu-row`) and the six ways-in
-behind it, in reading order: Faults, Launch, Build, Env, Record, Config. Every row is a glyph, a word
-and — where it has one — a value, drawn at the right-hand edge so six rows of different word lengths
-still read as one column of numbers.
+One button (`BarMenu`, `TopBar.tsx`; `.cn-menu-wrap`, `.cn-menu`, `.cn-menu-row`) and the seven
+ways-in behind it, in reading order: Faults, Launch, Build, Env, Signals, Record, Config. Every row
+is a glyph, a word and — where it has one — a value, drawn at the right-hand edge so seven rows of
+different word lengths still read as one column of numbers.
 
 **Every row names itself in words, and that is the difference between here and a rack.** A glyph in a
 fixed slot on a row somebody is already reading can go wordless — the agent mark is the icon
@@ -3656,6 +3684,10 @@ unmounts with the connection.
 are, and for a reason the fold shares with neither: the rows are behind a button, so a rendered bar says
 nothing about whether the list that fills them is right. Every assertion that used to read Faults,
 Launch, Env or Record off the bar's own markup reads the fold now.
+
+**Signals is here rather than a tab for the reason it is not a card**: it is consulted, not worked
+on. Its value is the whole feed, so the row says whether there is anything in there before it is
+opened, and it mutes at zero like every other. → [World signals](#world-signals)
 
 **Record and Config are in here rather than in the nav, and it is one rule keeping both out**: the nav
 is the surfaces work happens **on**, so a tab beside the others would say the archive is somewhere work

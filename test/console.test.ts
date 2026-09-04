@@ -267,21 +267,21 @@ test('the usage chip is on the top bar, tagged and unlabelled', () => {
  * carry is behind that button.
  *
  * The cut is what each thing is *for*, not what it costs to draw. Usage and Local
- * are numbers that move on their own and are glanced at on every pulse; the six
+ * are numbers that move on their own and are glanced at on every pulse; the seven
  * behind the button are counts that are usually zero (Faults, Launch), a state
- * that is `current` nearly all its life (Build, Env) and two surfaces that are
- * aimed at rather than read (Record, Config). Spread across the strip they wrapped
- * the bar to two rows at laptop widths.
+ * that is `current` nearly all its life (Build, Env) and three surfaces that are
+ * aimed at rather than read (Signals, Record, Config). Spread across the strip they
+ * wrapped the bar to two rows at laptop widths.
  *
  * Both halves are asserted, because either alone is a bar that lost something: the
- * six are all still reachable, and the two that stayed are still *on the glass*
- * rather than a seventh row in the menu.
+ * seven are all still reachable, and the two that stayed are still *on the glass*
+ * rather than an eighth row in the menu.
  */
 test('the bar folds its ways-in behind one menu, and keeps the two gauges out of it', () => {
   const keys = menuEntries(view(), actions).map((entry) => entry.key);
   assert.deepEqual(
     keys,
-    ['faults', 'launch', 'build', 'env', 'record', 'config'],
+    ['faults', 'launch', 'build', 'env', 'signals', 'record', 'config'],
     'a way-in went missing from the menu, or arrived in a different order',
   );
 
@@ -1830,11 +1830,19 @@ test('a goal with no measured spend draws no spend row rather than $0.00', () =>
   assert.ok(!unmeasured.includes('$0.00'), 'null is "never measured", not zero');
 });
 
-test('with no goal selected the overview draws its five cards, and the queue is not one of them', () => {
+test('with no goal selected the overview draws its cards, and neither feed is one of them', () => {
   const html = render(view());
-  for (const title of ['Fleet', 'Goals in flight', 'Pull requests', 'World signals', 'Environments']) {
+  for (const title of ['Fleet', 'Goals in flight', 'Pull requests', 'Environments']) {
     assert.ok(html.includes(title), `the overview is missing ${title}`);
   }
+  // World signals went the queue's way and for the queue's reason: it is read
+  // when something wants explaining, not watched. Both halves again — the card
+  // being gone is only an improvement if the way to it came with it.
+  assert.ok(!html.includes('World signals'), 'world signals is still drawing on the overview');
+  assert.ok(
+    html.includes('Up next is determined by world signals'),
+    'the fleet card offers no way to the signals the queue is decided off',
+  );
   // Up next is a band on the Fleet card now, collapsed, so its heading is not on
   // the page at all — what is, is the way in, carrying the count a card header
   // used to. Both halves matter: the card being gone is only an improvement if
@@ -2194,9 +2202,9 @@ test('injection rides in the launch panel, and the demo build is the whole of it
 });
 
 test('each tab replaces the last, and a selected goal outranks every one of them', () => {
-  assert.ok(render(view()).includes('World signals'), 'the overview is the tab the console opens on');
-  assert.ok(!render(view({ tab: 'tickets' })).includes('World signals'), 'a tab replaces the one before it');
-  assert.ok(!render(view({ tab: 'insights' })).includes('World signals'));
+  assert.ok(render(view()).includes('Goals in flight'), 'the overview is the tab the console opens on');
+  assert.ok(!render(view({ tab: 'tickets' })).includes('Goals in flight'), 'a tab replaces the one before it');
+  assert.ok(!render(view({ tab: 'insights' })).includes('Goals in flight'));
 
   // A queue row selects a goal without moving the nav, so the goal has to win —
   // otherwise clicking an ask lands on a triage list, or on a reading.

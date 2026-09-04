@@ -202,7 +202,7 @@ test('no reference is drawn inside a button', () => {
 test('the pull request rack is a way to the goal each PR delivers', () => {
   const v = view();
   const html = render(v);
-  const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('World signals'));
+  const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('Environments'));
 
   const pr = v.state.world.pullRequests[0];
   assert.ok(pr, 'the demo fixtures must carry an open pull request');
@@ -219,7 +219,7 @@ test('the pull request rack is a way to the goal each PR delivers', () => {
 test('the pull request rack is a way onto each pull request’s own page', () => {
   const v = view();
   const html = render(v);
-  const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('World signals'));
+  const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('Environments'));
 
   const pr = v.state.world.pullRequests[0];
   assert.ok(pr, 'the demo fixtures must carry an open pull request');

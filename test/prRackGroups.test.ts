@@ -59,7 +59,7 @@ const render = (v: CockpitView): string =>
   );
 
 /** The rack alone: a pull request's title is drawn on its goal's row as well. */
-const rack = (html: string): string => html.slice(html.indexOf('Pull requests'), html.indexOf('World signals'));
+const rack = (html: string): string => html.slice(html.indexOf('Pull requests'), html.indexOf('Environments'));
 
 /**
  * The band exists, and the pull requests somebody handed you are above it.
