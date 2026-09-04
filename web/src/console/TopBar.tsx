@@ -279,14 +279,11 @@ function Asks({ view, actions }: { view: CockpitView; actions: CockpitActions })
           exactly the operator it cannot reach. */}
       <span className="cn-issue cn-ident-act cn-ident-ask">
         <DesktopLink
-          className="cn-ask-btn"
           folder={view.state.config.desktopFolder}
           prompt={questionPrompt()}
           ready="waiting for your question"
           explain="which answers it from the harness’s own record of the work, and says so when the record is silent."
-        >
-          Question?
-        </DesktopLink>
+        />
       </span>
       {composing && (
         <RaiseIssueModal

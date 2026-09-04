@@ -37,8 +37,10 @@ const SOURCE = readFileSync(new URL('../web/src/components/ValidationSection.tsx
 const GOAL_PAGE = readFileSync(new URL('../web/src/console/GoalPage.tsx', import.meta.url), 'utf8');
 const TOP_BAR = readFileSync(new URL('../web/src/console/TopBar.tsx', import.meta.url), 'utf8');
 
+// No `className` and no `children`: the component owns its label and its look, so
+// a test that supplied either would be asserting a shape no call site can produce.
 const desktop = (props: { folder: string; prompt: string; explain: string; ready?: string }): string =>
-  renderToStaticMarkup(createElement(DesktopLink, { ...props, className: 'btn', children: 'Go' }));
+  renderToStaticMarkup(createElement(DesktopLink, props));
 
 test('the prompt addresses a check by its goal and its stored letter', () => {
   assert.equal(checkPrompt(249, 'A'), '/lubbdubb 249:A');
@@ -170,9 +172,13 @@ test('the control sits with the hand-over, on an unrun check', () => {
   // say *who runs this check*, and neither is a reading. Offered on every unrun
   // check rather than only a nominated one, the hand-over's rule — an operator
   // who knows their own machine does not need the planner's permission.
+  //
+  // Asserted as the *control*, never as its label: the label is `DesktopLink`'s
+  // own now — one wording for every site that opens that client — so a site
+  // spelling its own would be the drift this stopped rather than the thing to
+  // look for.
   const unrun = SOURCE.slice(SOURCE.indexOf("check.state === 'unrun' ?"), SOURCE.indexOf('Back to unrun'));
-  assert.ok(unrun.includes('Run it in Claude Code'), 'the desktop hand-off is drawn on an unrun check');
-  assert.ok(unrun.includes('<DesktopLink'), 'and it is drawn through the one control that opens that client');
+  assert.ok(unrun.includes('<DesktopLink'), 'the desktop hand-off is drawn on an unrun check');
   assert.ok(unrun.includes('Hand to the fleet'), 'beside the fleet hand-over');
 });
 

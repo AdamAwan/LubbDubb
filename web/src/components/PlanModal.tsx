@@ -17,11 +17,12 @@ import type {
 import { api } from '../api.js';
 import { discussPrompt } from '../cockpit/desktopLink.js';
 import { DesktopLink } from './DesktopLink.js';
-import { CaveatChecklist, heldTitle, useAcknowledgements } from './CaveatChecklist.js';
+import { CaveatChecklist, useAcknowledgements } from './CaveatChecklist.js';
 import { planCaveatsOf } from '../planCaveats.js';
 import { AsyncButton } from './AsyncButton.js';
 import { ConfirmButton } from './ConfirmButton.js';
 import { renderMarkdown } from './markdown.js';
+import { PlanAnswers } from './PlanAnswers.js';
 import { PlanMap } from './PlanMap.js';
 import { ProfilePicker } from './ProfilePicker.js';
 import { ValidationDigest } from './ValidationSection.js';
@@ -30,7 +31,6 @@ import { partOriginOf, planIssueOf, refLink, relTime } from './util.js';
 import { Modal } from './Modal.js';
 import { Ref } from './refs.js';
 import { HeadRow } from './panel.js';
-import { buttonClass } from './button.js';
 import { Tag, type TagTone } from './tag.js';
 import { logUsage } from '../cockpit/usage.js';
 
@@ -151,7 +151,6 @@ export function PlanModal({
   desktopFolder: string;
 }) {
   const [view, setView] = useState<'plan' | 'history'>('plan');
-  const [note, setNote] = useState('');
   const [pins, setPins] = useState<Record<string, Pin>>({});
   const [focused, setFocused] = useState<string | null>(null);
   const history = usePlanHistory(plan.id, plan.updatedAt);
@@ -542,82 +541,25 @@ export function PlanModal({
           />
         )}
         <PinList pins={pins} parts={live} onClear={(slug) => setPins(without(pins, slug))} />
-        <HeadRow className="pm-row">
-          {decidable && (
-            <input
-              className="pm-note"
-              placeholder={
-                Object.keys(pins).length > 0
-                  ? 'Anything to add — your pinned parts are sent with this'
-                  : 'Why (optional) — recorded either way'
-              }
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-            />
-          )}
-          {decidable && (
-            <>
-              <AsyncButton
-                ghost
-                title="Sends it back to the planner with your note. Parts nothing has started for are retired."
-                onClick={() => onDecide(decidable.id, 'reject', composeNote(pins, live, note))}
-              >
-                Reject — send it back to the planner
-              </AsyncButton>
-              {/* The two ways out that are not about the plan. A rejection asks a
-                    planner for a different plan, so it is the wrong "no" for a goal
-                    that should not be worked at all — which is the reading this
-                    panel, where the plan has actually been read, most often produces. */}
-              <AsyncButton
-                ghost
-                // The note is posted on the tracker as the closing comment, so a
-                // close with an empty box would shut somebody's ticket for a
-                // reason nobody can read.
-                disabled={note.trim().length === 0}
-                title={
-                  note.trim().length === 0
-                    ? 'Say why in the box — your words go on the ticket as the closing comment'
-                    : 'Comments with your words, closes the ticket, stops watching it and abandons this plan'
-                }
-                onClick={() => onBackOut(decidable.id, 'close', note.trim())}
-              >
-                Close the ticket
-              </AsyncButton>
-              <AsyncButton
-                ghost
-                title="Stops watching the ticket and sends this plan back to the planner. Nothing is scheduled for it — watch it again and a fresh plan is written."
-                onClick={() => onBackOut(decidable.id, 'hold', note.trim() || undefined)}
-              >
-                Hold — stop watching
-              </AsyncButton>
-              {issueNumber !== null && (
-                <DesktopLink
-                  className={buttonClass({ ghost: true })}
-                  folder={desktopFolder}
-                  prompt={discussPrompt(issueNumber)}
-                  explain={discuss}
-                >
-                  Discuss…
-                </DesktopLink>
-              )}
-              <AsyncButton
-                tone="primary"
-                // Held, not hidden: the checklist above says what is outstanding
-                // and the hint on the button says how many. The route refuses it
-                // either way — this is that answer, a step earlier.
-                disabled={held}
-                title={
-                  held
-                    ? heldTitle(ack.outstanding)
-                    : 'Release the plan — each part gets its own agent, branch and pull request'
-                }
-                onClick={() => onDecide(decidable.id, 'accept', composeNote(pins, live, note), ack.acknowledged)}
-              >
-                {approveLabel(live, queued, originOf)}
-              </AsyncButton>
-            </>
-          )}
-          {!decidable && (
+        {/* The four answers, the same component the inbox card draws. The sheet
+            adds only `Decision` above them, which is the one thing it knows and the
+            card does not: what approving *starts*. */}
+        {decidable && (
+          <PlanAnswers
+            proposalId={decidable.id}
+            issueNumber={issueNumber}
+            approveLabel={approveLabel(live, queued, originOf)}
+            outstanding={ack.outstanding}
+            acknowledged={ack.acknowledged}
+            seedNote={composeNote(pins, live)}
+            desktopFolder={desktopFolder}
+            discussExplain={discuss}
+            onDecide={onDecide}
+            onBackOut={onBackOut}
+          />
+        )}
+        {!decidable && (
+          <HeadRow className="pm-row">
             <span className="muted small">
               {spend === null
                 ? 'Nothing measured for this goal yet'
@@ -625,36 +567,37 @@ export function PlanModal({
               {' · updated '}
               {relTime(plan.updatedAt, now)}
             </span>
-          )}
-          <span className="spacer" />
-          {/* Offered on both statuses `plan_amend` settles, and no others: it
+            <span className="spacer" />
+            {/* Offered on both statuses `plan_amend` settles, and no others: it
                 rewrites an `awaiting_approval` plan and proposes against a running
                 one. A control that offered what the tool refuses is a session sent
                 to argue about a plan it cannot then change. */}
-          {(plan.status === 'awaiting_approval' || plan.status === 'active') && !decidable && issueNumber !== null && (
-            <DesktopLink
-              className={buttonClass({ ghost: true })}
-              folder={desktopFolder}
-              prompt={discussPrompt(issueNumber)}
-              explain={discuss}
+            {(plan.status === 'awaiting_approval' || plan.status === 'active') && issueNumber !== null && (
+              <DesktopLink folder={desktopFolder} prompt={discussPrompt(issueNumber)} explain={discuss} />
+            )}
+            {/* Never beside a verdict. On a decidable plan this is "Change something
+                first" with an empty note — the same route, the same outcome, and the
+                one an operator reaches for when they have nothing to say, which is
+                exactly the replan that re-runs the question that produced the plan
+                being refused. Here, where there is no verdict on offer, it is the
+                only way to ask a planner again. */}
+            <AsyncButton
+              ghost
+              title="Ask the planner again from the plan's current state. Nothing is torn down."
+              onClick={() => {
+                // The replan route flips the plan's status and settles what hung
+                // off it; no row anywhere records that a *person* sent it back, so
+                // this call site is the only witness there will ever be. The other
+                // arm needs none: "Change something first" settles a proposal, and
+                // that writes a decision row under `human:<proposal id>`.
+                logUsage('plan.reject');
+                return onReplan(plan.id);
+              }}
             >
-              Discuss…
-            </DesktopLink>
-          )}
-          <AsyncButton
-            ghost
-            title="Ask the planner again from the plan's current state. Nothing is torn down."
-            onClick={() => {
-              // The replan route flips the plan's status and settles what hung
-              // off it; no row anywhere records that a *person* sent it back, so
-              // this call site is the only witness there will ever be.
-              logUsage('plan.reject');
-              return onReplan(plan.id);
-            }}
-          >
-            Replan
-          </AsyncButton>
-        </HeadRow>
+              Replan
+            </AsyncButton>
+          </HeadRow>
+        )}
       </div>
     </Modal>
   );
@@ -805,13 +748,21 @@ function pinText(slug: string, pin: Pin): string {
   return pin === 'drop' ? `drop “${slug}”` : `question “${slug}”`;
 }
 
-/** The pinned objections and the free text as the one note the verdict carries. */
-function composeNote(pins: Record<string, Pin>, parts: PlanPartView[], note: string): string | undefined {
+/**
+ * The pinned objections as the first draft of the note the change drawer opens
+ * with.
+ *
+ * They used to be joined to a free-text box and sent *with a verdict* — so an
+ * operator who had marked one part of five could only say so by accepting or
+ * rejecting the whole plan. The words are the same; what changed is that they now
+ * arrive in a field the operator can still edit, on the one answer that does
+ * something with them.
+ */
+function composeNote(pins: Record<string, Pin>, parts: PlanPartView[]): string | undefined {
   const lines = Object.entries(pins)
     .filter(([slug]) => parts.some((p) => p.slug === slug))
     .map(([slug, pin]) => pinText(slug, pin));
-  const text = [...lines, note.trim()].filter((s) => s !== '').join('; ');
-  return text === '' ? undefined : text;
+  return lines.length === 0 ? undefined : lines.join('; ');
 }
 
 function without(pins: Record<string, Pin>, slug: string): Record<string, Pin> {

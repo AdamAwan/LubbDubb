@@ -24,7 +24,6 @@ import type {
 } from '../types.js';
 import { HeadRow, Panel } from './panel.js';
 import { DesktopLink } from './DesktopLink.js';
-import { buttonClass } from './button.js';
 import { Tag, type TagTone } from './tag.js';
 
 /**
@@ -348,13 +347,10 @@ function Discuss({ feature, folder }: { feature: number; folder: string }): JSX.
   if (!folder) return null;
   return (
     <DesktopLink
-      className={buttonClass({ ghost: true, size: 'small' })}
       folder={folder}
       prompt={`Read the story order for feature #${feature} with sequence_read, then talk me through changing it.`}
       explain="so you can argue with the order and write it back with sequence_amend"
-    >
-      Discuss…
-    </DesktopLink>
+    />
   );
 }
 

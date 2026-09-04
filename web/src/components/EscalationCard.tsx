@@ -5,6 +5,7 @@ import { renderMarkdown } from './markdown.js';
 import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 import { QuestionnaireModal } from './QuestionnaireModal.js';
 import { CaveatChecklist, heldTitle, useAcknowledgements } from './CaveatChecklist.js';
+import { PlanAnswers } from './PlanAnswers.js';
 import { planCaveatsOf } from '../planCaveats.js';
 import { Panel } from './panel.js';
 import { Button } from './button.js';
@@ -16,6 +17,7 @@ export function EscalationCard({
   resumedAt,
   now,
   refUrls,
+  desktopFolder,
   onAnswer,
   onAnswerQuestions,
   onDecide,
@@ -42,6 +44,8 @@ export function EscalationCard({
   resumedAt?: string | null;
   now?: number;
   refUrls: Record<string, string>;
+  /** `config.desktopFolder` — the checkout a Claude Code hand-off opens on. */
+  desktopFolder: string;
   onAnswer: (text: string) => Promise<unknown> | unknown;
   /**
    * Answer a questionnaire: one entry per question, positional, null for the ones
@@ -131,9 +135,11 @@ export function EscalationCard({
   const caveats = planCaveatsOf(decidable ?? undefined);
   const ack = useAcknowledgements(caveats);
   const held = ack.outstanding.length > 0;
-  // Only a plan has a ticket behind it to close or hold: a merge and a reply draft
-  // are acts on a pull request, and a shortfall is about work already delivered.
-  const backOutable = decidable?.kind === 'plan' && onBackOut ? decidable : null;
+  // Only a plan has a ticket behind it to close or hold, a planner to send it back
+  // to, and a conversation to open: a merge and a reply draft are acts on a pull
+  // request, and a shortfall is about work already delivered. So it is the one kind
+  // that draws `PlanAnswers` rather than the two-verdict row.
+  const planDecidable = decidable?.kind === 'plan' && onDecide && onBackOut ? decidable : null;
   // Only meaningful if the agent moved on *after* asking; a stamp from an earlier
   // park would call a brand-new question stale.
   const resumed = resumedAt != null && Date.parse(resumedAt) > Date.parse(escalation.createdAt);
@@ -334,17 +340,34 @@ export function EscalationCard({
             Deny
           </AsyncButton>
         </div>
+      ) : planDecidable ? (
+        /* A plan's four answers, the same component the plan sheet draws below the
+           decomposition. The other three kinds keep the two-verdict row below: a
+           merge, a reply draft and a shortfall have no ticket to close, no planner
+           to send anything back to, and no conversation to open — which is what
+           made one row serving all four kinds a row that could only be labelled for
+           the commonest of them. */
+        <>
+          <CaveatChecklist caveats={caveats} ticked={ack.ticked} onToggle={ack.toggle} refUrls={refUrls} />
+          <PlanAnswers
+            proposalId={planDecidable.id}
+            issueNumber={typeof context.issueNumber === 'number' ? context.issueNumber : null}
+            approveLabel={ACCEPT_LABEL.plan ?? 'Approve'}
+            outstanding={ack.outstanding}
+            acknowledged={ack.acknowledged}
+            desktopFolder={desktopFolder}
+            discussExplain="so the plan is talked through with a session that can amend it — nothing is scheduled, and nothing changes until it does."
+            onDecide={onDecide!}
+            onBackOut={onBackOut!}
+          />
+        </>
       ) : decidable ? (
         <>
           <CaveatChecklist caveats={caveats} ticked={ack.ticked} onToggle={ack.toggle} refUrls={refUrls} />
           <div className="esc-decide">
             <input
               placeholder={
-                backOutable
-                  ? 'Why (optional to decide) — required to close, and it is what the ticket gets'
-                  : overrulable
-                    ? 'Why — optional to decide, required to overrule'
-                    : 'Why (optional) — recorded either way'
+                overrulable ? 'Why — optional to decide, required to overrule' : 'Why (optional) — recorded either way'
               }
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -387,38 +410,6 @@ export function EscalationCard({
               </AsyncButton>
             )}
           </div>
-          {backOutable && (
-            /* Set apart below the two answers, the way dismissing is: neither of
-             these answers the question the card asked. Approve and Reject are both
-             about the *plan* — a rejection asks a planner for a different one — and
-             these two are about the ticket. */
-            <div className="esc-backout">
-              <span className="muted small">Not the work you want?</span>
-              <AsyncButton
-                ghost
-                // Disabled rather than hidden until there are words, for the overrule's
-                // reason and one more: the note is posted on somebody's tracker as the
-                // reason it closed, and a close nobody can read the reason for is the
-                // thing this control exists to stop.
-                disabled={text.trim().length === 0}
-                title={
-                  text.trim().length === 0
-                    ? 'Say why — your words go on the ticket as the closing comment'
-                    : 'Comments with your words, closes the ticket, stops watching it and abandons the plan'
-                }
-                onClick={() => onBackOut!(backOutable.id, 'close', text.trim())}
-              >
-                Close the ticket
-              </AsyncButton>
-              <AsyncButton
-                ghost
-                title="Stops watching the ticket and sends this plan back. Nothing is scheduled for it — watch it again and a fresh plan is written."
-                onClick={() => onBackOut!(backOutable.id, 'hold', text.trim() || undefined)}
-              >
-                Hold — stop watching
-              </AsyncButton>
-            </div>
-          )}
         </>
       ) : questions ? (
         <div className="esc-quick">

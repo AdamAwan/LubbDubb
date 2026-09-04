@@ -1643,7 +1643,17 @@ select:disabled {
 /* The two ways out of a plan verdict that are not verdicts on the plan. Set apart
    below the answers the way `.esc-dismiss` is, because neither answers the
    question the card asked — they are about the ticket. */
-.esc-backout {
+/* --------------------------------------------------------------------------
+   The four answers to a plan (`PlanAnswers`), drawn on both the inbox card and
+   the plan sheet — inside the console and outside it, which is why every value
+   here is a shared token and none is a `--cn-` one.
+   → docs/spec/17-cockpit.md#the-four-answers-to-a-plan
+   -------------------------------------------------------------------------- */
+/* The two ticket answers, set apart from the two about the plan. The rule is the
+   whole point: they answer a different question, and a row of five peers is what
+   let an operator who had decided the *ticket* was wrong press the one that
+   re-plans the goal. */
+.pa-backout {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1651,6 +1661,45 @@ select:disabled {
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px solid var(--border);
+}
+/* The control whose drawer is open, so the field below has something to belong
+   to. Named `pa-on` rather than reusing a tone: a tone says what a control does,
+   and this says only that it is the one being answered. */
+.btn.pa-on {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-fill);
+}
+/* A drawer is a question, so it is tinted like one and sits under the control
+   that asked it. The close arm is red-edged because its words leave the cockpit:
+   they are posted on somebody's tracker as the reason it shut. */
+.pa-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--accent-line);
+  background: var(--accent-fill);
+  border-radius: 8px;
+}
+.pa-drawer.pa-close {
+  border-color: var(--red-line);
+  background: var(--red-fill);
+}
+.pa-drawer-q {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.pa-drawer-note {
+  flex: 1;
+  min-width: 200px;
+  font-size: 12.5px;
+  padding: 6px 9px;
+}
+.pa-drawer-hint {
+  font-size: 11.5px;
+  color: var(--muted);
 }
 .esc-decide input {
   flex: 1;

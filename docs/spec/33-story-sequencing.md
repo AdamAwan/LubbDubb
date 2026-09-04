@@ -236,7 +236,7 @@ again — the thing declined was an order over a set, and the set has changed.
 
 There is no drag-to-reorder. An accepted sequence is changed by **talking to Claude Code**, which is
 the door a plan is already amended through ([08](08-planning.md#discussing-a-plan)): the card carries
-a `Discuss…` deep link (`web/src/components/DesktopLink.tsx`), the operator's own session opens on
+an `Open in Claude Code` deep link (`web/src/components/DesktopLink.tsx`), the operator's own session opens on
 the Feature, and it writes through `sequence_read` and `sequence_amend` on the desktop channel
 (`src/mcp/desktopSequence.ts`, mounted in `src/mcp/desktopTools.ts` under `DESKTOP_TOOL_NAMES` —
 never `buildTools`). The session dispatches nothing.

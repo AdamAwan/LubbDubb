@@ -227,7 +227,7 @@ Five surfaces and one shell.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│ ident │ Overview Tickets② Obstacles Insights │ Fleet ⏸ 14s │ Issue! Question?  62%⁵ʰ / 30%⁷ᵈ │ #390  ☰ │ top bar
+│ ident │ Overview Tickets② Obstacles Insights │ Fleet ⏸ 14s │ Issue! Claude ↗   62%⁵ʰ / 30%⁷ᵈ │ #390  ☰ │ top bar
 ├────────────────────────────────────────────────────────────────────────┤
 │ the recovery banner, when a previous run left work orphaned            │
 ├───────────────┬────────────────────────────────────────────────────────┤
@@ -1121,14 +1121,14 @@ each invisible to every check the repo runs:
 Every one of those is a class string being asked to remember something. A component remembers it once,
 which is the whole argument for the kit:
 
-| component                            | what it is                                                                                      |
-| ------------------------------------ | ----------------------------------------------------------------------------------------------- |
-| `ControlBar`                         | the row; groups wrap as units, never through one                                                |
-| `ControlGroup`                       | a captioned group, and the rule before it                                                       |
-| `ControlButton`                      | one control that acts, with an optional count pill                                              |
-| `ControlSegments` / `ControlSegment` | grouped buttons: mutually exclusive states sharing an edge                                      |
-| `ControlSelect`                      | the chrome a `<select>` wears to sit in a bar                                                   |
-| `CONTROL_CLASS`                      | the seam for `DesktopLink`, `TicketLink`, `PrLink` — components that already take a `className` |
+| component                            | what it is                                                                  |
+| ------------------------------------ | --------------------------------------------------------------------------- |
+| `ControlBar`                         | the row; groups wrap as units, never through one                            |
+| `ControlGroup`                       | a captioned group, and the rule before it                                   |
+| `ControlButton`                      | one control that acts, with an optional count pill                          |
+| `ControlSegments` / `ControlSegment` | grouped buttons: mutually exclusive states sharing an edge                  |
+| `ControlSelect`                      | the chrome a `<select>` wears to sit in a bar                               |
+| `CONTROL_CLASS`                      | the seam for `TicketLink` and `PrLink` — components that take a `className` |
 
 **Tone is a prop, never a class string**: `on` for an engaged toggle, `primary` for the one control a
 surface expects to be pressed, `danger` for one that destroys something. A caller cannot invent a
@@ -1258,7 +1258,7 @@ of a caller's tone uses `withShape`, so the caller's half and the station's half
 `withShape(look, onCloseTicket === null && 'go')`.
 
 **`buttonClass` is the seam for the controls that are not buttons.** The three async components resolve
-their class through it and add their own ring; `DesktopLink` is an `<a>`, because a deep link is a
+their class through it and add their own ring; `DesktopLink` reaches it for itself, because a deep link is a
 destination, and wears the button's look through the same call. It is what `CONTROL_CLASS` is for the
 control kit.
 
@@ -1519,12 +1519,12 @@ The run's state, what steers the work, and what happens somewhere other than thi
 groups, each with a caption saying what the group is for**, drawn through [the control
 kit](#the-control-kit) rather than as class strings.
 
-| caption         | controls                                              |
-| --------------- | ----------------------------------------------------- |
-| Run state       | Working / Done / Abandon… — one segmented control     |
-| Steer the work  | Give instructions, Watch, Prioritise, the profile pin |
-| Check the work  | Validate locally                                      |
-| Leave this page | Ask Claude Code ↗, Open ticket ↗, File a new bug    |
+| caption         | controls                                               |
+| --------------- | ------------------------------------------------------ |
+| Run state       | Working / Done / Abandon… — one segmented control      |
+| Steer the work  | Give instructions, Watch, Prioritise, the profile pin  |
+| Check the work  | Validate locally                                       |
+| Leave this page | Open in Claude Code ↗, Open ticket ↗, File a new bug |
 
 _Check the work_ is one control and still its own group, because it is the only one here whose effect
 is on **the operator's own machine** rather than on the tracker or on the queue. The whole group is
@@ -1587,11 +1587,11 @@ fact worth stating, where a missing button says nothing and reads as the cockpit
 having forgotten. It stops being an `<a>` because a link that leads nowhere is the
 dead end [refs](#links) exists to prevent.
 
-- **Ask Claude Code** is the row's one control that writes nothing, and it is named for where it goes:
-  `Ask` alone said neither whom nor about what, on a control whose whole point is that the answer comes
-  from somewhere else. An `<a>` carrying
+- **Open in Claude Code** is the row's one control that writes nothing, and it is named for where it
+  goes — the one label every deep link in the cockpit carries
+  ([above](#opening-the-operators-own-claude-code)). An `<a>` carrying
   `claude://code/new?q=/lubbdubb ask <n> &folder=<config.desktopFolder>`, built by the same
-  `desktopDeepLink` the plan sheet's **Discuss…** and the validation card's **Run it in Claude Code**
+  `desktopDeepLink` the plan sheet's and the validation card's hand-offs
   use ([20](20-validation.md#starting-a-run-from-the-cockpit)), so it opens the operator's own Claude
   Code on the goal's checkout with the command already in the composer and the harness's whole record
   of the goal one `goal_read` away ([11](11-mcp-tools.md#answering-a-question-about-a-goal)). It is
@@ -1884,10 +1884,10 @@ moment a row is **opened**, because an operator who opened one is reading it; an
 lighter than the `.gone` treatment on a withdrawn check, since _withdrawn_ and _done_ are not the same
 news.
 
-**Run it in Claude Code** is the odd one out and is the reason it exists: it writes nothing. A desktop
+The check's hand-off is the odd one out and is the reason it exists: it writes nothing. A desktop
 session is started from the operator's own Claude Code, not from here, so the control is an `<a>`
 carrying a `claude://code/new` deep link that opens that client on the goal's checkout with
-`/lubbdubb <issue>:<letter>` prefilled — the same builder the plan sheet's **Discuss…** uses — and the
+`/lubbdubb <issue>:<letter>` prefilled — the same builder the plan sheet's hand-off uses — and the
 cockpit's part in that run ends there. Without it the third runner is the only one with no trace on
 the surface managing the other two. → [20](20-validation.md#starting-a-run-from-the-cockpit)
 
@@ -3737,7 +3737,7 @@ wraps: the cheaper offer is only offered first while it is beside the other one.
 out of the bar's own face through a console-owned wrapper and `.cn-issue-btn` takes the button's padding
 off, since `console.css` styling `.ext-ref` directly is what this stylesheet is tested not to do.
 
-**Beside it is `Question?`, which answers instead of filing.** Most of what reaches the tracker
+**Beside it is the Claude Code hand-off, which answers instead of filing.** Most of what reaches the tracker
 as a complaint about the fleet is not a fault in it — it is _why has this not moved_, which the
 harness's own record settles in a sentence, and which nobody asked because asking meant opening a
 client, finding the checkout and remembering the skill. The control is that, as a link: a
@@ -5624,44 +5624,43 @@ person, parts that are large to review, and what the goal has cost so far.
 estimate what work will cost, and a made-up number on the button that authorises spending is worse than
 no number. The spend shown is spend already made.
 
-**Objection pins compose the note.** A part can be pinned _question_ or _drop_ while reading, and the
-pins are joined into the free-text note the accept and reject verdicts already carry — no new verdict,
-no new route, nothing the server has to learn. Reading a five-part plan and disagreeing with one of
-them is the ordinary case, and the only way to say so used to be to remember the slug and type it into
-a box at the bottom.
+### The four answers to a plan
 
-**Two of the buttons are not about the plan.** Beside Approve and Reject sit **Close the ticket**
-and **Hold — stop watching**, both drawn only on a plan proposal because only a plan has a ticket
-behind it ([08](08-planning.md#backing-out-of-a-plan)).
-They are here as well as on the inbox card because this is the surface where the plan has actually
-been _read_, and reading it is what produces "this is not really an issue" — for which the only "no"
-used to be Reject, which asks a planner for a different plan for a goal nobody wants.
+**One component, both surfaces.** `web/src/components/PlanAnswers.tsx` draws the four answers on the
+inbox card and in the plan sheet's footer, and the sheet adds only what the card cannot know: the
+`Decision` strip above them, which is what approving _starts_. Two rows of controls for one decision is
+how the sheet came to offer six answers where the card offered four, and how the card came to be the
+better-organised of the two — it already set the ticket answers apart under _"Not the work you want?"_,
+and the sheet, the surface where the plan is actually read, did not.
 
-Close is **disabled until there is a note**, the way the shortfall's overrule is and for a sharper
-reason: the note is posted on the tracker as the closing comment and outlives this harness, so an
-empty one shuts somebody's ticket for a reason nobody can read. A third button, **Draft a comment**,
-sat between them and filled the box from a server-composed placeholder; it is **withdrawn**, along with
-the route behind it, because a harness-written sentence is not the account the note is there to
-require. Hold takes a note optionally rather than requiring one — it decides nothing
-about the work, and its words are read by a planner rather than posted anywhere: it drops the watch
-tag and sends the plan back, so watching the ticket again produces a fresh plan instead of this one
-again.
+What the four are, and why there are no longer six, is [08](08-planning.md#the-four-answers). What is
+the cockpit's own:
 
-Approve / Reject appear only while the plan is `awaiting_approval`, and route through the same
-`decideProposal` the escalation card uses — one verdict, one implementation, so the rail's row clears
-whichever surface you decided from. Replan sits apart, because it settles nothing about the proposal in
-front of you. **Abandon** sat beside it and is gone: it retired the unstarted parts and worked the goal
-as one pull request, which was a distinct act only while a plan with no parts was a different kind of
-plan ([08](08-planning.md#a-plan-is-a-list-of-parts)). Replan is the way out now.
+**Nothing asks for words until an answer that needs them is chosen.** There is no note box at rest.
+`Change something first` and `Close the ticket` each open a drawer under the row, focused, captioned
+with what happens to what is typed, and **held until there is something** — `disabled` rather than left
+to a 400, the same call the held Approve makes. The change drawer is tinted in the accent and the close
+drawer in the red family, because only one of them writes anything outside this harness.
 
-**Discuss…** is an `<a>`, not a button — the only control on the sheet that is. It carries
+**Objection pins seed the change drawer.** A part can be pinned _question_ or _drop_ while reading. The
+pins used to be composed into the one free-text note and could only be sent by choosing a verdict
+first — so an operator who disagreed with one part of five had to accept or reject the whole plan to
+say so. They are the drawer's opening text now, still editable, on the one answer that does something
+with them.
+
+**Escape closes a drawer and decides nothing.** A question you cannot back out of is a commitment.
+
+Approve and the change arm appear only while the plan is `awaiting_approval`, and route through the
+same `decideProposal` the escalation card uses — one verdict, one implementation, so the rail's row
+clears whichever surface you decided from. **Abandon** is gone: it retired the unstarted parts and
+worked the goal as one pull request, which was a distinct act only while a plan with no parts was a
+different kind of plan ([08](08-planning.md#a-plan-is-a-list-of-parts)).
+
+The sheet's hand-off is an `<a>`, not a button — the only control on the sheet that is. It carries
 `desktopDeepLink(config.desktopFolder, discussPrompt(n))` (`web/src/cockpit/desktopLink.ts`), which
 opens the operator's own Claude Code on the goal's checkout with `/lubbdubb discuss <n>` prefilled.
-A destination belongs on an anchor rather than behind a click handler, and `a.btn` in the stylesheet
-is only the three things an `<a>` does not inherit from `.btn` — no colour of its own, because it is
-the same control. It is drawn only while the plan is `awaiting_approval`, which is exactly what
-`plan_amend` refuses outside of, and only when the plan's origin names a goal number, which is what
-the tool resolves a plan by.
+A destination belongs on an anchor rather than behind a click handler. It is drawn only when the plan's
+origin names a goal number, which is what `plan_amend` resolves a plan by.
 
 The sheet used to show a conversation instead: a fleet planner's status and last note, a reply box
 posting through `POST /api/agents/:id/respond`, and an **End discussion** control. That surface is
@@ -5820,13 +5819,28 @@ of its own for the same reason: the row above it says "Agents".
 
 ## Opening the operator's own Claude Code
 
-Four controls hand work to the operator's own Claude Code rather than to the fleet: the goal header's
-**Ask ↗** and **run it locally ↗**, the validation card's **Run it in Claude Code**, and the plan
-sheet's **Discuss…**. They are all `<DesktopLink>` (`web/src/components/DesktopLink.tsx`), over the
-scheme and the four prompt builders in `web/src/cockpit/desktopLink.ts`.
+Six controls hand work to the operator's own Claude Code rather than to the fleet: the goal header's
+question hand-off and its **run it locally**, the top bar's, the validation card's, the Feature
+board's story-order one, and the plan sheet's. They are all `<DesktopLink>`
+(`web/src/components/DesktopLink.tsx`), over the scheme and the prompt builders in
+`web/src/cockpit/desktopLink.ts`.
 
-**They are anchors, never buttons.** A deep link is a destination. `className` stays the caller's,
-because the four live in rows with different tones; what is shared is the address and the sentence.
+**Every one of them says "Open in Claude Code ↗".** They said six different things — `Ask Claude Code`,
+`run it locally`, `Question?`, `Run it in Claude Code` and `Discuss…` twice — and six names for one act
+is a vocabulary an operator learns per surface rather than once. The argument about which verb a given
+site deserves also has no end, because every site can make a case for its own; naming the destination
+ends it. What still differs between call sites is what the session **arrives with** (`prompt`) and what
+it **does** (`explain`), which is the pair that was always genuinely theirs.
+
+**They are anchors, never buttons.** A deep link is a destination.
+
+**The look is the component's, and it is the shared button kit's.** `className` used to stay the
+caller's, on the argument that the sites live in rows with different tones — and what that bought was
+`cn-tgl`, `cn-linkish`, `cn-ask-btn` and two different `buttonClass` looks on one control. It draws
+`buttonClass({ ghost: true, size: 'small' })` now, which carries `btn` twice and so survives
+`console.css`'s `.cn button` reset: the same element is native inside the console, where the goal
+header and top bar draw it, and outside it, where the plan sheet and the escalation card do. A control
+drawn on **both** grounds is exactly the case a second class would have had to keep in step by hand.
 
 **The command is in the title as well as the `href`, and the component is what puts it there.** The
 link fires only on the machine the browser is on, and a client that is not installed answers _nothing
@@ -5838,9 +5852,11 @@ now **assembled** — `Opens your own Claude Code with "<command>" <ready>, <exp
 supplies only the half that is its own. `test/validationDesktopPrompt.test.ts` pins the composition,
 and pins that no other `.tsx` builds one of these links.
 
-**`ready` is why the clause is a prop and not a constant.** Three of the four commands are complete
-and send as they land; **Ask** is deliberately not, and fills the composer with `/lubbdubb ask 284 `
-so the cursor sits after the number. A title promising a send that never comes is worse than none.
+**`ready` is why the clause is a prop and not a constant.** Most commands are complete and send as
+they land; the two that start a **conversation** deliberately are not — the goal's fills the composer
+with `/lubbdubb ask 284 ` so the cursor sits after the number, and the bar's with `/lubbdubb `. A title
+promising a send that never comes is worse than none. It is also the only thing left distinguishing
+those two from the rest, now that the label does not.
 
 ## Links
 
