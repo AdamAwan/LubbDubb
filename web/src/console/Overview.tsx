@@ -4,20 +4,18 @@ import type { CockpitActions } from '../cockpit/actions.js';
 import type {
   Agent,
   EnvironmentHealthReading,
-  GoalArrival,
   Issue,
   OpenPullRequest,
   QueueItem,
   ReadyingAction,
   ReadyingStep,
   SupplyState,
-  WorldEvent,
 } from '../types.js';
 import { buildGoalPage, buildGoalTrack, furthestEnvironment, goalOfPr, type GoalTrack } from '../view/goalPage.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { Icon } from '../components/icons.js';
 import { elapsed, fmtUsd, relTime } from '../components/util.js';
-import { Ref, RefText, refLabel } from '../components/refs.js';
+import { Ref, refLabel } from '../components/refs.js';
 import { StaleChip, waitedFor } from './GoalPage.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
 import { GroupHead, PanelRows, type PanelRowModel, type RowGroup } from './PanelRow.js';
@@ -31,22 +29,28 @@ import { orphanCount, orphanGoal } from '../view/orphanGoal.js';
 import { Tag, type TagTone } from '../components/tag.js';
 
 /**
- * What is shown when no goal is selected: seven cards, rows rather than pictures.
+ * What is shown when no goal is selected: six cards, rows rather than pictures.
  *
- * Document order is reading order — Fleet, Goals in flight, Pull requests, World
- * signals, Environments, Build, Project — and no card carries a CSS `order`, so
- * the DOM and the page agree at every width. The arrangement across tracks is
+ * Document order is reading order — Fleet, Goals in flight, Pull requests,
+ * Environments, Build, Project — and no card carries a CSS `order`, so the DOM
+ * and the page agree at every width. The arrangement across tracks is
  * `.cn-grid`'s business alone.
  *
  * **Up next is not among them any more**: the queue is a band on the Fleet card,
  * because it is the same list one stage further back. → {@link Fleet}
+ *
+ * **World signals is not among them either.** It was the fourth card and it was
+ * a page's worth of room spent at the wrong altitude: this page answers *what is
+ * happening*, and the feed is the log an operator reaches for when a queued row
+ * — or an empty queue — needs explaining. It is a panel now, named in the bar
+ * menu and reached from the Up next band it explains. → `WorldSignals`
  *
  * The last two are a pair and are last because neither is about the fleet's
  * work: everything above them is what the fleet did, Build is the process the
  * fleet runs inside, and Project is the repository it is pointed at — two
  * different checkouts, read on one timer.
  *
- * Two rules run through all seven. **Nothing here re-decides what the server
+ * Two rules run through all six. **Nothing here re-decides what the server
  * decided**: a PR's court is `attention.status`, its checks are `ciVerdict`, a
  * queued item's hold is the queue's own sentence, and a goal's state is its
  * `pickup.status` — every one quoted, none parsed. And **an empty card still
@@ -59,7 +63,6 @@ export function Overview({ view, actions }: { view: CockpitView; actions: Cockpi
       <Fleet view={view} actions={actions} />
       <GoalsInFlight view={view} actions={actions} />
       <Rack view={view} actions={actions} />
-      <WorldSignals view={view} />
       <Environments view={view} />
       <Build view={view} actions={actions} />
       <Project view={view} actions={actions} />
@@ -505,12 +508,41 @@ function Fleet({ view, actions }: { view: CockpitView; actions: CockpitActions }
               {asking > 0 && <span className="cn-alarm"> · {asking} on you</span>}
             </>
           ),
-          control:
-            queued.length > queueRows.length ? (
-              <button type="button" className="cn-group-more" onClick={() => actions.openPanel('upnext')}>
-                All {queued.length} →
+          control: (
+            <>
+              {queued.length > queueRows.length && (
+                <button type="button" className="cn-group-more" onClick={() => actions.openPanel('upnext')}>
+                  All {queued.length} →
+                </button>
+              )}
+              {/* The queue's *cause*, one click from the queue itself, and the
+                  control says which of the two it is. What the harness would do
+                  next is decided off what the world just did, so the questions
+                  this band raises — why is that queued, why is nothing — are
+                  answered on the signal feed; a control reading `Signals 5 →`
+                  put the feed beside the queue and left the relation between
+                  them to be guessed, which on the one band where it is the whole
+                  point is a caption worth the width. It is the only place in the
+                  cockpit that way in is drawn, and it draws at every size of
+                  queue including none: an empty band is exactly when an operator
+                  wants to know whether the world moved at all.
+
+                  **It carries no count**, unlike every other control on a band.
+                  The number is not what this one is for — the sentence is — and
+                  a figure on the end would read as *how much of the queue*,
+                  which is the one thing it does not count. The feed's size is on
+                  the bar menu's row, which is the other way to the same panel.
+                  → `WorldSignals` */}
+              <button
+                type="button"
+                className="cn-group-more"
+                onClick={() => actions.openPanel('signals')}
+                title="What the world did — the feed these dispatch decisions are taken off"
+              >
+                Up next is determined by world signals →
               </button>
-            ) : undefined,
+            </>
+          ),
         }}
       />
       {queueRows.length > 0 && <PanelRows rows={queueRows} rail={rail} />}
@@ -1647,140 +1679,3 @@ function healthTone(reading: EnvironmentHealthReading): TagTone {
 function healthAsk(reading: EnvironmentHealthReading): 'ask' | 'hold' {
   return reading.tier === 'orange' ? 'hold' : 'ask';
 }
-
-/**
- * The world's changes, one row per `(kind, ref)` with a count — three review
- * comments on one pull request are one signal, not three unrelated rows. The
- * server's order (newest first) is kept: re-sorting by count would move the row
- * an operator is watching the moment it moves again.
- *
- * Wide for its neighbour's sake rather than its own — two slots do not need the
- * room. Left narrow it was the one card off the overview's grid, sitting a quarter
- * wide under a page of half-width ones, which reads as a card that failed to lay
- * out rather than as one with little to say.
- */
-function WorldSignals({ view }: { view: CockpitView }): JSX.Element {
-  // Both halves of "what has happened", newest first: the world's own transitions
-  // and the environments the work has arrived in.
-  const rows = [
-    ...groupSignals(view.state.worldEvents),
-    ...arrivalSignals(view.state.environmentArrivals ?? [], view.now),
-  ]
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .slice(0, 10);
-  return (
-    <section className="cn-card cn-span2">
-      <h3>
-        World signals <i className="cn-n">{rows.length}</i>
-      </h3>
-      {rows.length === 0 && <p className="cn-empty">The world has not moved.</p>}
-      <PanelRows
-        rows={rows.map((row) => ({
-          key: row.key,
-          title: <RefText text={row.summary} />,
-          // The goal behind the signal, beside the sentence rather than inside
-          // it. The summary's own `#412` already links out to the provider, so
-          // repeating the pull request here would be one ref twice — what a
-          // signal never offers is the way onto the goal page.
-          refs: <Ref to={goalBehind(view, row.ref)} />,
-          facts: [
-            { label: 'kind', value: row.kind },
-            { label: 'when', value: relTime(row.createdAt, view.now) },
-            // The count is a fact with a name now, rather than the same slot a
-            // fleet row puts a dollar figure in.
-            ...(row.count > 1 ? [{ label: 'times', value: `×${row.count}` }] : []),
-          ],
-        }))}
-      />
-    </section>
-  );
-}
-
-/**
- * The goal a ref stands under: a goal ref names itself, a pull request resolves
- * through the ticket that owns it, and anything else — a ticketless PR, a `job:`
- * origin, a ref the world has forgotten — resolves to nothing and draws nothing.
- */
-function goalBehind(view: CockpitView, ref: string | null): string | null {
-  if (ref === null) return null;
-  if (/^issue:\d+/.test(ref)) return ref;
-  const pr = /^pr:(\d+)/.exec(ref);
-  return pr ? goalOfPr(view.state, Number(pr[1])) : null;
-}
-
-/**
- * One row of the feed, flattened off whatever produced it.
- *
- * Flat rather than "a `WorldEvent` and a count" because the card draws two
- * different things now — the world's own transitions, and the environments a
- * goal's work has arrived in — and an arrival is deliberately not a world event
- * ({@link arrivalSignals}). Carrying one as the other would need a `kind` the
- * union does not have, cast into it at the one place the row then prints it.
- */
-interface Signal {
-  key: string;
-  /** What kind of thing happened, as the row prints it. */
-  kind: string;
-  /** The world object it concerns, for the goal link beside the sentence. */
-  ref: string | null;
-  summary: string;
-  createdAt: string;
-  count: number;
-}
-
-function groupSignals(events: readonly WorldEvent[]): Signal[] {
-  const rows = new Map<string, Signal>();
-  for (const event of events) {
-    const key = `${event.kind}|${event.ref ?? ''}`;
-    const seen = rows.get(key);
-    // The newest of its group — the server sends newest first, so it is the first seen.
-    if (seen) seen.count += 1;
-    else
-      rows.set(key, {
-        key,
-        kind: event.kind,
-        ref: event.ref,
-        summary: event.summary,
-        createdAt: event.createdAt,
-        count: 1,
-      });
-  }
-  return [...rows.values()];
-}
-
-/**
- * The environment arrivals, as signals — merged into the feed here rather than
- * carried in `worldEvents` from the server.
- *
- * **An arrival is deliberately not a `WorldEvent`.** Those are derived by diffing
- * consecutive world snapshots, and a standing delivery verdict is expired by
- * *any* world event on its issue ref (`deliveryHold`) — so an arrival written as
- * one would lift the delivery park on the very goal it announced and hand the
- * work back to the fleet to do again. Adapting it at the feed's own door costs
- * one function and has no such reader.
- *
- * One row per arrival rather than one per `(kind, ref)`: two environments
- * reaching one goal is two things that happened, and rolling them together would
- * hide the second under a count of the first.
- */
-function arrivalSignals(arrivals: readonly GoalArrival[], now: number): Signal[] {
-  const cutoff = now - SIGNAL_WINDOW_MS;
-  return arrivals
-    .filter((a) => Date.parse(a.arrivedAt) >= cutoff)
-    .map((a) => ({
-      key: `arrival|${a.goalRef}|${a.environment}`,
-      kind: 'environment',
-      ref: a.goalRef,
-      summary: `${refLabel(a.goalRef)} reached ${a.environment}`,
-      createdAt: a.arrivedAt,
-      count: 1,
-    }));
-}
-
-/**
- * How far back an arrival stays in the feed. The world events beside it are
- * capped at 100 rows by the server and thin out on their own; arrivals are rare
- * enough that a deployment with four environments would otherwise keep last
- * spring's on the card.
- */
-const SIGNAL_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;

@@ -3990,8 +3990,15 @@ button.cn-grow {
 /* A heading over the rows under it, on the card's full width rather than on the
    rail: lined up with the subject column it would read as a row whose every
    other slot happened to be empty. */
+/* The band wraps rather than clipping. Its control is a nowrap chip and one of
+   them is a sentence — `Up next is determined by world signals →` — which in one
+   column runs past the card's edge and loses its own arrow. Wrapping puts it on a
+   second line at the widths where it does not fit and changes nothing at the
+   widths where it does; every other band's control is two words and never
+   reaches this. */
 .cn-group {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 7px 13px;

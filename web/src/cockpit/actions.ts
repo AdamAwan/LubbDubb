@@ -58,6 +58,16 @@ export type ConsolePanel =
    * unbounded and the card's own rows are capped by the fleet.
    */
   | 'upnext'
+  /**
+   * What the world did — the feed that was the overview's fourth card.
+   *
+   * A panel because it is consulted rather than watched: the queue and the racks
+   * say what is happening, and this says what happened to bring it about. It is
+   * named in the bar menu and reached from the Up next band, which is the reading
+   * it actually serves — the queue is decided off these signals, so "why is that
+   * queued" and "why is nothing" are one click apart from the queue itself.
+   */
+  | 'signals'
   | { ask: string }
   | null;
 

@@ -83,7 +83,7 @@ const render = (v: CockpitView): string =>
  */
 test('every pull-request row carries a way to the pull request it names', () => {
   const html = render(view());
-  const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('World signals'));
+  const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('Environments'));
   const rows = rack.split(ROW).slice(1);
   assert.ok(rows.length > 0, 'no pull-request rows rendered');
   for (const row of rows) {
@@ -231,7 +231,7 @@ test('a fleet row wears the state it is in, and the strongest one it is in', () 
 test('a pull-request row keeps the court’s reasons and wears none of its words', () => {
   const state = buildDemoState().state;
   const html = render(view());
-  const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('World signals'));
+  const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('Environments'));
   const rows = rack.split(ROW).slice(1);
   // In the card's own order, not the world's: the rack puts the pull requests
   // somebody handed you above the fleet's, so a positional match against
@@ -293,7 +293,7 @@ test('a pull-request row draws the agent on its branch instead of its checks', (
   // Scoped to the rack: a goal row's title is `#376 <the PR's own title>`, so a
   // page-wide search for a pull request's title finds the goal card first.
   const rowFor = (html: string, title: string): string => {
-    const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('World signals'));
+    const rack = html.slice(html.indexOf('Pull requests'), html.indexOf('Environments'));
     const found = rack.split(ROW).find((chunk) => chunk.includes(title));
     assert.ok(found, `no row drew "${title}"`);
     return found.slice(0, found.indexOf('cn-refs'));
@@ -338,7 +338,7 @@ test('the agent mark is the row’s first slot, on both racks', () => {
   const html = render(view());
   const racks = {
     'Goals in flight': html.slice(html.indexOf('Goals in flight'), html.indexOf('Pull requests')),
-    'Pull requests': html.slice(html.indexOf('Pull requests'), html.indexOf('World signals')),
+    'Pull requests': html.slice(html.indexOf('Pull requests'), html.indexOf('Environments')),
   };
 
   // Both cards widen the lamp column, and only those two: every other rack's lamp

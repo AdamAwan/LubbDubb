@@ -677,7 +677,7 @@ declared, not best, since the operator's list is the order the work travels in. 
 `unknown` are not furthest anything: a chip reading `liveUs` for half a feature is the boolean rollup
 the lens refuses to make, one layer up.
 
-Arrivals also reach the **World signals** card, merged into the feed at render time from
+Arrivals also reach the **World signals** panel, merged into the feed at render time from
 `CockpitState.environmentArrivals`. They are deliberately **not** `WorldEvent`s: those are derived by
 diffing consecutive world snapshots, and a standing delivery verdict is expired by _any_ world event
 on its issue ref ([03](03-world-model.md), `deliveryHold`) — so an arrival written as one would lift
