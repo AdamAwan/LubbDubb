@@ -351,6 +351,7 @@ export const PLACE_KEYS = [
   'record',
   'upnext',
   'signals',
+  'environments',
 ] as const;
 
 export type PlaceKey = (typeof PLACE_KEYS)[number];

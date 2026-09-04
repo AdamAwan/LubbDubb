@@ -58,7 +58,7 @@ const render = (v: CockpitView): string =>
   );
 
 /** The rack's markup alone: the card between its own heading and the next card's. */
-const rack = (html: string): string => html.slice(html.indexOf('Pull requests'), html.indexOf('Environments'));
+const rack = (html: string): string => html.slice(html.indexOf('Pull requests'), html.indexOf('Build'));
 
 /** Where a row starts. The boundary keeps `cn-rows`, the container, out of the count. */
 const ROW = /class="cn-row[ "]/g;
