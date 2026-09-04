@@ -583,7 +583,7 @@ function panelBody(
     // builder, so the three rows on the card and the thirty in here cannot come
     // to say different things about the same candidate.
     case 'upnext': {
-      const items = state.upcoming?.items ?? [];
+      const items = view.upNext;
       if (items.length === 0) return <p className="cn-empty">Nothing is queued.</p>;
       return <PanelRows rows={items.map((item) => queueRow(item, view, actions))} />;
     }

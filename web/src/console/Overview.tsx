@@ -419,7 +419,11 @@ function Fleet({ view, actions }: { view: CockpitView; actions: CockpitActions }
   const ended = view.past;
   const desk = view.deskRuns;
   const readying = view.readying;
-  const queued = view.state.upcoming?.items ?? [];
+  // The queue as it stands *now*, not as the last pulse projected it: a candidate
+  // this pulse dispatched is in `state.upcoming` as `dispatching` and in `live` as
+  // an agent, and the card would draw it on both bands until the next pulse
+  // recomputed the plan. → `CockpitView.upNext`
+  const queued = view.upNext;
   // Counted on the glass rather than left behind the disclosure: `unapproved` is
   // the one queue status that is the operator's move rather than the harness
   // stopped, and a row nobody can see is a row nobody answers.

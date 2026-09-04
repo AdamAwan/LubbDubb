@@ -1879,7 +1879,8 @@ test('the environments card draws its readings, and nothing at all without them'
  */
 test('the queue’s asks are counted on the glass, not folded away with the rows', () => {
   const v = view();
-  const items = v.state.upcoming?.items ?? [];
+  // The card's own list — the queue joined against the fleet, not the raw snapshot.
+  const items = v.upNext;
   const asking = items.filter((i) => i.status === 'unapproved').length;
   const text = decode(render(v).replace(/<[^>]*>/g, ''));
   assert.ok(text.includes(`${items.length} queued`), 'the fleet card does not state the size of its queue');

@@ -2965,6 +2965,27 @@ between the queue's rows and the summary of that same queue.
 Ended shifts are not counted against the budget. They are history, and an explicit expansion the
 operator asked for, so they scroll the card rather than pushing the queue out of it.
 
+#### The queue is joined against the fleet before it is drawn
+
+`state.upcoming` is the **last pulse's** projection, and the pulse that dispatches a candidate writes
+it into that list as `dispatching` in the same breath — see
+[the rule book](05-dispatcher.md#the-rule-book). The dispatcher's own de-duplication is
+`activeOrigins`, derived from active tasks, and the task an action creates does not exist yet at the
+moment of the push. So for the length of one interval the queue claims work that is already out, and
+the card drew the same issue twice: once as an agent, once as up next.
+
+`CockpitView.upNext` is that list with the staffed rows taken out — every origin a live agent's task
+names, and every origin a [readying](#work-that-is-not-an-agent-yet) action names. Both surfaces that
+draw the queue read it, so the band and the `upnext` panel cannot disagree about the queue's size,
+and the row budget above is spent against the honest length.
+
+**Live only.** An ended agent staffs nothing: an origin the fleet finished with and the harness
+queued again is a genuine queue row, and a filter that read history would hide it forever.
+
+The join is here rather than in the dispatcher because it is a reading, not a decision — the
+`dispatching` row is load-bearing for `Harness.busy` and for the priority-override reconcile set, and
+a queue that stopped reporting its own dispatches would take both with it.
+
 #### Three shapes that did not work
 
 Each of these read correctly in the diff, and each failed on the glass:

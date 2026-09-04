@@ -7,6 +7,7 @@ import type {
   OrphanedWork,
   Escalation,
   Proposal,
+  QueueItem,
   ReadyingAction,
   TicketOrder,
   TicketStateFilter,
@@ -72,6 +73,21 @@ export interface CockpitView {
    * nothing on the client to join it to.
    */
   readying: ReadyingAction[];
+  /**
+   * The "Up next" queue, minus the rows the fleet is already out on.
+   *
+   * `state.upcoming` is the *last pulse's* projection, and the pulse that
+   * dispatches a candidate writes it into that list as `dispatching` in the same
+   * breath — the dispatcher's own de-duplication is `activeOrigins`, which is
+   * derived from tasks that do not exist yet at the moment of the push. So for
+   * the length of one interval the queue claims work that is already out, and the
+   * Fleet card draws the same issue twice: once as an agent, once as "up next".
+   *
+   * Joined here rather than on the card because both surfaces that draw the queue
+   * — the band and the `upnext` panel — must agree about its size, and because
+   * the band's row budget is spent against this length.
+   */
+  upNext: QueueItem[];
   /** Terminal agents, newest first as the server ordered them. */
   past: Agent[];
   /** Inbox items still awaiting an answer. */
@@ -370,6 +386,26 @@ function groupByAgent<T extends { agentId: string }>(rows: readonly T[] | undefi
   return out;
 }
 
+/**
+ * The queue with the staffed rows taken out. → {@link CockpitView.upNext}
+ *
+ * Staffed is "the fleet is on this origin now": a live agent whose task names it,
+ * or a readying action on its way to becoming one. Ended agents are not staffing
+ * anything — an origin the fleet finished with and the harness queued again is a
+ * genuine queue row, and filtering on history would hide it forever.
+ */
+function buildUpNext(state: AppState, live: readonly Agent[]): QueueItem[] {
+  const items = state.upcoming?.items ?? [];
+  if (items.length === 0) return [];
+  const staffed = new Set<string>();
+  for (const agent of live) {
+    const origin = state.tasks.find((t) => t.id === agent.taskId)?.originRef;
+    if (origin) staffed.add(origin);
+  }
+  for (const action of state.readying ?? []) if (action.originRef) staffed.add(action.originRef);
+  return items.filter((item) => !staffed.has(item.origin));
+}
+
 export function buildViewModel(input: ViewInputs): CockpitView {
   const { state, now, selected } = input;
 
@@ -403,6 +439,7 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     live,
     deskRuns: buildDeskRuns(state),
     readying: state.readying,
+    upNext: buildUpNext(state, live),
     past,
     openEscalations,
     openHumanTaskCount: (state.humanTasks ?? []).filter((t) => t.status === 'open').length,
