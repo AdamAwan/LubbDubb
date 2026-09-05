@@ -922,6 +922,28 @@
 .cn-qbody:hover .cn-qtitle {
   color: var(--cn-tone-ink);
 }
+/* The one card whose body is a way *out* — the assigned row, whose subject is the
+   pull request as the provider draws it. An `<a>` gets none of the reset above for
+   free, and an underline across a two-line ask reads as prose rather than as a
+   card. */
+a.cn-qbody {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+/* Said where a token would say it, in the arrow the references vocabulary already
+   uses for the door that leaves. Sized and coloured as the age beside it: this is
+   a property of the row, not a control. */
+.cn-qout {
+  margin-left: auto;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--cn-fg-faint);
+}
+/* With both, the age keeps the right edge and the arrow sits in against it. */
+.cn-qout + .cn-qage {
+  margin-left: 6px;
+}
 .cn-qfoot {
   display: flex;
   align-items: center;

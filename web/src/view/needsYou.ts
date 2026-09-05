@@ -12,7 +12,6 @@ import type {
   ViewerAssignment,
 } from '../types.js';
 import { goalIssue, goalOfPr, standsFor } from './goalPage.js';
-import { hasPrPage } from './prPage.js';
 import { updateAskRows } from './updateAsks.js';
 import { watchBucket } from '../worldBuckets.js';
 
@@ -166,14 +165,17 @@ function assignedPrRows(state: AppState): NeedRow[] {
       ...(REVIEWER_NOTE[assignment] === undefined ? {} : { note: REVIEWER_NOTE[assignment] }),
       goalRef,
       originRef: `pr:${pr.number}`,
-      // **The body goes to the pull request**, which is the one thing a colleague
-      // is waiting on and the only reason this row exists. Where the console has
-      // no page for it the row falls back to the ask, because a click that lands
-      // nowhere reads as a console that is broken — every assigned row is read off
-      // `world.pullRequests`, so the fallback is a guard rather than a case.
-      opens: hasPrPage(state, pr.number) ? 'pr' : opensAt(goalRef, state),
-      // And the bar carries what the body used to be: who asked, which kind of
-      // reviewer they made you, and the goal it belongs to.
+      // **The body goes to the pull request on the provider** — the diff, the
+      // review and the checks, which is what a colleague marking you a reviewer is
+      // waiting for you to read, and the one thing the cockpit does not draw.
+      // Where the provider gave no address the row falls back to the ask, because
+      // a click that lands nowhere reads as a console that is broken.
+      opens: prAddress(state, pr.number) === undefined ? opensAt(goalRef, state) : 'provider',
+      // And the bar carries what the body used to be — who asked, which kind of
+      // reviewer they made you, the goal it belongs to — beside the `<Ref>` onto
+      // the harness's own page for the pull request. Everything the row used to
+      // reach is still one press away; what changed is which of them the card
+      // itself is.
       details: opensAt(goalRef, state),
       // Nobody is running it — that is the news. An id here would name some
       // earlier agent on the same branch.
@@ -234,17 +236,19 @@ function assignedLine(pr: OpenPullRequest): string {
  * is not a goal the console can draw — an escalation raised on a pull request, a
  * bench task with no ticket, a goal the world no longer carries. `build` is the two
  * update asks, whose subject is a repository rather than anything in the world, and
- * whose changelog the build panel already draws. `pr` is the assigned row alone —
- * the one ask whose subject is a pull request nobody in the fleet is working, where
- * the thing the operator opened the rail to reach *is* the pull request. `null` is
- * the recovery hold alone, which is answered on the banner above the console.
+ * whose changelog the build panel already draws. `provider` is the assigned row
+ * alone — the one ask whose subject is a pull request nobody in the fleet is
+ * working, where the thing the operator opened the rail to reach is the pull
+ * request *as the provider draws it*: the diff, the review, the checks, which is
+ * what a colleague is waiting for them to read. `null` is the recovery hold alone,
+ * which is answered on the banner above the console.
  *
  * Decided in the derivation because only the derivation can tell a ref that *has*
  * a page from one that merely looks like it does. A rail that reads `goalRef`
  * instead draws a row whose click lands nowhere — which is indistinguishable, to
  * the operator, from a console that is broken.
  */
-type NeedDestination = 'goal' | 'ask' | 'config' | 'build' | 'pr' | null;
+type NeedDestination = 'goal' | 'ask' | 'config' | 'build' | 'provider' | null;
 
 /** One row of the merged queue. */
 export interface NeedRow {
@@ -272,14 +276,15 @@ export interface NeedRow {
   /** Where a click on the card's body goes. */
   opens: NeedDestination;
   /**
-   * The row's *other* destination, drawn as the one control in the card's action
-   * bar — present only where the body goes somewhere that is not the ask.
+   * The row's *other* destination, drawn as a control in the card's action bar —
+   * present only where the body leaves the cockpit.
    *
    * The assigned row is the only one that has one, and it is what the body used to
    * be: the ask read in context, on the goal's page or in the ask panel. The body
-   * goes to the pull request now, because that is the thing a colleague is waiting
-   * on the operator to open, and a click that landed on a summary of a PR the
-   * operator was on their way to was a stop on the road rather than the road.
+   * goes to the provider's own page for the pull request now, because that is the
+   * thing a colleague is waiting on the operator to read, and a click that landed
+   * on the harness's summary of a PR they were on their way to was a stop on the
+   * road rather than the road.
    *
    * Decided here rather than in the rail for {@link NeedDestination}'s own reason:
    * only the derivation can tell a `goalRef` that has a page from one that merely
@@ -566,6 +571,19 @@ function needKindOfTask(kind: HumanTask['kind']): NeedKind {
  */
 function opensAt(goalRef: string | null, state: AppState): NeedDestination {
   return goalRef !== null && goalIssue(state, goalRef) !== undefined ? 'goal' : 'ask';
+}
+
+/**
+ * A pull request's address on the provider, by the two keys `buildRefUrls` writes
+ * for one — `pr:<n>` first because it is unambiguous, where `#<n>` is shared with
+ * an issue of the same number and the first writer into the map wins.
+ *
+ * The same lookup `refs.tsx` does when it draws the arm; asked here as well
+ * because whether the card *is* that door is a destination, and destinations are
+ * decided in the derivation.
+ */
+function prAddress(state: AppState, number: number): string | undefined {
+  return state.refUrls[`pr:${number}`] ?? state.refUrls[`#${number}`];
 }
 
 /**

@@ -4,7 +4,7 @@ import type { CockpitActions } from '../cockpit/actions.js';
 import type { AppliedFix, NeedGroup, NeedKind, NeedRow } from '../view/needsYou.js';
 import type { BuildReading, SetupCheck, SetupFix } from '../types.js';
 import { relTime } from '../components/util.js';
-import { refLabel } from '../components/refs.js';
+import { PrLink, Ref, refLabel } from '../components/refs.js';
 import { Button } from '../components/button.js';
 import { Tag } from '../components/tag.js';
 
@@ -327,6 +327,14 @@ function Row({
           </span>
           {KIND_LABEL[row.kind]}
         </Tag>
+        {/* The card leaves the cockpit, so it says so where a token would: the
+            same arrow the vocabulary's arm carries, and `aria-hidden` because the
+            anchor around it already announces where it goes. */}
+        {row.opens === 'provider' && (
+          <i className="cn-qout" aria-hidden="true">
+            ↗
+          </i>
+        )}
         {row.raisedAt !== '' && <i className="cn-qage">{relTime(row.raisedAt, now)}</i>}
       </div>
       <p className="cn-qtitle">{row.title}</p>
@@ -416,10 +424,6 @@ function Row({
   const goTo = (dest: NeedRow['opens']): (() => void) | null => {
     if (dest === 'build') return () => actions.openPanel('build');
     if (dest === 'goal') return ref === null ? null : () => actions.selectGoal(ref);
-    if (dest === 'pr') {
-      const number = Number(PR_ORIGIN.exec(row.originRef ?? '')?.[1]);
-      return Number.isNaN(number) ? null : () => actions.selectPr(number);
-    }
     if (dest === 'ask') return () => actions.openPanel({ ask: row.id });
     return null;
   };
@@ -432,11 +436,39 @@ function Row({
     return carded(open, <UpdateActs kind={row.kind} build={build} actions={actions} />);
   }
 
-  // A row with a second destination — the assigned row, whose body opens the pull
-  // request itself. What the body used to open goes in the bar: the ask read in
-  // context, which is a summary of a pull request the operator is on their way to
-  // rather than the pull request.
+  // The assigned row, and the one card that leaves the cockpit: its body is the
+  // provider's own page for the pull request — the diff, the review and the checks,
+  // which is what a colleague is waiting for the operator to read and the one thing
+  // no page here draws. An anchor rather than a button, because a destination is
+  // what an `<a>` is for: it opens in a tab of its own and it middle-clicks like
+  // every other way out of this cockpit.
+  //
+  // Nothing the row used to reach is lost — the bar carries both: the ask it used to
+  // open, and the `<Ref>` onto the harness's own page for the pull request, which is
+  // the two-door token every other row names a PR with.
   const details = row.details === undefined ? null : goTo(row.details);
+  const prNumber = Number(PR_ORIGIN.exec(row.originRef ?? '')?.[1]);
+  if (row.opens === 'provider' && !Number.isNaN(prNumber) && row.originRef !== null) {
+    return (
+      <div className={cls}>
+        <i className="cn-stripe" />
+        <PrLink number={prNumber} className="cn-qbody">
+          <div className="cn-qin">{body}</div>
+        </PrLink>
+        <i className="cn-stripe" />
+        <CardFoot>
+          {details !== null && (
+            <Button size="small" onClick={details}>
+              Details
+            </Button>
+          )}
+          <span className="cn-refs">
+            <Ref to={row.originRef} />
+          </span>
+        </CardFoot>
+      </div>
+    );
+  }
   if (details !== null) {
     return carded(
       open,

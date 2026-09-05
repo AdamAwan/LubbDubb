@@ -693,23 +693,29 @@ being answered is what the harness makes of the PR. Which kind of reviewer they 
 metadata line instead (`Required reviewer` / `Optional reviewer`), read off `assignedToYou` — a real
 distinction, and a clause every row would carry and no two rows would differ by.
 
-**The row _is_ the way to the pull request.** It is the one kind whose body does not open the ask:
-clicking it opens the pull request's own page, because the pull request is the thing a colleague is
-waiting on and the only reason the row exists. It carried a `<Ref>` to it instead, beside a body that
-opened a summary of the PR the operator was already on their way to — a stop on the road rather than
-the road.
+**The row _is_ the way to the pull request, on the provider.** It is the one card whose body leaves the
+cockpit: clicking it opens the PR where the colleague wrote it — the diff, the review, the checks, none
+of which any page here draws, and all of which are what "please review this" means. It carried a
+`<Ref>` to it instead, beside a body that opened the harness's own summary of a PR the operator was
+already on their way to: a stop on the road rather than the road.
 
-**What the body used to open is the one control in the card's [action bar](#the-action-bar)**
-(`Details`): the ask read in context, on the goal's page or in the ask panel — who asked, which kind of
-reviewer they made you, and the goal it belongs to. Two destinations, and one click may not have two,
-so the second is a control of its own ([links](#links)). The number itself comes back on the metadata
-line (`Optional reviewer · PR #415`), where the subject of every other row is already said: the card is
-the link now, so the row states what it links to rather than drawing a second token to it.
+**An `<a>`, not a button** — `PrLink` (`web/src/components/refs.tsx`), which is the one lookup for a
+pull request's address on the provider. A destination is what an anchor is for: it opens in a tab of
+its own and it middle-clicks like every other way out of this cockpit. The card says so where a token
+would, with the same `↗` the references vocabulary gives the door that leaves.
 
-**Both are decided in the derivation** — `opens: 'pr'` and `details` — for `NeedDestination`'s own
-reason: only the derivation can tell a ref that has a page from one that merely looks like it does. A
-pull request the console has no page for falls back to the ask, because a click that lands nowhere
-reads as a console that is broken.
+**Nothing it used to reach is lost — the card's [action bar](#the-action-bar) carries both.** `Details`
+opens what the body used to: the ask read in context, on the goal's page or in the ask panel — who
+asked, which kind of reviewer they made you, and the goal it belongs to. Beside it, in the `cn-refs`
+slot at the bar's right edge, is the ordinary `<Ref>` onto the pull request: the same two-door token
+every other row on the rail names a PR with, whose first door is the harness's own page for it. Three
+destinations, and one click may not have three, so two of them are controls of their own
+([links](#links)).
+
+**All of it is decided in the derivation** — `opens: 'provider'` and `details` — for
+`NeedDestination`'s own reason: only the derivation can tell a ref that has a page, or an address, from
+one that merely looks like it does. A pull request the provider gave no address for falls back to the
+ask, because a click that lands nowhere reads as a console that is broken.
 
 **It has no control either, and for `dispatch`'s reason turned around**: there is no verdict to record
 and no act to authorise, because the harness has no part in this one. The band says what the pull
@@ -876,9 +882,10 @@ values are the cases where that is not possible:
   goal-shaped ref the world no longer carries. The panel closes itself — answering settles the row,
   the next snapshot drops it from `needsYou`, and a panel whose row is gone draws nothing rather than
   offering a second verdict on a settled ask.
-- **`'pr'` — the pull request's own page**, and the assigned row alone. It is the one kind whose
-  subject is a pull request nobody in the fleet is working, so the thing the operator opened the rail
-  to reach _is_ the pull request; the ask itself moves to the bar as `details`.
+- **`'provider'` — the pull request on the provider**, and the assigned row alone. It is the one kind
+  whose subject is a pull request nobody in the fleet is working, so the thing the operator opened the
+  rail to reach is the PR as the person who assigned it sees it; the ask itself moves to the bar as
+  `details`, beside a `<Ref>` onto the cockpit's own page for it.
 - **`null` — the recovery hold alone**, which is harness-wide and is answered on the banner above the
   console. It renders as a `div` rather than a `button`, because it is the one row with nowhere to go.
 
@@ -957,8 +964,8 @@ empty "Yours to do" under a full "Blocking" is furniture.
 
 **Everything a card can _do_ is in one bar across the bottom of it.** `CardFoot`
 (`web/src/console/QueueRail.tsx`) draws it, and it is the whole of the card's pressable surface: a
-`config` row's fix, an update ask's controls, the assigned row's second destination. Nothing pressable
-is anywhere else.
+`config` row's fix, an update ask's controls, the two destinations the assigned row does not spend its
+body on. Nothing pressable is anywhere else.
 
 That is a rule about _finding_ things rather than about how a card looks. The acts had arrived one kind
 at a time and settled in three different places — the fix in a strip under the body, the update
