@@ -345,14 +345,18 @@ test('opening an idea shows the walk, the marks, the claims and the false claim 
   assert.match(html, /claim is false/);
   assert.match(html, /class="tag t-red tag-fill">False</);
   assert.match(html, /src\/unchanged\.ts:2 still reads old\./);
-  assert.match(html, /class="rp-l rp-del">-const old = 2;/);
+  assert.match(html, /<span class="rp-t">const old = 2;<\/span>/);
+  assert.doesNotMatch(html, /<span class="rp-t">-const old = 2;<\/span>/, 'the marker is never part of the code');
+  assert.doesNotMatch(html, /rp-del/, 'a block of one kind is not tinted — the step’s tag already says which');
   assert.match(html, /Mark read/);
 
   const other = render(payload(), 'idea_a');
   assert.match(other, /rp-step rp-dashed/, 'a region is drawn dashed');
   assert.match(other, /not in this PR/);
   assert.match(other, /the important bit/);
-  assert.match(other, /class="rp-l rp-add">\+import y from &quot;y&quot;;/);
+  // Mixed markers, so the column is drawn — beside the code, never in front of it.
+  assert.match(other, /class="rp-m" aria-hidden="true">\+<\/span><span class="rp-t">import y from &quot;y&quot;;/);
+  assert.match(other, /class="rp-l rp-add"/);
   assert.match(other, /new import/);
   assert.match(other, /witness · /);
   assert.match(other, /added afterwards/);

@@ -1,10 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { renderReviewPackCompanion, reviewPackCompanionPath } from '../src/reviewPacks/companion.js';
-import { falseClaims, numberIdeas, packFacts } from '../src/reviewPacks/derive.js';
+import { codeBlockLines, falseClaims, numberIdeas, packFacts } from '../src/reviewPacks/derive.js';
 import { REVIEW_PACK_SCHEMA } from '../src/store/reviewPacks.js';
 import type { ReviewIdea, ReviewPack, ReviewPackRecord } from '../src/types.js';
 import {
+  codeBlockLines as webCodeBlockLines,
   falseClaims as webFalseClaims,
   numberIdeas as webNumberIdeas,
   packFacts as webPackFacts,
@@ -167,6 +168,57 @@ test('an idea lists the scenarios its tests cover, above its claims and never as
   assert.doesNotMatch(bare, /Covered by/);
 });
 
+test('the diff marker is a column of its own, and is dropped where every line carries the same one', () => {
+  // Mixed: the column carries something, so it is drawn and the lines are tinted.
+  const mixed = codeBlockLines([' const a = 1;', '-const b = 2;', '+const b = 3;'], true);
+  assert.equal(mixed.gutter, true);
+  assert.deepEqual(mixed.lines, [
+    { marker: ' ', text: 'const a = 1;' },
+    { marker: '-', text: 'const b = 2;' },
+    { marker: '+', text: 'const b = 3;' },
+  ]);
+
+  // A new file: every line is an addition, the step's tag says so, and a screen
+  // of `+` says it again. → docs/spec/31-review-packs.md#the-code-block
+  const added_ = codeBlockLines(['+const a = 1;', '+const b = 2;'], true);
+  assert.equal(added_.gutter, false);
+  assert.deepEqual(
+    added_.lines.map((l) => l.text),
+    ['const a = 1;', 'const b = 2;'],
+  );
+
+  // A region never had a marker to take off.
+  assert.deepEqual(codeBlockLines(['const a = 1;'], false), {
+    gutter: false,
+    lines: [{ marker: null, text: 'const a = 1;' }],
+  });
+
+  const html = renderReviewPackCompanion(
+    record(
+      pack({
+        ideas: [
+          idea({
+            anchors: [
+              {
+                kind: 'hunk',
+                range: { path: 'src/a.ts', start: 1, end: 3 },
+                code: [' const a = 1;', '-const b = 2;', '+const b = 3;'],
+                gist: 'Here.',
+                note: null,
+                caption: null,
+                mark: null,
+              },
+            ],
+          }),
+        ],
+      }),
+    ),
+  );
+  // The code is in the text; the marker is beside it, not in front of it.
+  assert.match(html, /<span class="rp-m" aria-hidden="true">\+<\/span><span class="rp-t">const b = 3;<\/span>/);
+  assert.doesNotMatch(html, /<span class="rp-t">\+const b = 3;<\/span>/);
+});
+
 test('a pack stating a schema this build does not know is refused whole', () => {
   const html = renderReviewPackCompanion(record(pack({ schema: REVIEW_PACK_SCHEMA + 1 })));
   assert.match(html, /This pack cannot be shown/);
@@ -240,6 +292,14 @@ test('the companion and the cockpit agree on the derivations neither can share',
     pack({ ideas: [idea(), wrong] }),
     pack({ ideas: [idea(), wrong], order: ['idea_two', 'idea_one'] }),
   ]) {
+    for (const [code, diff] of [
+      [[' a', '-b', '+c'], true],
+      [['+a', '+b'], true],
+      [['a', 'b'], false],
+      [[], true],
+    ] as [string[], boolean][]) {
+      assert.deepEqual(codeBlockLines(code, diff), webCodeBlockLines(code, diff));
+    }
     const mine = numberIdeas(p);
     const theirs = webNumberIdeas(p);
     assert.equal(mine.by, theirs.by);

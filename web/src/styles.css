@@ -9323,6 +9323,20 @@ select:disabled {
   padding: 0 10px;
   white-space: pre;
 }
+/* The diff marker: a column of its own, never the first character of the code.
+   Unselectable, so copying the block gives code and not a diff. */
+.rp-m {
+  display: inline-block;
+  width: 1ch;
+  margin-right: 0.75ch;
+  color: var(--muted);
+  user-select: none;
+}
+
+.rp-t {
+  white-space: pre;
+}
+
 .rp-add {
   background: var(--diff-add-fill);
   color: var(--diff-add-ink);

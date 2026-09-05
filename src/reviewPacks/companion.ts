@@ -8,7 +8,7 @@ import type {
   ReviewRange,
   ReviewVerdict,
 } from '../types.js';
-import { falseClaims, ideaFlags, numberIdeas, packFacts, shortSha, type FalseClaim } from './derive.js';
+import { codeBlockLines, falseClaims, ideaFlags, numberIdeas, packFacts, shortSha, type FalseClaim } from './derive.js';
 
 /**
  * The HTML companion: one self-contained file that draws the same page the
@@ -246,15 +246,28 @@ function diffCounts(code: readonly string[]): { added: number; removed: number }
   return { added, removed };
 }
 
+/**
+ * A code block: the caption, then the lines with their diff marker in a column of
+ * its own rather than as the first character of the code.
+ * → `docs/spec/31-review-packs.md#the-code-block`
+ *
+ * The marker span is `aria-hidden` and unselectable, so a reader who copies the
+ * block gets the code and not a diff — the tint and the gutter say which lines
+ * moved, and neither is part of the text. Where there is no gutter there is no
+ * tint either: every line is the same kind, the step's tag has already said which,
+ * and a screen of solid green reads worse than the code does.
+ */
 function codeBlock(code: readonly string[], caption: string | null, dashed: boolean, diff: boolean): string {
-  const lines = code
-    .map((line) => {
-      const cls = diff && line.startsWith('+') ? ' rp-add' : diff && line.startsWith('-') ? ' rp-del' : '';
-      return `<span class="rp-l${cls}">${esc(line)}\n</span>`;
+  const { gutter, lines: split } = codeBlockLines(code, diff);
+  const lines = split
+    .map(({ marker, text }) => {
+      const cls = !gutter ? '' : marker === '+' ? ' rp-add' : marker === '-' ? ' rp-del' : '';
+      const mark = gutter ? `<span class="rp-m" aria-hidden="true">${esc(marker ?? ' ')}</span>` : '';
+      return `<span class="rp-l${cls}">${mark}<span class="rp-t">${esc(text)}</span>\n</span>`;
     })
     .join('');
   return (
-    `<div class="rp-code${dashed ? ' rp-dashed' : ''}">` +
+    `<div class="rp-code${dashed ? ' rp-dashed' : ''}${gutter ? ' rp-gutter' : ''}">` +
     (caption !== null ? `<div class="rp-code-cap">${esc(caption)}</div>` : '') +
     `<pre>${lines || `<span class="rp-l rp-gap">(no lines)</span>`}</pre></div>`
   );
@@ -454,8 +467,10 @@ a { color: var(--rp-accent); }
 .rp-code-cap { padding: .25rem .5rem; border-bottom: 1px solid var(--rp-line); color: var(--rp-dim); font-size: .78rem; }
 .rp-code pre { margin: 0; padding: .5rem; overflow-x: auto; }
 .rp-l { display: block; white-space: pre; }
-.rp-add { color: var(--rp-add); }
-.rp-del { color: var(--rp-del); }
+.rp-m { display: inline-block; width: 1ch; margin-right: .75ch; color: var(--rp-dim); user-select: none; }
+.rp-t { white-space: pre; }
+.rp-add { color: var(--rp-add); background: color-mix(in srgb, var(--rp-add) 12%, transparent); }
+.rp-del { color: var(--rp-del); background: color-mix(in srgb, var(--rp-del) 12%, transparent); }
 .rp-why { margin-top: .4rem; }
 .rp-why summary { cursor: pointer; color: var(--rp-dim); font-size: .8rem; }
 .rp-stamp { color: var(--rp-dim); }

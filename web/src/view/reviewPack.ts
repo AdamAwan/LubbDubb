@@ -208,3 +208,45 @@ export function ideaOpen(openIdea: string | null, id: string): boolean {
 export function shortSha(sha: string): string {
   return sha.slice(0, 7);
 }
+
+/**
+ * One line of an embedded code block, with the diff marker taken **out of the
+ * text**. → `docs/spec/31-review-packs.md#the-code-block`
+ *
+ * A hunk's lines arrive as git printed them, so every line carries a leading
+ * `+`, `-` or space. Printed inline that marker is the first character of the
+ * code: it shifts the indentation by a column, it lands in anything the reader
+ * copies, and on a new file — where every line is an addition — a whole screen
+ * of `+` says one thing the tag above the block already said. The marker is a
+ * column of its own here, and `text` is the code as it actually reads.
+ */
+interface CodeLine {
+  /** `+`, `-` or `' '` for a diff line; null for a region's plain lines. */
+  marker: '+' | '-' | ' ' | null;
+  text: string;
+}
+
+/**
+ * A code block split for rendering: the lines, and whether the marker column is
+ * worth drawing at all.
+ *
+ * **The gutter is dropped when every line carries the same marker** — a new
+ * file, a deleted one, a pure insertion. There is nothing to tell apart, the tag
+ * on the step already says `changed +102`, and the column is a screen-tall
+ * repetition of one character. It is drawn the moment a block mixes markers,
+ * because that is when it carries the information.
+ */
+export function codeBlockLines(code: readonly string[], diff: boolean): { gutter: boolean; lines: CodeLine[] } {
+  if (!diff) return { gutter: false, lines: code.map((text) => ({ marker: null, text })) };
+  const lines: CodeLine[] = code.map((line) => {
+    const head = line.slice(0, 1);
+    if (head === '+' || head === '-' || head === ' ') return { marker: head, text: line.slice(1) };
+    // A line git printed without a prefix — the "\ No newline" trailer, or a
+    // pack from a build that embedded them plain. Kept whole rather than losing
+    // its first character to a column it never had.
+    return { marker: null, text: line };
+  });
+  const first = lines[0]?.marker ?? null;
+  const gutter = lines.length > 0 && lines.some((l) => l.marker !== first);
+  return { gutter, lines };
+}

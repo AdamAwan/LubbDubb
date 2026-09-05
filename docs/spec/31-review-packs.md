@@ -229,6 +229,24 @@ provenance the way a claim does: written by the witness at the time — `by: 'wi
 pad entry's id and stamped with its time — or added by the author afterwards, `by: 'author'`. The
 page shows which, because the reader weighs them differently.
 
+### The code block
+
+_Built._ `codeBlockLines` in `src/reviewPacks/derive.ts` and its cockpit twin decide it.
+
+A hunk's lines are embedded as git printed them, each carrying a leading `+`, `-` or space
+([The document carries its code](#the-document-carries-its-code)). Printed inline that marker **is
+the first character of the code**: it shifts every line one column out of true, it lands in anything
+the reader copies, and on a new file — where every line is an addition — it fills the screen with one
+character. So the marker is drawn in a column of its own, unselectable and `aria-hidden`, and the
+code beside it reads as code.
+
+**The column is dropped when every line carries the same marker** — a new file, a deleted one, a pure
+insertion. There is nothing to tell apart, the step's own tag has already said `changed +102`, and so
+has the caption. The tint goes with it: a screen of solid green reads worse than the code does. Both
+come back the moment a block mixes markers, which is when they carry something.
+
+A `region` anchor's lines are plain and never had a marker, so they are drawn plain.
+
 ### Coverage
 
 _Built_ — stage 3. `src/reviewPacks/hunks.ts` computes the hunks and decides coverage;
@@ -736,6 +754,8 @@ the identifiers live in the code blocks, not the prose. Top to bottom:
    `caption` and diff lines coloured, and beneath it the folded reasoning: one fold per note, each
    stamped _witness · hh:mm_ or _added afterwards_. A fold with a false or disputed claim behind it
    is open by default. A deliberate absence reads "Should this have changed? No — here's the proof."
+   The diff marker is a **column of its own** and never the first character of the code
+   ([The code block](#the-code-block)).
 5. **Covered by.** Under the walk and above the claims, the idea's `coverage` as bare bullets — the
    scenarios its tests cover, named and not explained. Absent where the list is empty. It sits here
    rather than in a section of its own for [the reason tests are never an idea](#tests-are-never-an-idea).

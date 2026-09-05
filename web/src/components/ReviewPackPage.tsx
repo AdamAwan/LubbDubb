@@ -21,6 +21,7 @@ import {
   ALL_IDEAS,
   falseClaims,
   ideaFlags,
+  codeBlockLines,
   ideaOpen,
   KNOWN_REVIEW_PACK_SCHEMA,
   layMarks,
@@ -790,20 +791,27 @@ function CodeBlock({
   dashed: boolean;
   diff: boolean;
 }): JSX.Element {
+  // The diff marker is a column of its own, never the first character of the
+  // code: inline it shifts the indentation, lands in anything the reader copies,
+  // and on a new file fills the screen with one character the step's tag already
+  // said. → docs/spec/31-review-packs.md#the-code-block
+  const { gutter, lines } = codeBlockLines(code, diff);
   return (
-    <div className={`rp-code ${dashed ? 'rp-dashed' : ''}`}>
+    <div className={`rp-code ${dashed ? 'rp-dashed' : ''} ${gutter ? 'rp-gutter' : ''}`}>
       {caption !== null && <div className="rp-code-cap">{caption}</div>}
       <pre>
-        {code.map((line, i) => (
-          <span
-            key={i}
-            className={`rp-l ${diff && line.startsWith('+') ? 'rp-add' : diff && line.startsWith('-') ? 'rp-del' : ''}`}
-          >
-            {line}
+        {lines.map(({ marker, text }, i) => (
+          <span key={i} className={`rp-l ${!gutter ? '' : marker === '+' ? 'rp-add' : marker === '-' ? 'rp-del' : ''}`}>
+            {gutter && (
+              <span className="rp-m" aria-hidden="true">
+                {marker ?? ' '}
+              </span>
+            )}
+            <span className="rp-t">{text}</span>
             {'\n'}
           </span>
         ))}
-        {code.length === 0 && <span className="rp-l rp-gap">(no lines)</span>}
+        {lines.length === 0 && <span className="rp-l rp-gap">(no lines)</span>}
       </pre>
     </div>
   );
