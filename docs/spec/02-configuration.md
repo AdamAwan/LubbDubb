@@ -163,8 +163,8 @@ from `LUBBDUBB_TOKEN` or a minted 0600 file, so `lubbdubb.config.json` stays saf
 ## The project layer
 
 `lubbdubb.project.json`, at the root of the repository the harness works on, is the layer a **team**
-shares. It is committed — so it arrives by `git pull`, which is why the cockpit has a Pull control on
-the Project card and a watcher on this path ([21](21-self-update.md#pulling-it)): a clone days behind
+shares. It is committed — so it arrives by `git pull`, which is why the cockpit has a Pull control in
+the build panel and a watcher on this path ([21](21-self-update.md#pulling-it)): a clone days behind
 is a harness running a policy the team has already changed. Everything about a project that is the same for everyone working on it —
 which branch is integrated onto, what each CI check means, where landed work travels, which tracker
 states count as pickup — belongs in one file in the repository rather than in each member's copy of a

@@ -2380,8 +2380,8 @@ this page's job is to say when it has not done it well enough.
 
 ## The overview
 
-What the situation area shows when no goal is selected: five cards, rows rather than pictures, in
-reading order — **Fleet**, **Goals in flight**, **Pull requests**, **Build**, **Project**. The
+What the situation area shows when no goal is selected: three cards, rows rather than pictures, in
+reading order — **Fleet**, **Goals in flight**, **Pull requests**. The
 fleet's **runway** is a band along the foot of the first of them rather than a card of its own, because "who
 is out" and "what is behind them" are one thought — and for the same reason, so is
 [**Up next**](#the-queue-rides-the-fleet-card), which used to be the fourth card here.
@@ -2397,30 +2397,33 @@ surface here that was not about what is happening but about what happened to bri
 when a queued row, or an empty queue, wants explaining, and not glanced at on every pulse. As a card
 it spent a full-width slot on ten rows of a feed nobody had come to the page for.
 
-**Build and Project are last, and they are the two cards not about the fleet's work** — Build is the
-process the fleet runs inside and Project is the repository it is pointed at, two different checkouts
-read on one timer. Project is the only card that reports a git status on the glass, because that status
-is half the answer to why the upgrade ask on the rail is not there. Both headers carry a refresh glyph
-beside the count and the time the reading was taken.
+**Build and Project used to be the last two cards, and are [the build panel](21-self-update.md#the-panel-carries-the-standing)
+now.** They were the two not about the fleet's _work_ — one the process the fleet runs inside, the other
+the repository it is pointed at, two different checkouts read on one timer — and they went in two
+steps, for one reason each.
+
+First the act left them. Both were a control first and a changelog second, and the control was on the
+wrong surface: upgrading is a request made of the operator, and a card is a surface they _visit_, so the
+deployment furthest behind was the one whose card had been furniture the longest. The asks are
+[rail rows](#the-queue-rail--needs-you) now — raised at a moment, settled when answered.
+
+Then the readings followed. What was left on the cards was a changelog that the panel already drew in
+full, on a page that answers _what is happening_, spending two of its five slots on two readings that
+say `current` nearly all of the time. The panel carries both now — the harness's build, and the project
+checkout under it with its git status, its own changelog and the `Pull` control that survives on the
+one deployment that turned `selfUpdate.projectAutoPull` off. It is named in the bar menu and it is what
+both update asks open, so the surface that _asks_ and the surface that _explains_ are one press apart.
 → [21](21-self-update.md#where-it-lands-in-the-cockpit)
 
-**Neither card carries the act any more.** Both were controls first and a changelog second, and the
-control was on the wrong surface: upgrading is a request made of the operator, and a card is a surface
-they _visit_. The asks are [rail rows](#the-queue-rail--needs-you) now, and what is left on the cards is
-what they were always best at — the changelog, which answers _why you would want it_ where a queue row
-can only say how far behind you are. Project keeps a `Pull` control on exactly one deployment: the one
-that turned `selfUpdate.projectAutoPull` off, since with it on a pullable checkout has already been
-pulled.
-
-This reverses what this document said, and the reason it said it still holds: **being behind is a
-standing condition** — true continuously, for weeks if nobody looks — and a row that cannot be
-discharged is the furniture that teaches an operator to skim the whole queue. What changed is not the
+This reverses what this document said about the rail, and the reason it said it still holds: **being
+behind is a standing condition** — true continuously, for weeks if nobody looks — and a row that cannot
+be discharged is the furniture that teaches an operator to skim the whole queue. What changed is not the
 rule but the trigger. The upgrade ask is raised on `upgradability`, settles by being taken or snoozed,
 and becomes the progress line while it applies; the project ask is raised only where an automatic pull
 was refused and clears itself when the obstruction moves. Each has two ends, which is the whole of what
 the rail asks of a row. → [21](21-self-update.md#the-asks-are-on-the-rail)
 
-Two rules run through all of them. **Nothing here re-decides what the server decided**: a PR's court is
+Two rules run through all three. **Nothing here re-decides what the server decided**: a PR's court is
 `attention.status`, its checks are `ciVerdict`, a queued item's hold is the queue's own sentence, and a
 goal's state is its `pickup.status`. And **an empty card still draws**, muted, because a surface that
 vanishes when quiet is indistinguishable from one that broke.
@@ -6639,7 +6642,7 @@ muting rather than removing the rail, a group with no rows drawing no heading, a
 button and the recovery hold not, the ask drawn above the plan, a goal with no ask drawing no band, the
 goal page answering through the shared card, a held part quoting the reconciler, a retired plan drawing
 what it proposed rather than only saying it has no live parts, an HTML ticket drawn as HTML, a goal with
-no measured spend drawing no `$0.00`, the overview's five cards, the environments chip drawing only where something is not well, an empty rack still drawing, the
+no measured spend drawing no `$0.00`, the overview's three cards, the environments chip drawing only where something is not well, an empty rack still drawing, the
 the intake hold arriving on the rail rather than on the tickets tab, that tab's rows being ways into
 their goals and its container cascade, the fault
 log keeping its clear at zero, a panel's two ways out, the demo gate on injection, the precedence

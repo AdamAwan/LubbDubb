@@ -82,8 +82,9 @@ export const IDLE_INTENT: UpgradeIntent = { state: 'idle', targetSha: null, requ
 /**
  * Whether an update can be applied at all, and why not when it cannot.
  *
- * @public shipped on {@link BuildReading.projectPull}, which the Project card
- * reads to decide whether to draw its Pull control and what to say instead.
+ * @public shipped on {@link BuildReading.projectPull}, which the build panel's
+ * project section reads to decide whether to draw its Pull control and what to say
+ * instead.
  */
 export interface Upgradability {
   /** There is something to take, and taking it is a clean fast-forward. */

@@ -6309,6 +6309,16 @@ select:disabled {
 .build-more {
   color: var(--muted);
 }
+/* The worked checkout, under the harness's own. Ruled off rather than merely
+   spaced: they are two different repositories read on one timer, and a section
+   that only had air above it read as more of the build's own changelog. */
+.build-project {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
 /* The consequence, beside the button rather than inside it: what an upgrade does
    to work in flight is the whole of the decision, and it does not fit on a label. */
 .build-note {

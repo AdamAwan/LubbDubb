@@ -134,7 +134,7 @@ test('every row of a card sits on that card’s own grid', () => {
   const html = render(view());
   // Per card, because the subject column differs between them: what has to agree
   // is the rows of one card, which is what "always look here" means on a page of
-  // five different-shaped cards.
+  // different-shaped cards.
   const cards = html.split('class="cn-card').slice(1);
   let checked = 0;
   for (const card of cards) {
@@ -157,7 +157,10 @@ test('every row of a card sits on that card’s own grid', () => {
     }
     checked += 1;
   }
-  assert.ok(checked >= 4, `only ${checked} cards drew rows — this test is about the ones that do`);
+  // Three: Fleet, Goals in flight and the pull-request rack. The floor is here so
+  // the test cannot pass by finding nothing — Build and Project drew rows too until
+  // they left the overview for the build panel.
+  assert.ok(checked >= 3, `only ${checked} cards drew rows — this test is about the ones that do`);
 });
 
 /**

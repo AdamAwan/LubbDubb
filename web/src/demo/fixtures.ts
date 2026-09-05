@@ -2134,9 +2134,9 @@ export function buildDemoState(): DemoSeed {
     // omitted because the wire sends them unconditionally — a demo that left them
     // out was a payload the real cockpit never receives.
     recovery: [],
-    // A build a day behind, which is the state the Build card exists for: current
+    // A build a day behind, which is the state the update ask exists for: current
     // is one muted line and teaches nothing, and the changelog — what changed, who
-    // wrote it, how long it has been sitting — is the whole reason the card beats
+    // wrote it, how long it has been sitting — is the whole reason the panel beats
     // the gauge it replaced. `behind` is 14 against ten commits carried, because
     // the reading itself caps at ten (`MAX_COMMITS`) and a demo that never showed
     // a capped list would leave the card's "…and N more" line undrawn on the one
@@ -2233,8 +2233,8 @@ export function buildDemoState(): DemoSeed {
       //
       // Clean, and that is load-bearing rather than incidental: `upgradability`
       // refuses an upgrade over uncommitted changes in *either* checkout, so a
-      // dirty fixture here would draw a Build card with no controls and hide the
-      // feature the demo is showing.
+      // dirty fixture here would draw a build panel with no controls, and no upgrade
+      // ask on the rail, hiding the feature the demo is showing.
       project: {
         head: 'c18a6f30b94d27e5a0f3d81c6b52e9047fa13d6e',
         upstream: '5d9e0c41a7b8362fd05e1749cb3a806e2f4d91b7',

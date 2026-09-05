@@ -60,7 +60,7 @@ import { watchBucket } from '../worldBuckets.js';
 /**
  * `upgrade` and `project_pull` are the two update asks, and they are on this queue
  * for the reason the queue exists: **no rule in the harness will ever answer
- * them.** They lived on the Overview's Build and Project cards, which is a surface
+ * them.** They lived on the Overview's Build and Project cards — a surface
  * an operator visits rather than one that follows them — and being behind is a
  * condition that persists for weeks if nobody looks.
  *

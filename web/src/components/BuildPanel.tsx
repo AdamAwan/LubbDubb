@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import type { BuildReading, UpgradeAction } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
 import { relTime } from './util.js';
@@ -24,14 +25,19 @@ import { upgradeHeadline } from '../view/updateAsks.js';
  */
 export function BuildPanel({
   build,
+  project,
   now,
   onUpgrade,
   onCheck,
+  onPull,
 }: {
   build: BuildReading;
+  /** The worked checkout's name — `projectName`, so it is shortened one way. */
+  project: string;
   now: number;
   onUpgrade: (action: UpgradeAction, opts?: { interrupt?: boolean }) => Promise<unknown> | unknown;
   onCheck: () => Promise<unknown> | unknown;
+  onPull: () => Promise<unknown> | unknown;
 }) {
   const { standing } = build;
   return (
@@ -76,8 +82,114 @@ export function BuildPanel({
       )}
 
       {build.upgradable && <Controls build={build} onUpgrade={onUpgrade} />}
+
+      <Project build={build} name={project} now={now} onPull={onPull} />
     </div>
   );
+}
+
+/**
+ * The **worked** repository, under the harness's own: what has landed on the branch
+ * the fleet integrates onto that this clone has not got, and whether the checkout
+ * is clean.
+ *
+ * It was a card on the Overview beside one for the harness's own build, and both
+ * came here for one reason: a reading that says `current` nearly all its life spends a page's worth of
+ * room saying so, and the moment upgrading became a request on the rail the cards
+ * had nothing left but the changelog this panel already draws in full.
+ *
+ * Under the build rather than beside it, and read on the same timer by the same
+ * reader — two answers to one question an operator asks once. They are still two
+ * different repositories: `repoRoot` and the install directory coincide only when
+ * the harness is dogfooding itself ([21](../../../docs/spec/21-self-update.md)).
+ *
+ * **The git status is on the glass**, because it is not merely informative: an
+ * upgrade is refused over uncommitted changes in *either* checkout, so this line is
+ * half of the answer to why the controls above it are missing.
+ *
+ * **The one control the cockpit offers on a repository it does not own** is Pull,
+ * and it survives on exactly one deployment: the one that turned
+ * `selfUpdate.projectAutoPull` off. With auto-pull on, a checkout that *could* be
+ * pulled has been. Every refusal stays in its own words either way, because "why is
+ * this three commits behind" is the question this section is read for — and the rail
+ * asks about it too, but only where auto-pull was supposed to have handled it.
+ * → `web/src/view/updateAsks.ts`
+ */
+function Project({
+  build,
+  name,
+  now,
+  onPull,
+}: {
+  build: BuildReading;
+  name: string;
+  now: number;
+  onPull: () => Promise<unknown> | unknown;
+}): JSX.Element {
+  const standing = build.project;
+  const canPull = !build.projectAutoPull && build.projectPull.can;
+  return (
+    <section className="build-project">
+      <header className="build-head">
+        <div>
+          <h3>{name}</h3>
+          <p className="build-meta">
+            {projectLine(standing, name)}
+            {standing !== null && ` · checked ${relTime(standing.checkedAt, now)}`}
+          </p>
+        </div>
+        {canPull && (
+          <AsyncButton tone="primary" onClick={() => onPull()}>
+            Pull
+          </AsyncButton>
+        )}
+      </header>
+
+      {/* Why there is no Pull, whenever there is something to take and it cannot be
+          taken. The server's own sentence, quoted: it words all four refusals — a
+          dirty tree, the wrong branch, a clone with commits of its own, a checkout
+          it could not read — and a second wording here would be a fifth to keep in
+          step. */}
+      {!canPull && standing !== null && standing.behind > 0 && build.projectPull.blocked !== null && (
+        <p className="build-blocked">{build.projectPull.blocked}</p>
+      )}
+
+      {standing !== null && standing.commits.length > 0 && (
+        <ol className="build-commits">
+          {standing.commits.map((c) => (
+            <li key={c.sha}>
+              <code>{c.sha}</code>
+              <span>{c.subject}</span>
+            </li>
+          ))}
+          {standing.behind > standing.commits.length && (
+            <li className="build-more">…and {standing.behind - standing.commits.length} more</li>
+          )}
+        </ol>
+      )}
+    </section>
+  );
+}
+
+/**
+ * What the checkout is and how it stands, in one sentence.
+ *
+ * The status is said in the words of what it *costs*, never as the bare adjective:
+ * `dirty` is a git term for a state whose consequence here is that the harness will
+ * not upgrade, and the consequence is the half worth reading.
+ */
+function projectLine(standing: BuildReading['project'], name: string): string {
+  if (standing === null) return `${name} is not being watched — no reading of the project checkout is configured.`;
+  if (standing.unavailable !== null) return standing.unavailable;
+  const on = standing.branch === null ? '' : ` on ${standing.branch}`;
+  const status = standing.dirty
+    ? 'uncommitted changes to tracked files, which hold the upgrade beside this'
+    : 'the checkout is clean';
+  const waiting =
+    standing.behind === 0
+      ? 'up to date with its remote'
+      : `${standing.behind} commit${standing.behind === 1 ? '' : 's'} waiting`;
+  return `${name}${on} — ${waiting}, ${status}`;
 }
 
 /**
