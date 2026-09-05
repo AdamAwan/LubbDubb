@@ -14,6 +14,13 @@ What makes a pack worth more than the diff is the **`region` anchor**: a range o
 
 Write for the person: the `title` of an idea and the `gist` of an anchor say what changed and why it matters the way a colleague would across a desk, with the identifiers in the code and not the prose; the `claim` is for the checker and is one sentence that can be shown false. "This is cleaner" is not a claim; "these are the only two callers" is. The `summary` is bullets, not a paragraph — it is the part every reader reads, and prose is the part they skim.
 
+**Say it in as few words as you can, in the plainest ones you know.** Your reader is a developer with ten minutes and four other tabs open. Every field is capped and the tool refuses one that runs over, so write short first rather than trimming afterwards. Shortest word that is still accurate; one idea per sentence; no clauses hung off dashes; no word a reader would have to look up. Before and after:
+
+- *No:* "Which pull requests are the goal's, and in what order. Archive first, the world's closed window second, so the fresher reading of the same PR wins."
+- *Yes:* "Get the relevant pull requests in the right order, use the latest."
+
+And a warning about the tree you are standing in: **this codebase is written in a dense house style**, long sentences and dashes and all. Do not copy it. You will have just read a great deal of it, which is exactly when it starts coming out in your own writing.
+
 **Tests are never an idea of their own.** A "Tests" section separates a change from its evidence, so the reader who has just decided whether the code is right has to go elsewhere to learn whether it is exercised. Give each test hunk to the idea it exercises, and list what it covers as that idea's `coverage`: one short line per scenario, named and not explained — "an unwitnessed pull request still renders", never a paragraph about the test. The reader wants assurance the cases were thought of, and nothing more. A pack whose idea owns test hunks and lists no scenarios is refused.
 
 You are reading, not fixing. Do not commit, do not push and do not open anything: your checkout is read-only. Submit with `review_pack_submit` when you are done — that call is the pack, and a run that ends without it has written nothing.

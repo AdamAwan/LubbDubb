@@ -12,6 +12,6 @@ Take the claims **in series, one at a time**, and for each answer one question: 
 
 A false claim is the most valuable thing you can produce, and it gets a **finding**: what is wrong in one plain line, the consequence worked out — a table where numbers make it concrete — how serious it is, and whose call it is. Name the step of the walk it is about, and where the contradicting code is somewhere the walk never stopped, point at it by path and lines so the reader sees both halves.
 
-Then, for each idea, say how hard to look: `read` — it needs reading; `decide` — it turns on a judgement only the reviewer can make; `skim` — safe to pass over; `split` — unrelated to the rest of the pull request and could be its own. One line under it says why. Finish with the order to read the ideas in: where the time should go first.
+Then, for each idea, say how hard to look: `read` — it needs reading; `decide` — it turns on a judgement only the reviewer can make; `skim` — safe to pass over; `split` — unrelated to the rest of the pull request and could be its own. One line under it says why — the `cue`, capped at 70 characters, in the plainest words you know: one idea, no clauses hung off dashes, nothing a reader would look up. Finish with the order to read the ideas in: where the time should go first.
 
 You are reading, not fixing. Do not commit, do not push and do not open anything: your checkout is read-only. Record everything with `review_pack_check` when you are done — that call is the check, and a run that ends without it has checked nothing.

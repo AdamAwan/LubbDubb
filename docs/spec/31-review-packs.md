@@ -202,6 +202,39 @@ An idea's walk crosses files freely and is expected to: a change in this repo is
 domain type, wire type, store module, route, cockpit, spec, test — and reviewing those six files
 separately is how a whole class of the sharp edges gets missed.
 
+### Say it in fewer words
+
+_Built._ `LIMITS` in `src/reviewPacks/submission.ts`, and `CUE_LIMIT` in `src/reviewPacks/check.ts`.
+
+The reader is a developer with ten minutes and four other tabs open. Every prose field is therefore
+**capped in characters**, and the tool refuses one that runs over, naming the field, the limit and the
+count:
+
+| Field                    | Cap |
+| ------------------------ | --- |
+| `headline`               | 100 |
+| a `summary` bullet       | 100 |
+| an idea's `title`        | 60  |
+| an idea's `claim`        | 120 |
+| an anchor's `gist`       | 90  |
+| an anchor's `caption`    | 40  |
+| a `coverage` line        | 60  |
+| the checker's `cue`      | 70  |
+
+`claim` is the loosest because it is the checker's and has to stay falsifiable, which sometimes needs
+a clause the reader would not want.
+
+**The cap is what actually shortens the writing.** A prompt can ask for plain words and be obeyed for
+a paragraph; a number the author cannot argue with is what makes it choose. And the author has spent
+the whole run reading *this* repository, whose own prose runs long — which is exactly when that style
+starts coming out in its writing. So the prompt says, in as many words, not to copy it, and carries
+the one example that does more than any adjective:
+
+> _No:_ "Which pull requests are the goal's, and in what order. Archive first, the world's closed
+> window second, so the fresher reading of the same PR wins."
+>
+> _Yes:_ "Get the relevant pull requests in the right order, use the latest."
+
 ### An anchor
 
 An anchor is a place in the tree the walk stops at, with one line saying why it stops there. Two

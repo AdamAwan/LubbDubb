@@ -35,6 +35,30 @@ export interface Commission {
 }
 
 /**
+ * How long each piece of the author's prose may be, in characters.
+ * → `docs/spec/31-review-packs.md#say-it-in-fewer-words`
+ *
+ * A cap is the only thing that actually shortens the writing. The prompt can ask
+ * for plain words and be obeyed for a paragraph, and the author is reading a
+ * codebase whose own prose runs long — it writes back what it just read. A number
+ * it cannot argue with is what makes it choose.
+ *
+ * They are not arbitrary: a `gist` is one line beside a code block, a `title` is a
+ * row in a list, and both stop being scannable at about the widths below. `claim`
+ * is the loosest because it is for the checker and has to stay falsifiable, which
+ * sometimes needs a clause the reader would not want.
+ */
+const LIMITS = {
+  headline: 100,
+  summaryBullet: 100,
+  title: 60,
+  claim: 120,
+  gist: 90,
+  caption: 40,
+  coverage: 60,
+} as const;
+
+/**
  * Assemble the pack the author submitted into the document the store takes, or
  * refuse it by field name.
  *
@@ -59,12 +83,17 @@ export function assemblePack(
 
   const headline = line(args.headline);
   if (headline === null) return refuse('headline is required — one plain sentence saying what the change does.');
+  if (headline.length > LIMITS.headline) return refuse(overLimit('headline', LIMITS.headline, headline));
   const summary = text(args.summary);
   if (summary === null)
     return refuse(
       'summary is required — a short bulleted list, one line each, with the words that matter most in bold. ' +
         'Not a paragraph: the opening is the part every reader reads, and a block of prose is the part they skim.',
     );
+  // Per bullet, not over the whole block: the cap is about how much a reader takes
+  // in at one glance, and five short lines are easier than two long ones.
+  const long = summary.split('\n').find((l) => l.trim().length > LIMITS.summaryBullet);
+  if (long !== undefined) return refuse(overLimit('a summary bullet', LIMITS.summaryBullet, long.trim()));
   const estimatedMinutes = args.estimatedMinutes;
   if (typeof estimatedMinutes !== 'number' || !Number.isFinite(estimatedMinutes) || estimatedMinutes < 0) {
     return refuse('estimatedMinutes must be a number — how long you expect the read to take.');
@@ -96,8 +125,10 @@ export function assemblePack(
     }
     const claim = line(raw.claim);
     if (claim === null) return refuse(`${at}.claim is required — one falsifiable sentence, for the checker.`);
+    if (claim.length > LIMITS.claim) return refuse(overLimit(`${at}.claim`, LIMITS.claim, claim));
     const title = line(raw.title);
     if (title === null) return refuse(`${at}.title is required — the same thing said across a desk, for the person.`);
+    if (title.length > LIMITS.title) return refuse(overLimit(`${at}.title`, LIMITS.title, title));
     if (!Array.isArray(raw.anchors) || raw.anchors.length === 0) {
       return refuse(
         `${at}.anchors must be a non-empty list — an idea is a claim plus a walk, and this one has no walk.`,
@@ -124,6 +155,9 @@ export function assemblePack(
       const scenario = line(rawScenario);
       if (scenario === null) {
         return refuse(`${at}.coverage[${j}] must be one short line naming a scenario the tests cover.`);
+      }
+      if (scenario.length > LIMITS.coverage) {
+        return refuse(overLimit(`${at}.coverage[${j}]`, LIMITS.coverage, scenario));
       }
       coverage.push(scenario);
     }
@@ -179,9 +213,13 @@ function readAnchor(
   if (!isRecord(raw)) return { ok: false, error: `${at} must be an object.` };
   const gist = line(raw.gist);
   if (gist === null) return { ok: false, error: `${at}.gist is required — one line saying why the walk stops here.` };
+  if (gist.length > LIMITS.gist) return { ok: false, error: overLimit(`${at}.gist`, LIMITS.gist, gist) };
   const caption = raw.caption === undefined || raw.caption === null ? null : line(raw.caption);
   if (caption === null && raw.caption !== undefined && raw.caption !== null) {
     return { ok: false, error: `${at}.caption must be one line, or be left out.` };
+  }
+  if (caption !== null && caption.length > LIMITS.caption) {
+    return { ok: false, error: overLimit(`${at}.caption`, LIMITS.caption, caption) };
   }
   let mark: ReviewAnchorMark | null = null;
   if (raw.mark !== undefined && raw.mark !== null) {
@@ -287,6 +325,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isLine(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 1;
+}
+
+/**
+ * The refusal for a field that is over its cap: what it is, what it may be, and
+ * what it was. The count is quoted because "too long" without one is a guess the
+ * author has to make twice.
+ */
+function overLimit(at: string, max: number, value: string): string {
+  return (
+    `${at} is ${value.length} characters and the limit is ${max}. Say it in fewer words rather than abbreviating: ` +
+    `the shortest plain wording, one idea, no clauses hung off dashes. Was: "${value}"`
+  );
 }
 
 /** A required one-liner: trimmed, collapsed onto one line, null when empty or not a string. */
