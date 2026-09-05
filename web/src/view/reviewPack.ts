@@ -1,4 +1,5 @@
 import type {
+  ReviewAnchor,
   ReviewAttention,
   ReviewClaim,
   ReviewIdea,
@@ -250,6 +251,50 @@ export function codeBlockLines(code: readonly string[], diff: boolean): { gutter
   const gutter = lines.length > 0 && lines.some((l) => l.marker !== first);
   return { gutter, lines };
 }
+
+/**
+ * How much of a look one stop wants, decided from the code rather than declared.
+ * → `docs/spec/31-review-packs.md#how-hard-to-look-at-one-stop`
+ *
+ * The idea carries the checker's `attention`; this is the tier below it, because
+ * a walk mixes an import block and a fifty-line function and draws them as equals.
+ * Three values, and only the middle one is the ordinary case:
+ *
+ * - `key` is the author's own mark and nothing here second-guesses it.
+ * - `minor` is a stop that costs a reader nothing: a hunk whose changed lines are
+ *   all imports, or two changed lines or fewer. It is drawn quiet and its code is
+ *   folded.
+ * - `normal` is everything else, drawn as it always was.
+ *
+ * **Derived and never authored.** A `weight` field on the anchor would be more
+ * accurate — the author knows which forty lines are hairy and which are
+ * boilerplate, and no rule reading the text will — but it is a document change
+ * that every pack already written would lack, and this reaches the noisy majority
+ * for nothing. A region anchor is never `minor`: it is in the pack because
+ * somebody decided the change could not be judged without it.
+ */
+export function anchorWeight(anchor: ReviewAnchor): 'key' | 'normal' | 'minor' {
+  if (anchor.mark === 'key') return 'key';
+  if (anchor.kind !== 'hunk') return 'normal';
+  const changed = anchor.code.filter((l) => l.startsWith('+') || l.startsWith('-'));
+  if (changed.length === 0) return 'minor';
+  if (changed.every((l) => IMPORT_LINE.test(l))) return 'minor';
+  // Few lines is not the same as little to read: one changed line can be a
+  // thousand characters of prompt or doc, and drawing that quiet is the mistake
+  // this makes in the direction that costs a reader something. So both.
+  const written = changed.reduce((n, l) => n + l.trim().length, 0);
+  return changed.length <= MINOR_LINES && written <= MINOR_CHARS ? 'minor' : 'normal';
+}
+
+/** A changed line that is part of an import or export statement, including its wrapped members. */
+const IMPORT_LINE =
+  /^[+-]\s*(?:import\b|export\s+(?:\*|\{|type\b)|\}?\s*from\s|[A-Za-z_$][\w$]*\s*,?\s*$|\{\s*$|\}\s*$)/;
+
+/** Changed lines at or under which a hunk may carry nothing to stop for. */
+const MINOR_LINES = 2;
+
+/** And the characters within them, because one line can hold a whole prompt. */
+const MINOR_CHARS = 160;
 
 /**
  * The languages a code block is highlighted in, decided from the anchor's path.

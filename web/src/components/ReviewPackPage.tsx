@@ -21,6 +21,7 @@ import {
   ALL_IDEAS,
   falseClaims,
   ideaFlags,
+  anchorWeight,
   codeBlockLines,
   codeLanguage,
   highlightCode,
@@ -603,7 +604,7 @@ function IdeaRow({
           </div>
           <ol className="rp-walk">
             {idea.anchors.map((anchor, i) => (
-              <Step key={i} anchor={anchor} index={i + 1} />
+              <Step key={i} anchor={anchor} index={i + 1} ideaNumber={number} />
             ))}
           </ol>
           {idea.anchors.length === 0 && (
@@ -721,14 +722,29 @@ function diffCounts(code: readonly string[]): { added: number; removed: number }
   return { added, removed };
 }
 
-function Step({ anchor, index }: { anchor: ReviewAnchor; index: number }): JSX.Element {
+/**
+ * One stop on the walk.
+ *
+ * The number carries its idea's — `01.3`, never `3` — because step numbers restart
+ * per idea and a bare one says nothing about where in the page the reader is.
+ * `minor` stops are drawn quiet with their code folded
+ * ([weight](../view/reviewPack.js)): an import block beside a fifty-line function
+ * is not a stop, and drawing them as equals is what makes a long walk unreadable.
+ * → docs/spec/31-review-packs.md#how-hard-to-look-at-one-stop
+ */
+function Step({ anchor, index, ideaNumber }: { anchor: ReviewAnchor; index: number; ideaNumber: number }): JSX.Element {
   const region = anchor.kind === 'region';
   const counts = diffCounts(anchor.code);
   const disputedOrFalse = anchor.mark === 'false' || anchor.mark === 'disputed';
+  const weight = anchorWeight(anchor);
   return (
-    <li className={`rp-step ${region ? 'rp-dashed' : ''} ${anchor.mark !== null ? `rp-mark-${anchor.mark}` : ''}`}>
+    <li
+      className={`rp-step rp-w-${weight} ${region ? 'rp-dashed' : ''} ${anchor.mark !== null ? `rp-mark-${anchor.mark}` : ''}`}
+    >
       <div className="rp-step-head">
-        <span className="rp-step-n">{index}</span>
+        <span className="rp-step-n">
+          {pad(ideaNumber)}.{index}
+        </span>
         <span className="rp-path">{rangeLabel(anchor.range)}</span>
         {region ? (
           <Tag dashed>not in this PR</Tag>
@@ -742,6 +758,7 @@ function Step({ anchor, index }: { anchor: ReviewAnchor; index: number }): JSX.E
             the important bit
           </Tag>
         )}
+        {weight === 'minor' && <Tag>mechanical</Tag>}
         {anchor.mark === 'false' && (
           <Tag tone="red" fill>
             claim is false
@@ -754,7 +771,28 @@ function Step({ anchor, index }: { anchor: ReviewAnchor; index: number }): JSX.E
         )}
       </div>
       <p className="rp-gist">{anchor.gist}</p>
-      <CodeBlock code={anchor.code} caption={anchor.caption} dashed={region} diff={!region} path={anchor.range.path} />
+      {weight === 'minor' ? (
+        <details className="rp-minor-code">
+          <summary>
+            show the {anchor.code.length} {anchor.code.length === 1 ? 'line' : 'lines'}
+          </summary>
+          <CodeBlock
+            code={anchor.code}
+            caption={anchor.caption}
+            dashed={region}
+            diff={!region}
+            path={anchor.range.path}
+          />
+        </details>
+      ) : (
+        <CodeBlock
+          code={anchor.code}
+          caption={anchor.caption}
+          dashed={region}
+          diff={!region}
+          path={anchor.range.path}
+        />
+      )}
       {anchor.note !== null && (
         <details className="rp-why" open={disputedOrFalse}>
           <summary>
@@ -807,36 +845,59 @@ function CodeBlock({
     lines.map((l) => l.text),
     codeLanguage(path),
   );
+  // A block longer than this is scrolled past rather than read, and one of them
+  // buries every idea under it. The tail is folded, never dropped: the document
+  // carries its code and all of it stays copyable.
+  // → docs/spec/31-review-packs.md#the-code-block
+  const cut = lines.length > HEAD_LINES + TAIL_MARGIN ? HEAD_LINES : lines.length;
+  const row = ({ marker, text }: { marker: '+' | '-' | ' ' | null; text: string }, i: number): JSX.Element => (
+    <span key={i} className={`rp-l ${!gutter ? '' : marker === '+' ? 'rp-add' : marker === '-' ? 'rp-del' : ''}`}>
+      {gutter && (
+        <span className="rp-m" aria-hidden="true">
+          {marker ?? ' '}
+        </span>
+      )}
+      <span className="rp-t">
+        {(coloured[i] ?? [{ kind: 'plain' as const, text }]).map((run, k) =>
+          run.kind === 'plain' ? (
+            run.text
+          ) : (
+            <span key={k} className={`rp-hl-${run.kind}`}>
+              {run.text}
+            </span>
+          ),
+        )}
+      </span>
+      {'\n'}
+    </span>
+  );
   return (
     <div className={`rp-code ${dashed ? 'rp-dashed' : ''} ${gutter ? 'rp-gutter' : ''}`}>
-      {caption !== null && <div className="rp-code-cap">{caption}</div>}
+      {(caption !== null || cut < lines.length) && (
+        <div className="rp-code-cap">
+          <span>{caption}</span>
+          {cut < lines.length && <span className="rp-code-len">{lines.length} lines</span>}
+        </div>
+      )}
       <pre>
-        {lines.map(({ marker, text }, i) => (
-          <span key={i} className={`rp-l ${!gutter ? '' : marker === '+' ? 'rp-add' : marker === '-' ? 'rp-del' : ''}`}>
-            {gutter && (
-              <span className="rp-m" aria-hidden="true">
-                {marker ?? ' '}
-              </span>
-            )}
-            <span className="rp-t">
-              {(coloured[i] ?? [{ kind: 'plain' as const, text }]).map((run, k) =>
-                run.kind === 'plain' ? (
-                  run.text
-                ) : (
-                  <span key={k} className={`rp-hl-${run.kind}`}>
-                    {run.text}
-                  </span>
-                ),
-              )}
-            </span>
-            {'\n'}
-          </span>
-        ))}
+        {lines.slice(0, cut).map((line, i) => row(line, i))}
         {lines.length === 0 && <span className="rp-l rp-gap">(no lines)</span>}
       </pre>
+      {cut < lines.length && (
+        <details className="rp-rest">
+          <summary>
+            {lines.length - cut} more {lines.length - cut === 1 ? 'line' : 'lines'}
+          </summary>
+          <pre>{lines.slice(cut).map((line, i) => row(line, cut + i))}</pre>
+        </details>
+      )}
     </div>
   );
 }
+
+/** How much of a code block is shown before the rest is folded, and the slack that stops a fold saving nothing. */
+const HEAD_LINES = 20;
+const TAIL_MARGIN = 6;
 
 const VERDICT_TONE: Record<ReviewVerdict, TagTone> = { true: 'green', false: 'red', cant_tell: 'amber' };
 

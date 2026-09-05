@@ -9,6 +9,7 @@ import type {
   ReviewVerdict,
 } from '../types.js';
 import {
+  anchorWeight,
   codeBlockLines,
   codeLanguage,
   falseClaims,
@@ -80,7 +81,53 @@ export function renderReviewPackCompanion(record: ReviewPackRecord): string {
     spendTheTime(numbered, pack.estimatedMinutes),
     colophon(record),
   ];
-  return page(`Review pack · #${pack.prNumber} · ${pack.headline}`, body.join('\n'));
+  return page(
+    `Review pack · #${pack.prNumber} · ${pack.headline}`,
+    `<div class="rp-wrap">${contents(numbered)}<main class="rp-main" id="rp-top">${body.join('\n')}</main></div>`,
+  );
+}
+
+/**
+ * The contents rail: every idea, and every stop under it.
+ *
+ * **The companion's answer to what the cockpit answers with a collapsed row.**
+ * There is no address bar here to hold which idea is open, so every idea is open
+ * ([Reading it](../../docs/spec/31-review-packs.md#reading-it)) — which means the
+ * one screen the cockpit's rows give a reader has to come from somewhere else.
+ * The rail is that screen, and it stays on it: a reader eighty lines into a walk
+ * can see which idea they are in and jump.
+ *
+ * It draws the weight of each stop rather than only its name — a `key` stop marked,
+ * a `minor` one dimmed — so the map says where the time goes before the reader has
+ * scrolled to find out.
+ */
+function contents(numbered: ReturnType<typeof numberIdeas>): string {
+  const rows = numbered.ideas
+    .map(({ idea, number }) => {
+      const steps = idea.anchors
+        .map((a, i) => {
+          const weight = anchorWeight(a);
+          const name = a.range.path.split('/').pop() ?? a.range.path;
+          return (
+            `<li class="rp-c-${weight}"><a href="#rp-s${number}-${i + 1}">` +
+            `<span class="rp-c-n">${pad(number)}.${i + 1}</span> <span>${esc(name)}</span></a></li>`
+          );
+        })
+        .join('');
+      return (
+        `<div class="rp-c-grp"><a class="rp-c-idea" href="#rp-i${number}">` +
+        `<span class="rp-c-n">${pad(number)}</span> <span>${esc(idea.title)}</span></a>` +
+        (idea.attention === null ? '' : ` ${attentionChip(idea.attention)}`) +
+        `<ol>${steps}</ol></div>`
+      );
+    })
+    .join('');
+  return (
+    `<nav class="rp-rail" aria-label="Contents">` +
+    `<div class="rp-c-grp"><a class="rp-c-idea" href="#rp-top"><span class="rp-c-n">↑</span> <span>Top</span></a></div>` +
+    rows +
+    `</nav>`
+  );
 }
 
 /** Where one fleet's companion for a pull request's pack lives, beside the document. */
@@ -160,7 +207,7 @@ function ideaRow(idea: ReviewIdea, number: number, wrong: FalseClaim[]): string 
       ? ` · <span class="rp-flag rp-flag-disputed">${flags.disputed} ${flags.disputed === 1 ? 'dispute' : 'disputes'}</span>`
       : '');
   return (
-    `<details class="rp-idea" open>` +
+    `<details class="rp-idea" id="rp-i${number}" open>` +
     `<summary><div class="rp-row"><span class="rp-n">${pad(number)}</span>` +
     attentionChip(idea.attention) +
     `<h3>${esc(idea.title)}</h3><span class="rp-meta">${meta}</span></div>` +
@@ -211,10 +258,12 @@ function attentionChip(attention: ReviewAttention | null): string {
 
 function step(anchor: ReviewAnchor, index: number, ideaNumber: number): string {
   const region = anchor.kind === 'region';
+  const weight = anchorWeight(anchor);
   const counts = diffCounts(anchor.code);
   const tag = region
     ? `<span class="rp-tag rp-tag-region">not in this PR</span>`
     : `<span class="rp-tag rp-tag-diff">changed ${counts.added > 0 ? `+${counts.added}` : ''} ${counts.removed > 0 ? `−${counts.removed}` : ''}</span>`;
+  const quiet = weight === 'minor' ? `<span class="rp-tag">mechanical</span>` : '';
   const mark =
     anchor.mark === 'key'
       ? `<span class="rp-tag rp-tag-key">the important bit</span>`
@@ -225,11 +274,17 @@ function step(anchor: ReviewAnchor, index: number, ideaNumber: number): string {
           : '';
   const note = anchor.note;
   return (
-    `<li class="rp-step${region ? ' rp-dashed' : ''}${anchor.mark !== null ? ` rp-mark-${anchor.mark}` : ''}">` +
+    `<li class="rp-step rp-w-${weight}${region ? ' rp-dashed' : ''}${anchor.mark !== null ? ` rp-mark-${anchor.mark}` : ''}" ` +
+    `id="rp-s${ideaNumber}-${index}">` +
     `<div class="rp-step-head"><span class="rp-step-n">${pad(ideaNumber)}.${index}</span>` +
-    `<span class="rp-path">${rangeLabel(anchor.range)}</span>${tag}${mark}</div>` +
+    `<span class="rp-path">${rangeLabel(anchor.range)}</span>${tag}${mark}${quiet}</div>` +
     `<p class="rp-gist">${esc(anchor.gist)}</p>` +
-    codeBlock(anchor.code, anchor.caption, region, !region, anchor.range.path) +
+    (weight === 'minor'
+      ? `<details class="rp-minor-code"><summary>show the ${anchor.code.length} ` +
+        `${anchor.code.length === 1 ? 'line' : 'lines'}</summary>` +
+        codeBlock(anchor.code, anchor.caption, region, !region, anchor.range.path) +
+        `</details>`
+      : codeBlock(anchor.code, anchor.caption, region, !region, anchor.range.path)) +
     (note === null
       ? ''
       : `<details class="rp-why"${anchor.mark === 'false' || anchor.mark === 'disputed' ? ' open' : ''}>` +
@@ -466,7 +521,38 @@ const STYLE = `:root {
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--rp-bg); color: var(--rp-fg);
   font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
-.rp { max-width: 60rem; margin: 0 auto; padding: 2rem 1.25rem 6rem; }
+.rp { max-width: 76rem; margin: 0 auto; padding: 2rem 1.25rem 6rem; }
+/* The rail and the page beside it. The rail is the one screen a reader can come
+   back to: every idea is open here, so nothing else on the page is a map of it.
+   → docs/spec/31-review-packs.md#the-contents-rail */
+.rp-wrap { display: grid; grid-template-columns: 15rem minmax(0, 1fr); gap: 2rem; align-items: start; }
+.rp-main { min-width: 0; }
+.rp-rail { position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow: auto; font-size: .85rem; }
+.rp-c-grp { margin-bottom: .8rem; }
+.rp-c-idea { display: flex; gap: .4rem; font-weight: 600; text-decoration: none; color: var(--rp-fg); padding: .15rem 0; }
+.rp-c-idea:hover { text-decoration: underline; }
+.rp-rail ol { list-style: none; margin: .15rem 0 0; padding: 0; border-left: 2px solid var(--rp-line); }
+.rp-rail ol a { display: flex; gap: .4rem; padding: .1rem .55rem; color: var(--rp-dim); text-decoration: none;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rp-rail ol a:hover { color: var(--rp-fg); background: var(--rp-panel); }
+.rp-rail .rp-c-n { font-variant-numeric: tabular-nums; color: var(--rp-dim); }
+.rp-rail li.rp-c-minor a { opacity: .55; }
+.rp-rail li.rp-c-key a { color: var(--rp-fg); font-weight: 600; }
+.rp-rail li.rp-c-key .rp-c-n { color: var(--rp-accent); }
+/* No rail below the width that would leave the page too narrow to read: it folds
+   to the top of the document, where it is still a map and costs no column. */
+@media (max-width: 60rem) {
+  .rp-wrap { grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+  .rp-rail { position: static; max-height: none; border-bottom: 1px solid var(--rp-line); padding-bottom: .5rem; }
+}
+/* A mechanical stop — an import block, or two changed lines or fewer — drawn quiet,
+   because a walk that gives it the weight of a fifty-line function is unreadable.
+   → docs/spec/31-review-packs.md#how-hard-to-look-at-one-stop */
+.rp-step.rp-w-minor { opacity: .62; padding: .2rem 0 .3rem 1rem; }
+.rp-step.rp-w-minor .rp-gist { margin: .15rem 0; font-size: .9rem; }
+.rp-step.rp-w-minor:hover, .rp-step.rp-w-minor:focus-within { opacity: 1; }
+.rp-step.rp-w-key { border-left: 2px solid var(--rp-accent); margin-left: -1rem; padding-left: calc(1rem - 2px); }
+.rp-minor-code > summary { cursor: pointer; color: var(--rp-dim); font-size: .78rem; padding: .15rem 0; }
 h1 { font-size: 1.7rem; line-height: 1.25; margin: .4rem 0; }
 h3 { font-size: 1rem; margin: 0; }
 code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .86em; }
