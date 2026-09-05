@@ -693,12 +693,23 @@ being answered is what the harness makes of the PR. Which kind of reviewer they 
 metadata line instead (`Required reviewer` / `Optional reviewer`), read off `assignedToYou` — a real
 distinction, and a clause every row would carry and no two rows would differ by.
 
-**And it carries the way to the pull request.** A row that merely _named_ the pull request left the
-operator to go and find it, which is the surface this queue exists to replace; the `<Ref>` opens the
-pull request's own page, or the provider's where the world no longer carries it. The
-`<Ref>` sits **beside** the row body, never inside it: one click may not have two destinations, so the
-body stays the control that opens the ask and the reference is its own target — the same shape a config
-row's fix strip takes ([links](#links)).
+**The row _is_ the way to the pull request.** It is the one kind whose body does not open the ask:
+clicking it opens the pull request's own page, because the pull request is the thing a colleague is
+waiting on and the only reason the row exists. It carried a `<Ref>` to it instead, beside a body that
+opened a summary of the PR the operator was already on their way to — a stop on the road rather than
+the road.
+
+**What the body used to open is the one control in the card's [action bar](#the-action-bar)**
+(`Details`): the ask read in context, on the goal's page or in the ask panel — who asked, which kind of
+reviewer they made you, and the goal it belongs to. Two destinations, and one click may not have two,
+so the second is a control of its own ([links](#links)). The number itself comes back on the metadata
+line (`Optional reviewer · PR #415`), where the subject of every other row is already said: the card is
+the link now, so the row states what it links to rather than drawing a second token to it.
+
+**Both are decided in the derivation** — `opens: 'pr'` and `details` — for `NeedDestination`'s own
+reason: only the derivation can tell a ref that has a page from one that merely looks like it does. A
+pull request the console has no page for falls back to the ask, because a click that lands nowhere
+reads as a console that is broken.
 
 **It has no control either, and for `dispatch`'s reason turned around**: there is no verdict to record
 and no act to authorise, because the harness has no part in this one. The band says what the pull
@@ -752,8 +763,8 @@ itself: no rule in the harness will ever answer either. Amber on `permission`'s 
 terms respectively — one is an act waiting on a yes, the other is something of the operator's own
 stopping a thing the harness would otherwise have done — and both are always `yours`, since nothing is
 parked and no slot is held. They are also the only rows whose controls act on a repository rather than
-on a piece of work, which is why the body opens the build panel and the acts sit in a strip beneath it,
-in the shape a `config` row already takes. → [21](21-self-update.md#the-asks-are-on-the-rail)
+on a piece of work, which is why the body opens the build panel and the acts sit in the card's
+[action bar](#the-action-bar) beneath it. → [21](21-self-update.md#the-asks-are-on-the-rail)
 
 `KIND_TONE` and `KIND_SYMBOL` (`web/src/console/QueueRail.tsx`) are total over `NeedKind`, beside
 `KIND_LABEL`, so a new kind fails the typecheck rather than drawing in whatever the last rule in the
@@ -865,6 +876,9 @@ values are the cases where that is not possible:
   goal-shaped ref the world no longer carries. The panel closes itself — answering settles the row,
   the next snapshot drops it from `needsYou`, and a panel whose row is gone draws nothing rather than
   offering a second verdict on a settled ask.
+- **`'pr'` — the pull request's own page**, and the assigned row alone. It is the one kind whose
+  subject is a pull request nobody in the fleet is working, so the thing the operator opened the rail
+  to reach _is_ the pull request; the ask itself moves to the bar as `details`.
 - **`null` — the recovery hold alone**, which is harness-wide and is answered on the banner above the
   console. It renders as a `div` rather than a `button`, because it is the one row with nowhere to go.
 
@@ -938,6 +952,45 @@ screen.
 when quiet is indistinguishable from one that broke, and a column that came and went would reflow the
 whole shell every time the last ask was answered. A group with no rows draws no heading, though — an
 empty "Yours to do" under a full "Blocking" is furniture.
+
+### The action bar
+
+**Everything a card can _do_ is in one bar across the bottom of it.** `CardFoot`
+(`web/src/console/QueueRail.tsx`) draws it, and it is the whole of the card's pressable surface: a
+`config` row's fix, an update ask's controls, the assigned row's second destination. Nothing pressable
+is anywhere else.
+
+That is a rule about _finding_ things rather than about how a card looks. The acts had arrived one kind
+at a time and settled in three different places — the fix in a strip under the body, the update
+controls in a near-copy of that strip, a reference in a third grid column beside the body — so an
+operator scanning the rail answered "what can I do with this row?" somewhere different on every kind.
+Each placement was defensible on its own card; the set of them was not.
+
+**The body stays the control that opens the ask, and that is why the bar exists at all**: one click may
+not have two destinations, so a card carrying an act is a container whose body is a button and whose
+bar is everything else. The tone's stripe runs down the bar as well as the body, so the card is still
+one card.
+
+**Two halves, in this order: the sentence, then the acts.** The sentence is what decides which control
+to press — _Queue waits for 3 to finish; Now stops them and restores them on the way back up_ — so it
+comes first in the markup as well as on the glass, because reaching it after tabbing through the
+buttons it explains is reading the caption after the photograph. The acts are pushed hard against the
+right edge, which puts every control in a column of cards on one vertical line; the primary sits at
+that edge and the rest run outward from it, so `Snooze` — the one that answers nothing — ends up
+furthest from the hand.
+
+**A bar is drawn only where there is something to press.** Most rows carry no act at all: the whole
+card is the button and there is no bar. The one row that _has_ acts and draws none is an upgrade
+already applying — the title has become the progress, and a bar there would be an empty box under a
+sentence saying there is nothing left to decide.
+
+**The two exceptions take the bar's full width** (`cn-wide`) rather than being squeezed against the
+right edge, because neither is a control: a `shell` fix is a line of text to be copied, and an
+`assumed` config value is a field to type into. Both draw under the sentence at the bar's own width.
+
+`test/console.test.ts` pins the rule by position — every act in a card falls after that card's bar —
+because a control drawn back up into the body reads fine and renders fine, which is how the three
+shapes grew in the first place.
 
 ## The goal page
 

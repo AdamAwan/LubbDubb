@@ -231,6 +231,38 @@ test('an assigned pull request becomes a queue row, and a staffed one does not',
   assert.equal(mine[0]?.raisedAt, '2026-07-20T09:00:00.000Z');
 });
 
+/**
+ * **The card goes to the pull request; the ask is the control beside it.** The row
+ * carried a `<Ref>` to the PR beside a body that opened a summary of it, which put
+ * a stop on the road between the operator and the one thing a colleague is waiting
+ * on. Both destinations are decided here rather than in the rail, for
+ * `NeedDestination`'s reason: only the derivation can tell a ref that has a page
+ * from one that merely looks like it does.
+ * → docs/spec/17-cockpit.md#the-queue-rail--needs-you
+ */
+test('an assigned row opens the pull request, and carries the ask as its second destination', () => {
+  const base = buildDemoSeed().state;
+  const sample = base.world.pullRequests[0];
+  assert.ok(sample, 'the demo fixtures must carry a pull request');
+  const assigned = {
+    ...sample,
+    number: 9101,
+    attention: {
+      status: 'you' as const,
+      reasons: ['Priya Raman marked you as a reviewer'],
+      assignedToYou: 'reviewer-optional' as const,
+    },
+  };
+
+  const row = buildNeedsYou(stateWithPrs([assigned])).find((r) => r.kind === 'assigned');
+  assert.equal(row?.opens, 'pr', 'the body opens the pull request the person put on you');
+  assert.ok(row?.details !== undefined, 'and the bar carries what the body used to open');
+  assert.ok(
+    row?.details === 'goal' || row?.details === 'ask',
+    'which is the ask read in context: the goal’s page where there is one, the ask panel otherwise',
+  );
+});
+
 test('an assigned row with no clock running draws no age', () => {
   const base = buildDemoSeed().state;
   const sample = base.world.pullRequests[0];

@@ -499,9 +499,12 @@ is beside them at ghost weight. **The project row carries only `Snooze`**, and t
 rather than an omission: every refusal `projectPullability` returns is one the harness cannot get past
 either, so a "pull anyway" would be a button whose only outcome is the error the row already quotes.
 
-**The body of the row opens the build panel**, and the controls sit in a strip beneath it — the shape a
-config row already takes, for its reason: one click may not have two destinations. So the row asks, and
-the changelog that answers _why you would want it_ is one press away.
+**The body of the row opens the build panel**, and the controls sit in the card's
+[action bar](17-cockpit.md#the-action-bar) beneath it — where every act on the rail sits, for the
+reason that shape exists: one click may not have two destinations. So the row asks, and the changelog
+that answers _why you would want it_ is one press away. The sentence that separates `Queue` from `Now`
+is in the bar beside them, and the primary is at its right edge; while the upgrade is applying the row
+draws no bar at all, because its title has become the progress.
 
 An **unsupervised** deployment gets the rows and no controls: the process exits on apply and nothing
 would start it again, and the panel the row opens says what to run instead.
