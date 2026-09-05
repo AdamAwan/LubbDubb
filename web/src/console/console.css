@@ -173,72 +173,22 @@
 }
 /* The two ways out, at the readings' end of the bar. Their own group so the pair
    never comes apart when the strip wraps — the cheaper offer is only offered first
-   if it is still beside the other one. */
+   if it is still beside the other one.
+
+   Nothing here dresses them any more. All three faces — the compose `Button`, the
+   offline `ExtLink` and the `DesktopLink` beside them — wear the shared button kit
+   at `ghost small`, which is this bar's chip size to begin with. The chrome used to
+   be a wrapper rule here (`.cn-issue`, `.cn-issue-btn`, `.cn-ident-act`,
+   `.cn-ident-ask`) because `ExtLink` took no class of its own and a rule naming
+   `.ext-ref` is the one thing this stylesheet is tested not to do; once the question
+   hand-off became a `DesktopLink` it arrived already wearing the kit, and the pair
+   drew as a pill inside a pill. `ExtLink`'s `look` prop is the seam that replaced
+   the wrapper, so the group is now layout and nothing else. */
 .cn-asks {
   display: flex;
   align-items: center;
   gap: 6px;
 }
-
-/* The tracker link, sized down out of the bar's own face. It kept this rule when
-   the pair moved off the wordmark: the bar is 13px and the two controls are small
-   print beside the readings, not a third reading.
-
-   It is a **wrapper the console owns** rather than a rule on `.ext-ref`, because
-   `console.css` styling a shared component's class is the thing this stylesheet is
-   tested not to do. All three properties inherit and the token layer sets none of
-   them, so the link picks them up through the cascade and keeps its own hue, arrow
-   and focus ring — which is the whole of what the shared layer is for. */
-.cn-issue {
-  font-size: 12px;
-  font-weight: 400;
-  letter-spacing: normal;
-}
-/* The compose control wears the same face as the link it replaces, because it is
-   the same offer in the same spot and the operator should not have to learn two of
-   them: only where it lands differs, and that is what the modal's head is for. It
-   sets padding and nothing else — the chip round it carries the chrome, and the ink
-   is the bar's own. It wears no `↗`, since it leaves for nowhere. */
-.cn-issue-btn {
-  padding: 0;
-}
-/* The two ways out of the bar, drawn as controls rather than as more small print.
-   They sat side by side in one weight and one ink and read as a single run of
-   words: an operator scanning the bar saw neither, which is the whole failure for
-   a control whose value is being noticed at the moment something looks wrong.
-
-   The chrome is on the wrapper because one of the two faces is `ExtLink`, which
-   takes no class of its own — and `console.css` naming `.ext-ref` is the one thing
-   this stylesheet is tested not to do. The inner control keeps its own ink, so the
-   `↗` and the focus ring still come from the shared layer.
-
-   The question chip wears the console accent and the issue chip does not: they are
-   the same shape and the same size, and what separates them is the hue and the
-   punctuation. That is deliberate — the cheaper reading of "something looks wrong"
-   is the one that should catch the eye first.
-
-   `.cn-ident-act` and not `.tag`: the tag is a reading, and borrowing it dressed
-   these two as verdicts — and, because a `<button>` does not take the inherited
-   `text-transform` an `<a>` does, drew one of the pair in sentence case beside the
-   other in capitals. */
-.cn-ident-act {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 9px;
-  border: 1px solid var(--cn-line-hi);
-  border-radius: 999px;
-  background: var(--cn-panel-2);
-}
-.cn-ident-act:hover {
-  background: var(--cn-hover);
-}
-.cn-ident-act.cn-ident-ask {
-  border-color: var(--cn-accent);
-}
-/* The question hand-off has no face of its own any more: it is a `DesktopLink`,
-   which draws the shared button kit's ghost so that every control opening Claude
-   Code looks the same wherever it is drawn. `.cn-ident-ask` keeps the accent edge
-   on the slot, which is what marks it out from the compose control beside it. */
 .cn-dot {
   width: 7px;
   height: 7px;

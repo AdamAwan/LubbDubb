@@ -332,16 +332,17 @@ test('an unsaved theme edit marks the Config row and the menu button in front of
  * the ident because that is where every *control* on this strip is, and because
  * inheriting the wordmark's 600 read them as a second half of the product name.
  *
- * The ask control is matched on the label every deep link now carries: the bar's
- * used to say `Question?` and five other surfaces said five other things, which is
- * the drift `DesktopLink` owning its own label ended.
+ * The ask control is matched on `Question?`, which is the bar's own label and the
+ * one exception to the name every other deep link carries: the other five are drawn
+ * beside the thing they open and are named for the destination, and this one
+ * addresses nothing and is the offer to ask.
  */
 test('the two ways out ride the readings, together, online and off', () => {
   for (const connected of [true, false]) {
     const html = render(view({ connected }));
     const asks = /<div class="cn-asks">([\s\S]*?)<\/div>\s*<(?:div|i|span)/.exec(html)?.[1] ?? '';
     assert.ok(asks.includes('Issue!'), `the file control left the group (connected: ${String(connected)})`);
-    assert.ok(asks.includes('Open in Claude Code'), `the ask control left the group (connected: ${String(connected)})`);
+    assert.ok(asks.includes('Question?'), `the ask control left the group (connected: ${String(connected)})`);
     const reads = html.indexOf('cn-reads');
     assert.ok(reads > 0 && html.indexOf('cn-asks') > reads, 'the pair is drawn outside the readings group');
   }
@@ -377,6 +378,13 @@ test('a dropped socket draws no gauge, no rail and no situation area', () => {
 });
 
 /**
+ * The compose control's own title, and how it is matched now that both faces of
+ * `Issue!` are the shared button rather than a console class: the marker class the
+ * wrapper used to carry went with the wrapper.
+ */
+const COMPOSE_TITLE = 'Write an issue about LubbDubb';
+
+/**
  * The way to report a fault in LubbDubb is on the bar whether the harness is
  * talking to us or not (#404), and the offline arm is a whole second return in
  * `TopBar` — the one a change would forget, and the state an operator is most
@@ -393,7 +401,7 @@ test('the bar offers LubbDubb’s own tracker, online and off', () => {
   assert.ok(link.test(render(view({ connected: false }))), 'no new-issue link that keeps the opener while offline');
   // Connected, the same destination is reached through the compose modal instead —
   // which is the point of #449: two faces, one repository.
-  assert.ok(render(view({ connected: true })).includes('cn-issue-btn'), 'no compose button while connected');
+  assert.ok(render(view({ connected: true })).includes(COMPOSE_TITLE), 'no compose button while connected');
 });
 
 /**
@@ -416,12 +424,12 @@ test('the bar composes whenever it is connected, and links out when it is not', 
 
   for (const canFileTickets of [true, false]) {
     const composing = render(filing(canFileTickets, true));
-    assert.ok(composing.includes('cn-issue-btn'), `no compose button with canFileTickets=${canFileTickets}`);
+    assert.ok(composing.includes(COMPOSE_TITLE), `no compose button with canFileTickets=${canFileTickets}`);
     assert.ok(!link.test(composing), 'the external link is drawn beside the compose button');
 
     const offline = render(filing(canFileTickets, false));
     assert.ok(
-      link.test(offline) && !offline.includes('cn-issue-btn'),
+      link.test(offline) && !offline.includes(COMPOSE_TITLE),
       `no way out to LubbDubb’s tracker with the socket down and canFileTickets=${canFileTickets}`,
     );
   }

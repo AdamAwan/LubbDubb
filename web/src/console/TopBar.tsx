@@ -6,6 +6,7 @@ import type { CockpitActions, ConsoleTab } from '../cockpit/actions.js';
 import { FleetControl } from '../components/FleetControl.js';
 import { Icon } from '../components/icons.js';
 import { ExtLink, fmtUsd, relTime } from '../components/util.js';
+import { Button } from '../components/button.js';
 import { RaiseIssueModal } from '../components/RaiseIssueModal.js';
 import { DesktopLink } from '../components/DesktopLink.js';
 import { questionPrompt } from '../cockpit/desktopLink.js';
@@ -220,16 +221,22 @@ function Ident({ view }: { view: CockpitView }): JSX.Element {
  * wordmark's job is to say where you are. It also stops the pair inheriting the
  * ident's 600, which read them as a second half of the wordmark.
  *
- * `.cn-issue` is the console's own hook for sizing the pair out of the bar's face,
- * and `.cn-ident-act` is what makes each read as a control rather than as small
- * print — see `console.css`. Both are on the *wrapper*: `ExtLink` takes no class,
- * and a rule on `.ext-ref` is the one thing this stylesheet is tested not to do, so
- * the chrome goes round the link rather than on it.
+ * **All three faces are the shared button** — `Button` connected, `ExtLink` with a
+ * `look` offline, `DesktopLink` beside them — at `ghost small`, which is the
+ * console's chip size to begin with. `console.css` used to draw the chrome itself,
+ * on a wrapper `<span>`, because `ExtLink` took no class and a rule naming
+ * `.ext-ref` is the one thing this stylesheet is tested not to do. What that bought
+ * was a pill inside a pill once the question hand-off became a `DesktopLink` and
+ * arrived wearing the button kit: two borders, two radii and two grounds on one
+ * control. The wrapper is gone and the seam is the `look` prop, which is the same
+ * bargain `DesktopLink` already made.
  *
  * One word and a mark each. `Raise an issue` and `Got a question?` were two
  * sentences in the same weight and the same ink, a hand's width apart, and read as
  * one run of small print; the punctuation is what tells them apart at a glance,
- * since it is the difference between them — one files, one asks.
+ * since it is the difference between them — one files, one asks. It carries that
+ * difference alone now: the accent edge the question wore was the wrapper's, and a
+ * tone is the one thing `className` on a button may not carry.
  */
 function Asks({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   // Local state and not `Place`: a half-typed report is not somewhere you can come
@@ -250,22 +257,20 @@ function Asks({ view, actions }: { view: CockpitView; actions: CockpitActions })
 
   return (
     <div className="cn-asks">
-      <span className="cn-issue cn-ident-act">
-        {canCompose ? (
-          <button
-            type="button"
-            className="cn-issue-btn"
-            title="Write an issue about LubbDubb and file it on its own tracker, without leaving the cockpit"
-            onClick={() => setComposing(true)}
-          >
-            Issue!
-          </button>
-        ) : (
-          <ExtLink href={NEW_ISSUE_URL} title="Raise an issue on the LubbDubb repo">
-            Issue!
-          </ExtLink>
-        )}
-      </span>
+      {canCompose ? (
+        <Button
+          ghost
+          size="small"
+          title="Write an issue about LubbDubb and file it on its own tracker, without leaving the cockpit"
+          onClick={() => setComposing(true)}
+        >
+          Issue!
+        </Button>
+      ) : (
+        <ExtLink href={NEW_ISSUE_URL} look={{ ghost: true, size: 'small' }} title="Raise an issue on the LubbDubb repo">
+          Issue!
+        </ExtLink>
+      )}
       {/* The bar's second way out, and the one that answers rather than files.
           Most of what arrives as an issue about the fleet is not a fault in it —
           it is "why has this not moved", which the harness's own record answers in
@@ -274,17 +279,24 @@ function Asks({ view, actions }: { view: CockpitView; actions: CockpitActions })
           control: a `DesktopLink` onto the repository the fleet works, with
           `/lubbdubb ` in the composer and the question left to the operator.
 
+          The one deep link that says `Question?` rather than `Open in Claude
+          Code`. The other five are drawn beside the thing they open and are named
+          for the destination for that reason; this one addresses nothing, and the
+          destination is not the offer — named for it, it read as a developer's
+          control parked between `Issue!` and the usage meters rather than as the
+          invitation to ask. The questions it is for are in the title, which is the
+          only place a label of one word can put them.
+
           Unconditional, like every other deep link: it reaches only the machine
           the browser is on, and `DesktopLink` puts the command in the title for
           exactly the operator it cannot reach. */}
-      <span className="cn-issue cn-ident-act cn-ident-ask">
-        <DesktopLink
-          folder={view.state.config.desktopFolder}
-          prompt={questionPrompt()}
-          ready="waiting for your question"
-          explain="which answers it from the harness’s own record of the work, and says so when the record is silent."
-        />
-      </span>
+      <DesktopLink
+        folder={view.state.config.desktopFolder}
+        prompt={questionPrompt()}
+        label="Question?"
+        ready="waiting for your question"
+        explain="so you can ask why something has not been picked up, what a goal is doing or what any of this means — answered from the harness’s own record of the work, and said so when the record is silent."
+      />
       {composing && (
         <RaiseIssueModal
           probe={actions.probeFilingTarget}

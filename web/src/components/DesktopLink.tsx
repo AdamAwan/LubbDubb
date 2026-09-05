@@ -16,10 +16,16 @@ import { Icon } from './icons.js';
  * verb a given site deserves has no end, because every site can make a case.
  *
  * So the component owns all four now — address, sentence, label and look — and
- * takes no `className` and no `children`. **Every one of these says “Open in
- * Claude Code”.** What differs between call sites is what the session *arrives
- * with*, which is `prompt`, and what it *does*, which is `explain` — the two
- * things that were always the caller's and still are.
+ * takes no `className` and no `children`. What differs between call sites is what
+ * the session *arrives with*, which is `prompt`, and what it *does*, which is
+ * `explain` — the two things that were always the caller's and still are.
+ *
+ * **The label varies by the _act_, never by the surface**, which is why it is a
+ * closed union rather than a string. Five of the six controls are the same act —
+ * *open the thing I am looking at* — and say “Open in Claude Code”. The top bar's
+ * is not that act: it is drawn beside the wordmark, addresses no goal and starts a
+ * *question*, so a label naming the destination described the mechanism and left
+ * the offer unmade. Two acts, two names, and a `string` here is how six come back.
  *
  * **The look is the shared button kit's, not a family of its own.** `buttonClass`
  * carries `btn` twice, which is what survives `console.css`'s `.cn button` reset —
@@ -43,6 +49,7 @@ export function DesktopLink({
   prompt,
   explain,
   ready = 'ready to send',
+  label = 'Open in Claude Code',
 }: {
   folder: string;
   prompt: string;
@@ -54,6 +61,13 @@ export function DesktopLink({
    * stop, because the operator has not said what they are asking yet.
    */
   ready?: string;
+  /**
+   * Which of the two acts this is. `Question?` belongs to the one control that
+   * addresses nothing and asks — the top bar's; everything drawn beside the thing
+   * it opens takes the default. A union rather than a `string` so a seventh name
+   * cannot be written at a call site.
+   */
+  label?: 'Open in Claude Code' | 'Question?';
 }): JSX.Element {
   return (
     <a
@@ -62,7 +76,7 @@ export function DesktopLink({
       title={`Opens your own Claude Code with "${prompt.trim()}" ${ready}, ${explain}`}
     >
       <Icon name="chat" />
-      Open in Claude Code ↗
+      {label} ↗
     </a>
   );
 }
