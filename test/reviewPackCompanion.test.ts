@@ -215,8 +215,8 @@ test('the diff marker is a column of its own, and is dropped where every line ca
     ),
   );
   // The code is in the text; the marker is beside it, not in front of it.
-  assert.match(html, /<span class="rp-m" aria-hidden="true">\+<\/span><span class="rp-t">const b = 3;<\/span>/);
-  assert.doesNotMatch(html, /<span class="rp-t">\+const b = 3;<\/span>/);
+  assert.match(html, /<span class="rp-m" aria-hidden="true">\+<\/span><span class="rp-t">/);
+  assert.doesNotMatch(html, /<span class="rp-t">\+/, 'the marker is never the first character of the code');
 });
 
 test('a pack stating a schema this build does not know is refused whole', () => {

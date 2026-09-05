@@ -68,6 +68,13 @@
   --diff-add-ink: color-mix(in srgb, var(--green) 72%, var(--text));
   --diff-del-fill: color-mix(in srgb, var(--red) 14%, var(--well));
   --diff-del-ink: color-mix(in srgb, var(--red) 68%, var(--text));
+  /* Syntax in a review pack's code. Four kinds and no more — the parts a scanner
+     without a parser can name without ever being confidently wrong — and each a
+     mix over the well, so a theme that moves its hues moves the code with them. */
+  --code-comment: color-mix(in srgb, var(--green) 34%, var(--muted));
+  --code-string: color-mix(in srgb, var(--amber) 62%, var(--text));
+  --code-number: color-mix(in srgb, var(--amber) 62%, var(--text));
+  --code-keyword: color-mix(in srgb, var(--blue) 62%, var(--text));
   /* The three values a reference is drawn from: the edge of its box, the fill of
      the one that stays in the cockpit, and its lettering. Their own tokens rather
      than reuses of `--blue-line-2` / `--blue-fill` — those mean "tinted border and
@@ -9335,6 +9342,23 @@ select:disabled {
 
 .rp-t {
   white-space: pre;
+}
+
+.rp-hl-comment {
+  color: var(--code-comment);
+  font-style: italic;
+}
+
+.rp-hl-string {
+  color: var(--code-string);
+}
+
+.rp-hl-number {
+  color: var(--code-number);
+}
+
+.rp-hl-keyword {
+  color: var(--code-keyword);
 }
 
 .rp-add {

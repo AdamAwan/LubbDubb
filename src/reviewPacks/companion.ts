@@ -8,7 +8,17 @@ import type {
   ReviewRange,
   ReviewVerdict,
 } from '../types.js';
-import { codeBlockLines, falseClaims, ideaFlags, numberIdeas, packFacts, shortSha, type FalseClaim } from './derive.js';
+import {
+  codeBlockLines,
+  codeLanguage,
+  falseClaims,
+  highlightCode,
+  ideaFlags,
+  numberIdeas,
+  packFacts,
+  shortSha,
+  type FalseClaim,
+} from './derive.js';
 
 /**
  * The HTML companion: one self-contained file that draws the same page the
@@ -219,7 +229,7 @@ function step(anchor: ReviewAnchor, index: number): string {
     `<div class="rp-step-head"><span class="rp-step-n">${index}</span>` +
     `<span class="rp-path">${rangeLabel(anchor.range)}</span>${tag}${mark}</div>` +
     `<p class="rp-gist">${esc(anchor.gist)}</p>` +
-    codeBlock(anchor.code, anchor.caption, region, !region) +
+    codeBlock(anchor.code, anchor.caption, region, !region, anchor.range.path) +
     (note === null
       ? ''
       : `<details class="rp-why"${anchor.mark === 'false' || anchor.mark === 'disputed' ? ' open' : ''}>` +
@@ -257,13 +267,29 @@ function diffCounts(code: readonly string[]): { added: number; removed: number }
  * tint either: every line is the same kind, the step's tag has already said which,
  * and a screen of solid green reads worse than the code does.
  */
-function codeBlock(code: readonly string[], caption: string | null, dashed: boolean, diff: boolean): string {
+function codeBlock(
+  code: readonly string[],
+  caption: string | null,
+  dashed: boolean,
+  diff: boolean,
+  path: string,
+): string {
   const { gutter, lines: split } = codeBlockLines(code, diff);
+  const coloured = highlightCode(
+    split.map((l) => l.text),
+    codeLanguage(path),
+  );
   const lines = split
-    .map(({ marker, text }) => {
+    .map(({ marker, text }, i) => {
       const cls = !gutter ? '' : marker === '+' ? ' rp-add' : marker === '-' ? ' rp-del' : '';
       const mark = gutter ? `<span class="rp-m" aria-hidden="true">${esc(marker ?? ' ')}</span>` : '';
-      return `<span class="rp-l${cls}">${mark}<span class="rp-t">${esc(text)}</span>\n</span>`;
+      const body = coloured[i] ?? [{ kind: 'plain' as const, text }];
+      const runs = body
+        .map((run) =>
+          run.kind === 'plain' ? esc(run.text) : `<span class="rp-hl-${run.kind}">${esc(run.text)}</span>`,
+        )
+        .join('');
+      return `<span class="rp-l${cls}">${mark}<span class="rp-t">${runs}</span>\n</span>`;
     })
     .join('');
   return (
@@ -312,6 +338,7 @@ function finding(item: FalseClaim, index: number): string {
           `step ${stepNumber} — ${marked.range.path}:${marked.range.start}${marked.caption !== null ? ` — ${marked.caption}` : ''}`,
           marked.kind === 'region',
           marked.kind === 'hunk',
+          marked.range.path,
         )
       : `<p class="rp-gap">No step of the walk fits this claim; the code below is where the tree disagrees.</p>`) +
     (found?.counter != null
@@ -320,6 +347,7 @@ function finding(item: FalseClaim, index: number): string {
           `${found.counter.range.path}:${found.counter.range.start} — ${found.counter.caption}`,
           false,
           false,
+          found.counter.range.path,
         )
       : '');
   return (
@@ -406,6 +434,9 @@ const STYLE = `:root {
   --rp-panel: #ffffff; --rp-code-bg: #f5f3ef; --rp-accent: #3c5a8a;
   --rp-bad: #a33b34; --rp-bad-bg: #fdeceb; --rp-warn: #8a6a1f; --rp-ok: #3d6b46;
   --rp-add: #2f6b3d; --rp-del: #a33b34;
+  /* Syntax. Four kinds and no more: the parts a scanner without a parser can name
+     without ever being confidently wrong. */
+  --rp-hl-comment: #7a8a6f; --rp-hl-string: #7a5a2a; --rp-hl-number: #7a5a2a; --rp-hl-keyword: #6a4d8a;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -413,6 +444,7 @@ const STYLE = `:root {
     --rp-panel: #1e1e22; --rp-code-bg: #131316; --rp-accent: #8fb0e0;
     --rp-bad: #e8867d; --rp-bad-bg: #3a1f1e; --rp-warn: #d8b35e; --rp-ok: #86c294;
     --rp-add: #86c294; --rp-del: #e8867d;
+    --rp-hl-comment: #7f8f78; --rp-hl-string: #d3a76a; --rp-hl-number: #d3a76a; --rp-hl-keyword: #b79bd8;
   }
 }
 * { box-sizing: border-box; }
@@ -469,6 +501,10 @@ a { color: var(--rp-accent); }
 .rp-l { display: block; white-space: pre; }
 .rp-m { display: inline-block; width: 1ch; margin-right: .75ch; color: var(--rp-dim); user-select: none; }
 .rp-t { white-space: pre; }
+.rp-hl-comment { color: var(--rp-hl-comment); font-style: italic; }
+.rp-hl-string { color: var(--rp-hl-string); }
+.rp-hl-number { color: var(--rp-hl-number); }
+.rp-hl-keyword { color: var(--rp-hl-keyword); }
 .rp-add { color: var(--rp-add); background: color-mix(in srgb, var(--rp-add) 12%, transparent); }
 .rp-del { color: var(--rp-del); background: color-mix(in srgb, var(--rp-del) 12%, transparent); }
 .rp-why { margin-top: .4rem; }

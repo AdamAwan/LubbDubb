@@ -250,3 +250,193 @@ export function codeBlockLines(code: readonly string[], diff: boolean): { gutter
   const gutter = lines.length > 0 && lines.some((l) => l.marker !== first);
   return { gutter, lines };
 }
+
+/**
+ * The languages a code block is highlighted in, decided from the anchor's path.
+ * Null is "draw it plain", and is the honest answer for everything else: a
+ * tokenizer guessing at a language it does not know **mis**-colours, and a
+ * confident wrong colour is worse to read than no colour at all.
+ */
+type CodeLanguage = 'ts' | 'json';
+
+/** The language of a file, by extension, or null to draw it plain. */
+export function codeLanguage(path: string): CodeLanguage | null {
+  if (/\.[cm]?[jt]sx?$/.test(path)) return 'ts';
+  if (/\.json[c5]?$/.test(path)) return 'json';
+  return null;
+}
+
+/** One run of a line, with what it is. `plain` is everything the scanner does not name. */
+interface CodeToken {
+  kind: 'plain' | 'comment' | 'string' | 'number' | 'keyword';
+  text: string;
+}
+
+const TS_KEYWORDS = new Set([
+  'as',
+  'async',
+  'await',
+  'break',
+  'case',
+  'catch',
+  'class',
+  'const',
+  'continue',
+  'declare',
+  'default',
+  'delete',
+  'do',
+  'else',
+  'enum',
+  'export',
+  'extends',
+  'false',
+  'finally',
+  'for',
+  'from',
+  'function',
+  'get',
+  'if',
+  'implements',
+  'import',
+  'in',
+  'infer',
+  'instanceof',
+  'interface',
+  'is',
+  'keyof',
+  'let',
+  'new',
+  'null',
+  'of',
+  'private',
+  'protected',
+  'public',
+  'readonly',
+  'return',
+  'satisfies',
+  'set',
+  'static',
+  'super',
+  'switch',
+  'this',
+  'throw',
+  'true',
+  'try',
+  'type',
+  'typeof',
+  'undefined',
+  'void',
+  'while',
+  'yield',
+]);
+const JSON_KEYWORDS = new Set(['true', 'false', 'null']);
+
+/**
+ * Split a block of code into coloured runs, line by line.
+ * → `docs/spec/31-review-packs.md#the-code-block`
+ *
+ * **Rendered here, never in the browser.** The companion is one self-contained
+ * file with no script and no request, so a highlighter that runs on the page is
+ * not available to it, and a pack that highlighted in the cockpit and not in the
+ * companion would be two pages disagreeing about what the code says.
+ *
+ * The whole block is scanned at once and cut at newlines afterwards, so a block
+ * comment or a template literal that spans lines is one run rather than a
+ * mis-coloured line each. What it deliberately does not do: no regular
+ * expressions (telling one from a division needs a parser, and the wrong guess
+ * silently swallows the rest of the line), no interpolation inside a template
+ * literal, and no identifier classification beyond the keyword list — the parts
+ * of a highlighter that are wrong often enough to cost more than they give.
+ *
+ * A quoted string never runs past its own line: the code arrives as a hunk, which
+ * can begin and end anywhere, and a stray quote on a cut boundary would otherwise
+ * colour every line under it.
+ */
+export function highlightCode(code: readonly string[], language: CodeLanguage | null): CodeToken[][] {
+  if (language === null) return code.map((text) => [{ kind: 'plain', text }]);
+  const source = code.join('\n');
+  const words = language === 'ts' ? TS_KEYWORDS : JSON_KEYWORDS;
+  const runs: CodeToken[] = [];
+  let plain = '';
+  const keep = (kind: CodeToken['kind'], text: string): void => {
+    if (plain !== '') {
+      runs.push({ kind: 'plain', text: plain });
+      plain = '';
+    }
+    if (text !== '') runs.push({ kind, text });
+  };
+  let i = 0;
+  while (i < source.length) {
+    const rest = source.slice(i);
+    if (language === 'ts' && rest.startsWith('//')) {
+      const end = source.indexOf('\n', i);
+      const stop = end < 0 ? source.length : end;
+      keep('comment', source.slice(i, stop));
+      i = stop;
+      continue;
+    }
+    if (language === 'ts' && rest.startsWith('/*')) {
+      const end = source.indexOf('*/', i + 2);
+      const stop = end < 0 ? source.length : end + 2;
+      keep('comment', source.slice(i, stop));
+      i = stop;
+      continue;
+    }
+    const quote = source[i]!;
+    if (quote === '"' || quote === "'" || (language === 'ts' && quote === '`')) {
+      let j = i + 1;
+      while (j < source.length) {
+        const c = source[j]!;
+        if (c === '\\') {
+          j += 2;
+          continue;
+        }
+        if (c === quote) {
+          j += 1;
+          break;
+        }
+        // A quoted string cannot span a line, and a hunk can be cut anywhere.
+        if (c === '\n' && quote !== '`') break;
+        j += 1;
+      }
+      keep('string', source.slice(i, j));
+      i = j;
+      continue;
+    }
+    const c = source[i]!;
+    if (c >= '0' && c <= '9' && !/[\w$]/.test(source[i - 1] ?? '')) {
+      let j = i;
+      while (j < source.length && /[\w.]/.test(source[j]!)) j += 1;
+      keep('number', source.slice(i, j));
+      i = j;
+      continue;
+    }
+    if (/[A-Za-z_$]/.test(c)) {
+      let j = i;
+      while (j < source.length && /[\w$]/.test(source[j]!)) j += 1;
+      const word = source.slice(i, j);
+      if (words.has(word)) keep('keyword', word);
+      else plain += word;
+      i = j;
+      continue;
+    }
+    plain += c;
+    i += 1;
+  }
+  keep('plain', '');
+
+  // Back into lines, splitting the runs that crossed one.
+  const lines: CodeToken[][] = [[]];
+  for (const run of runs) {
+    const parts = run.text.split('\n');
+    parts.forEach((part, k) => {
+      if (k > 0) lines.push([]);
+      if (part !== '') lines[lines.length - 1]!.push({ kind: run.kind, text: part });
+    });
+  }
+  // `code.join` produced exactly one line per input line; anything else is a bug
+  // here rather than something to paper over at the call site.
+  while (lines.length < code.length) lines.push([]);
+  return lines.slice(0, Math.max(code.length, 0));
+}

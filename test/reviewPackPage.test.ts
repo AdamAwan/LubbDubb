@@ -332,7 +332,7 @@ test('no gate when nothing is false, and the collapsed row still carries the fla
   assert.ok(finding > ideas, 'the finding box comes after the ideas');
   assert.match(html, /The deleted constant is still read\./);
   assert.match(html, /the surviving reader/);
-  assert.match(html, /const two = old;/);
+  assert.match(html, /class="rp-hl-keyword">const<\/span> two = old;/);
   assert.match(html, /step 1 — src\/b\.ts:9/);
   assert.match(html, /<strong>Blocking; the author’s call\.<\/strong>/);
 });
@@ -345,7 +345,10 @@ test('opening an idea shows the walk, the marks, the claims and the false claim 
   assert.match(html, /claim is false/);
   assert.match(html, /class="tag t-red tag-fill">False</);
   assert.match(html, /src\/unchanged\.ts:2 still reads old\./);
-  assert.match(html, /<span class="rp-t">const old = 2;<\/span>/);
+  assert.match(
+    html,
+    /<span class="rp-t"><span class="rp-hl-keyword">const<\/span> old = <span class="rp-hl-number">2<\/span>;<\/span>/,
+  );
   assert.doesNotMatch(html, /<span class="rp-t">-const old = 2;<\/span>/, 'the marker is never part of the code');
   assert.doesNotMatch(html, /rp-del/, 'a block of one kind is not tinted — the step’s tag already says which');
   assert.match(html, /Mark read/);
@@ -355,7 +358,8 @@ test('opening an idea shows the walk, the marks, the claims and the false claim 
   assert.match(other, /not in this PR/);
   assert.match(other, /the important bit/);
   // Mixed markers, so the column is drawn — beside the code, never in front of it.
-  assert.match(other, /class="rp-m" aria-hidden="true">\+<\/span><span class="rp-t">import y from &quot;y&quot;;/);
+  assert.match(other, /class="rp-m" aria-hidden="true">\+<\/span><span class="rp-t">/);
+  assert.match(other, /class="rp-hl-keyword">import<\/span> y <span class="rp-hl-keyword">from<\/span>/);
   assert.match(other, /class="rp-l rp-add"/);
   assert.match(other, /new import/);
   assert.match(other, /witness · /);
